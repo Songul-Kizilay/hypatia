@@ -216,3 +216,15 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Hypatia runtime data, downloaded models, and operational output
+data/**
+!data/**/
+!data/**/.gitkeep
+!data/README.md
+models/**
+!models/**/
+!models/**/.gitkeep
+!models/README.md
+logs/**
+!logs/.gitkeep

@@ -12,6 +12,13 @@ This directory is the source of truth for Hypatia's product intent and technical
 | [Roadmap](Roadmap/README.md) | Version goals, scope boundaries, and release criteria. |
 | [Research](Research/README.md) | Research questions, source notes, and experiments. |
 | [Journal](Journal/README.md) | Architecture decision records and project history. |
+| [Decisions](Decisions/README.md) | Architecture Decision Records (ADRs). |
+| [Design](Design/README.md) | User flows, interface concepts, and accessibility. |
+| [Security](Security/README.md) | Threat models, privacy, permissions, and incident response. |
+| [Testing](Testing/README.md) | Evaluation strategy and acceptance criteria. |
+| [API](API/README.md) | Future API contracts and versioning. |
+| [Diagrams](Diagrams/README.md) | Mermaid, Draw.io, UML, and other visual artifacts. |
+| [Meeting Notes](MeetingNotes/README.md) | Dated planning and review notes. |
 
 ## Documentation rules
 

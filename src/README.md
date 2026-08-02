@@ -17,3 +17,7 @@ This directory is intentionally code-free during the documentation phase. The fo
 | `entertainment` | Recommendations and media experiences. |
 | `desktop`, `mobile`, `watch`, `xr` | User-facing application surfaces. |
 | `api` | External and internal service interfaces. |
+
+## Planned agents
+
+`research_agent`, `career_agent`, `security_agent`, `home_agent`, `planner_agent`, `memory_agent`, `vision_agent`, `voice_agent`, `gaming_agent`, and `cinema_agent` are reserved as separate future workspaces. Their specifications belong in `docs/Modules` before code is introduced.
