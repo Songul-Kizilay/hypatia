@@ -10,3 +10,5 @@ The roadmap expresses intended learning and delivery milestones. Versions are co
 | [v0.4](v0.4.md) | Sentinel | Future |
 | [v0.5](v0.5.md) | Smart home | Future |
 | [v1.0](v1.0.md) | Scout robot | Future |
+| [v2.0](v2.0.md) | XR | Future |
+| [v5.0](v5.0.md) | Multi-agent | Future |

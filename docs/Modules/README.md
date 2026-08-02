@@ -10,11 +10,20 @@ Each module document will state its purpose, user value, boundaries, permissions
 | [Brain](Brain.md) | Planned | Reasoning, planning, and reflective support. |
 | [Memory](Memory.md) | Planned | User-controlled retention and recall. |
 | [Research](Research.md) | Planned | Evidence-aware reading and synthesis. |
+| [Planner](Planner.md) | Planned | Transparent planning and approvals. |
+| [Teacher](Teacher.md) | Future | Adaptive, evidence-aware learning. |
 | [Voice](Voice.md) | Planned | Private, accessible voice interaction. |
 | [Vision](Vision.md) | Future | Consent-aware visual understanding. |
 | [Desktop](Desktop.md) | Planned | The first user-facing product surface. |
+| [Mobile](Mobile.md) | Future | Mobile companion experience. |
+| [Watch](Watch.md) | Future | Wearable interactions. |
+| [XR](XR.md) | Future | Spatial experiences. |
 | [Sentinel](Sentinel.md) | Future | Security awareness and transparent alerts. |
 | [Home](Home.md) | Future | Controlled smart-home integration. |
 | [Robotics](Robotics.md) | Future | Safe physical-world assistance. |
 | [Career Intelligence](Career_Intelligence.md) | Future | Career research and skill-development support. |
-| [Entertainment](Entertainment.md) | Future | Personal recommendations and media discovery. |
+| [Gaming](Gaming.md) | Future | Game discovery and recommendations. |
+| [Cinema](Cinema.md) | Future | Film and television discovery. |
+| [Music](Music.md) | Future | Music discovery and composition. |
+| [Companion](Companion.md) | Future | Respectful supportive interaction. |
+| [API](API.md) | Future | Permissioned programmatic interfaces. |

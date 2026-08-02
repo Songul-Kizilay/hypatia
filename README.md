@@ -2,7 +2,7 @@
 
 **Documentation-first development:** Hypatia is currently in its foundation and architecture phase. No application code has been added yet.
 
-Start with the [project documentation](docs/README.md), including the [vision](docs/Bible/00_Vision.md), [architecture](docs/Architecture/README.md), [module map](docs/Modules/README.md), and [roadmap](docs/Roadmap/README.md).
+Start with the [project documentation](docs/README.md), including the [vision](docs/Bible/01_Vision.md), [architecture](docs/Architecture/README.md), [module map](docs/Modules/README.md), and [roadmap](docs/Roadmap/README.md).
 
 > A local-first AI research companion.
 

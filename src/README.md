@@ -20,4 +20,4 @@ This directory is intentionally code-free during the documentation phase. The fo
 
 ## Planned agents
 
-`research_agent`, `career_agent`, `security_agent`, `home_agent`, `planner_agent`, `memory_agent`, `vision_agent`, `voice_agent`, `gaming_agent`, and `cinema_agent` are reserved as separate future workspaces. Their specifications belong in `docs/Modules` before code is introduced.
+`brain`, `research`, `security`, `career`, `planner`, `memory`, `home`, `vision`, `voice`, `gaming`, `cinema`, `companion`, and `teacher` are reserved as separate future agent workspaces. Their specifications belong in `docs/Modules` before code is introduced.
