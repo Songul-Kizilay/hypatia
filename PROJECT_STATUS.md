@@ -2,36 +2,37 @@
 
 ## Current Version
 
-v0.1.7 (in progress)
+v0.2.0 (in progress)
 
 ## Current Sprint
 
-Sprint 2.7 — Core Stabilization
+Sprint 3.1 — Knowledge Stabilization
 
 ## Current Focus
 
-Stabilize the core runtime with tests, consistent quality checks, logging, and error handling.
+Validate the Knowledge Foundation and prepare the `v0.2.0` release.
 
 ## Next
 
-- Finish the v0.1.7 stabilization release
-- Knowledge Engine foundations
+- Publish the `v0.2.0` release
+- Plan the next knowledge-layer increment
 
 ## Completed
 
-- [x] Bootstrap
-- [x] Config
-- [x] Logger
-- [x] Dependency Container
-- [x] EventBus
-- [x] MemoryManager
-- [x] Brain request flow
-- [x] Deterministic Planner
-- [x] 31 unit tests
+- [x] Bootstrap, Config, Logger, and Dependency Container
+- [x] EventBus and MemoryManager
+- [x] Brain request flow and deterministic Planner
+- [x] Knowledge Foundation
+  - [x] `.txt` and `.md` document loading
+  - [x] Paragraph parsing into chunks
+  - [x] In-memory chunk indexing
+  - [x] Case-insensitive text search
+  - [x] KnowledgeEngine orchestration
+- [x] 68 passing unit tests
 - [x] Project standards (EditorConfig, Git attributes, Black, Ruff, MyPy)
 
 ## Verification Pending
 
-- [x] Full core regression suite
-- [ ] Stabilization branch review
-- [ ] Version tag and GitHub release `v0.1.7`
+- [x] Full regression suite
+- [ ] Knowledge Foundation pull request review
+- [ ] Version tag and GitHub release `v0.2.0`

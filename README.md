@@ -1,6 +1,6 @@
 # Hypatia
 
-**Documentation-first development:** Hypatia has a tested core runtime and is in its stabilization phase. Product capabilities are introduced only after the core remains reliable.
+**Documentation-first development:** Hypatia has a tested core runtime and a completed Knowledge Foundation. Product capabilities are introduced only after their behavior is covered by tests.
 
 Start with the [project documentation](docs/README.md), including the [vision](docs/Bible/01_Vision.md), [architecture](docs/Architecture/README.md), [module map](docs/Modules/README.md), and [roadmap](docs/Roadmap/README.md).
 
@@ -65,7 +65,7 @@ To create the world's most capable personal AI research companion.
 
 ## Status
 
-🚧 Core stabilization in progress (`v0.1.7`)
+🚧 Knowledge stabilization in progress (`v0.2.0`)
 
 Completed foundation capabilities:
 
@@ -73,6 +73,8 @@ Completed foundation capabilities:
 - Event bus and in-memory conversation memory
 - Deterministic Brain request flow
 - Deterministic Planner task generation
-- 31 unit tests and shared code-quality standards
+- Knowledge Foundation: `.txt` and `.md` document loading, paragraph parsing, in-memory chunk indexing, and case-insensitive search
+- KnowledgeEngine orchestration for the full document-to-search pipeline
+- 68 passing unit tests and shared code-quality standards
 
-Planned next: Knowledge Engine foundations (documents, parsing, chunking, indexing, and search).
+Planned next: release `v0.2.0`, then extend the knowledge layer only through reviewed, test-backed increments.
