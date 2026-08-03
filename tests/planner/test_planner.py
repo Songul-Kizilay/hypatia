@@ -9,7 +9,16 @@ import unittest
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
+    sys.path.append(str(SRC_DIR))
+
+# unittest imports this module as ``planner.test_planner`` because the test
+# directory is a package. Extend that package's search path so imports below
+# resolve implementation modules at ``src/planner`` as well.
+loaded_planner = sys.modules.get("planner")
+if loaded_planner is not None:
+    source_planner_dir = str(SRC_DIR / "planner")
+    if source_planner_dir not in loaded_planner.__path__:
+        loaded_planner.__path__.append(source_planner_dir)
 
 from planner.Goal import Goal
 from planner.Planner import Planner
