@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+from knowledge.Chunk import Chunk
 
 
 @dataclass(frozen=True, slots=True)
@@ -13,3 +15,5 @@ class BrainResponse:
     request_id: str
     intent: str
     memory_count: int
+    success: bool = True
+    knowledge_results: list[Chunk] = field(default_factory=list)
