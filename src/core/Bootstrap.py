@@ -1,21 +1,46 @@
+from brain.Brain import Brain
 from core.Config import Config
+from core.DependencyContainer import DependencyContainer
 from core.Logger import Logger
+from eventbus.EventBus import EventBus
+from memory.MemoryManager import MemoryManager
 
 
 class Bootstrap:
+    def initialize(self) -> None:
+        self.container = DependencyContainer()
 
-    def initialize(self):
+        config = Config()
+        logger = Logger()
+        event_bus = EventBus()
+        memory_manager = MemoryManager(event_bus)
 
-        self.config = Config()
+        self.container.register(config)
+        self.container.register(logger)
+        self.container.register(event_bus)
+        self.container.register(memory_manager)
+        brain = Brain(self.container)
+        self.container.register(brain)
 
-        self.logger = Logger()
+        logger.info("Configuration Loaded")
+        logger.info("Logger Initialized")
+        logger.info("Dependency Container Ready")
+        logger.info("Event Bus Ready")
+        logger.info("Memory Manager Ready")
+        logger.info("Brain Ready")
 
-        self.logger.info("Configuration Loaded")
+        event_bus.emit(
+            "system.bootstrap.completed",
+            {"status": "ready"},
+            source="bootstrap",
+        )
 
-        self.logger.info("Logger Initialized")
+    def shutdown(self) -> None:
+        logger = self.container.resolve(Logger)
+        event_bus = self.container.resolve(EventBus)
 
-        self.logger.info("Bootstrap Finished")
-
-    def shutdown(self):
-
-        self.logger.info("Hypatia shutting down...")
+        event_bus.emit(
+            "system.shutdown.started",
+            source="bootstrap",
+        )
+        logger.info("Hypatia shutting down...")

@@ -1,34 +1,35 @@
-# Hypatia Project Status
+# Hypatia Status
 
-## Current Phase
+## Current Version
 
-🟢 Phase 2 — Architecture
-
----
-
-## Completed
-
-- Repository Structure
-- Documentation Structure
-- Hypatia Bible v1.0
-
----
+v0.1.5 (in progress)
 
 ## Current Sprint
 
-Sprint 1 — Architecture
-
----
+Sprint 2.6 — Brain
 
 ## Current Focus
 
-- System Architecture
-- AI Architecture
-- Agent Design
-- Module Design
+Finalize and test the first deterministic Brain request flow.
 
----
+## Next
 
-## Next Milestone
+- Planner
+- Knowledge
+- First AI Chat
 
-Architecture v1.0
+## Completed
+
+- [x] Bootstrap
+- [x] Config
+- [x] Logger
+- [x] Dependency Container
+- [x] EventBus
+- [x] MemoryManager
+- [x] Brain request flow (manual verification)
+
+## Verification Pending
+
+- [x] Brain unit tests
+- [ ] Feature-branch review
+- [ ] Version tag `v0.1.5`
