@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import sys
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
 import unittest
-
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 SRC_DIR = Path(__file__).resolve().parents[1] / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
+from core.Exceptions import MemoryError
 from eventbus.EventBus import EventBus
 from memory.MemoryManager import MemoryManager
 
@@ -28,7 +28,7 @@ class MemoryManagerTests(unittest.TestCase):
         self.assertEqual(self.memory.count(), 1)
 
     def test_add_rejects_blank_content(self) -> None:
-        with self.assertRaises(ValueError):
+        with self.assertRaises(MemoryError):
             self.memory.add("  ")
 
     def test_get_returns_none_for_missing_record(self) -> None:
@@ -62,7 +62,7 @@ class MemoryManagerTests(unittest.TestCase):
         self.assertEqual([record.content for record in matches], ["Python planner"])
 
     def test_expired_record_is_not_returned(self) -> None:
-        expired_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+        expired_at = datetime.now(UTC) - timedelta(seconds=1)
         record = self.memory.add("Temporary", expires_at=expired_at)
 
         self.assertIsNone(self.memory.get(record.memory_id))

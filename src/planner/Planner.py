@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from core.Exceptions import PlannerError
 from planner.Goal import Goal
 from planner.Plan import Plan
 from planner.Task import Task
@@ -15,7 +16,7 @@ class Planner:
         if isinstance(goal, str):
             goal = Goal(description=goal)
         if not isinstance(goal, Goal):
-            raise TypeError("Planner expects a Goal or goal description.")
+            raise PlannerError("Planner expects a Goal or goal description.")
 
         plan = Plan(goal=goal)
         for order, title in enumerate(self._task_titles_for(goal), start=1):

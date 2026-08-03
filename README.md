@@ -1,6 +1,6 @@
 # Hypatia
 
-**Documentation-first development:** Hypatia is currently in its foundation and architecture phase. No application code has been added yet.
+**Documentation-first development:** Hypatia has a tested core runtime and is in its stabilization phase. Product capabilities are introduced only after the core remains reliable.
 
 Start with the [project documentation](docs/README.md), including the [vision](docs/Bible/01_Vision.md), [architecture](docs/Architecture/README.md), [module map](docs/Modules/README.md), and [roadmap](docs/Roadmap/README.md).
 
@@ -65,4 +65,14 @@ To create the world's most capable personal AI research companion.
 
 ## Status
 
-🚧 Under Development
+🚧 Core stabilization in progress (`v0.1.7`)
+
+Completed foundation capabilities:
+
+- Application bootstrap, configuration, logging, and dependency injection
+- Event bus and in-memory conversation memory
+- Deterministic Brain request flow
+- Deterministic Planner task generation
+- 31 unit tests and shared code-quality standards
+
+Planned next: Knowledge Engine foundations (documents, parsing, chunking, indexing, and search).

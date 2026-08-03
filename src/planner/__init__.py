@@ -1,7 +1,7 @@
 from planner.Goal import Goal
-from planner.Task import Task, TaskStatus
 from planner.Plan import Plan
 from planner.Planner import Planner
+from planner.Task import Task, TaskStatus
 
 __all__ = [
     "Goal",

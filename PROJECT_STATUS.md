@@ -2,21 +2,20 @@
 
 ## Current Version
 
-v0.1.5 (in progress)
+v0.1.7 (in progress)
 
 ## Current Sprint
 
-Sprint 2.6 — Brain
+Sprint 2.7 — Core Stabilization
 
 ## Current Focus
 
-Finalize and test the first deterministic Brain request flow.
+Stabilize the core runtime with tests, consistent quality checks, logging, and error handling.
 
 ## Next
 
-- Planner
-- Knowledge
-- First AI Chat
+- Finish the v0.1.7 stabilization release
+- Knowledge Engine foundations
 
 ## Completed
 
@@ -26,10 +25,13 @@ Finalize and test the first deterministic Brain request flow.
 - [x] Dependency Container
 - [x] EventBus
 - [x] MemoryManager
-- [x] Brain request flow (manual verification)
+- [x] Brain request flow
+- [x] Deterministic Planner
+- [x] 31 unit tests
+- [x] Project standards (EditorConfig, Git attributes, Black, Ruff, MyPy)
 
 ## Verification Pending
 
-- [x] Brain unit tests
-- [ ] Feature-branch review
-- [ ] Version tag `v0.1.5`
+- [x] Full core regression suite
+- [ ] Stabilization branch review
+- [ ] Version tag and GitHub release `v0.1.7`

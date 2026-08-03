@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.Exceptions import ContainerError
+
 
 class DependencyContainer:
     """Stores initialized shared dependencies by a stable name."""
@@ -23,4 +25,4 @@ class DependencyContainer:
         try:
             return self._services[key]
         except KeyError as error:
-            raise KeyError(f"Dependency is not registered: {key}") from error
+            raise ContainerError(f"Dependency is not registered: {key}") from error

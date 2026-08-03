@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import sys
-from pathlib import Path
 import unittest
-
+from pathlib import Path
 
 SRC_DIR = Path(__file__).resolve().parents[1] / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
+from core.Exceptions import EventBusError
 from eventbus.Event import Event
 from eventbus.EventBus import EventBus
 
@@ -48,7 +48,9 @@ class EventBusTests(unittest.TestCase):
         self.assertEqual(received, ["one", "two"])
 
     def test_unsubscribe_removes_registered_handler(self) -> None:
-        handler = lambda event: None
+        def handler(event: Event) -> None:
+            return None
+
         self.bus.subscribe("test.event", handler)
 
         self.assertTrue(self.bus.unsubscribe("test.event", handler))
@@ -58,7 +60,7 @@ class EventBusTests(unittest.TestCase):
         self.assertFalse(self.bus.unsubscribe("test.event", lambda event: None))
 
     def test_subscribe_rejects_blank_event_name(self) -> None:
-        with self.assertRaises(ValueError):
+        with self.assertRaises(EventBusError):
             self.bus.subscribe("   ", lambda event: None)
 
     def test_emit_preserves_payload_and_source(self) -> None:

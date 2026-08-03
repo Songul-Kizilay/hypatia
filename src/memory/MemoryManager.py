@@ -3,17 +3,22 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from threading import RLock
 from types import MappingProxyType
 from typing import Any
 from uuid import uuid4
 
+from core.Exceptions import MemoryError
 from eventbus.EventBus import EventBus
 from memory.MemoryRecord import MemoryRecord
 
 
-_UNSET = object()
+class _Unset:
+    """Marks a field that must retain its current stored value."""
+
+
+_UNSET = _Unset()
 
 
 class MemoryManager:
@@ -66,7 +71,7 @@ class MemoryManager:
         content: str | None = None,
         metadata: Mapping[str, Any] | None = None,
         tags: Iterable[str] | None = None,
-        expires_at: datetime | None | object = _UNSET,
+        expires_at: datetime | None | _Unset = _UNSET,
     ) -> MemoryRecord | None:
         """Replace selected fields of a stored record."""
         expired = self._purge_expired()
@@ -74,7 +79,7 @@ class MemoryManager:
 
         if content is not None:
             content = self._validate_content(content)
-        if expires_at is not _UNSET:
+        if not isinstance(expires_at, _Unset):
             expires_at = self._validate_expiration(expires_at)
 
         with self._lock:
@@ -85,11 +90,17 @@ class MemoryManager:
             record = MemoryRecord(
                 memory_id=current.memory_id,
                 content=current.content if content is None else content,
-                metadata=current.metadata if metadata is None else self._freeze_metadata(metadata),
+                metadata=(
+                    current.metadata
+                    if metadata is None
+                    else self._freeze_metadata(metadata)
+                ),
                 tags=current.tags if tags is None else self._freeze_tags(tags),
                 created_at=current.created_at,
                 updated_at=self._now(),
-                expires_at=current.expires_at if expires_at is _UNSET else expires_at,
+                expires_at=(
+                    current.expires_at if isinstance(expires_at, _Unset) else expires_at
+                ),
             )
             self._records[memory_id] = record
 
@@ -116,7 +127,7 @@ class MemoryManager:
     ) -> list[MemoryRecord]:
         """Find non-expired records by case-insensitive content and tags."""
         if limit is not None and limit < 1:
-            raise ValueError("Search limit must be at least 1.")
+            raise MemoryError("Search limit must be at least 1.")
 
         expired = self._purge_expired()
         self._emit_expired(expired)
@@ -193,19 +204,19 @@ class MemoryManager:
     @staticmethod
     def _validate_content(content: str) -> str:
         if not isinstance(content, str) or not content.strip():
-            raise ValueError("Memory content cannot be empty.")
+            raise MemoryError("Memory content cannot be empty.")
         return content.strip()
 
     @staticmethod
-    def _validate_expiration(expires_at: datetime | None | object) -> datetime | None:
+    def _validate_expiration(expires_at: datetime | None) -> datetime | None:
         if expires_at is None:
             return None
         if not isinstance(expires_at, datetime):
-            raise TypeError("expires_at must be a datetime or None.")
+            raise MemoryError("expires_at must be a datetime or None.")
         if expires_at.tzinfo is None:
-            raise ValueError("expires_at must include timezone information.")
-        return expires_at.astimezone(timezone.utc)
+            raise MemoryError("expires_at must include timezone information.")
+        return expires_at.astimezone(UTC)
 
     @staticmethod
     def _now() -> datetime:
-        return datetime.now(timezone.utc)
+        return datetime.now(UTC)
