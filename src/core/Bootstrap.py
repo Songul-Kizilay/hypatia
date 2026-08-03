@@ -4,6 +4,7 @@ from core.DependencyContainer import DependencyContainer
 from core.Logger import Logger
 from eventbus.EventBus import EventBus
 from memory.MemoryManager import MemoryManager
+from planner.Planner import Planner
 
 
 class Bootstrap:
@@ -14,11 +15,13 @@ class Bootstrap:
         logger = Logger()
         event_bus = EventBus()
         memory_manager = MemoryManager(event_bus)
+        planner = Planner()
 
         self.container.register(config)
         self.container.register(logger)
         self.container.register(event_bus)
         self.container.register(memory_manager)
+        self.container.register(planner)
         brain = Brain(self.container)
         self.container.register(brain)
 
@@ -27,6 +30,7 @@ class Bootstrap:
         logger.info("Dependency Container Ready")
         logger.info("Event Bus Ready")
         logger.info("Memory Manager Ready")
+        logger.info("Planner Ready")
         logger.info("Brain Ready")
 
         event_bus.emit(
