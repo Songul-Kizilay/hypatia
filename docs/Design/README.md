@@ -1,3 +1,19 @@
-# Design
+README.md
 
-This directory will contain user flows, interaction principles, interface concepts, and accessibility decisions before UI implementation begins.
+UI
+
+UX
+
+Brand
+
+Colors
+
+Icons
+
+Fonts
+
+Themes
+
+Desktop Layout
+
+Mobile Layout

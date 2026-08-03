@@ -1,3 +1,15 @@
-# Diagrams
+README.md
 
-Store Mermaid, Draw.io, UML, and other visual design artifacts here. Each diagram should link to the decision or specification it supports.
+System Diagram
+
+Brain Diagram
+
+Memory Diagram
+
+Knowledge Graph
+
+RAG
+
+Agent Flow
+
+Event Flow

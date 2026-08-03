@@ -21,3 +21,11 @@ This directory is intentionally code-free during the documentation phase. The fo
 ## Planned agents
 
 `brain`, `research`, `security`, `career`, `planner`, `memory`, `home`, `vision`, `voice`, `gaming`, `cinema`, `companion`, and `teacher` are reserved as separate future agent workspaces. Their specifications belong in `docs/Modules` before code is introduced.
+
+## Layer boundaries
+
+- `agents/` decide, coordinate, and request approved work.
+- `modules/` implement domain capabilities such as research, memory, or voice.
+- `services/` provide shared technical capabilities such as model access, storage, speech, and notifications.
+
+Agents must depend on public module and service contracts rather than each other's internal implementation.
