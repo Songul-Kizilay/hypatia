@@ -3,22 +3,21 @@
 from __future__ import annotations
 
 import sys
-from pathlib import Path
 import unittest
-
+from pathlib import Path
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
+    sys.path.append(str(SRC_DIR))
 
 # unittest imports this file as ``brain.test_brain`` because the test
-# directory is a package. Remove that temporary package so imports below
-# resolve the real implementation package at ``src/brain``.
+# directory is a package. Extend that package's search path so imports below
+# resolve implementation modules at ``src/brain`` as well.
 loaded_brain = sys.modules.get("brain")
 if loaded_brain is not None:
-    loaded_path = Path(getattr(loaded_brain, "__file__", "")).resolve()
-    if loaded_path.parent == Path(__file__).resolve().parent:
-        del sys.modules["brain"]
+    source_brain_dir = str(SRC_DIR / "brain")
+    if source_brain_dir not in loaded_brain.__path__:
+        loaded_brain.__path__.append(source_brain_dir)
 
 from brain.Brain import Brain
 from core.DependencyContainer import DependencyContainer

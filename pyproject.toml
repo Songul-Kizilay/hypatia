@@ -1,0 +1,28 @@
+[project]
+name = "hypatia"
+version = "0.1.7"
+description = "A local-first AI research companion."
+requires-python = ">=3.14"
+
+[tool.black]
+line-length = 88
+target-version = ["py314"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py314"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["E402"]
+
+[tool.mypy]
+python_version = "3.14"
+mypy_path = "src"
+check_untyped_defs = true
+warn_return_any = true
+warn_unused_ignores = true
+no_implicit_optional = true

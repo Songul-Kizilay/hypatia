@@ -2,10 +2,10 @@
 System runtime states.
 """
 
-from enum import Enum
+from enum import StrEnum
 
 
-class SystemState(str, Enum):
+class SystemState(StrEnum):
 
     STARTING = "STARTING"
 

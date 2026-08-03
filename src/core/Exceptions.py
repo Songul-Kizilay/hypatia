@@ -15,6 +15,18 @@ class BootstrapError(HypatiaError):
     """Bootstrap error."""
 
 
+class ContainerError(HypatiaError):
+    """Dependency container error."""
+
+
+class EventBusError(HypatiaError):
+    """Event bus error."""
+
+
+class BrainError(HypatiaError):
+    """Brain request-processing error."""
+
+
 class MemoryError(HypatiaError):
     """Memory error."""
 

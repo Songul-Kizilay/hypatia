@@ -7,6 +7,7 @@ from brain.BrainRequest import BrainRequest
 from brain.BrainResponse import BrainResponse
 from brain.BrainRouter import BrainRouter
 from core.DependencyContainer import DependencyContainer
+from core.Exceptions import BrainError
 from eventbus.EventBus import EventBus
 from memory.MemoryManager import MemoryManager
 
@@ -23,7 +24,7 @@ class Brain:
         """Process a user message without involving an LLM or planner."""
         request = BrainRequest(message=message.strip())
         if not request.message:
-            raise ValueError("Brain request message cannot be empty.")
+            raise BrainError("Brain request message cannot be empty.")
 
         context = BrainContext(request=request)
         self._event_bus.emit(

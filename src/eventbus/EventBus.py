@@ -7,12 +7,11 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Callable
 from threading import RLock
-from typing import TypeAlias
 
+from core.Exceptions import EventBusError
 from eventbus.Event import Event
 
-
-EventHandler: TypeAlias = Callable[[Event], None]
+type EventHandler = Callable[[Event], None]
 
 
 class EventBus:
@@ -25,7 +24,7 @@ class EventBus:
     def subscribe(self, event_name: str, handler: EventHandler) -> None:
         """Subscribe a handler to an event name."""
         if not event_name.strip():
-            raise ValueError("Event name cannot be empty.")
+            raise EventBusError("Event name cannot be empty.")
 
         with self._lock:
             if handler not in self._subscribers[event_name]:
