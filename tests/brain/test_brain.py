@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -20,8 +21,9 @@ if loaded_brain is not None:
         loaded_brain.__path__.append(source_brain_dir)
 
 from brain.Brain import Brain
-from core.DependencyContainer import DependencyContainer
+from cognition.CognitiveEngine import CognitiveEngine
 from eventbus.EventBus import EventBus
+from knowledge.KnowledgeEngine import KnowledgeEngine
 from memory.MemoryManager import MemoryManager
 
 
@@ -29,10 +31,13 @@ class BrainTests(unittest.TestCase):
     def setUp(self) -> None:
         self.event_bus = EventBus()
         self.memory_manager = MemoryManager(self.event_bus)
-        self.container = DependencyContainer()
-        self.container.register(self.event_bus)
-        self.container.register(self.memory_manager)
-        self.brain = Brain(self.container)
+        self.knowledge_engine = KnowledgeEngine()
+        self.cognitive_engine = CognitiveEngine(self.knowledge_engine)
+        self.brain = Brain(
+            self.cognitive_engine,
+            self.memory_manager,
+            self.event_bus,
+        )
 
     def test_process_returns_greeting_and_saves_conversation(self) -> None:
         response = self.brain.process("hello")
@@ -65,6 +70,26 @@ class BrainTests(unittest.TestCase):
                 "brain.response.ready",
             ],
         )
+
+    def test_process_searches_knowledge_and_returns_matching_chunks(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            document_path = Path(temporary_directory) / "knowledge.md"
+            document_path.write_text("Hypatia\n\nKnowledge", encoding="utf-8")
+            self.knowledge_engine.load(document_path)
+
+            response = self.brain.process("search hypatia")
+
+        self.assertEqual(response.message, "I found 1 matching knowledge chunks.")
+        self.assertEqual(
+            [chunk.content for chunk in response.knowledge_results], ["Hypatia"]
+        )
+
+    def test_empty_search_is_delegated_to_cognitive_engine(self) -> None:
+        response = self.brain.process("search ")
+
+        self.assertFalse(response.success)
+        self.assertEqual(response.message, "A search query is required.")
+        self.assertEqual(response.knowledge_results, [])
 
 
 if __name__ == "__main__":
