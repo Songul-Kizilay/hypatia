@@ -4,7 +4,21 @@ All notable project changes are recorded here.
 
 ## Unreleased
 
-- Expanded documentation, planning, and repository structure.
+## [0.2.0] - 2026-08-03
+
+### Added
+
+- Knowledge Foundation pipeline from document loading to search.
+- `.txt` and `.md` document loading.
+- Paragraph parsing into ordered chunks.
+- In-memory chunk indexing and case-insensitive text search.
+- KnowledgeEngine orchestration for loading, indexing, searching, and clearing.
+
+### Tests
+
+- Added 37 Knowledge Foundation tests.
+- Expanded the full suite to 68 passing unit tests.
+- Verified Black, Ruff, MyPy, unittest, and whitespace checks.
 
 ## [0.1.7] - 2026-08-03
 
