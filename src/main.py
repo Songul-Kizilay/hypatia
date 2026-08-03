@@ -1,6 +1,6 @@
-from brain.Brain import Brain
 from core.Application import HypatiaApplication
 from core.Logger import Logger
+from planner.Planner import Planner
 
 
 def main() -> None:
@@ -9,12 +9,10 @@ def main() -> None:
 
     container = app.bootstrap.container
     logger = container.resolve(Logger)
-    brain = container.resolve(Brain)
-    response = brain.process("hello")
+    planner = container.resolve(Planner)
 
-    logger.info(f"Brain response: {response.message}")
-    logger.info(f"Brain intent: {response.intent}")
-    logger.info(f"Conversation memories: {response.memory_count + 1}")
+    plan = planner.create_plan("Read a PDF and summarize it")
+    logger.info(f"Generated plan with {plan.task_count()} tasks.")
 
 
 if __name__ == "__main__":
