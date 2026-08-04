@@ -17,7 +17,7 @@ class Bootstrap:
         event_bus = EventBus()
         memory_manager = MemoryManager(event_bus)
         knowledge_engine = KnowledgeEngine()
-        cognitive_engine = CognitiveEngine(knowledge_engine)
+        cognitive_engine = CognitiveEngine(knowledge_engine, memory_manager)
         brain = Brain(cognitive_engine, memory_manager, event_bus)
         planner = Planner()
 
