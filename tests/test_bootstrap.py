@@ -42,6 +42,18 @@ class BootstrapTests(unittest.TestCase):
             "User: search hypatia\nHypatia: I found 1 matching knowledge chunks.",
         )
 
+    def test_bootstrap_wires_brain_to_the_planner(self) -> None:
+        bootstrap = Bootstrap()
+        bootstrap.initialize()
+        brain = bootstrap.container.resolve(Brain)
+
+        response = brain.process("plan learn SQL injection")
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "plan")
+        self.assertIn("Plan created for: learn SQL injection", response.message)
+        self.assertIn("1. Clarify goal", response.message)
+
 
 if __name__ == "__main__":
     unittest.main()

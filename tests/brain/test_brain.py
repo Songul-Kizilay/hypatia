@@ -11,6 +11,8 @@ SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
+import planner
+
 # unittest imports this file as ``brain.test_brain`` because the test
 # directory is a package. Extend that package's search path so imports below
 # resolve implementation modules at ``src/brain`` as well.
@@ -20,11 +22,16 @@ if loaded_brain is not None:
     if source_brain_dir not in loaded_brain.__path__:
         loaded_brain.__path__.append(source_brain_dir)
 
+source_planner_dir = str(SRC_DIR / "planner")
+if source_planner_dir not in planner.__path__:
+    planner.__path__.append(source_planner_dir)
+
 from brain.Brain import Brain
 from cognition.CognitiveEngine import CognitiveEngine
 from eventbus.EventBus import EventBus
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from memory.MemoryManager import MemoryManager
+from planner.Planner import Planner
 
 
 class BrainTests(unittest.TestCase):
@@ -32,9 +39,11 @@ class BrainTests(unittest.TestCase):
         self.event_bus = EventBus()
         self.memory_manager = MemoryManager(self.event_bus)
         self.knowledge_engine = KnowledgeEngine()
+        self.planner = Planner()
         self.cognitive_engine = CognitiveEngine(
             self.knowledge_engine,
             self.memory_manager,
+            self.planner,
         )
         self.brain = Brain(
             self.cognitive_engine,
@@ -93,6 +102,20 @@ class BrainTests(unittest.TestCase):
         self.assertFalse(response.success)
         self.assertEqual(response.message, "A search query is required.")
         self.assertEqual(response.knowledge_results, [])
+
+    def test_plan_request_is_delegated_to_cognitive_engine(self) -> None:
+        response = self.brain.process("plan learn SQL injection")
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "plan")
+        self.assertIn("Plan created for: learn SQL injection", response.message)
+        self.assertIn("1. Clarify goal", response.message)
+
+    def test_empty_plan_is_delegated_to_cognitive_engine(self) -> None:
+        response = self.brain.process("plan ")
+
+        self.assertFalse(response.success)
+        self.assertEqual(response.message, "A planning goal is required.")
 
 
 if __name__ == "__main__":
