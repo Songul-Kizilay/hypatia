@@ -32,7 +32,10 @@ class BrainTests(unittest.TestCase):
         self.event_bus = EventBus()
         self.memory_manager = MemoryManager(self.event_bus)
         self.knowledge_engine = KnowledgeEngine()
-        self.cognitive_engine = CognitiveEngine(self.knowledge_engine)
+        self.cognitive_engine = CognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+        )
         self.brain = Brain(
             self.cognitive_engine,
             self.memory_manager,
