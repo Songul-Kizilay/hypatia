@@ -54,12 +54,14 @@ class CognitiveEngineTests(unittest.TestCase):
         path.write_text("Hypatia\n\nKnowledge\n\nHypatia", encoding="utf-8")
         self.knowledge_engine = KnowledgeEngine()
         self.knowledge_engine.load(path)
-        self.memory_manager = MemoryManager(EventBus())
+        self.event_bus = EventBus()
+        self.memory_manager = MemoryManager(self.event_bus)
         self.planner = Planner()
         self.engine = CognitiveEngine(
             self.knowledge_engine,
             self.memory_manager,
             self.planner,
+            self.event_bus,
         )
 
     def tearDown(self) -> None:
@@ -158,12 +160,20 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(response.knowledge_results, [])
         self.assertEqual(response.message, "I found 0 matching knowledge chunks.")
 
-    def test_unsupported_intent_returns_safe_response(self) -> None:
+    def test_greeting_is_processed_as_a_conversation(self) -> None:
         response = self.engine.process(BrainRequest(message="hello"))
 
         self.assertTrue(response.success)
-        self.assertEqual(response.intent, "unsupported")
-        self.assertEqual(response.message, "This intent is not supported yet.")
+        self.assertEqual(response.intent, "greeting")
+        self.assertEqual(response.message, "Hello! I am Hypatia.")
+
+    def test_message_is_processed_as_a_conversation(self) -> None:
+        response = self.engine.process(BrainRequest(message="how are you"))
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "message")
+        self.assertEqual(response.message, "I received your message: how are you")
+        self.assertEqual(len(self.memory_manager.all()), 1)
 
     def test_knowledge_error_returns_unsuccessful_response(self) -> None:
         memory_manager = MemoryManager()
@@ -171,6 +181,7 @@ class CognitiveEngineTests(unittest.TestCase):
             FailingKnowledgeEngine(),  # type: ignore[arg-type]
             memory_manager,
             Planner(),
+            EventBus(),
         )
 
         response = engine.process(BrainRequest(message="search hypatia"))
@@ -185,6 +196,7 @@ class CognitiveEngineTests(unittest.TestCase):
             FailingKnowledgeEngine(),  # type: ignore[arg-type]
             memory_manager,
             Planner(),
+            EventBus(),
         )
 
         engine.process(BrainRequest(message="search hypatia"))
@@ -200,6 +212,7 @@ class CognitiveEngineTests(unittest.TestCase):
             self.knowledge_engine,
             FailingMemoryManager(),  # type: ignore[arg-type]
             self.planner,
+            self.event_bus,
         )
 
         response = engine.process(BrainRequest(message="search hypatia"))
@@ -229,6 +242,7 @@ class CognitiveEngineTests(unittest.TestCase):
             self.knowledge_engine,
             self.memory_manager,
             FailingPlanner(),  # type: ignore[arg-type]
+            self.event_bus,
         )
 
         response = engine.process(BrainRequest(message="plan learn SQL injection"))

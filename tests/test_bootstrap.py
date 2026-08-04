@@ -54,6 +54,26 @@ class BootstrapTests(unittest.TestCase):
         self.assertIn("Plan created for: learn SQL injection", response.message)
         self.assertIn("1. Clarify goal", response.message)
 
+    def test_bootstrap_processes_greeting_through_cognition(self) -> None:
+        bootstrap = Bootstrap()
+        bootstrap.initialize()
+        brain = bootstrap.container.resolve(Brain)
+
+        response = brain.process("hello")
+
+        self.assertEqual(response.intent, "greeting")
+        self.assertEqual(response.message, "Hello! I am Hypatia.")
+
+    def test_bootstrap_processes_message_through_cognition(self) -> None:
+        bootstrap = Bootstrap()
+        bootstrap.initialize()
+        brain = bootstrap.container.resolve(Brain)
+
+        response = brain.process("how are you")
+
+        self.assertEqual(response.intent, "message")
+        self.assertEqual(response.message, "I received your message: how are you")
+
 
 if __name__ == "__main__":
     unittest.main()

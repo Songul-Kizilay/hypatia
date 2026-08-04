@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from brain.BrainContext import BrainContext
 from brain.BrainRequest import BrainRequest
 from brain.BrainResponse import BrainResponse
+from brain.BrainRouter import BrainRouter
 from core.Exceptions import KnowledgeError, MemoryError, PlannerError
+from eventbus.EventBus import EventBus
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from memory.MemoryManager import MemoryManager
 
@@ -23,10 +26,13 @@ class CognitiveEngine:
         knowledge_engine: KnowledgeEngine,
         memory_manager: MemoryManager,
         planner: Planner,
+        event_bus: EventBus,
     ) -> None:
         self._knowledge_engine = knowledge_engine
         self._memory_manager = memory_manager
         self._planner = planner
+        self._event_bus = event_bus
+        self._router = BrainRouter()
 
     def process(self, request: BrainRequest) -> BrainResponse:
         """Process a request using the currently supported cognitive intent."""
@@ -97,7 +103,7 @@ class CognitiveEngine:
                 memory_count=0,
             )
 
-        return self._unsupported_response(request, "This intent is not supported yet.")
+        return self._process_conversation(request)
 
     @staticmethod
     def _is_search_request(request: BrainRequest) -> bool:
@@ -135,6 +141,45 @@ class CognitiveEngine:
     def _format_plan(plan: Plan) -> str:
         task_lines = "\n".join(f"{task.order}. {task.title}" for task in plan.tasks)
         return f"Plan created for: {plan.goal.description}\n\n{task_lines}"
+
+    def _process_conversation(self, request: BrainRequest) -> BrainResponse:
+        """Process the deterministic greeting and message conversation flow."""
+        context = BrainContext(request=request)
+        self._event_bus.emit(
+            "brain.request.received",
+            {"request_id": request.request_id, "message": request.message},
+            source="brain",
+        )
+        context.intent = self._router.detect_intent(request)
+        self._event_bus.emit(
+            "brain.intent.detected",
+            {"request_id": request.request_id, "intent": context.intent},
+            source="brain",
+        )
+
+        response = BrainResponse(
+            message=self._compose_response(context),
+            request_id=request.request_id,
+            intent=context.intent,
+            memory_count=0,
+        )
+        self._memory_manager.add(
+            f"User: {request.message}\nHypatia: {response.message}",
+            metadata={"request_id": request.request_id, "intent": response.intent},
+            tags={"brain", "conversation"},
+        )
+        self._event_bus.emit(
+            "brain.response.ready",
+            {"request_id": response.request_id, "intent": response.intent},
+            source="brain",
+        )
+        return response
+
+    @staticmethod
+    def _compose_response(context: BrainContext) -> str:
+        if context.intent == "greeting":
+            return "Hello! I am Hypatia."
+        return f"I received your message: {context.request.message}"
 
     def _remember_search(
         self,

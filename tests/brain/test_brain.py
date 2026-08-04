@@ -44,6 +44,7 @@ class BrainTests(unittest.TestCase):
             self.knowledge_engine,
             self.memory_manager,
             self.planner,
+            self.event_bus,
         )
         self.brain = Brain(
             self.cognitive_engine,
@@ -58,14 +59,34 @@ class BrainTests(unittest.TestCase):
         self.assertEqual(response.message, "Hello! I am Hypatia.")
         self.assertEqual(response.memory_count, 0)
         self.assertEqual(self.memory_manager.count(), 1)
+        self.assertEqual(
+            self.memory_manager.all()[0].content,
+            "User: hello\nHypatia: Hello! I am Hypatia.",
+        )
+        self.assertEqual(
+            self.memory_manager.all()[0].tags,
+            frozenset({"brain", "conversation"}),
+        )
 
-    def test_process_checks_existing_memory(self) -> None:
+    def test_process_does_not_treat_existing_memory_as_recall(self) -> None:
         self.memory_manager.add("hello from a saved memory")
 
         response = self.brain.process("hello")
 
-        self.assertEqual(response.memory_count, 1)
+        self.assertEqual(response.memory_count, 0)
         self.assertEqual(self.memory_manager.count(), 2)
+
+    def test_process_returns_message_response_and_saves_one_conversation(self) -> None:
+        response = self.brain.process("how are you")
+
+        self.assertEqual(response.intent, "message")
+        self.assertEqual(response.message, "I received your message: how are you")
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(self.memory_manager.count(), 1)
+        self.assertEqual(
+            self.memory_manager.all()[0].content,
+            "User: how are you\nHypatia: I received your message: how are you",
+        )
 
     def test_process_emits_brain_lifecycle_events(self) -> None:
         observed_events: list[str] = []
@@ -95,6 +116,11 @@ class BrainTests(unittest.TestCase):
         self.assertEqual(
             [chunk.content for chunk in response.knowledge_results], ["Hypatia"]
         )
+        self.assertEqual(self.memory_manager.count(), 1)
+        self.assertEqual(
+            self.memory_manager.all()[0].tags,
+            frozenset({"cognition", "knowledge-search", "conversation"}),
+        )
 
     def test_empty_search_is_delegated_to_cognitive_engine(self) -> None:
         response = self.brain.process("search ")
@@ -110,6 +136,7 @@ class BrainTests(unittest.TestCase):
         self.assertEqual(response.intent, "plan")
         self.assertIn("Plan created for: learn SQL injection", response.message)
         self.assertIn("1. Clarify goal", response.message)
+        self.assertEqual(self.memory_manager.count(), 0)
 
     def test_empty_plan_is_delegated_to_cognitive_engine(self) -> None:
         response = self.brain.process("plan ")
