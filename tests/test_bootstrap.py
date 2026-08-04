@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 import unittest
@@ -12,6 +13,7 @@ if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
 from brain.Brain import Brain
+from brain.BrainRequest import BrainRequest
 from core.Bootstrap import Bootstrap
 from core.Exceptions import MemoryError
 from knowledge.KnowledgeEngine import KnowledgeEngine
@@ -174,6 +176,122 @@ class BootstrapTests(unittest.TestCase):
         self.assertTrue(response.success)
         self.assertEqual(response.memory_count, 0)
         self.assertEqual(response.message, "No matching conversation records found.")
+
+    def test_custom_session_conversation_persists_and_is_recalled_after_restart(
+        self,
+    ) -> None:
+        first_bootstrap = self._bootstrap()
+        first_bootstrap.initialize()
+        first_brain = first_bootstrap.container.resolve(Brain)
+        first_brain.process(
+            BrainRequest(
+                message="I like cats",
+                metadata={"session_id": "work-1"},
+            )
+        )
+
+        document = json.loads(self.memory_path.read_text(encoding="utf-8"))
+        self.assertEqual(document["schema_version"], 1)
+        self.assertEqual(document["records"][0]["metadata"]["session_id"], "work-1")
+        self.assertEqual(set(document), {"schema_version", "records"})
+
+        restarted_bootstrap = self._bootstrap()
+        restarted_bootstrap.initialize()
+        restarted_brain = restarted_bootstrap.container.resolve(Brain)
+        response = restarted_brain.process(
+            BrainRequest(
+                message="recall cats",
+                metadata={"session_id": "work-1"},
+            )
+        )
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.memory_count, 1)
+        self.assertIn("User: I like cats", response.message)
+
+    def test_custom_session_record_is_excluded_from_default_recall_after_restart(
+        self,
+    ) -> None:
+        first_bootstrap = self._bootstrap()
+        first_bootstrap.initialize()
+        first_brain = first_bootstrap.container.resolve(Brain)
+        first_brain.process(
+            BrainRequest(
+                message="I like cats",
+                metadata={"session_id": "work-1"},
+            )
+        )
+
+        restarted_bootstrap = self._bootstrap()
+        restarted_bootstrap.initialize()
+        restarted_brain = restarted_bootstrap.container.resolve(Brain)
+        response = restarted_brain.process("recall cats")
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.memory_count, 0)
+
+    def test_same_query_stays_isolated_between_sessions_after_restart(self) -> None:
+        first_bootstrap = self._bootstrap()
+        first_bootstrap.initialize()
+        first_brain = first_bootstrap.container.resolve(Brain)
+        first_brain.process(
+            BrainRequest(
+                message="Cats are my work topic",
+                metadata={"session_id": "work-1"},
+            )
+        )
+        first_brain.process(
+            BrainRequest(
+                message="Cats are my personal topic",
+                metadata={"session_id": "personal"},
+            )
+        )
+
+        restarted_bootstrap = self._bootstrap()
+        restarted_bootstrap.initialize()
+        restarted_brain = restarted_bootstrap.container.resolve(Brain)
+        work_response = restarted_brain.process(
+            BrainRequest(
+                message="recall cats",
+                metadata={"session_id": "work-1"},
+            )
+        )
+        personal_response = restarted_brain.process(
+            BrainRequest(
+                message="recall cats",
+                metadata={"session_id": "personal"},
+            )
+        )
+
+        self.assertIn("work topic", work_response.message)
+        self.assertNotIn("personal topic", work_response.message)
+        self.assertIn("personal topic", personal_response.message)
+        self.assertNotIn("work topic", personal_response.message)
+
+    def test_persisted_search_records_are_excluded_from_custom_session_recall(
+        self,
+    ) -> None:
+        document_path = Path(self.temporary_directory.name) / "knowledge.md"
+        document_path.write_text("Hypatia", encoding="utf-8")
+        first_bootstrap = self._bootstrap()
+        first_bootstrap.initialize()
+        knowledge_engine = first_bootstrap.container.resolve(KnowledgeEngine)
+        first_brain = first_bootstrap.container.resolve(Brain)
+        knowledge_engine.load(document_path)
+        first_brain.process("search hypatia")
+
+        restarted_bootstrap = self._bootstrap()
+        restarted_bootstrap.initialize()
+        restarted_brain = restarted_bootstrap.container.resolve(Brain)
+        response = restarted_brain.process(
+            BrainRequest(
+                message="recall hypatia",
+                metadata={"session_id": "work-1"},
+            )
+        )
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.memory_count, 0)
 
 
 if __name__ == "__main__":

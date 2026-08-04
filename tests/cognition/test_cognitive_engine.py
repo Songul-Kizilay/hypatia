@@ -28,6 +28,7 @@ from core.Exceptions import KnowledgeError, MemoryError, PlannerError
 from eventbus.EventBus import EventBus
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from memory.MemoryManager import MemoryManager
+from memory.MemoryRecord import MemoryRecord
 from planner.Planner import Planner
 from response.ResponseComposer import ResponseComposer
 
@@ -44,6 +45,13 @@ class FailingMemoryManager:
 
     def add(self, *args: object, **kwargs: object) -> None:
         raise MemoryError("Memory is unavailable.")
+
+
+class RecallSearchMustNotRunMemoryManager:
+    """Minimal double that fails if invalid recall attempts a memory search."""
+
+    def search(self, *args: object, **kwargs: object) -> list[MemoryRecord]:
+        raise AssertionError("Recall search must not run.")
 
 
 class FailingPlanner:
@@ -182,6 +190,55 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(response.intent, "message")
         self.assertEqual(response.message, "I received your message: how are you")
         self.assertEqual(len(self.memory_manager.all()), 1)
+
+    def test_conversation_without_a_session_id_uses_the_default_session(self) -> None:
+        self.engine.process(BrainRequest(message="hello"))
+
+        self.assertEqual(
+            self.memory_manager.all()[0].metadata["session_id"],
+            "default",
+        )
+
+    def test_none_empty_and_whitespace_session_ids_use_the_default_session(
+        self,
+    ) -> None:
+        for session_id in (None, "", "   "):
+            with self.subTest(session_id=session_id):
+                self.memory_manager.clear()
+                self.engine.process(
+                    BrainRequest(message="hello", metadata={"session_id": session_id})
+                )
+
+                self.assertEqual(
+                    self.memory_manager.all()[0].metadata["session_id"],
+                    "default",
+                )
+
+    def test_conversation_normalizes_a_string_session_id_without_mutating_request(
+        self,
+    ) -> None:
+        metadata = {"session_id": "  work-1  "}
+        request = BrainRequest(message="hello", metadata=metadata)
+
+        self.engine.process(request)
+
+        self.assertEqual(self.memory_manager.all()[0].metadata["session_id"], "work-1")
+        self.assertEqual(metadata, {"session_id": "  work-1  "})
+
+    def test_non_string_session_id_returns_a_controlled_failure_without_side_effects(
+        self,
+    ) -> None:
+        events: list[str] = []
+        self.event_bus.subscribe("*", lambda event: events.append(event.name))
+
+        response = self.engine.process(
+            BrainRequest(message="hello", metadata={"session_id": 123})
+        )
+
+        self.assertFalse(response.success)
+        self.assertEqual(response.message, "session_id must be a string.")
+        self.assertEqual(self.memory_manager.count(), 0)
+        self.assertEqual(events, [])
 
     def test_knowledge_error_returns_unsuccessful_response(self) -> None:
         memory_manager = MemoryManager()
@@ -361,3 +418,131 @@ class CognitiveEngineTests(unittest.TestCase):
             response.message,
             "I received your message: please recall cats",
         )
+
+    def test_default_session_recall_includes_legacy_records(self) -> None:
+        self.memory_manager.add(
+            "User: cats\nHypatia: Legacy conversation.",
+            tags={"brain", "conversation"},
+        )
+        self.memory_manager.add(
+            "User: cats\nHypatia: Default conversation.",
+            metadata={"session_id": "default"},
+            tags={"brain", "conversation"},
+        )
+
+        response = self.engine.process(BrainRequest(message="recall cats"))
+
+        self.assertEqual(response.memory_count, 2)
+        self.assertIn("Legacy conversation.", response.message)
+        self.assertIn("Default conversation.", response.message)
+
+    def test_custom_session_recall_returns_only_its_records(self) -> None:
+        self.memory_manager.add(
+            "User: cats\nHypatia: Default conversation.",
+            metadata={"session_id": "default"},
+            tags={"brain", "conversation"},
+        )
+        self.memory_manager.add(
+            "User: cats\nHypatia: Work conversation.",
+            metadata={"session_id": "work-1"},
+            tags={"brain", "conversation"},
+        )
+        self.memory_manager.add(
+            "User: cats\nHypatia: Personal conversation.",
+            metadata={"session_id": "personal"},
+            tags={"brain", "conversation"},
+        )
+
+        response = self.engine.process(
+            BrainRequest(message="recall cats", metadata={"session_id": "work-1"})
+        )
+
+        self.assertEqual(response.memory_count, 1)
+        self.assertIn("Work conversation.", response.message)
+        self.assertNotIn("Default conversation.", response.message)
+        self.assertNotIn("Personal conversation.", response.message)
+
+    def test_recall_applies_the_limit_after_session_filtering(self) -> None:
+        for index in range(5):
+            self.memory_manager.add(
+                f"User: cats other {index}\nHypatia: other {index}",
+                metadata={"session_id": "other"},
+                tags={"brain", "conversation"},
+            )
+        for index in range(6):
+            self.memory_manager.add(
+                f"User: cats work {index}\nHypatia: work {index}",
+                metadata={"session_id": "work-1"},
+                tags={"brain", "conversation"},
+            )
+
+        response = self.engine.process(
+            BrainRequest(message="recall cats", metadata={"session_id": "work-1"})
+        )
+
+        self.assertEqual(response.memory_count, 5)
+        self.assertIn("User: cats work 0", response.message)
+        self.assertIn("User: cats work 4", response.message)
+        self.assertNotIn("User: cats work 5", response.message)
+        self.assertNotIn("User: cats other 0", response.message)
+
+    def test_same_query_returns_different_results_for_different_sessions(self) -> None:
+        self.memory_manager.add(
+            "User: cats\nHypatia: Work answer.",
+            metadata={"session_id": "work-1"},
+            tags={"brain", "conversation"},
+        )
+        self.memory_manager.add(
+            "User: cats\nHypatia: Personal answer.",
+            metadata={"session_id": "personal"},
+            tags={"brain", "conversation"},
+        )
+
+        work_response = self.engine.process(
+            BrainRequest(message="recall cats", metadata={"session_id": "work-1"})
+        )
+        personal_response = self.engine.process(
+            BrainRequest(message="recall cats", metadata={"session_id": "personal"})
+        )
+
+        self.assertIn("Work answer.", work_response.message)
+        self.assertNotIn("Personal answer.", work_response.message)
+        self.assertIn("Personal answer.", personal_response.message)
+        self.assertNotIn("Work answer.", personal_response.message)
+
+    def test_custom_session_recall_excludes_default_and_none_session_records(
+        self,
+    ) -> None:
+        self.memory_manager.add(
+            "User: cats\nHypatia: Legacy conversation.",
+            tags={"brain", "conversation"},
+        )
+        self.memory_manager.add(
+            "User: cats\nHypatia: Null session conversation.",
+            metadata={"session_id": None},
+            tags={"brain", "conversation"},
+        )
+
+        response = self.engine.process(
+            BrainRequest(message="recall cats", metadata={"session_id": "work-1"})
+        )
+
+        self.assertEqual(response.memory_count, 0)
+        self.assertNotIn("Legacy conversation.", response.message)
+        self.assertNotIn("Null session conversation.", response.message)
+
+    def test_invalid_session_id_prevents_recall_search(self) -> None:
+        engine = CognitiveEngine(
+            self.knowledge_engine,
+            RecallSearchMustNotRunMemoryManager(),  # type: ignore[arg-type]
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+        )
+
+        response = engine.process(
+            BrainRequest(message="recall cats", metadata={"session_id": 123})
+        )
+
+        self.assertFalse(response.success)
+        self.assertEqual(response.message, "session_id must be a string.")
