@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from brain.BrainRequest import BrainRequest
 from brain.BrainResponse import BrainResponse
-from core.Exceptions import KnowledgeError, MemoryError
+from core.Exceptions import KnowledgeError, MemoryError, PlannerError
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from memory.MemoryManager import MemoryManager
+
+if TYPE_CHECKING:
+    from planner.Plan import Plan
+    from planner.Planner import Planner
 
 
 class CognitiveEngine:
@@ -16,9 +22,11 @@ class CognitiveEngine:
         self,
         knowledge_engine: KnowledgeEngine,
         memory_manager: MemoryManager,
+        planner: Planner,
     ) -> None:
         self._knowledge_engine = knowledge_engine
         self._memory_manager = memory_manager
+        self._planner = planner
 
     def process(self, request: BrainRequest) -> BrainResponse:
         """Process a request using the currently supported cognitive intent."""
@@ -60,6 +68,35 @@ class CognitiveEngine:
             self._remember_search(request, response, query)
             return response
 
+        if self._is_plan_request(request):
+            goal = self._plan_goal(request)
+            if not goal:
+                return BrainResponse(
+                    message="A planning goal is required.",
+                    request_id=request.request_id,
+                    intent="plan",
+                    memory_count=0,
+                    success=False,
+                )
+
+            try:
+                plan = self._planner.create_plan(goal)
+            except PlannerError as error:
+                return BrainResponse(
+                    message=f"Planning failed: {error}",
+                    request_id=request.request_id,
+                    intent="plan",
+                    memory_count=0,
+                    success=False,
+                )
+
+            return BrainResponse(
+                message=self._format_plan(plan),
+                request_id=request.request_id,
+                intent="plan",
+                memory_count=0,
+            )
+
         return self._unsupported_response(request, "This intent is not supported yet.")
 
     @staticmethod
@@ -77,6 +114,27 @@ class CognitiveEngine:
         if request.metadata.get("intent") == "search":
             return request.message.strip()
         return request.message[7:].strip()
+
+    @staticmethod
+    def _is_plan_request(request: BrainRequest) -> bool:
+        declared_intent = request.metadata.get("intent")
+        normalized_message = request.message.casefold().strip()
+        return (
+            declared_intent == "plan"
+            or normalized_message == "plan"
+            or normalized_message.startswith("plan ")
+        )
+
+    @staticmethod
+    def _plan_goal(request: BrainRequest) -> str:
+        if request.metadata.get("intent") == "plan":
+            return request.message.strip()
+        return request.message[5:].strip()
+
+    @staticmethod
+    def _format_plan(plan: Plan) -> str:
+        task_lines = "\n".join(f"{task.order}. {task.title}" for task in plan.tasks)
+        return f"Plan created for: {plan.goal.description}\n\n{task_lines}"
 
     def _remember_search(
         self,

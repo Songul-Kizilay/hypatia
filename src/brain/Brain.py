@@ -31,9 +31,9 @@ class Brain:
         brain_request = self._normalize_request(request)
         normalized_message = brain_request.message.strip()
         if (
-            brain_request.metadata.get("intent") == "search"
-            or normalized_message.casefold() == "search"
-            or normalized_message.casefold().startswith("search ")
+            brain_request.metadata.get("intent") in {"search", "plan"}
+            or normalized_message.casefold() in {"search", "plan"}
+            or normalized_message.casefold().startswith(("search ", "plan "))
         ):
             return self._cognitive_engine.process(brain_request)
 
