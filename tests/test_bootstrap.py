@@ -15,9 +15,18 @@ from brain.Brain import Brain
 from core.Bootstrap import Bootstrap
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from memory.MemoryManager import MemoryManager
+from response.ResponseComposer import ResponseComposer
 
 
 class BootstrapTests(unittest.TestCase):
+    def test_bootstrap_registers_response_composer(self) -> None:
+        bootstrap = Bootstrap()
+        bootstrap.initialize()
+
+        response_composer = bootstrap.container.resolve(ResponseComposer)
+
+        self.assertIsInstance(response_composer, ResponseComposer)
+
     def test_bootstrap_wires_cognitive_search_to_shared_memory_manager(
         self,
     ) -> None:

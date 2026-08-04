@@ -12,10 +12,15 @@ if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
 import planner
+import response
 
 source_planner_dir = str(SRC_DIR / "planner")
 if source_planner_dir not in planner.__path__:
     planner.__path__.append(source_planner_dir)
+
+source_response_dir = str(SRC_DIR / "response")
+if source_response_dir not in response.__path__:
+    response.__path__.append(source_response_dir)
 
 from brain.BrainRequest import BrainRequest
 from cognition.CognitiveEngine import CognitiveEngine
@@ -24,6 +29,7 @@ from eventbus.EventBus import EventBus
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from memory.MemoryManager import MemoryManager
 from planner.Planner import Planner
+from response.ResponseComposer import ResponseComposer
 
 
 class FailingKnowledgeEngine:
@@ -57,11 +63,13 @@ class CognitiveEngineTests(unittest.TestCase):
         self.event_bus = EventBus()
         self.memory_manager = MemoryManager(self.event_bus)
         self.planner = Planner()
+        self.response_composer = ResponseComposer()
         self.engine = CognitiveEngine(
             self.knowledge_engine,
             self.memory_manager,
             self.planner,
             self.event_bus,
+            self.response_composer,
         )
 
     def tearDown(self) -> None:
@@ -182,6 +190,7 @@ class CognitiveEngineTests(unittest.TestCase):
             memory_manager,
             Planner(),
             EventBus(),
+            ResponseComposer(),
         )
 
         response = engine.process(BrainRequest(message="search hypatia"))
@@ -197,6 +206,7 @@ class CognitiveEngineTests(unittest.TestCase):
             memory_manager,
             Planner(),
             EventBus(),
+            ResponseComposer(),
         )
 
         engine.process(BrainRequest(message="search hypatia"))
@@ -213,6 +223,7 @@ class CognitiveEngineTests(unittest.TestCase):
             FailingMemoryManager(),  # type: ignore[arg-type]
             self.planner,
             self.event_bus,
+            self.response_composer,
         )
 
         response = engine.process(BrainRequest(message="search hypatia"))
@@ -243,6 +254,7 @@ class CognitiveEngineTests(unittest.TestCase):
             self.memory_manager,
             FailingPlanner(),  # type: ignore[arg-type]
             self.event_bus,
+            self.response_composer,
         )
 
         response = engine.process(BrainRequest(message="plan learn SQL injection"))

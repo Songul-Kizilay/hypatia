@@ -12,6 +12,7 @@ if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
 import planner
+import response
 
 # unittest imports this file as ``brain.test_brain`` because the test
 # directory is a package. Extend that package's search path so imports below
@@ -26,12 +27,17 @@ source_planner_dir = str(SRC_DIR / "planner")
 if source_planner_dir not in planner.__path__:
     planner.__path__.append(source_planner_dir)
 
+source_response_dir = str(SRC_DIR / "response")
+if source_response_dir not in response.__path__:
+    response.__path__.append(source_response_dir)
+
 from brain.Brain import Brain
 from cognition.CognitiveEngine import CognitiveEngine
 from eventbus.EventBus import EventBus
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from memory.MemoryManager import MemoryManager
 from planner.Planner import Planner
+from response.ResponseComposer import ResponseComposer
 
 
 class BrainTests(unittest.TestCase):
@@ -40,11 +46,13 @@ class BrainTests(unittest.TestCase):
         self.memory_manager = MemoryManager(self.event_bus)
         self.knowledge_engine = KnowledgeEngine()
         self.planner = Planner()
+        self.response_composer = ResponseComposer()
         self.cognitive_engine = CognitiveEngine(
             self.knowledge_engine,
             self.memory_manager,
             self.planner,
             self.event_bus,
+            self.response_composer,
         )
         self.brain = Brain(
             self.cognitive_engine,

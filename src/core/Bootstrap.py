@@ -7,6 +7,7 @@ from eventbus.EventBus import EventBus
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from memory.MemoryManager import MemoryManager
 from planner.Planner import Planner
+from response.ResponseComposer import ResponseComposer
 
 
 class Bootstrap:
@@ -18,11 +19,13 @@ class Bootstrap:
         memory_manager = MemoryManager(event_bus)
         knowledge_engine = KnowledgeEngine()
         planner = Planner()
+        response_composer = ResponseComposer()
         cognitive_engine = CognitiveEngine(
             knowledge_engine,
             memory_manager,
             planner,
             event_bus,
+            response_composer,
         )
         brain = Brain(cognitive_engine, memory_manager, event_bus)
 
@@ -31,6 +34,7 @@ class Bootstrap:
         self.container.register(event_bus)
         self.container.register(memory_manager)
         self.container.register(knowledge_engine)
+        self.container.register(response_composer)
         self.container.register(cognitive_engine)
         self.container.register(brain)
         self.container.register(planner)
@@ -41,6 +45,7 @@ class Bootstrap:
         logger.info("Event Bus Ready")
         logger.info("Memory Manager Ready")
         logger.info("Knowledge Engine Ready")
+        logger.info("Response Composer Ready")
         logger.info("Cognitive Engine Ready")
         logger.info("Brain Ready")
         logger.info("Planner Ready")
