@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from brain.BrainContext import BrainContext
@@ -20,6 +21,8 @@ if TYPE_CHECKING:
 
 class CognitiveEngine:
     """Coordinates the first knowledge-backed cognitive request flow."""
+
+    _DEFAULT_SESSION_ID = "default"
 
     def __init__(
         self,
@@ -84,6 +87,11 @@ class CognitiveEngine:
             return self._response_composer.plan_success(request, plan)
 
         if self._is_recall_request(request):
+            try:
+                session_id = self._resolve_session_id(request)
+            except ValueError:
+                return self._session_failure(request)
+
             query = self._recall_query(request)
             if not query:
                 return self._response_composer.recall_failure(
@@ -94,9 +102,15 @@ class CognitiveEngine:
             records = self._memory_manager.search(
                 query,
                 tags={"brain", "conversation"},
-                limit=5,
+                limit=None,
             )
-            return self._response_composer.recall_success(request, records)
+            session_records = [
+                record
+                for record in records
+                if record.metadata.get("session_id", self._DEFAULT_SESSION_ID)
+                == session_id
+            ]
+            return self._response_composer.recall_success(request, session_records[:5])
 
         return self._process_conversation(request)
 
@@ -150,6 +164,11 @@ class CognitiveEngine:
 
     def _process_conversation(self, request: BrainRequest) -> BrainResponse:
         """Process the deterministic greeting and message conversation flow."""
+        try:
+            session_id = self._resolve_session_id(request)
+        except ValueError:
+            return self._session_failure(request)
+
         context = BrainContext(request=request)
         self._event_bus.emit(
             "brain.request.received",
@@ -168,9 +187,14 @@ class CognitiveEngine:
             if context.intent == "greeting"
             else self._response_composer.message(request)
         )
+        memory_metadata = {
+            "request_id": request.request_id,
+            "intent": response.intent,
+        }
+        memory_metadata["session_id"] = session_id
         self._memory_manager.add(
             f"User: {request.message}\nHypatia: {response.message}",
-            metadata={"request_id": request.request_id, "intent": response.intent},
+            metadata=memory_metadata,
             tags={"brain", "conversation"},
         )
         self._event_bus.emit(
@@ -179,6 +203,26 @@ class CognitiveEngine:
             source="brain",
         )
         return response
+
+    def _resolve_session_id(self, request: BrainRequest) -> str:
+        value = request.metadata.get("session_id")
+
+        if value is None:
+            return self._DEFAULT_SESSION_ID
+
+        if not isinstance(value, str):
+            raise ValueError("session_id must be a string.")
+
+        normalized = value.strip()
+        return normalized or self._DEFAULT_SESSION_ID
+
+    def _session_failure(self, request: BrainRequest) -> BrainResponse:
+        response = self._response_composer.message(request)
+        return replace(
+            response,
+            message="session_id must be a string.",
+            success=False,
+        )
 
     def _remember_search(
         self,
