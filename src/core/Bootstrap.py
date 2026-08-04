@@ -18,7 +18,12 @@ class Bootstrap:
         memory_manager = MemoryManager(event_bus)
         knowledge_engine = KnowledgeEngine()
         planner = Planner()
-        cognitive_engine = CognitiveEngine(knowledge_engine, memory_manager, planner)
+        cognitive_engine = CognitiveEngine(
+            knowledge_engine,
+            memory_manager,
+            planner,
+            event_bus,
+        )
         brain = Brain(cognitive_engine, memory_manager, event_bus)
 
         self.container.register(config)
