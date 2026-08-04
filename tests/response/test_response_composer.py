@@ -18,6 +18,7 @@ if source_planner_dir not in planner.__path__:
 
 from brain.BrainRequest import BrainRequest
 from knowledge.Chunk import Chunk, ChunkType
+from memory.MemoryRecord import MemoryRecord
 from planner.Planner import Planner
 from response.ResponseComposer import ResponseComposer
 
@@ -105,3 +106,57 @@ class ResponseComposerTests(unittest.TestCase):
         self.assertFalse(response.success)
         self.assertEqual(response.request_id, self.request.request_id)
         self.assertEqual(response.memory_count, 0)
+
+    def test_recall_success_with_no_records_returns_a_successful_empty_response(
+        self,
+    ) -> None:
+        response = self.composer.recall_success(self.request, [])
+
+        self.assertEqual(response.message, "No matching conversation records found.")
+        self.assertEqual(response.intent, "recall")
+        self.assertTrue(response.success)
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(response.request_id, self.request.request_id)
+
+    def test_recall_success_numbers_a_single_record_without_changing_content(
+        self,
+    ) -> None:
+        record = MemoryRecord(
+            memory_id="memory-1",
+            content="User: cats\nHypatia: Cats are animals.",
+        )
+
+        response = self.composer.recall_success(self.request, [record])
+
+        self.assertEqual(
+            response.message,
+            "Matching conversation records:\n\n"
+            "1. User: cats\nHypatia: Cats are animals.",
+        )
+        self.assertEqual(response.memory_count, 1)
+
+    def test_recall_success_preserves_multiple_record_order(self) -> None:
+        records = [
+            MemoryRecord(memory_id="memory-1", content="User: first"),
+            MemoryRecord(memory_id="memory-2", content="User: second"),
+        ]
+
+        response = self.composer.recall_success(self.request, records)
+
+        self.assertEqual(
+            response.message,
+            "Matching conversation records:\n\n1. User: first\n\n2. User: second",
+        )
+        self.assertEqual(response.memory_count, 2)
+
+    def test_recall_failure_preserves_the_given_message(self) -> None:
+        response = self.composer.recall_failure(
+            self.request,
+            "A recall query is required.",
+        )
+
+        self.assertEqual(response.message, "A recall query is required.")
+        self.assertEqual(response.intent, "recall")
+        self.assertFalse(response.success)
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(response.request_id, self.request.request_id)
