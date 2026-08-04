@@ -5,6 +5,7 @@ from __future__ import annotations
 from brain.BrainRequest import BrainRequest
 from brain.BrainResponse import BrainResponse
 from knowledge.Chunk import Chunk
+from memory.MemoryRecord import MemoryRecord
 from planner.Plan import Plan
 
 
@@ -81,6 +82,45 @@ class ResponseComposer:
             message=message,
             request_id=request.request_id,
             intent="plan",
+            memory_count=0,
+            success=False,
+        )
+
+    def recall_success(
+        self,
+        request: BrainRequest,
+        records: list[MemoryRecord],
+    ) -> BrainResponse:
+        """Compose a successful explicit conversation recall response."""
+        if not records:
+            return BrainResponse(
+                message="No matching conversation records found.",
+                request_id=request.request_id,
+                intent="recall",
+                memory_count=0,
+            )
+
+        items = "\n\n".join(
+            f"{index}. {record.content}"
+            for index, record in enumerate(records, start=1)
+        )
+        return BrainResponse(
+            message=f"Matching conversation records:\n\n{items}",
+            request_id=request.request_id,
+            intent="recall",
+            memory_count=len(records),
+        )
+
+    def recall_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Compose an unsuccessful explicit conversation recall response."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="recall",
             memory_count=0,
             success=False,
         )

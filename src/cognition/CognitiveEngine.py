@@ -83,6 +83,21 @@ class CognitiveEngine:
 
             return self._response_composer.plan_success(request, plan)
 
+        if self._is_recall_request(request):
+            query = self._recall_query(request)
+            if not query:
+                return self._response_composer.recall_failure(
+                    request,
+                    "A recall query is required.",
+                )
+
+            records = self._memory_manager.search(
+                query,
+                tags={"brain", "conversation"},
+                limit=5,
+            )
+            return self._response_composer.recall_success(request, records)
+
         return self._process_conversation(request)
 
     @staticmethod
@@ -116,6 +131,22 @@ class CognitiveEngine:
         if request.metadata.get("intent") == "plan":
             return request.message.strip()
         return request.message[5:].strip()
+
+    @staticmethod
+    def _is_recall_request(request: BrainRequest) -> bool:
+        declared_intent = request.metadata.get("intent")
+        normalized_message = request.message.casefold().strip()
+        return (
+            declared_intent == "recall"
+            or normalized_message == "recall"
+            or normalized_message.startswith("recall ")
+        )
+
+    @staticmethod
+    def _recall_query(request: BrainRequest) -> str:
+        if request.metadata.get("intent") == "recall":
+            return request.message.strip()
+        return request.message[7:].strip()
 
     def _process_conversation(self, request: BrainRequest) -> BrainResponse:
         """Process the deterministic greeting and message conversation flow."""

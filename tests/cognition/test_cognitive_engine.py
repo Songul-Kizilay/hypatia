@@ -262,3 +262,102 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertFalse(response.success)
         self.assertEqual(response.intent, "plan")
         self.assertEqual(response.message, "Planning failed: Planner is unavailable.")
+
+    def test_recall_returns_matching_conversation_records(self) -> None:
+        self.memory_manager.add(
+            "User: cats\nHypatia: Cats are animals.",
+            tags={"brain", "conversation"},
+        )
+
+        response = self.engine.process(BrainRequest(message="recall cats"))
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "recall")
+        self.assertEqual(response.memory_count, 1)
+        self.assertIn("1. User: cats\nHypatia: Cats are animals.", response.message)
+
+    def test_recall_matching_is_case_insensitive(self) -> None:
+        self.memory_manager.add(
+            "User: Cats\nHypatia: Cats are animals.",
+            tags={"brain", "conversation"},
+        )
+
+        response = self.engine.process(BrainRequest(message="recall CATS"))
+
+        self.assertEqual(response.memory_count, 1)
+
+    def test_recall_excludes_knowledge_search_records(self) -> None:
+        self.memory_manager.add(
+            "User: search cats\nHypatia: I found 1 matching knowledge chunks.",
+            tags={"cognition", "knowledge-search", "conversation"},
+        )
+        self.memory_manager.add(
+            "User: cats\nHypatia: Cats are animals.",
+            tags={"brain", "conversation"},
+        )
+
+        response = self.engine.process(BrainRequest(message="recall cats"))
+
+        self.assertEqual(response.memory_count, 1)
+        self.assertNotIn("search cats", response.message)
+        self.assertIn("Cats are animals.", response.message)
+
+    def test_recall_returns_at_most_the_first_five_matching_records(self) -> None:
+        for index in range(6):
+            self.memory_manager.add(
+                f"User: cats {index}\nHypatia: response {index}",
+                tags={"brain", "conversation"},
+            )
+
+        response = self.engine.process(BrainRequest(message="recall cats"))
+
+        self.assertEqual(response.memory_count, 5)
+        self.assertIn("1. User: cats 0", response.message)
+        self.assertIn("5. User: cats 4", response.message)
+        self.assertNotIn("cats 5", response.message)
+
+    def test_recall_with_no_matches_returns_a_successful_empty_response(self) -> None:
+        response = self.engine.process(BrainRequest(message="recall cats"))
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(response.message, "No matching conversation records found.")
+
+    def test_empty_recall_returns_a_controlled_failure(self) -> None:
+        response = self.engine.process(BrainRequest(message="recall"))
+
+        self.assertFalse(response.success)
+        self.assertEqual(response.intent, "recall")
+        self.assertEqual(response.message, "A recall query is required.")
+
+    def test_recall_does_not_create_a_new_memory_record(self) -> None:
+        self.memory_manager.add(
+            "User: cats\nHypatia: Cats are animals.",
+            tags={"brain", "conversation"},
+        )
+
+        self.engine.process(BrainRequest(message="recall cats"))
+
+        self.assertEqual(self.memory_manager.count(), 1)
+
+    def test_declared_recall_intent_uses_request_message_as_query(self) -> None:
+        self.memory_manager.add(
+            "User: cats\nHypatia: Cats are animals.",
+            tags={"brain", "conversation"},
+        )
+
+        response = self.engine.process(
+            BrainRequest(message="cats", metadata={"intent": "recall"})
+        )
+
+        self.assertEqual(response.intent, "recall")
+        self.assertEqual(response.memory_count, 1)
+
+    def test_recall_word_inside_a_sentence_remains_a_message(self) -> None:
+        response = self.engine.process(BrainRequest(message="please recall cats"))
+
+        self.assertEqual(response.intent, "message")
+        self.assertEqual(
+            response.message,
+            "I received your message: please recall cats",
+        )
