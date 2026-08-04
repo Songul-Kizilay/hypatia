@@ -12,9 +12,9 @@ from core.Exceptions import KnowledgeError, MemoryError, PlannerError
 from eventbus.EventBus import EventBus
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from memory.MemoryManager import MemoryManager
+from response.ResponseComposer import ResponseComposer
 
 if TYPE_CHECKING:
-    from planner.Plan import Plan
     from planner.Planner import Planner
 
 
@@ -27,11 +27,13 @@ class CognitiveEngine:
         memory_manager: MemoryManager,
         planner: Planner,
         event_bus: EventBus,
+        response_composer: ResponseComposer,
     ) -> None:
         self._knowledge_engine = knowledge_engine
         self._memory_manager = memory_manager
         self._planner = planner
         self._event_bus = event_bus
+        self._response_composer = response_composer
         self._router = BrainRouter()
 
     def process(self, request: BrainRequest) -> BrainResponse:
@@ -39,12 +41,9 @@ class CognitiveEngine:
         if self._is_search_request(request):
             query = self._search_query(request)
             if not query:
-                response = BrainResponse(
-                    message="A search query is required.",
-                    request_id=request.request_id,
-                    intent="search",
-                    memory_count=0,
-                    success=False,
+                response = self._response_composer.search_failure(
+                    request,
+                    "A search query is required.",
                 )
                 self._remember_search(request, response, query)
                 return response
@@ -52,24 +51,16 @@ class CognitiveEngine:
             try:
                 knowledge_results = self._knowledge_engine.search(query)
             except KnowledgeError as error:
-                response = BrainResponse(
-                    message=f"Knowledge search failed: {error}",
-                    request_id=request.request_id,
-                    intent="search",
-                    memory_count=0,
-                    success=False,
+                response = self._response_composer.search_failure(
+                    request,
+                    f"Knowledge search failed: {error}",
                 )
                 self._remember_search(request, response, query)
                 return response
 
-            response = BrainResponse(
-                message=(
-                    f"I found {len(knowledge_results)} matching knowledge chunks."
-                ),
-                request_id=request.request_id,
-                intent="search",
-                memory_count=0,
-                knowledge_results=knowledge_results,
+            response = self._response_composer.search_success(
+                request,
+                knowledge_results,
             )
             self._remember_search(request, response, query)
             return response
@@ -77,31 +68,20 @@ class CognitiveEngine:
         if self._is_plan_request(request):
             goal = self._plan_goal(request)
             if not goal:
-                return BrainResponse(
-                    message="A planning goal is required.",
-                    request_id=request.request_id,
-                    intent="plan",
-                    memory_count=0,
-                    success=False,
+                return self._response_composer.plan_failure(
+                    request,
+                    "A planning goal is required.",
                 )
 
             try:
                 plan = self._planner.create_plan(goal)
             except PlannerError as error:
-                return BrainResponse(
-                    message=f"Planning failed: {error}",
-                    request_id=request.request_id,
-                    intent="plan",
-                    memory_count=0,
-                    success=False,
+                return self._response_composer.plan_failure(
+                    request,
+                    f"Planning failed: {error}",
                 )
 
-            return BrainResponse(
-                message=self._format_plan(plan),
-                request_id=request.request_id,
-                intent="plan",
-                memory_count=0,
-            )
+            return self._response_composer.plan_success(request, plan)
 
         return self._process_conversation(request)
 
@@ -137,11 +117,6 @@ class CognitiveEngine:
             return request.message.strip()
         return request.message[5:].strip()
 
-    @staticmethod
-    def _format_plan(plan: Plan) -> str:
-        task_lines = "\n".join(f"{task.order}. {task.title}" for task in plan.tasks)
-        return f"Plan created for: {plan.goal.description}\n\n{task_lines}"
-
     def _process_conversation(self, request: BrainRequest) -> BrainResponse:
         """Process the deterministic greeting and message conversation flow."""
         context = BrainContext(request=request)
@@ -157,11 +132,10 @@ class CognitiveEngine:
             source="brain",
         )
 
-        response = BrainResponse(
-            message=self._compose_response(context),
-            request_id=request.request_id,
-            intent=context.intent,
-            memory_count=0,
+        response = (
+            self._response_composer.greeting(request)
+            if context.intent == "greeting"
+            else self._response_composer.message(request)
         )
         self._memory_manager.add(
             f"User: {request.message}\nHypatia: {response.message}",
@@ -174,12 +148,6 @@ class CognitiveEngine:
             source="brain",
         )
         return response
-
-    @staticmethod
-    def _compose_response(context: BrainContext) -> str:
-        if context.intent == "greeting":
-            return "Hello! I am Hypatia."
-        return f"I received your message: {context.request.message}"
 
     def _remember_search(
         self,
@@ -201,12 +169,3 @@ class CognitiveEngine:
             )
         except MemoryError:
             pass
-
-    @staticmethod
-    def _unsupported_response(request: BrainRequest, message: str) -> BrainResponse:
-        return BrainResponse(
-            message=message,
-            request_id=request.request_id,
-            intent="unsupported",
-            memory_count=0,
-        )
