@@ -12,6 +12,7 @@ from uuid import uuid4
 from core.Exceptions import MemoryError
 from eventbus.EventBus import EventBus
 from memory.MemoryRecord import MemoryRecord
+from memory.MemoryStore import MemoryStore
 
 
 class _Unset:
@@ -24,10 +25,31 @@ _UNSET = _Unset()
 class MemoryManager:
     """Stores immutable memory records and publishes lifecycle events."""
 
-    def __init__(self, event_bus: EventBus | None = None) -> None:
+    def __init__(
+        self,
+        event_bus: EventBus | None = None,
+        store: MemoryStore | None = None,
+    ) -> None:
         self._records: dict[str, MemoryRecord] = {}
         self._event_bus = event_bus
+        self._store = store
         self._lock = RLock()
+
+    def load(self) -> None:
+        """Replace memory with the active records from the persistent snapshot."""
+        if self._store is None:
+            return
+
+        records = self._store.load()
+        now = self._now()
+        active_records = {
+            record.memory_id: record
+            for record in records
+            if record.expires_at is None or record.expires_at > now
+        }
+
+        with self._lock:
+            self._records = active_records
 
     def add(
         self,
@@ -52,7 +74,10 @@ class MemoryManager:
         )
 
         with self._lock:
-            self._records[record.memory_id] = record
+            candidate_records = dict(self._records)
+            candidate_records[record.memory_id] = record
+            self._persist(candidate_records)
+            self._records = candidate_records
 
         self._emit("memory.record.added", record)
         return record
@@ -102,7 +127,10 @@ class MemoryManager:
                     current.expires_at if isinstance(expires_at, _Unset) else expires_at
                 ),
             )
-            self._records[memory_id] = record
+            candidate_records = dict(self._records)
+            candidate_records[memory_id] = record
+            self._persist(candidate_records)
+            self._records = candidate_records
 
         self._emit("memory.record.updated", record)
         return record
@@ -110,10 +138,14 @@ class MemoryManager:
     def delete(self, memory_id: str) -> bool:
         """Delete one record and return whether it existed."""
         with self._lock:
-            record = self._records.pop(memory_id, None)
+            record = self._records.get(memory_id)
+            if record is None:
+                return False
 
-        if record is None:
-            return False
+            candidate_records = dict(self._records)
+            candidate_records.pop(memory_id)
+            self._persist(candidate_records)
+            self._records = candidate_records
 
         self._emit("memory.record.deleted", record)
         return True
@@ -159,6 +191,7 @@ class MemoryManager:
         """Remove all records and return the number removed."""
         with self._lock:
             removed = tuple(self._records.values())
+            self._persist({})
             self._records.clear()
 
         for record in removed:
@@ -179,6 +212,12 @@ class MemoryManager:
     def _emit_expired(self, records: Iterable[MemoryRecord]) -> None:
         for record in records:
             self._emit("memory.record.expired", record)
+
+    def _persist(self, records: dict[str, MemoryRecord]) -> None:
+        if self._store is None:
+            return
+
+        self._store.save(list(records.values()))
 
     def _emit(self, name: str, record: MemoryRecord | dict[str, object]) -> None:
         if self._event_bus is None:
