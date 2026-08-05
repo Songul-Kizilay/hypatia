@@ -374,6 +374,58 @@ class ResponseComposer:
             success=False,
         )
 
+    def session_search_results(
+        self,
+        request: BrainRequest,
+        session: SessionRecord,
+        query: str,
+        records: list[MemoryRecord],
+    ) -> BrainResponse:
+        """Compose a search response for a command-selected session."""
+        items = "\n".join(
+            f"{index}. {record.content}"
+            for index, record in enumerate(records, start=1)
+        )
+        return BrainResponse(
+            message=(
+                f'Conversation matches in {session.session_id} for "{query}":\n{items}'
+            ),
+            request_id=request.request_id,
+            intent="session_search",
+            memory_count=len(records),
+        )
+
+    def session_search_empty(
+        self,
+        request: BrainRequest,
+        session: SessionRecord,
+        query: str,
+    ) -> BrainResponse:
+        """Compose a successful empty command-selected session search response."""
+        return BrainResponse(
+            message=(
+                "No matching conversations found in session "
+                f"{session.session_id} for: {query}"
+            ),
+            request_id=request.request_id,
+            intent="session_search",
+            memory_count=0,
+        )
+
+    def session_search_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Compose an unsuccessful command-selected session search response."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="session_search",
+            memory_count=0,
+            success=False,
+        )
+
     def session_activated(
         self,
         request: BrainRequest,

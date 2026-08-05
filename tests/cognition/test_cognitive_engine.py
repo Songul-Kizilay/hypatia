@@ -82,6 +82,16 @@ class RecordingConversationSearchMemoryManager:
         return list(self.records)
 
 
+class SessionSearchMustNotReadMemoryManager:
+    """Minimal double that fails if invalid session search reads memory."""
+
+    def all(self) -> list[MemoryRecord]:
+        raise AssertionError("Session search must not read all memory records.")
+
+    def search(self, *args: object, **kwargs: object) -> list[MemoryRecord]:
+        raise AssertionError("Invalid session search must not run.")
+
+
 class RecordingSessionOverviewMemoryManager:
     """Minimal double that records read-only session overview access."""
 
@@ -113,6 +123,13 @@ class SessionRecentMustNotResolveEngine(CognitiveEngine):
 
     def _resolve_session_id(self, request: BrainRequest) -> str:
         raise AssertionError("Session recent must not resolve a session ID.")
+
+
+class SessionSearchMustNotResolveEngine(CognitiveEngine):
+    """Fails the test if session search attempts request-level resolution."""
+
+    def _resolve_session_id(self, request: BrainRequest) -> str:
+        raise AssertionError("Session search must not resolve a session ID.")
 
 
 class FailingPlanner:
@@ -691,6 +708,117 @@ class CognitiveEngineTests(unittest.TestCase):
 
                 self.assertFalse(response.success)
                 self.assertEqual(response.intent, "session_recent")
+                self.assertEqual(response.message, expected)
+
+    def test_session_search_filters_after_relevance_order_without_resolving_request(
+        self,
+    ) -> None:
+        self.session_manager.create("work research")
+        records = [
+            MemoryRecord(
+                memory_id=f"target-{index}",
+                content=f"Target relevance {index}",
+                metadata={"session_id": "work research"},
+                tags=frozenset({"brain", "conversation"}),
+                created_at=datetime(2026, 8, 5, 10 - index, tzinfo=UTC),
+            )
+            for index in range(6)
+        ]
+        records.extend(
+            [
+                MemoryRecord(
+                    memory_id="other-session",
+                    content="Other relevance",
+                    metadata={"session_id": "work-1"},
+                    tags=frozenset({"brain", "conversation"}),
+                ),
+                MemoryRecord(
+                    memory_id="knowledge-record",
+                    content="Knowledge relevance",
+                    metadata={"session_id": "work research"},
+                    tags=frozenset({"cognition", "knowledge-search", "conversation"}),
+                ),
+                MemoryRecord(
+                    memory_id="null-record",
+                    content="Null relevance",
+                    metadata={"session_id": None},
+                    tags=frozenset({"brain", "conversation"}),
+                ),
+            ]
+        )
+        memory_manager = RecordingConversationSearchMemoryManager(records)
+        engine = SessionSearchMustNotResolveEngine(
+            KnowledgeSearchMustNotRun(),  # type: ignore[arg-type]
+            memory_manager,  # type: ignore[arg-type]
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+        )
+
+        response = engine.process(
+            BrainRequest(
+                message="SESSION SEARCH work research -- Persistence Contract",
+                metadata={"session_id": 123, "intent": "search"},
+            )
+        )
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "session_search")
+        self.assertEqual(memory_manager.calls, [("Persistence Contract", None)])
+        self.assertEqual(response.memory_count, 5)
+        self.assertIn("1. Target relevance 0", response.message)
+        self.assertIn("5. Target relevance 4", response.message)
+        self.assertNotIn("Target relevance 5", response.message)
+        self.assertNotIn("Other relevance", response.message)
+        self.assertNotIn("Knowledge relevance", response.message)
+        self.assertNotIn("Null relevance", response.message)
+
+    def test_session_search_default_target_treats_only_missing_metadata_as_legacy(
+        self,
+    ) -> None:
+        self.memory_manager.add("Legacy match", tags={"brain", "conversation"})
+        self.memory_manager.add(
+            "Explicit default match",
+            metadata={"session_id": "default"},
+            tags={"brain", "conversation"},
+        )
+        self.memory_manager.add(
+            "Null match",
+            metadata={"session_id": None},
+            tags={"brain", "conversation"},
+        )
+
+        response = self.engine.process(
+            BrainRequest(message="session search default -- match")
+        )
+
+        self.assertEqual(response.memory_count, 2)
+        self.assertIn("Legacy match", response.message)
+        self.assertIn("Explicit default match", response.message)
+        self.assertNotIn("Null match", response.message)
+
+    def test_session_search_failures_do_not_read_memory(self) -> None:
+        engine = CognitiveEngine(
+            KnowledgeSearchMustNotRun(),  # type: ignore[arg-type]
+            SessionSearchMustNotReadMemoryManager(),  # type: ignore[arg-type]
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+        )
+
+        for message, expected in (
+            ("session search work-1", "Search query separator is required: --"),
+            ("session search -- persistence", "Session ID must not be empty."),
+            ("session search work-1 --", "Search query must not be empty."),
+            ("session search unknown -- persistence", "Unknown session: unknown"),
+        ):
+            with self.subTest(message=message):
+                response = engine.process(BrainRequest(message=message))
+
+                self.assertFalse(response.success)
+                self.assertEqual(response.intent, "session_search")
                 self.assertEqual(response.message, expected)
 
     def test_active_session_is_used_when_conversation_has_no_session_override(

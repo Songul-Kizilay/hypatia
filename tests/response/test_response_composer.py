@@ -507,6 +507,67 @@ class ResponseComposerTests(unittest.TestCase):
         self.assertEqual(response.memory_count, 0)
         self.assertEqual(response.request_id, self.request.request_id)
 
+    def test_session_search_results_preserve_the_given_record_order(self) -> None:
+        records = [
+            MemoryRecord(
+                memory_id="memory-1",
+                content="Second timestamp, first relevance result.",
+                created_at=datetime(2026, 8, 5, 10, 0, tzinfo=UTC),
+            ),
+            MemoryRecord(
+                memory_id="memory-2",
+                content="First timestamp, second relevance result.",
+                created_at=datetime(2026, 8, 4, 10, 0, tzinfo=UTC),
+            ),
+        ]
+
+        response = self.composer.session_search_results(
+            self.request,
+            self._session("Work Research"),
+            "Persistence Contract",
+            records,
+        )
+
+        self.assertEqual(
+            response.message,
+            'Conversation matches in Work Research for "Persistence Contract":\n'
+            "1. Second timestamp, first relevance result.\n"
+            "2. First timestamp, second relevance result.",
+        )
+        self.assertEqual(response.intent, "session_search")
+        self.assertTrue(response.success)
+        self.assertEqual(response.memory_count, 2)
+        self.assertEqual(response.request_id, self.request.request_id)
+
+    def test_session_search_empty_composes_a_successful_response(self) -> None:
+        response = self.composer.session_search_empty(
+            self.request,
+            self._session("work research"),
+            "persistence contract",
+        )
+
+        self.assertEqual(
+            response.message,
+            "No matching conversations found in session work research for: "
+            "persistence contract",
+        )
+        self.assertEqual(response.intent, "session_search")
+        self.assertTrue(response.success)
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(response.request_id, self.request.request_id)
+
+    def test_session_search_failure_preserves_the_given_message(self) -> None:
+        response = self.composer.session_search_failure(
+            self.request,
+            "Search query separator is required: --",
+        )
+
+        self.assertEqual(response.message, "Search query separator is required: --")
+        self.assertEqual(response.intent, "session_search")
+        self.assertFalse(response.success)
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(response.request_id, self.request.request_id)
+
     @staticmethod
     def _session(session_id: str) -> SessionRecord:
         return SessionRecord(
