@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from datetime import UTC, datetime
 from threading import RLock
 from types import MappingProxyType
@@ -81,6 +81,23 @@ class MemoryManager:
 
         self._emit("memory.record.added", record)
         return record
+
+    def snapshot(self) -> tuple[MemoryRecord, ...]:
+        """Return the complete stored RAM state without expiry cleanup or events."""
+        with self._lock:
+            return tuple(self._records.values())
+
+    def persist_snapshot(self, records: Sequence[MemoryRecord]) -> None:
+        """Persist records without changing RAM or emitting events."""
+        validated_records = self._validate_snapshot_records(records)
+        with self._lock:
+            self._persist_records(validated_records)
+
+    def commit_snapshot(self, records: Sequence[MemoryRecord]) -> None:
+        """Replace RAM records without persistence or events."""
+        validated_records = self._validate_snapshot_records(records)
+        with self._lock:
+            self._records = {record.memory_id: record for record in validated_records}
 
     def get(self, memory_id: str) -> MemoryRecord | None:
         """Return a record by ID, or None when absent or expired."""
@@ -219,6 +236,10 @@ class MemoryManager:
 
         self._store.save(list(records.values()))
 
+    def _persist_records(self, records: Sequence[MemoryRecord]) -> None:
+        if self._store is not None:
+            self._store.save(list(records))
+
     def _emit(self, name: str, record: MemoryRecord | dict[str, object]) -> None:
         if self._event_bus is None:
             return
@@ -255,6 +276,30 @@ class MemoryManager:
         if expires_at.tzinfo is None:
             raise MemoryError("expires_at must include timezone information.")
         return expires_at.astimezone(UTC)
+
+    @staticmethod
+    def _validate_snapshot_records(records: object) -> tuple[MemoryRecord, ...]:
+        if not isinstance(records, Sequence) or isinstance(
+            records, (str, bytes, bytearray)
+        ):
+            raise MemoryError(
+                "Memory snapshot must be a sequence of MemoryRecord values."
+            )
+        snapshot_records = tuple(records)
+        if not all(isinstance(record, MemoryRecord) for record in snapshot_records):
+            raise MemoryError("Memory snapshot contains an invalid memory record.")
+        if not all(
+            isinstance(record.memory_id, str)
+            and bool(record.memory_id)
+            and record.memory_id == record.memory_id.strip()
+            for record in snapshot_records
+        ):
+            raise MemoryError("Memory snapshot contains an invalid memory ID.")
+        if len({record.memory_id for record in snapshot_records}) != len(
+            snapshot_records
+        ):
+            raise MemoryError("Memory snapshot contains duplicate memory IDs.")
+        return snapshot_records
 
     @staticmethod
     def _now() -> datetime:
