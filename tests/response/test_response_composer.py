@@ -279,7 +279,10 @@ class ResponseComposerTests(unittest.TestCase):
     def test_session_created_composes_the_expected_response(self) -> None:
         response = self.composer.session_created(self.request, self._session("work-1"))
 
-        self.assertEqual(response.message, "Session created: work-1")
+        self.assertEqual(
+            response.message,
+            "Session created:\nID: work-1\nStatus: ready",
+        )
         self.assertEqual(response.intent, "session_create")
         self.assertTrue(response.success)
         self.assertEqual(response.request_id, self.request.request_id)
@@ -291,6 +294,21 @@ class ResponseComposerTests(unittest.TestCase):
         self.assertEqual(response.message, "Session already exists: work-1")
         self.assertEqual(response.intent, "session_create")
         self.assertTrue(response.success)
+
+    def test_session_create_failure_preserves_the_given_domain_message(self) -> None:
+        response = self.composer.session_create_failure(
+            self.request,
+            "Session already exists: work-1",
+        )
+
+        self.assertEqual(
+            response.message,
+            "Session creation failed:\nReason: Session already exists: work-1",
+        )
+        self.assertEqual(response.intent, "session_create")
+        self.assertFalse(response.success)
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(response.request_id, self.request.request_id)
 
     def test_session_activated_composes_the_expected_response(self) -> None:
         response = self.composer.session_activated(

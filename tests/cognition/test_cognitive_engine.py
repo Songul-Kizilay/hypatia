@@ -912,12 +912,15 @@ class CognitiveEngineTests(unittest.TestCase):
 
         self.assertTrue(response.success)
         self.assertEqual(response.intent, "session_create")
-        self.assertEqual(response.message, "Session created: Work-2")
+        self.assertEqual(
+            response.message,
+            "Session created:\nID: Work-2\nStatus: ready",
+        )
         self.assertTrue(self.session_manager.exists("Work-2"))
         self.assertEqual(self.memory_manager.count(), 0)
         self.assertEqual(events, ["session.created"])
 
-    def test_duplicate_session_create_returns_an_exists_response_without_side_effects(
+    def test_duplicate_session_create_is_idempotent_without_side_effects(
         self,
     ) -> None:
         self.session_manager.create("work-2")
@@ -927,6 +930,7 @@ class CognitiveEngineTests(unittest.TestCase):
         response = self.engine.process(BrainRequest(message="create session work-2"))
 
         self.assertTrue(response.success)
+        self.assertEqual(response.intent, "session_create")
         self.assertEqual(response.message, "Session already exists: work-2")
         self.assertEqual(self.memory_manager.count(), 0)
         self.assertEqual(events, [])

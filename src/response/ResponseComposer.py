@@ -420,10 +420,26 @@ class ResponseComposer:
     ) -> BrainResponse:
         """Compose a successful session creation response."""
         return BrainResponse(
-            message=f"Session created: {session.session_id}",
+            message=(
+                "Session created:\n" f"ID: {session.session_id}\n" "Status: ready"
+            ),
             request_id=request.request_id,
             intent="session_create",
             memory_count=0,
+        )
+
+    def session_create_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Compose an unsuccessful session-creation response."""
+        return BrainResponse(
+            message=f"Session creation failed:\nReason: {message}",
+            request_id=request.request_id,
+            intent="session_create",
+            memory_count=0,
+            success=False,
         )
 
     def session_exists(
