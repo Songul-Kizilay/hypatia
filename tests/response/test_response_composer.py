@@ -659,13 +659,29 @@ class ResponseComposerTests(unittest.TestCase):
 
         self.assertEqual(
             response.message,
-            "Session rename preview: work -> archive\n"
-            "Memory records affected: 2\n"
-            "Active session affected: yes",
+            "Rename preview:\n"
+            "Source: work\n"
+            "Target: archive\n"
+            "Affected memories: 2\n"
+            "Changes: ready",
         )
         self.assertEqual(response.intent, "session_rename_preview")
         self.assertTrue(response.success)
         self.assertEqual(response.memory_count, 2)
+        self.assertFalse(response.message.endswith("\n"))
+        zero_memory_response = self.composer.session_rename_preview(
+            self.request,
+            SessionRenamePreview("work", "archive", 0, False),
+        )
+        self.assertEqual(
+            zero_memory_response.message,
+            "Rename preview:\n"
+            "Source: work\n"
+            "Target: archive\n"
+            "Affected memories: 0\n"
+            "Changes: ready",
+        )
+        self.assertEqual(zero_memory_response.memory_count, 0)
         self.assertEqual(failure.intent, "session_rename_preview")
         self.assertFalse(failure.success)
 
