@@ -264,6 +264,71 @@ class ResponseComposer:
             memory_count=0,
         )
 
+    def session_overview(
+        self,
+        request: BrainRequest,
+        sessions: list[SessionRecord],
+        conversation_counts: dict[str, int],
+        active_session_id: str,
+    ) -> BrainResponse:
+        """Compose an ordered overview of registered session conversations."""
+        session_lines = "\n".join(
+            self._session_overview_line(
+                index,
+                session,
+                conversation_counts.get(session.session_id, 0),
+                active_session_id,
+            )
+            for index, session in enumerate(sessions, start=1)
+        )
+        memory_count = sum(
+            conversation_counts.get(session.session_id, 0) for session in sessions
+        )
+        return BrainResponse(
+            message=f"Sessions:\n{session_lines}",
+            request_id=request.request_id,
+            intent="session_overview",
+            memory_count=memory_count,
+        )
+
+    def session_details(
+        self,
+        request: BrainRequest,
+        session: SessionRecord,
+        conversation_count: int,
+        is_active: bool,
+    ) -> BrainResponse:
+        """Compose a read-only detail response for one registered session."""
+        status = "active" if is_active else "inactive"
+        conversation_label = (
+            "conversation" if conversation_count == 1 else "conversations"
+        )
+        return BrainResponse(
+            message=(
+                f"Session: {session.session_id}\n"
+                f"Status: {status}\n"
+                f"Conversations: {conversation_count} {conversation_label}\n"
+                f"Created: {session.created_at.isoformat()}"
+            ),
+            request_id=request.request_id,
+            intent="session_details",
+            memory_count=conversation_count,
+        )
+
+    def session_details_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Compose an unsuccessful session-details response."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="session_details",
+            memory_count=0,
+            success=False,
+        )
+
     def session_activated(
         self,
         request: BrainRequest,
@@ -289,4 +354,19 @@ class ResponseComposer:
             intent="session",
             memory_count=0,
             success=False,
+        )
+
+    @staticmethod
+    def _session_overview_line(
+        index: int,
+        session: SessionRecord,
+        count: int,
+        active_session_id: str,
+    ) -> str:
+        """Format one session overview line without changing registry order."""
+        conversation_label = "conversation" if count == 1 else "conversations"
+        active_marker = " [active]" if session.session_id == active_session_id else ""
+        return (
+            f"{index}. {session.session_id} — {count} "
+            f"{conversation_label}{active_marker}"
         )
