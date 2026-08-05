@@ -22,6 +22,7 @@ from knowledge.Chunk import Chunk, ChunkType
 from memory.MemoryRecord import MemoryRecord
 from planner.Planner import Planner
 from response.ResponseComposer import ResponseComposer
+from session.SessionDeletePolicy import SessionDeleteStatus
 from session.SessionRecord import SessionRecord
 from session.SessionRenamePreview import SessionRenamePreview
 from session.SessionRenameResult import SessionRenameResult
@@ -333,30 +334,47 @@ class ResponseComposerTests(unittest.TestCase):
         self.assertEqual(response.memory_count, 0)
         self.assertEqual(response.request_id, self.request.request_id)
 
-    def test_session_delete_preview_composes_exact_success_and_failure(self) -> None:
-        success = self.composer.session_delete_preview(
+    def test_session_delete_preview_composes_each_policy_decision(self) -> None:
+        allow = self.composer.session_delete_preview(
+            self.request,
+            "work-1",
+            (),
+            SessionDeleteStatus.ALLOW,
+            "",
+        )
+        pending = self.composer.session_delete_preview(
             self.request,
             "work-1",
             ("memory-1", "memory-2"),
+            SessionDeleteStatus.PENDING_MEMORY_POLICY,
+            "session has attached memories",
         )
-        failure = self.composer.session_delete_preview_failure(
+        denied = self.composer.session_delete_preview(
             self.request,
-            "Active session cannot be deleted.",
+            "default",
+            (),
+            SessionDeleteStatus.DENY,
+            "default session cannot be deleted",
         )
 
         self.assertEqual(
-            success.message,
-            "Delete preview:\nSession: work-1\nAffected memories: 2\n"
-            "Memory IDs:\n- memory-1\n- memory-2\nChanges: ready",
+            allow.message,
+            "Delete preview:\nSession: work-1\nDecision: ALLOW\n"
+            "Affected memories: 0\nChanges: ready",
         )
-        self.assertEqual(success.intent, "session_delete_preview")
-        self.assertEqual(success.memory_count, 2)
-        self.assertEqual(success.request_id, self.request.request_id)
         self.assertEqual(
-            failure.message,
-            "Delete preview failed:\nReason: Active session cannot be deleted.",
+            pending.message,
+            "Delete preview:\nSession: work-1\nDecision: PENDING_MEMORY_POLICY\n"
+            "Reason: session has attached memories",
         )
-        self.assertFalse(failure.success)
+        self.assertEqual(
+            denied.message,
+            "Delete preview:\nSession: default\nDecision: DENY\n"
+            "Reason: default session cannot be deleted",
+        )
+        self.assertEqual(pending.memory_count, 2)
+        self.assertEqual(denied.intent, "session_delete_preview")
+        self.assertEqual(allow.request_id, self.request.request_id)
 
     def test_sessions_list_preserves_order_and_marks_only_the_active_session(
         self,

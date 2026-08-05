@@ -985,8 +985,10 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(self.session_manager.get_active().session_id, "default")
         self.assertEqual(self.memory_manager.count(), 0)
 
-    def test_session_delete_preview_is_read_only_and_reports_memory_ids(self) -> None:
-        record = self.memory_manager.add(
+    def test_session_delete_preview_is_read_only_and_reports_policy_decision(
+        self,
+    ) -> None:
+        self.memory_manager.add(
             "Work",
             metadata={"session_id": "work-1"},
             tags={"brain", "conversation"},
@@ -1004,9 +1006,10 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(response.intent, "session_delete_preview")
         self.assertEqual(
             response.message,
-            "Delete preview:\nSession: work-1\nAffected memories: 1\n"
-            f"Memory IDs:\n- {record.memory_id}\nChanges: ready",
+            "Delete preview:\nSession: work-1\nDecision: PENDING_MEMORY_POLICY\n"
+            "Reason: session has attached memories",
         )
+        self.assertEqual(response.memory_count, 1)
         self.assertEqual(self.session_manager.snapshot(), sessions_before)
         self.assertEqual(self.memory_manager.snapshot(), memory_before)
         self.assertEqual(events, [])

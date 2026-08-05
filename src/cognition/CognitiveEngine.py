@@ -337,7 +337,12 @@ class CognitiveEngine:
     def _process_session_delete_preview(self, request: BrainRequest) -> BrainResponse:
         """Preview a deletion without changing either store or emitting events."""
         try:
-            session_id, memory_ids = self._session_delete_preview_service.preview(
+            (
+                session_id,
+                memory_ids,
+                decision_status,
+                decision_reason,
+            ) = self._session_delete_preview_service.preview(
                 self._session_command_id(request, "preview delete session")
             )
         except (SessionError, ValueError) as error:
@@ -349,6 +354,8 @@ class CognitiveEngine:
             request,
             session_id,
             memory_ids,
+            decision_status,
+            decision_reason,
         )
 
     def _process_session_rename_candidates(
