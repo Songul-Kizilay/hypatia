@@ -11,17 +11,29 @@ from memory.JsonFileMemoryStore import JsonFileMemoryStore
 from memory.MemoryManager import MemoryManager
 from planner.Planner import Planner
 from response.ResponseComposer import ResponseComposer
+from session.JsonFileSessionStore import JsonFileSessionStore
+from session.SessionManager import SessionManager
 
 
 class Bootstrap:
-    def __init__(self, memory_path: Path | None = None) -> None:
+    def __init__(
+        self,
+        memory_path: Path | None = None,
+        session_path: Path | None = None,
+    ) -> None:
         self._memory_path = memory_path
+        self._session_path = session_path
 
     def initialize(self) -> None:
         config = Config()
         logger = Logger()
         container = DependencyContainer()
         event_bus = EventBus()
+        session_store = JsonFileSessionStore(
+            self._session_path or self._default_session_path()
+        )
+        session_manager = SessionManager(event_bus, session_store)
+        session_manager.load()
         memory_store = JsonFileMemoryStore(
             self._memory_path or self._default_memory_path()
         )
@@ -36,12 +48,15 @@ class Bootstrap:
             planner,
             event_bus,
             response_composer,
+            session_manager,
         )
         brain = Brain(cognitive_engine, memory_manager, event_bus)
 
         container.register(config)
         container.register(logger)
         container.register(event_bus)
+        container.register(session_store)
+        container.register(session_manager)
         container.register(memory_store)
         container.register(memory_manager)
         container.register(knowledge_engine)
@@ -56,6 +71,7 @@ class Bootstrap:
         logger.info("Logger Initialized")
         logger.info("Dependency Container Ready")
         logger.info("Event Bus Ready")
+        logger.info("Session Manager Ready")
         logger.info("Memory Manager Ready")
         logger.info("Knowledge Engine Ready")
         logger.info("Response Composer Ready")
@@ -73,6 +89,11 @@ class Bootstrap:
     def _default_memory_path() -> Path:
         project_root = Path(__file__).resolve().parents[2]
         return project_root / "data" / "memory" / "memory.json"
+
+    @staticmethod
+    def _default_session_path() -> Path:
+        project_root = Path(__file__).resolve().parents[2]
+        return project_root / "data" / "sessions" / "sessions.json"
 
     def shutdown(self) -> None:
         logger = self.container.resolve(Logger)

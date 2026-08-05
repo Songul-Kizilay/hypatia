@@ -15,24 +15,30 @@ if str(SRC_DIR) not in sys.path:
 from brain.Brain import Brain
 from brain.BrainRequest import BrainRequest
 from core.Bootstrap import Bootstrap
-from core.Exceptions import MemoryError
+from core.Exceptions import MemoryError, SessionError
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from memory.JsonFileMemoryStore import JsonFileMemoryStore
 from memory.MemoryManager import MemoryManager
 from memory.MemoryRecord import MemoryRecord
 from response.ResponseComposer import ResponseComposer
+from session.JsonFileSessionStore import JsonFileSessionStore
+from session.SessionManager import SessionManager
 
 
 class BootstrapTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary_directory = tempfile.TemporaryDirectory()
         self.memory_path = Path(self.temporary_directory.name) / "memory.json"
+        self.session_path = Path(self.temporary_directory.name) / "sessions.json"
 
     def tearDown(self) -> None:
         self.temporary_directory.cleanup()
 
     def _bootstrap(self) -> Bootstrap:
-        return Bootstrap(memory_path=self.memory_path)
+        return Bootstrap(
+            memory_path=self.memory_path,
+            session_path=self.session_path,
+        )
 
     def test_bootstrap_registers_response_composer(self) -> None:
         bootstrap = self._bootstrap()
@@ -102,10 +108,32 @@ class BootstrapTests(unittest.TestCase):
         bootstrap = Bootstrap()
         bootstrap.initialize()
 
-        store = bootstrap.container.resolve(JsonFileMemoryStore)
+        memory_store = bootstrap.container.resolve(JsonFileMemoryStore)
+        session_store = bootstrap.container.resolve(JsonFileSessionStore)
         project_root = Path(__file__).resolve().parents[1]
 
-        self.assertEqual(store._path, project_root / "data" / "memory" / "memory.json")
+        self.assertEqual(
+            memory_store._path,
+            project_root / "data" / "memory" / "memory.json",
+        )
+        self.assertEqual(
+            session_store._path,
+            project_root / "data" / "sessions" / "sessions.json",
+        )
+
+    def test_missing_session_file_creates_and_persists_the_default_registry(
+        self,
+    ) -> None:
+        bootstrap = self._bootstrap()
+
+        bootstrap.initialize()
+
+        session_manager = bootstrap.container.resolve(SessionManager)
+        document = json.loads(self.session_path.read_text(encoding="utf-8"))
+        self.assertEqual(session_manager.get_active().session_id, "default")
+        self.assertEqual(document["schema_version"], 1)
+        self.assertEqual(document["active_session_id"], "default")
+        self.assertEqual(document["sessions"][0]["session_id"], "default")
 
     def test_bootstrap_loads_existing_memory_for_explicit_recall(self) -> None:
         record = MemoryRecord(
@@ -143,6 +171,38 @@ class BootstrapTests(unittest.TestCase):
 
         self.assertFalse(hasattr(bootstrap, "container"))
 
+    def test_corrupt_session_file_stops_before_memory_load_and_container_publish(
+        self,
+    ) -> None:
+        self.session_path.write_text("{invalid", encoding="utf-8")
+        self.memory_path.write_text("{invalid", encoding="utf-8")
+        bootstrap = self._bootstrap()
+
+        with self.assertRaises(SessionError):
+            bootstrap.initialize()
+
+        self.assertFalse(hasattr(bootstrap, "container"))
+
+    def test_session_registry_and_memory_remain_independent_schema_documents(
+        self,
+    ) -> None:
+        bootstrap = self._bootstrap()
+        bootstrap.initialize()
+        brain = bootstrap.container.resolve(Brain)
+        brain.process("create session work-1")
+        brain.process("use session work-1")
+        brain.process("I like cats")
+
+        session_document = json.loads(self.session_path.read_text(encoding="utf-8"))
+        memory_document = json.loads(self.memory_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(session_document["schema_version"], 1)
+        self.assertEqual(
+            set(session_document), {"schema_version", "active_session_id", "sessions"}
+        )
+        self.assertEqual(memory_document["schema_version"], 1)
+        self.assertEqual(set(memory_document), {"schema_version", "records"})
+
     def test_persisted_conversation_is_recalled_after_bootstrap_restart(self) -> None:
         first_bootstrap = self._bootstrap()
         first_bootstrap.initialize()
@@ -157,6 +217,75 @@ class BootstrapTests(unittest.TestCase):
         self.assertTrue(response.success)
         self.assertEqual(response.memory_count, 1)
         self.assertIn("User: I like cats", response.message)
+
+    def test_active_session_and_conversation_persist_across_a_bootstrap_restart(
+        self,
+    ) -> None:
+        first_bootstrap = self._bootstrap()
+        first_bootstrap.initialize()
+        first_brain = first_bootstrap.container.resolve(Brain)
+        first_brain.process("create session work-1")
+        first_brain.process("use session work-1")
+        first_brain.process("I like cats")
+
+        restarted_bootstrap = self._bootstrap()
+        restarted_bootstrap.initialize()
+        session_manager = restarted_bootstrap.container.resolve(SessionManager)
+        restarted_brain = restarted_bootstrap.container.resolve(Brain)
+        response = restarted_brain.process("recall cats")
+
+        self.assertEqual(session_manager.get_active().session_id, "work-1")
+        self.assertEqual(response.memory_count, 1)
+        self.assertIn("User: I like cats", response.message)
+
+    def test_request_override_remains_local_after_a_restart(self) -> None:
+        first_bootstrap = self._bootstrap()
+        first_bootstrap.initialize()
+        first_brain = first_bootstrap.container.resolve(Brain)
+        first_brain.process("create session work-1")
+        first_brain.process("use session work-1")
+        first_brain.process(
+            BrainRequest(
+                message="I like cats",
+                metadata={"session_id": "default"},
+            )
+        )
+
+        restarted_bootstrap = self._bootstrap()
+        restarted_bootstrap.initialize()
+        session_manager = restarted_bootstrap.container.resolve(SessionManager)
+        restarted_brain = restarted_bootstrap.container.resolve(Brain)
+        response = restarted_brain.process(
+            BrainRequest(
+                message="recall cats",
+                metadata={"session_id": "default"},
+            )
+        )
+
+        self.assertIn("User: I like cats", response.message)
+        self.assertEqual(session_manager.get_active().session_id, "work-1")
+
+    def test_duplicate_session_create_remains_idempotent_after_restart(self) -> None:
+        first_bootstrap = self._bootstrap()
+        first_bootstrap.initialize()
+        first_bootstrap.container.resolve(Brain).process("create session work-1")
+
+        restarted_bootstrap = self._bootstrap()
+        restarted_bootstrap.initialize()
+        restarted_brain = restarted_bootstrap.container.resolve(Brain)
+        response = restarted_brain.process("create session work-1")
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.message, "Session already exists: work-1")
+        self.assertEqual(
+            [
+                session.session_id
+                for session in restarted_bootstrap.container.resolve(
+                    SessionManager
+                ).list()
+            ],
+            ["default", "work-1"],
+        )
 
     def test_persisted_search_records_are_excluded_from_recall(self) -> None:
         document_path = Path(self.temporary_directory.name) / "knowledge.md"
@@ -183,6 +312,7 @@ class BootstrapTests(unittest.TestCase):
         first_bootstrap = self._bootstrap()
         first_bootstrap.initialize()
         first_brain = first_bootstrap.container.resolve(Brain)
+        first_brain.process("create session work-1")
         first_brain.process(
             BrainRequest(
                 message="I like cats",
@@ -215,6 +345,7 @@ class BootstrapTests(unittest.TestCase):
         first_bootstrap = self._bootstrap()
         first_bootstrap.initialize()
         first_brain = first_bootstrap.container.resolve(Brain)
+        first_brain.process("create session work-1")
         first_brain.process(
             BrainRequest(
                 message="I like cats",
@@ -234,6 +365,8 @@ class BootstrapTests(unittest.TestCase):
         first_bootstrap = self._bootstrap()
         first_bootstrap.initialize()
         first_brain = first_bootstrap.container.resolve(Brain)
+        first_brain.process("create session work-1")
+        first_brain.process("create session personal")
         first_brain.process(
             BrainRequest(
                 message="Cats are my work topic",
@@ -278,6 +411,7 @@ class BootstrapTests(unittest.TestCase):
         knowledge_engine = first_bootstrap.container.resolve(KnowledgeEngine)
         first_brain = first_bootstrap.container.resolve(Brain)
         knowledge_engine.load(document_path)
+        first_brain.process("create session work-1")
         first_brain.process("search hypatia")
 
         restarted_bootstrap = self._bootstrap()

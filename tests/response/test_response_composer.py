@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 import unittest
+from datetime import UTC, datetime
 from pathlib import Path
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
@@ -21,6 +22,7 @@ from knowledge.Chunk import Chunk, ChunkType
 from memory.MemoryRecord import MemoryRecord
 from planner.Planner import Planner
 from response.ResponseComposer import ResponseComposer
+from session.SessionRecord import SessionRecord
 
 
 class ResponseComposerTests(unittest.TestCase):
@@ -160,3 +162,71 @@ class ResponseComposerTests(unittest.TestCase):
         self.assertFalse(response.success)
         self.assertEqual(response.memory_count, 0)
         self.assertEqual(response.request_id, self.request.request_id)
+
+    def test_session_created_composes_the_expected_response(self) -> None:
+        response = self.composer.session_created(self.request, self._session("work-1"))
+
+        self.assertEqual(response.message, "Session created: work-1")
+        self.assertEqual(response.intent, "session_create")
+        self.assertTrue(response.success)
+        self.assertEqual(response.request_id, self.request.request_id)
+        self.assertEqual(response.memory_count, 0)
+
+    def test_session_exists_composes_the_expected_response(self) -> None:
+        response = self.composer.session_exists(self.request, self._session("work-1"))
+
+        self.assertEqual(response.message, "Session already exists: work-1")
+        self.assertEqual(response.intent, "session_create")
+        self.assertTrue(response.success)
+
+    def test_session_activated_composes_the_expected_response(self) -> None:
+        response = self.composer.session_activated(
+            self.request, self._session("work-1")
+        )
+
+        self.assertEqual(response.message, "Active session: work-1")
+        self.assertEqual(response.intent, "session_use")
+        self.assertTrue(response.success)
+
+    def test_session_failure_preserves_the_given_message(self) -> None:
+        response = self.composer.session_failure(
+            self.request,
+            "Unknown session: work-1",
+        )
+
+        self.assertEqual(response.message, "Unknown session: work-1")
+        self.assertEqual(response.intent, "session")
+        self.assertFalse(response.success)
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(response.request_id, self.request.request_id)
+
+    def test_sessions_list_preserves_order_and_marks_only_the_active_session(
+        self,
+    ) -> None:
+        sessions = [
+            self._session("default"),
+            self._session("work-1"),
+            self._session("personal"),
+        ]
+
+        response = self.composer.sessions_list(
+            self.request,
+            sessions,
+            sessions[1],
+        )
+
+        self.assertEqual(
+            response.message,
+            "Sessions:\n1. default\n2. work-1 (active)\n3. personal",
+        )
+        self.assertEqual(response.intent, "session_list")
+        self.assertTrue(response.success)
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(response.message.count("(active)"), 1)
+
+    @staticmethod
+    def _session(session_id: str) -> SessionRecord:
+        return SessionRecord(
+            session_id=session_id,
+            created_at=datetime(2026, 8, 4, 15, 0, tzinfo=UTC),
+        )

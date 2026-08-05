@@ -42,6 +42,13 @@ class ImportSmokeTests(unittest.TestCase):
             "CognitiveEngine import OK",
         )
 
+    def test_session_manager_imports_in_a_clean_process(self) -> None:
+        self.assert_clean_import(
+            "from session.SessionManager import SessionManager; "
+            "print('SessionManager import OK')",
+            "SessionManager import OK",
+        )
+
     def test_bootstrap_initializes_in_a_clean_process(self) -> None:
         self.assert_clean_import(
             "from core.Bootstrap import Bootstrap; Bootstrap().initialize(); "

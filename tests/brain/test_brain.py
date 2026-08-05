@@ -38,6 +38,7 @@ from knowledge.KnowledgeEngine import KnowledgeEngine
 from memory.MemoryManager import MemoryManager
 from planner.Planner import Planner
 from response.ResponseComposer import ResponseComposer
+from session.SessionManager import SessionManager
 
 
 class BrainTests(unittest.TestCase):
@@ -47,12 +48,14 @@ class BrainTests(unittest.TestCase):
         self.knowledge_engine = KnowledgeEngine()
         self.planner = Planner()
         self.response_composer = ResponseComposer()
+        self.session_manager = SessionManager(self.event_bus)
         self.cognitive_engine = CognitiveEngine(
             self.knowledge_engine,
             self.memory_manager,
             self.planner,
             self.event_bus,
             self.response_composer,
+            self.session_manager,
         )
         self.brain = Brain(
             self.cognitive_engine,

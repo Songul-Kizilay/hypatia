@@ -7,6 +7,7 @@ from brain.BrainResponse import BrainResponse
 from knowledge.Chunk import Chunk
 from memory.MemoryRecord import MemoryRecord
 from planner.Plan import Plan
+from session.SessionRecord import SessionRecord
 
 
 class ResponseComposer:
@@ -121,6 +122,81 @@ class ResponseComposer:
             message=message,
             request_id=request.request_id,
             intent="recall",
+            memory_count=0,
+            success=False,
+        )
+
+    def session_created(
+        self,
+        request: BrainRequest,
+        session: SessionRecord,
+    ) -> BrainResponse:
+        """Compose a successful session creation response."""
+        return BrainResponse(
+            message=f"Session created: {session.session_id}",
+            request_id=request.request_id,
+            intent="session_create",
+            memory_count=0,
+        )
+
+    def session_exists(
+        self,
+        request: BrainRequest,
+        session: SessionRecord,
+    ) -> BrainResponse:
+        """Compose a successful duplicate-session response."""
+        return BrainResponse(
+            message=f"Session already exists: {session.session_id}",
+            request_id=request.request_id,
+            intent="session_create",
+            memory_count=0,
+        )
+
+    def sessions_list(
+        self,
+        request: BrainRequest,
+        sessions: list[SessionRecord],
+        active_session: SessionRecord,
+    ) -> BrainResponse:
+        """Compose an ordered registry listing with one active-session marker."""
+        session_lines = "\n".join(
+            (
+                f"{index}. {session.session_id} (active)"
+                if session.session_id == active_session.session_id
+                else f"{index}. {session.session_id}"
+            )
+            for index, session in enumerate(sessions, start=1)
+        )
+        return BrainResponse(
+            message=f"Sessions:\n{session_lines}",
+            request_id=request.request_id,
+            intent="session_list",
+            memory_count=0,
+        )
+
+    def session_activated(
+        self,
+        request: BrainRequest,
+        session: SessionRecord,
+    ) -> BrainResponse:
+        """Compose a successful active-session selection response."""
+        return BrainResponse(
+            message=f"Active session: {session.session_id}",
+            request_id=request.request_id,
+            intent="session_use",
+            memory_count=0,
+        )
+
+    def session_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Compose an unsuccessful session command response."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="session",
             memory_count=0,
             success=False,
         )

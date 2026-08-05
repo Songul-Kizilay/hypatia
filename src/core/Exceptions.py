@@ -31,6 +31,10 @@ class MemoryError(HypatiaError):
     """Memory error."""
 
 
+class SessionError(HypatiaError):
+    """Raised when session registry operations cannot be completed."""
+
+
 class PlannerError(HypatiaError):
     """Planner error."""
 
