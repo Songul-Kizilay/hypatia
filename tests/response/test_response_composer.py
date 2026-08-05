@@ -631,10 +631,6 @@ class ResponseComposerTests(unittest.TestCase):
         result = SessionRenameResult("work", "Research Archive", 2, True)
 
         response = self.composer.session_renamed(self.request, result)
-        failure = self.composer.session_rename_failure(
-            self.request,
-            "Default session cannot be renamed.",
-        )
 
         self.assertEqual(
             response.message,
@@ -663,10 +659,24 @@ class ResponseComposerTests(unittest.TestCase):
             "Status: committed",
         )
         self.assertFalse(zero_memory_response.message.endswith("\n"))
-        self.assertEqual(failure.message, "Default session cannot be renamed.")
-        self.assertEqual(failure.intent, "session_rename")
-        self.assertFalse(failure.success)
-        self.assertEqual(failure.memory_count, 0)
+        for message in (
+            "Unknown session: missing",
+            "Session already exists: personal",
+            "Default session cannot be renamed.",
+            "Session source and target must be different.",
+        ):
+            with self.subTest(message=message):
+                failure = self.composer.session_rename_failure(self.request, message)
+
+                self.assertEqual(
+                    failure.message,
+                    f"Rename failed:\nReason: {message}",
+                )
+                self.assertEqual(failure.intent, "session_rename")
+                self.assertFalse(failure.success)
+                self.assertEqual(failure.memory_count, 0)
+                self.assertEqual(failure.request_id, self.request.request_id)
+                self.assertFalse(failure.message.endswith("\n"))
 
     def test_session_rename_preview_responses_preserve_the_exact_contract(self) -> None:
         preview = SessionRenamePreview(
