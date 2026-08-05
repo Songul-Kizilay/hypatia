@@ -347,6 +347,7 @@ class CognitiveEngineTests(unittest.TestCase):
         self.event_bus.subscribe("*", events.append)
         sessions_before = self.session_manager.snapshot()
         memory_before = self.memory_manager.snapshot()
+        memory_id = memory_before[0].memory_id
 
         response = self.engine.process(
             BrainRequest(message="PREVIEW RENAME SESSION work-1 -- Work Archive")
@@ -360,6 +361,8 @@ class CognitiveEngineTests(unittest.TestCase):
             "Source: work-1\n"
             "Target: Work Archive\n"
             "Affected memories: 1\n"
+            "Memory IDs:\n"
+            f"- {memory_id}\n"
             "Changes: ready",
         )
         self.assertEqual(self.session_manager.snapshot(), sessions_before)

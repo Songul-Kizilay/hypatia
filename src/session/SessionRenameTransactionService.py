@@ -109,6 +109,7 @@ class SessionRenameTransactionService:
                 active_session_changed=(
                     session_snapshot.active_session_id != plan.updated_active_session_id
                 ),
+                memory_record_ids=plan.memory_record_ids_to_update,
             )
 
     def _emit_renamed(self, result: SessionRenameResult) -> None:
