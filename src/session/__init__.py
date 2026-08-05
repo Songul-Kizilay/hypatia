@@ -5,12 +5,16 @@ from session.SessionCreateResult import SessionCreateResult
 from session.SessionManager import SessionManager
 from session.SessionRecord import SessionRecord
 from session.SessionRegistrySnapshot import SessionRegistrySnapshot
+from session.SessionRenamePlan import SessionRenamePlan
+from session.SessionRenamePlanner import SessionRenamePlanner
 from session.SessionStore import SessionStore
 
 __all__ = [
     "JsonFileSessionStore",
     "SessionCreateResult",
     "SessionManager",
+    "SessionRenamePlan",
+    "SessionRenamePlanner",
     "SessionRecord",
     "SessionRegistrySnapshot",
     "SessionStore",
