@@ -708,6 +708,15 @@ class ResponseComposerTests(unittest.TestCase):
         self.assertTrue(empty_response.success)
         self.assertEqual(empty_response.memory_count, 0)
 
+    def test_session_active_preserves_the_exact_contract(self) -> None:
+        response = self.composer.session_active(self.request, self._session("work"))
+
+        self.assertEqual(response.message, "Active session: work")
+        self.assertEqual(response.intent, "session_active")
+        self.assertTrue(response.success)
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(response.request_id, self.request.request_id)
+
     @staticmethod
     def _session(session_id: str) -> SessionRecord:
         return SessionRecord(

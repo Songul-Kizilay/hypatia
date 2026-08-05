@@ -514,6 +514,70 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertTrue(response.success)
         self.assertEqual(response.memory_count, 0)
 
+    def test_session_active_is_read_only_for_default_and_selected_sessions(
+        self,
+    ) -> None:
+        events = []
+        self.event_bus.subscribe("*", events.append)
+        sessions_before = self.session_manager.snapshot()
+        memory_before = self.memory_manager.snapshot()
+
+        with (
+            patch.object(
+                self.session_rename_service,
+                "rename",
+                side_effect=AssertionError("Rename service must not be called."),
+            ),
+            patch.object(
+                self.session_rename_service,
+                "preview",
+                side_effect=AssertionError("Preview service must not be called."),
+            ),
+            patch.object(
+                self.memory_manager,
+                "add",
+                side_effect=AssertionError("Memory writes must not be called."),
+            ),
+        ):
+            default_response = self.engine.process(
+                BrainRequest(message="active session")
+            )
+
+        self.assertEqual(default_response.message, "Active session: default")
+        self.assertEqual(default_response.intent, "session_active")
+        self.assertTrue(default_response.success)
+        self.assertEqual(default_response.memory_count, 0)
+        self.assertEqual(self.session_manager.snapshot(), sessions_before)
+        self.assertEqual(self.memory_manager.snapshot(), memory_before)
+        self.assertEqual(events, [])
+
+        self.session_manager.set_active("work-1")
+        events.clear()
+        active_sessions_before = self.session_manager.snapshot()
+        active_memory_before = self.memory_manager.snapshot()
+        active_response = self.engine.process(BrainRequest(message="active session"))
+
+        self.assertEqual(active_response.message, "Active session: work-1")
+        self.assertEqual(active_response.intent, "session_active")
+        self.assertTrue(active_response.success)
+        self.assertEqual(active_response.memory_count, 0)
+        self.assertEqual(self.session_manager.snapshot(), active_sessions_before)
+        self.assertEqual(self.memory_manager.snapshot(), active_memory_before)
+        self.assertEqual(events, [])
+        self.assertTrue(
+            self.engine.process(BrainRequest(message="use session personal")).success
+        )
+        self.assertTrue(
+            self.engine.process(
+                BrainRequest(message="preview rename session work-1 -- archive")
+            ).success
+        )
+        self.assertTrue(
+            self.engine.process(
+                BrainRequest(message="rename session work-1 -- archive")
+            ).success
+        )
+
     def test_empty_search_query_is_saved_to_memory(self) -> None:
         self.engine.process(BrainRequest(message="search "))
 

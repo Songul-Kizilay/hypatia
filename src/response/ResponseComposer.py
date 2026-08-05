@@ -136,6 +136,19 @@ class ResponseComposer:
             memory_count=0,
         )
 
+    def session_active(
+        self,
+        request: BrainRequest,
+        session: SessionRecord,
+    ) -> BrainResponse:
+        """Compose the deterministic current active-session status."""
+        return BrainResponse(
+            message=f"Active session: {session.session_id}",
+            request_id=request.request_id,
+            intent="session_active",
+            memory_count=0,
+        )
+
     def search_success(
         self,
         request: BrainRequest,

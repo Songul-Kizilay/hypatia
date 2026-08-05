@@ -48,6 +48,8 @@ class BrainRouter:
             "session activity "
         ):
             return "session_activity"
+        if normalized_message == "active session":
+            return "session_active"
         if normalized_message == "help rename session":
             return "session_rename_help"
         if normalized_message == "list renameable sessions":
