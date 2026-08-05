@@ -23,6 +23,7 @@ from memory.MemoryRecord import MemoryRecord
 from planner.Planner import Planner
 from response.ResponseComposer import ResponseComposer
 from session.SessionRecord import SessionRecord
+from session.SessionRenameResult import SessionRenameResult
 
 
 class ResponseComposerTests(unittest.TestCase):
@@ -624,6 +625,28 @@ class ResponseComposerTests(unittest.TestCase):
         self.assertFalse(response.success)
         self.assertEqual(response.memory_count, 0)
         self.assertEqual(response.request_id, self.request.request_id)
+
+    def test_session_rename_responses_preserve_the_exact_contract(self) -> None:
+        result = SessionRenameResult("work", "Research Archive", 2, True)
+
+        response = self.composer.session_renamed(self.request, result)
+        failure = self.composer.session_rename_failure(
+            self.request,
+            "Default session cannot be renamed.",
+        )
+
+        self.assertEqual(
+            response.message,
+            "Session renamed: work -> Research Archive\nMemory records updated: 2",
+        )
+        self.assertEqual(response.intent, "session_rename")
+        self.assertTrue(response.success)
+        self.assertEqual(response.memory_count, 2)
+        self.assertEqual(response.request_id, self.request.request_id)
+        self.assertEqual(failure.message, "Default session cannot be renamed.")
+        self.assertEqual(failure.intent, "session_rename")
+        self.assertFalse(failure.success)
+        self.assertEqual(failure.memory_count, 0)
 
     @staticmethod
     def _session(session_id: str) -> SessionRecord:

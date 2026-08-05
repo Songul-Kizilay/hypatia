@@ -13,6 +13,7 @@ from planner.Planner import Planner
 from response.ResponseComposer import ResponseComposer
 from session.JsonFileSessionStore import JsonFileSessionStore
 from session.SessionManager import SessionManager
+from session.SessionRenameTransactionService import SessionRenameTransactionService
 
 
 class Bootstrap:
@@ -39,6 +40,11 @@ class Bootstrap:
         )
         memory_manager = MemoryManager(event_bus, memory_store)
         memory_manager.load()
+        session_rename_service = SessionRenameTransactionService(
+            session_manager=session_manager,
+            memory_manager=memory_manager,
+            event_bus=event_bus,
+        )
         knowledge_engine = KnowledgeEngine()
         planner = Planner()
         response_composer = ResponseComposer()
@@ -49,6 +55,7 @@ class Bootstrap:
             event_bus,
             response_composer,
             session_manager,
+            session_rename_service,
         )
         brain = Brain(cognitive_engine, memory_manager, event_bus)
 
@@ -59,6 +66,7 @@ class Bootstrap:
         container.register(session_manager)
         container.register(memory_store)
         container.register(memory_manager)
+        container.register(session_rename_service)
         container.register(knowledge_engine)
         container.register(response_composer)
         container.register(cognitive_engine)
@@ -73,6 +81,7 @@ class Bootstrap:
         logger.info("Event Bus Ready")
         logger.info("Session Manager Ready")
         logger.info("Memory Manager Ready")
+        logger.info("Session Rename Service Ready")
         logger.info("Knowledge Engine Ready")
         logger.info("Response Composer Ready")
         logger.info("Cognitive Engine Ready")

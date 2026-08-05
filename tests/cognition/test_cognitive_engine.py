@@ -25,7 +25,7 @@ if source_response_dir not in response.__path__:
     response.__path__.append(source_response_dir)
 
 from brain.BrainRequest import BrainRequest
-from cognition.CognitiveEngine import CognitiveEngine
+from cognition.CognitiveEngine import CognitiveEngine as ProductionCognitiveEngine
 from core.Exceptions import KnowledgeError, MemoryError, PlannerError
 from eventbus.EventBus import EventBus
 from knowledge.KnowledgeEngine import KnowledgeEngine
@@ -35,6 +35,24 @@ from memory.SessionMemoryPolicy import SessionMemoryPolicy
 from planner.Planner import Planner
 from response.ResponseComposer import ResponseComposer
 from session.SessionManager import SessionManager
+from session.SessionRenameTransactionService import SessionRenameTransactionService
+
+
+class StubSessionRenameService:
+    """Fails tests that accidentally route an unrelated request to rename."""
+
+    def rename(self, source_session_id: str, target_session_id: str) -> object:
+        raise AssertionError("Session rename service must not be called in this test.")
+
+
+class CognitiveEngine(ProductionCognitiveEngine):
+    """Test harness that supplies the required rename dependency when omitted."""
+
+    def __init__(self, *args: object) -> None:
+        if len(args) == 6:
+            super().__init__(*args, StubSessionRenameService())  # type: ignore[arg-type]
+            return
+        super().__init__(*args)  # type: ignore[arg-type]
 
 
 class FailingKnowledgeEngine:
@@ -174,6 +192,11 @@ class CognitiveEngineTests(unittest.TestCase):
         self.session_manager = SessionManager(self.event_bus)
         self.session_manager.create("work-1")
         self.session_manager.create("personal")
+        self.session_rename_service = SessionRenameTransactionService(
+            session_manager=self.session_manager,
+            memory_manager=self.memory_manager,
+            event_bus=self.event_bus,
+        )
         self.engine = CognitiveEngine(
             self.knowledge_engine,
             self.memory_manager,
@@ -181,6 +204,7 @@ class CognitiveEngineTests(unittest.TestCase):
             self.event_bus,
             self.response_composer,
             self.session_manager,
+            self.session_rename_service,
         )
 
     def tearDown(self) -> None:
@@ -194,12 +218,25 @@ class CognitiveEngineTests(unittest.TestCase):
 
     def test_session_manager_is_a_required_cognitive_engine_dependency(self) -> None:
         with self.assertRaises(TypeError):
-            CognitiveEngine(
+            ProductionCognitiveEngine(
                 self.knowledge_engine,
                 self.memory_manager,
                 self.planner,
                 self.event_bus,
                 self.response_composer,
+            )
+
+    def test_session_rename_service_is_a_required_cognitive_engine_dependency(
+        self,
+    ) -> None:
+        with self.assertRaises(TypeError):
+            ProductionCognitiveEngine(
+                self.knowledge_engine,
+                self.memory_manager,
+                self.planner,
+                self.event_bus,
+                self.response_composer,
+                self.session_manager,
             )
 
     def test_search_response_reports_matching_chunk_count(self) -> None:
@@ -264,6 +301,43 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertFalse(response.success)
         self.assertEqual(response.intent, "search")
         self.assertEqual(response.message, "A search query is required.")
+
+    def test_session_rename_executes_without_conversation_side_effects(self) -> None:
+        self.memory_manager.add("Work", metadata={"session_id": "work-1"})
+        events = []
+        self.event_bus.subscribe("*", events.append)
+
+        response = self.engine.process(
+            BrainRequest(message="  RENAME SESSION work-1 -- Work Archive  ")
+        )
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "session_rename")
+        self.assertEqual(
+            response.message,
+            "Session renamed: work-1 -> Work Archive\nMemory records updated: 1",
+        )
+        self.assertTrue(self.session_manager.exists("Work Archive"))
+        self.assertFalse(self.session_manager.exists("work-1"))
+        self.assertEqual(
+            self.memory_manager.snapshot()[0].metadata["session_id"],
+            "Work Archive",
+        )
+        self.assertEqual([event.name for event in events], ["session.renamed"])
+
+    def test_session_rename_parser_and_domain_failures_are_controlled(self) -> None:
+        for message, expected in (
+            ("rename session work", "Session rename separator is required: --"),
+            ("rename session -- work", "Session source ID must not be empty."),
+            ("rename session work --", "Session target ID must not be empty."),
+            ("rename session default -- other", "Default session cannot be renamed."),
+        ):
+            with self.subTest(message=message):
+                response = self.engine.process(BrainRequest(message=message))
+                self.assertFalse(response.success)
+                self.assertEqual(response.intent, "session_rename")
+                self.assertEqual(response.memory_count, 0)
+                self.assertEqual(response.message, expected)
 
     def test_empty_search_query_is_saved_to_memory(self) -> None:
         self.engine.process(BrainRequest(message="search "))

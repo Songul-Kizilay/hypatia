@@ -276,6 +276,26 @@ class BrainRouterTests(unittest.TestCase):
 
         self.assertEqual(intent, "greeting")
 
+    def test_session_rename_is_an_explicit_case_insensitive_command(self) -> None:
+        for message in (
+            "rename session",
+            "rename session work -- archive",
+            "RENAME SESSION Work -- Research Archive",
+        ):
+            with self.subTest(message=message):
+                self.assertEqual(
+                    self.router.detect_intent(BrainRequest(message=message)),
+                    "session_rename",
+                )
+
+    def test_natural_language_rename_variants_remain_messages(self) -> None:
+        for message in ("rename work", "session rename work -- archive"):
+            with self.subTest(message=message):
+                self.assertEqual(
+                    self.router.detect_intent(BrainRequest(message=message)),
+                    "message",
+                )
+
     def test_existing_greeting_and_message_detection_is_preserved(self) -> None:
         self.assertEqual(
             self.router.detect_intent(BrainRequest(message="hello there")),
