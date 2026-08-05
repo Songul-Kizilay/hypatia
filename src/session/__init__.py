@@ -9,6 +9,8 @@ from session.SessionRenameCandidate import SessionRenameCandidate
 from session.SessionRenameCandidateBuilder import SessionRenameCandidateBuilder
 from session.SessionRenamePlan import SessionRenamePlan
 from session.SessionRenamePlanner import SessionRenamePlanner
+from session.SessionRenameResult import SessionRenameResult
+from session.SessionRenameTransactionService import SessionRenameTransactionService
 from session.SessionStore import SessionStore
 
 __all__ = [
@@ -19,6 +21,8 @@ __all__ = [
     "SessionRenameCandidateBuilder",
     "SessionRenamePlan",
     "SessionRenamePlanner",
+    "SessionRenameResult",
+    "SessionRenameTransactionService",
     "SessionRecord",
     "SessionRegistrySnapshot",
     "SessionStore",
