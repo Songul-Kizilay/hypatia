@@ -14,6 +14,7 @@ from eventbus.EventBus import EventBus
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from memory.MemoryManager import MemoryManager
 from memory.MemoryRecord import MemoryRecord
+from memory.SessionMemoryPolicy import SessionMemoryPolicy
 from response.ResponseComposer import ResponseComposer
 from session.SessionManager import SessionManager
 from session.SessionRecord import SessionRecord
@@ -273,12 +274,10 @@ class CognitiveEngine:
         conversation_counts = {session.session_id: 0 for session in sessions}
 
         for record in self._memory_manager.all():
-            if not {"brain", "conversation"}.issubset(record.tags):
-                continue
-
-            session_id = record.metadata.get("session_id", "default")
-            if isinstance(session_id, str) and session_id in conversation_counts:
-                conversation_counts[session_id] += 1
+            for session_id in conversation_counts:
+                if SessionMemoryPolicy.matches(record, session_id):
+                    conversation_counts[session_id] += 1
+                    break
 
         return self._response_composer.session_overview(
             request,
@@ -300,8 +299,7 @@ class CognitiveEngine:
         conversation_count = sum(
             1
             for record in self._memory_manager.all()
-            if {"brain", "conversation"}.issubset(record.tags)
-            and record.metadata.get("session_id", "default") == session_id
+            if SessionMemoryPolicy.matches(record, session_id)
         )
         return self._response_composer.session_details(
             request,
@@ -323,8 +321,7 @@ class CognitiveEngine:
         records = [
             record
             for record in self._memory_manager.all()
-            if {"brain", "conversation"}.issubset(record.tags)
-            and record.metadata.get("session_id", "default") == session_id
+            if SessionMemoryPolicy.matches(record, session_id)
         ]
         activity_times = [
             record.created_at for record in records if record.created_at is not None
@@ -356,8 +353,7 @@ class CognitiveEngine:
         records = [
             record
             for record in self._memory_manager.all()
-            if {"brain", "conversation"}.issubset(record.tags)
-            and record.metadata.get("session_id", "default") == session_id
+            if SessionMemoryPolicy.matches(record, session_id)
         ]
         recent_records = sorted(
             records,
@@ -381,8 +377,7 @@ class CognitiveEngine:
         matching_records = [
             record
             for record in self._memory_manager.search(query, limit=None)
-            if {"brain", "conversation"}.issubset(record.tags)
-            and record.metadata.get("session_id", "default") == session_id
+            if SessionMemoryPolicy.matches(record, session_id)
         ][:5]
         if not matching_records:
             return self._response_composer.session_search_empty(

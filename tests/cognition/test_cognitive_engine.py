@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from unittest.mock import patch
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
@@ -30,6 +31,7 @@ from eventbus.EventBus import EventBus
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from memory.MemoryManager import MemoryManager
 from memory.MemoryRecord import MemoryRecord
+from memory.SessionMemoryPolicy import SessionMemoryPolicy
 from planner.Planner import Planner
 from response.ResponseComposer import ResponseComposer
 from session.SessionManager import SessionManager
@@ -502,6 +504,35 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(memory_manager.all_calls, 1)
         self.assertIn("1. default — 1 conversation [active]", response.message)
 
+    def test_session_overview_delegates_record_matching_to_the_shared_policy(
+        self,
+    ) -> None:
+        record = MemoryRecord(
+            memory_id="default-record",
+            content="Legacy default",
+            tags=frozenset({"brain", "conversation"}),
+        )
+        memory_manager = RecordingSessionOverviewMemoryManager([record])
+        engine = CognitiveEngine(
+            self.knowledge_engine,
+            memory_manager,  # type: ignore[arg-type]
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+        )
+
+        with patch.object(
+            SessionMemoryPolicy,
+            "matches",
+            wraps=SessionMemoryPolicy.matches,
+        ) as matches:
+            response = engine.process(BrainRequest(message="session overview"))
+
+        self.assertTrue(response.success)
+        self.assertEqual(memory_manager.all_calls, 1)
+        matches.assert_called_once_with(record, "default")
+
     def test_session_details_counts_only_target_normal_conversations(self) -> None:
         records = (
             (
@@ -620,6 +651,36 @@ class CognitiveEngineTests(unittest.TestCase):
                 self.assertFalse(response.success)
                 self.assertEqual(response.intent, "session_details")
                 self.assertEqual(response.message, expected)
+
+    def test_session_details_delegates_record_matching_to_the_shared_policy(
+        self,
+    ) -> None:
+        record = MemoryRecord(
+            memory_id="work-record",
+            content="Work conversation",
+            metadata={"session_id": "work-1"},
+            tags=frozenset({"brain", "conversation"}),
+        )
+        memory_manager = RecordingSessionOverviewMemoryManager([record])
+        engine = CognitiveEngine(
+            self.knowledge_engine,
+            memory_manager,  # type: ignore[arg-type]
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+        )
+
+        with patch.object(
+            SessionMemoryPolicy,
+            "matches",
+            wraps=SessionMemoryPolicy.matches,
+        ) as matches:
+            response = engine.process(BrainRequest(message="session details work-1"))
+
+        self.assertTrue(response.success)
+        self.assertEqual(memory_manager.all_calls, 1)
+        matches.assert_called_once_with(record, "work-1")
 
     def test_session_activity_aggregates_only_target_conversations(self) -> None:
         self.session_manager.create("Work Research")
@@ -764,6 +825,38 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertIn("First activity: none", response.message)
         self.assertIn("Last activity: none", response.message)
 
+    def test_session_activity_delegates_record_matching_to_the_shared_policy(
+        self,
+    ) -> None:
+        record = MemoryRecord(
+            memory_id="work-record",
+            content="Work conversation",
+            metadata={"session_id": "work"},
+            tags=frozenset({"brain", "conversation"}),
+            created_at=datetime.now(UTC),
+        )
+        self.session_manager.create("work")
+        memory_manager = RecordingSessionOverviewMemoryManager([record])
+        engine = CognitiveEngine(
+            self.knowledge_engine,
+            memory_manager,  # type: ignore[arg-type]
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+        )
+
+        with patch.object(
+            SessionMemoryPolicy,
+            "matches",
+            wraps=SessionMemoryPolicy.matches,
+        ) as matches:
+            response = engine.process(BrainRequest(message="session activity work"))
+
+        self.assertTrue(response.success)
+        self.assertEqual(memory_manager.all_calls, 1)
+        matches.assert_called_once_with(record, "work")
+
     def test_session_recent_uses_the_complete_suffix_and_filters_before_limiting(
         self,
     ) -> None:
@@ -850,6 +943,38 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(response.memory_count, 1)
         self.assertIn("Legacy default", response.message)
         self.assertNotIn("Null default", response.message)
+
+    def test_session_recent_delegates_record_matching_to_the_shared_policy(
+        self,
+    ) -> None:
+        record = MemoryRecord(
+            memory_id="work-record",
+            content="Work conversation",
+            metadata={"session_id": "work"},
+            tags=frozenset({"brain", "conversation"}),
+            created_at=datetime.now(UTC),
+        )
+        self.session_manager.create("work")
+        memory_manager = RecordingSessionOverviewMemoryManager([record])
+        engine = CognitiveEngine(
+            self.knowledge_engine,
+            memory_manager,  # type: ignore[arg-type]
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+        )
+
+        with patch.object(
+            SessionMemoryPolicy,
+            "matches",
+            wraps=SessionMemoryPolicy.matches,
+        ) as matches:
+            response = engine.process(BrainRequest(message="session recent work"))
+
+        self.assertTrue(response.success)
+        self.assertEqual(memory_manager.all_calls, 1)
+        matches.assert_called_once_with(record, "work")
 
     def test_session_recent_empty_and_unknown_ids_do_not_read_memory(self) -> None:
         engine = CognitiveEngine(
@@ -959,6 +1084,40 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertIn("Legacy match", response.message)
         self.assertIn("Explicit default match", response.message)
         self.assertNotIn("Null match", response.message)
+
+    def test_session_search_delegates_record_matching_to_the_shared_policy(
+        self,
+    ) -> None:
+        record = MemoryRecord(
+            memory_id="work-record",
+            content="Work conversation",
+            metadata={"session_id": "work"},
+            tags=frozenset({"brain", "conversation"}),
+            created_at=datetime.now(UTC),
+        )
+        self.session_manager.create("work")
+        memory_manager = RecordingConversationSearchMemoryManager([record])
+        engine = CognitiveEngine(
+            self.knowledge_engine,
+            memory_manager,  # type: ignore[arg-type]
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+        )
+
+        with patch.object(
+            SessionMemoryPolicy,
+            "matches",
+            wraps=SessionMemoryPolicy.matches,
+        ) as matches:
+            response = engine.process(
+                BrainRequest(message="session search work -- conversation")
+            )
+
+        self.assertTrue(response.success)
+        self.assertEqual(memory_manager.calls, [("conversation", None)])
+        matches.assert_called_once_with(record, "work")
 
     def test_session_search_failures_do_not_read_memory(self) -> None:
         engine = CognitiveEngine(

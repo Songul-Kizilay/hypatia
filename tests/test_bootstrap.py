@@ -1137,6 +1137,147 @@ class BootstrapTests(unittest.TestCase):
         self.assertNotIn("Work bootstrap discussion", response.message)
         self.assertEqual(session_manager.get_active().session_id, "work-1")
 
+    def test_session_memory_policy_semantics_survive_restart_across_commands(
+        self,
+    ) -> None:
+        first_bootstrap = self._bootstrap()
+        first_bootstrap.initialize()
+        first_brain = first_bootstrap.container.resolve(Brain)
+        first_brain.process("create session work research")
+        first_brain.process("create session other")
+        first_brain.process("use session other")
+
+        now = datetime(2026, 8, 5, 9, 0, tzinfo=UTC)
+        JsonFileMemoryStore(self.memory_path).save(
+            [
+                MemoryRecord(
+                    memory_id="legacy-default",
+                    content="Legacy default policy",
+                    tags=frozenset({"brain", "conversation"}),
+                    created_at=now,
+                    updated_at=now,
+                ),
+                MemoryRecord(
+                    memory_id="explicit-default",
+                    content="Explicit default policy",
+                    metadata={"session_id": "default"},
+                    tags=frozenset({"brain", "conversation"}),
+                    created_at=now + timedelta(seconds=1),
+                    updated_at=now + timedelta(seconds=1),
+                ),
+                MemoryRecord(
+                    memory_id="null-session",
+                    content="Null policy",
+                    metadata={"session_id": None},
+                    tags=frozenset({"brain", "conversation"}),
+                    created_at=now + timedelta(seconds=2),
+                    updated_at=now + timedelta(seconds=2),
+                ),
+                MemoryRecord(
+                    memory_id="numeric-session",
+                    content="Numeric policy",
+                    metadata={"session_id": 123},
+                    tags=frozenset({"brain", "conversation"}),
+                    created_at=now + timedelta(seconds=3),
+                    updated_at=now + timedelta(seconds=3),
+                ),
+                *[
+                    MemoryRecord(
+                        memory_id=f"target-{index}",
+                        content=f"Target policy {index}",
+                        metadata={"session_id": "work research"},
+                        tags=frozenset({"brain", "conversation"}),
+                        created_at=now + timedelta(minutes=index),
+                        updated_at=now + timedelta(minutes=index),
+                    )
+                    for index in range(3)
+                ],
+                MemoryRecord(
+                    memory_id="wrong-case",
+                    content="Wrong case policy",
+                    metadata={"session_id": "Work Research"},
+                    tags=frozenset({"brain", "conversation"}),
+                    created_at=now + timedelta(minutes=4),
+                    updated_at=now + timedelta(minutes=4),
+                ),
+                MemoryRecord(
+                    memory_id="wrong-tags",
+                    content="Wrong tags policy",
+                    metadata={"session_id": "work research"},
+                    tags=frozenset({"cognition", "knowledge-search", "conversation"}),
+                    created_at=now + timedelta(minutes=5),
+                    updated_at=now + timedelta(minutes=5),
+                ),
+                MemoryRecord(
+                    memory_id="other-session",
+                    content="Other policy",
+                    metadata={"session_id": "other"},
+                    tags=frozenset({"brain", "conversation"}),
+                    created_at=now + timedelta(minutes=6),
+                    updated_at=now + timedelta(minutes=6),
+                ),
+                MemoryRecord(
+                    memory_id="orphan-session",
+                    content="Orphan policy",
+                    metadata={"session_id": "orphan"},
+                    tags=frozenset({"brain", "conversation"}),
+                    created_at=now + timedelta(minutes=7),
+                    updated_at=now + timedelta(minutes=7),
+                ),
+            ]
+        )
+
+        restarted_bootstrap = self._bootstrap()
+        restarted_bootstrap.initialize()
+        container = restarted_bootstrap.container
+        brain = container.resolve(Brain)
+        memory_manager = container.resolve(MemoryManager)
+        session_manager = container.resolve(SessionManager)
+        events: list[str] = []
+        container.resolve(EventBus).subscribe(
+            "*", lambda event: events.append(event.name)
+        )
+        memory_document = self.memory_path.read_text(encoding="utf-8")
+        session_document = self.session_path.read_text(encoding="utf-8")
+        records = memory_manager.all()
+        sessions = session_manager.list()
+
+        overview = brain.process("session overview")
+        details = brain.process("session details work research")
+        recent = brain.process("session recent work research")
+        search = brain.process("session search work research -- policy")
+        activity = brain.process("session activity work research")
+
+        self.assertEqual(overview.memory_count, 6)
+        overview_lines = overview.message.splitlines()
+        self.assertTrue(overview_lines[1].startswith("1. default"))
+        self.assertTrue(overview_lines[1].endswith("2 conversations"))
+        self.assertTrue(overview_lines[2].startswith("2. work research"))
+        self.assertTrue(overview_lines[2].endswith("3 conversations"))
+        self.assertTrue(overview_lines[3].startswith("3. other"))
+        self.assertTrue(overview_lines[3].endswith("1 conversation [active]"))
+        self.assertEqual(details.memory_count, 3)
+        self.assertEqual(recent.memory_count, 3)
+        self.assertIn("1. Target policy 2", recent.message)
+        self.assertIn("3. Target policy 0", recent.message)
+        self.assertEqual(search.memory_count, 3)
+        self.assertNotIn("Wrong case policy", search.message)
+        self.assertNotIn("Wrong tags policy", search.message)
+        self.assertEqual(activity.memory_count, 3)
+        self.assertIn(f"First activity: {now.isoformat()}", activity.message)
+        self.assertIn(
+            f"Last activity: {(now + timedelta(minutes=2)).isoformat()}",
+            activity.message,
+        )
+        self.assertEqual(session_manager.get_active().session_id, "other")
+        self.assertEqual(session_manager.list(), sessions)
+        self.assertEqual(memory_manager.all(), records)
+        self.assertEqual(self.memory_path.read_text(encoding="utf-8"), memory_document)
+        self.assertEqual(
+            self.session_path.read_text(encoding="utf-8"), session_document
+        )
+        self.assertEqual(events, [])
+
     def test_conversation_search_legacy_and_invalid_session_contracts_survive_restart(
         self,
     ) -> None:
