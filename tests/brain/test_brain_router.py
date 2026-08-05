@@ -55,3 +55,42 @@ class BrainRouterTests(unittest.TestCase):
             self.router.detect_intent(BrainRequest(message="tell me more")),
             "message",
         )
+
+    def test_create_session_command_is_detected_and_preserves_its_id_case(self) -> None:
+        request = BrainRequest(message="CREATE SESSION Work-1")
+
+        self.assertEqual(self.router.detect_intent(request), "session_create")
+        self.assertEqual(request.message.removeprefix("CREATE SESSION "), "Work-1")
+
+    def test_list_sessions_command_is_detected(self) -> None:
+        self.assertEqual(
+            self.router.detect_intent(BrainRequest(message="list sessions")),
+            "session_list",
+        )
+
+    def test_use_session_command_is_detected(self) -> None:
+        self.assertEqual(
+            self.router.detect_intent(BrainRequest(message="use session work-1")),
+            "session_use",
+        )
+
+    def test_non_command_session_phrases_remain_messages(self) -> None:
+        for message in (
+            "please create session work-1",
+            "can you list sessions",
+            "I want to use session work-1",
+            "create sessions work-1",
+            "use sessions work-1",
+        ):
+            with self.subTest(message=message):
+                self.assertEqual(
+                    self.router.detect_intent(BrainRequest(message=message)),
+                    "message",
+                )
+
+    def test_declared_session_metadata_does_not_trigger_a_session_command(self) -> None:
+        intent = self.router.detect_intent(
+            BrainRequest(message="hello", metadata={"intent": "session_create"})
+        )
+
+        self.assertEqual(intent, "greeting")

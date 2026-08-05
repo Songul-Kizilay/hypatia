@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from brain.BrainContext import BrainContext
 from brain.BrainRequest import BrainRequest
 from brain.BrainResponse import BrainResponse
 from brain.BrainRouter import BrainRouter
-from core.Exceptions import KnowledgeError, MemoryError, PlannerError
+from core.Exceptions import KnowledgeError, MemoryError, PlannerError, SessionError
 from eventbus.EventBus import EventBus
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from memory.MemoryManager import MemoryManager
 from response.ResponseComposer import ResponseComposer
+from session.SessionManager import SessionManager
 
 if TYPE_CHECKING:
     from planner.Planner import Planner
@@ -22,8 +22,6 @@ if TYPE_CHECKING:
 class CognitiveEngine:
     """Coordinates the first knowledge-backed cognitive request flow."""
 
-    _DEFAULT_SESSION_ID = "default"
-
     def __init__(
         self,
         knowledge_engine: KnowledgeEngine,
@@ -31,12 +29,14 @@ class CognitiveEngine:
         planner: Planner,
         event_bus: EventBus,
         response_composer: ResponseComposer,
+        session_manager: SessionManager,
     ) -> None:
         self._knowledge_engine = knowledge_engine
         self._memory_manager = memory_manager
         self._planner = planner
         self._event_bus = event_bus
         self._response_composer = response_composer
+        self._session_manager = session_manager
         self._router = BrainRouter()
 
     def process(self, request: BrainRequest) -> BrainResponse:
@@ -89,8 +89,8 @@ class CognitiveEngine:
         if self._is_recall_request(request):
             try:
                 session_id = self._resolve_session_id(request)
-            except ValueError:
-                return self._session_failure(request)
+            except SessionError as error:
+                return self._response_composer.session_failure(request, str(error))
 
             query = self._recall_query(request)
             if not query:
@@ -107,10 +107,13 @@ class CognitiveEngine:
             session_records = [
                 record
                 for record in records
-                if record.metadata.get("session_id", self._DEFAULT_SESSION_ID)
-                == session_id
+                if record.metadata.get("session_id", "default") == session_id
             ]
             return self._response_composer.recall_success(request, session_records[:5])
+
+        session_intent = self._router.detect_intent(request)
+        if session_intent in {"session_create", "session_list", "session_use"}:
+            return self._process_session_command(request, session_intent)
 
         return self._process_conversation(request)
 
@@ -166,8 +169,8 @@ class CognitiveEngine:
         """Process the deterministic greeting and message conversation flow."""
         try:
             session_id = self._resolve_session_id(request)
-        except ValueError:
-            return self._session_failure(request)
+        except SessionError as error:
+            return self._response_composer.session_failure(request, str(error))
 
         context = BrainContext(request=request)
         self._event_bus.emit(
@@ -207,22 +210,48 @@ class CognitiveEngine:
     def _resolve_session_id(self, request: BrainRequest) -> str:
         value = request.metadata.get("session_id")
 
-        if value is None:
-            return self._DEFAULT_SESSION_ID
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return self._session_manager.get_active().session_id
 
         if not isinstance(value, str):
-            raise ValueError("session_id must be a string.")
+            raise SessionError("session_id must be a string.")
 
         normalized = value.strip()
-        return normalized or self._DEFAULT_SESSION_ID
+        if not self._session_manager.exists(normalized):
+            raise SessionError(f"Unknown session: {normalized}")
+        return normalized
 
-    def _session_failure(self, request: BrainRequest) -> BrainResponse:
-        response = self._response_composer.message(request)
-        return replace(
-            response,
-            message="session_id must be a string.",
-            success=False,
-        )
+    def _process_session_command(
+        self,
+        request: BrainRequest,
+        intent: str,
+    ) -> BrainResponse:
+        try:
+            if intent == "session_create":
+                result = self._session_manager.create(
+                    self._session_command_id(request, "create session")
+                )
+                if result.created:
+                    return self._response_composer.session_created(
+                        request, result.session
+                    )
+                return self._response_composer.session_exists(request, result.session)
+            if intent == "session_list":
+                return self._response_composer.sessions_list(
+                    request,
+                    self._session_manager.list(),
+                    self._session_manager.get_active(),
+                )
+            session = self._session_manager.set_active(
+                self._session_command_id(request, "use session")
+            )
+            return self._response_composer.session_activated(request, session)
+        except SessionError as error:
+            return self._response_composer.session_failure(request, str(error))
+
+    @staticmethod
+    def _session_command_id(request: BrainRequest, command: str) -> str:
+        return request.message.strip()[len(command) :].strip()
 
     def _remember_search(
         self,

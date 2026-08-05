@@ -31,6 +31,7 @@ from memory.MemoryManager import MemoryManager
 from memory.MemoryRecord import MemoryRecord
 from planner.Planner import Planner
 from response.ResponseComposer import ResponseComposer
+from session.SessionManager import SessionManager
 
 
 class FailingKnowledgeEngine:
@@ -72,12 +73,16 @@ class CognitiveEngineTests(unittest.TestCase):
         self.memory_manager = MemoryManager(self.event_bus)
         self.planner = Planner()
         self.response_composer = ResponseComposer()
+        self.session_manager = SessionManager(self.event_bus)
+        self.session_manager.create("work-1")
+        self.session_manager.create("personal")
         self.engine = CognitiveEngine(
             self.knowledge_engine,
             self.memory_manager,
             self.planner,
             self.event_bus,
             self.response_composer,
+            self.session_manager,
         )
 
     def tearDown(self) -> None:
@@ -88,6 +93,16 @@ class CognitiveEngineTests(unittest.TestCase):
 
         self.assertTrue(response.success)
         self.assertEqual(response.intent, "search")
+
+    def test_session_manager_is_a_required_cognitive_engine_dependency(self) -> None:
+        with self.assertRaises(TypeError):
+            CognitiveEngine(
+                self.knowledge_engine,
+                self.memory_manager,
+                self.planner,
+                self.event_bus,
+                self.response_composer,
+            )
 
     def test_search_response_reports_matching_chunk_count(self) -> None:
         response = self.engine.process(BrainRequest(message="search hypatia"))
@@ -240,6 +255,113 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(self.memory_manager.count(), 0)
         self.assertEqual(events, [])
 
+    def test_create_session_uses_the_registry_without_conversation_side_effects(
+        self,
+    ) -> None:
+        events: list[str] = []
+        self.event_bus.subscribe("*", lambda event: events.append(event.name))
+
+        response = self.engine.process(BrainRequest(message="create session Work-2"))
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "session_create")
+        self.assertEqual(response.message, "Session created: Work-2")
+        self.assertTrue(self.session_manager.exists("Work-2"))
+        self.assertEqual(self.memory_manager.count(), 0)
+        self.assertEqual(events, ["session.created"])
+
+    def test_duplicate_session_create_returns_an_exists_response_without_side_effects(
+        self,
+    ) -> None:
+        self.session_manager.create("work-2")
+        events: list[str] = []
+        self.event_bus.subscribe("*", lambda event: events.append(event.name))
+
+        response = self.engine.process(BrainRequest(message="create session work-2"))
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.message, "Session already exists: work-2")
+        self.assertEqual(self.memory_manager.count(), 0)
+        self.assertEqual(events, [])
+
+    def test_list_sessions_preserves_order_and_marks_the_active_session(self) -> None:
+        response = self.engine.process(BrainRequest(message="list sessions"))
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "session_list")
+        self.assertEqual(
+            response.message,
+            "Sessions:\n1. default (active)\n2. work-1\n3. personal",
+        )
+        self.assertEqual(self.memory_manager.count(), 0)
+
+    def test_use_session_activates_an_existing_session_without_memory_writes(
+        self,
+    ) -> None:
+        response = self.engine.process(BrainRequest(message="use session work-1"))
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "session_use")
+        self.assertEqual(response.message, "Active session: work-1")
+        self.assertEqual(self.session_manager.get_active().session_id, "work-1")
+        self.assertEqual(self.memory_manager.count(), 0)
+
+    def test_use_unknown_session_returns_a_controlled_failure(self) -> None:
+        response = self.engine.process(BrainRequest(message="use session unknown"))
+
+        self.assertFalse(response.success)
+        self.assertEqual(response.message, "Unknown session: unknown")
+        self.assertEqual(self.session_manager.get_active().session_id, "default")
+        self.assertEqual(self.memory_manager.count(), 0)
+
+    def test_active_session_is_used_when_conversation_has_no_session_override(
+        self,
+    ) -> None:
+        self.session_manager.set_active("work-1")
+
+        self.engine.process(BrainRequest(message="hello"))
+
+        self.assertEqual(
+            self.memory_manager.all()[0].metadata["session_id"],
+            "work-1",
+        )
+
+    def test_blank_session_override_uses_the_active_session(self) -> None:
+        self.session_manager.set_active("work-1")
+
+        self.engine.process(BrainRequest(message="hello", metadata={"session_id": ""}))
+
+        self.assertEqual(
+            self.memory_manager.all()[0].metadata["session_id"],
+            "work-1",
+        )
+
+    def test_request_session_override_does_not_change_the_active_session(self) -> None:
+        self.session_manager.set_active("work-1")
+
+        self.engine.process(
+            BrainRequest(message="hello", metadata={"session_id": "default"})
+        )
+
+        self.assertEqual(
+            self.memory_manager.all()[0].metadata["session_id"],
+            "default",
+        )
+        self.assertEqual(self.session_manager.get_active().session_id, "work-1")
+
+    def test_unknown_session_override_prevents_conversation_side_effects(self) -> None:
+        events: list[str] = []
+        self.event_bus.subscribe("*", lambda event: events.append(event.name))
+
+        response = self.engine.process(
+            BrainRequest(message="hello", metadata={"session_id": "unknown"})
+        )
+
+        self.assertFalse(response.success)
+        self.assertEqual(response.message, "Unknown session: unknown")
+        self.assertEqual(self.memory_manager.count(), 0)
+        self.assertEqual(events, [])
+
     def test_knowledge_error_returns_unsuccessful_response(self) -> None:
         memory_manager = MemoryManager()
         engine = CognitiveEngine(
@@ -248,6 +370,7 @@ class CognitiveEngineTests(unittest.TestCase):
             Planner(),
             EventBus(),
             ResponseComposer(),
+            SessionManager(),
         )
 
         response = engine.process(BrainRequest(message="search hypatia"))
@@ -264,6 +387,7 @@ class CognitiveEngineTests(unittest.TestCase):
             Planner(),
             EventBus(),
             ResponseComposer(),
+            SessionManager(),
         )
 
         engine.process(BrainRequest(message="search hypatia"))
@@ -281,6 +405,7 @@ class CognitiveEngineTests(unittest.TestCase):
             self.planner,
             self.event_bus,
             self.response_composer,
+            self.session_manager,
         )
 
         response = engine.process(BrainRequest(message="search hypatia"))
@@ -312,6 +437,7 @@ class CognitiveEngineTests(unittest.TestCase):
             FailingPlanner(),  # type: ignore[arg-type]
             self.event_bus,
             self.response_composer,
+            self.session_manager,
         )
 
         response = engine.process(BrainRequest(message="plan learn SQL injection"))
@@ -436,6 +562,41 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertIn("Legacy conversation.", response.message)
         self.assertIn("Default conversation.", response.message)
 
+    def test_active_session_is_used_when_recall_has_no_session_override(self) -> None:
+        self.memory_manager.add(
+            "User: cats\nHypatia: Default conversation.",
+            metadata={"session_id": "default"},
+            tags={"brain", "conversation"},
+        )
+        self.memory_manager.add(
+            "User: cats\nHypatia: Work conversation.",
+            metadata={"session_id": "work-1"},
+            tags={"brain", "conversation"},
+        )
+        self.session_manager.set_active("work-1")
+
+        response = self.engine.process(BrainRequest(message="recall cats"))
+
+        self.assertEqual(response.memory_count, 1)
+        self.assertIn("Work conversation.", response.message)
+        self.assertNotIn("Default conversation.", response.message)
+
+    def test_recall_session_override_does_not_change_the_active_session(self) -> None:
+        self.memory_manager.add(
+            "User: cats\nHypatia: Default conversation.",
+            metadata={"session_id": "default"},
+            tags={"brain", "conversation"},
+        )
+        self.session_manager.set_active("work-1")
+
+        response = self.engine.process(
+            BrainRequest(message="recall cats", metadata={"session_id": "default"})
+        )
+
+        self.assertEqual(response.memory_count, 1)
+        self.assertIn("Default conversation.", response.message)
+        self.assertEqual(self.session_manager.get_active().session_id, "work-1")
+
     def test_custom_session_recall_returns_only_its_records(self) -> None:
         self.memory_manager.add(
             "User: cats\nHypatia: Default conversation.",
@@ -538,6 +699,7 @@ class CognitiveEngineTests(unittest.TestCase):
             self.planner,
             self.event_bus,
             self.response_composer,
+            self.session_manager,
         )
 
         response = engine.process(
@@ -546,3 +708,20 @@ class CognitiveEngineTests(unittest.TestCase):
 
         self.assertFalse(response.success)
         self.assertEqual(response.message, "session_id must be a string.")
+
+    def test_unknown_session_override_prevents_recall_search(self) -> None:
+        engine = CognitiveEngine(
+            self.knowledge_engine,
+            RecallSearchMustNotRunMemoryManager(),  # type: ignore[arg-type]
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+        )
+
+        response = engine.process(
+            BrainRequest(message="recall cats", metadata={"session_id": "unknown"})
+        )
+
+        self.assertFalse(response.success)
+        self.assertEqual(response.message, "Unknown session: unknown")

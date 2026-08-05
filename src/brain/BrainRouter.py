@@ -20,5 +20,15 @@ class BrainRouter:
             or normalized_message.startswith("recall ")
         ):
             return "recall"
+        if normalized_message == "create session" or normalized_message.startswith(
+            "create session "
+        ):
+            return "session_create"
+        if normalized_message == "list sessions":
+            return "session_list"
+        if normalized_message == "use session" or normalized_message.startswith(
+            "use session "
+        ):
+            return "session_use"
         words = set(request.message.casefold().split())
         return "greeting" if words.intersection(self._GREETING_WORDS) else "message"
