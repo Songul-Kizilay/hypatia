@@ -49,6 +49,8 @@ class CognitiveEngine:
             return self._process_conversation_search(request)
         if intent == "session_search":
             return self._process_session_search(request)
+        if intent == "session_activity":
+            return self._process_session_activity(request)
 
         if self._is_search_request(request):
             query = self._search_query(request)
@@ -308,6 +310,39 @@ class CognitiveEngine:
             self._session_manager.get_active().session_id == session_id,
         )
 
+    def _process_session_activity(self, request: BrainRequest) -> BrainResponse:
+        """Return a read-only first-and-last activity summary for one session."""
+        try:
+            session_id = self._session_activity_id(request)
+            if not self._session_manager.exists(session_id):
+                raise SessionError(f"Unknown session: {session_id}")
+        except (SessionError, ValueError) as error:
+            return self._response_composer.session_activity_failure(request, str(error))
+
+        session = self._session_record(session_id)
+        records = [
+            record
+            for record in self._memory_manager.all()
+            if {"brain", "conversation"}.issubset(record.tags)
+            and record.metadata.get("session_id", "default") == session_id
+        ]
+        activity_times = [
+            record.created_at for record in records if record.created_at is not None
+        ]
+        if activity_times:
+            first_activity = min(activity_times)
+            last_activity = max(activity_times)
+        else:
+            first_activity = None
+            last_activity = None
+        return self._response_composer.session_activity(
+            request,
+            session,
+            len(records),
+            first_activity,
+            last_activity,
+        )
+
     def _process_session_recent(self, request: BrainRequest) -> BrainResponse:
         """Return five newest normal conversations for a command-selected session."""
         try:
@@ -440,6 +475,14 @@ class CognitiveEngine:
     def _session_recent_id(request: BrainRequest) -> str:
         """Return the complete non-empty session-recent command suffix."""
         session_id = request.message.strip()[len("session recent") :].strip()
+        if not session_id:
+            raise ValueError("Session ID must not be empty.")
+        return session_id
+
+    @staticmethod
+    def _session_activity_id(request: BrainRequest) -> str:
+        """Return the complete non-empty session-activity command suffix."""
+        session_id = request.message.strip()[len("session activity") :].strip()
         if not session_id:
             raise ValueError("Session ID must not be empty.")
         return session_id
