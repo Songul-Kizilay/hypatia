@@ -642,7 +642,8 @@ class ResponseComposerTests(unittest.TestCase):
             "Source: work\n"
             "Target: Research Archive\n"
             "Memory records updated: 2\n"
-            "Active session changed: yes",
+            "Active session changed: yes\n"
+            "Status: committed",
         )
         self.assertEqual(response.intent, "session_rename")
         self.assertTrue(response.success)
@@ -658,7 +659,8 @@ class ResponseComposerTests(unittest.TestCase):
             "Source: work\n"
             "Target: archive\n"
             "Memory records updated: 0\n"
-            "Active session changed: no",
+            "Active session changed: no\n"
+            "Status: committed",
         )
         self.assertFalse(zero_memory_response.message.endswith("\n"))
         self.assertEqual(failure.message, "Default session cannot be renamed.")

@@ -320,7 +320,8 @@ class CognitiveEngineTests(unittest.TestCase):
             "Source: work-1\n"
             "Target: Work Archive\n"
             "Memory records updated: 1\n"
-            "Active session changed: yes",
+            "Active session changed: yes\n"
+            "Status: committed",
         )
         self.assertTrue(self.session_manager.exists("Work Archive"))
         self.assertFalse(self.session_manager.exists("work-1"))
@@ -344,7 +345,8 @@ class CognitiveEngineTests(unittest.TestCase):
             "Source: work-1\n"
             "Target: Work Archive\n"
             "Memory records updated: 0\n"
-            "Active session changed: no",
+            "Active session changed: no\n"
+            "Status: committed",
         )
         self.assertEqual(self.session_manager.get_active().session_id, "default")
 

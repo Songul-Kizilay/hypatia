@@ -50,6 +50,7 @@ class ResponseComposer:
                     f"Memory records updated: {result.memory_record_count}",
                     "Active session changed: "
                     f"{'yes' if result.active_session_changed else 'no'}",
+                    "Status: committed",
                 ]
             ),
             request_id=request.request_id,
