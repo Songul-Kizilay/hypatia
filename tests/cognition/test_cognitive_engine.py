@@ -949,6 +949,9 @@ class CognitiveEngineTests(unittest.TestCase):
     def test_use_session_activates_an_existing_session_without_memory_writes(
         self,
     ) -> None:
+        events: list[str] = []
+        self.event_bus.subscribe("*", lambda event: events.append(event.name))
+
         response = self.engine.process(BrainRequest(message="use session work-1"))
 
         self.assertTrue(response.success)
@@ -956,6 +959,23 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(response.message, "Active session: work-1")
         self.assertEqual(self.session_manager.get_active().session_id, "work-1")
         self.assertEqual(self.memory_manager.count(), 0)
+        self.assertEqual(events, ["session.activated"])
+
+    def test_use_active_session_is_a_no_op_without_memory_writes_or_events(
+        self,
+    ) -> None:
+        events: list[str] = []
+        self.event_bus.subscribe("*", lambda event: events.append(event.name))
+        before = self.session_manager.snapshot()
+
+        response = self.engine.process(BrainRequest(message="use session default"))
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "session_use")
+        self.assertEqual(response.message, "Active session: default")
+        self.assertEqual(self.session_manager.snapshot(), before)
+        self.assertEqual(self.memory_manager.count(), 0)
+        self.assertEqual(events, [])
 
     def test_use_unknown_session_returns_a_controlled_failure(self) -> None:
         response = self.engine.process(BrainRequest(message="use session unknown"))
