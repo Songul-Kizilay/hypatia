@@ -189,9 +189,9 @@ class ResponseComposer:
                 "session activity <session_id>\n"
                 "session search <session_id> <query>\n"
                 "list renameable sessions\n"
-                "check rename target <target_session_id>\n"
-                "preview rename session <source_session_id> -- <target_session_id>\n"
-                "rename session <source_session_id> -- <target_session_id>\n"
+                "check rename target <target>\n"
+                "preview rename session <source> -- <target>\n"
+                "rename session <source> -- <target>\n"
                 "help rename session"
             ),
             request_id=request.request_id,

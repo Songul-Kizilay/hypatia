@@ -563,11 +563,32 @@ class CognitiveEngineTests(unittest.TestCase):
                 side_effect=AssertionError("Knowledge engine must not be called."),
             ),
         ):
-            response = self.engine.process(BrainRequest(message="help sessions"))
+            request = BrainRequest(message="help sessions")
+            response = self.engine.process(request)
 
         self.assertEqual(response.intent, "session_help")
         self.assertTrue(response.success)
         self.assertEqual(response.memory_count, 0)
+        self.assertEqual(
+            response.message,
+            "Session commands:\n"
+            "create session <session_id>\n"
+            "list sessions\n"
+            "use session <session_id>\n"
+            "active session\n"
+            "session overview\n"
+            "session details <session_id>\n"
+            "session recent <session_id>\n"
+            "session activity <session_id>\n"
+            "session search <session_id> <query>\n"
+            "list renameable sessions\n"
+            "check rename target <target>\n"
+            "preview rename session <source> -- <target>\n"
+            "rename session <source> -- <target>\n"
+            "help rename session",
+        )
+        self.assertFalse(response.message.endswith("\n"))
+        self.assertEqual(response.request_id, request.request_id)
         self.assertEqual(self.session_manager.snapshot(), sessions_before)
         self.assertEqual(self.memory_manager.snapshot(), memory_before)
         self.assertEqual(events, [])
