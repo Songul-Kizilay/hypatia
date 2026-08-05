@@ -407,6 +407,45 @@ class CognitiveEngineTests(unittest.TestCase):
                 self.assertEqual(response.memory_count, 0)
                 self.assertEqual(response.message, expected)
 
+    def test_session_rename_help_has_no_rename_or_conversation_side_effects(
+        self,
+    ) -> None:
+        events = []
+        self.event_bus.subscribe("*", events.append)
+        memory_before = self.memory_manager.snapshot()
+        sessions_before = self.session_manager.snapshot()
+
+        with (
+            patch.object(
+                self.session_rename_service,
+                "rename",
+                side_effect=AssertionError("Rename service must not be called."),
+            ),
+            patch.object(
+                self.session_rename_service,
+                "preview",
+                side_effect=AssertionError("Preview service must not be called."),
+            ),
+        ):
+            response = self.engine.process(BrainRequest(message="help rename session"))
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "session_rename_help")
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(self.memory_manager.snapshot(), memory_before)
+        self.assertEqual(self.session_manager.snapshot(), sessions_before)
+        self.assertEqual(events, [])
+        self.assertTrue(
+            self.engine.process(
+                BrainRequest(message="preview rename session work-1 -- archive")
+            ).success
+        )
+        self.assertTrue(
+            self.engine.process(
+                BrainRequest(message="rename session work-1 -- archive")
+            ).success
+        )
+
     def test_empty_search_query_is_saved_to_memory(self) -> None:
         self.engine.process(BrainRequest(message="search "))
 

@@ -99,6 +99,19 @@ class ResponseComposer:
             success=False,
         )
 
+    def session_rename_help(self, request: BrainRequest) -> BrainResponse:
+        """Compose deterministic usage guidance for session rename commands."""
+        return BrainResponse(
+            message=(
+                "Session rename commands:\n"
+                "rename session <source_session_id> -- <target_session_id>\n"
+                "preview rename session <source_session_id> -- <target_session_id>"
+            ),
+            request_id=request.request_id,
+            intent="session_rename_help",
+            memory_count=0,
+        )
+
     def search_success(
         self,
         request: BrainRequest,
