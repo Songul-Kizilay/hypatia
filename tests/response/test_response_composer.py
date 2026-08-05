@@ -724,10 +724,19 @@ class ResponseComposerTests(unittest.TestCase):
 
         self.assertEqual(
             response.message,
-            "Session rename commands:\n"
-            "rename session <source_session_id> -- <target_session_id>\n"
-            "preview rename session <source_session_id> -- <target_session_id>",
+            "Rename session:\n"
+            "rename session <source> -- <target>\n"
+            "\n"
+            "Preview:\n"
+            "preview rename session <source> -- <target>\n"
+            "\n"
+            "Check target:\n"
+            "check rename target <target>\n"
+            "\n"
+            "Example:\n"
+            "rename session work -- archive",
         )
+        self.assertFalse(response.message.endswith("\n"))
         self.assertEqual(response.intent, "session_rename_help")
         self.assertTrue(response.success)
         self.assertEqual(response.memory_count, 0)

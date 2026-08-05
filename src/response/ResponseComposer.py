@@ -120,9 +120,17 @@ class ResponseComposer:
         """Compose deterministic usage guidance for session rename commands."""
         return BrainResponse(
             message=(
-                "Session rename commands:\n"
-                "rename session <source_session_id> -- <target_session_id>\n"
-                "preview rename session <source_session_id> -- <target_session_id>"
+                "Rename session:\n"
+                "rename session <source> -- <target>\n"
+                "\n"
+                "Preview:\n"
+                "preview rename session <source> -- <target>\n"
+                "\n"
+                "Check target:\n"
+                "check rename target <target>\n"
+                "\n"
+                "Example:\n"
+                "rename session work -- archive"
             ),
             request_id=request.request_id,
             intent="session_rename_help",
