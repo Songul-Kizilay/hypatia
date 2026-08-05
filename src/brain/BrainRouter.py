@@ -20,6 +20,11 @@ class BrainRouter:
             or normalized_message.startswith("recall ")
         ):
             return "recall"
+        if (
+            normalized_message == "recent conversations"
+            or normalized_message.startswith("recent conversations ")
+        ):
+            return "recent_conversations"
         if normalized_message == "create session" or normalized_message.startswith(
             "create session "
         ):

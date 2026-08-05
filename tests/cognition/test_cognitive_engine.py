@@ -55,6 +55,13 @@ class RecallSearchMustNotRunMemoryManager:
         raise AssertionError("Recall search must not run.")
 
 
+class RecentConversationsMustNotReadMemoryManager:
+    """Minimal double that fails when an invalid request reads memory."""
+
+    def all(self) -> list[MemoryRecord]:
+        raise AssertionError("Recent conversations must not read memory.")
+
+
 class FailingPlanner:
     """Minimal failure double for PlannerError handling coverage."""
 
@@ -725,3 +732,199 @@ class CognitiveEngineTests(unittest.TestCase):
 
         self.assertFalse(response.success)
         self.assertEqual(response.message, "Unknown session: unknown")
+
+    def test_recent_conversations_uses_a_default_limit_of_five_newest_records(
+        self,
+    ) -> None:
+        for index in range(6):
+            self.memory_manager.add(
+                f"Conversation {index}",
+                metadata={"session_id": "default"},
+                tags={"brain", "conversation"},
+            )
+
+        response = self.engine.process(BrainRequest(message="recent conversations"))
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "recent_conversations")
+        self.assertEqual(response.memory_count, 5)
+        self.assertIn("1. Conversation 5", response.message)
+        self.assertIn("5. Conversation 1", response.message)
+        self.assertNotIn("Conversation 0", response.message)
+
+    def test_recent_conversations_honours_explicit_one_and_twenty_limits(self) -> None:
+        for index in range(6):
+            self.memory_manager.add(
+                f"Conversation {index}",
+                metadata={"session_id": "default"},
+                tags={"brain", "conversation"},
+            )
+
+        one_response = self.engine.process(
+            BrainRequest(message="recent conversations 1")
+        )
+        twenty_response = self.engine.process(
+            BrainRequest(message="recent conversations 20")
+        )
+
+        self.assertEqual(one_response.memory_count, 1)
+        self.assertIn("1. Conversation 5", one_response.message)
+        self.assertEqual(twenty_response.memory_count, 6)
+        self.assertIn("6. Conversation 0", twenty_response.message)
+
+    def test_recent_conversations_rejects_invalid_counts(self) -> None:
+        expected_messages = {
+            "recent conversations abc": "Count must be an integer.",
+            "recent conversations 0": "Count must be between 1 and 20.",
+            "recent conversations 21": "Count must be between 1 and 20.",
+        }
+
+        for message, expected in expected_messages.items():
+            with self.subTest(message=message):
+                response = self.engine.process(BrainRequest(message=message))
+
+                self.assertFalse(response.success)
+                self.assertEqual(response.intent, "recent_conversations")
+                self.assertEqual(response.message, expected)
+                self.assertEqual(response.memory_count, 0)
+
+    def test_recent_conversations_filters_tags_and_other_sessions_before_limiting(
+        self,
+    ) -> None:
+        for index in range(5):
+            self.memory_manager.add(
+                f"Other session {index}",
+                metadata={"session_id": "personal"},
+                tags={"brain", "conversation"},
+            )
+        for index in range(6):
+            self.memory_manager.add(
+                f"Work conversation {index}",
+                metadata={"session_id": "work-1"},
+                tags={"brain", "conversation"},
+            )
+        self.memory_manager.add(
+            "Search record",
+            metadata={"session_id": "work-1"},
+            tags={"cognition", "knowledge-search", "conversation"},
+        )
+        self.memory_manager.add(
+            "Plan record",
+            metadata={"session_id": "work-1"},
+            tags={"brain", "plan"},
+        )
+
+        response = self.engine.process(
+            BrainRequest(
+                message="recent conversations",
+                metadata={"session_id": "work-1"},
+            )
+        )
+
+        self.assertEqual(response.memory_count, 5)
+        self.assertIn("1. Work conversation 5", response.message)
+        self.assertIn("5. Work conversation 1", response.message)
+        self.assertNotIn("Work conversation 0", response.message)
+        self.assertNotIn("Other session", response.message)
+        self.assertNotIn("Search record", response.message)
+        self.assertNotIn("Plan record", response.message)
+
+    def test_recent_conversations_treats_only_missing_session_metadata_as_legacy(
+        self,
+    ) -> None:
+        self.memory_manager.add(
+            "Legacy conversation",
+            tags={"brain", "conversation"},
+        )
+        self.memory_manager.add(
+            "Null session conversation",
+            metadata={"session_id": None},
+            tags={"brain", "conversation"},
+        )
+
+        response = self.engine.process(BrainRequest(message="recent conversations"))
+
+        self.assertEqual(response.memory_count, 1)
+        self.assertIn("Legacy conversation", response.message)
+        self.assertNotIn("Null session conversation", response.message)
+
+    def test_recent_conversations_uses_active_session_and_request_override(
+        self,
+    ) -> None:
+        self.memory_manager.add(
+            "Default conversation",
+            metadata={"session_id": "default"},
+            tags={"brain", "conversation"},
+        )
+        self.memory_manager.add(
+            "Work conversation",
+            metadata={"session_id": "work-1"},
+            tags={"brain", "conversation"},
+        )
+        self.session_manager.set_active("work-1")
+
+        active_response = self.engine.process(
+            BrainRequest(message="recent conversations")
+        )
+        override_response = self.engine.process(
+            BrainRequest(
+                message="recent conversations",
+                metadata={"session_id": "default"},
+            )
+        )
+
+        self.assertIn("Work conversation", active_response.message)
+        self.assertNotIn("Default conversation", active_response.message)
+        self.assertIn("Default conversation", override_response.message)
+        self.assertNotIn("Work conversation", override_response.message)
+        self.assertEqual(self.session_manager.get_active().session_id, "work-1")
+
+    def test_invalid_recent_conversations_session_overrides_have_no_side_effects(
+        self,
+    ) -> None:
+        events: list[str] = []
+        self.event_bus.subscribe("*", lambda event: events.append(event.name))
+        engine = CognitiveEngine(
+            self.knowledge_engine,
+            RecentConversationsMustNotReadMemoryManager(),  # type: ignore[arg-type]
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+        )
+
+        for session_id, expected in (
+            (123, "session_id must be a string."),
+            ("unknown", "Unknown session: unknown"),
+        ):
+            with self.subTest(session_id=session_id):
+                response = engine.process(
+                    BrainRequest(
+                        message="recent conversations",
+                        metadata={"session_id": session_id},
+                    )
+                )
+
+                self.assertFalse(response.success)
+                self.assertEqual(response.message, expected)
+
+        self.assertEqual(events, [])
+        self.assertEqual(self.session_manager.get_active().session_id, "default")
+
+    def test_recent_conversations_does_not_create_conversation_or_session_events(
+        self,
+    ) -> None:
+        self.memory_manager.add(
+            "Stored conversation",
+            metadata={"session_id": "default"},
+            tags={"brain", "conversation"},
+        )
+        events: list[str] = []
+        self.event_bus.subscribe("*", lambda event: events.append(event.name))
+        memory_count = self.memory_manager.count()
+
+        response = self.engine.process(BrainRequest(message="recent conversations"))
+
+        self.assertTrue(response.success)
+        self.assertEqual(self.memory_manager.count(), memory_count)
+        self.assertEqual(events, [])
