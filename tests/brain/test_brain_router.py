@@ -324,6 +324,30 @@ class BrainRouterTests(unittest.TestCase):
             "session_use",
         )
 
+    def test_preview_delete_session_command_is_detected(self) -> None:
+        for message in (
+            "preview delete session",
+            " PREVIEW DELETE SESSION work-1 ",
+        ):
+            with self.subTest(message=message):
+                self.assertEqual(
+                    self.router.detect_intent(BrainRequest(message=message)),
+                    "session_delete_preview",
+                )
+
+    def test_preview_delete_near_misses_remain_messages(self) -> None:
+        for message in (
+            "preview delete",
+            "preview delete user",
+            "delete preview session",
+            "preview session delete",
+        ):
+            with self.subTest(message=message):
+                self.assertEqual(
+                    self.router.detect_intent(BrainRequest(message=message)),
+                    "message",
+                )
+
     def test_non_command_session_phrases_remain_messages(self) -> None:
         for message in (
             "please create session work-1",
