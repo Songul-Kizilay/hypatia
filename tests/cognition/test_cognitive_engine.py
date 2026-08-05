@@ -578,6 +578,77 @@ class CognitiveEngineTests(unittest.TestCase):
             ).success
         )
 
+    def test_session_rename_target_check_is_read_only_and_preserves_target_case(
+        self,
+    ) -> None:
+        self.session_manager.create("archive")
+        events = []
+        self.event_bus.subscribe("*", events.append)
+        sessions_before = self.session_manager.snapshot()
+        memory_before = self.memory_manager.snapshot()
+
+        with (
+            patch.object(
+                self.session_rename_service,
+                "rename",
+                side_effect=AssertionError("Rename service must not be called."),
+            ),
+            patch.object(
+                self.session_rename_service,
+                "preview",
+                side_effect=AssertionError("Preview service must not be called."),
+            ),
+            patch.object(
+                self.memory_manager,
+                "add",
+                side_effect=AssertionError("Memory writes must not be called."),
+            ),
+        ):
+            available = self.engine.process(
+                BrainRequest(message="check rename target Work Archive")
+            )
+            unavailable = self.engine.process(
+                BrainRequest(message="check rename target archive")
+            )
+            default_target = self.engine.process(
+                BrainRequest(message="check rename target default")
+            )
+            failure = self.engine.process(BrainRequest(message="check rename target"))
+
+        self.assertEqual(
+            available.message,
+            "Session rename target available: Work Archive",
+        )
+        self.assertTrue(available.success)
+        self.assertEqual(
+            unavailable.message,
+            "Session rename target unavailable: archive",
+        )
+        self.assertTrue(unavailable.success)
+        self.assertEqual(
+            default_target.message,
+            "Session rename target unavailable: default",
+        )
+        self.assertTrue(default_target.success)
+        self.assertEqual(failure.message, "Session target ID must not be empty.")
+        self.assertFalse(failure.success)
+        for check_response in (available, unavailable, default_target, failure):
+            self.assertEqual(check_response.intent, "session_rename_target_check")
+            self.assertEqual(check_response.memory_count, 0)
+        self.assertEqual(self.session_manager.snapshot(), sessions_before)
+        self.assertEqual(self.memory_manager.snapshot(), memory_before)
+        self.assertEqual(events, [])
+        self.assertTrue(
+            self.engine.process(
+                BrainRequest(message="preview rename session work-1 -- renamed")
+            ).success
+        )
+        self.assertTrue(
+            self.engine.process(
+                BrainRequest(message="rename session work-1 -- renamed")
+            ).success
+        )
+
     def test_empty_search_query_is_saved_to_memory(self) -> None:
         self.engine.process(BrainRequest(message="search "))
 

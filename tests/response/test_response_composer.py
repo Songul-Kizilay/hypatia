@@ -717,6 +717,41 @@ class ResponseComposerTests(unittest.TestCase):
         self.assertEqual(response.memory_count, 0)
         self.assertEqual(response.request_id, self.request.request_id)
 
+    def test_session_rename_target_check_preserves_the_exact_contract(self) -> None:
+        available = self.composer.session_rename_target_check(
+            self.request,
+            "Work Archive",
+            True,
+        )
+        unavailable = self.composer.session_rename_target_check(
+            self.request,
+            "archive",
+            False,
+        )
+        failure = self.composer.session_rename_target_check_failure(
+            self.request,
+            "Session target ID must not be empty.",
+        )
+
+        self.assertEqual(
+            available.message,
+            "Session rename target available: Work Archive",
+        )
+        self.assertEqual(
+            unavailable.message,
+            "Session rename target unavailable: archive",
+        )
+        self.assertEqual(failure.message, "Session target ID must not be empty.")
+        for response, success in (
+            (available, True),
+            (unavailable, True),
+            (failure, False),
+        ):
+            self.assertEqual(response.intent, "session_rename_target_check")
+            self.assertEqual(response.success, success)
+            self.assertEqual(response.memory_count, 0)
+            self.assertEqual(response.request_id, self.request.request_id)
+
     @staticmethod
     def _session(session_id: str) -> SessionRecord:
         return SessionRecord(
