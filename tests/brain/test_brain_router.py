@@ -209,6 +209,40 @@ class BrainRouterTests(unittest.TestCase):
 
         self.assertEqual(intent, "greeting")
 
+    def test_session_search_commands_are_detected_case_insensitively(self) -> None:
+        for message in (
+            "session search",
+            "session search work-1",
+            "session search work-1 --",
+            "SESSION SEARCH Work Research -- Memory",
+        ):
+            with self.subTest(message=message):
+                self.assertEqual(
+                    self.router.detect_intent(BrainRequest(message=message)),
+                    "session_search",
+                )
+
+    def test_natural_language_session_search_phrases_remain_messages(self) -> None:
+        for message in (
+            "search the work session for persistence",
+            "find our memory discussion",
+            "what did we say about routing",
+        ):
+            with self.subTest(message=message):
+                self.assertEqual(
+                    self.router.detect_intent(BrainRequest(message=message)),
+                    "message",
+                )
+
+    def test_declared_session_search_metadata_does_not_trigger_the_command(
+        self,
+    ) -> None:
+        intent = self.router.detect_intent(
+            BrainRequest(message="hello", metadata={"intent": "session_search"})
+        )
+
+        self.assertEqual(intent, "greeting")
+
     def test_existing_greeting_and_message_detection_is_preserved(self) -> None:
         self.assertEqual(
             self.router.detect_intent(BrainRequest(message="hello there")),

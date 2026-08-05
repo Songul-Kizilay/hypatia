@@ -47,6 +47,8 @@ class CognitiveEngine:
         intent = self._router.detect_intent(request)
         if intent == "conversation_search":
             return self._process_conversation_search(request)
+        if intent == "session_search":
+            return self._process_session_search(request)
 
         if self._is_search_request(request):
             query = self._search_query(request)
@@ -331,6 +333,35 @@ class CognitiveEngine:
             return self._response_composer.session_recent_empty(request, session)
         return self._response_composer.session_recent(request, recent_records, session)
 
+    def _process_session_search(self, request: BrainRequest) -> BrainResponse:
+        """Find matching conversations for a command-selected session."""
+        try:
+            session_id, query = self._session_search_parts(request)
+            if not self._session_manager.exists(session_id):
+                raise SessionError(f"Unknown session: {session_id}")
+        except (SessionError, ValueError) as error:
+            return self._response_composer.session_search_failure(request, str(error))
+
+        session = self._session_record(session_id)
+        matching_records = [
+            record
+            for record in self._memory_manager.search(query, limit=None)
+            if {"brain", "conversation"}.issubset(record.tags)
+            and record.metadata.get("session_id", "default") == session_id
+        ][:5]
+        if not matching_records:
+            return self._response_composer.session_search_empty(
+                request,
+                session,
+                query,
+            )
+        return self._response_composer.session_search_results(
+            request,
+            session,
+            query,
+            matching_records,
+        )
+
     def _process_recent_conversations(self, request: BrainRequest) -> BrainResponse:
         """Return recent normal conversation records for the resolved session."""
         try:
@@ -412,6 +443,27 @@ class CognitiveEngine:
         if not session_id:
             raise ValueError("Session ID must not be empty.")
         return session_id
+
+    @staticmethod
+    def _session_search_parts(request: BrainRequest) -> tuple[str, str]:
+        """Return validated session-search command fields without metadata access."""
+        remainder = request.message.strip()[len("session search") :]
+        session_part, separator, query_part = remainder.partition(" -- ")
+        if not separator:
+            if remainder.endswith(" --"):
+                session_part = remainder[:-3]
+                query_part = ""
+            else:
+                raise ValueError("Search query separator is required: --")
+
+        session_id = session_part.strip()
+        if not session_id:
+            raise ValueError("Session ID must not be empty.")
+
+        query = query_part.strip()
+        if not query:
+            raise ValueError("Search query must not be empty.")
+        return session_id, query
 
     @staticmethod
     def _recent_conversation_limit(request: BrainRequest) -> int:

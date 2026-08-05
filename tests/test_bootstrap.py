@@ -780,6 +780,128 @@ class BootstrapTests(unittest.TestCase):
         )
         self.assertEqual(events, [])
 
+    def test_session_search_preserves_target_and_read_only_state_after_restart(
+        self,
+    ) -> None:
+        first_bootstrap = self._bootstrap()
+        first_bootstrap.initialize()
+        first_brain = first_bootstrap.container.resolve(Brain)
+        first_brain.process("create session work research")
+        first_brain.process("create session other")
+        first_brain.process("use session other")
+
+        now = datetime.now(UTC)
+        JsonFileMemoryStore(self.memory_path).save(
+            [
+                MemoryRecord(
+                    memory_id="target-a",
+                    content="A persistence target",
+                    metadata={"session_id": "work research"},
+                    tags=frozenset({"brain", "conversation"}),
+                    created_at=now,
+                    updated_at=now,
+                ),
+                MemoryRecord(
+                    memory_id="target-b",
+                    content="B persistence target",
+                    metadata={"session_id": "work research"},
+                    tags=frozenset({"brain", "conversation"}),
+                    created_at=now + timedelta(hours=1),
+                    updated_at=now + timedelta(hours=1),
+                ),
+                MemoryRecord(
+                    memory_id="target-other-query",
+                    content="Target without the query",
+                    metadata={"session_id": "work research"},
+                    tags=frozenset({"brain", "conversation"}),
+                    created_at=now + timedelta(hours=2),
+                    updated_at=now + timedelta(hours=2),
+                ),
+                MemoryRecord(
+                    memory_id="other-session",
+                    content="Other persistence target",
+                    metadata={"session_id": "other"},
+                    tags=frozenset({"brain", "conversation"}),
+                    created_at=now + timedelta(hours=3),
+                    updated_at=now + timedelta(hours=3),
+                ),
+                MemoryRecord(
+                    memory_id="legacy-default",
+                    content="Legacy persistence target",
+                    tags=frozenset({"brain", "conversation"}),
+                    created_at=now + timedelta(hours=4),
+                    updated_at=now + timedelta(hours=4),
+                ),
+                MemoryRecord(
+                    memory_id="null-session",
+                    content="Null persistence target",
+                    metadata={"session_id": None},
+                    tags=frozenset({"brain", "conversation"}),
+                    created_at=now + timedelta(hours=5),
+                    updated_at=now + timedelta(hours=5),
+                ),
+                MemoryRecord(
+                    memory_id="non-string-session",
+                    content="Non-string persistence target",
+                    metadata={"session_id": 123},
+                    tags=frozenset({"brain", "conversation"}),
+                    created_at=now + timedelta(hours=6),
+                    updated_at=now + timedelta(hours=6),
+                ),
+                MemoryRecord(
+                    memory_id="knowledge-record",
+                    content="Knowledge persistence target",
+                    metadata={"session_id": "work research"},
+                    tags=frozenset({"cognition", "knowledge-search", "conversation"}),
+                    created_at=now + timedelta(hours=7),
+                    updated_at=now + timedelta(hours=7),
+                ),
+            ]
+        )
+
+        restarted_bootstrap = self._bootstrap()
+        restarted_bootstrap.initialize()
+        restarted_container = restarted_bootstrap.container
+        restarted_brain = restarted_container.resolve(Brain)
+        restarted_memory_manager = restarted_container.resolve(MemoryManager)
+        restarted_session_manager = restarted_container.resolve(SessionManager)
+        events: list[str] = []
+        restarted_container.resolve(EventBus).subscribe(
+            "*",
+            lambda event: events.append(event.name),
+        )
+        memory_count = restarted_memory_manager.count()
+        memory_document = self.memory_path.read_text(encoding="utf-8")
+        session_document = self.session_path.read_text(encoding="utf-8")
+
+        response = restarted_brain.process(
+            BrainRequest(
+                message="session search work research -- persistence",
+                metadata={"session_id": "other", "intent": "message"},
+            )
+        )
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "session_search")
+        self.assertEqual(response.memory_count, 2)
+        self.assertIn("1. A persistence target", response.message)
+        self.assertIn("2. B persistence target", response.message)
+        self.assertNotIn("Other persistence target", response.message)
+        self.assertNotIn("Legacy persistence target", response.message)
+        self.assertNotIn("Null persistence target", response.message)
+        self.assertNotIn("Non-string persistence target", response.message)
+        self.assertNotIn("Knowledge persistence target", response.message)
+        self.assertEqual(restarted_session_manager.get_active().session_id, "other")
+        self.assertEqual(restarted_memory_manager.count(), memory_count)
+        self.assertEqual(self.memory_path.read_text(encoding="utf-8"), memory_document)
+        self.assertEqual(
+            self.session_path.read_text(encoding="utf-8"),
+            session_document,
+        )
+        self.assertEqual(events, [])
+        self.assertEqual(json.loads(memory_document)["schema_version"], 1)
+        self.assertEqual(json.loads(session_document)["schema_version"], 1)
+
     def test_conversation_search_preserves_filter_order_and_limit_after_restart(
         self,
     ) -> None:
