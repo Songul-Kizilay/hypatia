@@ -42,10 +42,15 @@ class ResponseComposer:
     ) -> BrainResponse:
         """Compose a successful session rename response."""
         return BrainResponse(
-            message=(
-                f"Session renamed: {result.source_session_id} -> "
-                f"{result.target_session_id}\n"
-                f"Memory records updated: {result.memory_record_count}"
+            message="\n".join(
+                [
+                    "Rename complete:",
+                    f"Source: {result.source_session_id}",
+                    f"Target: {result.target_session_id}",
+                    f"Memory records updated: {result.memory_record_count}",
+                    "Active session changed: "
+                    f"{'yes' if result.active_session_changed else 'no'}",
+                ]
             ),
             request_id=request.request_id,
             intent="session_rename",

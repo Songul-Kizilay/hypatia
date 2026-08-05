@@ -304,6 +304,7 @@ class CognitiveEngineTests(unittest.TestCase):
 
     def test_session_rename_executes_without_conversation_side_effects(self) -> None:
         self.memory_manager.add("Work", metadata={"session_id": "work-1"})
+        self.session_manager.set_active("work-1")
         events = []
         self.event_bus.subscribe("*", events.append)
 
@@ -315,7 +316,11 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(response.intent, "session_rename")
         self.assertEqual(
             response.message,
-            "Session renamed: work-1 -> Work Archive\nMemory records updated: 1",
+            "Rename complete:\n"
+            "Source: work-1\n"
+            "Target: Work Archive\n"
+            "Memory records updated: 1\n"
+            "Active session changed: yes",
         )
         self.assertTrue(self.session_manager.exists("Work Archive"))
         self.assertFalse(self.session_manager.exists("work-1"))
@@ -324,6 +329,24 @@ class CognitiveEngineTests(unittest.TestCase):
             "Work Archive",
         )
         self.assertEqual([event.name for event in events], ["session.renamed"])
+
+    def test_session_rename_reports_zero_memory_for_a_non_active_session(self) -> None:
+        response = self.engine.process(
+            BrainRequest(message="rename session work-1 -- Work Archive")
+        )
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "session_rename")
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(
+            response.message,
+            "Rename complete:\n"
+            "Source: work-1\n"
+            "Target: Work Archive\n"
+            "Memory records updated: 0\n"
+            "Active session changed: no",
+        )
+        self.assertEqual(self.session_manager.get_active().session_id, "default")
 
     def test_session_rename_parser_and_domain_failures_are_controlled(self) -> None:
         for message, expected in (

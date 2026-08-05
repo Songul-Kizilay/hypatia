@@ -638,12 +638,29 @@ class ResponseComposerTests(unittest.TestCase):
 
         self.assertEqual(
             response.message,
-            "Session renamed: work -> Research Archive\nMemory records updated: 2",
+            "Rename complete:\n"
+            "Source: work\n"
+            "Target: Research Archive\n"
+            "Memory records updated: 2\n"
+            "Active session changed: yes",
         )
         self.assertEqual(response.intent, "session_rename")
         self.assertTrue(response.success)
         self.assertEqual(response.memory_count, 2)
         self.assertEqual(response.request_id, self.request.request_id)
+        zero_memory_response = self.composer.session_renamed(
+            self.request,
+            SessionRenameResult("work", "archive", 0, False),
+        )
+        self.assertEqual(
+            zero_memory_response.message,
+            "Rename complete:\n"
+            "Source: work\n"
+            "Target: archive\n"
+            "Memory records updated: 0\n"
+            "Active session changed: no",
+        )
+        self.assertFalse(zero_memory_response.message.endswith("\n"))
         self.assertEqual(failure.message, "Default session cannot be renamed.")
         self.assertEqual(failure.intent, "session_rename")
         self.assertFalse(failure.success)
