@@ -116,6 +116,43 @@ class ResponseComposer:
             success=False,
         )
 
+    def session_delete_preview(
+        self,
+        request: BrainRequest,
+        session_id: str,
+        memory_ids: tuple[str, ...],
+    ) -> BrainResponse:
+        """Compose a deterministic, read-only delete preview."""
+        lines = [
+            "Delete preview:",
+            f"Session: {session_id}",
+            f"Affected memories: {len(memory_ids)}",
+        ]
+        if memory_ids:
+            lines.append("Memory IDs:")
+            lines.extend(f"- {memory_id}" for memory_id in memory_ids)
+        lines.append("Changes: ready")
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="session_delete_preview",
+            memory_count=len(memory_ids),
+        )
+
+    def session_delete_preview_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Compose a failed, side-effect-free delete preview."""
+        return BrainResponse(
+            message=f"Delete preview failed:\nReason: {message}",
+            request_id=request.request_id,
+            intent="session_delete_preview",
+            memory_count=0,
+            success=False,
+        )
+
     def session_rename_help(self, request: BrainRequest) -> BrainResponse:
         """Compose deterministic usage guidance for session rename commands."""
         return BrainResponse(

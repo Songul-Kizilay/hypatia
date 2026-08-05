@@ -333,6 +333,31 @@ class ResponseComposerTests(unittest.TestCase):
         self.assertEqual(response.memory_count, 0)
         self.assertEqual(response.request_id, self.request.request_id)
 
+    def test_session_delete_preview_composes_exact_success_and_failure(self) -> None:
+        success = self.composer.session_delete_preview(
+            self.request,
+            "work-1",
+            ("memory-1", "memory-2"),
+        )
+        failure = self.composer.session_delete_preview_failure(
+            self.request,
+            "Active session cannot be deleted.",
+        )
+
+        self.assertEqual(
+            success.message,
+            "Delete preview:\nSession: work-1\nAffected memories: 2\n"
+            "Memory IDs:\n- memory-1\n- memory-2\nChanges: ready",
+        )
+        self.assertEqual(success.intent, "session_delete_preview")
+        self.assertEqual(success.memory_count, 2)
+        self.assertEqual(success.request_id, self.request.request_id)
+        self.assertEqual(
+            failure.message,
+            "Delete preview failed:\nReason: Active session cannot be deleted.",
+        )
+        self.assertFalse(failure.success)
+
     def test_sessions_list_preserves_order_and_marks_only_the_active_session(
         self,
     ) -> None:

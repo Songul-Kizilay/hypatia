@@ -17,6 +17,7 @@ from memory.MemoryRecord import MemoryRecord
 from memory.SessionMemoryPolicy import SessionMemoryPolicy
 from response.ResponseComposer import ResponseComposer
 from session.SessionCreateService import SessionCreateService
+from session.SessionDeletePreviewService import SessionDeletePreviewService
 from session.SessionManager import SessionManager
 from session.SessionRecord import SessionRecord
 from session.SessionRenameTransactionService import SessionRenameTransactionService
@@ -46,6 +47,10 @@ class CognitiveEngine:
         self._response_composer = response_composer
         self._session_manager = session_manager
         self._session_create_service = SessionCreateService(session_manager)
+        self._session_delete_preview_service = SessionDeletePreviewService(
+            session_manager,
+            memory_manager,
+        )
         self._session_use_service = SessionUseService(session_manager)
         self._session_rename_service = session_rename_service
         self._router = BrainRouter()
@@ -76,6 +81,8 @@ class CognitiveEngine:
             return self._process_session_rename(request)
         if intent == "session_rename_preview":
             return self._process_session_rename_preview(request)
+        if intent == "session_delete_preview":
+            return self._process_session_delete_preview(request)
 
         if self._is_search_request(request):
             query = self._search_query(request)
@@ -326,6 +333,23 @@ class CognitiveEngine:
                 str(error),
             )
         return self._response_composer.session_rename_preview(request, preview)
+
+    def _process_session_delete_preview(self, request: BrainRequest) -> BrainResponse:
+        """Preview a deletion without changing either store or emitting events."""
+        try:
+            session_id, memory_ids = self._session_delete_preview_service.preview(
+                self._session_command_id(request, "preview delete session")
+            )
+        except (SessionError, ValueError) as error:
+            return self._response_composer.session_delete_preview_failure(
+                request,
+                str(error),
+            )
+        return self._response_composer.session_delete_preview(
+            request,
+            session_id,
+            memory_ids,
+        )
 
     def _process_session_rename_candidates(
         self, request: BrainRequest

@@ -70,6 +70,11 @@ class BrainRouter:
             or normalized_message.startswith("preview rename session ")
         ):
             return "session_rename_preview"
+        if (
+            normalized_message == "preview delete session"
+            or normalized_message.startswith("preview delete session ")
+        ):
+            return "session_delete_preview"
         if normalized_message == "create session" or normalized_message.startswith(
             "create session "
         ):
