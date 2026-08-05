@@ -163,6 +163,59 @@ class ResponseComposerTests(unittest.TestCase):
         self.assertEqual(response.memory_count, 0)
         self.assertEqual(response.request_id, self.request.request_id)
 
+    def test_recent_conversations_preserves_record_order_and_content(self) -> None:
+        records = [
+            MemoryRecord(
+                memory_id="memory-1",
+                content="First conversation\nwith preserved formatting.",
+            ),
+            MemoryRecord(
+                memory_id="memory-2",
+                content="SECOND conversation!",
+            ),
+        ]
+
+        response = self.composer.recent_conversations(
+            self.request,
+            records,
+            self._session("work-1"),
+        )
+
+        self.assertEqual(
+            response.message,
+            "Recent conversations in work-1:\n"
+            "1. First conversation\nwith preserved formatting.\n"
+            "2. SECOND conversation!",
+        )
+        self.assertEqual(response.intent, "recent_conversations")
+        self.assertTrue(response.success)
+        self.assertEqual(response.memory_count, 2)
+        self.assertEqual(response.request_id, self.request.request_id)
+
+    def test_recent_conversations_empty_composes_a_successful_response(self) -> None:
+        response = self.composer.recent_conversations_empty(
+            self.request,
+            self._session("work-1"),
+        )
+
+        self.assertEqual(response.message, "No conversations found in session: work-1")
+        self.assertEqual(response.intent, "recent_conversations")
+        self.assertTrue(response.success)
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(response.request_id, self.request.request_id)
+
+    def test_recent_conversations_failure_preserves_the_given_message(self) -> None:
+        response = self.composer.recent_conversations_failure(
+            self.request,
+            "Count must be an integer.",
+        )
+
+        self.assertEqual(response.message, "Count must be an integer.")
+        self.assertEqual(response.intent, "recent_conversations")
+        self.assertFalse(response.success)
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(response.request_id, self.request.request_id)
+
     def test_session_created_composes_the_expected_response(self) -> None:
         response = self.composer.session_created(self.request, self._session("work-1"))
 

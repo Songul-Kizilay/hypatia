@@ -6,6 +6,7 @@ import json
 import sys
 import tempfile
 import unittest
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 SRC_DIR = Path(__file__).resolve().parents[1] / "src"
@@ -16,6 +17,7 @@ from brain.Brain import Brain
 from brain.BrainRequest import BrainRequest
 from core.Bootstrap import Bootstrap
 from core.Exceptions import MemoryError, SessionError
+from eventbus.EventBus import EventBus
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from memory.JsonFileMemoryStore import JsonFileMemoryStore
 from memory.MemoryManager import MemoryManager
@@ -426,6 +428,136 @@ class BootstrapTests(unittest.TestCase):
 
         self.assertTrue(response.success)
         self.assertEqual(response.memory_count, 0)
+
+    def test_recent_conversations_persist_session_filter_order_and_limits_after_restart(
+        self,
+    ) -> None:
+        first_bootstrap = self._bootstrap()
+        first_bootstrap.initialize()
+        first_container = first_bootstrap.container
+        first_brain = first_container.resolve(Brain)
+        first_memory_manager = first_container.resolve(MemoryManager)
+        first_brain.process("create session work-1")
+        first_brain.process("create session personal")
+        first_brain.process("use session work-1")
+        for index in range(6):
+            first_brain.process(f"Work message {index}")
+        first_brain.process(
+            BrainRequest(
+                message="Personal message",
+                metadata={"session_id": "personal"},
+            )
+        )
+        first_memory_manager.add(
+            "Search record",
+            metadata={"session_id": "work-1"},
+            tags={"cognition", "knowledge-search", "conversation"},
+        )
+        first_memory_manager.add(
+            "Plan record",
+            metadata={"session_id": "work-1"},
+            tags={"brain", "plan"},
+        )
+
+        restarted_bootstrap = self._bootstrap()
+        restarted_bootstrap.initialize()
+        restarted_container = restarted_bootstrap.container
+        restarted_brain = restarted_container.resolve(Brain)
+        restarted_memory_manager = restarted_container.resolve(MemoryManager)
+        restarted_session_manager = restarted_container.resolve(SessionManager)
+        events: list[str] = []
+        restarted_container.resolve(EventBus).subscribe(
+            "*",
+            lambda event: events.append(event.name),
+        )
+        memory_count = restarted_memory_manager.count()
+        session_document = self.session_path.read_text(encoding="utf-8")
+
+        default_response = restarted_brain.process("recent conversations")
+        one_response = restarted_brain.process("recent conversations 1")
+        twenty_response = restarted_brain.process("recent conversations 20")
+
+        self.assertEqual(restarted_session_manager.get_active().session_id, "work-1")
+        self.assertEqual(default_response.memory_count, 5)
+        self.assertIn("1. User: Work message 5", default_response.message)
+        self.assertIn("5. User: Work message 1", default_response.message)
+        self.assertNotIn("Work message 0", default_response.message)
+        self.assertNotIn("Personal message", default_response.message)
+        self.assertNotIn("Search record", default_response.message)
+        self.assertNotIn("Plan record", default_response.message)
+        self.assertEqual(one_response.memory_count, 1)
+        self.assertIn("1. User: Work message 5", one_response.message)
+        self.assertEqual(twenty_response.memory_count, 6)
+        self.assertIn("6. User: Work message 0", twenty_response.message)
+        self.assertEqual(restarted_memory_manager.count(), memory_count)
+        self.assertEqual(
+            self.session_path.read_text(encoding="utf-8"), session_document
+        )
+        self.assertEqual(events, [])
+
+    def test_recent_conversations_request_override_remains_local_after_restart(
+        self,
+    ) -> None:
+        first_bootstrap = self._bootstrap()
+        first_bootstrap.initialize()
+        first_brain = first_bootstrap.container.resolve(Brain)
+        first_brain.process("create session work-1")
+        first_brain.process("use session work-1")
+        first_brain.process("Work conversation")
+        first_brain.process(
+            BrainRequest(
+                message="Default conversation",
+                metadata={"session_id": "default"},
+            )
+        )
+
+        restarted_bootstrap = self._bootstrap()
+        restarted_bootstrap.initialize()
+        session_manager = restarted_bootstrap.container.resolve(SessionManager)
+        brain = restarted_bootstrap.container.resolve(Brain)
+        response = brain.process(
+            BrainRequest(
+                message="recent conversations",
+                metadata={"session_id": "default"},
+            )
+        )
+
+        self.assertEqual(response.memory_count, 1)
+        self.assertIn("Default conversation", response.message)
+        self.assertNotIn("Work conversation", response.message)
+        self.assertEqual(session_manager.get_active().session_id, "work-1")
+
+    def test_recent_conversations_treats_only_missing_session_metadata_as_legacy(
+        self,
+    ) -> None:
+        now = datetime.now(UTC)
+        JsonFileMemoryStore(self.memory_path).save(
+            [
+                MemoryRecord(
+                    memory_id="legacy-record",
+                    content="Legacy conversation",
+                    tags=frozenset({"brain", "conversation"}),
+                    created_at=now,
+                    updated_at=now,
+                ),
+                MemoryRecord(
+                    memory_id="null-session-record",
+                    content="Null session conversation",
+                    metadata={"session_id": None},
+                    tags=frozenset({"brain", "conversation"}),
+                    created_at=now + timedelta(seconds=1),
+                    updated_at=now + timedelta(seconds=1),
+                ),
+            ]
+        )
+
+        bootstrap = self._bootstrap()
+        bootstrap.initialize()
+        response = bootstrap.container.resolve(Brain).process("recent conversations")
+
+        self.assertEqual(response.memory_count, 1)
+        self.assertIn("Legacy conversation", response.message)
+        self.assertNotIn("Null session conversation", response.message)
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from brain.BrainContext import BrainContext
@@ -12,8 +13,10 @@ from core.Exceptions import KnowledgeError, MemoryError, PlannerError, SessionEr
 from eventbus.EventBus import EventBus
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from memory.MemoryManager import MemoryManager
+from memory.MemoryRecord import MemoryRecord
 from response.ResponseComposer import ResponseComposer
 from session.SessionManager import SessionManager
+from session.SessionRecord import SessionRecord
 
 if TYPE_CHECKING:
     from planner.Planner import Planner
@@ -114,6 +117,8 @@ class CognitiveEngine:
         session_intent = self._router.detect_intent(request)
         if session_intent in {"session_create", "session_list", "session_use"}:
             return self._process_session_command(request, session_intent)
+        if session_intent == "recent_conversations":
+            return self._process_recent_conversations(request)
 
         return self._process_conversation(request)
 
@@ -248,6 +253,66 @@ class CognitiveEngine:
             return self._response_composer.session_activated(request, session)
         except SessionError as error:
             return self._response_composer.session_failure(request, str(error))
+
+    def _process_recent_conversations(self, request: BrainRequest) -> BrainResponse:
+        """Return recent normal conversation records for the resolved session."""
+        try:
+            session_id = self._resolve_session_id(request)
+            limit = self._recent_conversation_limit(request)
+        except (SessionError, ValueError) as error:
+            return self._response_composer.recent_conversations_failure(
+                request,
+                str(error),
+            )
+
+        session = self._session_record(session_id)
+        records = [
+            record
+            for record in self._memory_manager.all()
+            if {"brain", "conversation"}.issubset(record.tags)
+            and record.metadata.get("session_id", "default") == session_id
+        ]
+        recent_records = sorted(
+            records,
+            key=self._record_created_at,
+            reverse=True,
+        )[:limit]
+        if not recent_records:
+            return self._response_composer.recent_conversations_empty(request, session)
+        return self._response_composer.recent_conversations(
+            request,
+            recent_records,
+            session,
+        )
+
+    @staticmethod
+    def _recent_conversation_limit(request: BrainRequest) -> int:
+        """Return the validated optional count from a recent-conversations command."""
+        remainder = request.message.strip()[len("recent conversations") :].strip()
+        if not remainder:
+            return 5
+
+        try:
+            limit = int(remainder)
+        except ValueError as error:
+            raise ValueError("Count must be an integer.") from error
+
+        if not 1 <= limit <= 20:
+            raise ValueError("Count must be between 1 and 20.")
+        return limit
+
+    def _session_record(self, session_id: str) -> SessionRecord:
+        """Return the registry record for an already resolved session ID."""
+        return next(
+            session
+            for session in self._session_manager.list()
+            if session.session_id == session_id
+        )
+
+    @staticmethod
+    def _record_created_at(record: MemoryRecord) -> datetime:
+        """Return a deterministic ordering timestamp for a memory record."""
+        return record.created_at or datetime.min.replace(tzinfo=UTC)
 
     @staticmethod
     def _session_command_id(request: BrainRequest, command: str) -> str:

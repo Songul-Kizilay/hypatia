@@ -46,6 +46,46 @@ class BrainRouterTests(unittest.TestCase):
 
         self.assertEqual(intent, "message")
 
+    def test_recent_conversations_command_is_detected(self) -> None:
+        intent = self.router.detect_intent(BrainRequest(message="recent conversations"))
+
+        self.assertEqual(intent, "recent_conversations")
+
+    def test_recent_conversations_count_command_is_detected_case_insensitively(
+        self,
+    ) -> None:
+        intent = self.router.detect_intent(
+            BrainRequest(message="RECENT CONVERSATIONS 10")
+        )
+
+        self.assertEqual(intent, "recent_conversations")
+
+    def test_recent_conversations_word_inside_a_sentence_remains_a_message(
+        self,
+    ) -> None:
+        for message in (
+            "can you show my recent conversations",
+            "what did we recently talk about",
+            "show recent things",
+        ):
+            with self.subTest(message=message):
+                self.assertEqual(
+                    self.router.detect_intent(BrainRequest(message=message)),
+                    "message",
+                )
+
+    def test_declared_recent_conversations_metadata_does_not_trigger_the_command(
+        self,
+    ) -> None:
+        intent = self.router.detect_intent(
+            BrainRequest(
+                message="hello",
+                metadata={"intent": "recent_conversations"},
+            )
+        )
+
+        self.assertEqual(intent, "greeting")
+
     def test_existing_greeting_and_message_detection_is_preserved(self) -> None:
         self.assertEqual(
             self.router.detect_intent(BrainRequest(message="hello there")),
