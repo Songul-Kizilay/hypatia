@@ -149,6 +149,35 @@ class ResponseComposer:
             memory_count=0,
         )
 
+    def session_rename_target_check(
+        self,
+        request: BrainRequest,
+        target_session_id: str,
+        available: bool,
+    ) -> BrainResponse:
+        """Compose the deterministic read-only rename-target availability status."""
+        status = "available" if available else "unavailable"
+        return BrainResponse(
+            message=f"Session rename target {status}: {target_session_id}",
+            request_id=request.request_id,
+            intent="session_rename_target_check",
+            memory_count=0,
+        )
+
+    def session_rename_target_check_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Compose a controlled rename-target availability validation failure."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="session_rename_target_check",
+            memory_count=0,
+            success=False,
+        )
+
     def search_success(
         self,
         request: BrainRequest,

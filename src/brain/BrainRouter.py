@@ -54,6 +54,11 @@ class BrainRouter:
             return "session_rename_help"
         if normalized_message == "list renameable sessions":
             return "session_rename_candidates"
+        if (
+            normalized_message == "check rename target"
+            or normalized_message.startswith("check rename target ")
+        ):
+            return "session_rename_target_check"
         if normalized_message == "rename session" or normalized_message.startswith(
             "rename session "
         ):

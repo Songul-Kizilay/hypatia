@@ -446,3 +446,35 @@ class BrainRouterTests(unittest.TestCase):
             self.router.detect_intent(BrainRequest(message="session activity work")),
             "session_activity",
         )
+
+    def test_session_rename_target_check_command_is_explicit_and_case_insensitive(
+        self,
+    ) -> None:
+        for message in (
+            "check rename target archive",
+            "  CHECK RENAME TARGET Work Archive  ",
+            "check rename target",
+        ):
+            with self.subTest(message=message):
+                self.assertEqual(
+                    self.router.detect_intent(BrainRequest(message=message)),
+                    "session_rename_target_check",
+                )
+
+        for message in (
+            "check session rename target archive",
+            "rename target check archive",
+            "is target archive available",
+        ):
+            with self.subTest(message=message):
+                self.assertEqual(
+                    self.router.detect_intent(BrainRequest(message=message)),
+                    "message",
+                )
+
+        self.assertEqual(
+            self.router.detect_intent(
+                BrainRequest(message="rename session work -- archive")
+            ),
+            "session_rename",
+        )

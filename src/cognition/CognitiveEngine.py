@@ -64,6 +64,8 @@ class CognitiveEngine:
             return self._response_composer.session_rename_help(request)
         if intent == "session_rename_candidates":
             return self._process_session_rename_candidates(request)
+        if intent == "session_rename_target_check":
+            return self._process_session_rename_target_check(request)
         if intent == "session_rename":
             return self._process_session_rename(request)
         if intent == "session_rename_preview":
@@ -330,6 +332,23 @@ class CognitiveEngine:
             active_session_id,
         )
 
+    def _process_session_rename_target_check(
+        self, request: BrainRequest
+    ) -> BrainResponse:
+        """Check whether an explicit rename target is unused without side effects."""
+        try:
+            target_session_id = self._session_rename_target_id(request)
+        except ValueError as error:
+            return self._response_composer.session_rename_target_check_failure(
+                request,
+                str(error),
+            )
+        return self._response_composer.session_rename_target_check(
+            request,
+            target_session_id,
+            not self._session_manager.exists(target_session_id),
+        )
+
     def _process_session_overview(self, request: BrainRequest) -> BrainResponse:
         """Return a read-only overview of registered session conversations."""
         sessions = self._session_manager.list()
@@ -588,6 +607,16 @@ class CognitiveEngine:
         if not target_session_id:
             raise ValueError("Session target ID must not be empty.")
         return source_session_id, target_session_id
+
+    @staticmethod
+    def _session_rename_target_id(request: BrainRequest) -> str:
+        """Return the validated target ID from an explicit availability command."""
+        target_session_id = request.message.strip()[
+            len("check rename target") :
+        ].strip()
+        if not target_session_id:
+            raise ValueError("Session target ID must not be empty.")
+        return target_session_id
 
     @staticmethod
     def _recent_conversation_limit(request: BrainRequest) -> int:
