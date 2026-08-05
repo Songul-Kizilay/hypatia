@@ -21,6 +21,7 @@ from session.SessionManager import SessionManager
 from session.SessionRecord import SessionRecord
 from session.SessionRegistrySnapshot import SessionRegistrySnapshot
 from session.SessionRenamePlanner import SessionRenamePlanner
+from session.SessionRenamePreview import SessionRenamePreview
 from session.SessionRenameResult import SessionRenameResult
 from session.SessionRenameTransactionService import SessionRenameTransactionService
 
@@ -346,6 +347,24 @@ class SessionRenameTransactionServiceTests(unittest.TestCase):
         self.assertEqual(self.session.state.active_session_id, "renamed")
         self.assertEqual(self.memory.state[1].metadata["session_id"], "renamed")
         self.assertEqual(self.calls.count("memory.persist"), 1)
+
+    def test_preview_is_read_only_and_reports_the_planned_effect(self) -> None:
+        bus = EventBus()
+        events = []
+        bus.subscribe("*", events.append)
+        session_before = self.session.state
+        memory_before = self.memory.state
+
+        preview = self._service(event_bus=bus).preview("work", "renamed")
+
+        self.assertEqual(
+            preview,
+            SessionRenamePreview("work", "renamed", 1, True),
+        )
+        self.assertEqual(self.calls, ["session.snapshot", "memory.snapshot"])
+        self.assertEqual(self.session.state, session_before)
+        self.assertEqual(self.memory.state, memory_before)
+        self.assertEqual(events, [])
 
     def _service(
         self,
