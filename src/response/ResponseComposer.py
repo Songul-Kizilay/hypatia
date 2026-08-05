@@ -9,6 +9,7 @@ from brain.BrainResponse import BrainResponse
 from knowledge.Chunk import Chunk
 from memory.MemoryRecord import MemoryRecord
 from planner.Plan import Plan
+from session.SessionDeletePolicy import SessionDeleteStatus
 from session.SessionRecord import SessionRecord
 from session.SessionRenamePreview import SessionRenamePreview
 from session.SessionRenameResult import SessionRenameResult
@@ -121,17 +122,24 @@ class ResponseComposer:
         request: BrainRequest,
         session_id: str,
         memory_ids: tuple[str, ...],
+        decision_status: SessionDeleteStatus,
+        decision_reason: str,
     ) -> BrainResponse:
         """Compose a deterministic, read-only delete preview."""
         lines = [
             "Delete preview:",
             f"Session: {session_id}",
-            f"Affected memories: {len(memory_ids)}",
         ]
-        if memory_ids:
-            lines.append("Memory IDs:")
-            lines.extend(f"- {memory_id}" for memory_id in memory_ids)
-        lines.append("Changes: ready")
+        lines.append(f"Decision: {decision_status.value}")
+        if decision_status is SessionDeleteStatus.ALLOW:
+            lines.extend(
+                [
+                    f"Affected memories: {len(memory_ids)}",
+                    "Changes: ready",
+                ]
+            )
+        else:
+            lines.append(f"Reason: {decision_reason}")
         return BrainResponse(
             message="\n".join(lines),
             request_id=request.request_id,
