@@ -474,11 +474,28 @@ class CognitiveEngineTests(unittest.TestCase):
                 side_effect=AssertionError("Preview service must not be called."),
             ),
         ):
-            response = self.engine.process(BrainRequest(message="help rename session"))
+            request = BrainRequest(message="help rename session")
+            response = self.engine.process(request)
 
         self.assertTrue(response.success)
+        self.assertEqual(
+            response.message,
+            "Rename session:\n"
+            "rename session <source> -- <target>\n"
+            "\n"
+            "Preview:\n"
+            "preview rename session <source> -- <target>\n"
+            "\n"
+            "Check target:\n"
+            "check rename target <target>\n"
+            "\n"
+            "Example:\n"
+            "rename session work -- archive",
+        )
+        self.assertFalse(response.message.endswith("\n"))
         self.assertEqual(response.intent, "session_rename_help")
         self.assertEqual(response.memory_count, 0)
+        self.assertEqual(response.request_id, request.request_id)
         self.assertEqual(self.memory_manager.snapshot(), memory_before)
         self.assertEqual(self.session_manager.snapshot(), sessions_before)
         self.assertEqual(events, [])
