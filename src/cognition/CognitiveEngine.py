@@ -122,6 +122,8 @@ class CognitiveEngine:
             return self._process_session_command(request, intent)
         if intent == "session_overview":
             return self._process_session_overview(request)
+        if intent == "session_details":
+            return self._process_session_details(request)
         if intent == "recent_conversations":
             return self._process_recent_conversations(request)
 
@@ -279,6 +281,29 @@ class CognitiveEngine:
             self._session_manager.get_active().session_id,
         )
 
+    def _process_session_details(self, request: BrainRequest) -> BrainResponse:
+        """Return a read-only conversation count for one command-selected session."""
+        try:
+            session_id = self._session_details_id(request)
+            if not self._session_manager.exists(session_id):
+                raise SessionError(f"Unknown session: {session_id}")
+        except (SessionError, ValueError) as error:
+            return self._response_composer.session_details_failure(request, str(error))
+
+        session = self._session_record(session_id)
+        conversation_count = sum(
+            1
+            for record in self._memory_manager.all()
+            if {"brain", "conversation"}.issubset(record.tags)
+            and record.metadata.get("session_id", "default") == session_id
+        )
+        return self._response_composer.session_details(
+            request,
+            session,
+            conversation_count,
+            self._session_manager.get_active().session_id == session_id,
+        )
+
     def _process_recent_conversations(self, request: BrainRequest) -> BrainResponse:
         """Return recent normal conversation records for the resolved session."""
         try:
@@ -344,6 +369,14 @@ class CognitiveEngine:
         if not query:
             raise ValueError("Search query must not be empty.")
         return query
+
+    @staticmethod
+    def _session_details_id(request: BrainRequest) -> str:
+        """Return the non-empty, command-selected session ID without metadata."""
+        session_id = request.message.strip()[len("session details") :].strip()
+        if not session_id:
+            raise ValueError("Session ID must not be empty.")
+        return session_id
 
     @staticmethod
     def _recent_conversation_limit(request: BrainRequest) -> int:

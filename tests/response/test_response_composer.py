@@ -396,6 +396,64 @@ class ResponseComposerTests(unittest.TestCase):
         self.assertEqual(response.memory_count, 0)
         self.assertEqual(response.request_id, self.request.request_id)
 
+    def test_session_details_composes_an_active_session_without_reformatting_time(
+        self,
+    ) -> None:
+        session = SessionRecord(
+            session_id="work-1",
+            created_at=datetime(2026, 8, 5, 9, 10, tzinfo=UTC),
+        )
+
+        response = self.composer.session_details(
+            self.request,
+            session,
+            conversation_count=1,
+            is_active=True,
+        )
+
+        self.assertEqual(
+            response.message,
+            "Session: work-1\n"
+            "Status: active\n"
+            "Conversations: 1 conversation\n"
+            "Created: 2026-08-05T09:10:00+00:00",
+        )
+        self.assertEqual(response.intent, "session_details")
+        self.assertTrue(response.success)
+        self.assertEqual(response.memory_count, 1)
+        self.assertEqual(response.request_id, self.request.request_id)
+
+    def test_session_details_composes_an_inactive_session_with_plural_count(
+        self,
+    ) -> None:
+        response = self.composer.session_details(
+            self.request,
+            self._session("research"),
+            conversation_count=3,
+            is_active=False,
+        )
+
+        self.assertEqual(
+            response.message,
+            "Session: research\n"
+            "Status: inactive\n"
+            "Conversations: 3 conversations\n"
+            "Created: 2026-08-04T15:00:00+00:00",
+        )
+        self.assertEqual(response.memory_count, 3)
+
+    def test_session_details_failure_preserves_the_given_message(self) -> None:
+        response = self.composer.session_details_failure(
+            self.request,
+            "Session ID must not be empty.",
+        )
+
+        self.assertEqual(response.message, "Session ID must not be empty.")
+        self.assertEqual(response.intent, "session_details")
+        self.assertFalse(response.success)
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(response.request_id, self.request.request_id)
+
     @staticmethod
     def _session(session_id: str) -> SessionRecord:
         return SessionRecord(

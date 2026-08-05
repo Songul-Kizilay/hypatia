@@ -291,6 +291,44 @@ class ResponseComposer:
             memory_count=memory_count,
         )
 
+    def session_details(
+        self,
+        request: BrainRequest,
+        session: SessionRecord,
+        conversation_count: int,
+        is_active: bool,
+    ) -> BrainResponse:
+        """Compose a read-only detail response for one registered session."""
+        status = "active" if is_active else "inactive"
+        conversation_label = (
+            "conversation" if conversation_count == 1 else "conversations"
+        )
+        return BrainResponse(
+            message=(
+                f"Session: {session.session_id}\n"
+                f"Status: {status}\n"
+                f"Conversations: {conversation_count} {conversation_label}\n"
+                f"Created: {session.created_at.isoformat()}"
+            ),
+            request_id=request.request_id,
+            intent="session_details",
+            memory_count=conversation_count,
+        )
+
+    def session_details_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Compose an unsuccessful session-details response."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="session_details",
+            memory_count=0,
+            success=False,
+        )
+
     def session_activated(
         self,
         request: BrainRequest,
