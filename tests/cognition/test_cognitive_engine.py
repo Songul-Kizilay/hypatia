@@ -339,6 +339,31 @@ class CognitiveEngineTests(unittest.TestCase):
                 self.assertEqual(response.memory_count, 0)
                 self.assertEqual(response.message, expected)
 
+    def test_session_rename_preview_has_no_conversation_or_session_side_effects(
+        self,
+    ) -> None:
+        self.memory_manager.add("Work", metadata={"session_id": "work-1"})
+        events = []
+        self.event_bus.subscribe("*", events.append)
+        sessions_before = self.session_manager.snapshot()
+        memory_before = self.memory_manager.snapshot()
+
+        response = self.engine.process(
+            BrainRequest(message="PREVIEW RENAME SESSION work-1 -- Work Archive")
+        )
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "session_rename_preview")
+        self.assertEqual(
+            response.message,
+            "Session rename preview: work-1 -> Work Archive\n"
+            "Memory records affected: 1\n"
+            "Active session affected: no",
+        )
+        self.assertEqual(self.session_manager.snapshot(), sessions_before)
+        self.assertEqual(self.memory_manager.snapshot(), memory_before)
+        self.assertEqual(events, [])
+
     def test_empty_search_query_is_saved_to_memory(self) -> None:
         self.engine.process(BrainRequest(message="search "))
 

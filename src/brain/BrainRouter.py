@@ -52,6 +52,11 @@ class BrainRouter:
             "rename session "
         ):
             return "session_rename"
+        if (
+            normalized_message == "preview rename session"
+            or normalized_message.startswith("preview rename session ")
+        ):
+            return "session_rename_preview"
         if normalized_message == "create session" or normalized_message.startswith(
             "create session "
         ):

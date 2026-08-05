@@ -1384,6 +1384,34 @@ class BootstrapTests(unittest.TestCase):
         self.assertFalse(source_response.success)
         self.assertEqual(source_response.message, "Unknown session: work")
 
+    def test_session_rename_preview_is_read_only_and_preserves_later_rename(
+        self,
+    ) -> None:
+        bootstrap = self._bootstrap()
+        bootstrap.initialize()
+        container = bootstrap.container
+        sessions = container.resolve(SessionManager)
+        memories = container.resolve(MemoryManager)
+        event_bus = container.resolve(EventBus)
+        brain = container.resolve(Brain)
+        sessions.create("work")
+        memories.add("Work", metadata={"session_id": "work"})
+        events: list[str] = []
+        event_bus.subscribe("*", lambda event: events.append(event.name))
+        sessions_before = sessions.snapshot()
+        memories_before = memories.snapshot()
+
+        preview = brain.process("preview rename session work -- archive")
+        self.assertEqual(sessions.snapshot(), sessions_before)
+        self.assertEqual(memories.snapshot(), memories_before)
+        renamed = brain.process("rename session work -- archive")
+
+        self.assertTrue(preview.success)
+        self.assertEqual(preview.intent, "session_rename_preview")
+        self.assertEqual(preview.memory_count, 1)
+        self.assertTrue(renamed.success)
+        self.assertEqual(events, ["session.renamed"])
+
 
 if __name__ == "__main__":
     unittest.main()

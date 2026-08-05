@@ -57,6 +57,8 @@ class CognitiveEngine:
             return self._process_session_activity(request)
         if intent == "session_rename":
             return self._process_session_rename(request)
+        if intent == "session_rename_preview":
+            return self._process_session_rename_preview(request)
 
         if self._is_search_request(request):
             query = self._search_query(request)
@@ -284,6 +286,24 @@ class CognitiveEngine:
         except (SessionError, ValueError) as error:
             return self._response_composer.session_rename_failure(request, str(error))
         return self._response_composer.session_renamed(request, result)
+
+    def _process_session_rename_preview(self, request: BrainRequest) -> BrainResponse:
+        """Preview an explicit session rename without any side effects."""
+        try:
+            source_session_id, target_session_id = self._session_rename_parts(
+                request,
+                command_prefix="preview rename session",
+            )
+            preview = self._session_rename_service.preview(
+                source_session_id,
+                target_session_id,
+            )
+        except (SessionError, ValueError) as error:
+            return self._response_composer.session_rename_preview_failure(
+                request,
+                str(error),
+            )
+        return self._response_composer.session_rename_preview(request, preview)
 
     def _process_session_overview(self, request: BrainRequest) -> BrainResponse:
         """Return a read-only overview of registered session conversations."""
@@ -521,9 +541,13 @@ class CognitiveEngine:
         return session_id, query
 
     @staticmethod
-    def _session_rename_parts(request: BrainRequest) -> tuple[str, str]:
+    def _session_rename_parts(
+        request: BrainRequest,
+        *,
+        command_prefix: str = "rename session",
+    ) -> tuple[str, str]:
         """Return validated source and target IDs from an explicit rename command."""
-        remainder = request.message.strip()[len("rename session") :]
+        remainder = request.message.strip()[len(command_prefix) :]
         source_part, separator, target_part = remainder.partition(" -- ")
         if not separator:
             if remainder.endswith(" --"):

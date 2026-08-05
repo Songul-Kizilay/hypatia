@@ -10,6 +10,7 @@ from knowledge.Chunk import Chunk
 from memory.MemoryRecord import MemoryRecord
 from planner.Plan import Plan
 from session.SessionRecord import SessionRecord
+from session.SessionRenamePreview import SessionRenamePreview
 from session.SessionRenameResult import SessionRenameResult
 
 
@@ -61,6 +62,39 @@ class ResponseComposer:
             message=message,
             request_id=request.request_id,
             intent="session_rename",
+            memory_count=0,
+            success=False,
+        )
+
+    def session_rename_preview(
+        self,
+        request: BrainRequest,
+        preview: SessionRenamePreview,
+    ) -> BrainResponse:
+        """Compose a successful read-only session rename preview."""
+        active_changed = "yes" if preview.active_session_changed else "no"
+        return BrainResponse(
+            message=(
+                f"Session rename preview: {preview.source_session_id} -> "
+                f"{preview.target_session_id}\n"
+                f"Memory records affected: {preview.memory_record_count}\n"
+                f"Active session affected: {active_changed}"
+            ),
+            request_id=request.request_id,
+            intent="session_rename_preview",
+            memory_count=preview.memory_record_count,
+        )
+
+    def session_rename_preview_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Compose an unsuccessful session rename preview response."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="session_rename_preview",
             memory_count=0,
             success=False,
         )

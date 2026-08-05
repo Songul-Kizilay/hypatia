@@ -344,3 +344,19 @@ class BrainRouterTests(unittest.TestCase):
         )
 
         self.assertEqual(intent, "greeting")
+
+    def test_session_rename_preview_command_is_explicit_and_case_insensitive(
+        self,
+    ) -> None:
+        self.assertEqual(
+            self.router.detect_intent(
+                BrainRequest(message="PREVIEW RENAME SESSION Work -- Archive")
+            ),
+            "session_rename_preview",
+        )
+        self.assertEqual(
+            self.router.detect_intent(
+                BrainRequest(message="preview session rename work")
+            ),
+            "message",
+        )
