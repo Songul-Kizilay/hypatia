@@ -46,6 +46,37 @@ class BrainRouterTests(unittest.TestCase):
 
         self.assertEqual(intent, "message")
 
+    def test_conversation_search_command_is_detected(self) -> None:
+        intent = self.router.detect_intent(
+            BrainRequest(message="search conversations bootstrap")
+        )
+
+        self.assertEqual(intent, "conversation_search")
+
+    def test_empty_conversation_search_command_is_detected(self) -> None:
+        intent = self.router.detect_intent(BrainRequest(message="search conversations"))
+
+        self.assertEqual(intent, "conversation_search")
+
+    def test_conversation_search_command_is_case_insensitive(self) -> None:
+        intent = self.router.detect_intent(
+            BrainRequest(message="SEARCH CONVERSATIONS Session Manager")
+        )
+
+        self.assertEqual(intent, "conversation_search")
+
+    def test_natural_language_conversation_search_phrases_remain_messages(self) -> None:
+        for message in (
+            "can you search our conversations",
+            "what did we discuss about bootstrap",
+            "find something from earlier",
+        ):
+            with self.subTest(message=message):
+                self.assertEqual(
+                    self.router.detect_intent(BrainRequest(message=message)),
+                    "message",
+                )
+
     def test_recent_conversations_command_is_detected(self) -> None:
         intent = self.router.detect_intent(BrainRequest(message="recent conversations"))
 

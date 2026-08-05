@@ -21,6 +21,11 @@ class BrainRouter:
         ):
             return "recall"
         if (
+            normalized_message == "search conversations"
+            or normalized_message.startswith("search conversations ")
+        ):
+            return "conversation_search"
+        if (
             normalized_message == "recent conversations"
             or normalized_message.startswith("recent conversations ")
         ):

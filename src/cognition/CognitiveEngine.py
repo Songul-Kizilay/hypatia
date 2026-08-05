@@ -44,6 +44,10 @@ class CognitiveEngine:
 
     def process(self, request: BrainRequest) -> BrainResponse:
         """Process a request using the currently supported cognitive intent."""
+        intent = self._router.detect_intent(request)
+        if intent == "conversation_search":
+            return self._process_conversation_search(request)
+
         if self._is_search_request(request):
             query = self._search_query(request)
             if not query:
@@ -114,10 +118,9 @@ class CognitiveEngine:
             ]
             return self._response_composer.recall_success(request, session_records[:5])
 
-        session_intent = self._router.detect_intent(request)
-        if session_intent in {"session_create", "session_list", "session_use"}:
-            return self._process_session_command(request, session_intent)
-        if session_intent == "recent_conversations":
+        if intent in {"session_create", "session_list", "session_use"}:
+            return self._process_session_command(request, intent)
+        if intent == "recent_conversations":
             return self._process_recent_conversations(request)
 
         return self._process_conversation(request)
@@ -284,6 +287,41 @@ class CognitiveEngine:
             recent_records,
             session,
         )
+
+    def _process_conversation_search(self, request: BrainRequest) -> BrainResponse:
+        """Find matching normal conversation records in the resolved session."""
+        try:
+            query = self._conversation_search_query(request)
+            session_id = self._resolve_session_id(request)
+        except (SessionError, ValueError) as error:
+            return self._response_composer.conversation_search_failure(
+                request,
+                str(error),
+            )
+
+        records = self._memory_manager.search(query, limit=None)
+        matching_records = [
+            record
+            for record in records
+            if {"brain", "conversation"}.issubset(record.tags)
+            and record.metadata.get("session_id", "default") == session_id
+        ][:5]
+        session = self._session_record(session_id)
+        if not matching_records:
+            return self._response_composer.conversation_search_empty(request, session)
+        return self._response_composer.conversation_search_results(
+            request,
+            matching_records,
+            session,
+        )
+
+    @staticmethod
+    def _conversation_search_query(request: BrainRequest) -> str:
+        """Return the non-empty user-provided conversation search query."""
+        query = request.message.strip()[len("search conversations") :].strip()
+        if not query:
+            raise ValueError("Search query must not be empty.")
+        return query
 
     @staticmethod
     def _recent_conversation_limit(request: BrainRequest) -> int:

@@ -559,6 +559,163 @@ class BootstrapTests(unittest.TestCase):
         self.assertIn("Legacy conversation", response.message)
         self.assertNotIn("Null session conversation", response.message)
 
+    def test_conversation_search_preserves_filter_order_and_limit_after_restart(
+        self,
+    ) -> None:
+        first_bootstrap = self._bootstrap()
+        first_bootstrap.initialize()
+        first_container = first_bootstrap.container
+        first_brain = first_container.resolve(Brain)
+        first_memory_manager = first_container.resolve(MemoryManager)
+        first_brain.process("create session work-1")
+        first_brain.process("create session personal")
+        first_brain.process("use session work-1")
+        for index in range(5):
+            first_brain.process(
+                BrainRequest(
+                    message=f"Personal bootstrap relevance {index}",
+                    metadata={"session_id": "personal"},
+                )
+            )
+        for index in range(6):
+            first_brain.process(f"Work bootstrap relevance {index}")
+        first_memory_manager.add(
+            "Knowledge bootstrap relevance",
+            metadata={"session_id": "work-1"},
+            tags={"cognition", "knowledge-search", "conversation"},
+        )
+        first_memory_manager.add(
+            "Plan bootstrap relevance",
+            metadata={"session_id": "work-1"},
+            tags={"brain", "plan"},
+        )
+
+        restarted_bootstrap = self._bootstrap()
+        restarted_bootstrap.initialize()
+        restarted_container = restarted_bootstrap.container
+        restarted_brain = restarted_container.resolve(Brain)
+        restarted_memory_manager = restarted_container.resolve(MemoryManager)
+        restarted_session_manager = restarted_container.resolve(SessionManager)
+        events: list[str] = []
+        restarted_container.resolve(EventBus).subscribe(
+            "*",
+            lambda event: events.append(event.name),
+        )
+        memory_count = restarted_memory_manager.count()
+        memory_document = self.memory_path.read_text(encoding="utf-8")
+        session_document = self.session_path.read_text(encoding="utf-8")
+
+        response = restarted_brain.process("search conversations bootstrap")
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "conversation_search")
+        self.assertEqual(restarted_session_manager.get_active().session_id, "work-1")
+        self.assertEqual(response.memory_count, 5)
+        self.assertIn("1. User: Work bootstrap relevance 0", response.message)
+        self.assertIn("5. User: Work bootstrap relevance 4", response.message)
+        self.assertNotIn("Work bootstrap relevance 5", response.message)
+        self.assertNotIn("Personal bootstrap relevance", response.message)
+        self.assertNotIn("Knowledge bootstrap relevance", response.message)
+        self.assertNotIn("Plan bootstrap relevance", response.message)
+        self.assertEqual(restarted_memory_manager.count(), memory_count)
+        self.assertEqual(self.memory_path.read_text(encoding="utf-8"), memory_document)
+        self.assertEqual(
+            self.session_path.read_text(encoding="utf-8"), session_document
+        )
+        self.assertEqual(events, [])
+
+    def test_conversation_search_request_override_remains_local_after_restart(
+        self,
+    ) -> None:
+        first_bootstrap = self._bootstrap()
+        first_bootstrap.initialize()
+        first_brain = first_bootstrap.container.resolve(Brain)
+        first_brain.process("create session work-1")
+        first_brain.process("use session work-1")
+        first_brain.process("Work bootstrap discussion")
+        first_brain.process(
+            BrainRequest(
+                message="Default bootstrap discussion",
+                metadata={"session_id": "default"},
+            )
+        )
+
+        restarted_bootstrap = self._bootstrap()
+        restarted_bootstrap.initialize()
+        session_manager = restarted_bootstrap.container.resolve(SessionManager)
+        response = restarted_bootstrap.container.resolve(Brain).process(
+            BrainRequest(
+                message="search conversations bootstrap",
+                metadata={"session_id": "default"},
+            )
+        )
+
+        self.assertTrue(response.success)
+        self.assertIn("Default bootstrap discussion", response.message)
+        self.assertNotIn("Work bootstrap discussion", response.message)
+        self.assertEqual(session_manager.get_active().session_id, "work-1")
+
+    def test_conversation_search_legacy_and_invalid_session_contracts_survive_restart(
+        self,
+    ) -> None:
+        now = datetime.now(UTC)
+        JsonFileMemoryStore(self.memory_path).save(
+            [
+                MemoryRecord(
+                    memory_id="legacy-bootstrap",
+                    content="Legacy bootstrap conversation",
+                    tags=frozenset({"brain", "conversation"}),
+                    created_at=now,
+                    updated_at=now,
+                ),
+                MemoryRecord(
+                    memory_id="null-session-bootstrap",
+                    content="Null session bootstrap conversation",
+                    metadata={"session_id": None},
+                    tags=frozenset({"brain", "conversation"}),
+                    created_at=now + timedelta(seconds=1),
+                    updated_at=now + timedelta(seconds=1),
+                ),
+            ]
+        )
+        bootstrap = self._bootstrap()
+        bootstrap.initialize()
+        container = bootstrap.container
+        brain = container.resolve(Brain)
+        memory_manager = container.resolve(MemoryManager)
+        events: list[str] = []
+        container.resolve(EventBus).subscribe(
+            "*", lambda event: events.append(event.name)
+        )
+        memory_count = memory_manager.count()
+
+        legacy_response = brain.process("search conversations bootstrap")
+        empty_response = brain.process("search conversations")
+        unknown_response = brain.process(
+            BrainRequest(
+                message="search conversations bootstrap",
+                metadata={"session_id": "unknown"},
+            )
+        )
+        invalid_response = brain.process(
+            BrainRequest(
+                message="search conversations bootstrap",
+                metadata={"session_id": 123},
+            )
+        )
+
+        self.assertEqual(legacy_response.memory_count, 1)
+        self.assertIn("Legacy bootstrap conversation", legacy_response.message)
+        self.assertNotIn("Null session bootstrap conversation", legacy_response.message)
+        self.assertFalse(empty_response.success)
+        self.assertEqual(empty_response.message, "Search query must not be empty.")
+        self.assertFalse(unknown_response.success)
+        self.assertEqual(unknown_response.message, "Unknown session: unknown")
+        self.assertFalse(invalid_response.success)
+        self.assertEqual(invalid_response.message, "session_id must be a string.")
+        self.assertEqual(memory_manager.count(), memory_count)
+        self.assertEqual(events, [])
+
 
 if __name__ == "__main__":
     unittest.main()

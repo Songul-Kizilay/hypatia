@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 import tempfile
 import unittest
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
@@ -60,6 +61,25 @@ class RecentConversationsMustNotReadMemoryManager:
 
     def all(self) -> list[MemoryRecord]:
         raise AssertionError("Recent conversations must not read memory.")
+
+
+class KnowledgeSearchMustNotRun:
+    """Minimal double that fails when conversation search reaches knowledge."""
+
+    def search(self, query: str) -> list[object]:
+        raise AssertionError("Knowledge search must not run.")
+
+
+class RecordingConversationSearchMemoryManager:
+    """Minimal double that preserves a caller-provided relevance order."""
+
+    def __init__(self, records: list[MemoryRecord]) -> None:
+        self.records = records
+        self.calls: list[tuple[str, int | None]] = []
+
+    def search(self, query: str, *, limit: int | None) -> list[MemoryRecord]:
+        self.calls.append((query, limit))
+        return list(self.records)
 
 
 class FailingPlanner:
@@ -732,6 +752,245 @@ class CognitiveEngineTests(unittest.TestCase):
 
         self.assertFalse(response.success)
         self.assertEqual(response.message, "Unknown session: unknown")
+
+    def test_conversation_search_precedes_generic_knowledge_search(self) -> None:
+        self.memory_manager.add(
+            "Bootstrap loading order",
+            metadata={"session_id": "default"},
+            tags={"brain", "conversation"},
+        )
+        engine = CognitiveEngine(
+            KnowledgeSearchMustNotRun(),  # type: ignore[arg-type]
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+        )
+
+        response = engine.process(
+            BrainRequest(message="search conversations bootstrap")
+        )
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "conversation_search")
+        self.assertIn("Bootstrap loading order", response.message)
+
+    def test_conversation_search_preserves_query_case_and_uses_no_memory_limit(
+        self,
+    ) -> None:
+        memory_manager = RecordingConversationSearchMemoryManager(
+            [
+                MemoryRecord(
+                    memory_id="match-1",
+                    content="Session Manager transaction contract",
+                    metadata={"session_id": "default"},
+                    tags=frozenset({"brain", "conversation"}),
+                )
+            ]
+        )
+        engine = CognitiveEngine(
+            KnowledgeSearchMustNotRun(),  # type: ignore[arg-type]
+            memory_manager,  # type: ignore[arg-type]
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+        )
+
+        response = engine.process(
+            BrainRequest(message="SEARCH CONVERSATIONS Session Manager")
+        )
+
+        self.assertTrue(response.success)
+        self.assertEqual(memory_manager.calls, [("Session Manager", None)])
+
+    def test_empty_conversation_search_fails_without_memory_or_knowledge_access(
+        self,
+    ) -> None:
+        engine = CognitiveEngine(
+            KnowledgeSearchMustNotRun(),  # type: ignore[arg-type]
+            RecentConversationsMustNotReadMemoryManager(),  # type: ignore[arg-type]
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+        )
+
+        response = engine.process(BrainRequest(message="search conversations"))
+
+        self.assertFalse(response.success)
+        self.assertEqual(response.intent, "conversation_search")
+        self.assertEqual(response.message, "Search query must not be empty.")
+
+    def test_conversation_search_filters_sessions_and_tags_before_limiting(
+        self,
+    ) -> None:
+        now = datetime.now(UTC)
+        records = [
+            MemoryRecord(
+                memory_id=f"other-{index}",
+                content=f"Other relevance {index}",
+                metadata={"session_id": "personal"},
+                tags=frozenset({"brain", "conversation"}),
+                created_at=now + timedelta(hours=index),
+            )
+            for index in range(5)
+        ]
+        records.extend(
+            MemoryRecord(
+                memory_id=f"work-{index}",
+                content=f"Work relevance {index}",
+                metadata={"session_id": "work-1"},
+                tags=frozenset({"brain", "conversation"}),
+                created_at=now + timedelta(hours=10 - index),
+            )
+            for index in range(6)
+        )
+        records.extend(
+            [
+                MemoryRecord(
+                    memory_id="search-record",
+                    content="Knowledge search relevance",
+                    metadata={"session_id": "work-1"},
+                    tags=frozenset({"cognition", "knowledge-search", "conversation"}),
+                ),
+                MemoryRecord(
+                    memory_id="plan-record",
+                    content="Plan relevance",
+                    metadata={"session_id": "work-1"},
+                    tags=frozenset({"brain", "plan"}),
+                ),
+            ]
+        )
+        memory_manager = RecordingConversationSearchMemoryManager(records)
+        engine = CognitiveEngine(
+            KnowledgeSearchMustNotRun(),  # type: ignore[arg-type]
+            memory_manager,  # type: ignore[arg-type]
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+        )
+
+        response = engine.process(
+            BrainRequest(
+                message="search conversations relevance",
+                metadata={"session_id": "work-1"},
+            )
+        )
+
+        self.assertEqual(response.memory_count, 5)
+        self.assertIn("1. Work relevance 0", response.message)
+        self.assertIn("5. Work relevance 4", response.message)
+        self.assertNotIn("Work relevance 5", response.message)
+        self.assertNotIn("Other relevance", response.message)
+        self.assertNotIn("Knowledge search relevance", response.message)
+        self.assertNotIn("Plan relevance", response.message)
+
+    def test_conversation_search_treats_only_missing_session_metadata_as_legacy(
+        self,
+    ) -> None:
+        self.memory_manager.add(
+            "Legacy conversation match",
+            tags={"brain", "conversation"},
+        )
+        self.memory_manager.add(
+            "Null session conversation match",
+            metadata={"session_id": None},
+            tags={"brain", "conversation"},
+        )
+
+        response = self.engine.process(
+            BrainRequest(message="search conversations conversation")
+        )
+
+        self.assertEqual(response.memory_count, 1)
+        self.assertIn("Legacy conversation match", response.message)
+        self.assertNotIn("Null session conversation match", response.message)
+
+    def test_conversation_search_uses_active_session_and_request_override(
+        self,
+    ) -> None:
+        self.memory_manager.add(
+            "Default conversation match",
+            metadata={"session_id": "default"},
+            tags={"brain", "conversation"},
+        )
+        self.memory_manager.add(
+            "Work conversation match",
+            metadata={"session_id": "work-1"},
+            tags={"brain", "conversation"},
+        )
+        self.session_manager.set_active("work-1")
+
+        active_response = self.engine.process(
+            BrainRequest(message="search conversations match")
+        )
+        override_response = self.engine.process(
+            BrainRequest(
+                message="search conversations match",
+                metadata={"session_id": "default"},
+            )
+        )
+
+        self.assertIn("Work conversation match", active_response.message)
+        self.assertNotIn("Default conversation match", active_response.message)
+        self.assertIn("Default conversation match", override_response.message)
+        self.assertNotIn("Work conversation match", override_response.message)
+        self.assertEqual(self.session_manager.get_active().session_id, "work-1")
+
+    def test_invalid_conversation_search_session_override_has_no_side_effects(
+        self,
+    ) -> None:
+        events: list[str] = []
+        self.event_bus.subscribe("*", lambda event: events.append(event.name))
+        engine = CognitiveEngine(
+            KnowledgeSearchMustNotRun(),  # type: ignore[arg-type]
+            RecentConversationsMustNotReadMemoryManager(),  # type: ignore[arg-type]
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+        )
+
+        for session_id, expected in (
+            (123, "session_id must be a string."),
+            ("unknown", "Unknown session: unknown"),
+        ):
+            with self.subTest(session_id=session_id):
+                response = engine.process(
+                    BrainRequest(
+                        message="search conversations bootstrap",
+                        metadata={"session_id": session_id},
+                    )
+                )
+
+                self.assertFalse(response.success)
+                self.assertEqual(response.message, expected)
+
+        self.assertEqual(events, [])
+        self.assertEqual(self.session_manager.get_active().session_id, "default")
+
+    def test_conversation_search_does_not_create_new_events_or_memory_records(
+        self,
+    ) -> None:
+        self.memory_manager.add(
+            "Stored conversation match",
+            metadata={"session_id": "default"},
+            tags={"brain", "conversation"},
+        )
+        events: list[str] = []
+        self.event_bus.subscribe("*", lambda event: events.append(event.name))
+        memory_count = self.memory_manager.count()
+
+        response = self.engine.process(
+            BrainRequest(message="search conversations match")
+        )
+
+        self.assertTrue(response.success)
+        self.assertEqual(self.memory_manager.count(), memory_count)
+        self.assertEqual(events, [])
 
     def test_recent_conversations_uses_a_default_limit_of_five_newest_records(
         self,
