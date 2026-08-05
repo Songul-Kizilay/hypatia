@@ -10,6 +10,7 @@ from knowledge.Chunk import Chunk
 from memory.MemoryRecord import MemoryRecord
 from planner.Plan import Plan
 from session.SessionRecord import SessionRecord
+from session.SessionRenameResult import SessionRenameResult
 
 
 class ResponseComposer:
@@ -31,6 +32,37 @@ class ResponseComposer:
             request_id=request.request_id,
             intent="message",
             memory_count=0,
+        )
+
+    def session_renamed(
+        self,
+        request: BrainRequest,
+        result: SessionRenameResult,
+    ) -> BrainResponse:
+        """Compose a successful session rename response."""
+        return BrainResponse(
+            message=(
+                f"Session renamed: {result.source_session_id} -> "
+                f"{result.target_session_id}\n"
+                f"Memory records updated: {result.memory_record_count}"
+            ),
+            request_id=request.request_id,
+            intent="session_rename",
+            memory_count=result.memory_record_count,
+        )
+
+    def session_rename_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Compose an unsuccessful session rename response."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="session_rename",
+            memory_count=0,
+            success=False,
         )
 
     def search_success(

@@ -48,6 +48,10 @@ class BrainRouter:
             "session activity "
         ):
             return "session_activity"
+        if normalized_message == "rename session" or normalized_message.startswith(
+            "rename session "
+        ):
+            return "session_rename"
         if normalized_message == "create session" or normalized_message.startswith(
             "create session "
         ):

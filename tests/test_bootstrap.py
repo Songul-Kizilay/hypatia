@@ -25,6 +25,7 @@ from memory.MemoryRecord import MemoryRecord
 from response.ResponseComposer import ResponseComposer
 from session.JsonFileSessionStore import JsonFileSessionStore
 from session.SessionManager import SessionManager
+from session.SessionRenameTransactionService import SessionRenameTransactionService
 
 
 class BootstrapTests(unittest.TestCase):
@@ -1338,6 +1339,50 @@ class BootstrapTests(unittest.TestCase):
         self.assertEqual(invalid_response.message, "session_id must be a string.")
         self.assertEqual(memory_manager.count(), memory_count)
         self.assertEqual(events, [])
+
+    def test_session_rename_uses_shared_wiring_and_survives_restart(self) -> None:
+        bootstrap = self._bootstrap()
+        bootstrap.initialize()
+        container = bootstrap.container
+        service = container.resolve(SessionRenameTransactionService)
+        sessions = container.resolve(SessionManager)
+        memories = container.resolve(MemoryManager)
+        event_bus = container.resolve(EventBus)
+        brain = container.resolve(Brain)
+
+        self.assertIs(service._session_manager, sessions)
+        self.assertIs(service._memory_manager, memories)
+        self.assertIs(service._event_bus, event_bus)
+        sessions.create("work")
+        sessions.set_active("work")
+        memories.add(
+            "Migrated conversation",
+            metadata={"session_id": "work"},
+            tags={"brain", "conversation"},
+        )
+        events: list[str] = []
+        event_bus.subscribe("*", lambda event: events.append(event.name))
+
+        response = brain.process("rename session work -- archive")
+        restarted = self._bootstrap()
+        restarted.initialize()
+        restarted_container = restarted.container
+        restarted_brain = restarted_container.resolve(Brain)
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "session_rename")
+        self.assertEqual(events, ["session.renamed"])
+        self.assertEqual(
+            restarted_container.resolve(SessionManager).get_active().session_id,
+            "archive",
+        )
+        self.assertIn(
+            "Migrated conversation",
+            restarted_brain.process("session recent archive").message,
+        )
+        source_response = restarted_brain.process("session details work")
+        self.assertFalse(source_response.success)
+        self.assertEqual(source_response.message, "Unknown session: work")
 
 
 if __name__ == "__main__":

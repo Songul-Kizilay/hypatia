@@ -39,6 +39,7 @@ from memory.MemoryManager import MemoryManager
 from planner.Planner import Planner
 from response.ResponseComposer import ResponseComposer
 from session.SessionManager import SessionManager
+from session.SessionRenameTransactionService import SessionRenameTransactionService
 
 
 class BrainTests(unittest.TestCase):
@@ -49,6 +50,11 @@ class BrainTests(unittest.TestCase):
         self.planner = Planner()
         self.response_composer = ResponseComposer()
         self.session_manager = SessionManager(self.event_bus)
+        self.session_rename_service = SessionRenameTransactionService(
+            session_manager=self.session_manager,
+            memory_manager=self.memory_manager,
+            event_bus=self.event_bus,
+        )
         self.cognitive_engine = CognitiveEngine(
             self.knowledge_engine,
             self.memory_manager,
@@ -56,6 +62,7 @@ class BrainTests(unittest.TestCase):
             self.event_bus,
             self.response_composer,
             self.session_manager,
+            self.session_rename_service,
         )
         self.brain = Brain(
             self.cognitive_engine,

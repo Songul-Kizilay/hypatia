@@ -18,6 +18,7 @@ from memory.SessionMemoryPolicy import SessionMemoryPolicy
 from response.ResponseComposer import ResponseComposer
 from session.SessionManager import SessionManager
 from session.SessionRecord import SessionRecord
+from session.SessionRenameTransactionService import SessionRenameTransactionService
 
 if TYPE_CHECKING:
     from planner.Planner import Planner
@@ -34,6 +35,7 @@ class CognitiveEngine:
         event_bus: EventBus,
         response_composer: ResponseComposer,
         session_manager: SessionManager,
+        session_rename_service: SessionRenameTransactionService,
     ) -> None:
         self._knowledge_engine = knowledge_engine
         self._memory_manager = memory_manager
@@ -41,6 +43,7 @@ class CognitiveEngine:
         self._event_bus = event_bus
         self._response_composer = response_composer
         self._session_manager = session_manager
+        self._session_rename_service = session_rename_service
         self._router = BrainRouter()
 
     def process(self, request: BrainRequest) -> BrainResponse:
@@ -52,6 +55,8 @@ class CognitiveEngine:
             return self._process_session_search(request)
         if intent == "session_activity":
             return self._process_session_activity(request)
+        if intent == "session_rename":
+            return self._process_session_rename(request)
 
         if self._is_search_request(request):
             query = self._search_query(request)
@@ -267,6 +272,18 @@ class CognitiveEngine:
             return self._response_composer.session_activated(request, session)
         except SessionError as error:
             return self._response_composer.session_failure(request, str(error))
+
+    def _process_session_rename(self, request: BrainRequest) -> BrainResponse:
+        """Execute an explicit session rename without conversation side effects."""
+        try:
+            source_session_id, target_session_id = self._session_rename_parts(request)
+            result = self._session_rename_service.rename(
+                source_session_id,
+                target_session_id,
+            )
+        except (SessionError, ValueError) as error:
+            return self._response_composer.session_rename_failure(request, str(error))
+        return self._response_composer.session_renamed(request, result)
 
     def _process_session_overview(self, request: BrainRequest) -> BrainResponse:
         """Return a read-only overview of registered session conversations."""
@@ -502,6 +519,26 @@ class CognitiveEngine:
         if not query:
             raise ValueError("Search query must not be empty.")
         return session_id, query
+
+    @staticmethod
+    def _session_rename_parts(request: BrainRequest) -> tuple[str, str]:
+        """Return validated source and target IDs from an explicit rename command."""
+        remainder = request.message.strip()[len("rename session") :]
+        source_part, separator, target_part = remainder.partition(" -- ")
+        if not separator:
+            if remainder.endswith(" --"):
+                source_part = remainder[:-3]
+                target_part = ""
+            else:
+                raise ValueError("Session rename separator is required: --")
+
+        source_session_id = source_part.strip()
+        if not source_session_id:
+            raise ValueError("Session source ID must not be empty.")
+        target_session_id = target_part.strip()
+        if not target_session_id:
+            raise ValueError("Session target ID must not be empty.")
+        return source_session_id, target_session_id
 
     @staticmethod
     def _recent_conversation_limit(request: BrainRequest) -> int:
