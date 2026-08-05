@@ -364,6 +364,49 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(self.memory_manager.snapshot(), memory_before)
         self.assertEqual(events, [])
 
+    def test_session_rename_preview_parser_and_domain_failures_are_controlled(
+        self,
+    ) -> None:
+        self.session_manager.create("archive")
+
+        for message, expected in (
+            (
+                "preview rename session work-1",
+                "Session rename separator is required: --",
+            ),
+            (
+                "preview rename session -- work-1",
+                "Session source ID must not be empty.",
+            ),
+            (
+                "preview rename session work-1 --",
+                "Session target ID must not be empty.",
+            ),
+            (
+                "preview rename session missing -- other",
+                "Unknown session: missing",
+            ),
+            (
+                "preview rename session default -- other",
+                "Default session cannot be renamed.",
+            ),
+            (
+                "preview rename session work-1 -- work-1",
+                "Session source and target must be different.",
+            ),
+            (
+                "preview rename session work-1 -- archive",
+                "Session already exists: archive",
+            ),
+        ):
+            with self.subTest(message=message):
+                response = self.engine.process(BrainRequest(message=message))
+
+                self.assertFalse(response.success)
+                self.assertEqual(response.intent, "session_rename_preview")
+                self.assertEqual(response.memory_count, 0)
+                self.assertEqual(response.message, expected)
+
     def test_empty_search_query_is_saved_to_memory(self) -> None:
         self.engine.process(BrainRequest(message="search "))
 

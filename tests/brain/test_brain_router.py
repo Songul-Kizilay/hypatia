@@ -360,3 +360,13 @@ class BrainRouterTests(unittest.TestCase):
             ),
             "message",
         )
+        self.assertEqual(
+            self.router.detect_intent(BrainRequest(message="preview rename session")),
+            "session_rename_preview",
+        )
+        self.assertEqual(
+            self.router.detect_intent(
+                BrainRequest(message="rename session work -- archive")
+            ),
+            "session_rename",
+        )

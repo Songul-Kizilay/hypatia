@@ -1400,15 +1400,33 @@ class BootstrapTests(unittest.TestCase):
         event_bus.subscribe("*", lambda event: events.append(event.name))
         sessions_before = sessions.snapshot()
         memories_before = memories.snapshot()
+        memory_document = self.memory_path.read_text(encoding="utf-8")
+        session_document = self.session_path.read_text(encoding="utf-8")
 
         preview = brain.process("preview rename session work -- archive")
-        self.assertEqual(sessions.snapshot(), sessions_before)
-        self.assertEqual(memories.snapshot(), memories_before)
-        renamed = brain.process("rename session work -- archive")
 
         self.assertTrue(preview.success)
         self.assertEqual(preview.intent, "session_rename_preview")
         self.assertEqual(preview.memory_count, 1)
+        self.assertEqual(sessions.snapshot(), sessions_before)
+        self.assertEqual(memories.snapshot(), memories_before)
+        self.assertEqual(self.memory_path.read_text(encoding="utf-8"), memory_document)
+        self.assertEqual(
+            self.session_path.read_text(encoding="utf-8"), session_document
+        )
+        self.assertEqual(events, [])
+
+        restarted = self._bootstrap()
+        restarted.initialize()
+        restarted_container = restarted.container
+        self.assertEqual(
+            restarted_container.resolve(SessionManager).snapshot(), sessions_before
+        )
+        self.assertEqual(
+            restarted_container.resolve(MemoryManager).snapshot(), memories_before
+        )
+
+        renamed = brain.process("rename session work -- archive")
         self.assertTrue(renamed.success)
         self.assertEqual(events, ["session.renamed"])
 
