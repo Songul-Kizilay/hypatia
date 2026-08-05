@@ -176,6 +176,39 @@ class BrainRouterTests(unittest.TestCase):
 
         self.assertEqual(intent, "greeting")
 
+    def test_session_recent_commands_are_detected_case_insensitively(self) -> None:
+        self.assertEqual(
+            self.router.detect_intent(BrainRequest(message="SESSION RECENT")),
+            "session_recent",
+        )
+        self.assertEqual(
+            self.router.detect_intent(
+                BrainRequest(message="SESSION RECENT Work Research")
+            ),
+            "session_recent",
+        )
+
+    def test_natural_language_session_recent_phrases_remain_messages(self) -> None:
+        for message in (
+            "show recent messages from work",
+            "what did we discuss in research",
+            "give me recent session messages",
+        ):
+            with self.subTest(message=message):
+                self.assertEqual(
+                    self.router.detect_intent(BrainRequest(message=message)),
+                    "message",
+                )
+
+    def test_declared_session_recent_metadata_does_not_trigger_the_command(
+        self,
+    ) -> None:
+        intent = self.router.detect_intent(
+            BrainRequest(message="hello", metadata={"intent": "session_recent"})
+        )
+
+        self.assertEqual(intent, "greeting")
+
     def test_existing_greeting_and_message_detection_is_preserved(self) -> None:
         self.assertEqual(
             self.router.detect_intent(BrainRequest(message="hello there")),
