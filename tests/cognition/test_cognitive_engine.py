@@ -351,18 +351,35 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(self.session_manager.get_active().session_id, "default")
 
     def test_session_rename_parser_and_domain_failures_are_controlled(self) -> None:
+        sessions_before = self.session_manager.snapshot()
+        memory_before = self.memory_manager.snapshot()
+        events: list[object] = []
+        self.event_bus.subscribe("*", events.append)
+
         for message, expected in (
             ("rename session work", "Session rename separator is required: --"),
             ("rename session -- work", "Session source ID must not be empty."),
             ("rename session work --", "Session target ID must not be empty."),
+            ("rename session missing -- other", "Unknown session: missing"),
+            ("rename session work-1 -- personal", "Session already exists: personal"),
             ("rename session default -- other", "Default session cannot be renamed."),
+            (
+                "rename session work-1 -- work-1",
+                "Session source and target must be different.",
+            ),
         ):
             with self.subTest(message=message):
                 response = self.engine.process(BrainRequest(message=message))
                 self.assertFalse(response.success)
                 self.assertEqual(response.intent, "session_rename")
                 self.assertEqual(response.memory_count, 0)
-                self.assertEqual(response.message, expected)
+                self.assertEqual(
+                    response.message, f"Rename failed:\nReason: {expected}"
+                )
+
+        self.assertEqual(self.session_manager.snapshot(), sessions_before)
+        self.assertEqual(self.memory_manager.snapshot(), memory_before)
+        self.assertEqual(events, [])
 
     def test_session_rename_preview_has_no_conversation_or_session_side_effects(
         self,

@@ -65,7 +65,7 @@ class ResponseComposer:
     ) -> BrainResponse:
         """Compose an unsuccessful session rename response."""
         return BrainResponse(
-            message=message,
+            message=f"Rename failed:\nReason: {message}",
             request_id=request.request_id,
             intent="session_rename",
             memory_count=0,
