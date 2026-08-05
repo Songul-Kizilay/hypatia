@@ -149,6 +149,31 @@ class ResponseComposer:
             memory_count=0,
         )
 
+    def session_help(self, request: BrainRequest) -> BrainResponse:
+        """Compose deterministic usage guidance for supported session commands."""
+        return BrainResponse(
+            message=(
+                "Session commands:\n"
+                "create session <session_id>\n"
+                "list sessions\n"
+                "use session <session_id>\n"
+                "active session\n"
+                "session overview\n"
+                "session details <session_id>\n"
+                "session recent <session_id>\n"
+                "session activity <session_id>\n"
+                "session search <session_id> <query>\n"
+                "list renameable sessions\n"
+                "check rename target <target_session_id>\n"
+                "preview rename session <source_session_id> -- <target_session_id>\n"
+                "rename session <source_session_id> -- <target_session_id>\n"
+                "help rename session"
+            ),
+            request_id=request.request_id,
+            intent="session_help",
+            memory_count=0,
+        )
+
     def session_rename_target_check(
         self,
         request: BrainRequest,

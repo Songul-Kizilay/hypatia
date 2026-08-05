@@ -446,6 +446,86 @@ class CognitiveEngineTests(unittest.TestCase):
             ).success
         )
 
+    def test_session_help_has_no_runtime_side_effects(self) -> None:
+        events = []
+        self.event_bus.subscribe("*", events.append)
+        memory_before = self.memory_manager.snapshot()
+        sessions_before = self.session_manager.snapshot()
+
+        with (
+            patch.object(
+                self.session_manager,
+                "list",
+                side_effect=AssertionError("Session reads must not be called."),
+            ),
+            patch.object(
+                self.session_manager,
+                "get_active",
+                side_effect=AssertionError("Session reads must not be called."),
+            ),
+            patch.object(
+                self.session_manager,
+                "exists",
+                side_effect=AssertionError("Session reads must not be called."),
+            ),
+            patch.object(
+                self.session_rename_service,
+                "rename",
+                side_effect=AssertionError("Rename service must not be called."),
+            ),
+            patch.object(
+                self.session_rename_service,
+                "preview",
+                side_effect=AssertionError("Preview service must not be called."),
+            ),
+            patch.object(
+                self.memory_manager,
+                "add",
+                side_effect=AssertionError("Memory writes must not be called."),
+            ),
+            patch.object(
+                self.memory_manager,
+                "all",
+                side_effect=AssertionError("Memory reads must not be called."),
+            ),
+            patch.object(
+                self.planner,
+                "create_plan",
+                side_effect=AssertionError("Planner must not be called."),
+            ),
+            patch.object(
+                self.knowledge_engine,
+                "search",
+                side_effect=AssertionError("Knowledge engine must not be called."),
+            ),
+        ):
+            response = self.engine.process(BrainRequest(message="help sessions"))
+
+        self.assertEqual(response.intent, "session_help")
+        self.assertTrue(response.success)
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(self.session_manager.snapshot(), sessions_before)
+        self.assertEqual(self.memory_manager.snapshot(), memory_before)
+        self.assertEqual(events, [])
+        self.assertTrue(
+            self.engine.process(BrainRequest(message="active session")).success
+        )
+        self.assertTrue(
+            self.engine.process(
+                BrainRequest(message="check rename target archive")
+            ).success
+        )
+        self.assertTrue(
+            self.engine.process(
+                BrainRequest(message="preview rename session work-1 -- archive")
+            ).success
+        )
+        self.assertTrue(
+            self.engine.process(
+                BrainRequest(message="rename session work-1 -- archive")
+            ).success
+        )
+
     def test_session_rename_candidates_are_read_only_and_preserve_order(self) -> None:
         self.session_manager.create("archive")
         self.session_manager.set_active("archive")

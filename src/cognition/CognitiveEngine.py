@@ -60,6 +60,8 @@ class CognitiveEngine:
                 request,
                 self._session_manager.get_active(),
             )
+        if intent == "session_help":
+            return self._response_composer.session_help(request)
         if intent == "session_rename_help":
             return self._response_composer.session_rename_help(request)
         if intent == "session_rename_candidates":

@@ -717,6 +717,33 @@ class ResponseComposerTests(unittest.TestCase):
         self.assertEqual(response.memory_count, 0)
         self.assertEqual(response.request_id, self.request.request_id)
 
+    def test_session_help_preserves_the_exact_contract(self) -> None:
+        response = self.composer.session_help(self.request)
+
+        self.assertEqual(
+            response.message,
+            "Session commands:\n"
+            "create session <session_id>\n"
+            "list sessions\n"
+            "use session <session_id>\n"
+            "active session\n"
+            "session overview\n"
+            "session details <session_id>\n"
+            "session recent <session_id>\n"
+            "session activity <session_id>\n"
+            "session search <session_id> <query>\n"
+            "list renameable sessions\n"
+            "check rename target <target_session_id>\n"
+            "preview rename session <source_session_id> -- <target_session_id>\n"
+            "rename session <source_session_id> -- <target_session_id>\n"
+            "help rename session",
+        )
+        self.assertFalse(response.message.endswith("\n"))
+        self.assertEqual(response.intent, "session_help")
+        self.assertTrue(response.success)
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(response.request_id, self.request.request_id)
+
     def test_session_rename_target_check_preserves_the_exact_contract(self) -> None:
         available = self.composer.session_rename_target_check(
             self.request,
