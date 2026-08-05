@@ -16,6 +16,7 @@ from memory.MemoryManager import MemoryManager
 from memory.MemoryRecord import MemoryRecord
 from memory.SessionMemoryPolicy import SessionMemoryPolicy
 from response.ResponseComposer import ResponseComposer
+from session.SessionCreateService import SessionCreateService
 from session.SessionManager import SessionManager
 from session.SessionRecord import SessionRecord
 from session.SessionRenameTransactionService import SessionRenameTransactionService
@@ -43,6 +44,7 @@ class CognitiveEngine:
         self._event_bus = event_bus
         self._response_composer = response_composer
         self._session_manager = session_manager
+        self._session_create_service = SessionCreateService(session_manager)
         self._session_rename_service = session_rename_service
         self._router = BrainRouter()
 
@@ -267,12 +269,13 @@ class CognitiveEngine:
     ) -> BrainResponse:
         try:
             if intent == "session_create":
-                result = self._session_manager.create(
+                result = self._session_create_service.create(
                     self._session_command_id(request, "create session")
                 )
                 if result.created:
                     return self._response_composer.session_created(
-                        request, result.session
+                        request,
+                        result.session,
                     )
                 return self._response_composer.session_exists(request, result.session)
             if intent == "session_list":
@@ -286,6 +289,10 @@ class CognitiveEngine:
             )
             return self._response_composer.session_activated(request, session)
         except SessionError as error:
+            if intent == "session_create":
+                return self._response_composer.session_create_failure(
+                    request, str(error)
+                )
             return self._response_composer.session_failure(request, str(error))
 
     def _process_session_rename(self, request: BrainRequest) -> BrainResponse:
