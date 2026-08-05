@@ -108,6 +108,13 @@ class SessionDetailsMustNotResolveEngine(CognitiveEngine):
         raise AssertionError("Session details must not resolve a session ID.")
 
 
+class SessionRecentMustNotResolveEngine(CognitiveEngine):
+    """Fails the test if session recent attempts request-level resolution."""
+
+    def _resolve_session_id(self, request: BrainRequest) -> str:
+        raise AssertionError("Session recent must not resolve a session ID.")
+
+
 class FailingPlanner:
     """Minimal failure double for PlannerError handling coverage."""
 
@@ -576,6 +583,114 @@ class CognitiveEngineTests(unittest.TestCase):
 
                 self.assertFalse(response.success)
                 self.assertEqual(response.intent, "session_details")
+                self.assertEqual(response.message, expected)
+
+    def test_session_recent_uses_the_complete_suffix_and_filters_before_limiting(
+        self,
+    ) -> None:
+        self.session_manager.create("work research")
+        now = datetime.now(UTC)
+        records = [
+            MemoryRecord(
+                memory_id=f"target-{index}",
+                content=f"Target conversation {index}",
+                metadata={"session_id": "work research"},
+                tags=frozenset({"brain", "conversation"}),
+                created_at=now + timedelta(seconds=index),
+            )
+            for index in range(6)
+        ]
+        records.extend(
+            [
+                MemoryRecord(
+                    memory_id="other-session",
+                    content="Other session",
+                    metadata={"session_id": "work-1"},
+                    tags=frozenset({"brain", "conversation"}),
+                    created_at=now + timedelta(minutes=1),
+                ),
+                MemoryRecord(
+                    memory_id="search-record",
+                    content="Search record",
+                    metadata={"session_id": "work research"},
+                    tags=frozenset({"cognition", "knowledge-search", "conversation"}),
+                    created_at=now + timedelta(minutes=2),
+                ),
+                MemoryRecord(
+                    memory_id="null-record",
+                    content="Null record",
+                    metadata={"session_id": None},
+                    tags=frozenset({"brain", "conversation"}),
+                    created_at=now + timedelta(minutes=3),
+                ),
+            ]
+        )
+        memory_manager = RecordingSessionOverviewMemoryManager(records)
+        engine = SessionRecentMustNotResolveEngine(
+            self.knowledge_engine,
+            memory_manager,  # type: ignore[arg-type]
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+        )
+
+        response = engine.process(
+            BrainRequest(
+                message="SESSION RECENT work research",
+                metadata={"session_id": 123},
+            )
+        )
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "session_recent")
+        self.assertEqual(memory_manager.all_calls, 1)
+        self.assertEqual(response.memory_count, 5)
+        self.assertIn("1. Target conversation 5", response.message)
+        self.assertIn("5. Target conversation 1", response.message)
+        self.assertNotIn("Target conversation 0", response.message)
+        self.assertNotIn("Other session", response.message)
+        self.assertNotIn("Search record", response.message)
+        self.assertNotIn("Null record", response.message)
+
+    def test_session_recent_treats_only_missing_session_metadata_as_default(
+        self,
+    ) -> None:
+        self.memory_manager.add(
+            "Legacy default",
+            tags={"brain", "conversation"},
+        )
+        self.memory_manager.add(
+            "Null default",
+            metadata={"session_id": None},
+            tags={"brain", "conversation"},
+        )
+
+        response = self.engine.process(BrainRequest(message="session recent default"))
+
+        self.assertEqual(response.memory_count, 1)
+        self.assertIn("Legacy default", response.message)
+        self.assertNotIn("Null default", response.message)
+
+    def test_session_recent_empty_and_unknown_ids_do_not_read_memory(self) -> None:
+        engine = CognitiveEngine(
+            self.knowledge_engine,
+            RecentConversationsMustNotReadMemoryManager(),  # type: ignore[arg-type]
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+        )
+
+        for message, expected in (
+            ("session recent", "Session ID must not be empty."),
+            ("session recent unknown", "Unknown session: unknown"),
+        ):
+            with self.subTest(message=message):
+                response = engine.process(BrainRequest(message=message))
+
+                self.assertFalse(response.success)
+                self.assertEqual(response.intent, "session_recent")
                 self.assertEqual(response.message, expected)
 
     def test_active_session_is_used_when_conversation_has_no_session_override(

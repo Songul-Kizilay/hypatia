@@ -124,6 +124,8 @@ class CognitiveEngine:
             return self._process_session_overview(request)
         if intent == "session_details":
             return self._process_session_details(request)
+        if intent == "session_recent":
+            return self._process_session_recent(request)
         if intent == "recent_conversations":
             return self._process_recent_conversations(request)
 
@@ -304,6 +306,31 @@ class CognitiveEngine:
             self._session_manager.get_active().session_id == session_id,
         )
 
+    def _process_session_recent(self, request: BrainRequest) -> BrainResponse:
+        """Return five newest normal conversations for a command-selected session."""
+        try:
+            session_id = self._session_recent_id(request)
+            if not self._session_manager.exists(session_id):
+                raise SessionError(f"Unknown session: {session_id}")
+        except (SessionError, ValueError) as error:
+            return self._response_composer.session_recent_failure(request, str(error))
+
+        session = self._session_record(session_id)
+        records = [
+            record
+            for record in self._memory_manager.all()
+            if {"brain", "conversation"}.issubset(record.tags)
+            and record.metadata.get("session_id", "default") == session_id
+        ]
+        recent_records = sorted(
+            records,
+            key=self._record_created_at,
+            reverse=True,
+        )[:5]
+        if not recent_records:
+            return self._response_composer.session_recent_empty(request, session)
+        return self._response_composer.session_recent(request, recent_records, session)
+
     def _process_recent_conversations(self, request: BrainRequest) -> BrainResponse:
         """Return recent normal conversation records for the resolved session."""
         try:
@@ -374,6 +401,14 @@ class CognitiveEngine:
     def _session_details_id(request: BrainRequest) -> str:
         """Return the non-empty, command-selected session ID without metadata."""
         session_id = request.message.strip()[len("session details") :].strip()
+        if not session_id:
+            raise ValueError("Session ID must not be empty.")
+        return session_id
+
+    @staticmethod
+    def _session_recent_id(request: BrainRequest) -> str:
+        """Return the complete non-empty session-recent command suffix."""
+        session_id = request.message.strip()[len("session recent") :].strip()
         if not session_id:
             raise ValueError("Session ID must not be empty.")
         return session_id

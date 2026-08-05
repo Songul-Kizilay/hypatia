@@ -454,6 +454,59 @@ class ResponseComposerTests(unittest.TestCase):
         self.assertEqual(response.memory_count, 0)
         self.assertEqual(response.request_id, self.request.request_id)
 
+    def test_session_recent_preserves_record_order_and_content(self) -> None:
+        records = [
+            MemoryRecord(
+                memory_id="memory-1",
+                content="First conversation\nwith preserved formatting.",
+            ),
+            MemoryRecord(
+                memory_id="memory-2",
+                content="SECOND conversation!",
+            ),
+        ]
+
+        response = self.composer.session_recent(
+            self.request,
+            records,
+            self._session("Work Research"),
+        )
+
+        self.assertEqual(
+            response.message,
+            "Recent conversations in Work Research:\n"
+            "1. First conversation\nwith preserved formatting.\n"
+            "2. SECOND conversation!",
+        )
+        self.assertEqual(response.intent, "session_recent")
+        self.assertTrue(response.success)
+        self.assertEqual(response.memory_count, 2)
+        self.assertEqual(response.request_id, self.request.request_id)
+
+    def test_session_recent_empty_composes_a_successful_response(self) -> None:
+        response = self.composer.session_recent_empty(
+            self.request,
+            self._session("work-1"),
+        )
+
+        self.assertEqual(response.message, "No conversations found in session: work-1")
+        self.assertEqual(response.intent, "session_recent")
+        self.assertTrue(response.success)
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(response.request_id, self.request.request_id)
+
+    def test_session_recent_failure_preserves_the_given_message(self) -> None:
+        response = self.composer.session_recent_failure(
+            self.request,
+            "Session ID must not be empty.",
+        )
+
+        self.assertEqual(response.message, "Session ID must not be empty.")
+        self.assertEqual(response.intent, "session_recent")
+        self.assertFalse(response.success)
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(response.request_id, self.request.request_id)
+
     @staticmethod
     def _session(session_id: str) -> SessionRecord:
         return SessionRecord(

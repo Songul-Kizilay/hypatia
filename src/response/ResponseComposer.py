@@ -329,6 +329,51 @@ class ResponseComposer:
             success=False,
         )
 
+    def session_recent(
+        self,
+        request: BrainRequest,
+        records: list[MemoryRecord],
+        session: SessionRecord,
+    ) -> BrainResponse:
+        """Compose a recent-conversations response for a command-selected session."""
+        items = "\n".join(
+            f"{index}. {record.content}"
+            for index, record in enumerate(records, start=1)
+        )
+        return BrainResponse(
+            message=f"Recent conversations in {session.session_id}:\n{items}",
+            request_id=request.request_id,
+            intent="session_recent",
+            memory_count=len(records),
+        )
+
+    def session_recent_empty(
+        self,
+        request: BrainRequest,
+        session: SessionRecord,
+    ) -> BrainResponse:
+        """Compose a successful empty session-recent response."""
+        return BrainResponse(
+            message=f"No conversations found in session: {session.session_id}",
+            request_id=request.request_id,
+            intent="session_recent",
+            memory_count=0,
+        )
+
+    def session_recent_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Compose an unsuccessful session-recent response."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="session_recent",
+            memory_count=0,
+            success=False,
+        )
+
     def session_activated(
         self,
         request: BrainRequest,

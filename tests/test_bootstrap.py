@@ -713,6 +713,73 @@ class BootstrapTests(unittest.TestCase):
         self.assertEqual(json.loads(memory_document)["schema_version"], 1)
         self.assertEqual(json.loads(session_document)["schema_version"], 1)
 
+    def test_session_recent_preserves_target_and_read_only_state_after_restart(
+        self,
+    ) -> None:
+        first_bootstrap = self._bootstrap()
+        first_bootstrap.initialize()
+        first_container = first_bootstrap.container
+        first_brain = first_container.resolve(Brain)
+        first_memory_manager = first_container.resolve(MemoryManager)
+        first_brain.process("create session work research")
+        for index in range(6):
+            first_brain.process(
+                BrainRequest(
+                    message=f"Target conversation {index}",
+                    metadata={"session_id": "work research"},
+                )
+            )
+        first_brain.process(
+            BrainRequest(
+                message="Other session conversation",
+                metadata={"session_id": "default"},
+            )
+        )
+        first_memory_manager.add(
+            "Search record",
+            metadata={"session_id": "work research"},
+            tags={"cognition", "knowledge-search", "conversation"},
+        )
+
+        restarted_bootstrap = self._bootstrap()
+        restarted_bootstrap.initialize()
+        restarted_container = restarted_bootstrap.container
+        restarted_brain = restarted_container.resolve(Brain)
+        restarted_memory_manager = restarted_container.resolve(MemoryManager)
+        restarted_session_manager = restarted_container.resolve(SessionManager)
+        events: list[str] = []
+        restarted_container.resolve(EventBus).subscribe(
+            "*",
+            lambda event: events.append(event.name),
+        )
+        memory_count = restarted_memory_manager.count()
+        memory_document = self.memory_path.read_text(encoding="utf-8")
+        session_document = self.session_path.read_text(encoding="utf-8")
+
+        response = restarted_brain.process(
+            BrainRequest(
+                message="SESSION RECENT work research",
+                metadata={"session_id": 123},
+            )
+        )
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "session_recent")
+        self.assertEqual(response.memory_count, 5)
+        self.assertIn("1. User: Target conversation 5", response.message)
+        self.assertIn("5. User: Target conversation 1", response.message)
+        self.assertNotIn("Target conversation 0", response.message)
+        self.assertNotIn("Other session conversation", response.message)
+        self.assertNotIn("Search record", response.message)
+        self.assertEqual(restarted_session_manager.get_active().session_id, "default")
+        self.assertEqual(restarted_memory_manager.count(), memory_count)
+        self.assertEqual(self.memory_path.read_text(encoding="utf-8"), memory_document)
+        self.assertEqual(
+            self.session_path.read_text(encoding="utf-8"),
+            session_document,
+        )
+        self.assertEqual(events, [])
+
     def test_conversation_search_preserves_filter_order_and_limit_after_restart(
         self,
     ) -> None:
