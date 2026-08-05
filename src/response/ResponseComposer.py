@@ -72,13 +72,24 @@ class ResponseComposer:
         preview: SessionRenamePreview,
     ) -> BrainResponse:
         """Compose a successful read-only session rename preview."""
+        memory_id_lines = (
+            [
+                "Memory IDs:",
+                *(f"- {memory_id}" for memory_id in preview.memory_record_ids),
+            ]
+            if preview.memory_record_ids
+            else []
+        )
         return BrainResponse(
-            message=(
-                "Rename preview:\n"
-                f"Source: {preview.source_session_id}\n"
-                f"Target: {preview.target_session_id}\n"
-                f"Affected memories: {preview.memory_record_count}\n"
-                "Changes: ready"
+            message="\n".join(
+                [
+                    "Rename preview:",
+                    f"Source: {preview.source_session_id}",
+                    f"Target: {preview.target_session_id}",
+                    f"Affected memories: {preview.memory_record_count}",
+                    *memory_id_lines,
+                    "Changes: ready",
+                ]
             ),
             request_id=request.request_id,
             intent="session_rename_preview",

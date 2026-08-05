@@ -359,12 +359,26 @@ class SessionRenameTransactionServiceTests(unittest.TestCase):
 
         self.assertEqual(
             preview,
-            SessionRenamePreview("work", "renamed", 1, True),
+            SessionRenamePreview("work", "renamed", 1, True, ("work-memory",)),
         )
+        self.assertEqual(preview.memory_record_ids, ("work-memory",))
         self.assertEqual(self.calls, ["session.snapshot", "memory.snapshot"])
         self.assertEqual(self.session.state, session_before)
         self.assertEqual(self.memory.state, memory_before)
         self.assertEqual(events, [])
+
+    def test_preview_memory_ids_are_immutable_unique_and_count_consistent(self) -> None:
+        preview = SessionRenamePreview("work", "renamed", 2, False, ("one", "two"))
+
+        self.assertEqual(preview.memory_record_ids, ("one", "two"))
+        with self.assertRaises(FrozenInstanceError):
+            preview.memory_record_ids = ()  # type: ignore[misc]
+        with self.assertRaisesRegex(ValueError, "must match the record count"):
+            SessionRenamePreview("work", "renamed", 1, False, ("one", "two"))
+        with self.assertRaisesRegex(ValueError, "must be unique"):
+            SessionRenamePreview("work", "renamed", 2, False, ("one", "one"))
+        with self.assertRaisesRegex(TypeError, "must be a tuple"):
+            SessionRenamePreview("work", "renamed", 1, False, ["one"])  # type: ignore[arg-type]
 
     def _service(
         self,

@@ -650,7 +650,9 @@ class ResponseComposerTests(unittest.TestCase):
         self.assertEqual(failure.memory_count, 0)
 
     def test_session_rename_preview_responses_preserve_the_exact_contract(self) -> None:
-        preview = SessionRenamePreview("work", "archive", 2, True)
+        preview = SessionRenamePreview(
+            "work", "archive", 2, True, ("memory-1", "memory-2")
+        )
         response = self.composer.session_rename_preview(self.request, preview)
         failure = self.composer.session_rename_preview_failure(
             self.request,
@@ -663,6 +665,9 @@ class ResponseComposerTests(unittest.TestCase):
             "Source: work\n"
             "Target: archive\n"
             "Affected memories: 2\n"
+            "Memory IDs:\n"
+            "- memory-1\n"
+            "- memory-2\n"
             "Changes: ready",
         )
         self.assertEqual(response.intent, "session_rename_preview")
@@ -671,7 +676,7 @@ class ResponseComposerTests(unittest.TestCase):
         self.assertFalse(response.message.endswith("\n"))
         zero_memory_response = self.composer.session_rename_preview(
             self.request,
-            SessionRenamePreview("work", "archive", 0, False),
+            SessionRenamePreview("work", "archive", 0, False, ()),
         )
         self.assertEqual(
             zero_memory_response.message,
