@@ -447,6 +447,26 @@ class BrainRouterTests(unittest.TestCase):
             "session_activity",
         )
 
+    def test_session_help_command_is_exact_and_case_insensitive(self) -> None:
+        for message in ("help sessions", "  HELP SESSIONS  "):
+            with self.subTest(message=message):
+                self.assertEqual(
+                    self.router.detect_intent(BrainRequest(message=message)),
+                    "session_help",
+                )
+
+        for message in ("help session", "session help", "help sessions rename"):
+            with self.subTest(message=message):
+                self.assertEqual(
+                    self.router.detect_intent(BrainRequest(message=message)),
+                    "message",
+                )
+
+        self.assertEqual(
+            self.router.detect_intent(BrainRequest(message="help rename session")),
+            "session_rename_help",
+        )
+
     def test_session_rename_target_check_command_is_explicit_and_case_insensitive(
         self,
     ) -> None:
