@@ -335,6 +335,67 @@ class ResponseComposerTests(unittest.TestCase):
         self.assertEqual(response.memory_count, 0)
         self.assertEqual(response.message.count("(active)"), 1)
 
+    def test_session_overview_preserves_registry_order_and_formats_counts(self) -> None:
+        sessions = [
+            self._session("default"),
+            self._session("work-1"),
+            self._session("research"),
+        ]
+
+        response = self.composer.session_overview(
+            self.request,
+            sessions,
+            {"default": 0, "work-1": 1, "research": 8},
+            "work-1",
+        )
+
+        self.assertEqual(
+            response.message,
+            "Sessions:\n"
+            "1. default — 0 conversations\n"
+            "2. work-1 — 1 conversation [active]\n"
+            "3. research — 8 conversations",
+        )
+        self.assertEqual(response.intent, "session_overview")
+        self.assertTrue(response.success)
+        self.assertEqual(response.memory_count, 9)
+        self.assertEqual(response.request_id, self.request.request_id)
+        self.assertEqual(response.message.count("[active]"), 1)
+
+    def test_session_overview_defaults_missing_counts_and_excludes_orphans(
+        self,
+    ) -> None:
+        sessions = [self._session("default"), self._session("work-1")]
+
+        response = self.composer.session_overview(
+            self.request,
+            sessions,
+            {"default": 2, "orphan": 99},
+            "default",
+        )
+
+        self.assertEqual(
+            response.message,
+            "Sessions:\n"
+            "1. default — 2 conversations [active]\n"
+            "2. work-1 — 0 conversations",
+        )
+        self.assertEqual(response.memory_count, 2)
+
+    def test_session_overview_handles_an_empty_registry_deterministically(self) -> None:
+        response = self.composer.session_overview(
+            self.request,
+            [],
+            {"orphan": 99},
+            "work-1",
+        )
+
+        self.assertEqual(response.message, "Sessions:\n")
+        self.assertEqual(response.intent, "session_overview")
+        self.assertTrue(response.success)
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(response.request_id, self.request.request_id)
+
     @staticmethod
     def _session(session_id: str) -> SessionRecord:
         return SessionRecord(

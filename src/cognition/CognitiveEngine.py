@@ -120,6 +120,8 @@ class CognitiveEngine:
 
         if intent in {"session_create", "session_list", "session_use"}:
             return self._process_session_command(request, intent)
+        if intent == "session_overview":
+            return self._process_session_overview(request)
         if intent == "recent_conversations":
             return self._process_recent_conversations(request)
 
@@ -256,6 +258,26 @@ class CognitiveEngine:
             return self._response_composer.session_activated(request, session)
         except SessionError as error:
             return self._response_composer.session_failure(request, str(error))
+
+    def _process_session_overview(self, request: BrainRequest) -> BrainResponse:
+        """Return a read-only overview of registered session conversations."""
+        sessions = self._session_manager.list()
+        conversation_counts = {session.session_id: 0 for session in sessions}
+
+        for record in self._memory_manager.all():
+            if not {"brain", "conversation"}.issubset(record.tags):
+                continue
+
+            session_id = record.metadata.get("session_id", "default")
+            if isinstance(session_id, str) and session_id in conversation_counts:
+                conversation_counts[session_id] += 1
+
+        return self._response_composer.session_overview(
+            request,
+            sessions,
+            conversation_counts,
+            self._session_manager.get_active().session_id,
+        )
 
     def _process_recent_conversations(self, request: BrainRequest) -> BrainResponse:
         """Return recent normal conversation records for the resolved session."""

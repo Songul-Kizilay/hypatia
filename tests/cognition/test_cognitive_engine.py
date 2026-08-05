@@ -82,6 +82,25 @@ class RecordingConversationSearchMemoryManager:
         return list(self.records)
 
 
+class RecordingSessionOverviewMemoryManager:
+    """Minimal double that records read-only session overview access."""
+
+    def __init__(self, records: list[MemoryRecord]) -> None:
+        self.records = records
+        self.all_calls = 0
+
+    def all(self) -> list[MemoryRecord]:
+        self.all_calls += 1
+        return list(self.records)
+
+
+class SessionOverviewMustNotResolveEngine(CognitiveEngine):
+    """Fails the test if session overview attempts request-level resolution."""
+
+    def _resolve_session_id(self, request: BrainRequest) -> str:
+        raise AssertionError("Session overview must not resolve a session ID.")
+
+
 class FailingPlanner:
     """Minimal failure double for PlannerError handling coverage."""
 
@@ -340,6 +359,98 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(response.message, "Unknown session: unknown")
         self.assertEqual(self.session_manager.get_active().session_id, "default")
         self.assertEqual(self.memory_manager.count(), 0)
+
+    def test_session_overview_counts_only_registered_normal_conversations(
+        self,
+    ) -> None:
+        records = (
+            ("Legacy default", {}, {"brain", "conversation"}),
+            (
+                "Default with extra tag",
+                {"session_id": "default"},
+                {"brain", "conversation", "extra"},
+            ),
+            ("Work conversation", {"session_id": "work-1"}, {"brain", "conversation"}),
+            (
+                "Personal conversation",
+                {"session_id": "personal"},
+                {"brain", "conversation"},
+            ),
+            ("None session", {"session_id": None}, {"brain", "conversation"}),
+            ("Numeric session", {"session_id": 123}, {"brain", "conversation"}),
+            ("Orphan session", {"session_id": "orphan"}, {"brain", "conversation"}),
+            ("Brain only", {"session_id": "default"}, {"brain"}),
+            ("Conversation only", {"session_id": "default"}, {"conversation"}),
+            ("Plan record", {"session_id": "default"}, {"brain", "plan"}),
+            (
+                "Knowledge search record",
+                {"session_id": "default"},
+                {"conversation", "knowledge-search"},
+            ),
+        )
+        for content, metadata, tags in records:
+            self.memory_manager.add(content, metadata=metadata, tags=tags)
+        self.session_manager.set_active("work-1")
+        events: list[str] = []
+        self.event_bus.subscribe("*", lambda event: events.append(event.name))
+        memory_count = self.memory_manager.count()
+
+        for metadata in (
+            {},
+            {"session_id": "personal"},
+            {"session_id": 123},
+            {"session_id": None},
+            {"session_id": ""},
+        ):
+            with self.subTest(metadata=metadata):
+                response = self.engine.process(
+                    BrainRequest(message="session overview", metadata=metadata)
+                )
+
+                self.assertTrue(response.success)
+                self.assertEqual(response.intent, "session_overview")
+                self.assertEqual(
+                    response.message,
+                    "Sessions:\n"
+                    "1. default — 2 conversations\n"
+                    "2. work-1 — 1 conversation [active]\n"
+                    "3. personal — 1 conversation",
+                )
+                self.assertEqual(response.memory_count, 4)
+                self.assertEqual(self.memory_manager.count(), memory_count)
+                self.assertEqual(self.session_manager.get_active().session_id, "work-1")
+
+        self.assertEqual(events, [])
+
+    def test_session_overview_reads_memory_once_without_resolving_request_session(
+        self,
+    ) -> None:
+        memory_manager = RecordingSessionOverviewMemoryManager(
+            [
+                MemoryRecord(
+                    memory_id="default-record",
+                    content="Legacy default",
+                    tags=frozenset({"brain", "conversation"}),
+                )
+            ]
+        )
+        engine = SessionOverviewMustNotResolveEngine(
+            self.knowledge_engine,
+            memory_manager,  # type: ignore[arg-type]
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+        )
+
+        response = engine.process(
+            BrainRequest(message="session overview", metadata={"session_id": 123})
+        )
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "session_overview")
+        self.assertEqual(memory_manager.all_calls, 1)
+        self.assertIn("1. default — 1 conversation [active]", response.message)
 
     def test_active_session_is_used_when_conversation_has_no_session_override(
         self,
