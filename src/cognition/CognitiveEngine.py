@@ -57,6 +57,8 @@ class CognitiveEngine:
             return self._process_session_activity(request)
         if intent == "session_rename_help":
             return self._response_composer.session_rename_help(request)
+        if intent == "session_rename_candidates":
+            return self._process_session_rename_candidates(request)
         if intent == "session_rename":
             return self._process_session_rename(request)
         if intent == "session_rename_preview":
@@ -306,6 +308,22 @@ class CognitiveEngine:
                 str(error),
             )
         return self._response_composer.session_rename_preview(request, preview)
+
+    def _process_session_rename_candidates(
+        self, request: BrainRequest
+    ) -> BrainResponse:
+        """List source sessions that are eligible for an explicit rename."""
+        sessions = [
+            session
+            for session in self._session_manager.list()
+            if session.session_id != "default"
+        ]
+        active_session_id = self._session_manager.get_active().session_id
+        return self._response_composer.session_rename_candidates(
+            request,
+            sessions,
+            active_session_id,
+        )
 
     def _process_session_overview(self, request: BrainRequest) -> BrainResponse:
         """Return a read-only overview of registered session conversations."""

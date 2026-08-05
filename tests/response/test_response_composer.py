@@ -683,6 +683,31 @@ class ResponseComposerTests(unittest.TestCase):
         self.assertEqual(response.memory_count, 0)
         self.assertEqual(response.request_id, self.request.request_id)
 
+    def test_session_rename_candidates_preserve_the_exact_contract(self) -> None:
+        response = self.composer.session_rename_candidates(
+            self.request,
+            [self._session("work"), self._session("archive")],
+            "archive",
+        )
+        empty_response = self.composer.session_rename_candidates(
+            self.request,
+            [],
+            "default",
+        )
+
+        self.assertEqual(
+            response.message,
+            "Renameable sessions:\nwork\narchive (active)",
+        )
+        self.assertEqual(response.intent, "session_rename_candidates")
+        self.assertTrue(response.success)
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(response.request_id, self.request.request_id)
+        self.assertEqual(empty_response.message, "No renameable sessions.")
+        self.assertEqual(empty_response.intent, "session_rename_candidates")
+        self.assertTrue(empty_response.success)
+        self.assertEqual(empty_response.memory_count, 0)
+
     @staticmethod
     def _session(session_id: str) -> SessionRecord:
         return SessionRecord(
