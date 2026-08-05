@@ -446,6 +446,74 @@ class CognitiveEngineTests(unittest.TestCase):
             ).success
         )
 
+    def test_session_rename_candidates_are_read_only_and_preserve_order(self) -> None:
+        self.session_manager.create("archive")
+        self.session_manager.set_active("archive")
+        self.memory_manager.add("Conversation", metadata={"session_id": "archive"})
+        events = []
+        self.event_bus.subscribe("*", events.append)
+        sessions_before = self.session_manager.snapshot()
+        memory_before = self.memory_manager.snapshot()
+
+        with (
+            patch.object(
+                self.session_rename_service,
+                "rename",
+                side_effect=AssertionError("Rename service must not be called."),
+            ),
+            patch.object(
+                self.session_rename_service,
+                "preview",
+                side_effect=AssertionError("Preview service must not be called."),
+            ),
+        ):
+            response = self.engine.process(
+                BrainRequest(message="list renameable sessions")
+            )
+
+        self.assertEqual(
+            response.message,
+            "Renameable sessions:\nwork-1\npersonal\narchive (active)",
+        )
+        self.assertEqual(response.intent, "session_rename_candidates")
+        self.assertTrue(response.success)
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(self.session_manager.snapshot(), sessions_before)
+        self.assertEqual(self.memory_manager.snapshot(), memory_before)
+        self.assertEqual(events, [])
+        self.assertTrue(
+            self.engine.process(
+                BrainRequest(message="preview rename session work-1 -- renamed")
+            ).success
+        )
+        self.assertTrue(
+            self.engine.process(
+                BrainRequest(message="rename session work-1 -- renamed")
+            ).success
+        )
+
+    def test_session_rename_candidates_excludes_default_without_active_suffix(
+        self,
+    ) -> None:
+        empty_engine = CognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            SessionManager(self.event_bus),
+            self.session_rename_service,
+        )
+
+        response = empty_engine.process(
+            BrainRequest(message="list renameable sessions")
+        )
+
+        self.assertEqual(response.message, "No renameable sessions.")
+        self.assertEqual(response.intent, "session_rename_candidates")
+        self.assertTrue(response.success)
+        self.assertEqual(response.memory_count, 0)
+
     def test_empty_search_query_is_saved_to_memory(self) -> None:
         self.engine.process(BrainRequest(message="search "))
 

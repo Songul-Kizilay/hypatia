@@ -112,6 +112,30 @@ class ResponseComposer:
             memory_count=0,
         )
 
+    def session_rename_candidates(
+        self,
+        request: BrainRequest,
+        sessions: list[SessionRecord],
+        active_session_id: str,
+    ) -> BrainResponse:
+        """Compose a deterministic list of sessions eligible for rename."""
+        if not sessions:
+            message = "No renameable sessions."
+        else:
+            lines = ["Renameable sessions:"]
+            for session in sessions:
+                active_suffix = (
+                    " (active)" if session.session_id == active_session_id else ""
+                )
+                lines.append(f"{session.session_id}{active_suffix}")
+            message = "\n".join(lines)
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="session_rename_candidates",
+            memory_count=0,
+        )
+
     def search_success(
         self,
         request: BrainRequest,
