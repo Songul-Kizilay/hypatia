@@ -35,6 +35,21 @@ class SessionError(HypatiaError):
     """Raised when session registry operations cannot be completed."""
 
 
+class SessionRenameRollbackError(SessionError):
+    """Raised when session rename failure cannot restore memory persistence."""
+
+    def __init__(
+        self,
+        original_error: Exception,
+        rollback_error: Exception,
+    ) -> None:
+        super().__init__(
+            "Session rename failed and memory rollback could not be completed."
+        )
+        self.original_error = original_error
+        self.rollback_error = rollback_error
+
+
 class PlannerError(HypatiaError):
     """Planner error."""
 
