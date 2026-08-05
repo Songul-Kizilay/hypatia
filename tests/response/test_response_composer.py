@@ -318,6 +318,8 @@ class ResponseComposerTests(unittest.TestCase):
         self.assertEqual(response.message, "Active session: work-1")
         self.assertEqual(response.intent, "session_use")
         self.assertTrue(response.success)
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(response.request_id, self.request.request_id)
 
     def test_session_failure_preserves_the_given_message(self) -> None:
         response = self.composer.session_failure(

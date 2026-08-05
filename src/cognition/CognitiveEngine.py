@@ -20,6 +20,7 @@ from session.SessionCreateService import SessionCreateService
 from session.SessionManager import SessionManager
 from session.SessionRecord import SessionRecord
 from session.SessionRenameTransactionService import SessionRenameTransactionService
+from session.SessionUseService import SessionUseService
 
 if TYPE_CHECKING:
     from planner.Planner import Planner
@@ -45,6 +46,7 @@ class CognitiveEngine:
         self._response_composer = response_composer
         self._session_manager = session_manager
         self._session_create_service = SessionCreateService(session_manager)
+        self._session_use_service = SessionUseService(session_manager)
         self._session_rename_service = session_rename_service
         self._router = BrainRouter()
 
@@ -284,7 +286,7 @@ class CognitiveEngine:
                     self._session_manager.list(),
                     self._session_manager.get_active(),
                 )
-            session = self._session_manager.set_active(
+            session = self._session_use_service.use(
                 self._session_command_id(request, "use session")
             )
             return self._response_composer.session_activated(request, session)
