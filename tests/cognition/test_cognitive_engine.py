@@ -92,6 +92,18 @@ class SessionSearchMustNotReadMemoryManager:
         raise AssertionError("Invalid session search must not run.")
 
 
+class SessionActivityMustNotReadMemoryManager:
+    """Minimal double that fails if invalid session activity reads memory."""
+
+    def all(self) -> list[MemoryRecord]:
+        raise AssertionError(
+            "Invalid session activity must not read all memory records."
+        )
+
+    def search(self, *args: object, **kwargs: object) -> list[MemoryRecord]:
+        raise AssertionError("Invalid session activity must not run a memory search.")
+
+
 class RecordingSessionOverviewMemoryManager:
     """Minimal double that records read-only session overview access."""
 
@@ -130,6 +142,13 @@ class SessionSearchMustNotResolveEngine(CognitiveEngine):
 
     def _resolve_session_id(self, request: BrainRequest) -> str:
         raise AssertionError("Session search must not resolve a session ID.")
+
+
+class SessionActivityMustNotResolveEngine(CognitiveEngine):
+    """Fails the test if session activity attempts request-level resolution."""
+
+    def _resolve_session_id(self, request: BrainRequest) -> str:
+        raise AssertionError("Session activity must not resolve a session ID.")
 
 
 class FailingPlanner:
@@ -601,6 +620,149 @@ class CognitiveEngineTests(unittest.TestCase):
                 self.assertFalse(response.success)
                 self.assertEqual(response.intent, "session_details")
                 self.assertEqual(response.message, expected)
+
+    def test_session_activity_aggregates_only_target_conversations(self) -> None:
+        self.session_manager.create("Work Research")
+        self.session_manager.set_active("personal")
+        records = [
+            MemoryRecord(
+                memory_id="middle",
+                content="Middle activity",
+                metadata={"session_id": "Work Research"},
+                tags=frozenset({"brain", "conversation"}),
+                created_at=datetime(2026, 8, 5, 10, 0, tzinfo=UTC),
+            ),
+            MemoryRecord(
+                memory_id="newest",
+                content="Newest activity",
+                metadata={"session_id": "Work Research"},
+                tags=frozenset({"brain", "conversation", "extra"}),
+                created_at=datetime(2026, 8, 6, 10, 0, tzinfo=UTC),
+            ),
+            MemoryRecord(
+                memory_id="oldest",
+                content="Oldest activity",
+                metadata={"session_id": "Work Research"},
+                tags=frozenset({"brain", "conversation"}),
+                created_at=datetime(2026, 8, 4, 10, 0, tzinfo=UTC),
+            ),
+            MemoryRecord(
+                memory_id="other",
+                content="Other session",
+                metadata={"session_id": "personal"},
+                tags=frozenset({"brain", "conversation"}),
+            ),
+            MemoryRecord(
+                memory_id="none",
+                content="None session",
+                metadata={"session_id": None},
+                tags=frozenset({"brain", "conversation"}),
+            ),
+            MemoryRecord(
+                memory_id="orphan",
+                content="Orphan session",
+                metadata={"session_id": "orphan"},
+                tags=frozenset({"brain", "conversation"}),
+            ),
+            MemoryRecord(
+                memory_id="search",
+                content="Knowledge record",
+                metadata={"session_id": "Work Research"},
+                tags=frozenset({"cognition", "knowledge-search", "conversation"}),
+            ),
+        ]
+        memory_manager = RecordingSessionOverviewMemoryManager(records)
+        engine = SessionActivityMustNotResolveEngine(
+            self.knowledge_engine,
+            memory_manager,  # type: ignore[arg-type]
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+        )
+
+        response = engine.process(
+            BrainRequest(
+                message="SESSION ACTIVITY Work Research",
+                metadata={"session_id": 123, "intent": "search"},
+            )
+        )
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "session_activity")
+        self.assertEqual(memory_manager.all_calls, 1)
+        self.assertEqual(response.memory_count, 3)
+        self.assertIn("Session: Work Research", response.message)
+        self.assertIn("First activity: 2026-08-04T10:00:00+00:00", response.message)
+        self.assertIn("Last activity: 2026-08-06T10:00:00+00:00", response.message)
+        self.assertEqual(self.session_manager.get_active().session_id, "personal")
+
+    def test_session_activity_treats_only_missing_metadata_as_default(self) -> None:
+        self.memory_manager.add("Legacy default", tags={"brain", "conversation"})
+        self.memory_manager.add(
+            "Explicit default",
+            metadata={"session_id": "default"},
+            tags={"brain", "conversation"},
+        )
+        self.memory_manager.add(
+            "Null default",
+            metadata={"session_id": None},
+            tags={"brain", "conversation"},
+        )
+        events: list[str] = []
+        self.event_bus.subscribe("*", lambda event: events.append(event.name))
+        memory_count = self.memory_manager.count()
+
+        response = self.engine.process(BrainRequest(message="session activity default"))
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.memory_count, 2)
+        self.assertEqual(self.memory_manager.count(), memory_count)
+        self.assertEqual(events, [])
+
+    def test_session_activity_empty_and_unknown_ids_do_not_read_memory(self) -> None:
+        engine = CognitiveEngine(
+            self.knowledge_engine,
+            SessionActivityMustNotReadMemoryManager(),  # type: ignore[arg-type]
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+        )
+
+        for message, expected in (
+            ("session activity", "Session ID must not be empty."),
+            ("session activity unknown", "Unknown session: unknown"),
+        ):
+            with self.subTest(message=message):
+                response = engine.process(BrainRequest(message=message))
+
+                self.assertFalse(response.success)
+                self.assertEqual(response.intent, "session_activity")
+                self.assertEqual(response.message, expected)
+
+    def test_session_activity_empty_registered_session_is_successful(self) -> None:
+        self.session_manager.create("empty-session")
+        memory_manager = RecordingSessionOverviewMemoryManager([])
+        engine = CognitiveEngine(
+            self.knowledge_engine,
+            memory_manager,  # type: ignore[arg-type]
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+        )
+
+        response = engine.process(
+            BrainRequest(message="session activity empty-session")
+        )
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "session_activity")
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(memory_manager.all_calls, 1)
+        self.assertIn("First activity: none", response.message)
+        self.assertIn("Last activity: none", response.message)
 
     def test_session_recent_uses_the_complete_suffix_and_filters_before_limiting(
         self,

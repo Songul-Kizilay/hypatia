@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from brain.BrainRequest import BrainRequest
 from brain.BrainResponse import BrainResponse
 from knowledge.Chunk import Chunk
@@ -325,6 +327,43 @@ class ResponseComposer:
             message=message,
             request_id=request.request_id,
             intent="session_details",
+            memory_count=0,
+            success=False,
+        )
+
+    def session_activity(
+        self,
+        request: BrainRequest,
+        session: SessionRecord,
+        conversation_count: int,
+        first_activity: datetime | None,
+        last_activity: datetime | None,
+    ) -> BrainResponse:
+        """Compose a read-only conversation activity summary for one session."""
+        first_value = first_activity.isoformat() if first_activity else "none"
+        last_value = last_activity.isoformat() if last_activity else "none"
+        return BrainResponse(
+            message=(
+                f"Session: {session.session_id}\n"
+                f"Conversations: {conversation_count}\n"
+                f"First activity: {first_value}\n"
+                f"Last activity: {last_value}"
+            ),
+            request_id=request.request_id,
+            intent="session_activity",
+            memory_count=conversation_count,
+        )
+
+    def session_activity_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Compose an unsuccessful session-activity response."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="session_activity",
             memory_count=0,
             success=False,
         )

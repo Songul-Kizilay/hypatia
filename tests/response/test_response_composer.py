@@ -454,6 +454,63 @@ class ResponseComposerTests(unittest.TestCase):
         self.assertEqual(response.memory_count, 0)
         self.assertEqual(response.request_id, self.request.request_id)
 
+    def test_session_activity_composes_the_given_activity_values(self) -> None:
+        first_activity = datetime(2026, 8, 5, 10, 0, tzinfo=UTC)
+        last_activity = datetime(2026, 8, 4, 9, 0, tzinfo=UTC)
+
+        response = self.composer.session_activity(
+            self.request,
+            self._session("Work Research"),
+            conversation_count=24,
+            first_activity=first_activity,
+            last_activity=last_activity,
+        )
+
+        self.assertEqual(
+            response.message,
+            "Session: Work Research\n"
+            "Conversations: 24\n"
+            "First activity: 2026-08-05T10:00:00+00:00\n"
+            "Last activity: 2026-08-04T09:00:00+00:00",
+        )
+        self.assertEqual(response.intent, "session_activity")
+        self.assertTrue(response.success)
+        self.assertEqual(response.memory_count, 24)
+        self.assertEqual(response.request_id, self.request.request_id)
+
+    def test_session_activity_renders_empty_sessions_successfully(self) -> None:
+        response = self.composer.session_activity(
+            self.request,
+            self._session("empty-session"),
+            conversation_count=0,
+            first_activity=None,
+            last_activity=None,
+        )
+
+        self.assertEqual(
+            response.message,
+            "Session: empty-session\n"
+            "Conversations: 0\n"
+            "First activity: none\n"
+            "Last activity: none",
+        )
+        self.assertEqual(response.intent, "session_activity")
+        self.assertTrue(response.success)
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(response.request_id, self.request.request_id)
+
+    def test_session_activity_failure_preserves_the_given_message(self) -> None:
+        response = self.composer.session_activity_failure(
+            self.request,
+            "Session ID must not be empty.",
+        )
+
+        self.assertEqual(response.message, "Session ID must not be empty.")
+        self.assertEqual(response.intent, "session_activity")
+        self.assertFalse(response.success)
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(response.request_id, self.request.request_id)
+
     def test_session_recent_preserves_record_order_and_content(self) -> None:
         records = [
             MemoryRecord(

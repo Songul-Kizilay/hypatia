@@ -44,6 +44,10 @@ class BrainRouter:
             "session search "
         ):
             return "session_search"
+        if normalized_message == "session activity" or normalized_message.startswith(
+            "session activity "
+        ):
+            return "session_activity"
         if normalized_message == "create session" or normalized_message.startswith(
             "create session "
         ):
