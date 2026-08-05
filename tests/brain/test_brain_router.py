@@ -419,3 +419,30 @@ class BrainRouterTests(unittest.TestCase):
             self.router.detect_intent(BrainRequest(message="list sessions")),
             "session_list",
         )
+
+    def test_active_session_command_is_exact_and_case_insensitive(self) -> None:
+        for message in (
+            "active session",
+            "  ACTIVE SESSION  ",
+        ):
+            with self.subTest(message=message):
+                self.assertEqual(
+                    self.router.detect_intent(BrainRequest(message=message)),
+                    "session_active",
+                )
+
+        for message in (
+            "session active",
+            "show active session",
+            "active session work",
+        ):
+            with self.subTest(message=message):
+                self.assertEqual(
+                    self.router.detect_intent(BrainRequest(message=message)),
+                    "message",
+                )
+
+        self.assertEqual(
+            self.router.detect_intent(BrainRequest(message="session activity work")),
+            "session_activity",
+        )
