@@ -356,9 +356,11 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(response.intent, "session_rename_preview")
         self.assertEqual(
             response.message,
-            "Session rename preview: work-1 -> Work Archive\n"
-            "Memory records affected: 1\n"
-            "Active session affected: no",
+            "Rename preview:\n"
+            "Source: work-1\n"
+            "Target: Work Archive\n"
+            "Affected memories: 1\n"
+            "Changes: ready",
         )
         self.assertEqual(self.session_manager.snapshot(), sessions_before)
         self.assertEqual(self.memory_manager.snapshot(), memory_before)

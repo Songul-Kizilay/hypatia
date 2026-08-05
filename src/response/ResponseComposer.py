@@ -72,13 +72,13 @@ class ResponseComposer:
         preview: SessionRenamePreview,
     ) -> BrainResponse:
         """Compose a successful read-only session rename preview."""
-        active_changed = "yes" if preview.active_session_changed else "no"
         return BrainResponse(
             message=(
-                f"Session rename preview: {preview.source_session_id} -> "
-                f"{preview.target_session_id}\n"
-                f"Memory records affected: {preview.memory_record_count}\n"
-                f"Active session affected: {active_changed}"
+                "Rename preview:\n"
+                f"Source: {preview.source_session_id}\n"
+                f"Target: {preview.target_session_id}\n"
+                f"Affected memories: {preview.memory_record_count}\n"
+                "Changes: ready"
             ),
             request_id=request.request_id,
             intent="session_rename_preview",
