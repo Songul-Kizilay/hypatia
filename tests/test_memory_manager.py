@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import sys
 import tempfile
 import unittest
@@ -333,3 +334,91 @@ class MemoryManagerTests(unittest.TestCase):
             restarted_memory.load()
 
         self.assertEqual(restarted_memory.all(), [])
+
+    def test_snapshot_is_side_effect_free_and_does_not_purge_expired_records(
+        self,
+    ) -> None:
+        expired = MemoryRecord(
+            memory_id="expired",
+            content="Expired",
+            expires_at=datetime.now(UTC) - timedelta(seconds=1),
+        )
+        memory = MemoryManager(self.bus, RecordingMemoryStore([expired]))
+        memory.commit_snapshot((expired,))
+        events: list[str] = []
+        self.bus.subscribe("*", lambda event: events.append(event.name))
+
+        snapshot = memory.snapshot()
+
+        self.assertEqual(snapshot, (expired,))
+        self.assertIs(snapshot[0], expired)
+        self.assertEqual(events, [])
+
+    def test_persist_snapshot_writes_once_without_changing_ram_or_events(self) -> None:
+        store = RecordingMemoryStore()
+        memory = MemoryManager(self.bus, store)
+        original = memory.add("Original")
+        candidate = (MemoryRecord(memory_id="candidate", content="Candidate"),)
+        events: list[str] = []
+        self.bus.subscribe("*", lambda event: events.append(event.name))
+
+        self.assertIsNone(memory.persist_snapshot(candidate))
+
+        self.assertEqual(store.saved_snapshots[-1], list(candidate))
+        self.assertEqual(memory.snapshot(), (original,))
+        self.assertEqual(events, [])
+
+    def test_persist_snapshot_store_none_and_store_failure_leave_ram_unchanged(
+        self,
+    ) -> None:
+        candidate = (MemoryRecord(memory_id="candidate", content="Candidate"),)
+        self.assertIsNone(self.memory.persist_snapshot(candidate))
+        self.assertEqual(self.memory.snapshot(), ())
+
+        store = FailingMemoryStore()
+        store.fail_save = True
+        memory = MemoryManager(self.bus, store)
+        original = MemoryRecord("original", "Original")
+        memory.commit_snapshot((original,))
+        with self.assertRaisesRegex(MemoryError, "^Memory save failed\\.$"):
+            memory.persist_snapshot(candidate)
+        self.assertEqual(memory.snapshot(), (original,))
+
+    def test_commit_snapshot_replaces_ram_in_order_without_store_or_events(
+        self,
+    ) -> None:
+        store = RecordingMemoryStore()
+        memory = MemoryManager(self.bus, store)
+        first = MemoryRecord(memory_id="first", content="First")
+        second = MemoryRecord(memory_id="second", content="Second")
+        events: list[str] = []
+        self.bus.subscribe("*", lambda event: events.append(event.name))
+
+        self.assertIsNone(memory.commit_snapshot((second, first)))
+
+        self.assertEqual(memory.snapshot(), (second, first))
+        self.assertEqual(store.saved_snapshots, [])
+        self.assertEqual(events, [])
+        memory.commit_snapshot(())
+        self.assertEqual(memory.snapshot(), ())
+
+    def test_snapshot_record_validation_is_exact_and_side_effect_free(self) -> None:
+        cases = (
+            (object(), "Memory snapshot must be a sequence of MemoryRecord values."),
+            ("records", "Memory snapshot must be a sequence of MemoryRecord values."),
+            (("bad",), "Memory snapshot contains an invalid memory record."),
+            (
+                (MemoryRecord(" bad ", "content"),),
+                "Memory snapshot contains an invalid memory ID.",
+            ),
+            (
+                (MemoryRecord("same", "one"), MemoryRecord("same", "two")),
+                "Memory snapshot contains duplicate memory IDs.",
+            ),
+        )
+        before = self.memory.snapshot()
+        for records, message in cases:
+            with self.subTest(message=message):
+                with self.assertRaisesRegex(MemoryError, re.escape(message)):
+                    self.memory.commit_snapshot(records)  # type: ignore[arg-type]
+        self.assertEqual(self.memory.snapshot(), before)

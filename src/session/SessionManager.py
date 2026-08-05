@@ -50,6 +50,26 @@ class SessionManager:
         self._emit("session.created", session)
         return SessionCreateResult(session=session, created=True)
 
+    def snapshot(self) -> SessionRegistrySnapshot:
+        """Return the current registry and active-session state without side effects."""
+        with self._lock:
+            return SessionRegistrySnapshot(
+                active_session_id=self._active_session_id,
+                sessions=self._sessions,
+            )
+
+    def persist_snapshot(self, snapshot: SessionRegistrySnapshot) -> None:
+        """Persist a complete registry snapshot without changing RAM or events."""
+        validated_snapshot = self._validate_snapshot(snapshot)
+        with self._lock:
+            self._persist(validated_snapshot)
+
+    def commit_snapshot(self, snapshot: SessionRegistrySnapshot) -> None:
+        """Replace RAM registry state without persistence or events."""
+        validated_snapshot = self._validate_snapshot(snapshot)
+        with self._lock:
+            self._commit(validated_snapshot)
+
     def list(self) -> list[SessionRecord]:
         """Return registered sessions in creation order."""
         with self._lock:
@@ -133,6 +153,48 @@ class SessionManager:
                 "created_at": session.created_at.isoformat(),
             },
             source="session_manager",
+        )
+
+    @classmethod
+    def _validate_snapshot(cls, snapshot: object) -> SessionRegistrySnapshot:
+        if not isinstance(snapshot, SessionRegistrySnapshot):
+            raise SessionError("Session snapshot must be a SessionRegistrySnapshot.")
+        if not snapshot.sessions:
+            raise SessionError("Session snapshot must contain at least one session.")
+        if not all(isinstance(session, SessionRecord) for session in snapshot.sessions):
+            raise SessionError("Session snapshot contains an invalid session record.")
+
+        session_ids = tuple(session.session_id for session in snapshot.sessions)
+        if not all(
+            cls._is_valid_snapshot_session_id(session_id) for session_id in session_ids
+        ):
+            raise SessionError("Session snapshot contains an invalid session ID.")
+        if len(set(session_ids)) != len(session_ids):
+            raise SessionError("Session snapshot contains duplicate session IDs.")
+        if cls._DEFAULT_SESSION_ID not in session_ids:
+            raise SessionError("Session snapshot must contain the default session.")
+        if not cls._is_valid_snapshot_session_id(snapshot.active_session_id):
+            raise SessionError("Session snapshot has an invalid active session ID.")
+        if snapshot.active_session_id not in session_ids:
+            raise SessionError("Active session ID must exist in the session registry.")
+        if not all(
+            cls._is_timezone_aware(session.created_at) for session in snapshot.sessions
+        ):
+            raise SessionError(
+                "Session record created_at must include timezone information."
+            )
+        return snapshot
+
+    @staticmethod
+    def _is_valid_snapshot_session_id(value: object) -> bool:
+        return isinstance(value, str) and bool(value) and value == value.strip()
+
+    @staticmethod
+    def _is_timezone_aware(value: object) -> bool:
+        return (
+            isinstance(value, datetime)
+            and value.tzinfo is not None
+            and value.utcoffset() is not None
         )
 
     @staticmethod
