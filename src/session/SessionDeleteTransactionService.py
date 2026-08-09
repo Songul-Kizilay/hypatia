@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from session.SessionDeleteExecutionResult import SessionDeleteExecutionResult
 from session.SessionDeletePlan import SessionDeletePlan
-from session.SessionDeletePolicy import SessionDeleteStatus
+from session.SessionDeletePolicy import SessionDeletePolicy, SessionDeleteStatus
 from session.SessionManager import SessionManager
 from session.SessionRecord import SessionRecord
 from session.SessionRegistrySnapshot import SessionRegistrySnapshot
@@ -76,6 +76,18 @@ class SessionDeleteTransactionService:
         )
         if deleted_session is None:
             raise ValueError("Session delete target is not present in snapshot.")
+
+        decision = SessionDeletePolicy.evaluate(
+            context.session_id,
+            original.active_session_id,
+            context.memory_record_ids,
+        )
+        if decision.status is not SessionDeleteStatus.ALLOW:
+            raise ValueError(
+                "Session delete transaction is no longer allowed: "
+                f"{decision.reason}."
+            )
+
         candidate = self.build_candidate(context, original)
         sessions.apply_snapshot_if_current(original, candidate)
 
