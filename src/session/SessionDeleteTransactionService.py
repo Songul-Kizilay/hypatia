@@ -23,6 +23,10 @@ class SessionDeleteTransactionService:
         """Build the future transaction context from an approved deletion plan."""
         if plan.policy_decision.status is not SessionDeleteStatus.ALLOW:
             raise ValueError("Session delete plan must be allowed.")
+        if plan.memory_record_ids_to_remove:
+            raise ValueError(
+                "Allowed session delete plan must not contain memory records."
+            )
         return SessionDeleteTransactionContext(
             session_id=plan.session_id,
             memory_record_ids=plan.memory_record_ids_to_remove,
