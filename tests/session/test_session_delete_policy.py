@@ -19,17 +19,28 @@ from session.SessionDeletePolicy import (
 
 
 class SessionDeletePolicyTests(unittest.TestCase):
-    def test_default_is_denied_before_active_status(self) -> None:
-        decision = SessionDeletePolicy.evaluate("default", "default", ())
+    def test_default_is_denied_before_active_or_memory_status(self) -> None:
+        for active_session_id, memory_ids in (
+            ("default", ()),
+            ("other", ("memory-1",)),
+        ):
+            with self.subTest(memory_ids=memory_ids):
+                decision = SessionDeletePolicy.evaluate(
+                    "default",
+                    active_session_id,
+                    memory_ids,
+                )
 
-        self.assertEqual(decision.status, SessionDeleteStatus.DENY)
-        self.assertEqual(decision.reason, "default session cannot be deleted")
+                self.assertEqual(decision.status, SessionDeleteStatus.DENY)
+                self.assertEqual(decision.reason, "default session cannot be deleted")
 
-    def test_active_session_is_denied(self) -> None:
-        decision = SessionDeletePolicy.evaluate("work", "work", ())
+    def test_active_session_is_denied_before_memory_status(self) -> None:
+        for memory_ids in ((), ("memory-1",)):
+            with self.subTest(memory_ids=memory_ids):
+                decision = SessionDeletePolicy.evaluate("work", "work", memory_ids)
 
-        self.assertEqual(decision.status, SessionDeleteStatus.DENY)
-        self.assertEqual(decision.reason, "active session cannot be deleted")
+                self.assertEqual(decision.status, SessionDeleteStatus.DENY)
+                self.assertEqual(decision.reason, "active session cannot be deleted")
 
     def test_inactive_session_with_memories_is_pending_regardless_of_id_order(
         self,

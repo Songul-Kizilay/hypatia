@@ -5,6 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
+from session.SessionDeleteMemoryPolicy import (
+    SessionDeleteMemoryAction,
+    SessionDeleteMemoryPolicy,
+)
+
 
 class SessionDeleteStatus(Enum):
     """Possible outcomes for a known session deletion request."""
@@ -45,10 +50,11 @@ class SessionDeletePolicy:
                 status=SessionDeleteStatus.DENY,
                 reason="active session cannot be deleted",
             )
-        if matching_memory_ids:
+        memory_decision = SessionDeleteMemoryPolicy.evaluate(matching_memory_ids)
+        if memory_decision.action is SessionDeleteMemoryAction.BLOCK:
             return SessionDeleteDecision(
                 status=SessionDeleteStatus.PENDING_MEMORY_POLICY,
-                reason="session has attached memories",
+                reason=memory_decision.reason or "",
             )
         return SessionDeleteDecision(
             status=SessionDeleteStatus.ALLOW,
