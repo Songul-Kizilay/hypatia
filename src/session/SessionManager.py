@@ -70,6 +70,10 @@ class SessionManager:
         with self._lock:
             self._commit(validated_snapshot)
 
+    def emit_deleted(self, session: SessionRecord) -> None:
+        """Publish a completed session deletion without changing registry state."""
+        self._emit("session.deleted", session)
+
     def list(self) -> list[SessionRecord]:
         """Return registered sessions in creation order."""
         with self._lock:

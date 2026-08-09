@@ -219,6 +219,44 @@ class SessionManagerTests(unittest.TestCase):
 
         self.assertEqual(persisted_at_event, [True])
 
+    def test_emit_deleted_publishes_exact_event_without_state_or_store_changes(
+        self,
+    ) -> None:
+        store = RecordingSessionStore()
+        manager = SessionManager(self.event_bus, store)
+        session = manager.create("work-1").session
+        events = []
+        self.event_bus.subscribe("session.deleted", events.append)
+        snapshot_before = manager.snapshot()
+        saves_before = len(store.saved_snapshots)
+
+        self.assertIsNone(manager.emit_deleted(session))
+
+        self.assertEqual(manager.snapshot(), snapshot_before)
+        self.assertEqual(len(store.saved_snapshots), saves_before)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].name, "session.deleted")
+        self.assertEqual(
+            events[0].payload,
+            {
+                "session_id": "work-1",
+                "created_at": session.created_at.isoformat(),
+            },
+        )
+        self.assertEqual(events[0].source, "session_manager")
+
+    def test_emit_deleted_is_a_silent_no_op_without_an_event_bus(self) -> None:
+        store = RecordingSessionStore()
+        manager = SessionManager(store=store)
+        session = manager.create("work-1").session
+        snapshot_before = manager.snapshot()
+        saves_before = len(store.saved_snapshots)
+
+        self.assertIsNone(manager.emit_deleted(session))
+
+        self.assertEqual(manager.snapshot(), snapshot_before)
+        self.assertEqual(len(store.saved_snapshots), saves_before)
+
     def test_list_preserves_creation_order_and_get_active_returns_registered_record(
         self,
     ) -> None:
