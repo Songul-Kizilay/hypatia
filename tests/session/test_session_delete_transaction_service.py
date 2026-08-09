@@ -196,27 +196,43 @@ class SessionDeleteTransactionServiceTests(unittest.TestCase):
         self.assertEqual(result.session_id, "work")
         self.assertEqual(result.memory_records_removed, 0)
         self.assertTrue(result.committed)
-        self.assertEqual(events, [])
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].name, "session.deleted")
+        self.assertEqual(
+            events[0].payload,
+            {
+                "session_id": "work",
+                "created_at": original.sessions[1].created_at.isoformat(),
+            },
+        )
+        self.assertEqual(events[0].source, "session_manager")
 
     def test_execute_keeps_ram_unchanged_when_persistence_fails(self) -> None:
         store = RecordingSessionStore()
-        sessions = SessionManager(store=store)
+        event_bus = EventBus()
+        sessions = SessionManager(event_bus, store)
         store.manager = sessions
         sessions.create("work")
         original = sessions.snapshot()
         store.fail_on_save = True
+        events: list[object] = []
+        event_bus.subscribe("*", events.append)
 
         with self.assertRaisesRegex(RuntimeError, "^session store unavailable$"):
             self.service.execute(SessionDeleteTransactionContext("work", ()), sessions)
 
         self.assertEqual(sessions.snapshot(), original)
+        self.assertEqual(events, [])
 
     def test_execute_rejects_stale_and_memory_contexts_without_mutation(self) -> None:
         store = RecordingSessionStore()
-        sessions = SessionManager(store=store)
+        event_bus = EventBus()
+        sessions = SessionManager(event_bus, store)
         store.manager = sessions
         sessions.create("work")
         original = sessions.snapshot()
+        events: list[object] = []
+        event_bus.subscribe("*", events.append)
 
         for context, message in (
             (
@@ -236,6 +252,7 @@ class SessionDeleteTransactionServiceTests(unittest.TestCase):
 
                 self.assertEqual(sessions.snapshot(), original)
                 self.assertEqual(len(store.saved), saves_before)
+                self.assertEqual(events, [])
 
     @staticmethod
     def _allowed_plan() -> SessionDeletePlan:
