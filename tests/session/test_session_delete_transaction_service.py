@@ -45,23 +45,26 @@ class RecordingSessionStore:
 
 
 class SnapshotMutatingSessionManager(SessionManager):
-    """Simulate a registry write between delete snapshot and atomic apply."""
+    """Simulate a registry write after policy evaluation and before atomic apply."""
 
     def __init__(self, event_bus: EventBus, store: RecordingSessionStore) -> None:
         super().__init__(event_bus, store)
-        self._mutate_after_next_snapshot = False
+        self._mutate_before_next_atomic_apply = False
 
-    def mutate_after_next_snapshot(self) -> None:
-        """Schedule one independent registry mutation after snapshot capture."""
-        self._mutate_after_next_snapshot = True
+    def mutate_before_next_atomic_apply(self) -> None:
+        """Schedule one independent registry mutation before the atomic apply."""
+        self._mutate_before_next_atomic_apply = True
 
-    def snapshot(self) -> SessionRegistrySnapshot:
-        """Return the captured state, then simulate an intervening mutation."""
-        snapshot = super().snapshot()
-        if self._mutate_after_next_snapshot:
-            self._mutate_after_next_snapshot = False
+    def apply_snapshot_if_current(
+        self,
+        expected: SessionRegistrySnapshot,
+        candidate: SessionRegistrySnapshot,
+    ) -> None:
+        """Apply only after a simulated post-policy registry write."""
+        if self._mutate_before_next_atomic_apply:
+            self._mutate_before_next_atomic_apply = False
             self.create("research")
-        return snapshot
+        super().apply_snapshot_if_current(expected, candidate)
 
 
 class SessionDeleteTransactionServiceTests(unittest.TestCase):
@@ -255,6 +258,53 @@ class SessionDeleteTransactionServiceTests(unittest.TestCase):
         )
         self.assertEqual(events, [])
 
+    def test_commit_revalidates_and_rejects_the_default_target(self) -> None:
+        event_bus = EventBus()
+        store = RecordingSessionStore()
+        sessions = SessionManager(event_bus, store)
+        store.manager = sessions
+        original = sessions.snapshot()
+        events: list[object] = []
+        event_bus.subscribe("*", events.append)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "^Session delete transaction is no longer allowed: "
+            "default session cannot be deleted\\.$",
+        ):
+            self.service.commit(
+                SessionDeleteTransactionContext("default", ()),
+                sessions,
+            )
+
+        self.assertEqual(sessions.snapshot(), original)
+        self.assertEqual(store.saved, [])
+        self.assertEqual(events, [])
+
+    def test_commit_revalidates_and_rejects_a_newly_active_target(self) -> None:
+        event_bus = EventBus()
+        store = RecordingSessionStore()
+        sessions = SessionManager(event_bus, store)
+        store.manager = sessions
+        sessions.create("work")
+        context = self.service.prepare(self._allowed_plan())
+        sessions.set_active("work")
+        original = sessions.snapshot()
+        saves_before = len(store.saved)
+        events: list[object] = []
+        event_bus.subscribe("*", events.append)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "^Session delete transaction is no longer allowed: "
+            "active session cannot be deleted\\.$",
+        ):
+            self.service.commit(context, sessions)
+
+        self.assertEqual(sessions.snapshot(), original)
+        self.assertEqual(len(store.saved), saves_before)
+        self.assertEqual(events, [])
+
     def test_execute_keeps_ram_unchanged_when_persistence_fails(self) -> None:
         store = RecordingSessionStore()
         event_bus = EventBus()
@@ -283,7 +333,7 @@ class SessionDeleteTransactionServiceTests(unittest.TestCase):
         events: list[object] = []
         event_bus.subscribe("*", events.append)
         saves_before = len(store.saved)
-        sessions.mutate_after_next_snapshot()
+        sessions.mutate_before_next_atomic_apply()
 
         with self.assertRaisesRegex(
             SessionError,
