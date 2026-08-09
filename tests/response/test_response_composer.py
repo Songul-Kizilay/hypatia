@@ -22,6 +22,7 @@ from knowledge.Chunk import Chunk, ChunkType
 from memory.MemoryRecord import MemoryRecord
 from planner.Planner import Planner
 from response.ResponseComposer import ResponseComposer
+from session.SessionDeleteExecutionResult import SessionDeleteExecutionResult
 from session.SessionDeletePolicy import SessionDeleteStatus
 from session.SessionRecord import SessionRecord
 from session.SessionRenamePreview import SessionRenamePreview
@@ -375,6 +376,43 @@ class ResponseComposerTests(unittest.TestCase):
         self.assertEqual(pending.memory_count, 2)
         self.assertEqual(denied.intent, "session_delete_preview")
         self.assertEqual(allow.request_id, self.request.request_id)
+
+    def test_session_deleted_composes_committed_zero_memory_result(self) -> None:
+        response = self.composer.session_deleted(
+            self.request,
+            SessionDeleteExecutionResult(
+                session_id="work-1",
+                memory_records_removed=0,
+                committed=True,
+            ),
+        )
+
+        self.assertEqual(
+            response.message,
+            "Session deleted:\nID: work-1\nMemory records removed: 0\n"
+            "Status: committed",
+        )
+        self.assertEqual(response.intent, "session_delete")
+        self.assertEqual(response.memory_count, 0)
+        self.assertTrue(response.success)
+        self.assertEqual(response.request_id, self.request.request_id)
+
+    def test_session_deleted_preserves_removed_memory_count(self) -> None:
+        response = self.composer.session_deleted(
+            self.request,
+            SessionDeleteExecutionResult(
+                session_id="work-1",
+                memory_records_removed=3,
+                committed=True,
+            ),
+        )
+
+        self.assertEqual(
+            response.message,
+            "Session deleted:\nID: work-1\nMemory records removed: 3\n"
+            "Status: committed",
+        )
+        self.assertEqual(response.memory_count, 3)
 
     def test_sessions_list_preserves_order_and_marks_only_the_active_session(
         self,
