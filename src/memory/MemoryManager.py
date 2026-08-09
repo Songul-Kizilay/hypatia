@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import UTC, datetime
 from threading import RLock
 from types import MappingProxyType
-from typing import Any
+from typing import Any, TypeVar
 from uuid import uuid4
 
 from core.Exceptions import MemoryError
@@ -20,6 +20,7 @@ class _Unset:
 
 
 _UNSET = _Unset()
+_T = TypeVar("_T")
 
 
 class MemoryManager:
@@ -86,6 +87,17 @@ class MemoryManager:
         """Return the complete stored RAM state without expiry cleanup or events."""
         with self._lock:
             return tuple(self._records.values())
+
+    def run_if_snapshot_current(
+        self,
+        expected_snapshot: tuple[MemoryRecord, ...],
+        operation: Callable[[], _T],
+    ) -> _T:
+        """Run an operation only while an expected RAM snapshot remains current."""
+        with self._lock:
+            if tuple(self._records.values()) != expected_snapshot:
+                raise MemoryError("Memory snapshot changed.")
+            return operation()
 
     def persist_snapshot(self, records: Sequence[MemoryRecord]) -> None:
         """Persist records without changing RAM or emitting events."""
