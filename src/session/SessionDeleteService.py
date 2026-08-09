@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from core.Exceptions import SessionError
+from core.Exceptions import SessionDeleteEventError, SessionError
 from memory.MemoryManager import MemoryManager
 from memory.SessionMemoryPolicy import SessionMemoryPolicy
 from session.SessionDeleteExecutionResult import SessionDeleteExecutionResult
@@ -58,5 +58,8 @@ class SessionDeleteService:
                 self._session_manager,
             ),
         )
-        self._session_manager.emit_deleted(deleted_session)
+        try:
+            self._session_manager.emit_deleted(deleted_session)
+        except Exception as event_error:
+            raise SessionDeleteEventError(result, event_error) from event_error
         return result

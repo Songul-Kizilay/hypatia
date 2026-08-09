@@ -2,6 +2,13 @@
 Shared exceptions.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from session.SessionDeleteExecutionResult import SessionDeleteExecutionResult
+
 
 class HypatiaError(Exception):
     """Base exception."""
@@ -33,6 +40,21 @@ class MemoryError(HypatiaError):
 
 class SessionError(HypatiaError):
     """Raised when session registry operations cannot be completed."""
+
+
+class SessionDeleteEventError(SessionError):
+    """Raised when delete committed but lifecycle event publication failed."""
+
+    def __init__(
+        self,
+        result: SessionDeleteExecutionResult,
+        event_error: Exception,
+    ) -> None:
+        super().__init__(
+            "Session delete committed but lifecycle event publication failed."
+        )
+        self.result = result
+        self.event_error = event_error
 
 
 class SessionRenameRollbackError(SessionError):
