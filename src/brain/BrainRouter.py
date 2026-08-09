@@ -75,6 +75,10 @@ class BrainRouter:
             or normalized_message.startswith("preview delete session ")
         ):
             return "session_delete_preview"
+        if normalized_message == "delete session" or normalized_message.startswith(
+            "delete session "
+        ):
+            return "session_delete"
         if normalized_message == "create session" or normalized_message.startswith(
             "create session "
         ):
