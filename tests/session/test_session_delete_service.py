@@ -11,7 +11,7 @@ SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
-from core.Exceptions import MemoryError, SessionError
+from core.Exceptions import MemoryError, SessionDeleteEventError, SessionError
 from eventbus.EventBus import EventBus
 from memory.MemoryManager import MemoryManager
 from session.SessionDeleteService import SessionDeleteService
@@ -164,6 +164,30 @@ class SessionDeleteServiceTests(unittest.TestCase):
         service.delete("work")
 
         self.assertEqual(guard_states, [False])
+
+    def test_delete_reports_a_post_commit_event_failure_without_rollback(self) -> None:
+        memory_before = self.memory.snapshot()
+
+        def fail_subscriber(event: object) -> None:
+            raise RuntimeError("subscriber failed")
+
+        self.event_bus.subscribe("session.deleted", fail_subscriber)
+
+        with self.assertRaisesRegex(
+            SessionDeleteEventError,
+            "^Session delete committed but lifecycle event publication failed\\.$",
+        ) as raised:
+            self.service.delete("work")
+
+        error = raised.exception
+        self.assertEqual(error.result.session_id, "work")
+        self.assertEqual(error.result.memory_records_removed, 0)
+        self.assertTrue(error.result.committed)
+        self.assertIsInstance(error.event_error, RuntimeError)
+        self.assertEqual(str(error.event_error), "subscriber failed")
+        self.assertIsInstance(error.__cause__, RuntimeError)
+        self.assertFalse(self.sessions.exists("work"))
+        self.assertEqual(self.memory.snapshot(), memory_before)
 
     def test_delete_blocks_a_concurrent_memory_write_while_committing(self) -> None:
         transaction = BlockingTransactionService()
