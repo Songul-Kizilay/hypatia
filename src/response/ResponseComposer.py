@@ -9,6 +9,7 @@ from brain.BrainResponse import BrainResponse
 from knowledge.Chunk import Chunk
 from memory.MemoryRecord import MemoryRecord
 from planner.Plan import Plan
+from session.SessionDeleteExecutionResult import SessionDeleteExecutionResult
 from session.SessionDeletePolicy import SessionDeleteStatus
 from session.SessionRecord import SessionRecord
 from session.SessionRenamePreview import SessionRenamePreview
@@ -159,6 +160,26 @@ class ResponseComposer:
             intent="session_delete_preview",
             memory_count=0,
             success=False,
+        )
+
+    def session_deleted(
+        self,
+        request: BrainRequest,
+        result: SessionDeleteExecutionResult,
+    ) -> BrainResponse:
+        """Compose a successful response for a committed session deletion."""
+        return BrainResponse(
+            message="\n".join(
+                [
+                    "Session deleted:",
+                    f"ID: {result.session_id}",
+                    f"Memory records removed: {result.memory_records_removed}",
+                    "Status: committed",
+                ]
+            ),
+            request_id=request.request_id,
+            intent="session_delete",
+            memory_count=result.memory_records_removed,
         )
 
     def session_rename_help(self, request: BrainRequest) -> BrainResponse:
