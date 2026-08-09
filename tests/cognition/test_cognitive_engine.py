@@ -34,6 +34,7 @@ from memory.MemoryRecord import MemoryRecord
 from memory.SessionMemoryPolicy import SessionMemoryPolicy
 from planner.Planner import Planner
 from response.ResponseComposer import ResponseComposer
+from session.SessionDeleteService import SessionDeleteService
 from session.SessionManager import SessionManager
 from session.SessionRenameTransactionService import SessionRenameTransactionService
 
@@ -215,6 +216,13 @@ class CognitiveEngineTests(unittest.TestCase):
 
         self.assertTrue(response.success)
         self.assertEqual(response.intent, "search")
+
+    def test_session_delete_service_uses_the_engine_manager_boundaries(self) -> None:
+        service = self.engine._session_delete_service
+
+        self.assertIsInstance(service, SessionDeleteService)
+        self.assertIs(service._session_manager, self.session_manager)
+        self.assertIs(service._memory_manager, self.memory_manager)
 
     def test_session_manager_is_a_required_cognitive_engine_dependency(self) -> None:
         with self.assertRaises(TypeError):

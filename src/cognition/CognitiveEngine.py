@@ -18,6 +18,7 @@ from memory.SessionMemoryPolicy import SessionMemoryPolicy
 from response.ResponseComposer import ResponseComposer
 from session.SessionCreateService import SessionCreateService
 from session.SessionDeletePreviewService import SessionDeletePreviewService
+from session.SessionDeleteService import SessionDeleteService
 from session.SessionManager import SessionManager
 from session.SessionRecord import SessionRecord
 from session.SessionRenameTransactionService import SessionRenameTransactionService
@@ -48,6 +49,10 @@ class CognitiveEngine:
         self._session_manager = session_manager
         self._session_create_service = SessionCreateService(session_manager)
         self._session_delete_preview_service = SessionDeletePreviewService(
+            session_manager,
+            memory_manager,
+        )
+        self._session_delete_service = SessionDeleteService(
             session_manager,
             memory_manager,
         )
