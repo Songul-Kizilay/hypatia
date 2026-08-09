@@ -33,7 +33,7 @@ class SessionDeleteTransactionServiceTests(unittest.TestCase):
 
         self.assertEqual(
             context,
-            SessionDeleteTransactionContext("work", ("memory-1", "memory-2")),
+            SessionDeleteTransactionContext("work", ()),
         )
         with self.assertRaises(FrozenInstanceError):
             context.session_id = "other"  # type: ignore[misc]
@@ -46,7 +46,7 @@ class SessionDeleteTransactionServiceTests(unittest.TestCase):
 
         self.assertEqual(first, second)
         self.assertEqual(plan.session_id, "work")
-        self.assertEqual(plan.memory_record_ids_to_remove, ("memory-1", "memory-2"))
+        self.assertEqual(plan.memory_record_ids_to_remove, ())
         self.assertEqual(plan.policy_decision.status, SessionDeleteStatus.ALLOW)
 
     def test_prepare_does_not_change_runtime_state_or_emit_events(self) -> None:
@@ -54,21 +54,15 @@ class SessionDeleteTransactionServiceTests(unittest.TestCase):
         sessions = SessionManager(event_bus)
         memories = MemoryManager(event_bus=event_bus)
         sessions.create("work")
-        memory = memories.add("Work", metadata={"session_id": "work"})
+        memories.add("Work", metadata={"session_id": "work"})
         sessions_before = sessions.snapshot()
         memories_before = memories.snapshot()
         events: list[object] = []
         event_bus.subscribe("*", events.append)
 
-        context = self.service.prepare(
-            SessionDeletePlan(
-                "work",
-                (memory.memory_id,),
-                SessionDeleteDecision(SessionDeleteStatus.ALLOW, ""),
-            )
-        )
+        context = self.service.prepare(self._allowed_plan())
 
-        self.assertEqual(context.memory_record_ids, (memory.memory_id,))
+        self.assertEqual(context.memory_record_ids, ())
         self.assertEqual(sessions.snapshot(), sessions_before)
         self.assertEqual(memories.snapshot(), memories_before)
         self.assertEqual(events, [])
@@ -96,11 +90,24 @@ class SessionDeleteTransactionServiceTests(unittest.TestCase):
                 ):
                     self.service.prepare(plan)
 
+    def test_prepare_rejects_an_allowed_plan_with_memory_records(self) -> None:
+        plan = SessionDeletePlan(
+            "work",
+            ("memory-1",),
+            SessionDeleteDecision(SessionDeleteStatus.ALLOW, ""),
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "^Allowed session delete plan must not contain memory records\\.$",
+        ):
+            self.service.prepare(plan)
+
     @staticmethod
     def _allowed_plan() -> SessionDeletePlan:
         plan = SessionDeletePlan.for_decision(
             "work",
-            ("memory-1", "memory-2"),
+            (),
             SessionDeleteDecision(SessionDeleteStatus.ALLOW, ""),
         )
         assert plan is not None
