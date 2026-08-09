@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from session.SessionDeleteExecutionResult import SessionDeleteExecutionResult
 from session.SessionDeletePlan import SessionDeletePlan
 from session.SessionDeletePolicy import SessionDeleteStatus
+from session.SessionManager import SessionManager
 from session.SessionRegistrySnapshot import SessionRegistrySnapshot
 
 
@@ -49,4 +51,26 @@ class SessionDeleteTransactionService:
         return SessionRegistrySnapshot(
             active_session_id=snapshot.active_session_id,
             sessions=remaining_sessions,
+        )
+
+    def execute(
+        self,
+        context: SessionDeleteTransactionContext,
+        sessions: SessionManager,
+    ) -> SessionDeleteExecutionResult:
+        """Persist and commit one already-approved zero-memory deletion."""
+        if context.memory_record_ids:
+            raise ValueError(
+                "Session delete transaction must not contain memory records."
+            )
+
+        original = sessions.snapshot()
+        candidate = self.build_candidate(context, original)
+        sessions.persist_snapshot(candidate)
+        sessions.commit_snapshot(candidate)
+
+        return SessionDeleteExecutionResult(
+            session_id=context.session_id,
+            memory_records_removed=0,
+            committed=True,
         )
