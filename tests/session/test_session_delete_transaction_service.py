@@ -228,6 +228,33 @@ class SessionDeleteTransactionServiceTests(unittest.TestCase):
         )
         self.assertEqual(events[0].source, "session_manager")
 
+    def test_commit_persists_and_returns_the_original_record_without_events(
+        self,
+    ) -> None:
+        event_bus = EventBus()
+        store = RecordingSessionStore()
+        sessions = SessionManager(event_bus, store)
+        store.manager = sessions
+        sessions.create("work")
+        original = sessions.snapshot()
+        events: list[object] = []
+        event_bus.subscribe("*", events.append)
+
+        result, deleted_session = self.service.commit(
+            SessionDeleteTransactionContext("work", ()),
+            sessions,
+        )
+
+        self.assertEqual(deleted_session, original.sessions[1])
+        self.assertEqual(result.session_id, "work")
+        self.assertEqual(result.memory_records_removed, 0)
+        self.assertTrue(result.committed)
+        self.assertEqual(
+            tuple(session.session_id for session in sessions.list()),
+            ("default",),
+        )
+        self.assertEqual(events, [])
+
     def test_execute_keeps_ram_unchanged_when_persistence_fails(self) -> None:
         store = RecordingSessionStore()
         event_bus = EventBus()
@@ -240,7 +267,7 @@ class SessionDeleteTransactionServiceTests(unittest.TestCase):
         event_bus.subscribe("*", events.append)
 
         with self.assertRaisesRegex(RuntimeError, "^session store unavailable$"):
-            self.service.execute(SessionDeleteTransactionContext("work", ()), sessions)
+            self.service.commit(SessionDeleteTransactionContext("work", ()), sessions)
 
         self.assertEqual(sessions.snapshot(), original)
         self.assertEqual(events, [])
@@ -262,7 +289,7 @@ class SessionDeleteTransactionServiceTests(unittest.TestCase):
             SessionError,
             "^Session snapshot changed\\.$",
         ):
-            self.service.execute(SessionDeleteTransactionContext("work", ()), sessions)
+            self.service.commit(SessionDeleteTransactionContext("work", ()), sessions)
 
         self.assertEqual(
             tuple(session.session_id for session in sessions.list()),

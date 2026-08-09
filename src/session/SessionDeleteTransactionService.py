@@ -8,6 +8,7 @@ from session.SessionDeleteExecutionResult import SessionDeleteExecutionResult
 from session.SessionDeletePlan import SessionDeletePlan
 from session.SessionDeletePolicy import SessionDeleteStatus
 from session.SessionManager import SessionManager
+from session.SessionRecord import SessionRecord
 from session.SessionRegistrySnapshot import SessionRegistrySnapshot
 
 
@@ -53,12 +54,12 @@ class SessionDeleteTransactionService:
             sessions=remaining_sessions,
         )
 
-    def execute(
+    def commit(
         self,
         context: SessionDeleteTransactionContext,
         sessions: SessionManager,
-    ) -> SessionDeleteExecutionResult:
-        """Persist and commit one already-approved zero-memory deletion."""
+    ) -> tuple[SessionDeleteExecutionResult, SessionRecord]:
+        """Commit one approved delete without publishing its lifecycle event."""
         if context.memory_record_ids:
             raise ValueError(
                 "Session delete transaction must not contain memory records."
@@ -77,10 +78,22 @@ class SessionDeleteTransactionService:
             raise ValueError("Session delete target is not present in snapshot.")
         candidate = self.build_candidate(context, original)
         sessions.apply_snapshot_if_current(original, candidate)
-        sessions.emit_deleted(deleted_session)
 
-        return SessionDeleteExecutionResult(
-            session_id=context.session_id,
-            memory_records_removed=0,
-            committed=True,
+        return (
+            SessionDeleteExecutionResult(
+                session_id=context.session_id,
+                memory_records_removed=0,
+                committed=True,
+            ),
+            deleted_session,
         )
+
+    def execute(
+        self,
+        context: SessionDeleteTransactionContext,
+        sessions: SessionManager,
+    ) -> SessionDeleteExecutionResult:
+        """Commit one approved deletion and publish its lifecycle event."""
+        result, deleted_session = self.commit(context, sessions)
+        sessions.emit_deleted(deleted_session)
+        return result
