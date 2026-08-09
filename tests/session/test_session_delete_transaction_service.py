@@ -11,6 +11,7 @@ SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
+from core.Exceptions import SessionError
 from eventbus.EventBus import EventBus
 from memory.MemoryManager import MemoryManager
 from session.SessionDeletePlan import SessionDeletePlan
@@ -41,6 +42,26 @@ class RecordingSessionStore:
         if self.fail_on_save:
             raise RuntimeError("session store unavailable")
         self.saved.append(snapshot)
+
+
+class SnapshotMutatingSessionManager(SessionManager):
+    """Simulate a registry write between delete snapshot and atomic apply."""
+
+    def __init__(self, event_bus: EventBus, store: RecordingSessionStore) -> None:
+        super().__init__(event_bus, store)
+        self._mutate_after_next_snapshot = False
+
+    def mutate_after_next_snapshot(self) -> None:
+        """Schedule one independent registry mutation after snapshot capture."""
+        self._mutate_after_next_snapshot = True
+
+    def snapshot(self) -> SessionRegistrySnapshot:
+        """Return the captured state, then simulate an intervening mutation."""
+        snapshot = super().snapshot()
+        if self._mutate_after_next_snapshot:
+            self._mutate_after_next_snapshot = False
+            self.create("research")
+        return snapshot
 
 
 class SessionDeleteTransactionServiceTests(unittest.TestCase):
@@ -223,6 +244,32 @@ class SessionDeleteTransactionServiceTests(unittest.TestCase):
 
         self.assertEqual(sessions.snapshot(), original)
         self.assertEqual(events, [])
+
+    def test_execute_rejects_an_intervening_registry_mutation_without_delete_event(
+        self,
+    ) -> None:
+        event_bus = EventBus()
+        store = RecordingSessionStore()
+        sessions = SnapshotMutatingSessionManager(event_bus, store)
+        store.manager = sessions
+        sessions.create("work")
+        events: list[object] = []
+        event_bus.subscribe("*", events.append)
+        saves_before = len(store.saved)
+        sessions.mutate_after_next_snapshot()
+
+        with self.assertRaisesRegex(
+            SessionError,
+            "^Session snapshot changed\\.$",
+        ):
+            self.service.execute(SessionDeleteTransactionContext("work", ()), sessions)
+
+        self.assertEqual(
+            tuple(session.session_id for session in sessions.list()),
+            ("default", "work", "research"),
+        )
+        self.assertEqual(len(store.saved), saves_before + 1)
+        self.assertEqual([event.name for event in events], ["session.created"])
 
     def test_execute_rejects_stale_and_memory_contexts_without_mutation(self) -> None:
         store = RecordingSessionStore()
