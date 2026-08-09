@@ -76,8 +76,7 @@ class SessionDeleteTransactionService:
         if deleted_session is None:
             raise ValueError("Session delete target is not present in snapshot.")
         candidate = self.build_candidate(context, original)
-        sessions.persist_snapshot(candidate)
-        sessions.commit_snapshot(candidate)
+        sessions.apply_snapshot_if_current(original, candidate)
         sessions.emit_deleted(deleted_session)
 
         return SessionDeleteExecutionResult(
