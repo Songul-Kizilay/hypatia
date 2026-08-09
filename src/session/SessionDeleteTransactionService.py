@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from session.SessionDeletePlan import SessionDeletePlan
 from session.SessionDeletePolicy import SessionDeleteStatus
+from session.SessionRegistrySnapshot import SessionRegistrySnapshot
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,4 +31,22 @@ class SessionDeleteTransactionService:
         return SessionDeleteTransactionContext(
             session_id=plan.session_id,
             memory_record_ids=plan.memory_record_ids_to_remove,
+        )
+
+    def build_candidate(
+        self,
+        context: SessionDeleteTransactionContext,
+        snapshot: SessionRegistrySnapshot,
+    ) -> SessionRegistrySnapshot:
+        """Build a deletion candidate without changing the supplied registry."""
+        remaining_sessions = tuple(
+            session
+            for session in snapshot.sessions
+            if session.session_id != context.session_id
+        )
+        if len(remaining_sessions) == len(snapshot.sessions):
+            raise ValueError("Session delete target is not present in snapshot.")
+        return SessionRegistrySnapshot(
+            active_session_id=snapshot.active_session_id,
+            sessions=remaining_sessions,
         )
