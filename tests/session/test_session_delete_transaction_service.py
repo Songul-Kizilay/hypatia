@@ -103,6 +103,53 @@ class SessionDeleteTransactionServiceTests(unittest.TestCase):
         ):
             self.service.prepare(plan)
 
+    def test_build_candidate_removes_only_the_target_without_mutating_inputs(
+        self,
+    ) -> None:
+        event_bus = EventBus()
+        sessions = SessionManager(event_bus)
+        sessions.create("work")
+        sessions.create("research")
+        snapshot = sessions.snapshot()
+        context = self.service.prepare(self._allowed_plan())
+        events: list[object] = []
+        event_bus.subscribe("*", events.append)
+
+        candidate = self.service.build_candidate(context, snapshot)
+
+        self.assertEqual(
+            tuple(session.session_id for session in candidate.sessions),
+            ("default", "research"),
+        )
+        self.assertEqual(candidate.active_session_id, "default")
+        self.assertEqual(sessions.snapshot(), snapshot)
+        self.assertEqual(context, SessionDeleteTransactionContext("work", ()))
+        self.assertEqual(events, [])
+
+    def test_build_candidate_is_deterministic_for_the_same_snapshot_and_context(
+        self,
+    ) -> None:
+        sessions = SessionManager()
+        sessions.create("work")
+        snapshot = sessions.snapshot()
+        context = self.service.prepare(self._allowed_plan())
+
+        first = self.service.build_candidate(context, snapshot)
+        second = self.service.build_candidate(context, snapshot)
+
+        self.assertEqual(first, second)
+        self.assertEqual(snapshot, sessions.snapshot())
+
+    def test_build_candidate_rejects_a_stale_context_with_an_exact_error(self) -> None:
+        context = self.service.prepare(self._allowed_plan())
+        snapshot = SessionManager().snapshot()
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "^Session delete target is not present in snapshot\\.$",
+        ):
+            self.service.build_candidate(context, snapshot)
+
     @staticmethod
     def _allowed_plan() -> SessionDeletePlan:
         plan = SessionDeletePlan.for_decision(
