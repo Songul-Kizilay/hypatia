@@ -70,6 +70,28 @@ class SessionManager:
         with self._lock:
             self._commit(validated_snapshot)
 
+    def apply_snapshot_if_current(
+        self,
+        expected_snapshot: SessionRegistrySnapshot,
+        candidate_snapshot: SessionRegistrySnapshot,
+    ) -> None:
+        """Persist and commit a candidate only while the expected registry is current.
+
+        The comparison and state transition share one registry lock.
+        """
+        expected_snapshot = self._validate_snapshot(expected_snapshot)
+        candidate_snapshot = self._validate_snapshot(candidate_snapshot)
+
+        with self._lock:
+            current_snapshot = SessionRegistrySnapshot(
+                active_session_id=self._active_session_id,
+                sessions=self._sessions,
+            )
+            if current_snapshot != expected_snapshot:
+                raise SessionError("Session snapshot changed.")
+            self._persist(candidate_snapshot)
+            self._commit(candidate_snapshot)
+
     def emit_deleted(self, session: SessionRecord) -> None:
         """Publish a completed session deletion without changing registry state."""
         self._emit("session.deleted", session)

@@ -7,6 +7,7 @@ import sys
 import unittest
 from datetime import UTC, datetime
 from pathlib import Path
+from threading import Event, Thread
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
@@ -70,6 +71,21 @@ class FailingSessionStore(RecordingSessionStore):
     def save(self, snapshot: SessionRegistrySnapshot) -> None:
         if self.fail_save:
             raise SessionError("Session save failed.")
+        super().save(snapshot)
+
+
+class BlockingSessionStore(RecordingSessionStore):
+    """Persistence fake that pauses one save while the registry lock is held."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.save_started = Event()
+        self.allow_save_to_finish = Event()
+
+    def save(self, snapshot: SessionRegistrySnapshot) -> None:
+        self.save_started.set()
+        if not self.allow_save_to_finish.wait(timeout=1):
+            raise AssertionError("Timed out waiting to release session persistence.")
         super().save(snapshot)
 
 
@@ -356,6 +372,96 @@ class SessionManagerTests(unittest.TestCase):
         self.assertEqual(manager.get_active().session_id, "work-1")
         self.assertEqual(store.saved_snapshots, [])
         self.assertEqual(events, [])
+
+    def test_apply_snapshot_if_current_persists_and_commits_without_events(
+        self,
+    ) -> None:
+        store = RecordingSessionStore()
+        manager = SessionManager(self.event_bus, store)
+        expected = manager.snapshot()
+        candidate = self._snapshot(active_session_id="work-1")
+        events: list[str] = []
+        self.event_bus.subscribe("*", lambda event: events.append(event.name))
+
+        self.assertIsNone(manager.apply_snapshot_if_current(expected, candidate))
+
+        self.assertEqual(store.saved_snapshots, [candidate])
+        self.assertEqual(manager.snapshot(), candidate)
+        self.assertEqual(events, [])
+
+    def test_apply_snapshot_if_current_rejects_stale_expected_without_persistence(
+        self,
+    ) -> None:
+        store = RecordingSessionStore()
+        manager = SessionManager(self.event_bus, store)
+        expected = manager.snapshot()
+        manager.create("work-1")
+        saves_before = len(store.saved_snapshots)
+        events: list[str] = []
+        self.event_bus.subscribe("*", lambda event: events.append(event.name))
+
+        with self.assertRaisesRegex(SessionError, "^Session snapshot changed\\.$"):
+            manager.apply_snapshot_if_current(
+                expected,
+                self._snapshot(active_session_id="work-1"),
+            )
+
+        self.assertEqual(len(store.saved_snapshots), saves_before)
+        self.assertEqual(
+            [session.session_id for session in manager.list()], ["default", "work-1"]
+        )
+        self.assertEqual(events, [])
+
+    def test_apply_snapshot_if_current_preserves_ram_when_persistence_fails(
+        self,
+    ) -> None:
+        store = FailingSessionStore()
+        store.fail_save = True
+        manager = SessionManager(self.event_bus, store)
+        expected = manager.snapshot()
+        events: list[str] = []
+        self.event_bus.subscribe("*", lambda event: events.append(event.name))
+
+        with self.assertRaisesRegex(SessionError, "^Session save failed\\.$"):
+            manager.apply_snapshot_if_current(
+                expected,
+                self._snapshot(active_session_id="work-1"),
+            )
+
+        self.assertEqual(manager.snapshot(), expected)
+        self.assertEqual(events, [])
+
+    def test_apply_snapshot_if_current_blocks_other_registry_mutation_until_complete(
+        self,
+    ) -> None:
+        store = BlockingSessionStore()
+        manager = SessionManager(store=store)
+        expected = manager.snapshot()
+        candidate = self._snapshot(active_session_id="work-1")
+        apply_thread = Thread(
+            target=lambda: manager.apply_snapshot_if_current(expected, candidate)
+        )
+        create_complete = Event()
+        create_thread = Thread(
+            target=lambda: (manager.create("work-2"), create_complete.set())
+        )
+
+        apply_thread.start()
+        self.assertTrue(store.save_started.wait(timeout=1))
+        create_thread.start()
+        self.assertFalse(create_complete.wait(timeout=0.1))
+
+        store.allow_save_to_finish.set()
+        apply_thread.join(timeout=1)
+        create_thread.join(timeout=1)
+
+        self.assertFalse(apply_thread.is_alive())
+        self.assertFalse(create_thread.is_alive())
+        self.assertTrue(create_complete.is_set())
+        self.assertEqual(
+            [session.session_id for session in manager.list()],
+            ["default", "work-1", "work-2"],
+        )
 
     def test_snapshot_validation_failures_are_exact_and_side_effect_free(self) -> None:
         naive = datetime(2026, 8, 4, 15, 0)
