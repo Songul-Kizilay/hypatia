@@ -527,15 +527,14 @@ class CognitiveEngine:
             session_id, query = self._session_search_parts(request)
             if not self._session_manager.exists(session_id):
                 raise SessionError(f"Unknown session: {session_id}")
-        except (SessionError, ValueError) as error:
+            session = self._session_record(session_id)
+            matching_records = [
+                record
+                for record in self._memory_manager.search(query, limit=None)
+                if SessionMemoryPolicy.matches(record, session_id)
+            ][:5]
+        except (SessionError, MemoryError, ValueError) as error:
             return self._response_composer.session_search_failure(request, str(error))
-
-        session = self._session_record(session_id)
-        matching_records = [
-            record
-            for record in self._memory_manager.search(query, limit=None)
-            if SessionMemoryPolicy.matches(record, session_id)
-        ][:5]
         if not matching_records:
             return self._response_composer.session_search_empty(
                 request,
