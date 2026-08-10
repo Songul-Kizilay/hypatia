@@ -1298,6 +1298,51 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertTrue(self.session_manager.exists("personal"))
         self.assertEqual(self.memory_manager.count(), 0)
 
+    def test_session_delete_maps_real_persistence_failure_without_composing(
+        self,
+    ) -> None:
+        class FailingSessionStore:
+            def save(self, snapshot: object) -> None:
+                raise RuntimeError("session store unavailable")
+
+        sessions_before = self.session_manager.snapshot()
+        memory_before = self.memory_manager.snapshot()
+        events: list[object] = []
+        self.event_bus.subscribe("*", events.append)
+        self.session_manager._store = FailingSessionStore()  # type: ignore[attr-defined]
+
+        with (
+            patch.object(
+                self.response_composer,
+                "session_deleted",
+                wraps=self.response_composer.session_deleted,
+            ) as session_deleted,
+            patch.object(
+                self.response_composer,
+                "session_delete_event_failure",
+                wraps=self.response_composer.session_delete_event_failure,
+            ) as session_delete_event_failure,
+        ):
+            response = self.engine.process(
+                BrainRequest(
+                    message="delete session personal", request_id="request-123"
+                )
+            )
+
+        session_deleted.assert_not_called()
+        session_delete_event_failure.assert_not_called()
+        self.assertFalse(response.success)
+        self.assertEqual(response.request_id, "request-123")
+        self.assertEqual(response.intent, "session_delete")
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(
+            response.message,
+            "Delete failed:\nReason: session store unavailable",
+        )
+        self.assertEqual(self.session_manager.snapshot(), sessions_before)
+        self.assertEqual(self.memory_manager.snapshot(), memory_before)
+        self.assertEqual(events, [])
+
     def test_session_overview_counts_only_registered_normal_conversations(
         self,
     ) -> None:
