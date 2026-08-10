@@ -182,6 +182,20 @@ class ResponseComposer:
             memory_count=result.memory_records_removed,
         )
 
+    def session_delete_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Compose a failed pre-commit session deletion response."""
+        return BrainResponse(
+            message=f"Delete failed:\nReason: {message}",
+            request_id=request.request_id,
+            intent="session_delete",
+            memory_count=0,
+            success=False,
+        )
+
     def session_rename_help(self, request: BrainRequest) -> BrainResponse:
         """Compose deterministic usage guidance for session rename commands."""
         return BrainResponse(

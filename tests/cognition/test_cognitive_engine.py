@@ -26,7 +26,12 @@ if source_response_dir not in response.__path__:
 
 from brain.BrainRequest import BrainRequest
 from cognition.CognitiveEngine import CognitiveEngine as ProductionCognitiveEngine
-from core.Exceptions import KnowledgeError, MemoryError, PlannerError
+from core.Exceptions import (
+    KnowledgeError,
+    MemoryError,
+    PlannerError,
+    SessionDeleteEventError,
+)
 from eventbus.EventBus import EventBus
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from memory.MemoryManager import MemoryManager
@@ -1072,6 +1077,61 @@ class CognitiveEngineTests(unittest.TestCase):
             self.engine.process(BrainRequest(message="delete session personal"))
 
         session_deleted.assert_not_called()
+
+    def test_session_delete_maps_pre_commit_domain_errors_without_side_effects(
+        self,
+    ) -> None:
+        for message, expected_reason in (
+            ("delete session missing", "Unknown session: missing"),
+            ("delete session default", "default session cannot be deleted"),
+        ):
+            with self.subTest(message=message):
+                sessions_before = self.session_manager.snapshot()
+                memory_before = self.memory_manager.snapshot()
+                events: list[object] = []
+                self.event_bus.subscribe("*", events.append)
+
+                response = self.engine.process(BrainRequest(message=message))
+
+                self.assertFalse(response.success)
+                self.assertEqual(response.intent, "session_delete")
+                self.assertEqual(
+                    response.message,
+                    f"Delete failed:\nReason: {expected_reason}",
+                )
+                self.assertEqual(response.memory_count, 0)
+                self.assertEqual(self.session_manager.snapshot(), sessions_before)
+                self.assertEqual(self.memory_manager.snapshot(), memory_before)
+                self.assertEqual(events, [])
+
+    def test_session_delete_reraises_committed_event_failure_without_composing(
+        self,
+    ) -> None:
+        error = SessionDeleteEventError(
+            SessionDeleteExecutionResult(
+                session_id="personal",
+                memory_records_removed=0,
+                committed=True,
+            ),
+            RuntimeError("event bus unavailable"),
+        )
+
+        with (
+            patch.object(
+                self.engine._session_delete_service,
+                "delete",
+                side_effect=error,
+            ),
+            patch.object(
+                self.response_composer,
+                "session_delete_failure",
+                wraps=self.response_composer.session_delete_failure,
+            ) as session_delete_failure,
+            self.assertRaises(SessionDeleteEventError),
+        ):
+            self.engine.process(BrainRequest(message="delete session personal"))
+
+        session_delete_failure.assert_not_called()
 
     def test_session_overview_counts_only_registered_normal_conversations(
         self,
