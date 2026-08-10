@@ -185,6 +185,17 @@ class FailingPlanner:
         raise PlannerError("Planner is unavailable.")
 
 
+class RecordingLLMProvider:
+    """Records accidental LLM calls from the existing conversation flow."""
+
+    def __init__(self) -> None:
+        self.prompts: list[str] = []
+
+    def generate(self, prompt: str) -> str:
+        self.prompts.append(prompt)
+        return "Generated response."
+
+
 class CognitiveEngineTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary_directory = tempfile.TemporaryDirectory()
@@ -252,6 +263,25 @@ class CognitiveEngineTests(unittest.TestCase):
                 self.response_composer,
                 self.session_manager,
             )
+
+    def test_conversation_does_not_call_an_injected_llm_provider(self) -> None:
+        llm_provider = RecordingLLMProvider()
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+        )
+
+        response = engine.process(BrainRequest(message="Tell me something."))
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "message")
+        self.assertEqual(llm_provider.prompts, [])
 
     def test_search_response_reports_matching_chunk_count(self) -> None:
         response = self.engine.process(BrainRequest(message="search hypatia"))
