@@ -18,6 +18,7 @@ from core.Exceptions import (
 )
 from eventbus.EventBus import EventBus
 from knowledge.KnowledgeEngine import KnowledgeEngine
+from llm.LLMProvider import LLMProvider
 from memory.MemoryManager import MemoryManager
 from memory.MemoryRecord import MemoryRecord
 from memory.SessionMemoryPolicy import SessionMemoryPolicy
@@ -46,6 +47,7 @@ class CognitiveEngine:
         response_composer: ResponseComposer,
         session_manager: SessionManager,
         session_rename_service: SessionRenameTransactionService,
+        llm_provider: LLMProvider | None = None,
     ) -> None:
         self._knowledge_engine = knowledge_engine
         self._memory_manager = memory_manager
@@ -64,6 +66,7 @@ class CognitiveEngine:
         )
         self._session_use_service = SessionUseService(session_manager)
         self._session_rename_service = session_rename_service
+        self._llm_provider = llm_provider
         self._router = BrainRouter()
 
     def process(self, request: BrainRequest) -> BrainResponse:
