@@ -145,26 +145,27 @@ class CognitiveEngine:
         if self._is_recall_request(request):
             try:
                 session_id = self._resolve_session_id(request)
+                query = self._recall_query(request)
+                if not query:
+                    return self._response_composer.recall_failure(
+                        request,
+                        "A recall query is required.",
+                    )
+
+                records = self._memory_manager.search(
+                    query,
+                    tags={"brain", "conversation"},
+                    limit=None,
+                )
+                session_records = [
+                    record
+                    for record in records
+                    if record.metadata.get("session_id", "default") == session_id
+                ]
             except SessionError as error:
                 return self._response_composer.session_failure(request, str(error))
-
-            query = self._recall_query(request)
-            if not query:
-                return self._response_composer.recall_failure(
-                    request,
-                    "A recall query is required.",
-                )
-
-            records = self._memory_manager.search(
-                query,
-                tags={"brain", "conversation"},
-                limit=None,
-            )
-            session_records = [
-                record
-                for record in records
-                if record.metadata.get("session_id", "default") == session_id
-            ]
+            except MemoryError as error:
+                return self._response_composer.recall_failure(request, str(error))
             return self._response_composer.recall_success(request, session_records[:5])
 
         if intent in {"session_create", "session_list", "session_use"}:
