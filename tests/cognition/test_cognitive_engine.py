@@ -34,6 +34,7 @@ from memory.MemoryRecord import MemoryRecord
 from memory.SessionMemoryPolicy import SessionMemoryPolicy
 from planner.Planner import Planner
 from response.ResponseComposer import ResponseComposer
+from session.SessionDeleteExecutionResult import SessionDeleteExecutionResult
 from session.SessionDeleteService import SessionDeleteService
 from session.SessionManager import SessionManager
 from session.SessionRenameTransactionService import SessionRenameTransactionService
@@ -1021,6 +1022,56 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(self.session_manager.snapshot(), sessions_before)
         self.assertEqual(self.memory_manager.snapshot(), memory_before)
         self.assertEqual(events, [])
+
+    def test_session_delete_returns_a_committed_delete_response(self) -> None:
+        events: list[str] = []
+        self.event_bus.subscribe("*", lambda event: events.append(event.name))
+
+        response = self.engine.process(
+            BrainRequest(message="delete session personal", request_id="request-123")
+        )
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.request_id, "request-123")
+        self.assertEqual(response.intent, "session_delete")
+        self.assertEqual(
+            response.message,
+            "Session deleted:\nID: personal\nMemory records removed: 0\n"
+            "Status: committed",
+        )
+        self.assertEqual(response.memory_count, 0)
+        self.assertFalse(self.session_manager.exists("personal"))
+        self.assertEqual(self.memory_manager.count(), 0)
+        self.assertEqual(events, ["session.deleted"])
+
+    def test_session_delete_rejects_an_uncommitted_result_before_composing(
+        self,
+    ) -> None:
+        result = SessionDeleteExecutionResult(
+            session_id="personal",
+            memory_records_removed=0,
+            committed=False,
+        )
+
+        with (
+            patch.object(
+                self.engine._session_delete_service,
+                "delete",
+                return_value=result,
+            ),
+            patch.object(
+                self.response_composer,
+                "session_deleted",
+                wraps=self.response_composer.session_deleted,
+            ) as session_deleted,
+            self.assertRaisesRegex(
+                ValueError,
+                "Session delete result must be committed.",
+            ),
+        ):
+            self.engine.process(BrainRequest(message="delete session personal"))
+
+        session_deleted.assert_not_called()
 
     def test_session_overview_counts_only_registered_normal_conversations(
         self,

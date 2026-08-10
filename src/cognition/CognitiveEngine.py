@@ -88,6 +88,8 @@ class CognitiveEngine:
             return self._process_session_rename_preview(request)
         if intent == "session_delete_preview":
             return self._process_session_delete_preview(request)
+        if intent == "session_delete":
+            return self._process_session_delete(request)
 
         if self._is_search_request(request):
             query = self._search_query(request)
@@ -362,6 +364,15 @@ class CognitiveEngine:
             decision_status,
             decision_reason,
         )
+
+    def _process_session_delete(self, request: BrainRequest) -> BrainResponse:
+        """Execute a delete only when the service confirms its commit."""
+        result = self._session_delete_service.delete(
+            self._session_command_id(request, "delete session")
+        )
+        if result.committed is not True:
+            raise ValueError("Session delete result must be committed.")
+        return self._response_composer.session_deleted(request, result)
 
     def _process_session_rename_candidates(
         self, request: BrainRequest
