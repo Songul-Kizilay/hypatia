@@ -19,8 +19,8 @@ class HypatiaApplication:
     This class represents the running Hypatia instance.
     """
 
-    def __init__(self) -> None:
-        self.bootstrap = Bootstrap()
+    def __init__(self, bootstrap: Bootstrap | None = None) -> None:
+        self.bootstrap = bootstrap or Bootstrap()
 
     def start(self) -> None:
         """
