@@ -121,6 +121,8 @@ class Bootstrap:
             return None
         if self._llm_api_key is None or not self._llm_api_key.strip():
             raise RuntimeError("LLM API key is required when LLM is enabled.")
+        if self._llm_config.base_url == "":
+            raise RuntimeError("LLM base URL is required when LLM is enabled.")
         return activate_llm(self._llm_config, self._llm_api_key)
 
     def shutdown(self) -> None:
