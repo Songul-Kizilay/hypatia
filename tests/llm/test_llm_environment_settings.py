@@ -18,6 +18,18 @@ from llm.LLMRuntimeConfig import LLMRuntimeConfig
 
 
 class LLMEnvironmentSettingsTests(unittest.TestCase):
+    def test_loader_defaults_to_disabled_when_enable_flag_is_absent(self) -> None:
+        environment: dict[str, str] = {}
+
+        config, api_key = load_llm_environment_settings(environment)
+
+        self.assertEqual(
+            config,
+            LLMRuntimeConfig(enabled=False, base_url="", model=""),
+        )
+        self.assertIsNone(api_key)
+        self.assertEqual(environment, {})
+
     def test_loader_preserves_values_and_keeps_api_key_separate(self) -> None:
         environment = {
             "HYPATIA_LLM_ENABLED": "true",
