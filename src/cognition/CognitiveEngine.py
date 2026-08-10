@@ -583,20 +583,19 @@ class CognitiveEngine:
         try:
             query = self._conversation_search_query(request)
             session_id = self._resolve_session_id(request)
-        except (SessionError, ValueError) as error:
+            records = self._memory_manager.search(query, limit=None)
+            matching_records = [
+                record
+                for record in records
+                if {"brain", "conversation"}.issubset(record.tags)
+                and record.metadata.get("session_id", "default") == session_id
+            ][:5]
+            session = self._session_record(session_id)
+        except (SessionError, MemoryError, ValueError) as error:
             return self._response_composer.conversation_search_failure(
                 request,
                 str(error),
             )
-
-        records = self._memory_manager.search(query, limit=None)
-        matching_records = [
-            record
-            for record in records
-            if {"brain", "conversation"}.issubset(record.tags)
-            and record.metadata.get("session_id", "default") == session_id
-        ][:5]
-        session = self._session_record(session_id)
         if not matching_records:
             return self._response_composer.conversation_search_empty(request, session)
         return self._response_composer.conversation_search_results(
