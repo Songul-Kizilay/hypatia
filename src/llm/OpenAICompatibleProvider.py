@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from llm.LLMProvider import LLMError
+
 ChatCompletionResponse = dict[str, list[dict[str, dict[str, str]]]]
 ChatCompletionTransport = Callable[
     [str, dict[str, str], dict[str, object]],
@@ -28,12 +30,15 @@ class OpenAICompatibleProvider:
 
     def generate(self, prompt: str) -> str:
         """Generate a response from one user message."""
-        response = self._transport(
-            self._base_url,
-            {"Authorization": f"Bearer {self._api_key}"},
-            {
-                "model": self._model,
-                "messages": [{"role": "user", "content": prompt}],
-            },
-        )
+        try:
+            response = self._transport(
+                self._base_url,
+                {"Authorization": f"Bearer {self._api_key}"},
+                {
+                    "model": self._model,
+                    "messages": [{"role": "user", "content": prompt}],
+                },
+            )
+        except OSError as error:
+            raise LLMError("LLM transport failed.") from error
         return response["choices"][0]["message"]["content"]
