@@ -1214,6 +1214,51 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertTrue(self.session_manager.exists("personal"))
         self.assertEqual(self.memory_manager.count(), 0)
 
+    def test_session_delete_maps_transaction_guard_value_error_without_composing(
+        self,
+    ) -> None:
+        error = ValueError(
+            "Session delete transaction is no longer allowed: "
+            "active session cannot be deleted."
+        )
+
+        with (
+            patch.object(
+                self.engine._session_delete_service,
+                "delete",
+                side_effect=error,
+            ),
+            patch.object(
+                self.response_composer,
+                "session_deleted",
+                wraps=self.response_composer.session_deleted,
+            ) as session_deleted,
+            patch.object(
+                self.response_composer,
+                "session_delete_event_failure",
+                wraps=self.response_composer.session_delete_event_failure,
+            ) as session_delete_event_failure,
+        ):
+            response = self.engine.process(
+                BrainRequest(
+                    message="delete session personal", request_id="request-123"
+                )
+            )
+
+        session_deleted.assert_not_called()
+        session_delete_event_failure.assert_not_called()
+        self.assertFalse(response.success)
+        self.assertEqual(response.request_id, "request-123")
+        self.assertEqual(response.intent, "session_delete")
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(
+            response.message,
+            "Delete failed:\nReason: Session delete transaction is no longer "
+            "allowed: active session cannot be deleted.",
+        )
+        self.assertTrue(self.session_manager.exists("personal"))
+        self.assertEqual(self.memory_manager.count(), 0)
+
     def test_session_overview_counts_only_registered_normal_conversations(
         self,
     ) -> None:
