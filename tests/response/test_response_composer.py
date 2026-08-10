@@ -414,6 +414,21 @@ class ResponseComposerTests(unittest.TestCase):
         )
         self.assertEqual(response.memory_count, 3)
 
+    def test_session_delete_failure_composes_a_failed_delete_response(self) -> None:
+        response = self.composer.session_delete_failure(
+            self.request,
+            "default session cannot be deleted",
+        )
+
+        self.assertEqual(
+            response.message,
+            "Delete failed:\nReason: default session cannot be deleted",
+        )
+        self.assertEqual(response.intent, "session_delete")
+        self.assertFalse(response.success)
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(response.request_id, self.request.request_id)
+
     def test_sessions_list_preserves_order_and_marks_only_the_active_session(
         self,
     ) -> None:

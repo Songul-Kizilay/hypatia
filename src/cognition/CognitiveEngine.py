@@ -9,7 +9,13 @@ from brain.BrainContext import BrainContext
 from brain.BrainRequest import BrainRequest
 from brain.BrainResponse import BrainResponse
 from brain.BrainRouter import BrainRouter
-from core.Exceptions import KnowledgeError, MemoryError, PlannerError, SessionError
+from core.Exceptions import (
+    KnowledgeError,
+    MemoryError,
+    PlannerError,
+    SessionDeleteEventError,
+    SessionError,
+)
 from eventbus.EventBus import EventBus
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from memory.MemoryManager import MemoryManager
@@ -367,9 +373,17 @@ class CognitiveEngine:
 
     def _process_session_delete(self, request: BrainRequest) -> BrainResponse:
         """Execute a delete only when the service confirms its commit."""
-        result = self._session_delete_service.delete(
-            self._session_command_id(request, "delete session")
-        )
+        try:
+            result = self._session_delete_service.delete(
+                self._session_command_id(request, "delete session")
+            )
+        except SessionDeleteEventError:
+            raise
+        except SessionError as error:
+            return self._response_composer.session_delete_failure(
+                request,
+                str(error),
+            )
         if result.committed is not True:
             raise ValueError("Session delete result must be committed.")
         return self._response_composer.session_deleted(request, result)
