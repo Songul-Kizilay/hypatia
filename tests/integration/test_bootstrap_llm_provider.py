@@ -26,6 +26,44 @@ class FakeLLMProvider(LLMProvider):
 
 
 class BootstrapLLMProviderTests(unittest.TestCase):
+    def test_process_environment_factory_activates_and_passes_provider_to_cognition(
+        self,
+    ) -> None:
+        sentinel_config = LLMRuntimeConfig(
+            enabled=True,
+            base_url="https://api.example.test/v1/chat/completions",
+            model="test-model",
+        )
+        sentinel_provider = Mock(spec=LLMProvider)
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary_path = Path(temporary_directory)
+            memory_path = temporary_path / "memory.json"
+            session_path = temporary_path / "sessions.json"
+
+            with (
+                patch(
+                    "core.Bootstrap.load_llm_process_environment_settings",
+                    return_value=(sentinel_config, "test-api-key"),
+                ) as settings_loader,
+                patch(
+                    "core.Bootstrap.activate_llm",
+                    return_value=sentinel_provider,
+                ) as activate_llm,
+            ):
+                bootstrap = Bootstrap.from_process_environment(
+                    memory_path,
+                    session_path,
+                )
+                bootstrap.initialize()
+
+            cognitive_engine = bootstrap.container.resolve(CognitiveEngine)
+
+        settings_loader.assert_called_once_with()
+        activate_llm.assert_called_once_with(sentinel_config, "test-api-key")
+        self.assertIs(cognitive_engine._llm_provider, sentinel_provider)
+        sentinel_provider.generate.assert_not_called()
+
     def test_process_environment_factory_preserves_loaded_settings(self) -> None:
         sentinel_config = LLMRuntimeConfig(
             enabled=True,
