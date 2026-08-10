@@ -34,6 +34,7 @@ from core.Exceptions import (
 )
 from eventbus.EventBus import EventBus
 from knowledge.KnowledgeEngine import KnowledgeEngine
+from llm.LLMProvider import LLMError
 from memory.MemoryManager import MemoryManager
 from memory.MemoryRecord import MemoryRecord
 from memory.SessionMemoryPolicy import SessionMemoryPolicy
@@ -197,6 +198,17 @@ class RecordingLLMProvider:
         return self.response
 
 
+class FailingLLMProvider:
+    """Raises the provider boundary's controlled generation error."""
+
+    def __init__(self) -> None:
+        self.prompts: list[str] = []
+
+    def generate(self, prompt: str) -> str:
+        self.prompts.append(prompt)
+        raise LLMError("Generation unavailable.")
+
+
 class CognitiveEngineTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary_directory = tempfile.TemporaryDirectory()
@@ -315,6 +327,43 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(
             response.message,
             "I received your message: Tell me something.",
+        )
+
+    def test_message_maps_an_llm_generation_failure_without_memory(self) -> None:
+        llm_provider = FailingLLMProvider()
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+        )
+        events: list[str] = []
+        self.event_bus.subscribe("*", lambda event: events.append(event.name))
+        request = BrainRequest(
+            message="Tell me something.",
+            request_id="request-123",
+        )
+
+        response = engine.process(request)
+
+        self.assertFalse(response.success)
+        self.assertEqual(response.request_id, "request-123")
+        self.assertEqual(response.intent, "message")
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(response.message, "Generation unavailable.")
+        self.assertEqual(llm_provider.prompts, ["Tell me something."])
+        self.assertEqual(self.memory_manager.all(), [])
+        self.assertEqual(
+            events,
+            [
+                "brain.request.received",
+                "brain.intent.detected",
+                "brain.response.ready",
+            ],
         )
 
     def test_search_response_reports_matching_chunk_count(self) -> None:

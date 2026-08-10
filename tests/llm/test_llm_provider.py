@@ -8,7 +8,7 @@ SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
-from llm.LLMProvider import LLMProvider
+from llm.LLMProvider import LLMError, LLMProvider
 
 
 class DeterministicFakeLLMProvider:
@@ -21,6 +21,12 @@ def generate_response(provider: LLMProvider, prompt: str) -> str:
 
 
 class LLMProviderTests(unittest.TestCase):
+    def test_llm_error_is_the_generation_domain_exception(self) -> None:
+        error = LLMError("Generation unavailable.")
+
+        self.assertIsInstance(error, Exception)
+        self.assertEqual(str(error), "Generation unavailable.")
+
     def test_provider_is_usable_through_the_generation_contract(self) -> None:
         provider: LLMProvider = DeterministicFakeLLMProvider()
 
