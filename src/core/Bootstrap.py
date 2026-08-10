@@ -7,6 +7,7 @@ from core.DependencyContainer import DependencyContainer
 from core.Logger import Logger
 from eventbus.EventBus import EventBus
 from knowledge.KnowledgeEngine import KnowledgeEngine
+from llm.LLMProvider import LLMProvider
 from memory.JsonFileMemoryStore import JsonFileMemoryStore
 from memory.MemoryManager import MemoryManager
 from planner.Planner import Planner
@@ -21,9 +22,11 @@ class Bootstrap:
         self,
         memory_path: Path | None = None,
         session_path: Path | None = None,
+        llm_provider: LLMProvider | None = None,
     ) -> None:
         self._memory_path = memory_path
         self._session_path = session_path
+        self._llm_provider = llm_provider
 
     def initialize(self) -> None:
         config = Config()
@@ -56,6 +59,7 @@ class Bootstrap:
             response_composer,
             session_manager,
             session_rename_service,
+            llm_provider=self._llm_provider,
         )
         brain = Brain(cognitive_engine, memory_manager, event_bus)
 
