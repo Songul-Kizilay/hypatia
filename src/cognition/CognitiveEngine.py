@@ -430,20 +430,24 @@ class CognitiveEngine:
 
     def _process_session_overview(self, request: BrainRequest) -> BrainResponse:
         """Return a read-only overview of registered session conversations."""
-        sessions = self._session_manager.list()
-        conversation_counts = {session.session_id: 0 for session in sessions}
+        try:
+            sessions = self._session_manager.list()
+            conversation_counts = {session.session_id: 0 for session in sessions}
 
-        for record in self._memory_manager.all():
-            for session_id in conversation_counts:
-                if SessionMemoryPolicy.matches(record, session_id):
-                    conversation_counts[session_id] += 1
-                    break
+            for record in self._memory_manager.all():
+                for session_id in conversation_counts:
+                    if SessionMemoryPolicy.matches(record, session_id):
+                        conversation_counts[session_id] += 1
+                        break
+            active_session_id = self._session_manager.get_active().session_id
+        except MemoryError as error:
+            return self._response_composer.session_overview_failure(request, str(error))
 
         return self._response_composer.session_overview(
             request,
             sessions,
             conversation_counts,
-            self._session_manager.get_active().session_id,
+            active_session_id,
         )
 
     def _process_session_details(self, request: BrainRequest) -> BrainResponse:
