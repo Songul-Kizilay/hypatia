@@ -8,6 +8,7 @@ from core.Logger import Logger
 from eventbus.EventBus import EventBus
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from llm.LLMProvider import LLMProvider
+from llm.LLMRuntimeConfig import LLMRuntimeConfig
 from memory.JsonFileMemoryStore import JsonFileMemoryStore
 from memory.MemoryManager import MemoryManager
 from planner.Planner import Planner
@@ -23,10 +24,12 @@ class Bootstrap:
         memory_path: Path | None = None,
         session_path: Path | None = None,
         llm_provider: LLMProvider | None = None,
+        llm_config: LLMRuntimeConfig | None = None,
     ) -> None:
         self._memory_path = memory_path
         self._session_path = session_path
         self._llm_provider = llm_provider
+        self._llm_config = llm_config
 
     def initialize(self) -> None:
         config = Config()
@@ -59,7 +62,7 @@ class Bootstrap:
             response_composer,
             session_manager,
             session_rename_service,
-            llm_provider=self._llm_provider,
+            llm_provider=self._configured_llm_provider(),
         )
         brain = Brain(cognitive_engine, memory_manager, event_bus)
 
@@ -107,6 +110,13 @@ class Bootstrap:
     def _default_session_path() -> Path:
         project_root = Path(__file__).resolve().parents[2]
         return project_root / "data" / "sessions" / "sessions.json"
+
+    def _configured_llm_provider(self) -> LLMProvider | None:
+        if self._llm_provider is not None:
+            return self._llm_provider
+        if self._llm_config is None or self._llm_config.enabled is False:
+            return None
+        return None
 
     def shutdown(self) -> None:
         logger = self.container.resolve(Logger)

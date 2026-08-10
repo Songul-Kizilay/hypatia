@@ -4,6 +4,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
@@ -12,6 +13,7 @@ if str(SRC_DIR) not in sys.path:
 from cognition.CognitiveEngine import CognitiveEngine
 from core.Bootstrap import Bootstrap
 from llm.LLMProvider import LLMProvider
+from llm.LLMRuntimeConfig import LLMRuntimeConfig
 
 
 class FakeLLMProvider(LLMProvider):
@@ -40,3 +42,24 @@ class BootstrapLLMProviderTests(unittest.TestCase):
 
         self.assertIs(cognitive_engine._llm_provider, provider)
         self.assertEqual(provider.generate_calls, 0)
+
+    def test_disabled_config_keeps_the_cognitive_engine_provider_free(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary_path = Path(temporary_directory)
+            bootstrap = Bootstrap(
+                memory_path=temporary_path / "memory.json",
+                session_path=temporary_path / "sessions.json",
+                llm_config=LLMRuntimeConfig(
+                    enabled=False,
+                    base_url="https://api.example.test/v1/chat/completions",
+                    model="test-model",
+                ),
+            )
+
+            with patch("llm.LLMRuntimeActivator.activate_llm") as activate_llm:
+                bootstrap.initialize()
+
+            cognitive_engine = bootstrap.container.resolve(CognitiveEngine)
+
+        self.assertIsNone(cognitive_engine._llm_provider)
+        activate_llm.assert_not_called()
