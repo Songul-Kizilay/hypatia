@@ -119,7 +119,7 @@ class Bootstrap:
             return self._llm_provider
         if self._llm_config is None or self._llm_config.enabled is False:
             return None
-        if self._llm_api_key is None:
+        if self._llm_api_key is None or self._llm_api_key == "":
             raise RuntimeError("LLM API key is required when LLM is enabled.")
         return activate_llm(self._llm_config, self._llm_api_key)
 
