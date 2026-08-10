@@ -18,7 +18,7 @@ from core.Exceptions import (
 )
 from eventbus.EventBus import EventBus
 from knowledge.KnowledgeEngine import KnowledgeEngine
-from llm.LLMProvider import LLMProvider
+from llm.LLMProvider import LLMError, LLMProvider
 from memory.MemoryManager import MemoryManager
 from memory.MemoryRecord import MemoryRecord
 from memory.SessionMemoryPolicy import SessionMemoryPolicy
@@ -253,12 +253,27 @@ class CognitiveEngine:
         )
 
         if context.intent == "message" and self._llm_provider is not None:
-            response = BrainResponse(
-                message=self._llm_provider.generate(request.message),
-                request_id=request.request_id,
-                intent="message",
-                memory_count=0,
-            )
+            try:
+                response = BrainResponse(
+                    message=self._llm_provider.generate(request.message),
+                    request_id=request.request_id,
+                    intent="message",
+                    memory_count=0,
+                )
+            except LLMError as error:
+                response = BrainResponse(
+                    message=str(error),
+                    request_id=request.request_id,
+                    intent="message",
+                    memory_count=0,
+                    success=False,
+                )
+                self._event_bus.emit(
+                    "brain.response.ready",
+                    {"request_id": response.request_id, "intent": response.intent},
+                    source="brain",
+                )
+                return response
         else:
             response = (
                 self._response_composer.greeting(request)

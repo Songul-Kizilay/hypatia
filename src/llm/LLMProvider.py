@@ -5,6 +5,10 @@ from __future__ import annotations
 from typing import Protocol
 
 
+class LLMError(Exception):
+    """Raised when LLM generation cannot complete."""
+
+
 class LLMProvider(Protocol):
     """Generate a text response for a prompt."""
 
