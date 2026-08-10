@@ -167,9 +167,10 @@ class SessionDeleteServiceTests(unittest.TestCase):
 
     def test_delete_reports_a_post_commit_event_failure_without_rollback(self) -> None:
         memory_before = self.memory.snapshot()
+        event_error = RuntimeError("subscriber failed")
 
         def fail_subscriber(event: object) -> None:
-            raise RuntimeError("subscriber failed")
+            raise event_error
 
         self.event_bus.subscribe("session.deleted", fail_subscriber)
 
@@ -183,9 +184,8 @@ class SessionDeleteServiceTests(unittest.TestCase):
         self.assertEqual(error.result.session_id, "work")
         self.assertEqual(error.result.memory_records_removed, 0)
         self.assertTrue(error.result.committed)
-        self.assertIsInstance(error.event_error, RuntimeError)
-        self.assertEqual(str(error.event_error), "subscriber failed")
-        self.assertIsInstance(error.__cause__, RuntimeError)
+        self.assertIs(error.event_error, event_error)
+        self.assertIs(error.__cause__, event_error)
         self.assertFalse(self.sessions.exists("work"))
         self.assertEqual(self.memory.snapshot(), memory_before)
 
