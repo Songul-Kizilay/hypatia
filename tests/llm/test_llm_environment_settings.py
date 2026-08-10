@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+import os
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
-from llm.LLMEnvironmentSettings import load_llm_environment_settings
+from llm.LLMEnvironmentSettings import (
+    load_llm_environment_settings,
+    load_llm_process_environment_settings,
+)
 from llm.LLMRuntimeConfig import LLMRuntimeConfig
 
 
@@ -42,3 +47,20 @@ class LLMEnvironmentSettingsTests(unittest.TestCase):
                 "HYPATIA_LLM_API_KEY": "test-api-key",
             },
         )
+
+    def test_process_environment_loader_delegates_to_the_pure_loader(self) -> None:
+        sentinel_config = LLMRuntimeConfig(
+            enabled=True,
+            base_url="https://api.example.test/v1/chat/completions",
+            model="test-model",
+        )
+        sentinel_result = (sentinel_config, "test-api-key")
+
+        with patch(
+            "llm.LLMEnvironmentSettings.load_llm_environment_settings",
+            return_value=sentinel_result,
+        ) as pure_loader:
+            result = load_llm_process_environment_settings()
+
+        self.assertIs(result, sentinel_result)
+        pure_loader.assert_called_once_with(os.environ)
