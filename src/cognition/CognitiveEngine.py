@@ -452,15 +452,14 @@ class CognitiveEngine:
             session_id = self._session_details_id(request)
             if not self._session_manager.exists(session_id):
                 raise SessionError(f"Unknown session: {session_id}")
-        except (SessionError, ValueError) as error:
+            session = self._session_record(session_id)
+            conversation_count = sum(
+                1
+                for record in self._memory_manager.all()
+                if SessionMemoryPolicy.matches(record, session_id)
+            )
+        except (SessionError, MemoryError, ValueError) as error:
             return self._response_composer.session_details_failure(request, str(error))
-
-        session = self._session_record(session_id)
-        conversation_count = sum(
-            1
-            for record in self._memory_manager.all()
-            if SessionMemoryPolicy.matches(record, session_id)
-        )
         return self._response_composer.session_details(
             request,
             session,
