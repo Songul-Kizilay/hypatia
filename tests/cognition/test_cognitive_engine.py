@@ -188,12 +188,13 @@ class FailingPlanner:
 class RecordingLLMProvider:
     """Records accidental LLM calls from the existing conversation flow."""
 
-    def __init__(self) -> None:
+    def __init__(self, response: str) -> None:
         self.prompts: list[str] = []
+        self.response = response
 
     def generate(self, prompt: str) -> str:
         self.prompts.append(prompt)
-        return "Generated response."
+        return self.response
 
 
 class CognitiveEngineTests(unittest.TestCase):
@@ -264,8 +265,8 @@ class CognitiveEngineTests(unittest.TestCase):
                 self.session_manager,
             )
 
-    def test_conversation_does_not_call_an_injected_llm_provider(self) -> None:
-        llm_provider = RecordingLLMProvider()
+    def test_message_uses_an_injected_llm_provider(self) -> None:
+        llm_provider = RecordingLLMProvider("LLM says hello.")
         engine = ProductionCognitiveEngine(
             self.knowledge_engine,
             self.memory_manager,
@@ -276,12 +277,45 @@ class CognitiveEngineTests(unittest.TestCase):
             self.session_rename_service,
             llm_provider=llm_provider,
         )
+        events: list[str] = []
+        self.event_bus.subscribe("*", lambda event: events.append(event.name))
+        request = BrainRequest(
+            message="Tell me something.",
+            request_id="request-123",
+        )
 
-        response = engine.process(BrainRequest(message="Tell me something."))
+        response = engine.process(request)
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.request_id, "request-123")
+        self.assertEqual(response.intent, "message")
+        self.assertEqual(response.message, "LLM says hello.")
+        self.assertEqual(llm_provider.prompts, ["Tell me something."])
+        self.assertEqual(
+            self.memory_manager.all()[0].content,
+            "User: Tell me something.\nHypatia: LLM says hello.",
+        )
+        self.assertEqual(
+            events,
+            [
+                "brain.request.received",
+                "brain.intent.detected",
+                "memory.record.added",
+                "brain.response.ready",
+            ],
+        )
+
+    def test_message_without_an_llm_provider_uses_the_deterministic_response(
+        self,
+    ) -> None:
+        response = self.engine.process(BrainRequest(message="Tell me something."))
 
         self.assertTrue(response.success)
         self.assertEqual(response.intent, "message")
-        self.assertEqual(llm_provider.prompts, [])
+        self.assertEqual(
+            response.message,
+            "I received your message: Tell me something.",
+        )
 
     def test_search_response_reports_matching_chunk_count(self) -> None:
         response = self.engine.process(BrainRequest(message="search hypatia"))

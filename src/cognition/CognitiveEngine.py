@@ -252,11 +252,19 @@ class CognitiveEngine:
             source="brain",
         )
 
-        response = (
-            self._response_composer.greeting(request)
-            if context.intent == "greeting"
-            else self._response_composer.message(request)
-        )
+        if context.intent == "message" and self._llm_provider is not None:
+            response = BrainResponse(
+                message=self._llm_provider.generate(request.message),
+                request_id=request.request_id,
+                intent="message",
+                memory_count=0,
+            )
+        else:
+            response = (
+                self._response_composer.greeting(request)
+                if context.intent == "greeting"
+                else self._response_composer.message(request)
+            )
         memory_metadata = {
             "request_id": request.request_id,
             "intent": response.intent,
