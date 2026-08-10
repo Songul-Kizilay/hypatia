@@ -473,24 +473,23 @@ class CognitiveEngine:
             session_id = self._session_activity_id(request)
             if not self._session_manager.exists(session_id):
                 raise SessionError(f"Unknown session: {session_id}")
-        except (SessionError, ValueError) as error:
+            session = self._session_record(session_id)
+            records = [
+                record
+                for record in self._memory_manager.all()
+                if SessionMemoryPolicy.matches(record, session_id)
+            ]
+            activity_times = [
+                record.created_at for record in records if record.created_at is not None
+            ]
+            if activity_times:
+                first_activity = min(activity_times)
+                last_activity = max(activity_times)
+            else:
+                first_activity = None
+                last_activity = None
+        except (SessionError, MemoryError, ValueError) as error:
             return self._response_composer.session_activity_failure(request, str(error))
-
-        session = self._session_record(session_id)
-        records = [
-            record
-            for record in self._memory_manager.all()
-            if SessionMemoryPolicy.matches(record, session_id)
-        ]
-        activity_times = [
-            record.created_at for record in records if record.created_at is not None
-        ]
-        if activity_times:
-            first_activity = min(activity_times)
-            last_activity = max(activity_times)
-        else:
-            first_activity = None
-            last_activity = None
         return self._response_composer.session_activity(
             request,
             session,
