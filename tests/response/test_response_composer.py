@@ -534,6 +534,18 @@ class ResponseComposerTests(unittest.TestCase):
         self.assertEqual(response.memory_count, 0)
         self.assertEqual(response.request_id, self.request.request_id)
 
+    def test_session_overview_failure_preserves_the_given_message(self) -> None:
+        response = self.composer.session_overview_failure(
+            self.request,
+            "Memory snapshot changed.",
+        )
+
+        self.assertEqual(response.message, "Memory snapshot changed.")
+        self.assertEqual(response.request_id, self.request.request_id)
+        self.assertEqual(response.intent, "session_overview")
+        self.assertEqual(response.memory_count, 0)
+        self.assertFalse(response.success)
+
     def test_session_details_composes_an_active_session_without_reformatting_time(
         self,
     ) -> None:

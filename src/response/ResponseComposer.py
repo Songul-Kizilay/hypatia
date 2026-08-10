@@ -605,6 +605,20 @@ class ResponseComposer:
             memory_count=memory_count,
         )
 
+    def session_overview_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Compose an unsuccessful session-overview response."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="session_overview",
+            memory_count=0,
+            success=False,
+        )
+
     def session_details(
         self,
         request: BrainRequest,

@@ -1745,6 +1745,41 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(memory_manager.all_calls, 1)
         matches.assert_called_once_with(record, "default")
 
+    def test_session_overview_maps_memory_failure_without_composing(self) -> None:
+        sessions_before = self.session_manager.snapshot()
+        memory_before = self.memory_manager.snapshot()
+        events: list[object] = []
+        self.event_bus.subscribe("*", events.append)
+
+        with (
+            patch.object(
+                self.memory_manager,
+                "all",
+                side_effect=MemoryError("Memory snapshot changed."),
+            ),
+            patch.object(
+                self.response_composer,
+                "session_overview",
+                wraps=self.response_composer.session_overview,
+            ) as session_overview,
+        ):
+            response = self.engine.process(
+                BrainRequest(
+                    message="session overview",
+                    request_id="request-123",
+                )
+            )
+
+        session_overview.assert_not_called()
+        self.assertFalse(response.success)
+        self.assertEqual(response.request_id, "request-123")
+        self.assertEqual(response.intent, "session_overview")
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(response.message, "Memory snapshot changed.")
+        self.assertEqual(self.session_manager.snapshot(), sessions_before)
+        self.assertEqual(self.memory_manager.snapshot(), memory_before)
+        self.assertEqual(events, [])
+
     def test_session_details_counts_only_target_normal_conversations(self) -> None:
         records = (
             (
