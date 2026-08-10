@@ -553,24 +553,23 @@ class CognitiveEngine:
         try:
             session_id = self._resolve_session_id(request)
             limit = self._recent_conversation_limit(request)
-        except (SessionError, ValueError) as error:
+            session = self._session_record(session_id)
+            records = [
+                record
+                for record in self._memory_manager.all()
+                if {"brain", "conversation"}.issubset(record.tags)
+                and record.metadata.get("session_id", "default") == session_id
+            ]
+            recent_records = sorted(
+                records,
+                key=self._record_created_at,
+                reverse=True,
+            )[:limit]
+        except (SessionError, MemoryError, ValueError) as error:
             return self._response_composer.recent_conversations_failure(
                 request,
                 str(error),
             )
-
-        session = self._session_record(session_id)
-        records = [
-            record
-            for record in self._memory_manager.all()
-            if {"brain", "conversation"}.issubset(record.tags)
-            and record.metadata.get("session_id", "default") == session_id
-        ]
-        recent_records = sorted(
-            records,
-            key=self._record_created_at,
-            reverse=True,
-        )[:limit]
         if not recent_records:
             return self._response_composer.recent_conversations_empty(request, session)
         return self._response_composer.recent_conversations(

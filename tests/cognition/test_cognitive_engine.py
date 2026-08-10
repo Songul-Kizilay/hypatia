@@ -3272,6 +3272,47 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertIn("Legacy conversation", response.message)
         self.assertNotIn("Null session conversation", response.message)
 
+    def test_recent_conversations_maps_memory_failure_without_composing(self) -> None:
+        sessions_before = self.session_manager.snapshot()
+        memory_before = self.memory_manager.snapshot()
+        events: list[object] = []
+        self.event_bus.subscribe("*", events.append)
+
+        with (
+            patch.object(
+                self.memory_manager,
+                "all",
+                side_effect=MemoryError("Memory snapshot changed."),
+            ),
+            patch.object(
+                self.response_composer,
+                "recent_conversations",
+                wraps=self.response_composer.recent_conversations,
+            ) as recent_conversations,
+            patch.object(
+                self.response_composer,
+                "recent_conversations_empty",
+                wraps=self.response_composer.recent_conversations_empty,
+            ) as recent_conversations_empty,
+        ):
+            response = self.engine.process(
+                BrainRequest(
+                    message="recent conversations",
+                    request_id="request-123",
+                )
+            )
+
+        recent_conversations.assert_not_called()
+        recent_conversations_empty.assert_not_called()
+        self.assertFalse(response.success)
+        self.assertEqual(response.request_id, "request-123")
+        self.assertEqual(response.intent, "recent_conversations")
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(response.message, "Memory snapshot changed.")
+        self.assertEqual(self.session_manager.snapshot(), sessions_before)
+        self.assertEqual(self.memory_manager.snapshot(), memory_before)
+        self.assertEqual(events, [])
+
     def test_recent_conversations_uses_active_session_and_request_override(
         self,
     ) -> None:
