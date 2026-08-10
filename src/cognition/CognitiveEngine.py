@@ -386,7 +386,7 @@ class CognitiveEngine:
                 request,
                 error.result,
             )
-        except SessionError as error:
+        except (SessionError, MemoryError) as error:
             return self._response_composer.session_delete_failure(
                 request,
                 str(error),
