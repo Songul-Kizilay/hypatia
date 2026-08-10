@@ -4,7 +4,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
@@ -63,3 +63,34 @@ class BootstrapLLMProviderTests(unittest.TestCase):
 
         self.assertIsNone(cognitive_engine._llm_provider)
         activate_llm.assert_not_called()
+
+    def test_enabled_config_activates_and_passes_the_provider_to_cognition(
+        self,
+    ) -> None:
+        config = LLMRuntimeConfig(
+            enabled=True,
+            base_url="https://api.example.test/v1/chat/completions",
+            model="test-model",
+        )
+        sentinel_provider = Mock(spec=LLMProvider)
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary_path = Path(temporary_directory)
+            bootstrap = Bootstrap(
+                memory_path=temporary_path / "memory.json",
+                session_path=temporary_path / "sessions.json",
+                llm_config=config,
+                llm_api_key="test-api-key",
+            )
+
+            with patch(
+                "core.Bootstrap.activate_llm",
+                return_value=sentinel_provider,
+            ) as activate_llm:
+                bootstrap.initialize()
+
+            cognitive_engine = bootstrap.container.resolve(CognitiveEngine)
+
+        activate_llm.assert_called_once_with(config, "test-api-key")
+        self.assertIs(cognitive_engine._llm_provider, sentinel_provider)
+        sentinel_provider.generate.assert_not_called()

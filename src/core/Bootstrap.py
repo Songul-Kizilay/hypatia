@@ -8,6 +8,7 @@ from core.Logger import Logger
 from eventbus.EventBus import EventBus
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from llm.LLMProvider import LLMProvider
+from llm.LLMRuntimeActivator import activate_llm
 from llm.LLMRuntimeConfig import LLMRuntimeConfig
 from memory.JsonFileMemoryStore import JsonFileMemoryStore
 from memory.MemoryManager import MemoryManager
@@ -25,11 +26,13 @@ class Bootstrap:
         session_path: Path | None = None,
         llm_provider: LLMProvider | None = None,
         llm_config: LLMRuntimeConfig | None = None,
+        llm_api_key: str | None = None,
     ) -> None:
         self._memory_path = memory_path
         self._session_path = session_path
         self._llm_provider = llm_provider
         self._llm_config = llm_config
+        self._llm_api_key = llm_api_key
 
     def initialize(self) -> None:
         config = Config()
@@ -116,6 +119,8 @@ class Bootstrap:
             return self._llm_provider
         if self._llm_config is None or self._llm_config.enabled is False:
             return None
+        if self._llm_api_key is not None:
+            return activate_llm(self._llm_config, self._llm_api_key)
         return None
 
     def shutdown(self) -> None:
