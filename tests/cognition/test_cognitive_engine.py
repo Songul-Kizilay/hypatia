@@ -3074,6 +3074,47 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertIn("Legacy conversation match", response.message)
         self.assertNotIn("Null session conversation match", response.message)
 
+    def test_conversation_search_maps_memory_failure_without_composing(self) -> None:
+        sessions_before = self.session_manager.snapshot()
+        memory_before = self.memory_manager.snapshot()
+        events: list[object] = []
+        self.event_bus.subscribe("*", events.append)
+
+        with (
+            patch.object(
+                self.memory_manager,
+                "search",
+                side_effect=MemoryError("Memory snapshot changed."),
+            ),
+            patch.object(
+                self.response_composer,
+                "conversation_search_results",
+                wraps=self.response_composer.conversation_search_results,
+            ) as conversation_search_results,
+            patch.object(
+                self.response_composer,
+                "conversation_search_empty",
+                wraps=self.response_composer.conversation_search_empty,
+            ) as conversation_search_empty,
+        ):
+            response = self.engine.process(
+                BrainRequest(
+                    message="search conversations project",
+                    request_id="request-123",
+                )
+            )
+
+        conversation_search_results.assert_not_called()
+        conversation_search_empty.assert_not_called()
+        self.assertFalse(response.success)
+        self.assertEqual(response.request_id, "request-123")
+        self.assertEqual(response.intent, "conversation_search")
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(response.message, "Memory snapshot changed.")
+        self.assertEqual(self.session_manager.snapshot(), sessions_before)
+        self.assertEqual(self.memory_manager.snapshot(), memory_before)
+        self.assertEqual(events, [])
+
     def test_conversation_search_uses_active_session_and_request_override(
         self,
     ) -> None:
