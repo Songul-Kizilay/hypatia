@@ -377,8 +377,15 @@ class CognitiveEngine:
             result = self._session_delete_service.delete(
                 self._session_command_id(request, "delete session")
             )
-        except SessionDeleteEventError:
-            raise
+        except SessionDeleteEventError as error:
+            if error.result.committed is not True:
+                raise ValueError(
+                    "Session delete event failure result must be committed."
+                ) from error
+            return self._response_composer.session_delete_event_failure(
+                request,
+                error.result,
+            )
         except SessionError as error:
             return self._response_composer.session_delete_failure(
                 request,

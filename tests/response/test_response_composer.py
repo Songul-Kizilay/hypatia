@@ -429,6 +429,26 @@ class ResponseComposerTests(unittest.TestCase):
         self.assertEqual(response.memory_count, 0)
         self.assertEqual(response.request_id, self.request.request_id)
 
+    def test_session_delete_event_failure_composes_a_committed_warning(self) -> None:
+        response = self.composer.session_delete_event_failure(
+            self.request,
+            SessionDeleteExecutionResult(
+                session_id="work-1",
+                memory_records_removed=3,
+                committed=True,
+            ),
+        )
+
+        self.assertEqual(
+            response.message,
+            "Session deleted:\nID: work-1\nMemory records removed: 3\n"
+            "Status: committed\nWarning: lifecycle event publication failed",
+        )
+        self.assertEqual(response.intent, "session_delete")
+        self.assertTrue(response.success)
+        self.assertEqual(response.memory_count, 3)
+        self.assertEqual(response.request_id, self.request.request_id)
+
     def test_sessions_list_preserves_order_and_marks_only_the_active_session(
         self,
     ) -> None:
