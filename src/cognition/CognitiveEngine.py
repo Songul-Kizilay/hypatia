@@ -340,7 +340,7 @@ class CognitiveEngine:
                 source_session_id,
                 target_session_id,
             )
-        except (SessionError, MemoryError, ValueError) as error:
+        except (SessionError, MemoryError, ValueError, RuntimeError) as error:
             return self._response_composer.session_rename_preview_failure(
                 request,
                 str(error),
