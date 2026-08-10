@@ -1028,6 +1028,58 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(self.memory_manager.snapshot(), memory_before)
         self.assertEqual(events, [])
 
+    def test_session_delete_preview_maps_memory_failure_without_composing(
+        self,
+    ) -> None:
+        sessions_before = self.session_manager.snapshot()
+        memory_before = self.memory_manager.snapshot()
+        events: list[object] = []
+        self.event_bus.subscribe("*", events.append)
+
+        with (
+            patch.object(
+                self.engine._session_delete_preview_service,
+                "preview",
+                side_effect=MemoryError("Memory snapshot changed."),
+            ),
+            patch.object(
+                self.response_composer,
+                "session_delete_preview",
+                wraps=self.response_composer.session_delete_preview,
+            ) as session_delete_preview,
+            patch.object(
+                self.response_composer,
+                "session_deleted",
+                wraps=self.response_composer.session_deleted,
+            ) as session_deleted,
+            patch.object(
+                self.response_composer,
+                "session_delete_event_failure",
+                wraps=self.response_composer.session_delete_event_failure,
+            ) as session_delete_event_failure,
+        ):
+            response = self.engine.process(
+                BrainRequest(
+                    message="preview delete session personal",
+                    request_id="request-123",
+                )
+            )
+
+        session_delete_preview.assert_not_called()
+        session_deleted.assert_not_called()
+        session_delete_event_failure.assert_not_called()
+        self.assertFalse(response.success)
+        self.assertEqual(response.request_id, "request-123")
+        self.assertEqual(response.intent, "session_delete_preview")
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(
+            response.message,
+            "Delete preview failed:\nReason: Memory snapshot changed.",
+        )
+        self.assertEqual(self.session_manager.snapshot(), sessions_before)
+        self.assertEqual(self.memory_manager.snapshot(), memory_before)
+        self.assertEqual(events, [])
+
     def test_session_delete_returns_a_committed_delete_response(self) -> None:
         events: list[str] = []
         self.event_bus.subscribe("*", lambda event: events.append(event.name))

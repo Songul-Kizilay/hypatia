@@ -358,7 +358,7 @@ class CognitiveEngine:
             ) = self._session_delete_preview_service.preview(
                 self._session_command_id(request, "preview delete session")
             )
-        except (SessionError, ValueError) as error:
+        except (SessionError, MemoryError, ValueError) as error:
             return self._response_composer.session_delete_preview_failure(
                 request,
                 str(error),
