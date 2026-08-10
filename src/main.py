@@ -4,7 +4,7 @@ from planner.Planner import Planner
 
 
 def main() -> None:
-    app = HypatiaApplication()
+    app = HypatiaApplication.from_process_environment()
     app.start()
 
     container = app.bootstrap.container
