@@ -197,3 +197,30 @@ class BootstrapLLMProviderTests(unittest.TestCase):
                     bootstrap.initialize()
 
         activate_llm.assert_not_called()
+
+    def test_enabled_config_with_a_whitespace_only_base_url_fails_before_activation(
+        self,
+    ) -> None:
+        config = LLMRuntimeConfig(
+            enabled=True,
+            base_url="   ",
+            model="test-model",
+        )
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary_path = Path(temporary_directory)
+            bootstrap = Bootstrap(
+                memory_path=temporary_path / "memory.json",
+                session_path=temporary_path / "sessions.json",
+                llm_config=config,
+                llm_api_key="test-api-key",
+            )
+
+            with patch("core.Bootstrap.activate_llm") as activate_llm:
+                with self.assertRaisesRegex(
+                    RuntimeError,
+                    "^LLM base URL is required when LLM is enabled\\.$",
+                ):
+                    bootstrap.initialize()
+
+        activate_llm.assert_not_called()
