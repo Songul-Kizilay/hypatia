@@ -22,6 +22,11 @@ class HypatiaApplication:
     def __init__(self, bootstrap: Bootstrap | None = None) -> None:
         self.bootstrap = bootstrap or Bootstrap()
 
+    @classmethod
+    def from_process_environment(cls) -> HypatiaApplication:
+        bootstrap = Bootstrap.from_process_environment()
+        return cls(bootstrap=bootstrap)
+
     def start(self) -> None:
         """
         Starts the Hypatia runtime.
