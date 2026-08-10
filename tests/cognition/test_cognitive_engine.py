@@ -468,6 +468,52 @@ class CognitiveEngineTests(unittest.TestCase):
                 self.assertEqual(response.memory_count, 0)
                 self.assertEqual(response.message, expected)
 
+    def test_session_rename_preview_maps_memory_failure_without_composing(
+        self,
+    ) -> None:
+        sessions_before = self.session_manager.snapshot()
+        memory_before = self.memory_manager.snapshot()
+        events: list[object] = []
+        self.event_bus.subscribe("*", events.append)
+
+        with (
+            patch.object(
+                self.engine._session_rename_service,
+                "preview",
+                side_effect=MemoryError("Memory snapshot changed."),
+            ),
+            patch.object(
+                self.response_composer,
+                "session_rename_preview",
+                wraps=self.response_composer.session_rename_preview,
+            ) as session_rename_preview,
+            patch.object(
+                self.response_composer,
+                "session_renamed",
+                wraps=self.response_composer.session_renamed,
+            ) as session_renamed,
+        ):
+            response = self.engine.process(
+                BrainRequest(
+                    message="preview rename session work-1 -- Work Archive",
+                    request_id="request-123",
+                )
+            )
+
+        session_rename_preview.assert_not_called()
+        session_renamed.assert_not_called()
+        self.assertFalse(response.success)
+        self.assertEqual(response.request_id, "request-123")
+        self.assertEqual(response.intent, "session_rename_preview")
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(
+            response.message,
+            "Memory snapshot changed.",
+        )
+        self.assertEqual(self.session_manager.snapshot(), sessions_before)
+        self.assertEqual(self.memory_manager.snapshot(), memory_before)
+        self.assertEqual(events, [])
+
     def test_session_rename_help_has_no_rename_or_conversation_side_effects(
         self,
     ) -> None:
