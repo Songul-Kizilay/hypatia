@@ -196,6 +196,27 @@ class ResponseComposer:
             success=False,
         )
 
+    def session_delete_event_failure(
+        self,
+        request: BrainRequest,
+        result: SessionDeleteExecutionResult,
+    ) -> BrainResponse:
+        """Compose a committed deletion with an event-publication warning."""
+        return BrainResponse(
+            message="\n".join(
+                [
+                    "Session deleted:",
+                    f"ID: {result.session_id}",
+                    f"Memory records removed: {result.memory_records_removed}",
+                    "Status: committed",
+                    "Warning: lifecycle event publication failed",
+                ]
+            ),
+            request_id=request.request_id,
+            intent="session_delete",
+            memory_count=result.memory_records_removed,
+        )
+
     def session_rename_help(self, request: BrainRequest) -> BrainResponse:
         """Compose deterministic usage guidance for session rename commands."""
         return BrainResponse(

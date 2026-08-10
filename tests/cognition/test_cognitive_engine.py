@@ -1104,7 +1104,7 @@ class CognitiveEngineTests(unittest.TestCase):
                 self.assertEqual(self.memory_manager.snapshot(), memory_before)
                 self.assertEqual(events, [])
 
-    def test_session_delete_reraises_committed_event_failure_without_composing(
+    def test_session_delete_composes_committed_event_failure_warning(
         self,
     ) -> None:
         error = SessionDeleteEventError(
@@ -1127,11 +1127,53 @@ class CognitiveEngineTests(unittest.TestCase):
                 "session_delete_failure",
                 wraps=self.response_composer.session_delete_failure,
             ) as session_delete_failure,
-            self.assertRaises(SessionDeleteEventError),
+            patch.object(
+                self.response_composer,
+                "session_deleted",
+                wraps=self.response_composer.session_deleted,
+            ) as session_deleted,
         ):
-            self.engine.process(BrainRequest(message="delete session personal"))
+            response = self.engine.process(
+                BrainRequest(
+                    message="delete session personal",
+                    request_id="request-123",
+                )
+            )
 
         session_delete_failure.assert_not_called()
+        session_deleted.assert_not_called()
+        self.assertTrue(response.success)
+        self.assertEqual(response.request_id, "request-123")
+        self.assertEqual(response.intent, "session_delete")
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(
+            response.message,
+            "Session deleted:\nID: personal\nMemory records removed: 0\n"
+            "Status: committed\nWarning: lifecycle event publication failed",
+        )
+
+    def test_session_delete_rejects_an_uncommitted_event_failure_result(
+        self,
+    ) -> None:
+        error = SessionDeleteEventError(
+            SessionDeleteExecutionResult(
+                session_id="personal",
+                memory_records_removed=0,
+                committed=False,
+            ),
+            RuntimeError("event bus unavailable"),
+        )
+
+        with patch.object(
+            self.engine._session_delete_service,
+            "delete",
+            side_effect=error,
+        ):
+            with self.assertRaisesRegex(
+                ValueError,
+                "Session delete event failure result must be committed.",
+            ):
+                self.engine.process(BrainRequest(message="delete session personal"))
 
     def test_session_overview_counts_only_registered_normal_conversations(
         self,
