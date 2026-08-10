@@ -2733,6 +2733,41 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(response.memory_count, 0)
         self.assertEqual(response.message, "No matching conversation records found.")
 
+    def test_recall_maps_memory_failure_without_composing(self) -> None:
+        sessions_before = self.session_manager.snapshot()
+        memory_before = self.memory_manager.snapshot()
+        events: list[object] = []
+        self.event_bus.subscribe("*", events.append)
+
+        with (
+            patch.object(
+                self.memory_manager,
+                "search",
+                side_effect=MemoryError("Memory snapshot changed."),
+            ),
+            patch.object(
+                self.response_composer,
+                "recall_success",
+                wraps=self.response_composer.recall_success,
+            ) as recall_success,
+        ):
+            response = self.engine.process(
+                BrainRequest(
+                    message="recall project",
+                    request_id="request-123",
+                )
+            )
+
+        recall_success.assert_not_called()
+        self.assertFalse(response.success)
+        self.assertEqual(response.request_id, "request-123")
+        self.assertEqual(response.intent, "recall")
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(response.message, "Memory snapshot changed.")
+        self.assertEqual(self.session_manager.snapshot(), sessions_before)
+        self.assertEqual(self.memory_manager.snapshot(), memory_before)
+        self.assertEqual(events, [])
+
     def test_empty_recall_returns_a_controlled_failure(self) -> None:
         response = self.engine.process(BrainRequest(message="recall"))
 
