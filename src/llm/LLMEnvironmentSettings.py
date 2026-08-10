@@ -12,7 +12,7 @@ def load_llm_environment_settings(
     environment: Mapping[str, str],
 ) -> tuple[LLMRuntimeConfig, str | None]:
     """Build non-secret LLM configuration and return its secret separately."""
-    if "HYPATIA_LLM_ENABLED" not in environment:
+    if environment.get("HYPATIA_LLM_ENABLED") != "true":
         return LLMRuntimeConfig(enabled=False, base_url="", model=""), None
 
     config = LLMRuntimeConfig(
