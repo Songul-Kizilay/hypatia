@@ -13,6 +13,7 @@ if str(SRC_DIR) not in sys.path:
 from llm.LLMEnvironmentSettings import (
     load_llm_environment_settings,
     load_llm_process_environment_settings,
+    load_llm_process_system_prompt,
     load_llm_system_prompt,
 )
 from llm.LLMRuntimeConfig import LLMRuntimeConfig
@@ -152,4 +153,14 @@ class LLMEnvironmentSettingsTests(unittest.TestCase):
             result = load_llm_process_environment_settings()
 
         self.assertIs(result, sentinel_result)
+        pure_loader.assert_called_once_with(os.environ)
+
+    def test_process_system_prompt_loader_delegates_to_the_pure_loader(self) -> None:
+        with patch(
+            "llm.LLMEnvironmentSettings.load_llm_system_prompt",
+            return_value="sentinel-system-prompt",
+        ) as pure_loader:
+            result = load_llm_process_system_prompt()
+
+        self.assertEqual(result, "sentinel-system-prompt")
         pure_loader.assert_called_once_with(os.environ)

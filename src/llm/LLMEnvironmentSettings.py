@@ -32,3 +32,8 @@ def load_llm_environment_settings(
 def load_llm_process_environment_settings() -> tuple[LLMRuntimeConfig, str | None]:
     """Load LLM settings from the current process environment."""
     return load_llm_environment_settings(os.environ)
+
+
+def load_llm_process_system_prompt() -> str | None:
+    """Load the system prompt from the current process environment."""
+    return load_llm_system_prompt(os.environ)
