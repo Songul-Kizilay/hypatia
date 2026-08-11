@@ -28,12 +28,14 @@ class Bootstrap:
         llm_provider: LLMProvider | None = None,
         llm_config: LLMRuntimeConfig | None = None,
         llm_api_key: str | None = None,
+        llm_system_prompt: str | None = None,
     ) -> None:
         self._memory_path = memory_path
         self._session_path = session_path
         self._llm_provider = llm_provider
         self._llm_config = llm_config
         self._llm_api_key = llm_api_key
+        self._llm_system_prompt = llm_system_prompt
 
     @classmethod
     def from_process_environment(
@@ -142,7 +144,11 @@ class Bootstrap:
             raise RuntimeError("LLM base URL is required when LLM is enabled.")
         if not self._llm_config.model.strip():
             raise RuntimeError("LLM model is required when LLM is enabled.")
-        return activate_llm(self._llm_config, self._llm_api_key)
+        return activate_llm(
+            self._llm_config,
+            self._llm_api_key,
+            system_prompt=self._llm_system_prompt,
+        )
 
     def shutdown(self) -> None:
         logger = self.container.resolve(Logger)
