@@ -8,11 +8,20 @@ SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
+from llm.LLMConversationMessage import LLMConversationMessage
 from llm.LLMProvider import LLMError, LLMProvider
 
 
 class DeterministicFakeLLMProvider:
-    def generate(self, prompt: str) -> str:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, tuple[LLMConversationMessage, ...]]] = []
+
+    def generate(
+        self,
+        prompt: str,
+        history: tuple[LLMConversationMessage, ...] = (),
+    ) -> str:
+        self.calls.append((prompt, history))
         return f"Generated: {prompt}"
 
 
@@ -33,3 +42,23 @@ class LLMProviderTests(unittest.TestCase):
         response = generate_response(provider, "Describe Hypatia.")
 
         self.assertEqual(response, "Generated: Describe Hypatia.")
+
+    def test_provider_contract_accepts_optional_conversation_history(self) -> None:
+        provider = DeterministicFakeLLMProvider()
+        history = (
+            LLMConversationMessage(role="user", content="hello"),
+            LLMConversationMessage(role="assistant", content="hi"),
+        )
+
+        single_turn_response = provider.generate("hello")
+        history_response = provider.generate("follow up", history=history)
+
+        self.assertEqual(single_turn_response, "Generated: hello")
+        self.assertEqual(history_response, "Generated: follow up")
+        self.assertEqual(
+            provider.calls,
+            [
+                ("hello", ()),
+                ("follow up", history),
+            ],
+        )
