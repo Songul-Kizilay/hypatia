@@ -7,7 +7,10 @@ from core.DependencyContainer import DependencyContainer
 from core.Logger import Logger
 from eventbus.EventBus import EventBus
 from knowledge.KnowledgeEngine import KnowledgeEngine
-from llm.LLMEnvironmentSettings import load_llm_process_environment_settings
+from llm.LLMEnvironmentSettings import (
+    load_llm_process_environment_settings,
+    load_llm_process_system_prompt,
+)
 from llm.LLMProvider import LLMProvider
 from llm.LLMRuntimeActivator import activate_llm
 from llm.LLMRuntimeConfig import LLMRuntimeConfig
@@ -45,12 +48,14 @@ class Bootstrap:
     ) -> Bootstrap:
         """Create Bootstrap with LLM settings loaded from the process environment."""
         llm_config, llm_api_key = load_llm_process_environment_settings()
+        llm_system_prompt = load_llm_process_system_prompt()
 
         return cls(
             memory_path=memory_path,
             session_path=session_path,
             llm_config=llm_config,
             llm_api_key=llm_api_key,
+            llm_system_prompt=llm_system_prompt,
         )
 
     def initialize(self) -> None:
