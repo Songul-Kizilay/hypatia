@@ -396,6 +396,65 @@ class CognitiveEngineTests(unittest.TestCase):
             ],
         )
 
+    def test_message_limits_history_to_the_most_recent_eight_turns(self) -> None:
+        for turn in range(1, 10):
+            self.memory_manager.add(
+                f"User: User turn {turn}\nHypatia: Assistant turn {turn}",
+                metadata={
+                    "session_id": "work-1",
+                    "user_message": f"User turn {turn}",
+                    "assistant_message": f"Assistant turn {turn}",
+                },
+                tags={"brain", "conversation"},
+            )
+        self.memory_manager.add(
+            "User: Other session\nHypatia: Other response",
+            metadata={
+                "session_id": "personal",
+                "user_message": "Other session",
+                "assistant_message": "Other response",
+            },
+            tags={"brain", "conversation"},
+        )
+        llm_provider = RecordingLLMProvider("Current response")
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+        )
+
+        engine.process(
+            BrainRequest(
+                message="Current prompt",
+                metadata={"session_id": "work-1"},
+            )
+        )
+
+        expected_history = tuple(
+            message
+            for turn in range(2, 10)
+            for message in (
+                LLMConversationMessage(
+                    role="user",
+                    content=f"User turn {turn}",
+                ),
+                LLMConversationMessage(
+                    role="assistant",
+                    content=f"Assistant turn {turn}",
+                ),
+            )
+        )
+        self.assertEqual(
+            llm_provider.calls,
+            [("Current prompt", expected_history)],
+        )
+        self.assertEqual(len(expected_history), 16)
+
     def test_message_without_an_llm_provider_uses_the_deterministic_response(
         self,
     ) -> None:

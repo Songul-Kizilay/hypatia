@@ -38,6 +38,9 @@ if TYPE_CHECKING:
     from planner.Planner import Planner
 
 
+LLM_CONVERSATION_HISTORY_MAX_TURNS = 8
+
+
 class CognitiveEngine:
     """Coordinates the first knowledge-backed cognitive request flow."""
 
@@ -260,6 +263,7 @@ class CognitiveEngine:
                 history = build_llm_conversation_history(
                     tuple(self._memory_manager.all()),
                     session_id,
+                    max_turns=LLM_CONVERSATION_HISTORY_MAX_TURNS,
                 )
                 response = BrainResponse(
                     message=self._llm_provider.generate(
