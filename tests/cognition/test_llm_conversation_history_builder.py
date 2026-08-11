@@ -149,6 +149,102 @@ class LLMConversationHistoryBuilderTests(unittest.TestCase):
             (),
         )
 
+    def test_max_turns_returns_most_recent_valid_turns_in_order(self) -> None:
+        records = (
+            MemoryRecord(
+                memory_id="turn-1",
+                content="ignored",
+                metadata=MappingProxyType(
+                    {
+                        "session_id": "session-a",
+                        "user_message": "turn 1 user",
+                        "assistant_message": "turn 1 assistant",
+                    }
+                ),
+                tags=frozenset({"brain", "conversation"}),
+            ),
+            MemoryRecord(
+                memory_id="malformed",
+                content="ignored",
+                metadata=MappingProxyType(
+                    {
+                        "session_id": "session-a",
+                        "user_message": "malformed user",
+                    }
+                ),
+                tags=frozenset({"brain", "conversation"}),
+            ),
+            MemoryRecord(
+                memory_id="turn-2",
+                content="ignored",
+                metadata=MappingProxyType(
+                    {
+                        "session_id": "session-a",
+                        "user_message": "turn 2 user",
+                        "assistant_message": "turn 2 assistant",
+                    }
+                ),
+                tags=frozenset({"brain", "conversation"}),
+            ),
+            MemoryRecord(
+                memory_id="other-session",
+                content="ignored",
+                metadata=MappingProxyType(
+                    {
+                        "session_id": "session-b",
+                        "user_message": "other user",
+                        "assistant_message": "other assistant",
+                    }
+                ),
+                tags=frozenset({"brain", "conversation"}),
+            ),
+            MemoryRecord(
+                memory_id="turn-3",
+                content="ignored",
+                metadata=MappingProxyType(
+                    {
+                        "session_id": "session-a",
+                        "user_message": "turn 3 user",
+                        "assistant_message": "turn 3 assistant",
+                    }
+                ),
+                tags=frozenset({"brain", "conversation"}),
+            ),
+        )
+
+        self.assertEqual(
+            build_llm_conversation_history(
+                records,
+                "session-a",
+                max_turns=2,
+            ),
+            (
+                LLMConversationMessage(role="user", content="turn 2 user"),
+                LLMConversationMessage(
+                    role="assistant",
+                    content="turn 2 assistant",
+                ),
+                LLMConversationMessage(role="user", content="turn 3 user"),
+                LLMConversationMessage(
+                    role="assistant",
+                    content="turn 3 assistant",
+                ),
+            ),
+        )
+
+    def test_rejects_invalid_max_turns(self) -> None:
+        for value in (0, -1, True):
+            with self.subTest(max_turns=value):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "max_turns must be a positive integer or None.",
+                ):
+                    build_llm_conversation_history(
+                        (),
+                        "session-a",
+                        max_turns=value,
+                    )
+
 
 if __name__ == "__main__":
     unittest.main()
