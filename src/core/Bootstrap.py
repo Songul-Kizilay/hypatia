@@ -7,6 +7,7 @@ from core.DependencyContainer import DependencyContainer
 from core.Logger import Logger
 from eventbus.EventBus import EventBus
 from knowledge.KnowledgeEngine import KnowledgeEngine
+from llm.HypatiaSystemPrompt import HYPATIA_DEFAULT_SYSTEM_PROMPT
 from llm.LLMEnvironmentSettings import (
     load_llm_process_environment_settings,
     load_llm_process_system_prompt,
@@ -49,6 +50,8 @@ class Bootstrap:
         """Create Bootstrap with LLM settings loaded from the process environment."""
         llm_config, llm_api_key = load_llm_process_environment_settings()
         llm_system_prompt = load_llm_process_system_prompt()
+        if llm_system_prompt is None:
+            llm_system_prompt = HYPATIA_DEFAULT_SYSTEM_PROMPT
 
         return cls(
             memory_path=memory_path,
