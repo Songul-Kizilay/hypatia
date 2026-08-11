@@ -215,6 +215,66 @@ class BootstrapLLMProviderTests(unittest.TestCase):
             },
         )
 
+    def test_default_system_prompt_precedes_unchanged_english_user_prompt(
+        self,
+    ) -> None:
+        sentinel_config = LLMRuntimeConfig(
+            enabled=True,
+            base_url="https://api.example.test/v1/chat/completions",
+            model="test-model",
+        )
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary_path = Path(temporary_directory)
+
+            with (
+                patch(
+                    "core.Bootstrap.load_llm_process_environment_settings",
+                    return_value=(sentinel_config, "test-api-key"),
+                ),
+                patch(
+                    "core.Bootstrap.load_llm_process_system_prompt",
+                    return_value=None,
+                ),
+            ):
+                bootstrap = Bootstrap.from_process_environment(
+                    temporary_path / "memory.json",
+                    temporary_path / "sessions.json",
+                )
+                bootstrap.initialize()
+
+            cognitive_engine = bootstrap.container.resolve(CognitiveEngine)
+
+        provider = cognitive_engine._llm_provider
+        self.assertIsInstance(provider, OpenAICompatibleProvider)
+        transport = Mock(
+            return_value={
+                "choices": [{"message": {"content": "Hello!"}}],
+            }
+        )
+        provider._transport = transport
+
+        result = provider.generate("Hello Hypatia, how are you today?")
+
+        self.assertEqual(result, "Hello!")
+        transport.assert_called_once_with(
+            "https://api.example.test/v1/chat/completions",
+            {"Authorization": "Bearer test-api-key"},
+            {
+                "model": "test-model",
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": HYPATIA_DEFAULT_SYSTEM_PROMPT,
+                    },
+                    {
+                        "role": "user",
+                        "content": "Hello Hypatia, how are you today?",
+                    },
+                ],
+            },
+        )
+
     def test_process_environment_factory_preserves_loaded_settings(self) -> None:
         sentinel_config = LLMRuntimeConfig(
             enabled=True,
