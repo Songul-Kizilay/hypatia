@@ -11,7 +11,10 @@ SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
-from llm.UrllibChatCompletionTransport import UrllibChatCompletionTransport
+from llm.UrllibChatCompletionTransport import (
+    DEFAULT_TIMEOUT_SECONDS,
+    UrllibChatCompletionTransport,
+)
 
 
 class FakeResponse:
@@ -28,9 +31,11 @@ class FakeResponse:
 class UrllibChatCompletionTransportTests(unittest.TestCase):
     def test_transport_posts_a_json_request_without_using_the_network(self) -> None:
         requests: list[Request] = []
+        timeouts: list[float] = []
 
-        def fake_urlopen(request: Request) -> FakeResponse:
+        def fake_urlopen(request: Request, timeout: float) -> FakeResponse:
             requests.append(request)
+            timeouts.append(timeout)
             return FakeResponse()
 
         transport = UrllibChatCompletionTransport()
@@ -53,6 +58,7 @@ class UrllibChatCompletionTransportTests(unittest.TestCase):
             {"choices": [{"message": {"content": "Generated answer."}}]},
         )
         self.assertEqual(len(requests), 1)
+        self.assertEqual(timeouts, [DEFAULT_TIMEOUT_SECONDS])
         request = requests[0]
         self.assertEqual(
             request.full_url, "https://api.example.test/v1/chat/completions"
