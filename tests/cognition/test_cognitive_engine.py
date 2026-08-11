@@ -455,6 +455,76 @@ class CognitiveEngineTests(unittest.TestCase):
         )
         self.assertEqual(len(expected_history), 16)
 
+    def test_message_uses_the_configured_history_turn_limit(self) -> None:
+        for turn in range(1, 4):
+            self.memory_manager.add(
+                f"User: User turn {turn}\nHypatia: Assistant turn {turn}",
+                metadata={
+                    "session_id": "work-1",
+                    "user_message": f"User turn {turn}",
+                    "assistant_message": f"Assistant turn {turn}",
+                },
+                tags={"brain", "conversation"},
+            )
+        llm_provider = RecordingLLMProvider("Current response")
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+            llm_history_max_turns=2,
+        )
+
+        engine.process(
+            BrainRequest(
+                message="Current prompt",
+                metadata={"session_id": "work-1"},
+            )
+        )
+
+        self.assertEqual(
+            llm_provider.calls,
+            [
+                (
+                    "Current prompt",
+                    (
+                        LLMConversationMessage(role="user", content="User turn 2"),
+                        LLMConversationMessage(
+                            role="assistant",
+                            content="Assistant turn 2",
+                        ),
+                        LLMConversationMessage(role="user", content="User turn 3"),
+                        LLMConversationMessage(
+                            role="assistant",
+                            content="Assistant turn 3",
+                        ),
+                    ),
+                )
+            ],
+        )
+
+    def test_constructor_rejects_invalid_history_turn_limits(self) -> None:
+        expected_message = "llm_history_max_turns must be a positive integer or None."
+
+        for value in (0, -1, True, False):
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError) as raised:
+                    ProductionCognitiveEngine(
+                        self.knowledge_engine,
+                        self.memory_manager,
+                        self.planner,
+                        self.event_bus,
+                        self.response_composer,
+                        self.session_manager,
+                        self.session_rename_service,
+                        llm_history_max_turns=value,
+                    )
+                self.assertEqual(str(raised.exception), expected_message)
+
     def test_message_without_an_llm_provider_uses_the_deterministic_response(
         self,
     ) -> None:
