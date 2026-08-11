@@ -85,7 +85,65 @@ class MalformedJsonTransport:
         raise json.JSONDecodeError("Expecting value", "not-json", 0)
 
 
+class StaticResponseTransport:
+    def __init__(self, response: object) -> None:
+        self.calls: list[tuple[str, dict[str, str], dict[str, object]]] = []
+        self._response = response
+
+    def __call__(
+        self,
+        base_url: str,
+        headers: dict[str, str],
+        payload: dict[str, object],
+    ) -> object:
+        self.calls.append((base_url, headers, payload))
+        return self._response
+
+
 class OpenAICompatibleProviderTests(unittest.TestCase):
+    def test_generate_normalizes_malformed_or_non_string_response_shapes(
+        self,
+    ) -> None:
+        invalid_responses = (
+            {"choices": None},
+            {"choices": ["invalid"]},
+            {"choices": [{"message": None}]},
+            {"choices": [{"message": {"content": None}}]},
+            {"choices": [{"message": {"content": 123}}]},
+        )
+
+        for response in invalid_responses:
+            with self.subTest(response=response):
+                transport = StaticResponseTransport(response)
+                provider = OpenAICompatibleProvider(
+                    base_url="https://api.example.test/v1",
+                    api_key="test-api-key",
+                    model="test-model",
+                    transport=transport,
+                )
+
+                with self.assertRaises(LLMError) as context:
+                    provider.generate("Tell me something.")
+
+                self.assertEqual(str(context.exception), "LLM response invalid.")
+                self.assertEqual(len(transport.calls), 1)
+
+    def test_generate_preserves_whitespace_in_string_content(self) -> None:
+        transport = StaticResponseTransport(
+            {"choices": [{"message": {"content": "  answer  "}}]}
+        )
+        provider = OpenAICompatibleProvider(
+            base_url="https://api.example.test/v1",
+            api_key="test-api-key",
+            model="test-model",
+            transport=transport,
+        )
+
+        response = provider.generate("Tell me something.")
+
+        self.assertEqual(response, "  answer  ")
+        self.assertEqual(len(transport.calls), 1)
+
     def test_generate_sends_system_history_and_current_user_in_order(self) -> None:
         transport = RecordingTransport()
         provider = OpenAICompatibleProvider(
