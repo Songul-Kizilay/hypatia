@@ -18,6 +18,29 @@ from llm.LLMRuntimeConfig import LLMRuntimeConfig
 
 
 class LLMEnvironmentSettingsTests(unittest.TestCase):
+    def test_loader_maps_missing_base_url_to_empty_when_enabled(self) -> None:
+        environment = {
+            "HYPATIA_LLM_ENABLED": "true",
+            "HYPATIA_LLM_MODEL": "test-model",
+            "HYPATIA_LLM_API_KEY": "test-api-key",
+        }
+
+        config, api_key = load_llm_environment_settings(environment)
+
+        self.assertEqual(
+            config,
+            LLMRuntimeConfig(enabled=True, base_url="", model="test-model"),
+        )
+        self.assertEqual(api_key, "test-api-key")
+        self.assertEqual(
+            environment,
+            {
+                "HYPATIA_LLM_ENABLED": "true",
+                "HYPATIA_LLM_MODEL": "test-model",
+                "HYPATIA_LLM_API_KEY": "test-api-key",
+            },
+        )
+
     def test_loader_defaults_to_disabled_when_enable_flag_is_false(self) -> None:
         environment = {"HYPATIA_LLM_ENABLED": "false"}
 
