@@ -10,9 +10,11 @@ SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
+from brain.BrainRequest import BrainRequest
 from cognition.CognitiveEngine import CognitiveEngine
 from core.Bootstrap import Bootstrap
 from llm.HypatiaSystemPrompt import HYPATIA_DEFAULT_SYSTEM_PROMPT
+from llm.LLMConversationMessage import LLMConversationMessage
 from llm.LLMProvider import LLMProvider
 from llm.LLMRuntimeConfig import LLMRuntimeConfig
 from llm.OpenAICompatibleProvider import OpenAICompatibleProvider
@@ -27,7 +29,82 @@ class FakeLLMProvider(LLMProvider):
         return "unused"
 
 
+class RecordingLLMProvider(LLMProvider):
+    def __init__(self, responses: list[str]) -> None:
+        self._responses = iter(responses)
+        self.calls: list[tuple[str, tuple[LLMConversationMessage, ...]]] = []
+
+    def generate(
+        self,
+        prompt: str,
+        history: tuple[LLMConversationMessage, ...] = (),
+    ) -> str:
+        self.calls.append((prompt, history))
+        return next(self._responses)
+
+
 class BootstrapLLMProviderTests(unittest.TestCase):
+    def test_process_history_cap_affects_composed_conversation_behavior(
+        self,
+    ) -> None:
+        enabled_config = LLMRuntimeConfig(
+            enabled=True,
+            base_url="https://api.example.test/v1/chat/completions",
+            model="test-model",
+        )
+        provider = RecordingLLMProvider(
+            ["Assistant 1", "Assistant 2", "Assistant 3", "Assistant 4"]
+        )
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary_path = Path(temporary_directory)
+            with (
+                patch(
+                    "core.Bootstrap.load_llm_process_environment_settings",
+                    return_value=(enabled_config, "test-api-key"),
+                ),
+                patch(
+                    "core.Bootstrap.load_llm_process_system_prompt",
+                    return_value=None,
+                ),
+                patch(
+                    "core.Bootstrap.load_llm_process_history_max_turns",
+                    return_value=2,
+                ),
+                patch(
+                    "core.Bootstrap.activate_llm",
+                    return_value=provider,
+                ),
+            ):
+                bootstrap = Bootstrap.from_process_environment(
+                    temporary_path / "memory.json",
+                    temporary_path / "sessions.json",
+                )
+                bootstrap.initialize()
+
+            cognitive_engine = bootstrap.container.resolve(CognitiveEngine)
+            for turn in range(1, 5):
+                cognitive_engine.process(BrainRequest(message=f"User {turn}"))
+
+        self.assertEqual(
+            provider.calls[-1],
+            (
+                "User 4",
+                (
+                    LLMConversationMessage(role="user", content="User 2"),
+                    LLMConversationMessage(
+                        role="assistant",
+                        content="Assistant 2",
+                    ),
+                    LLMConversationMessage(role="user", content="User 3"),
+                    LLMConversationMessage(
+                        role="assistant",
+                        content="Assistant 3",
+                    ),
+                ),
+            ),
+        )
+
     def test_process_history_cap_reaches_cognitive_engine_unchanged(self) -> None:
         disabled_config = LLMRuntimeConfig(enabled=False, base_url="", model="")
 
