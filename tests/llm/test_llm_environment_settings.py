@@ -13,11 +13,26 @@ if str(SRC_DIR) not in sys.path:
 from llm.LLMEnvironmentSettings import (
     load_llm_environment_settings,
     load_llm_process_environment_settings,
+    load_llm_system_prompt,
 )
 from llm.LLMRuntimeConfig import LLMRuntimeConfig
 
 
 class LLMEnvironmentSettingsTests(unittest.TestCase):
+    def test_system_prompt_loader_preserves_value_and_mapping(self) -> None:
+        environment = {
+            "HYPATIA_LLM_SYSTEM_PROMPT": "  You are Hypatia.  ",
+        }
+
+        result = load_llm_system_prompt(environment)
+
+        self.assertEqual(result, "  You are Hypatia.  ")
+        self.assertEqual(
+            environment,
+            {"HYPATIA_LLM_SYSTEM_PROMPT": "  You are Hypatia.  "},
+        )
+        self.assertIsNone(load_llm_system_prompt({}))
+
     def test_loader_maps_missing_model_to_empty_when_enabled(self) -> None:
         environment = {
             "HYPATIA_LLM_ENABLED": "true",

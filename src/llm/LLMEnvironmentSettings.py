@@ -8,6 +8,11 @@ from collections.abc import Mapping
 from llm.LLMRuntimeConfig import LLMRuntimeConfig
 
 
+def load_llm_system_prompt(environment: Mapping[str, str]) -> str | None:
+    """Return the configured system prompt without modifying it."""
+    return environment.get("HYPATIA_LLM_SYSTEM_PROMPT")
+
+
 def load_llm_environment_settings(
     environment: Mapping[str, str],
 ) -> tuple[LLMRuntimeConfig, str | None]:
