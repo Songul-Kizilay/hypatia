@@ -283,6 +283,8 @@ class CognitiveEngine:
         memory_metadata = {
             "request_id": request.request_id,
             "intent": response.intent,
+            "user_message": request.message,
+            "assistant_message": response.message,
         }
         memory_metadata["session_id"] = session_id
         self._memory_manager.add(

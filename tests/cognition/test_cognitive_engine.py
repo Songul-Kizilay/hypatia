@@ -278,7 +278,7 @@ class CognitiveEngineTests(unittest.TestCase):
             )
 
     def test_message_uses_an_injected_llm_provider(self) -> None:
-        llm_provider = RecordingLLMProvider("LLM says hello.")
+        llm_provider = RecordingLLMProvider("Nice to meet you.")
         engine = ProductionCognitiveEngine(
             self.knowledge_engine,
             self.memory_manager,
@@ -292,7 +292,7 @@ class CognitiveEngineTests(unittest.TestCase):
         events: list[str] = []
         self.event_bus.subscribe("*", lambda event: events.append(event.name))
         request = BrainRequest(
-            message="Tell me something.",
+            message="  My name is Songül.  ",
             request_id="request-123",
         )
 
@@ -301,12 +301,24 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertTrue(response.success)
         self.assertEqual(response.request_id, "request-123")
         self.assertEqual(response.intent, "message")
-        self.assertEqual(response.message, "LLM says hello.")
-        self.assertEqual(llm_provider.prompts, ["Tell me something."])
+        self.assertEqual(response.message, "Nice to meet you.")
+        self.assertEqual(llm_provider.prompts, ["  My name is Songül.  "])
+        record = self.memory_manager.all()[0]
         self.assertEqual(
-            self.memory_manager.all()[0].content,
-            "User: Tell me something.\nHypatia: LLM says hello.",
+            record.content,
+            "User:   My name is Songül.  \nHypatia: Nice to meet you.",
         )
+        self.assertEqual(
+            record.metadata,
+            {
+                "request_id": "request-123",
+                "intent": "message",
+                "session_id": "default",
+                "user_message": "  My name is Songül.  ",
+                "assistant_message": "Nice to meet you.",
+            },
+        )
+        self.assertEqual(record.tags, frozenset({"brain", "conversation"}))
         self.assertEqual(
             events,
             [
