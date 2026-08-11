@@ -85,6 +85,35 @@ class MalformedJsonTransport:
 
 
 class OpenAICompatibleProviderTests(unittest.TestCase):
+    def test_generate_sends_a_system_message_before_the_user_message(self) -> None:
+        transport = RecordingTransport()
+        provider = OpenAICompatibleProvider(
+            base_url="https://api.example.test/v1",
+            api_key="test-api-key",
+            model="test-model",
+            transport=transport,
+            system_prompt="You are Hypatia.",
+        )
+
+        provider.generate("Tell me something.")
+
+        self.assertEqual(
+            transport.calls,
+            [
+                (
+                    "https://api.example.test/v1",
+                    {"Authorization": "Bearer test-api-key"},
+                    {
+                        "model": "test-model",
+                        "messages": [
+                            {"role": "system", "content": "You are Hypatia."},
+                            {"role": "user", "content": "Tell me something."},
+                        ],
+                    },
+                )
+            ],
+        )
+
     def test_generate_normalizes_a_json_decode_error(self) -> None:
         transport = MalformedJsonTransport()
         provider = OpenAICompatibleProvider(
