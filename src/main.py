@@ -9,7 +9,7 @@ def main() -> None:
 
     try:
         container = app.bootstrap.container
-        logger = container.resolve(Logger)
+        container.resolve(Logger)
         brain = container.resolve(Brain)
 
         while True:
@@ -25,7 +25,7 @@ def main() -> None:
                 break
 
             response = brain.process(message)
-            logger.info(response.message)
+            print(response.message)
     finally:
         app.stop()
 

@@ -40,6 +40,7 @@ class MainTests(unittest.TestCase):
                 "main.HypatiaApplication.from_process_environment",
                 return_value=application,
             ) as application_factory,
+            patch("builtins.print") as console_output,
         ):
             main_module.main()
 
@@ -52,9 +53,10 @@ class MainTests(unittest.TestCase):
             [(("First message",),), (("Second message",),)],
         )
         self.assertEqual(
-            logger.info.call_args_list,
+            console_output.call_args_list,
             [((first_response.message,),), ((second_response.message,),)],
         )
+        logger.info.assert_not_called()
 
     def test_main_stops_application_when_input_is_interrupted(self) -> None:
         logger = Mock(spec=Logger)
@@ -129,6 +131,7 @@ class MainTests(unittest.TestCase):
                 "main.HypatiaApplication.from_process_environment",
                 return_value=application,
             ) as application_factory,
+            patch("builtins.print") as console_output,
         ):
             main_module.main()
 
@@ -137,4 +140,5 @@ class MainTests(unittest.TestCase):
         application.stop.assert_called_once_with()
         self.assertEqual(user_input.call_args_list, [(("You: ",),)] * 3)
         brain.process.assert_called_once_with("Hello Hypatia")
-        logger.info.assert_called_once_with(response.message)
+        console_output.assert_called_once_with(response.message)
+        logger.info.assert_not_called()
