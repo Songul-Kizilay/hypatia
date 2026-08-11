@@ -4,15 +4,29 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from typing import cast
 
 from llm.LLMConversationMessage import LLMConversationMessage
 from llm.LLMProvider import LLMError
 
-ChatCompletionResponse = dict[str, list[dict[str, dict[str, str]]]]
+ChatCompletionResponse = object
 ChatCompletionTransport = Callable[
     [str, dict[str, str], dict[str, object]],
     ChatCompletionResponse,
 ]
+
+
+def _extract_content(response: object) -> str:
+    try:
+        choices = cast(dict[str, object], response)["choices"]
+        first_choice = cast(list[object], choices)[0]
+        message = cast(dict[str, object], first_choice)["message"]
+        content = cast(dict[str, object], message)["content"]
+    except (KeyError, IndexError, TypeError) as error:
+        raise LLMError("LLM response invalid.") from error
+    if not isinstance(content, str):
+        raise LLMError("LLM response invalid.")
+    return content
 
 
 class OpenAICompatibleProvider:
@@ -58,7 +72,4 @@ class OpenAICompatibleProvider:
             raise LLMError("LLM transport failed.") from error
         except json.JSONDecodeError as error:
             raise LLMError("LLM response invalid.") from error
-        try:
-            return response["choices"][0]["message"]["content"]
-        except (KeyError, IndexError) as error:
-            raise LLMError("LLM response invalid.") from error
+        return _extract_content(response)
