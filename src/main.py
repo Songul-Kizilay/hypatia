@@ -1,6 +1,5 @@
 from brain.Brain import Brain
 from core.Application import HypatiaApplication
-from core.Logger import Logger
 
 
 def main() -> None:
@@ -9,7 +8,6 @@ def main() -> None:
 
     try:
         container = app.bootstrap.container
-        container.resolve(Logger)
         brain = container.resolve(Brain)
 
         while True:
