@@ -12,7 +12,9 @@ if str(SRC_DIR) not in sys.path:
 
 from llm.LLMEnvironmentSettings import (
     load_llm_environment_settings,
+    load_llm_history_max_turns,
     load_llm_process_environment_settings,
+    load_llm_process_history_max_turns,
     load_llm_process_system_prompt,
     load_llm_system_prompt,
 )
@@ -20,6 +22,22 @@ from llm.LLMRuntimeConfig import LLMRuntimeConfig
 
 
 class LLMEnvironmentSettingsTests(unittest.TestCase):
+    def test_history_max_turns_loader_maps_optional_positive_integer(self) -> None:
+        environment = {"HYPATIA_LLM_HISTORY_MAX_TURNS": "8"}
+
+        self.assertIsNone(load_llm_history_max_turns({}))
+        self.assertEqual(load_llm_history_max_turns(environment), 8)
+        self.assertEqual(environment, {"HYPATIA_LLM_HISTORY_MAX_TURNS": "8"})
+
+    def test_history_max_turns_loader_rejects_invalid_values(self) -> None:
+        expected_message = "HYPATIA_LLM_HISTORY_MAX_TURNS must be a positive integer."
+
+        for value in ("", " ", "0", "-1", "abc", " 8 "):
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError) as raised:
+                    load_llm_history_max_turns({"HYPATIA_LLM_HISTORY_MAX_TURNS": value})
+                self.assertEqual(str(raised.exception), expected_message)
+
     def test_system_prompt_loader_preserves_value_and_mapping(self) -> None:
         environment = {
             "HYPATIA_LLM_SYSTEM_PROMPT": "  You are Hypatia.  ",
@@ -163,4 +181,16 @@ class LLMEnvironmentSettingsTests(unittest.TestCase):
             result = load_llm_process_system_prompt()
 
         self.assertEqual(result, "sentinel-system-prompt")
+        pure_loader.assert_called_once_with(os.environ)
+
+    def test_process_history_max_turns_loader_delegates_to_the_pure_loader(
+        self,
+    ) -> None:
+        with patch(
+            "llm.LLMEnvironmentSettings.load_llm_history_max_turns",
+            return_value=8,
+        ) as pure_loader:
+            result = load_llm_process_history_max_turns()
+
+        self.assertEqual(result, 8)
         pure_loader.assert_called_once_with(os.environ)

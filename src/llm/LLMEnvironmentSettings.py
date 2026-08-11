@@ -13,6 +13,20 @@ def load_llm_system_prompt(environment: Mapping[str, str]) -> str | None:
     return environment.get("HYPATIA_LLM_SYSTEM_PROMPT")
 
 
+def load_llm_history_max_turns(environment: Mapping[str, str]) -> int | None:
+    """Return the configured positive conversation history turn limit."""
+    value = environment.get("HYPATIA_LLM_HISTORY_MAX_TURNS")
+    if value is None:
+        return None
+    if not value.isascii() or not value.isdecimal():
+        raise ValueError("HYPATIA_LLM_HISTORY_MAX_TURNS must be a positive integer.")
+
+    max_turns = int(value)
+    if max_turns <= 0:
+        raise ValueError("HYPATIA_LLM_HISTORY_MAX_TURNS must be a positive integer.")
+    return max_turns
+
+
 def load_llm_environment_settings(
     environment: Mapping[str, str],
 ) -> tuple[LLMRuntimeConfig, str | None]:
@@ -37,3 +51,8 @@ def load_llm_process_environment_settings() -> tuple[LLMRuntimeConfig, str | Non
 def load_llm_process_system_prompt() -> str | None:
     """Load the system prompt from the current process environment."""
     return load_llm_system_prompt(os.environ)
+
+
+def load_llm_process_history_max_turns() -> int | None:
+    """Load the conversation history turn limit from the process environment."""
+    return load_llm_history_max_turns(os.environ)
