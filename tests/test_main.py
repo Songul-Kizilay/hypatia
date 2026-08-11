@@ -11,12 +11,10 @@ if str(SRC_DIR) not in sys.path:
 
 import main as main_module
 from brain.Brain import Brain
-from core.Logger import Logger
 
 
 class MainTests(unittest.TestCase):
     def test_main_uses_process_environment_application_factory(self) -> None:
-        logger = Mock(spec=Logger)
         brain = Mock(spec=Brain)
         first_response = Mock()
         first_response.message = "First response."
@@ -24,10 +22,7 @@ class MainTests(unittest.TestCase):
         second_response.message = "Second response."
         brain.process.side_effect = [first_response, second_response]
         container = Mock()
-        container.resolve.side_effect = {
-            Logger: logger,
-            Brain: brain,
-        }.get
+        container.resolve.return_value = brain
         application = Mock()
         application.bootstrap.container = container
 
@@ -47,6 +42,7 @@ class MainTests(unittest.TestCase):
         application_factory.assert_called_once_with()
         application.start.assert_called_once_with()
         application.stop.assert_called_once_with()
+        container.resolve.assert_called_once_with(Brain)
         self.assertEqual(user_input.call_args_list, [(("You: ",),)] * 3)
         self.assertEqual(
             brain.process.call_args_list,
@@ -56,16 +52,11 @@ class MainTests(unittest.TestCase):
             console_output.call_args_list,
             [((first_response.message,),), ((second_response.message,),)],
         )
-        logger.info.assert_not_called()
 
     def test_main_stops_application_when_input_is_interrupted(self) -> None:
-        logger = Mock(spec=Logger)
         brain = Mock(spec=Brain)
         container = Mock()
-        container.resolve.side_effect = {
-            Logger: logger,
-            Brain: brain,
-        }.get
+        container.resolve.return_value = brain
         application = Mock()
         application.bootstrap.container = container
 
@@ -81,16 +72,13 @@ class MainTests(unittest.TestCase):
         application_factory.assert_called_once_with()
         application.start.assert_called_once_with()
         application.stop.assert_called_once_with()
+        container.resolve.assert_called_once_with(Brain)
         brain.process.assert_not_called()
 
     def test_main_stops_application_when_input_reaches_end_of_file(self) -> None:
-        logger = Mock(spec=Logger)
         brain = Mock(spec=Brain)
         container = Mock()
-        container.resolve.side_effect = {
-            Logger: logger,
-            Brain: brain,
-        }.get
+        container.resolve.return_value = brain
         application = Mock()
         application.bootstrap.container = container
 
@@ -106,19 +94,16 @@ class MainTests(unittest.TestCase):
         application_factory.assert_called_once_with()
         application.start.assert_called_once_with()
         application.stop.assert_called_once_with()
+        container.resolve.assert_called_once_with(Brain)
         brain.process.assert_not_called()
 
     def test_main_ignores_whitespace_only_input(self) -> None:
-        logger = Mock(spec=Logger)
         brain = Mock(spec=Brain)
         response = Mock()
         response.message = "Hello from Hypatia."
         brain.process.return_value = response
         container = Mock()
-        container.resolve.side_effect = {
-            Logger: logger,
-            Brain: brain,
-        }.get
+        container.resolve.return_value = brain
         application = Mock()
         application.bootstrap.container = container
 
@@ -138,7 +123,7 @@ class MainTests(unittest.TestCase):
         application_factory.assert_called_once_with()
         application.start.assert_called_once_with()
         application.stop.assert_called_once_with()
+        container.resolve.assert_called_once_with(Brain)
         self.assertEqual(user_input.call_args_list, [(("You: ",),)] * 3)
         brain.process.assert_called_once_with("Hello Hypatia")
         console_output.assert_called_once_with(response.message)
-        logger.info.assert_not_called()
