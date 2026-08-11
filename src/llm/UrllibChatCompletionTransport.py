@@ -8,6 +8,8 @@ from urllib.request import Request, urlopen
 
 from llm.OpenAICompatibleProvider import ChatCompletionResponse
 
+DEFAULT_TIMEOUT_SECONDS = 30.0
+
 
 class UrllibChatCompletionTransport:
     """Send one JSON chat-completion request through urllib."""
@@ -24,5 +26,5 @@ class UrllibChatCompletionTransport:
             headers={"Content-Type": "application/json", **headers},
             method="POST",
         )
-        with urlopen(request) as response:
+        with urlopen(request, timeout=DEFAULT_TIMEOUT_SECONDS) as response:
             return cast(ChatCompletionResponse, json.loads(response.read()))
