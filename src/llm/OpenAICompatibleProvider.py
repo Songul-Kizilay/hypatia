@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 
 from llm.LLMProvider import LLMError
@@ -41,6 +42,8 @@ class OpenAICompatibleProvider:
             )
         except OSError as error:
             raise LLMError("LLM transport failed.") from error
+        except json.JSONDecodeError as error:
+            raise LLMError("LLM response invalid.") from error
         try:
             return response["choices"][0]["message"]["content"]
         except (KeyError, IndexError) as error:
