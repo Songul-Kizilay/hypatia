@@ -74,8 +74,32 @@ class MainTests(unittest.TestCase):
                 return_value=application,
             ) as application_factory,
         ):
-            with self.assertRaises(KeyboardInterrupt):
-                main_module.main()
+            main_module.main()
+
+        application_factory.assert_called_once_with()
+        application.start.assert_called_once_with()
+        application.stop.assert_called_once_with()
+        brain.process.assert_not_called()
+
+    def test_main_stops_application_when_input_reaches_end_of_file(self) -> None:
+        logger = Mock(spec=Logger)
+        brain = Mock(spec=Brain)
+        container = Mock()
+        container.resolve.side_effect = {
+            Logger: logger,
+            Brain: brain,
+        }.get
+        application = Mock()
+        application.bootstrap.container = container
+
+        with (
+            patch("builtins.input", side_effect=EOFError),
+            patch(
+                "main.HypatiaApplication.from_process_environment",
+                return_value=application,
+            ) as application_factory,
+        ):
+            main_module.main()
 
         application_factory.assert_called_once_with()
         application.start.assert_called_once_with()

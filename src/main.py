@@ -13,7 +13,11 @@ def main() -> None:
         brain = container.resolve(Brain)
 
         while True:
-            message = input("You: ")
+            try:
+                message = input("You: ")
+            except KeyboardInterrupt, EOFError:
+                break
+
             if message == "exit":
                 break
 
