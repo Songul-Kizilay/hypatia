@@ -29,3 +29,15 @@ class LLMProviderFactoryTests(unittest.TestCase):
         )
         self.assertEqual(provider._api_key, "test-api-key")
         self.assertEqual(provider._model, "test-model")
+        self.assertIsNone(provider._system_prompt)
+
+    def test_factory_forwards_an_optional_system_prompt(self) -> None:
+        provider = create_llm_provider(
+            base_url="https://api.example.test/v1/chat/completions",
+            api_key="test-api-key",
+            model="test-model",
+            system_prompt="You are Hypatia.",
+        )
+
+        self.assertIsInstance(provider, OpenAICompatibleProvider)
+        self.assertEqual(provider._system_prompt, "You are Hypatia.")

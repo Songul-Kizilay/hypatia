@@ -11,6 +11,7 @@ def create_llm_provider(
     base_url: str,
     api_key: str,
     model: str,
+    system_prompt: str | None = None,
 ) -> LLMProvider:
     """Compose an OpenAI-compatible provider with the stdlib transport."""
     return OpenAICompatibleProvider(
@@ -18,4 +19,5 @@ def create_llm_provider(
         api_key=api_key,
         model=model,
         transport=UrllibChatCompletionTransport(),
+        system_prompt=system_prompt,
     )
