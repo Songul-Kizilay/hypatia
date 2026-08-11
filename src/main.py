@@ -23,7 +23,7 @@ def main() -> None:
                 break
 
             response = brain.process(message)
-            print(response.message)
+            print(f"Hypatia: {response.message}")
     finally:
         app.stop()
 
