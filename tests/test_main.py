@@ -45,6 +45,7 @@ class MainTests(unittest.TestCase):
 
         application_factory.assert_called_once_with()
         application.start.assert_called_once_with()
+        application.stop.assert_called_once_with()
         self.assertEqual(user_input.call_args_list, [(("You: ",),)] * 3)
         self.assertEqual(
             brain.process.call_args_list,
