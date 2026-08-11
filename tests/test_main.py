@@ -18,9 +18,11 @@ class MainTests(unittest.TestCase):
     def test_main_uses_process_environment_application_factory(self) -> None:
         logger = Mock(spec=Logger)
         brain = Mock(spec=Brain)
-        response = Mock()
-        response.message = "Hello from Hypatia."
-        brain.process.return_value = response
+        first_response = Mock()
+        first_response.message = "First response."
+        second_response = Mock()
+        second_response.message = "Second response."
+        brain.process.side_effect = [first_response, second_response]
         container = Mock()
         container.resolve.side_effect = {
             Logger: logger,
@@ -30,7 +32,10 @@ class MainTests(unittest.TestCase):
         application.bootstrap.container = container
 
         with (
-            patch("builtins.input", return_value="Hello Hypatia") as user_input,
+            patch(
+                "builtins.input",
+                side_effect=["First message", "Second message", "exit"],
+            ) as user_input,
             patch(
                 "main.HypatiaApplication.from_process_environment",
                 return_value=application,
@@ -40,6 +45,12 @@ class MainTests(unittest.TestCase):
 
         application_factory.assert_called_once_with()
         application.start.assert_called_once_with()
-        user_input.assert_called_once_with("You: ")
-        brain.process.assert_called_once_with("Hello Hypatia")
-        logger.info.assert_called_once_with(response.message)
+        self.assertEqual(user_input.call_args_list, [(("You: ",),)] * 3)
+        self.assertEqual(
+            brain.process.call_args_list,
+            [(("First message",),), (("Second message",),)],
+        )
+        self.assertEqual(
+            logger.info.call_args_list,
+            [((first_response.message,),), ((second_response.message,),)],
+        )
