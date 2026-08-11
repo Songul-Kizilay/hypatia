@@ -55,3 +55,29 @@ class MainTests(unittest.TestCase):
             logger.info.call_args_list,
             [((first_response.message,),), ((second_response.message,),)],
         )
+
+    def test_main_stops_application_when_input_is_interrupted(self) -> None:
+        logger = Mock(spec=Logger)
+        brain = Mock(spec=Brain)
+        container = Mock()
+        container.resolve.side_effect = {
+            Logger: logger,
+            Brain: brain,
+        }.get
+        application = Mock()
+        application.bootstrap.container = container
+
+        with (
+            patch("builtins.input", side_effect=KeyboardInterrupt),
+            patch(
+                "main.HypatiaApplication.from_process_environment",
+                return_value=application,
+            ) as application_factory,
+        ):
+            with self.assertRaises(KeyboardInterrupt):
+                main_module.main()
+
+        application_factory.assert_called_once_with()
+        application.start.assert_called_once_with()
+        application.stop.assert_called_once_with()
+        brain.process.assert_not_called()
