@@ -85,6 +85,28 @@ class MalformedJsonTransport:
 
 
 class OpenAICompatibleProviderTests(unittest.TestCase):
+    def test_generate_preserves_turkish_and_english_user_prompts(self) -> None:
+        transport = RecordingTransport()
+        provider = OpenAICompatibleProvider(
+            base_url="https://api.example.test/v1",
+            api_key="test-api-key",
+            model="test-model",
+            transport=transport,
+        )
+        turkish_prompt = "Merhaba Hypatia, bugün nasılsın?"
+        english_prompt = "Hello Hypatia, how are you today?"
+
+        provider.generate(turkish_prompt)
+        provider.generate(english_prompt)
+
+        self.assertEqual(
+            [call[2]["messages"] for call in transport.calls],
+            [
+                [{"role": "user", "content": turkish_prompt}],
+                [{"role": "user", "content": english_prompt}],
+            ],
+        )
+
     def test_generate_sends_a_system_message_before_the_user_message(self) -> None:
         transport = RecordingTransport()
         provider = OpenAICompatibleProvider(
