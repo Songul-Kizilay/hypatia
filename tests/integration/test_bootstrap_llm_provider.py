@@ -424,6 +424,74 @@ class BootstrapLLMProviderTests(unittest.TestCase):
             },
         )
 
+    def test_invalid_llm_response_does_not_persist_conversation_memory(
+        self,
+    ) -> None:
+        enabled_config = LLMRuntimeConfig(
+            enabled=True,
+            base_url="https://api.example.test/v1/chat/completions",
+            model="test-model",
+        )
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary_path = Path(temporary_directory)
+            with (
+                patch(
+                    "core.Bootstrap.load_llm_process_environment_settings",
+                    return_value=(enabled_config, "test-api-key"),
+                ),
+                patch(
+                    "core.Bootstrap.load_llm_process_system_prompt",
+                    return_value=None,
+                ),
+            ):
+                bootstrap = Bootstrap.from_process_environment(
+                    temporary_path / "memory.json",
+                    temporary_path / "sessions.json",
+                )
+                bootstrap.initialize()
+
+            cognitive_engine = bootstrap.container.resolve(CognitiveEngine)
+            cognitive_engine._session_manager.create("work-1")
+            cognitive_engine._memory_manager.add(
+                "User: Prior successful turn.\nHypatia: Prior answer.",
+                metadata={
+                    "session_id": "work-1",
+                    "user_message": "Prior successful turn.",
+                    "assistant_message": "Prior answer.",
+                },
+                tags={"brain", "conversation"},
+            )
+            memory_before = cognitive_engine._memory_manager.snapshot()
+
+            provider = cognitive_engine._llm_provider
+            self.assertIsInstance(provider, OpenAICompatibleProvider)
+            transport = Mock(return_value={"choices": [{"message": {"content": None}}]})
+            provider._transport = transport
+
+            response = cognitive_engine.process(
+                BrainRequest(
+                    message="Remember this failed turn.",
+                    metadata={"session_id": "work-1"},
+                )
+            )
+
+            self.assertFalse(response.success)
+            self.assertEqual(response.message, "LLM response invalid.")
+            transport.assert_called_once()
+            self.assertEqual(
+                cognitive_engine._memory_manager.snapshot(),
+                memory_before,
+            )
+            self.assertNotIn(
+                "Remember this failed turn.",
+                {
+                    record.metadata.get("user_message")
+                    for record in cognitive_engine._memory_manager.all()
+                    if {"brain", "conversation"}.issubset(record.tags)
+                },
+            )
+
     def test_process_environment_factory_preserves_loaded_settings(self) -> None:
         sentinel_config = LLMRuntimeConfig(
             enabled=True,
