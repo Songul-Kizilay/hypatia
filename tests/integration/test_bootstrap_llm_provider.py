@@ -12,6 +12,7 @@ if str(SRC_DIR) not in sys.path:
 
 from cognition.CognitiveEngine import CognitiveEngine
 from core.Bootstrap import Bootstrap
+from llm.HypatiaSystemPrompt import HYPATIA_DEFAULT_SYSTEM_PROMPT
 from llm.LLMProvider import LLMProvider
 from llm.LLMRuntimeConfig import LLMRuntimeConfig
 
@@ -48,7 +49,7 @@ class BootstrapLLMProviderTests(unittest.TestCase):
                 ) as settings_loader,
                 patch(
                     "core.Bootstrap.load_llm_process_system_prompt",
-                    return_value="You are Hypatia.",
+                    return_value="  Custom prompt.  ",
                 ) as system_prompt_loader,
                 patch(
                     "core.Bootstrap.activate_llm",
@@ -68,10 +69,55 @@ class BootstrapLLMProviderTests(unittest.TestCase):
         activate_llm.assert_called_once_with(
             sentinel_config,
             "test-api-key",
-            system_prompt="You are Hypatia.",
+            system_prompt="  Custom prompt.  ",
         )
         self.assertIs(cognitive_engine._llm_provider, sentinel_provider)
         sentinel_provider.generate.assert_not_called()
+
+    def test_process_environment_factory_uses_default_system_prompt_when_absent(
+        self,
+    ) -> None:
+        sentinel_config = LLMRuntimeConfig(
+            enabled=True,
+            base_url="https://api.example.test/v1/chat/completions",
+            model="test-model",
+        )
+        sentinel_provider = Mock(spec=LLMProvider)
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary_path = Path(temporary_directory)
+
+            with (
+                patch(
+                    "core.Bootstrap.load_llm_process_environment_settings",
+                    return_value=(sentinel_config, "test-api-key"),
+                ) as settings_loader,
+                patch(
+                    "core.Bootstrap.load_llm_process_system_prompt",
+                    return_value=None,
+                ) as system_prompt_loader,
+                patch(
+                    "core.Bootstrap.activate_llm",
+                    return_value=sentinel_provider,
+                ) as activate_llm,
+            ):
+                bootstrap = Bootstrap.from_process_environment(
+                    temporary_path / "memory.json",
+                    temporary_path / "sessions.json",
+                )
+                bootstrap.initialize()
+
+        settings_loader.assert_called_once_with()
+        system_prompt_loader.assert_called_once_with()
+        self.assertEqual(
+            bootstrap._llm_system_prompt,
+            HYPATIA_DEFAULT_SYSTEM_PROMPT,
+        )
+        activate_llm.assert_called_once_with(
+            sentinel_config,
+            "test-api-key",
+            system_prompt=HYPATIA_DEFAULT_SYSTEM_PROMPT,
+        )
 
     def test_process_environment_factory_preserves_loaded_settings(self) -> None:
         sentinel_config = LLMRuntimeConfig(
