@@ -23,21 +23,26 @@ class OpenAICompatibleProvider:
         api_key: str,
         model: str,
         transport: ChatCompletionTransport,
+        system_prompt: str | None = None,
     ) -> None:
         self._base_url = base_url
         self._api_key = api_key
         self._model = model
         self._transport = transport
+        self._system_prompt = system_prompt
 
     def generate(self, prompt: str) -> str:
         """Generate a response from one user message."""
+        messages = [{"role": "user", "content": prompt}]
+        if self._system_prompt is not None:
+            messages.insert(0, {"role": "system", "content": self._system_prompt})
         try:
             response = self._transport(
                 self._base_url,
                 {"Authorization": f"Bearer {self._api_key}"},
                 {
                     "model": self._model,
-                    "messages": [{"role": "user", "content": prompt}],
+                    "messages": messages,
                 },
             )
         except OSError as error:
