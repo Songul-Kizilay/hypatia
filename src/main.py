@@ -19,6 +19,8 @@ def main() -> None:
         response = brain.process(message)
         logger.info(response.message)
 
+    app.stop()
+
 
 if __name__ == "__main__":
     main()
