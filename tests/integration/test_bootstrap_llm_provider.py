@@ -466,7 +466,12 @@ class BootstrapLLMProviderTests(unittest.TestCase):
 
             provider = cognitive_engine._llm_provider
             self.assertIsInstance(provider, OpenAICompatibleProvider)
-            transport = Mock(return_value={"choices": [{"message": {"content": None}}]})
+            transport = Mock(
+                side_effect=[
+                    {"choices": [{"message": {"content": None}}]},
+                    {"choices": [{"message": {"content": "Recovered answer."}}]},
+                ]
+            )
             provider._transport = transport
 
             response = cognitive_engine.process(
@@ -490,6 +495,38 @@ class BootstrapLLMProviderTests(unittest.TestCase):
                     for record in cognitive_engine._memory_manager.all()
                     if {"brain", "conversation"}.issubset(record.tags)
                 },
+            )
+
+            recovery_response = cognitive_engine.process(
+                BrainRequest(
+                    message="What do you remember?",
+                    metadata={"session_id": "work-1"},
+                )
+            )
+
+            self.assertTrue(recovery_response.success)
+            self.assertEqual(recovery_response.message, "Recovered answer.")
+            self.assertEqual(transport.call_count, 2)
+            self.assertEqual(
+                transport.call_args_list[1].args[2]["messages"],
+                [
+                    {
+                        "role": "system",
+                        "content": HYPATIA_DEFAULT_SYSTEM_PROMPT,
+                    },
+                    {
+                        "role": "user",
+                        "content": "Prior successful turn.",
+                    },
+                    {
+                        "role": "assistant",
+                        "content": "Prior answer.",
+                    },
+                    {
+                        "role": "user",
+                        "content": "What do you remember?",
+                    },
+                ],
             )
 
     def test_process_environment_factory_preserves_loaded_settings(self) -> None:
