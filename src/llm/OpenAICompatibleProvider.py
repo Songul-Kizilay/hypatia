@@ -41,4 +41,7 @@ class OpenAICompatibleProvider:
             )
         except OSError as error:
             raise LLMError("LLM transport failed.") from error
-        return response["choices"][0]["message"]["content"]
+        try:
+            return response["choices"][0]["message"]["content"]
+        except KeyError as error:
+            raise LLMError("LLM response invalid.") from error
