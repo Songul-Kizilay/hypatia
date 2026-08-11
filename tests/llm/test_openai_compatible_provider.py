@@ -10,6 +10,7 @@ SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
+from llm.LLMConversationMessage import LLMConversationMessage
 from llm.LLMProvider import LLMError
 from llm.OpenAICompatibleProvider import (
     ChatCompletionResponse,
@@ -85,6 +86,47 @@ class MalformedJsonTransport:
 
 
 class OpenAICompatibleProviderTests(unittest.TestCase):
+    def test_generate_sends_system_history_and_current_user_in_order(self) -> None:
+        transport = RecordingTransport()
+        provider = OpenAICompatibleProvider(
+            base_url="https://api.example.test/v1",
+            api_key="test-api-key",
+            model="test-model",
+            transport=transport,
+            system_prompt="You are Hypatia.",
+        )
+        history = (
+            LLMConversationMessage(role="user", content="My name is Songül."),
+            LLMConversationMessage(
+                role="assistant",
+                content="Nice to meet you.",
+            ),
+        )
+
+        provider.generate("What is my name?", history=history)
+
+        self.assertEqual(
+            transport.calls,
+            [
+                (
+                    "https://api.example.test/v1",
+                    {"Authorization": "Bearer test-api-key"},
+                    {
+                        "model": "test-model",
+                        "messages": [
+                            {"role": "system", "content": "You are Hypatia."},
+                            {"role": "user", "content": "My name is Songül."},
+                            {
+                                "role": "assistant",
+                                "content": "Nice to meet you.",
+                            },
+                            {"role": "user", "content": "What is my name?"},
+                        ],
+                    },
+                )
+            ],
+        )
+
     def test_generate_preserves_turkish_and_english_user_prompts(self) -> None:
         transport = RecordingTransport()
         provider = OpenAICompatibleProvider(

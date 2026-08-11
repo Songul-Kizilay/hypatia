@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 
+from llm.LLMConversationMessage import LLMConversationMessage
 from llm.LLMProvider import LLMError
 
 ChatCompletionResponse = dict[str, list[dict[str, dict[str, str]]]]
@@ -31,11 +32,19 @@ class OpenAICompatibleProvider:
         self._transport = transport
         self._system_prompt = system_prompt
 
-    def generate(self, prompt: str) -> str:
-        """Generate a response from one user message."""
-        messages = [{"role": "user", "content": prompt}]
+    def generate(
+        self,
+        prompt: str,
+        history: tuple[LLMConversationMessage, ...] = (),
+    ) -> str:
+        """Generate a response from optional history and one user message."""
+        messages: list[dict[str, str]] = []
         if self._system_prompt is not None:
-            messages.insert(0, {"role": "system", "content": self._system_prompt})
+            messages.append({"role": "system", "content": self._system_prompt})
+        messages.extend(
+            {"role": message.role, "content": message.content} for message in history
+        )
+        messages.append({"role": "user", "content": prompt})
         try:
             response = self._transport(
                 self._base_url,
