@@ -7,19 +7,20 @@ def main() -> None:
     app = HypatiaApplication.from_process_environment()
     app.start()
 
-    container = app.bootstrap.container
-    logger = container.resolve(Logger)
-    brain = container.resolve(Brain)
+    try:
+        container = app.bootstrap.container
+        logger = container.resolve(Logger)
+        brain = container.resolve(Brain)
 
-    while True:
-        message = input("You: ")
-        if message == "exit":
-            break
+        while True:
+            message = input("You: ")
+            if message == "exit":
+                break
 
-        response = brain.process(message)
-        logger.info(response.message)
-
-    app.stop()
+            response = brain.process(message)
+            logger.info(response.message)
+    finally:
+        app.stop()
 
 
 if __name__ == "__main__":
