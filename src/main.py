@@ -11,7 +11,8 @@ def main() -> None:
     logger = container.resolve(Logger)
     brain = container.resolve(Brain)
 
-    response = brain.process("Say hello from Hypatia.")
+    message = input("You: ")
+    response = brain.process(message)
     logger.info(response.message)
 
 
