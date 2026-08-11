@@ -63,18 +63,53 @@ To create the world's most capable personal AI research companion.
 
 ---
 
-## Status
-
-🚧 Knowledge stabilization in progress (`v0.2.0`)
-
-Completed foundation capabilities:
+## Current capabilities
 
 - Application bootstrap, configuration, logging, and dependency injection
-- Event bus and in-memory conversation memory
-- Deterministic Brain request flow
+- Sessions and persisted structured conversation memory
+- Deterministic Brain request flow when the LLM runtime is disabled
+- OpenAI-compatible chat-completions provider with an optional system prompt
+- Turkish and English user-message transport through the LLM conversation path
+- Bounded, same-session multi-turn history with a configurable turn limit
 - Deterministic Planner task generation
 - Knowledge Foundation: `.txt` and `.md` document loading, paragraph parsing, in-memory chunk indexing, and case-insensitive search
 - KnowledgeEngine orchestration for the full document-to-search pipeline
-- 68 passing unit tests and shared code-quality standards
+- A full automated test suite and shared code-quality standards
 
-Planned next: release `v0.2.0`, then extend the knowledge layer only through reviewed, test-backed increments.
+Roadmap modules listed above are product direction, not a claim that every module is
+already implemented.
+
+---
+
+## LLM runtime quickstart
+
+Hypatia can use any provider that exposes an OpenAI-compatible chat-completions
+endpoint. Set these values in the process environment before starting Hypatia:
+
+```text
+HYPATIA_LLM_ENABLED=true
+HYPATIA_LLM_BASE_URL=<OpenAI-compatible chat completions endpoint>
+HYPATIA_LLM_MODEL=<model name>
+HYPATIA_LLM_API_KEY=<required API key>
+```
+
+The API key is required whenever the LLM runtime is enabled. Use a placeholder in
+documentation and scripts; never commit a real secret.
+
+Optional process-environment settings:
+
+```text
+HYPATIA_LLM_SYSTEM_PROMPT=<custom prompt>
+HYPATIA_LLM_HISTORY_MAX_TURNS=<positive integer>
+```
+
+If `HYPATIA_LLM_SYSTEM_PROMPT` is absent, Hypatia uses its default system prompt.
+If `HYPATIA_LLM_HISTORY_MAX_TURNS` is absent, the default is 8 conversation turns.
+A positive history limit sends only the most recent N structured turns from the
+same resolved session to the model, in order. The current request is not included
+in its own history.
+
+Turkish and English user messages can travel through this conversational path.
+Previous conversation turns from the same resolved session are supplied as
+context. When the LLM runtime is disabled, Hypatia preserves its existing
+deterministic behavior.
