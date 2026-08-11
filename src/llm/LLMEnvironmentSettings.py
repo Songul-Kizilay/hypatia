@@ -18,7 +18,7 @@ def load_llm_environment_settings(
     config = LLMRuntimeConfig(
         enabled=environment["HYPATIA_LLM_ENABLED"] == "true",
         base_url=environment.get("HYPATIA_LLM_BASE_URL", ""),
-        model=environment["HYPATIA_LLM_MODEL"],
+        model=environment.get("HYPATIA_LLM_MODEL", ""),
     )
 
     return config, environment.get("HYPATIA_LLM_API_KEY")
