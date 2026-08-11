@@ -54,7 +54,14 @@ class CognitiveEngine:
         session_manager: SessionManager,
         session_rename_service: SessionRenameTransactionService,
         llm_provider: LLMProvider | None = None,
+        llm_history_max_turns: int | None = None,
     ) -> None:
+        if llm_history_max_turns is not None and (
+            isinstance(llm_history_max_turns, bool) or llm_history_max_turns <= 0
+        ):
+            raise ValueError(
+                "llm_history_max_turns must be a positive integer or None."
+            )
         self._knowledge_engine = knowledge_engine
         self._memory_manager = memory_manager
         self._planner = planner
@@ -73,6 +80,11 @@ class CognitiveEngine:
         self._session_use_service = SessionUseService(session_manager)
         self._session_rename_service = session_rename_service
         self._llm_provider = llm_provider
+        self._llm_history_max_turns = (
+            LLM_CONVERSATION_HISTORY_MAX_TURNS
+            if llm_history_max_turns is None
+            else llm_history_max_turns
+        )
         self._router = BrainRouter()
 
     def process(self, request: BrainRequest) -> BrainResponse:
@@ -263,7 +275,7 @@ class CognitiveEngine:
                 history = build_llm_conversation_history(
                     tuple(self._memory_manager.all()),
                     session_id,
-                    max_turns=LLM_CONVERSATION_HISTORY_MAX_TURNS,
+                    max_turns=self._llm_history_max_turns,
                 )
                 response = BrainResponse(
                     message=self._llm_provider.generate(
