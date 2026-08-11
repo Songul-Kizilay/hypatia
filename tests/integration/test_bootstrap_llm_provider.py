@@ -15,6 +15,7 @@ from core.Bootstrap import Bootstrap
 from llm.HypatiaSystemPrompt import HYPATIA_DEFAULT_SYSTEM_PROMPT
 from llm.LLMProvider import LLMProvider
 from llm.LLMRuntimeConfig import LLMRuntimeConfig
+from llm.OpenAICompatibleProvider import OpenAICompatibleProvider
 
 
 class FakeLLMProvider(LLMProvider):
@@ -117,6 +118,41 @@ class BootstrapLLMProviderTests(unittest.TestCase):
             sentinel_config,
             "test-api-key",
             system_prompt=HYPATIA_DEFAULT_SYSTEM_PROMPT,
+        )
+
+    def test_default_system_prompt_reaches_the_composed_provider(self) -> None:
+        sentinel_config = LLMRuntimeConfig(
+            enabled=True,
+            base_url="https://api.example.test/v1/chat/completions",
+            model="test-model",
+        )
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary_path = Path(temporary_directory)
+
+            with (
+                patch(
+                    "core.Bootstrap.load_llm_process_environment_settings",
+                    return_value=(sentinel_config, "test-api-key"),
+                ),
+                patch(
+                    "core.Bootstrap.load_llm_process_system_prompt",
+                    return_value=None,
+                ),
+            ):
+                bootstrap = Bootstrap.from_process_environment(
+                    temporary_path / "memory.json",
+                    temporary_path / "sessions.json",
+                )
+                bootstrap.initialize()
+
+            cognitive_engine = bootstrap.container.resolve(CognitiveEngine)
+
+        provider = cognitive_engine._llm_provider
+        self.assertIsInstance(provider, OpenAICompatibleProvider)
+        self.assertEqual(
+            provider._system_prompt,
+            HYPATIA_DEFAULT_SYSTEM_PROMPT,
         )
 
     def test_process_environment_factory_preserves_loaded_settings(self) -> None:
