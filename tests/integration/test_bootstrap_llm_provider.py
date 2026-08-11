@@ -28,6 +28,42 @@ class FakeLLMProvider(LLMProvider):
 
 
 class BootstrapLLMProviderTests(unittest.TestCase):
+    def test_process_history_cap_reaches_cognitive_engine_unchanged(self) -> None:
+        disabled_config = LLMRuntimeConfig(enabled=False, base_url="", model="")
+
+        for loaded_value, expected_value in ((3, 3), (None, 8)):
+            with self.subTest(loaded_value=loaded_value):
+                with tempfile.TemporaryDirectory() as temporary_directory:
+                    temporary_path = Path(temporary_directory)
+
+                    with (
+                        patch(
+                            "core.Bootstrap.load_llm_process_environment_settings",
+                            return_value=(disabled_config, None),
+                        ),
+                        patch(
+                            "core.Bootstrap.load_llm_process_system_prompt",
+                            return_value=None,
+                        ),
+                        patch(
+                            "core.Bootstrap.load_llm_process_history_max_turns",
+                            return_value=loaded_value,
+                        ) as history_loader,
+                    ):
+                        bootstrap = Bootstrap.from_process_environment(
+                            temporary_path / "memory.json",
+                            temporary_path / "sessions.json",
+                        )
+                        bootstrap.initialize()
+
+                    cognitive_engine = bootstrap.container.resolve(CognitiveEngine)
+
+                history_loader.assert_called_once_with()
+                self.assertEqual(
+                    cognitive_engine._llm_history_max_turns,
+                    expected_value,
+                )
+
     def test_process_environment_factory_activates_and_passes_provider_to_cognition(
         self,
     ) -> None:

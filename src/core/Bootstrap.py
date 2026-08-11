@@ -10,6 +10,7 @@ from knowledge.KnowledgeEngine import KnowledgeEngine
 from llm.HypatiaSystemPrompt import HYPATIA_DEFAULT_SYSTEM_PROMPT
 from llm.LLMEnvironmentSettings import (
     load_llm_process_environment_settings,
+    load_llm_process_history_max_turns,
     load_llm_process_system_prompt,
 )
 from llm.LLMProvider import LLMProvider
@@ -33,6 +34,7 @@ class Bootstrap:
         llm_config: LLMRuntimeConfig | None = None,
         llm_api_key: str | None = None,
         llm_system_prompt: str | None = None,
+        llm_history_max_turns: int | None = None,
     ) -> None:
         self._memory_path = memory_path
         self._session_path = session_path
@@ -40,6 +42,7 @@ class Bootstrap:
         self._llm_config = llm_config
         self._llm_api_key = llm_api_key
         self._llm_system_prompt = llm_system_prompt
+        self._llm_history_max_turns = llm_history_max_turns
 
     @classmethod
     def from_process_environment(
@@ -50,6 +53,7 @@ class Bootstrap:
         """Create Bootstrap with LLM settings loaded from the process environment."""
         llm_config, llm_api_key = load_llm_process_environment_settings()
         llm_system_prompt = load_llm_process_system_prompt()
+        llm_history_max_turns = load_llm_process_history_max_turns()
         if llm_system_prompt is None:
             llm_system_prompt = HYPATIA_DEFAULT_SYSTEM_PROMPT
 
@@ -59,6 +63,7 @@ class Bootstrap:
             llm_config=llm_config,
             llm_api_key=llm_api_key,
             llm_system_prompt=llm_system_prompt,
+            llm_history_max_turns=llm_history_max_turns,
         )
 
     def initialize(self) -> None:
@@ -93,6 +98,7 @@ class Bootstrap:
             session_manager,
             session_rename_service,
             llm_provider=self._configured_llm_provider(),
+            llm_history_max_turns=self._llm_history_max_turns,
         )
         brain = Brain(cognitive_engine, memory_manager, event_bus)
 
