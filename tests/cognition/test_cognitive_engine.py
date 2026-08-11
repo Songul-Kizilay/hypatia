@@ -34,6 +34,7 @@ from core.Exceptions import (
 )
 from eventbus.EventBus import EventBus
 from knowledge.KnowledgeEngine import KnowledgeEngine
+from llm.LLMConversationMessage import LLMConversationMessage
 from llm.LLMProvider import LLMError
 from memory.MemoryManager import MemoryManager
 from memory.MemoryRecord import MemoryRecord
@@ -190,11 +191,15 @@ class RecordingLLMProvider:
     """Records accidental LLM calls from the existing conversation flow."""
 
     def __init__(self, response: str) -> None:
-        self.prompts: list[str] = []
+        self.calls: list[tuple[str, tuple[LLMConversationMessage, ...]]] = []
         self.response = response
 
-    def generate(self, prompt: str) -> str:
-        self.prompts.append(prompt)
+    def generate(
+        self,
+        prompt: str,
+        history: tuple[LLMConversationMessage, ...] = (),
+    ) -> str:
+        self.calls.append((prompt, history))
         return self.response
 
 
@@ -202,10 +207,14 @@ class FailingLLMProvider:
     """Raises the provider boundary's controlled generation error."""
 
     def __init__(self) -> None:
-        self.prompts: list[str] = []
+        self.calls: list[tuple[str, tuple[LLMConversationMessage, ...]]] = []
 
-    def generate(self, prompt: str) -> str:
-        self.prompts.append(prompt)
+    def generate(
+        self,
+        prompt: str,
+        history: tuple[LLMConversationMessage, ...] = (),
+    ) -> str:
+        self.calls.append((prompt, history))
         raise LLMError("Generation unavailable.")
 
 
@@ -302,7 +311,10 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(response.request_id, "request-123")
         self.assertEqual(response.intent, "message")
         self.assertEqual(response.message, "Nice to meet you.")
-        self.assertEqual(llm_provider.prompts, ["  My name is Songül.  "])
+        self.assertEqual(
+            llm_provider.calls,
+            [("  My name is Songül.  ", ())],
+        )
         record = self.memory_manager.all()[0]
         self.assertEqual(
             record.content,
@@ -326,6 +338,61 @@ class CognitiveEngineTests(unittest.TestCase):
                 "brain.intent.detected",
                 "memory.record.added",
                 "brain.response.ready",
+            ],
+        )
+
+    def test_message_passes_existing_same_session_conversation_history(self) -> None:
+        llm_provider = RecordingLLMProvider("Nice to meet you.")
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+        )
+        engine.process(
+            BrainRequest(
+                message="My name is Songül.",
+                metadata={"session_id": "work-1"},
+            )
+        )
+        self.memory_manager.add(
+            "User: Other session\nHypatia: Other response",
+            metadata={
+                "session_id": "personal",
+                "user_message": "Other session",
+                "assistant_message": "Other response",
+            },
+            tags={"brain", "conversation"},
+        )
+
+        engine.process(
+            BrainRequest(
+                message="What is my name?",
+                metadata={"session_id": "work-1"},
+            )
+        )
+
+        self.assertEqual(
+            llm_provider.calls,
+            [
+                ("My name is Songül.", ()),
+                (
+                    "What is my name?",
+                    (
+                        LLMConversationMessage(
+                            role="user",
+                            content="My name is Songül.",
+                        ),
+                        LLMConversationMessage(
+                            role="assistant",
+                            content="Nice to meet you.",
+                        ),
+                    ),
+                ),
             ],
         )
 
@@ -367,7 +434,7 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(response.intent, "message")
         self.assertEqual(response.memory_count, 0)
         self.assertEqual(response.message, "Generation unavailable.")
-        self.assertEqual(llm_provider.prompts, ["Tell me something."])
+        self.assertEqual(llm_provider.calls, [("Tell me something.", ())])
         self.assertEqual(self.memory_manager.all(), [])
         self.assertEqual(
             events,

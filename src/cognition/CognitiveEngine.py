@@ -9,6 +9,9 @@ from brain.BrainContext import BrainContext
 from brain.BrainRequest import BrainRequest
 from brain.BrainResponse import BrainResponse
 from brain.BrainRouter import BrainRouter
+from cognition.LLMConversationHistoryBuilder import (
+    build_llm_conversation_history,
+)
 from core.Exceptions import (
     KnowledgeError,
     MemoryError,
@@ -254,8 +257,15 @@ class CognitiveEngine:
 
         if context.intent == "message" and self._llm_provider is not None:
             try:
+                history = build_llm_conversation_history(
+                    tuple(self._memory_manager.all()),
+                    session_id,
+                )
                 response = BrainResponse(
-                    message=self._llm_provider.generate(request.message),
+                    message=self._llm_provider.generate(
+                        request.message,
+                        history=history,
+                    ),
                     request_id=request.request_id,
                     intent="message",
                     memory_count=0,
