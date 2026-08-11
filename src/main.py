@@ -11,9 +11,13 @@ def main() -> None:
     logger = container.resolve(Logger)
     brain = container.resolve(Brain)
 
-    message = input("You: ")
-    response = brain.process(message)
-    logger.info(response.message)
+    while True:
+        message = input("You: ")
+        if message == "exit":
+            break
+
+        response = brain.process(message)
+        logger.info(response.message)
 
 
 if __name__ == "__main__":
