@@ -47,6 +47,10 @@ class BootstrapLLMProviderTests(unittest.TestCase):
                     return_value=(sentinel_config, "test-api-key"),
                 ) as settings_loader,
                 patch(
+                    "core.Bootstrap.load_llm_process_system_prompt",
+                    return_value="You are Hypatia.",
+                ) as system_prompt_loader,
+                patch(
                     "core.Bootstrap.activate_llm",
                     return_value=sentinel_provider,
                 ) as activate_llm,
@@ -60,10 +64,11 @@ class BootstrapLLMProviderTests(unittest.TestCase):
             cognitive_engine = bootstrap.container.resolve(CognitiveEngine)
 
         settings_loader.assert_called_once_with()
+        system_prompt_loader.assert_called_once_with()
         activate_llm.assert_called_once_with(
             sentinel_config,
             "test-api-key",
-            system_prompt=None,
+            system_prompt="You are Hypatia.",
         )
         self.assertIs(cognitive_engine._llm_provider, sentinel_provider)
         sentinel_provider.generate.assert_not_called()
@@ -85,6 +90,10 @@ class BootstrapLLMProviderTests(unittest.TestCase):
                     "core.Bootstrap.load_llm_process_environment_settings",
                     return_value=(sentinel_config, "test-api-key"),
                 ) as settings_loader,
+                patch(
+                    "core.Bootstrap.load_llm_process_system_prompt",
+                    return_value="You are Hypatia.",
+                ) as system_prompt_loader,
                 patch("core.Bootstrap.activate_llm") as activate_llm,
             ):
                 bootstrap = Bootstrap.from_process_environment(
@@ -93,8 +102,10 @@ class BootstrapLLMProviderTests(unittest.TestCase):
                 )
 
         settings_loader.assert_called_once_with()
+        system_prompt_loader.assert_called_once_with()
         self.assertIs(bootstrap._llm_config, sentinel_config)
         self.assertEqual(bootstrap._llm_api_key, "test-api-key")
+        self.assertEqual(bootstrap._llm_system_prompt, "You are Hypatia.")
         self.assertIs(bootstrap._memory_path, memory_path)
         self.assertIs(bootstrap._session_path, session_path)
         activate_llm.assert_not_called()
