@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from llm.LLMConversationMessage import LLMConversationMessage
+
 
 class LLMError(Exception):
     """Raised when LLM generation cannot complete."""
@@ -12,5 +14,9 @@ class LLMError(Exception):
 class LLMProvider(Protocol):
     """Generate a text response for a prompt."""
 
-    def generate(self, prompt: str) -> str:
-        """Return a generated response for the supplied prompt."""
+    def generate(
+        self,
+        prompt: str,
+        history: tuple[LLMConversationMessage, ...] = (),
+    ) -> str:
+        """Return a response for the prompt and optional conversation history."""
