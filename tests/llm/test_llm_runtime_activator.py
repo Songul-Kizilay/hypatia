@@ -47,5 +47,33 @@ class LLMRuntimeActivatorTests(unittest.TestCase):
             base_url="https://api.example.test/v1/chat/completions",
             api_key="test-api-key",
             model="test-model",
+            system_prompt=None,
+        )
+        sentinel_provider.generate.assert_not_called()
+
+    def test_enabled_config_forwards_system_prompt_unchanged(self) -> None:
+        config = LLMRuntimeConfig(
+            enabled=True,
+            base_url="https://api.example.test/v1/chat/completions",
+            model="test-model",
+        )
+        sentinel_provider = Mock(spec=LLMProvider)
+
+        with patch(
+            "llm.LLMRuntimeActivator.create_llm_provider",
+            return_value=sentinel_provider,
+        ) as provider_factory:
+            provider = activate_llm(
+                config,
+                "test-api-key",
+                system_prompt="You are Hypatia.",
+            )
+
+        self.assertIs(provider, sentinel_provider)
+        provider_factory.assert_called_once_with(
+            base_url="https://api.example.test/v1/chat/completions",
+            api_key="test-api-key",
+            model="test-model",
+            system_prompt="You are Hypatia.",
         )
         sentinel_provider.generate.assert_not_called()
