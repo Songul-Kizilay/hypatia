@@ -50,7 +50,10 @@ class MainTests(unittest.TestCase):
         )
         self.assertEqual(
             console_output.call_args_list,
-            [((first_response.message,),), ((second_response.message,),)],
+            [
+                ((f"Hypatia: {first_response.message}",),),
+                ((f"Hypatia: {second_response.message}",),),
+            ],
         )
 
     def test_main_stops_application_when_input_is_interrupted(self) -> None:
@@ -126,4 +129,4 @@ class MainTests(unittest.TestCase):
         container.resolve.assert_called_once_with(Brain)
         self.assertEqual(user_input.call_args_list, [(("You: ",),)] * 3)
         brain.process.assert_called_once_with("Hello Hypatia")
-        console_output.assert_called_once_with(response.message)
+        console_output.assert_called_once_with(f"Hypatia: {response.message}")
