@@ -29,13 +29,17 @@ class MainTests(unittest.TestCase):
         application = Mock()
         application.bootstrap.container = container
 
-        with patch(
-            "main.HypatiaApplication.from_process_environment",
-            return_value=application,
-        ) as application_factory:
+        with (
+            patch("builtins.input", return_value="Hello Hypatia") as user_input,
+            patch(
+                "main.HypatiaApplication.from_process_environment",
+                return_value=application,
+            ) as application_factory,
+        ):
             main_module.main()
 
         application_factory.assert_called_once_with()
         application.start.assert_called_once_with()
-        brain.process.assert_called_once_with("Say hello from Hypatia.")
+        user_input.assert_called_once_with("You: ")
+        brain.process.assert_called_once_with("Hello Hypatia")
         logger.info.assert_called_once_with(response.message)
