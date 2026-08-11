@@ -105,3 +105,36 @@ class MainTests(unittest.TestCase):
         application.start.assert_called_once_with()
         application.stop.assert_called_once_with()
         brain.process.assert_not_called()
+
+    def test_main_ignores_whitespace_only_input(self) -> None:
+        logger = Mock(spec=Logger)
+        brain = Mock(spec=Brain)
+        response = Mock()
+        response.message = "Hello from Hypatia."
+        brain.process.return_value = response
+        container = Mock()
+        container.resolve.side_effect = {
+            Logger: logger,
+            Brain: brain,
+        }.get
+        application = Mock()
+        application.bootstrap.container = container
+
+        with (
+            patch(
+                "builtins.input",
+                side_effect=["   ", "Hello Hypatia", "exit"],
+            ) as user_input,
+            patch(
+                "main.HypatiaApplication.from_process_environment",
+                return_value=application,
+            ) as application_factory,
+        ):
+            main_module.main()
+
+        application_factory.assert_called_once_with()
+        application.start.assert_called_once_with()
+        application.stop.assert_called_once_with()
+        self.assertEqual(user_input.call_args_list, [(("You: ",),)] * 3)
+        brain.process.assert_called_once_with("Hello Hypatia")
+        logger.info.assert_called_once_with(response.message)

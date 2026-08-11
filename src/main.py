@@ -18,6 +18,9 @@ def main() -> None:
             except KeyboardInterrupt, EOFError:
                 break
 
+            if not message.strip():
+                continue
+
             if message == "exit":
                 break
 
