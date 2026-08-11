@@ -44,6 +44,42 @@ class RecordingLLMProvider(LLMProvider):
 
 
 class BootstrapLLMProviderTests(unittest.TestCase):
+    def test_invalid_process_history_cap_fails_before_provider_activation(
+        self,
+    ) -> None:
+        enabled_config = LLMRuntimeConfig(
+            enabled=True,
+            base_url="https://api.example.test/v1/chat/completions",
+            model="test-model",
+        )
+        expected_message = "HYPATIA_LLM_HISTORY_MAX_TURNS must be a positive integer."
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary_path = Path(temporary_directory)
+            with (
+                patch(
+                    "core.Bootstrap.load_llm_process_environment_settings",
+                    return_value=(enabled_config, "test-api-key"),
+                ),
+                patch(
+                    "core.Bootstrap.load_llm_process_system_prompt",
+                    return_value=None,
+                ),
+                patch(
+                    "core.Bootstrap.load_llm_process_history_max_turns",
+                    side_effect=ValueError(expected_message),
+                ),
+                patch("core.Bootstrap.activate_llm") as activate_llm,
+            ):
+                with self.assertRaises(ValueError) as error:
+                    Bootstrap.from_process_environment(
+                        temporary_path / "memory.json",
+                        temporary_path / "sessions.json",
+                    )
+
+        self.assertEqual(str(error.exception), expected_message)
+        activate_llm.assert_not_called()
+
     def test_process_history_cap_affects_composed_conversation_behavior(
         self,
     ) -> None:
