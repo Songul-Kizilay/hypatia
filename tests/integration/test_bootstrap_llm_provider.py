@@ -470,6 +470,7 @@ class BootstrapLLMProviderTests(unittest.TestCase):
                 side_effect=[
                     {"choices": [{"message": {"content": None}}]},
                     {"choices": [{"message": {"content": "Recovered answer."}}]},
+                    {"choices": [{"message": {"content": "Continued answer."}}]},
                 ]
             )
             provider._transport = transport
@@ -525,6 +526,46 @@ class BootstrapLLMProviderTests(unittest.TestCase):
                     {
                         "role": "user",
                         "content": "What do you remember?",
+                    },
+                ],
+            )
+
+            continuation_response = cognitive_engine.process(
+                BrainRequest(
+                    message="Continue please.",
+                    metadata={"session_id": "work-1"},
+                )
+            )
+
+            self.assertTrue(continuation_response.success)
+            self.assertEqual(continuation_response.message, "Continued answer.")
+            self.assertEqual(transport.call_count, 3)
+            self.assertEqual(
+                transport.call_args_list[2].args[2]["messages"],
+                [
+                    {
+                        "role": "system",
+                        "content": HYPATIA_DEFAULT_SYSTEM_PROMPT,
+                    },
+                    {
+                        "role": "user",
+                        "content": "Prior successful turn.",
+                    },
+                    {
+                        "role": "assistant",
+                        "content": "Prior answer.",
+                    },
+                    {
+                        "role": "user",
+                        "content": "What do you remember?",
+                    },
+                    {
+                        "role": "assistant",
+                        "content": "Recovered answer.",
+                    },
+                    {
+                        "role": "user",
+                        "content": "Continue please.",
                     },
                 ],
             )
