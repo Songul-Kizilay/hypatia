@@ -1,7 +1,10 @@
 """Provider-backed learned-memory candidate extraction boundary."""
 
-from llm.LLMProvider import LLMProvider
+from llm.LLMProvider import LLMError, LLMProvider
 from memory.LearnedMemoryCandidate import LearnedMemoryCandidateBatch
+from memory.LearnedMemoryCandidateExtractionError import (
+    LearnedMemoryCandidateExtractionError,
+)
 from memory.LearnedMemoryCandidateParser import (
     parse_learned_memory_candidate_batch,
 )
@@ -21,8 +24,13 @@ class LLMLearnedMemoryCandidateExtractor:
         source_text: str,
     ) -> LearnedMemoryCandidateBatch:
         prompt = build_learned_memory_candidate_prompt(source_text)
-        payload = self._provider.generate(prompt, ())
-        return parse_learned_memory_candidate_batch(
-            source_text=source_text,
-            payload=payload,
-        )
+        try:
+            payload = self._provider.generate(prompt, ())
+            return parse_learned_memory_candidate_batch(
+                source_text=source_text,
+                payload=payload,
+            )
+        except (LLMError, ValueError) as error:
+            raise LearnedMemoryCandidateExtractionError(
+                "Learned memory candidate extraction failed."
+            ) from error
