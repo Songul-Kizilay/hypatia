@@ -1442,7 +1442,7 @@ class CognitiveEngineTests(unittest.TestCase):
                     build_learned_memory_augmented_prompt(
                         user_message=third_message,
                         learned_memory_context=build_learned_memory_context(
-                            (python_memory, rust_memory)
+                            (rust_memory,)
                         ),
                     ),
                     first_turn + second_turn,
