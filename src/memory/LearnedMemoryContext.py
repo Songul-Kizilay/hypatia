@@ -5,6 +5,7 @@ from memory.LearnedMemoryRetrieval import (
     select_latest_learned_memories,
     select_recent_learned_memories,
 )
+from memory.LearnedMemorySelector import LearnedMemorySelector
 from memory.LearnedMemoryStore import load_learned_memories
 from memory.MemoryManager import MemoryManager
 
@@ -20,6 +21,19 @@ def build_learned_memory_context(
         *(f"- {memory.kind} | {memory.key} | {memory.value}" for memory in memories),
     )
     return "\n".join(lines)
+
+
+def build_selected_learned_memory_context(
+    *,
+    source_text: str,
+    memories: tuple[LearnedMemory, ...],
+    selector: LearnedMemorySelector,
+) -> str:
+    selected_memories = selector.select(
+        source_text=source_text,
+        memories=memories,
+    )
+    return build_learned_memory_context(selected_memories)
 
 
 def build_bounded_learned_memory_context(

@@ -14,6 +14,7 @@ from memory.LearnedMemoryContext import (
     build_bounded_learned_memory_context,
     build_learned_memory_augmented_prompt,
     build_learned_memory_context,
+    build_selected_learned_memory_context,
     load_bounded_learned_memory_context,
     load_learned_memory_context,
 )
@@ -22,6 +23,68 @@ from memory.MemoryManager import MemoryManager
 
 
 class LearnedMemoryContextTests(unittest.TestCase):
+    def test_selected_context_delegates_exact_inputs_and_result_once(self) -> None:
+        first = LearnedMemory(kind="preference", key="language", value="Python")
+        second = LearnedMemory(kind="goal", key="learning", value="Kali Linux")
+        third = LearnedMemory(kind="project_fact", key="project", value="Hypatia")
+        memories = (first, second, third)
+        selected = (third, first)
+        selector = Mock()
+        selector.select.return_value = selected
+        sentinel_context = "".join(("selected", "-context"))
+
+        with patch(
+            "memory.LearnedMemoryContext.build_learned_memory_context",
+            return_value=sentinel_context,
+        ) as build_learned_memory_context:
+            result = build_selected_learned_memory_context(
+                source_text="  What matters?  ",
+                memories=memories,
+                selector=selector,
+            )
+
+        selector.select.assert_called_once_with(
+            source_text="  What matters?  ",
+            memories=memories,
+        )
+        self.assertIs(selector.select.call_args.kwargs["memories"], memories)
+        build_learned_memory_context.assert_called_once_with(selected)
+        self.assertIs(build_learned_memory_context.call_args.args[0], selected)
+        self.assertIs(result, sentinel_context)
+
+    def test_selected_context_formats_empty_and_duplicate_results_exactly(self) -> None:
+        first = LearnedMemory(kind="preference", key="language", value="Python")
+        second = LearnedMemory(kind="goal", key="learning", value="Kali Linux")
+        memories = (first, second)
+        original_memories = tuple(memories)
+        selector = Mock()
+        selector.select.side_effect = ((), (second, second))
+
+        empty_result = build_selected_learned_memory_context(
+            source_text="\tNothing relevant\n",
+            memories=memories,
+            selector=selector,
+        )
+        duplicate_result = build_selected_learned_memory_context(
+            source_text="  Keep duplicates  ",
+            memories=memories,
+            selector=selector,
+        )
+
+        self.assertEqual(empty_result, "")
+        self.assertEqual(
+            duplicate_result,
+            "Known learned memories:\n"
+            "- goal | learning | Kali Linux\n"
+            "- goal | learning | Kali Linux",
+        )
+        self.assertEqual(memories, original_memories)
+        self.assertIs(memories[0], first)
+        self.assertIs(memories[1], second)
+        self.assertEqual(selector.select.call_count, 2)
+        self.assertIs(selector.select.call_args_list[0].kwargs["memories"], memories)
+        self.assertIs(selector.select.call_args_list[1].kwargs["memories"], memories)
+
     def test_load_bounded_context_delegates_exact_tuple_and_limit_once(self) -> None:
         memory_manager = Mock(spec=MemoryManager)
         old_python = LearnedMemory(
