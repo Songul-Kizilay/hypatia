@@ -248,3 +248,41 @@ class LearnedMemoryCorrectionTests(unittest.TestCase):
                 "value": "Rust",
             },
         )
+
+    def test_real_store_exact_correction_is_a_no_op(self) -> None:
+        memory_manager = MemoryManager()
+        original = LearnedMemory(
+            kind="preference",
+            key="preferred_language",
+            value="Python",
+        )
+        original_record = append_learned_memory(memory_manager, original)
+        before_snapshot = memory_manager.snapshot()
+
+        result = correct_learned_memory_value_if_changed(
+            memory_manager,
+            kind="preference",
+            key="preferred_language",
+            value="Python",
+        )
+
+        after_snapshot = memory_manager.snapshot()
+        self.assertIsNone(result)
+        self.assertEqual(len(before_snapshot), 1)
+        self.assertEqual(memory_manager.count(), 1)
+        self.assertEqual(after_snapshot, before_snapshot)
+        self.assertIs(after_snapshot[0], original_record)
+        self.assertEqual(load_learned_memories(memory_manager), (original,))
+        self.assertEqual(original_record.content, "Python")
+        self.assertEqual(
+            original_record.tags,
+            frozenset({"learned", "preference"}),
+        )
+        self.assertEqual(
+            dict(original_record.metadata),
+            {
+                "kind": "preference",
+                "key": "preferred_language",
+                "value": "Python",
+            },
+        )
