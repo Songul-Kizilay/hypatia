@@ -15,11 +15,73 @@ from memory.LearnedMemoryRetrieval import (
     find_learned_memories,
     resolve_latest_learned_memory,
     select_latest_learned_memories,
+    select_recent_learned_memories,
 )
 from memory.MemoryRecord import MemoryRecord
 
 
 class LearnedMemoryRetrievalTests(unittest.TestCase):
+    def test_recent_view_empty_input_returns_exact_empty_tuple(self) -> None:
+        self.assertEqual(select_recent_learned_memories((), 5), ())
+
+    def test_recent_view_zero_limit_returns_exact_empty_tuple(self) -> None:
+        memory_a = LearnedMemory(kind="preference", key="language", value="Python")
+        memory_b = LearnedMemory(kind="goal", key="learning", value="Rust")
+
+        self.assertEqual(select_recent_learned_memories((memory_a, memory_b), 0), ())
+
+    def test_recent_view_returns_final_objects_with_identity_and_order(self) -> None:
+        memory_a = LearnedMemory(kind="preference", key="language", value="Python")
+        memory_b = LearnedMemory(kind="goal", key="learning", value="Kali")
+        memory_c = LearnedMemory(kind="preference", key="language", value="Rust")
+
+        result = select_recent_learned_memories(
+            (memory_a, memory_b, memory_c),
+            2,
+        )
+
+        self.assertEqual(result, (memory_b, memory_c))
+        self.assertIs(result[0], memory_b)
+        self.assertIs(result[1], memory_c)
+
+    def test_recent_view_large_limit_preserves_all_object_identities(self) -> None:
+        memory_a = LearnedMemory(kind="preference", key="language", value="Python")
+        memory_b = LearnedMemory(kind="goal", key="learning", value="Rust")
+        memories = (memory_a, memory_b)
+
+        result = select_recent_learned_memories(memories, 10)
+
+        self.assertEqual(result, memories)
+        self.assertIs(result[0], memory_a)
+        self.assertIs(result[1], memory_b)
+
+    def test_recent_view_rejects_negative_limit_without_mutation(self) -> None:
+        memory_a = LearnedMemory(kind="preference", key="language", value="Python")
+        memories = (memory_a,)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            r"^Learned memory limit must be non-negative\.$",
+        ):
+            select_recent_learned_memories(memories, -1)
+
+        self.assertEqual(memories, (memory_a,))
+        self.assertIs(memories[0], memory_a)
+
+    def test_recent_view_is_repeatable_without_mutating_input(self) -> None:
+        memory_a = LearnedMemory(kind="preference", key="language", value="Python")
+        memory_b = LearnedMemory(kind="goal", key="learning", value="Rust")
+        memories = (memory_a, memory_b)
+
+        first = select_recent_learned_memories(memories, 1)
+        second = select_recent_learned_memories(memories, 1)
+
+        self.assertEqual(first, (memory_b,))
+        self.assertEqual(second, (memory_b,))
+        self.assertIs(first[0], memory_b)
+        self.assertIs(second[0], memory_b)
+        self.assertEqual(memories, (memory_a, memory_b))
+
     def test_latest_view_empty_input_returns_exact_empty_tuple(self) -> None:
         self.assertEqual(select_latest_learned_memories(()), ())
 
