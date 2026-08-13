@@ -10,7 +10,10 @@ if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
 from memory.LearnedMemory import LearnedMemory
-from memory.LearnedMemoryRetrieval import collect_learned_memories
+from memory.LearnedMemoryRetrieval import (
+    collect_learned_memories,
+    find_learned_memories,
+)
 from memory.MemoryRecord import MemoryRecord
 
 
@@ -58,3 +61,58 @@ class LearnedMemoryRetrievalTests(unittest.TestCase):
         self.assertEqual(result, ())
         self.assertIsInstance(result, tuple)
         decode_learned_memory.assert_not_called()
+
+    def test_finds_all_exact_kind_and_key_matches_in_supplied_order(self) -> None:
+        first_match = LearnedMemory(
+            kind="preference",
+            key="preferred_language",
+            value="Python",
+        )
+        same_key_different_kind = LearnedMemory(
+            kind="user_fact",
+            key="preferred_language",
+            value="Turkish",
+        )
+        same_kind_different_key = LearnedMemory(
+            kind="preference",
+            key="preferred_editor",
+            value="VS Code",
+        )
+        case_different_key = LearnedMemory(
+            kind="preference",
+            key="Preferred_Language",
+            value="Rust",
+        )
+        second_match = LearnedMemory(
+            kind="preference",
+            key="preferred_language",
+            value="Go",
+        )
+        memories = (
+            first_match,
+            same_key_different_kind,
+            same_kind_different_key,
+            case_different_key,
+            second_match,
+        )
+
+        result = find_learned_memories(
+            memories,
+            kind="preference",
+            key="preferred_language",
+        )
+
+        self.assertEqual(result, (first_match, second_match))
+        self.assertIs(result[0], first_match)
+        self.assertIs(result[1], second_match)
+        self.assertIsInstance(result, tuple)
+
+    def test_find_with_empty_input_returns_exact_empty_tuple(self) -> None:
+        result = find_learned_memories(
+            (),
+            kind="preference",
+            key="preferred_language",
+        )
+
+        self.assertEqual(result, ())
+        self.assertIsInstance(result, tuple)
