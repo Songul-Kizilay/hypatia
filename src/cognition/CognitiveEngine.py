@@ -22,8 +22,12 @@ from core.Exceptions import (
 from eventbus.EventBus import EventBus
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from llm.LLMProvider import LLMError, LLMProvider
+from memory.LearnedMemoryCandidateExtractor import LearnedMemoryCandidateExtractor
 from memory.MemoryManager import MemoryManager
 from memory.MemoryRecord import MemoryRecord
+from memory.NoOpLearnedMemoryCandidateExtractor import (
+    NoOpLearnedMemoryCandidateExtractor,
+)
 from memory.SessionMemoryPolicy import SessionMemoryPolicy
 from response.ResponseComposer import ResponseComposer
 from session.SessionCreateService import SessionCreateService
@@ -55,6 +59,9 @@ class CognitiveEngine:
         session_rename_service: SessionRenameTransactionService,
         llm_provider: LLMProvider | None = None,
         llm_history_max_turns: int | None = None,
+        learned_memory_candidate_extractor: (
+            LearnedMemoryCandidateExtractor | None
+        ) = None,
     ) -> None:
         if llm_history_max_turns is not None and (
             isinstance(llm_history_max_turns, bool) or llm_history_max_turns <= 0
@@ -84,6 +91,11 @@ class CognitiveEngine:
             LLM_CONVERSATION_HISTORY_MAX_TURNS
             if llm_history_max_turns is None
             else llm_history_max_turns
+        )
+        self._learned_memory_candidate_extractor = (
+            learned_memory_candidate_extractor
+            if learned_memory_candidate_extractor is not None
+            else NoOpLearnedMemoryCandidateExtractor()
         )
         self._router = BrainRouter()
 
