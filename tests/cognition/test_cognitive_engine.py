@@ -531,6 +531,120 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertNotIn("source_text", learned_record.metadata)
         self.assertEqual(llm_provider.calls, [(message, ())])
 
+    def test_successful_llm_message_persists_multiple_learned_candidates(self) -> None:
+        llm_provider = RecordingLLMProvider("I will remember both.")
+        message = "  Python tercih ediyorum ve Rust öğrenmek istiyorum.  "
+        python_preference = LearnedMemory(
+            kind="preference",
+            key="preferred_language",
+            value="Python",
+        )
+        rust_goal = LearnedMemory(
+            kind="goal",
+            key="current_learning_goal",
+            value="Rust",
+        )
+        python_candidate = LearnedMemoryCandidate(
+            memory=python_preference,
+            source_text=message,
+        )
+        rust_candidate = LearnedMemoryCandidate(
+            memory=rust_goal,
+            source_text=message,
+        )
+        recording_extractor = RecordingCandidateExtractor(
+            LearnedMemoryCandidateBatch(
+                source_text=message,
+                candidates=(python_candidate, rust_candidate),
+            )
+        )
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+            learned_memory_candidate_extractor=recording_extractor,
+        )
+
+        response = engine.process(BrainRequest(message=message))
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.message, "I will remember both.")
+        self.assertEqual(recording_extractor.calls, [message])
+        self.assertEqual(
+            load_learned_memories(self.memory_manager),
+            (python_preference, rust_goal),
+        )
+        self.assertEqual(
+            load_latest_learned_memory(
+                self.memory_manager,
+                kind="preference",
+                key="preferred_language",
+            ),
+            python_preference,
+        )
+        self.assertEqual(
+            load_latest_learned_memory(
+                self.memory_manager,
+                kind="goal",
+                key="current_learning_goal",
+            ),
+            rust_goal,
+        )
+        records = self.memory_manager.all()
+        learned_records = tuple(
+            record for record in records if "learned" in record.tags
+        )
+        conversation_records = tuple(
+            record for record in records if "conversation" in record.tags
+        )
+        self.assertEqual(len(learned_records), 2)
+        self.assertEqual(len(conversation_records), 1)
+        self.assertEqual(
+            tuple(record.content for record in learned_records),
+            ("Python", "Rust"),
+        )
+        self.assertEqual(
+            learned_records[0].tags,
+            frozenset({"learned", "preference"}),
+        )
+        self.assertEqual(
+            learned_records[0].metadata,
+            {
+                "kind": "preference",
+                "key": "preferred_language",
+                "value": "Python",
+            },
+        )
+        self.assertEqual(
+            learned_records[1].tags,
+            frozenset({"learned", "goal"}),
+        )
+        self.assertEqual(
+            learned_records[1].metadata,
+            {
+                "kind": "goal",
+                "key": "current_learning_goal",
+                "value": "Rust",
+            },
+        )
+        self.assertNotIn("source_text", learned_records[0].metadata)
+        self.assertNotIn("source_text", learned_records[1].metadata)
+        self.assertEqual(
+            conversation_records[0].content,
+            "User:   Python tercih ediyorum ve Rust öğrenmek istiyorum.  \n"
+            "Hypatia: I will remember both.",
+        )
+        self.assertEqual(
+            conversation_records[0].tags,
+            frozenset({"brain", "conversation"}),
+        )
+        self.assertEqual(llm_provider.calls, [(message, ())])
+
     def test_repeated_exact_candidate_is_a_learned_memory_no_op(self) -> None:
         llm_provider = RecordingLLMProvider("I will remember that.")
         first_message = "  Ben Python tercih ediyorum.  "
