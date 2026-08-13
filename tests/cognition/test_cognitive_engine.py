@@ -518,6 +518,105 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertNotIn("source_text", learned_record.metadata)
         self.assertEqual(llm_provider.calls, [(message, ())])
 
+    def test_repeated_exact_candidate_is_a_learned_memory_no_op(self) -> None:
+        llm_provider = RecordingLLMProvider("I will remember that.")
+        first_message = "  Ben Python tercih ediyorum.  "
+        second_message = "  Python tercihimi hatırla.  "
+        learned_memory = LearnedMemory(
+            kind="preference",
+            key="preferred_language",
+            value="Python",
+        )
+        candidate = LearnedMemoryCandidate(
+            memory=learned_memory,
+            source_text=first_message,
+        )
+        batch = LearnedMemoryCandidateBatch(
+            source_text=first_message,
+            candidates=(candidate,),
+        )
+        recording_extractor = RecordingCandidateExtractor(batch)
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+            learned_memory_candidate_extractor=recording_extractor,
+        )
+
+        first_response = engine.process(BrainRequest(message=first_message))
+        first_learned_record = next(
+            record for record in self.memory_manager.all() if "learned" in record.tags
+        )
+        second_response = engine.process(BrainRequest(message=second_message))
+
+        self.assertTrue(first_response.success)
+        self.assertTrue(second_response.success)
+        self.assertEqual(first_response.message, "I will remember that.")
+        self.assertEqual(second_response.message, "I will remember that.")
+        self.assertEqual(recording_extractor.calls, [first_message, second_message])
+        self.assertEqual(load_learned_memories(self.memory_manager), (learned_memory,))
+        self.assertEqual(
+            load_latest_learned_memory(
+                self.memory_manager,
+                kind="preference",
+                key="preferred_language",
+            ),
+            learned_memory,
+        )
+        records = self.memory_manager.all()
+        learned_records = tuple(
+            record for record in records if "learned" in record.tags
+        )
+        conversation_records = tuple(
+            record for record in records if "conversation" in record.tags
+        )
+        self.assertEqual(len(learned_records), 1)
+        self.assertEqual(len(conversation_records), 2)
+        self.assertIs(learned_records[0], first_learned_record)
+        self.assertEqual(first_learned_record.content, "Python")
+        self.assertEqual(
+            first_learned_record.tags,
+            frozenset({"learned", "preference"}),
+        )
+        self.assertEqual(
+            first_learned_record.metadata,
+            {
+                "kind": "preference",
+                "key": "preferred_language",
+                "value": "Python",
+            },
+        )
+        self.assertEqual(
+            tuple(record.content for record in conversation_records),
+            (
+                "User:   Ben Python tercih ediyorum.  \n"
+                "Hypatia: I will remember that.",
+                "User:   Python tercihimi hatırla.  \n"
+                "Hypatia: I will remember that.",
+            ),
+        )
+        self.assertEqual(
+            llm_provider.calls,
+            [
+                (first_message, ()),
+                (
+                    second_message,
+                    (
+                        LLMConversationMessage(role="user", content=first_message),
+                        LLMConversationMessage(
+                            role="assistant",
+                            content="I will remember that.",
+                        ),
+                    ),
+                ),
+            ],
+        )
+
     def test_failed_llm_message_does_not_invoke_candidate_extractor(self) -> None:
         llm_provider = FailingLLMProvider()
         recording_extractor = RecordingCandidateExtractor()
