@@ -27,3 +27,13 @@ def find_learned_memories(
     return tuple(
         memory for memory in memories if memory.kind == kind and memory.key == key
     )
+
+
+def resolve_latest_learned_memory(
+    memories: tuple[LearnedMemory, ...],
+    *,
+    kind: LearnedMemoryKind,
+    key: str,
+) -> LearnedMemory | None:
+    matches = find_learned_memories(memories, kind=kind, key=key)
+    return matches[-1] if matches else None
