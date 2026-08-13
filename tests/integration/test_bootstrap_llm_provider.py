@@ -12,13 +12,27 @@ if str(SRC_DIR) not in sys.path:
 
 from brain.BrainRequest import BrainRequest
 from cognition.CognitiveEngine import CognitiveEngine
+from cognition.LLMConversationHistoryBuilder import (
+    build_llm_conversation_history,
+)
 from core.Bootstrap import Bootstrap
 from llm.HypatiaSystemPrompt import HYPATIA_DEFAULT_SYSTEM_PROMPT
 from llm.LLMConversationMessage import LLMConversationMessage
 from llm.LLMProvider import LLMProvider
 from llm.LLMRuntimeConfig import LLMRuntimeConfig
 from llm.OpenAICompatibleProvider import OpenAICompatibleProvider
+from memory.LearnedMemory import LearnedMemory
 from memory.LearnedMemoryCandidate import LearnedMemoryCandidateBatch
+from memory.LearnedMemoryCandidatePrompt import (
+    build_learned_memory_candidate_prompt,
+)
+from memory.LearnedMemoryStore import (
+    load_latest_learned_memory,
+    load_learned_memories,
+)
+from memory.LLMLearnedMemoryCandidateExtractor import (
+    LLMLearnedMemoryCandidateExtractor,
+)
 from memory.NoOpLearnedMemoryCandidateExtractor import (
     NoOpLearnedMemoryCandidateExtractor,
 )
@@ -60,6 +74,104 @@ class RecordingCandidateExtractor:
 
 
 class BootstrapLLMProviderTests(unittest.TestCase):
+    def test_bootstrap_composes_real_llm_learning_extractor_end_to_end(
+        self,
+    ) -> None:
+        conversation_provider = RecordingLLMProvider(["Normal answer."])
+        extraction_provider = RecordingLLMProvider(
+            [
+                '{"candidates":[{"kind":"preference",'
+                '"key":"preferred_language","value":"Python"}]}'
+            ]
+        )
+        extractor = LLMLearnedMemoryCandidateExtractor(extraction_provider)
+        source_text = "  I prefer Python for new projects.  "
+        expected_memory = LearnedMemory(
+            kind="preference",
+            key="preferred_language",
+            value="Python",
+        )
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary_path = Path(temporary_directory)
+            bootstrap = Bootstrap(
+                memory_path=temporary_path / "memory.json",
+                session_path=temporary_path / "sessions.json",
+                llm_provider=conversation_provider,
+                learned_memory_candidate_extractor=extractor,
+            )
+            bootstrap.initialize()
+
+            cognitive_engine = bootstrap.container.resolve(CognitiveEngine)
+            response = cognitive_engine.process(BrainRequest(message=source_text))
+            learned_memories = load_learned_memories(cognitive_engine._memory_manager)
+            latest = load_latest_learned_memory(
+                cognitive_engine._memory_manager,
+                kind="preference",
+                key="preferred_language",
+            )
+            records = tuple(cognitive_engine._memory_manager.all())
+
+        self.assertIs(
+            cognitive_engine._learned_memory_candidate_extractor,
+            extractor,
+        )
+        self.assertEqual(conversation_provider.calls, [(source_text, ())])
+        self.assertEqual(
+            extraction_provider.calls,
+            [(build_learned_memory_candidate_prompt(source_text), ())],
+        )
+        self.assertTrue(response.success)
+        self.assertEqual(response.message, "Normal answer.")
+        self.assertEqual(learned_memories, (expected_memory,))
+        self.assertEqual(latest, expected_memory)
+        self.assertEqual(len(records), 2)
+
+        learned_records = tuple(
+            record for record in records if "learned" in record.tags
+        )
+        self.assertEqual(len(learned_records), 1)
+        self.assertEqual(learned_records[0].content, "Python")
+        self.assertEqual(learned_records[0].tags, {"learned", "preference"})
+        self.assertEqual(
+            learned_records[0].metadata,
+            {
+                "kind": "preference",
+                "key": "preferred_language",
+                "value": "Python",
+            },
+        )
+        self.assertNotIn("source_text", learned_records[0].metadata)
+
+        conversation_records = tuple(
+            record
+            for record in records
+            if {"brain", "conversation"}.issubset(record.tags)
+        )
+        self.assertEqual(len(conversation_records), 1)
+        self.assertEqual(
+            conversation_records[0].metadata["user_message"],
+            source_text,
+        )
+        self.assertEqual(
+            conversation_records[0].metadata["assistant_message"],
+            "Normal answer.",
+        )
+        self.assertEqual(
+            build_llm_conversation_history(
+                records,
+                conversation_records[0].metadata["session_id"],
+                max_turns=8,
+            ),
+            (
+                LLMConversationMessage(role="user", content=source_text),
+                LLMConversationMessage(
+                    role="assistant",
+                    content="Normal answer.",
+                ),
+            ),
+        )
+
     def test_bootstrap_passes_explicit_learning_extractor_unchanged(self) -> None:
         provider = RecordingLLMProvider(["Exact assistant response."])
         extractor = RecordingCandidateExtractor()
