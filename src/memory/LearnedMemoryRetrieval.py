@@ -29,6 +29,21 @@ def find_learned_memories(
     )
 
 
+def select_latest_learned_memories(
+    memories: tuple[LearnedMemory, ...],
+) -> tuple[LearnedMemory, ...]:
+    seen: set[tuple[LearnedMemoryKind, str]] = set()
+    retained_reversed: list[LearnedMemory] = []
+
+    for memory in reversed(memories):
+        identity = (memory.kind, memory.key)
+        if identity not in seen:
+            seen.add(identity)
+            retained_reversed.append(memory)
+
+    return tuple(reversed(retained_reversed))
+
+
 def resolve_latest_learned_memory(
     memories: tuple[LearnedMemory, ...],
     *,
