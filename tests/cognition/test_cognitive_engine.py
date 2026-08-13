@@ -41,6 +41,9 @@ from memory.LearnedMemoryCandidate import (
     LearnedMemoryCandidate,
     LearnedMemoryCandidateBatch,
 )
+from memory.LearnedMemoryCandidateExtractionError import (
+    LearnedMemoryCandidateExtractionError,
+)
 from memory.LearnedMemoryCandidateExtractor import LearnedMemoryCandidateExtractor
 from memory.LearnedMemoryStore import (
     load_latest_learned_memory,
@@ -264,6 +267,18 @@ class RecordingCandidateSequenceExtractor:
         return batch
 
 
+class FailingCandidateExtractor:
+    """Records extraction calls before raising a caller-supplied error."""
+
+    def __init__(self, error: Exception) -> None:
+        self.calls: list[str] = []
+        self.error = error
+
+    def extract(self, source_text: str) -> LearnedMemoryCandidateBatch:
+        self.calls.append(source_text)
+        raise self.error
+
+
 class CognitiveEngineTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary_directory = tempfile.TemporaryDirectory()
@@ -454,6 +469,104 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(recording_extractor.calls, [message])
         persist.assert_called_once_with(self.memory_manager, batch)
         self.assertEqual(llm_provider.calls, [(message, ())])
+
+    def test_learning_failure_preserves_successful_conversation_and_history(
+        self,
+    ) -> None:
+        llm_provider = RecordingLLMProvider("The conversation succeeded.")
+        extraction_error = LearnedMemoryCandidateExtractionError(
+            "Learned memory candidate extraction failed."
+        )
+        extractor = FailingCandidateExtractor(extraction_error)
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+            learned_memory_candidate_extractor=extractor,
+        )
+        first_message = "  Remember this exact text.  "
+        second_message = "What did we discuss?"
+
+        with patch(
+            "cognition.CognitiveEngine.persist_learned_memory_candidate_batch"
+        ) as persist:
+            first_response = engine.process(BrainRequest(message=first_message))
+
+            self.assertTrue(first_response.success)
+            self.assertEqual(first_response.message, "The conversation succeeded.")
+            self.assertEqual(extractor.calls, [first_message])
+            persist.assert_not_called()
+            first_records = tuple(self.memory_manager.all())
+            self.assertEqual(len(first_records), 1)
+            self.assertEqual(
+                first_records[0].tags, frozenset({"brain", "conversation"})
+            )
+            self.assertEqual(
+                first_records[0].metadata,
+                {
+                    "request_id": first_response.request_id,
+                    "intent": "message",
+                    "session_id": "default",
+                    "user_message": first_message,
+                    "assistant_message": "The conversation succeeded.",
+                },
+            )
+
+            second_response = engine.process(BrainRequest(message=second_message))
+
+        self.assertTrue(second_response.success)
+        self.assertEqual(extractor.calls, [first_message, second_message])
+        persist.assert_not_called()
+        records = tuple(self.memory_manager.all())
+        self.assertEqual(len(records), 2)
+        self.assertTrue(
+            all(
+                record.tags == frozenset({"brain", "conversation"})
+                for record in records
+            )
+        )
+        first_turn = (
+            LLMConversationMessage(role="user", content=first_message),
+            LLMConversationMessage(
+                role="assistant",
+                content="The conversation succeeded.",
+            ),
+        )
+        self.assertEqual(
+            llm_provider.calls,
+            [
+                (first_message, ()),
+                (second_message, first_turn),
+            ],
+        )
+        self.assertEqual(load_learned_memories(self.memory_manager), ())
+
+    def test_unrelated_extraction_error_escapes_unchanged(self) -> None:
+        llm_provider = RecordingLLMProvider("The conversation succeeded.")
+        unexpected_error = RuntimeError("unexpected")
+        extractor = FailingCandidateExtractor(unexpected_error)
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+            learned_memory_candidate_extractor=extractor,
+        )
+
+        with self.assertRaises(RuntimeError) as context:
+            engine.process(BrainRequest(message="exact message"))
+
+        self.assertIs(context.exception, unexpected_error)
+        self.assertEqual(extractor.calls, ["exact message"])
 
     def test_successful_llm_message_persists_extracted_learned_memory(self) -> None:
         llm_provider = RecordingLLMProvider("I will remember that.")
