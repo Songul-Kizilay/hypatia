@@ -14,11 +14,65 @@ from memory.LearnedMemoryRetrieval import (
     collect_learned_memories,
     find_learned_memories,
     resolve_latest_learned_memory,
+    select_latest_learned_memories,
 )
 from memory.MemoryRecord import MemoryRecord
 
 
 class LearnedMemoryRetrievalTests(unittest.TestCase):
+    def test_latest_view_empty_input_returns_exact_empty_tuple(self) -> None:
+        self.assertEqual(select_latest_learned_memories(()), ())
+
+    def test_latest_view_preserves_distinct_objects_and_order(self) -> None:
+        preference = LearnedMemory(kind="preference", key="language", value="Python")
+        goal = LearnedMemory(kind="goal", key="learning", value="Rust")
+        memories = (preference, goal)
+
+        result = select_latest_learned_memories(memories)
+
+        self.assertEqual(result, memories)
+        self.assertIs(result[0], preference)
+        self.assertIs(result[1], goal)
+        self.assertIs(memories[0], preference)
+
+    def test_latest_view_retains_correction_last_occurrence_order(self) -> None:
+        python = LearnedMemory(kind="preference", key="language", value="Python")
+        goal = LearnedMemory(kind="goal", key="learning", value="Kali")
+        rust = LearnedMemory(kind="preference", key="language", value="Rust")
+
+        result = select_latest_learned_memories((python, goal, rust))
+
+        self.assertEqual(result, (goal, rust))
+        self.assertIs(result[0], goal)
+        self.assertIs(result[1], rust)
+
+    def test_latest_view_retains_multiple_corrections_in_final_order(self) -> None:
+        python = LearnedMemory(kind="preference", key="language", value="Python")
+        linux = LearnedMemory(kind="goal", key="learning", value="Linux")
+        rust = LearnedMemory(kind="preference", key="language", value="Rust")
+        kali = LearnedMemory(kind="goal", key="learning", value="Kali")
+        go = LearnedMemory(kind="preference", key="language", value="Go")
+
+        result = select_latest_learned_memories((python, linux, rust, kali, go))
+
+        self.assertEqual(result, (kali, go))
+        self.assertIs(result[0], kali)
+        self.assertIs(result[1], go)
+
+    def test_latest_view_uses_exact_case_sensitive_kind_and_key_groups(
+        self,
+    ) -> None:
+        lower = LearnedMemory(kind="preference", key="language", value="Rust")
+        upper = LearnedMemory(kind="preference", key="Language", value="Python")
+        different_kind = LearnedMemory(kind="goal", key="language", value="Kali")
+
+        result = select_latest_learned_memories((lower, upper, different_kind))
+
+        self.assertEqual(result, (lower, upper, different_kind))
+        self.assertIs(result[0], lower)
+        self.assertIs(result[1], upper)
+        self.assertIs(result[2], different_kind)
+
     @patch("memory.LearnedMemoryRetrieval.decode_learned_memory")
     def test_collects_decoded_memories_in_order_with_identity_preserved(
         self,
