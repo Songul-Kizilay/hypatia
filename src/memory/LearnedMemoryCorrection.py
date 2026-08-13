@@ -6,6 +6,18 @@ from memory.MemoryManager import MemoryManager
 from memory.MemoryRecord import MemoryRecord
 
 
+def should_correct_learned_memory(
+    current: LearnedMemory | None,
+    *,
+    kind: LearnedMemoryKind,
+    key: str,
+    value: str,
+) -> bool:
+    if current is None:
+        return True
+    return (current.kind, current.key, current.value) != (kind, key, value)
+
+
 def correct_learned_memory_value(
     memory_manager: MemoryManager,
     *,

@@ -10,7 +10,10 @@ if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
 from memory.LearnedMemory import LearnedMemory
-from memory.LearnedMemoryCorrection import correct_learned_memory_value
+from memory.LearnedMemoryCorrection import (
+    correct_learned_memory_value,
+    should_correct_learned_memory,
+)
 from memory.LearnedMemoryStore import (
     append_learned_memory,
     load_latest_learned_memory,
@@ -21,6 +24,85 @@ from memory.MemoryRecord import MemoryRecord
 
 
 class LearnedMemoryCorrectionTests(unittest.TestCase):
+    def test_should_correct_requires_an_exact_current_match(self) -> None:
+        current = LearnedMemory(
+            kind="preference",
+            key="preferred_language",
+            value="Python",
+        )
+        cases = (
+            (
+                "missing current",
+                None,
+                "preference",
+                "preferred_language",
+                "Python",
+                True,
+            ),
+            (
+                "exact match",
+                current,
+                "preference",
+                "preferred_language",
+                "Python",
+                False,
+            ),
+            (
+                "different value",
+                current,
+                "preference",
+                "preferred_language",
+                "Rust",
+                True,
+            ),
+            ("different key", current, "preference", "language", "Python", True),
+            (
+                "different kind",
+                current,
+                "user_fact",
+                "preferred_language",
+                "Python",
+                True,
+            ),
+            (
+                "case difference",
+                current,
+                "preference",
+                "preferred_language",
+                "python",
+                True,
+            ),
+            (
+                "whitespace difference",
+                current,
+                "preference",
+                "preferred_language",
+                " Python ",
+                True,
+            ),
+        )
+
+        for name, candidate, kind, key, value, expected in cases:
+            with self.subTest(name=name):
+                self.assertIs(
+                    should_correct_learned_memory(
+                        candidate,
+                        kind=kind,
+                        key=key,
+                        value=value,
+                    ),
+                    expected,
+                )
+
+        self.assertEqual(
+            current,
+            LearnedMemory(
+                kind="preference",
+                key="preferred_language",
+                value="Python",
+            ),
+        )
+
     @patch("memory.LearnedMemoryCorrection.correct_learned_memory")
     def test_constructs_exact_memory_and_preserves_record_identity(
         self,
