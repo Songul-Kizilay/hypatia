@@ -65,6 +65,7 @@ class Bootstrap:
         llm_config, llm_api_key = load_llm_process_environment_settings()
         llm_system_prompt = load_llm_process_system_prompt()
         llm_history_max_turns = load_llm_process_history_max_turns()
+        learned_memory_context_limit = cls._load_process_learned_memory_context_limit()
         if llm_system_prompt is None:
             llm_system_prompt = HYPATIA_DEFAULT_SYSTEM_PROMPT
 
@@ -75,7 +76,20 @@ class Bootstrap:
             llm_api_key=llm_api_key,
             llm_system_prompt=llm_system_prompt,
             llm_history_max_turns=llm_history_max_turns,
+            learned_memory_context_limit=learned_memory_context_limit,
         )
+
+    @staticmethod
+    def _load_process_learned_memory_context_limit() -> int | None:
+        raw_limit = os.environ.get("HYPATIA_LEARNED_MEMORY_CONTEXT_LIMIT")
+        if raw_limit is None:
+            return None
+        if not raw_limit.isascii() or not raw_limit.isdecimal():
+            raise ValueError(
+                "HYPATIA_LEARNED_MEMORY_CONTEXT_LIMIT must be a "
+                "non-negative integer."
+            )
+        return int(raw_limit)
 
     def initialize(self) -> None:
         config = Config()
