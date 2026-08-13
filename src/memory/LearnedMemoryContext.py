@@ -31,6 +31,14 @@ def build_bounded_learned_memory_context(
     return build_learned_memory_context(bounded_memories)
 
 
+def load_bounded_learned_memory_context(
+    memory_manager: MemoryManager,
+    limit: int,
+) -> str:
+    memories = load_learned_memories(memory_manager)
+    return build_bounded_learned_memory_context(memories, limit)
+
+
 def load_learned_memory_context(memory_manager: MemoryManager) -> str:
     memories = load_learned_memories(memory_manager)
     latest_memories = select_latest_learned_memories(memories)

@@ -14,6 +14,7 @@ from memory.LearnedMemoryContext import (
     build_bounded_learned_memory_context,
     build_learned_memory_augmented_prompt,
     build_learned_memory_context,
+    load_bounded_learned_memory_context,
     load_learned_memory_context,
 )
 from memory.LearnedMemoryStore import append_learned_memory, load_learned_memories
@@ -21,6 +22,76 @@ from memory.MemoryManager import MemoryManager
 
 
 class LearnedMemoryContextTests(unittest.TestCase):
+    def test_load_bounded_context_delegates_exact_tuple_and_limit_once(self) -> None:
+        memory_manager = Mock(spec=MemoryManager)
+        old_python = LearnedMemory(
+            kind="preference", key="preferred_language", value="Python"
+        )
+        rust = LearnedMemory(kind="preference", key="preferred_language", value="Rust")
+        all_memories = (old_python, rust)
+        sentinel_context = "".join(("bounded", "-context"))
+
+        with (
+            patch(
+                "memory.LearnedMemoryContext.load_learned_memories",
+                return_value=all_memories,
+            ) as load_learned_memories,
+            patch(
+                "memory.LearnedMemoryContext.build_bounded_learned_memory_context",
+                return_value=sentinel_context,
+            ) as build_bounded_learned_memory_context,
+        ):
+            result = load_bounded_learned_memory_context(memory_manager, 1)
+
+        load_learned_memories.assert_called_once_with(memory_manager)
+        build_bounded_learned_memory_context.assert_called_once_with(all_memories, 1)
+        self.assertIs(result, sentinel_context)
+
+    def test_load_bounded_context_uses_real_store_without_compacting_history(
+        self,
+    ) -> None:
+        memory_manager = MemoryManager()
+        old_python = LearnedMemory(
+            kind="preference", key="preferred_language", value="Python"
+        )
+        goal = LearnedMemory(
+            kind="goal", key="current_learning_goal", value="Kali Linux"
+        )
+        rust = LearnedMemory(kind="preference", key="preferred_language", value="Rust")
+
+        append_learned_memory(memory_manager, old_python)
+        append_learned_memory(memory_manager, goal)
+        append_learned_memory(memory_manager, rust)
+
+        self.assertEqual(
+            load_bounded_learned_memory_context(memory_manager, 1),
+            "Known learned memories:\n" "- preference | preferred_language | Rust",
+        )
+        self.assertEqual(
+            load_learned_memories(memory_manager),
+            (old_python, goal, rust),
+        )
+
+    def test_load_bounded_context_zero_and_empty_are_exact_empty_string(self) -> None:
+        memory_manager = MemoryManager()
+        append_learned_memory(
+            memory_manager,
+            LearnedMemory(kind="preference", key="language", value="Rust"),
+        )
+
+        self.assertEqual(load_bounded_learned_memory_context(memory_manager, 0), "")
+        self.assertEqual(
+            load_bounded_learned_memory_context(MemoryManager(), 5),
+            "",
+        )
+
+    def test_load_bounded_context_propagates_exact_negative_limit_error(self) -> None:
+        with self.assertRaisesRegex(
+            ValueError,
+            r"^Learned memory limit must be non-negative\.$",
+        ):
+            load_bounded_learned_memory_context(MemoryManager(), -1)
+
     def test_bounded_context_delegates_exact_composition_once(self) -> None:
         old_python = LearnedMemory(
             kind="preference", key="preferred_language", value="Python"
