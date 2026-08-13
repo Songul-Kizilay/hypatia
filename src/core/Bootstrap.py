@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from brain.Brain import Brain
@@ -18,6 +19,9 @@ from llm.LLMRuntimeActivator import activate_llm
 from llm.LLMRuntimeConfig import LLMRuntimeConfig
 from memory.JsonFileMemoryStore import JsonFileMemoryStore
 from memory.LearnedMemoryCandidateExtractor import LearnedMemoryCandidateExtractor
+from memory.LLMLearnedMemoryCandidateExtractor import (
+    LLMLearnedMemoryCandidateExtractor,
+)
 from memory.MemoryManager import MemoryManager
 from planner.Planner import Planner
 from response.ResponseComposer import ResponseComposer
@@ -94,6 +98,16 @@ class Bootstrap:
         knowledge_engine = KnowledgeEngine()
         planner = Planner()
         response_composer = ResponseComposer()
+        llm_provider = self._configured_llm_provider()
+        learned_memory_candidate_extractor = self._learned_memory_candidate_extractor
+        if (
+            learned_memory_candidate_extractor is None
+            and os.environ.get("HYPATIA_LEARNING_ENABLED") == "true"
+            and llm_provider is not None
+        ):
+            learned_memory_candidate_extractor = LLMLearnedMemoryCandidateExtractor(
+                llm_provider
+            )
         cognitive_engine = CognitiveEngine(
             knowledge_engine,
             memory_manager,
@@ -102,11 +116,9 @@ class Bootstrap:
             response_composer,
             session_manager,
             session_rename_service,
-            llm_provider=self._configured_llm_provider(),
+            llm_provider=llm_provider,
             llm_history_max_turns=self._llm_history_max_turns,
-            learned_memory_candidate_extractor=(
-                self._learned_memory_candidate_extractor
-            ),
+            learned_memory_candidate_extractor=learned_memory_candidate_extractor,
         )
         brain = Brain(cognitive_engine, memory_manager, event_bus)
 
