@@ -388,6 +388,52 @@ class CognitiveEngineTests(unittest.TestCase):
             ],
         )
 
+    def test_successful_llm_message_invokes_candidate_extractor_once(self) -> None:
+        llm_provider = RecordingLLMProvider("I will remember that later.")
+        recording_extractor = RecordingCandidateExtractor()
+        message = "  Ben kahveyi şekersiz içerim.  "
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+            learned_memory_candidate_extractor=recording_extractor,
+        )
+
+        response = engine.process(BrainRequest(message=message))
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.message, "I will remember that later.")
+        self.assertEqual(recording_extractor.calls, [message])
+        self.assertEqual(llm_provider.calls, [(message, ())])
+
+    def test_failed_llm_message_does_not_invoke_candidate_extractor(self) -> None:
+        llm_provider = FailingLLMProvider()
+        recording_extractor = RecordingCandidateExtractor()
+        message = "  Ben kahveyi şekersiz içerim.  "
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+            learned_memory_candidate_extractor=recording_extractor,
+        )
+
+        response = engine.process(BrainRequest(message=message))
+
+        self.assertFalse(response.success)
+        self.assertEqual(response.message, "Generation unavailable.")
+        self.assertEqual(recording_extractor.calls, [])
+        self.assertEqual(llm_provider.calls, [(message, ())])
+
     def test_message_passes_existing_same_session_conversation_history(self) -> None:
         llm_provider = RecordingLLMProvider("Nice to meet you.")
         engine = ProductionCognitiveEngine(
