@@ -29,6 +29,10 @@ from memory.LearnedMemoryCandidateExtractor import LearnedMemoryCandidateExtract
 from memory.LearnedMemoryCandidatePersistence import (
     persist_learned_memory_candidate_batch,
 )
+from memory.LearnedMemoryContext import (
+    build_learned_memory_augmented_prompt,
+    load_learned_memory_context,
+)
 from memory.MemoryManager import MemoryManager
 from memory.MemoryRecord import MemoryRecord
 from memory.NoOpLearnedMemoryCandidateExtractor import (
@@ -295,9 +299,16 @@ class CognitiveEngine:
                     session_id,
                     max_turns=self._llm_history_max_turns,
                 )
+                learned_memory_context = load_learned_memory_context(
+                    self._memory_manager
+                )
+                provider_prompt = build_learned_memory_augmented_prompt(
+                    user_message=request.message,
+                    learned_memory_context=learned_memory_context,
+                )
                 response = BrainResponse(
                     message=self._llm_provider.generate(
-                        request.message,
+                        provider_prompt,
                         history=history,
                     ),
                     request_id=request.request_id,
