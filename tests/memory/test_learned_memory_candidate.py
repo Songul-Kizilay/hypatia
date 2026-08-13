@@ -10,7 +10,10 @@ if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
 from memory.LearnedMemory import LearnedMemory
-from memory.LearnedMemoryCandidate import LearnedMemoryCandidate
+from memory.LearnedMemoryCandidate import (
+    LearnedMemoryCandidate,
+    LearnedMemoryCandidateBatch,
+)
 
 
 class LearnedMemoryCandidateTests(unittest.TestCase):
@@ -45,3 +48,52 @@ class LearnedMemoryCandidateTests(unittest.TestCase):
 
         with self.assertRaises(FrozenInstanceError):
             candidate.source_text = "changed"  # type: ignore[misc]
+
+    def test_batch_preserves_exact_source_tuple_order_and_identity(self) -> None:
+        candidate_a = LearnedMemoryCandidate(
+            memory=LearnedMemory(
+                kind="user_fact",
+                key="name",
+                value="Songül",
+            ),
+            source_text="candidate source a",
+        )
+        candidate_b = LearnedMemoryCandidate(
+            memory=LearnedMemory(
+                kind="preference",
+                key="preferred_programming_language",
+                value="Python",
+            ),
+            source_text="candidate source b",
+        )
+        candidates = (candidate_a, candidate_b)
+
+        batch = LearnedMemoryCandidateBatch(
+            source_text="  exact source  ",
+            candidates=candidates,
+        )
+
+        self.assertEqual(batch.source_text, "  exact source  ")
+        self.assertIs(batch.candidates, candidates)
+        self.assertIs(batch.candidates[0], candidate_a)
+        self.assertIs(batch.candidates[1], candidate_b)
+
+    def test_batch_accepts_exact_empty_tuple(self) -> None:
+        candidates: tuple[LearnedMemoryCandidate, ...] = ()
+
+        batch = LearnedMemoryCandidateBatch(
+            source_text="Merhaba",
+            candidates=candidates,
+        )
+
+        self.assertIs(batch.candidates, candidates)
+        self.assertEqual(batch.candidates, ())
+
+    def test_batch_is_immutable(self) -> None:
+        batch = LearnedMemoryCandidateBatch(
+            source_text="source",
+            candidates=(),
+        )
+
+        with self.assertRaises(FrozenInstanceError):
+            batch.source_text = "changed"  # type: ignore[misc]

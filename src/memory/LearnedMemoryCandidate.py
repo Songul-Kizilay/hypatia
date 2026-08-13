@@ -9,3 +9,9 @@ from memory.LearnedMemory import LearnedMemory
 class LearnedMemoryCandidate:
     memory: LearnedMemory
     source_text: str
+
+
+@dataclass(frozen=True)
+class LearnedMemoryCandidateBatch:
+    source_text: str
+    candidates: tuple[LearnedMemoryCandidate, ...]
