@@ -11,6 +11,7 @@ if str(SRC_DIR) not in sys.path:
 
 from memory.LearnedMemory import LearnedMemory
 from memory.LearnedMemoryContext import (
+    build_bounded_learned_memory_context,
     build_learned_memory_augmented_prompt,
     build_learned_memory_context,
     load_learned_memory_context,
@@ -20,6 +21,83 @@ from memory.MemoryManager import MemoryManager
 
 
 class LearnedMemoryContextTests(unittest.TestCase):
+    def test_bounded_context_delegates_exact_composition_once(self) -> None:
+        old_python = LearnedMemory(
+            kind="preference", key="preferred_language", value="Python"
+        )
+        old_linux = LearnedMemory(
+            kind="goal", key="current_learning_goal", value="Linux"
+        )
+        project = LearnedMemory(
+            kind="project_fact", key="active_project", value="Hypatia"
+        )
+        rust = LearnedMemory(kind="preference", key="preferred_language", value="Rust")
+        kali = LearnedMemory(kind="goal", key="current_learning_goal", value="Kali")
+        all_memories = (old_python, old_linux, project, rust, kali)
+        latest_memories = (project, rust, kali)
+        bounded_memories = (rust, kali)
+        sentinel_context = "".join(("bounded", "-context"))
+
+        with (
+            patch(
+                "memory.LearnedMemoryContext.select_latest_learned_memories",
+                return_value=latest_memories,
+            ) as select_latest_learned_memories,
+            patch(
+                "memory.LearnedMemoryContext.select_recent_learned_memories",
+                return_value=bounded_memories,
+            ) as select_recent_learned_memories,
+            patch(
+                "memory.LearnedMemoryContext.build_learned_memory_context",
+                return_value=sentinel_context,
+            ) as build_learned_memory_context,
+        ):
+            result = build_bounded_learned_memory_context(all_memories, 2)
+
+        select_latest_learned_memories.assert_called_once_with(all_memories)
+        select_recent_learned_memories.assert_called_once_with(latest_memories, 2)
+        build_learned_memory_context.assert_called_once_with(bounded_memories)
+        self.assertIs(result, sentinel_context)
+
+    def test_bounded_context_collapses_corrections_before_limiting(self) -> None:
+        old_python = LearnedMemory(
+            kind="preference", key="preferred_language", value="Python"
+        )
+        old_linux = LearnedMemory(
+            kind="goal", key="current_learning_goal", value="Linux"
+        )
+        project = LearnedMemory(
+            kind="project_fact", key="active_project", value="Hypatia"
+        )
+        rust = LearnedMemory(kind="preference", key="preferred_language", value="Rust")
+        kali = LearnedMemory(kind="goal", key="current_learning_goal", value="Kali")
+        memories = (old_python, old_linux, project, rust, kali)
+
+        self.assertEqual(
+            build_bounded_learned_memory_context(memories, 2),
+            "Known learned memories:\n"
+            "- preference | preferred_language | Rust\n"
+            "- goal | current_learning_goal | Kali",
+        )
+        self.assertEqual(memories, (old_python, old_linux, project, rust, kali))
+        self.assertIs(memories[0], old_python)
+        self.assertIs(memories[4], kali)
+
+    def test_bounded_context_zero_and_empty_return_exact_empty_string(self) -> None:
+        memory = LearnedMemory(kind="preference", key="language", value="Rust")
+
+        self.assertEqual(build_bounded_learned_memory_context((memory,), 0), "")
+        self.assertEqual(build_bounded_learned_memory_context((), 5), "")
+
+    def test_bounded_context_propagates_exact_negative_limit_error(self) -> None:
+        memory = LearnedMemory(kind="preference", key="language", value="Rust")
+
+        with self.assertRaisesRegex(
+            ValueError,
+            r"^Learned memory limit must be non-negative\.$",
+        ):
+            build_bounded_learned_memory_context((memory,), -1)
+
     def test_augmented_prompt_empty_context_returns_exact_user_message(self) -> None:
         message = "  Ne öğreniyordum?  "
 
