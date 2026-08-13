@@ -1,6 +1,7 @@
 """Deterministic LLM-readable representation of learned memories."""
 
 from memory.LearnedMemory import LearnedMemory
+from memory.LearnedMemoryRetrieval import select_latest_learned_memories
 from memory.LearnedMemoryStore import load_learned_memories
 from memory.MemoryManager import MemoryManager
 
@@ -20,7 +21,8 @@ def build_learned_memory_context(
 
 def load_learned_memory_context(memory_manager: MemoryManager) -> str:
     memories = load_learned_memories(memory_manager)
-    return build_learned_memory_context(memories)
+    latest_memories = select_latest_learned_memories(memories)
+    return build_learned_memory_context(latest_memories)
 
 
 def build_learned_memory_augmented_prompt(

@@ -15,6 +15,7 @@ from memory.LearnedMemoryContext import (
     build_learned_memory_context,
     load_learned_memory_context,
 )
+from memory.LearnedMemoryStore import append_learned_memory, load_learned_memories
 from memory.MemoryManager import MemoryManager
 
 
@@ -89,25 +90,34 @@ class LearnedMemoryContextTests(unittest.TestCase):
 
     def test_load_context_delegates_exact_authoritative_tuple_once(self) -> None:
         memory_manager = Mock(spec=MemoryManager)
-        memories = (
-            LearnedMemory(
-                kind="preference",
-                key="preferred_language",
-                value="Rust",
-            ),
-            LearnedMemory(
-                kind="goal",
-                key="current_learning_goal",
-                value="Kali Linux",
-            ),
+        old_python = LearnedMemory(
+            kind="preference",
+            key="preferred_language",
+            value="Python",
         )
+        goal = LearnedMemory(
+            kind="goal",
+            key="current_learning_goal",
+            value="Kali Linux",
+        )
+        new_rust = LearnedMemory(
+            kind="preference",
+            key="preferred_language",
+            value="Rust",
+        )
+        all_memories = (old_python, goal, new_rust)
+        latest_memories = (goal, new_rust)
         sentinel_context = "".join(("sentinel", "-context"))
 
         with (
             patch(
                 "memory.LearnedMemoryContext.load_learned_memories",
-                return_value=memories,
+                return_value=all_memories,
             ) as load_learned_memories,
+            patch(
+                "memory.LearnedMemoryContext.select_latest_learned_memories",
+                return_value=latest_memories,
+            ) as select_latest_learned_memories,
             patch(
                 "memory.LearnedMemoryContext.build_learned_memory_context",
                 return_value=sentinel_context,
@@ -116,8 +126,44 @@ class LearnedMemoryContextTests(unittest.TestCase):
             result = load_learned_memory_context(memory_manager)
 
         load_learned_memories.assert_called_once_with(memory_manager)
-        build_learned_memory_context.assert_called_once_with(memories)
+        select_latest_learned_memories.assert_called_once_with(all_memories)
+        build_learned_memory_context.assert_called_once_with(latest_memories)
         self.assertIs(result, sentinel_context)
+
+    def test_load_context_uses_latest_view_without_compacting_real_history(
+        self,
+    ) -> None:
+        memory_manager = MemoryManager()
+        old_python = LearnedMemory(
+            kind="preference",
+            key="preferred_language",
+            value="Python",
+        )
+        goal = LearnedMemory(
+            kind="goal",
+            key="current_learning_goal",
+            value="Kali Linux",
+        )
+        new_rust = LearnedMemory(
+            kind="preference",
+            key="preferred_language",
+            value="Rust",
+        )
+
+        append_learned_memory(memory_manager, old_python)
+        append_learned_memory(memory_manager, goal)
+        append_learned_memory(memory_manager, new_rust)
+
+        self.assertEqual(
+            load_learned_memory_context(memory_manager),
+            "Known learned memories:\n"
+            "- goal | current_learning_goal | Kali Linux\n"
+            "- preference | preferred_language | Rust",
+        )
+        self.assertEqual(
+            load_learned_memories(memory_manager),
+            (old_python, goal, new_rust),
+        )
 
     def test_load_context_from_real_empty_manager_returns_exact_empty_string(
         self,
