@@ -286,3 +286,66 @@ class LearnedMemoryCorrectionTests(unittest.TestCase):
                 "value": "Python",
             },
         )
+
+    def test_real_store_changed_value_appends_and_becomes_latest(self) -> None:
+        memory_manager = MemoryManager()
+        original = LearnedMemory(
+            kind="preference",
+            key="preferred_language",
+            value="Python",
+        )
+        corrected = LearnedMemory(
+            kind="preference",
+            key="preferred_language",
+            value="Rust",
+        )
+        original_record = append_learned_memory(memory_manager, original)
+
+        result = correct_learned_memory_value_if_changed(
+            memory_manager,
+            kind="preference",
+            key="preferred_language",
+            value="Rust",
+        )
+
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(memory_manager.count(), 2)
+        self.assertEqual(
+            load_learned_memories(memory_manager),
+            (original, corrected),
+        )
+        self.assertEqual(
+            load_latest_learned_memory(
+                memory_manager,
+                kind="preference",
+                key="preferred_language",
+            ),
+            corrected,
+        )
+        snapshot = memory_manager.snapshot()
+        self.assertIs(snapshot[0], original_record)
+        self.assertIs(snapshot[1], result)
+        self.assertEqual(original_record.content, "Python")
+        self.assertEqual(
+            original_record.tags,
+            frozenset({"learned", "preference"}),
+        )
+        self.assertEqual(
+            dict(original_record.metadata),
+            {
+                "kind": "preference",
+                "key": "preferred_language",
+                "value": "Python",
+            },
+        )
+        self.assertEqual(result.content, "Rust")
+        self.assertEqual(result.tags, frozenset({"learned", "preference"}))
+        self.assertEqual(
+            dict(result.metadata),
+            {
+                "kind": "preference",
+                "key": "preferred_language",
+                "value": "Rust",
+            },
+        )
