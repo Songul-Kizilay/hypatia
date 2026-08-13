@@ -12,6 +12,7 @@ if str(SRC_DIR) not in sys.path:
 from memory.LearnedMemory import LearnedMemory
 from memory.LearnedMemoryCorrection import (
     correct_learned_memory_value,
+    correct_learned_memory_value_if_changed,
     should_correct_learned_memory,
 )
 from memory.LearnedMemoryStore import (
@@ -24,6 +25,73 @@ from memory.MemoryRecord import MemoryRecord
 
 
 class LearnedMemoryCorrectionTests(unittest.TestCase):
+    def test_corrects_only_when_exact_current_value_changed(self) -> None:
+        memory_manager = MagicMock(spec=MemoryManager)
+        current = LearnedMemory(
+            kind="preference",
+            key="preferred_language",
+            value="Python",
+        )
+        sentinel_record = MemoryRecord(
+            memory_id="corrected-record",
+            content="Rust",
+        )
+        cases = (
+            ("exact no-op", current, False, None, False),
+            ("different value", current, True, sentinel_record, True),
+            ("missing current", None, True, sentinel_record, True),
+        )
+
+        for name, latest, should_correct, expected, expect_write in cases:
+            with (
+                self.subTest(name=name),
+                patch(
+                    "memory.LearnedMemoryCorrection.load_latest_learned_memory",
+                    return_value=latest,
+                ) as load_latest,
+                patch(
+                    "memory.LearnedMemoryCorrection.should_correct_learned_memory",
+                    return_value=should_correct,
+                ) as decide,
+                patch(
+                    "memory.LearnedMemoryCorrection.correct_learned_memory_value",
+                    return_value=sentinel_record,
+                ) as correct,
+            ):
+                result = correct_learned_memory_value_if_changed(
+                    memory_manager,
+                    kind="preference",
+                    key="preferred_language",
+                    value="Rust",
+                )
+
+                load_latest.assert_called_once_with(
+                    memory_manager,
+                    kind="preference",
+                    key="preferred_language",
+                )
+                decide.assert_called_once_with(
+                    latest,
+                    kind="preference",
+                    key="preferred_language",
+                    value="Rust",
+                )
+                if expect_write:
+                    correct.assert_called_once_with(
+                        memory_manager,
+                        kind="preference",
+                        key="preferred_language",
+                        value="Rust",
+                    )
+                    self.assertIs(result, expected)
+                else:
+                    correct.assert_not_called()
+                    self.assertIsNone(result)
+
+        memory_manager.add.assert_not_called()
+        memory_manager.update.assert_not_called()
+        memory_manager.delete.assert_not_called()
+
     def test_should_correct_requires_an_exact_current_match(self) -> None:
         current = LearnedMemory(
             kind="preference",
