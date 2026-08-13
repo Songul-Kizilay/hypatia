@@ -33,37 +33,30 @@ def parse_learned_memory_candidate_batch(
         raise ValueError(_INVALID_PAYLOAD_MESSAGE)
 
     candidates = decoded["candidates"]
-    if not isinstance(candidates, list) or len(candidates) > 1:
+    if not isinstance(candidates, list):
         raise ValueError(_INVALID_PAYLOAD_MESSAGE)
 
-    if not candidates:
-        return LearnedMemoryCandidateBatch(
-            source_text=source_text,
-            candidates=(),
-        )
+    parsed_candidates: list[LearnedMemoryCandidate] = []
+    for candidate in candidates:
+        if not isinstance(candidate, dict) or set(candidate) != {
+            "kind",
+            "key",
+            "value",
+        }:
+            raise ValueError(_INVALID_PAYLOAD_MESSAGE)
 
-    candidate = candidates[0]
-    if not isinstance(candidate, dict) or set(candidate) != {
-        "kind",
-        "key",
-        "value",
-    }:
-        raise ValueError(_INVALID_PAYLOAD_MESSAGE)
+        kind = candidate["kind"]
+        key = candidate["key"]
+        value = candidate["value"]
+        if (
+            not isinstance(kind, str)
+            or kind not in _ALLOWED_KINDS
+            or not isinstance(key, str)
+            or not isinstance(value, str)
+        ):
+            raise ValueError(_INVALID_PAYLOAD_MESSAGE)
 
-    kind = candidate["kind"]
-    key = candidate["key"]
-    value = candidate["value"]
-    if (
-        not isinstance(kind, str)
-        or kind not in _ALLOWED_KINDS
-        or not isinstance(key, str)
-        or not isinstance(value, str)
-    ):
-        raise ValueError(_INVALID_PAYLOAD_MESSAGE)
-
-    return LearnedMemoryCandidateBatch(
-        source_text=source_text,
-        candidates=(
+        parsed_candidates.append(
             LearnedMemoryCandidate(
                 memory=LearnedMemory(
                     kind=cast(LearnedMemoryKind, kind),
@@ -71,6 +64,10 @@ def parse_learned_memory_candidate_batch(
                     value=value,
                 ),
                 source_text=source_text,
-            ),
-        ),
+            )
+        )
+
+    return LearnedMemoryCandidateBatch(
+        source_text=source_text,
+        candidates=tuple(parsed_candidates),
     )
