@@ -44,6 +44,17 @@ def select_latest_learned_memories(
     return tuple(reversed(retained_reversed))
 
 
+def select_recent_learned_memories(
+    memories: tuple[LearnedMemory, ...],
+    limit: int,
+) -> tuple[LearnedMemory, ...]:
+    if limit < 0:
+        raise ValueError("Learned memory limit must be non-negative.")
+    if limit == 0:
+        return ()
+    return memories[-limit:]
+
+
 def resolve_latest_learned_memory(
     memories: tuple[LearnedMemory, ...],
     *,
