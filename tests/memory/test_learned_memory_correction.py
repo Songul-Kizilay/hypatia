@@ -11,6 +11,11 @@ if str(SRC_DIR) not in sys.path:
 
 from memory.LearnedMemory import LearnedMemory
 from memory.LearnedMemoryCorrection import correct_learned_memory_value
+from memory.LearnedMemoryStore import (
+    append_learned_memory,
+    load_latest_learned_memory,
+    load_learned_memories,
+)
 from memory.MemoryManager import MemoryManager
 from memory.MemoryRecord import MemoryRecord
 
@@ -47,3 +52,49 @@ class LearnedMemoryCorrectionTests(unittest.TestCase):
         memory_manager.add.assert_not_called()
         memory_manager.update.assert_not_called()
         memory_manager.delete.assert_not_called()
+
+    def test_real_store_preserves_history_and_resolves_correction(self) -> None:
+        memory_manager = MemoryManager()
+        original = LearnedMemory(
+            kind="preference",
+            key="preferred_language",
+            value="Python",
+        )
+        corrected = LearnedMemory(
+            kind="preference",
+            key="preferred_language",
+            value="Rust",
+        )
+        append_learned_memory(memory_manager, original)
+
+        record = correct_learned_memory_value(
+            memory_manager,
+            kind="preference",
+            key="preferred_language",
+            value="Rust",
+        )
+
+        self.assertEqual(
+            load_learned_memories(memory_manager),
+            (original, corrected),
+        )
+        self.assertEqual(
+            load_latest_learned_memory(
+                memory_manager,
+                kind="preference",
+                key="preferred_language",
+            ),
+            corrected,
+        )
+        self.assertEqual(memory_manager.count(), 2)
+        self.assertIs(memory_manager.get(record.memory_id), record)
+        self.assertEqual(record.content, "Rust")
+        self.assertEqual(record.tags, frozenset({"learned", "preference"}))
+        self.assertEqual(
+            dict(record.metadata),
+            {
+                "kind": "preference",
+                "key": "preferred_language",
+                "value": "Rust",
+            },
+        )
