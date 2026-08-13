@@ -45,7 +45,13 @@ from memory.LearnedMemoryCandidateExtractionError import (
     LearnedMemoryCandidateExtractionError,
 )
 from memory.LearnedMemoryCandidateExtractor import LearnedMemoryCandidateExtractor
+from memory.LearnedMemoryContext import (
+    build_learned_memory_augmented_prompt,
+    build_learned_memory_context,
+    load_learned_memory_context,
+)
 from memory.LearnedMemoryStore import (
+    append_learned_memory,
     load_latest_learned_memory,
     load_learned_memories,
 )
@@ -429,6 +435,86 @@ class CognitiveEngineTests(unittest.TestCase):
                 "brain.response.ready",
             ],
         )
+
+    def test_message_augments_only_provider_prompt_with_learned_memory(
+        self,
+    ) -> None:
+        message = "  What language do I prefer?  "
+        provider_response = "You prefer Rust."
+        llm_provider = RecordingLLMProvider(provider_response)
+        recording_extractor = RecordingCandidateExtractor()
+        learned_memory = LearnedMemory(
+            kind="preference",
+            key="preferred_language",
+            value="Rust",
+        )
+        self.memory_manager.add(
+            "User: Earlier question\nHypatia: Earlier answer",
+            metadata={
+                "session_id": "default",
+                "user_message": "Earlier question",
+                "assistant_message": "Earlier answer",
+            },
+            tags={"brain", "conversation"},
+        )
+        learned_record = append_learned_memory(
+            self.memory_manager,
+            learned_memory,
+        )
+        learned_context = load_learned_memory_context(self.memory_manager)
+        expected_prompt = build_learned_memory_augmented_prompt(
+            user_message=message,
+            learned_memory_context=learned_context,
+        )
+        expected_history = (
+            LLMConversationMessage(role="user", content="Earlier question"),
+            LLMConversationMessage(role="assistant", content="Earlier answer"),
+        )
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+            learned_memory_candidate_extractor=recording_extractor,
+        )
+
+        with (
+            patch(
+                "cognition.CognitiveEngine.load_learned_memory_context",
+                wraps=load_learned_memory_context,
+            ) as load_context,
+            patch(
+                "cognition.CognitiveEngine.build_learned_memory_augmented_prompt",
+                wraps=build_learned_memory_augmented_prompt,
+            ) as build_prompt,
+        ):
+            response = engine.process(BrainRequest(message=message))
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.message, provider_response)
+        load_context.assert_called_once_with(self.memory_manager)
+        build_prompt.assert_called_once_with(
+            user_message=message,
+            learned_memory_context=learned_context,
+        )
+        self.assertEqual(llm_provider.calls, [(expected_prompt, expected_history)])
+        self.assertEqual(recording_extractor.calls, [message])
+        self.assertEqual(load_learned_memories(self.memory_manager), (learned_memory,))
+        records = self.memory_manager.all()
+        self.assertIs(
+            next(record for record in records if "learned" in record.tags),
+            learned_record,
+        )
+        conversation_records = tuple(
+            record for record in records if "conversation" in record.tags
+        )
+        self.assertEqual(len(conversation_records), 2)
+        self.assertEqual(conversation_records[-1].metadata["user_message"], message)
+        self.assertNotIn(expected_prompt, conversation_records[-1].content)
 
     def test_successful_llm_message_invokes_candidate_extractor_once(self) -> None:
         llm_provider = RecordingLLMProvider("I will remember that later.")
@@ -1044,7 +1130,12 @@ class CognitiveEngineTests(unittest.TestCase):
             [
                 (first_message, ()),
                 (
-                    second_message,
+                    build_learned_memory_augmented_prompt(
+                        user_message=second_message,
+                        learned_memory_context=build_learned_memory_context(
+                            (learned_memory,)
+                        ),
+                    ),
                     (
                         LLMConversationMessage(role="user", content=first_message),
                         LLMConversationMessage(
@@ -1173,7 +1264,12 @@ class CognitiveEngineTests(unittest.TestCase):
             [
                 (first_message, ()),
                 (
-                    second_message,
+                    build_learned_memory_augmented_prompt(
+                        user_message=second_message,
+                        learned_memory_context=build_learned_memory_context(
+                            (python_memory,)
+                        ),
+                    ),
                     (
                         LLMConversationMessage(role="user", content=first_message),
                         LLMConversationMessage(
@@ -1333,8 +1429,24 @@ class CognitiveEngineTests(unittest.TestCase):
             llm_provider.calls,
             [
                 (first_message, ()),
-                (second_message, first_turn),
-                (third_message, first_turn + second_turn),
+                (
+                    build_learned_memory_augmented_prompt(
+                        user_message=second_message,
+                        learned_memory_context=build_learned_memory_context(
+                            (python_memory,)
+                        ),
+                    ),
+                    first_turn,
+                ),
+                (
+                    build_learned_memory_augmented_prompt(
+                        user_message=third_message,
+                        learned_memory_context=build_learned_memory_context(
+                            (python_memory, rust_memory)
+                        ),
+                    ),
+                    first_turn + second_turn,
+                ),
             ],
         )
 
