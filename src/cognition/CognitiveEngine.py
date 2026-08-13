@@ -298,6 +298,9 @@ class CognitiveEngine:
                     intent="message",
                     memory_count=0,
                 )
+                _batch = self._learned_memory_candidate_extractor.extract(
+                    request.message
+                )
             except LLMError as error:
                 response = BrainResponse(
                     message=str(error),
