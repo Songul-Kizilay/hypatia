@@ -251,6 +251,19 @@ class RecordingCandidateExtractor:
         )
 
 
+class RecordingCandidateSequenceExtractor:
+    """Returns caller-supplied candidate batches in exact call order."""
+
+    def __init__(self, batches: tuple[LearnedMemoryCandidateBatch, ...]) -> None:
+        self.calls: list[str] = []
+        self.batches = batches
+
+    def extract(self, source_text: str) -> LearnedMemoryCandidateBatch:
+        batch = self.batches[len(self.calls)]
+        self.calls.append(source_text)
+        return batch
+
+
 class CognitiveEngineTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary_directory = tempfile.TemporaryDirectory()
@@ -597,6 +610,135 @@ class CognitiveEngineTests(unittest.TestCase):
                 "User:   Ben Python tercih ediyorum.  \n"
                 "Hypatia: I will remember that.",
                 "User:   Python tercihimi hatırla.  \n"
+                "Hypatia: I will remember that.",
+            ),
+        )
+        self.assertEqual(
+            llm_provider.calls,
+            [
+                (first_message, ()),
+                (
+                    second_message,
+                    (
+                        LLMConversationMessage(role="user", content=first_message),
+                        LLMConversationMessage(
+                            role="assistant",
+                            content="I will remember that.",
+                        ),
+                    ),
+                ),
+            ],
+        )
+
+    def test_changed_candidate_appends_a_learned_memory_correction(self) -> None:
+        llm_provider = RecordingLLMProvider("I will remember that.")
+        first_message = "  Ben Python tercih ediyorum.  "
+        second_message = "  Artık Rust tercih ediyorum.  "
+        python_memory = LearnedMemory(
+            kind="preference",
+            key="preferred_language",
+            value="Python",
+        )
+        rust_memory = LearnedMemory(
+            kind="preference",
+            key="preferred_language",
+            value="Rust",
+        )
+        python_candidate = LearnedMemoryCandidate(
+            memory=python_memory,
+            source_text=first_message,
+        )
+        rust_candidate = LearnedMemoryCandidate(
+            memory=rust_memory,
+            source_text=second_message,
+        )
+        recording_extractor = RecordingCandidateSequenceExtractor(
+            (
+                LearnedMemoryCandidateBatch(
+                    source_text=first_message,
+                    candidates=(python_candidate,),
+                ),
+                LearnedMemoryCandidateBatch(
+                    source_text=second_message,
+                    candidates=(rust_candidate,),
+                ),
+            )
+        )
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+            learned_memory_candidate_extractor=recording_extractor,
+        )
+
+        first_response = engine.process(BrainRequest(message=first_message))
+        python_record = next(
+            record for record in self.memory_manager.all() if "learned" in record.tags
+        )
+        second_response = engine.process(BrainRequest(message=second_message))
+
+        self.assertTrue(first_response.success)
+        self.assertTrue(second_response.success)
+        self.assertEqual(first_response.message, "I will remember that.")
+        self.assertEqual(second_response.message, "I will remember that.")
+        self.assertEqual(recording_extractor.calls, [first_message, second_message])
+        self.assertEqual(
+            load_learned_memories(self.memory_manager),
+            (python_memory, rust_memory),
+        )
+        self.assertEqual(
+            load_latest_learned_memory(
+                self.memory_manager,
+                kind="preference",
+                key="preferred_language",
+            ),
+            rust_memory,
+        )
+        records = self.memory_manager.all()
+        learned_records = tuple(
+            record for record in records if "learned" in record.tags
+        )
+        conversation_records = tuple(
+            record for record in records if "conversation" in record.tags
+        )
+        self.assertEqual(len(learned_records), 2)
+        self.assertEqual(len(conversation_records), 2)
+        self.assertIs(learned_records[0], python_record)
+        self.assertEqual(python_record.content, "Python")
+        self.assertEqual(python_record.tags, frozenset({"learned", "preference"}))
+        self.assertEqual(
+            python_record.metadata,
+            {
+                "kind": "preference",
+                "key": "preferred_language",
+                "value": "Python",
+            },
+        )
+        rust_record = learned_records[1]
+        self.assertIsNot(rust_record, python_record)
+        self.assertEqual(rust_record.content, "Rust")
+        self.assertEqual(rust_record.tags, frozenset({"learned", "preference"}))
+        self.assertEqual(
+            rust_record.metadata,
+            {
+                "kind": "preference",
+                "key": "preferred_language",
+                "value": "Rust",
+            },
+        )
+        self.assertNotIn("source_text", python_record.metadata)
+        self.assertNotIn("source_text", rust_record.metadata)
+        self.assertEqual(
+            tuple(record.content for record in conversation_records),
+            (
+                "User:   Ben Python tercih ediyorum.  \n"
+                "Hypatia: I will remember that.",
+                "User:   Artık Rust tercih ediyorum.  \n"
                 "Hypatia: I will remember that.",
             ),
         )
