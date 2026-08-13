@@ -31,6 +31,7 @@ from memory.LearnedMemoryCandidatePersistence import (
 )
 from memory.LearnedMemoryContext import (
     build_learned_memory_augmented_prompt,
+    load_bounded_learned_memory_context,
     load_learned_memory_context,
 )
 from memory.MemoryManager import MemoryManager
@@ -72,6 +73,7 @@ class CognitiveEngine:
         learned_memory_candidate_extractor: (
             LearnedMemoryCandidateExtractor | None
         ) = None,
+        learned_memory_context_limit: int | None = None,
     ) -> None:
         if llm_history_max_turns is not None and (
             isinstance(llm_history_max_turns, bool) or llm_history_max_turns <= 0
@@ -107,6 +109,7 @@ class CognitiveEngine:
             if learned_memory_candidate_extractor is not None
             else NoOpLearnedMemoryCandidateExtractor()
         )
+        self._learned_memory_context_limit = learned_memory_context_limit
         self._router = BrainRouter()
 
     def process(self, request: BrainRequest) -> BrainResponse:
@@ -299,9 +302,15 @@ class CognitiveEngine:
                     session_id,
                     max_turns=self._llm_history_max_turns,
                 )
-                learned_memory_context = load_learned_memory_context(
-                    self._memory_manager
-                )
+                if self._learned_memory_context_limit is None:
+                    learned_memory_context = load_learned_memory_context(
+                        self._memory_manager
+                    )
+                else:
+                    learned_memory_context = load_bounded_learned_memory_context(
+                        self._memory_manager,
+                        self._learned_memory_context_limit,
+                    )
                 provider_prompt = build_learned_memory_augmented_prompt(
                     user_message=request.message,
                     learned_memory_context=learned_memory_context,
