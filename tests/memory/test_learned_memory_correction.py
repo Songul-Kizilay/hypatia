@@ -349,3 +349,42 @@ class LearnedMemoryCorrectionTests(unittest.TestCase):
                 "value": "Rust",
             },
         )
+
+    def test_real_store_missing_current_creates_first_memory(self) -> None:
+        memory_manager = MemoryManager()
+        expected = LearnedMemory(
+            kind="preference",
+            key="preferred_language",
+            value="Python",
+        )
+
+        result = correct_learned_memory_value_if_changed(
+            memory_manager,
+            kind="preference",
+            key="preferred_language",
+            value="Python",
+        )
+
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(memory_manager.count(), 1)
+        self.assertIs(memory_manager.snapshot()[0], result)
+        self.assertEqual(result.content, "Python")
+        self.assertEqual(result.tags, frozenset({"learned", "preference"}))
+        self.assertEqual(
+            dict(result.metadata),
+            {
+                "kind": "preference",
+                "key": "preferred_language",
+                "value": "Python",
+            },
+        )
+        self.assertEqual(load_learned_memories(memory_manager), (expected,))
+        self.assertEqual(
+            load_latest_learned_memory(
+                memory_manager,
+                kind="preference",
+                key="preferred_language",
+            ),
+            expected,
+        )
