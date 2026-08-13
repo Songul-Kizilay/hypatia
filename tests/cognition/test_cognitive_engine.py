@@ -645,6 +645,98 @@ class CognitiveEngineTests(unittest.TestCase):
         )
         self.assertEqual(llm_provider.calls, [(message, ())])
 
+    def test_same_batch_exact_duplicate_candidate_is_a_no_op(self) -> None:
+        llm_provider = RecordingLLMProvider("I will remember that.")
+        message = "  Ben Python tercih ediyorum.  "
+        learned_memory = LearnedMemory(
+            kind="preference",
+            key="preferred_language",
+            value="Python",
+        )
+        first_candidate = LearnedMemoryCandidate(
+            memory=learned_memory,
+            source_text=message,
+        )
+        duplicate_candidate = LearnedMemoryCandidate(
+            memory=learned_memory,
+            source_text=message,
+        )
+        self.assertIsNot(first_candidate, duplicate_candidate)
+        self.assertIs(first_candidate.memory, duplicate_candidate.memory)
+        recording_extractor = RecordingCandidateExtractor(
+            LearnedMemoryCandidateBatch(
+                source_text=message,
+                candidates=(first_candidate, duplicate_candidate),
+            )
+        )
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+            learned_memory_candidate_extractor=recording_extractor,
+        )
+
+        response = engine.process(BrainRequest(message=message))
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.message, "I will remember that.")
+        self.assertEqual(recording_extractor.calls, [message])
+        self.assertEqual(load_learned_memories(self.memory_manager), (learned_memory,))
+        self.assertEqual(
+            load_latest_learned_memory(
+                self.memory_manager,
+                kind="preference",
+                key="preferred_language",
+            ),
+            learned_memory,
+        )
+        records = self.memory_manager.all()
+        learned_records = tuple(
+            record for record in records if "learned" in record.tags
+        )
+        conversation_records = tuple(
+            record for record in records if "conversation" in record.tags
+        )
+        self.assertEqual(len(learned_records), 1)
+        self.assertEqual(len(conversation_records), 1)
+        learned_record = learned_records[0]
+        self.assertIs(
+            next(
+                record
+                for record in self.memory_manager.all()
+                if "learned" in record.tags
+            ),
+            learned_record,
+        )
+        self.assertEqual(learned_record.content, "Python")
+        self.assertEqual(
+            learned_record.tags,
+            frozenset({"learned", "preference"}),
+        )
+        self.assertEqual(
+            learned_record.metadata,
+            {
+                "kind": "preference",
+                "key": "preferred_language",
+                "value": "Python",
+            },
+        )
+        self.assertNotIn("source_text", learned_record.metadata)
+        self.assertEqual(
+            conversation_records[0].content,
+            "User:   Ben Python tercih ediyorum.  \n" "Hypatia: I will remember that.",
+        )
+        self.assertEqual(
+            conversation_records[0].tags,
+            frozenset({"brain", "conversation"}),
+        )
+        self.assertEqual(llm_provider.calls, [(message, ())])
+
     def test_repeated_exact_candidate_is_a_learned_memory_no_op(self) -> None:
         llm_provider = RecordingLLMProvider("I will remember that.")
         first_message = "  Ben Python tercih ediyorum.  "
