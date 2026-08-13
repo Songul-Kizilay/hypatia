@@ -13,6 +13,7 @@ from memory.LearnedMemory import LearnedMemory
 from memory.LearnedMemoryRetrieval import (
     collect_learned_memories,
     find_learned_memories,
+    resolve_latest_learned_memory,
 )
 from memory.MemoryRecord import MemoryRecord
 
@@ -116,3 +117,94 @@ class LearnedMemoryRetrievalTests(unittest.TestCase):
 
         self.assertEqual(result, ())
         self.assertIsInstance(result, tuple)
+
+    def test_resolves_last_exact_match_by_identity(self) -> None:
+        first_match = LearnedMemory(
+            kind="preference",
+            key="preferred_language",
+            value="Python",
+        )
+        unrelated = LearnedMemory(
+            kind="user_fact",
+            key="name",
+            value="Songül",
+        )
+        second_match = LearnedMemory(
+            kind="preference",
+            key="preferred_language",
+            value="Rust",
+        )
+        latest_match = LearnedMemory(
+            kind="preference",
+            key="preferred_language",
+            value="Go",
+        )
+        memories = (first_match, unrelated, second_match, latest_match)
+
+        result = resolve_latest_learned_memory(
+            memories,
+            kind="preference",
+            key="preferred_language",
+        )
+
+        self.assertIs(result, latest_match)
+
+    @patch("memory.LearnedMemoryRetrieval.find_learned_memories")
+    def test_latest_resolution_delegates_exact_lookup_once(
+        self,
+        find_learned_memories,
+    ) -> None:
+        memories = (LearnedMemory(kind="preference", key="language", value="Python"),)
+        latest_match = LearnedMemory(
+            kind="preference",
+            key="language",
+            value="Rust",
+        )
+        find_learned_memories.return_value = (memories[0], latest_match)
+
+        result = resolve_latest_learned_memory(
+            memories,
+            kind="preference",
+            key="language",
+        )
+
+        self.assertIs(result, latest_match)
+        find_learned_memories.assert_called_once_with(
+            memories,
+            kind="preference",
+            key="language",
+        )
+
+    @patch("memory.LearnedMemoryRetrieval.find_learned_memories")
+    def test_latest_resolution_returns_none_or_single_match_identity(
+        self,
+        find_learned_memories,
+    ) -> None:
+        memories: tuple[LearnedMemory, ...] = ()
+        single_match = LearnedMemory(
+            kind="user_fact",
+            key="name",
+            value="Songül",
+        )
+        find_learned_memories.side_effect = [(), (single_match,)]
+
+        no_match = resolve_latest_learned_memory(
+            memories,
+            kind="user_fact",
+            key="name",
+        )
+        one_match = resolve_latest_learned_memory(
+            memories,
+            kind="user_fact",
+            key="name",
+        )
+
+        self.assertIsNone(no_match)
+        self.assertIs(one_match, single_match)
+        self.assertEqual(
+            find_learned_memories.call_args_list,
+            [
+                call(memories, kind="user_fact", key="name"),
+                call(memories, kind="user_fact", key="name"),
+            ],
+        )
