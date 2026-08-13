@@ -21,6 +21,33 @@ from memory.MemoryRecord import MemoryRecord
 
 
 class LearnedMemoryStoreTests(unittest.TestCase):
+    def test_correction_is_read_latest_while_history_remains_in_order(self) -> None:
+        memory_manager = MemoryManager()
+        original = LearnedMemory(
+            kind="preference",
+            key="preferred_language",
+            value="Python",
+        )
+        corrected = LearnedMemory(
+            kind="preference",
+            key="preferred_language",
+            value="Rust",
+        )
+
+        append_learned_memory(memory_manager, original)
+        correct_learned_memory(memory_manager, corrected)
+
+        memories = load_learned_memories(memory_manager)
+        latest = load_latest_learned_memory(
+            memory_manager,
+            kind="preference",
+            key="preferred_language",
+        )
+
+        self.assertEqual(memories, (original, corrected))
+        self.assertEqual(latest, corrected)
+        self.assertEqual(memory_manager.count(), 2)
+
     @patch("memory.LearnedMemoryStore.collect_learned_memories")
     def test_loads_exact_snapshot_once_and_returns_collector_identity(
         self,
