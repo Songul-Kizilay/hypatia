@@ -48,6 +48,7 @@ from memory.LearnedMemoryCandidateExtractor import LearnedMemoryCandidateExtract
 from memory.LearnedMemoryContext import (
     build_learned_memory_augmented_prompt,
     build_learned_memory_context,
+    load_bounded_learned_memory_context,
     load_learned_memory_context,
 )
 from memory.LearnedMemoryStore import (
@@ -488,6 +489,10 @@ class CognitiveEngineTests(unittest.TestCase):
                 wraps=load_learned_memory_context,
             ) as load_context,
             patch(
+                "cognition.CognitiveEngine.load_bounded_learned_memory_context",
+                wraps=load_bounded_learned_memory_context,
+            ) as load_bounded_context,
+            patch(
                 "cognition.CognitiveEngine.build_learned_memory_augmented_prompt",
                 wraps=build_learned_memory_augmented_prompt,
             ) as build_prompt,
@@ -497,6 +502,7 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertTrue(response.success)
         self.assertEqual(response.message, provider_response)
         load_context.assert_called_once_with(self.memory_manager)
+        load_bounded_context.assert_not_called()
         build_prompt.assert_called_once_with(
             user_message=message,
             learned_memory_context=learned_context,
@@ -515,6 +521,123 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(len(conversation_records), 2)
         self.assertEqual(conversation_records[-1].metadata["user_message"], message)
         self.assertNotIn(expected_prompt, conversation_records[-1].content)
+
+    def test_explicit_limit_uses_only_exact_bounded_context_for_provider(self) -> None:
+        message = "  What language do I prefer?  "
+        bounded_context = "".join(("bounded", "-context"))
+        provider_prompt = "".join(("provider", "-prompt"))
+        provider_response = "You prefer Rust."
+        llm_provider = RecordingLLMProvider(provider_response)
+        recording_extractor = RecordingCandidateExtractor()
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+            learned_memory_candidate_extractor=recording_extractor,
+            learned_memory_context_limit=2,
+        )
+
+        with (
+            patch(
+                "cognition.CognitiveEngine.load_learned_memory_context",
+            ) as load_context,
+            patch(
+                "cognition.CognitiveEngine.load_bounded_learned_memory_context",
+                return_value=bounded_context,
+            ) as load_bounded_context,
+            patch(
+                "cognition.CognitiveEngine.build_learned_memory_augmented_prompt",
+                return_value=provider_prompt,
+            ) as build_prompt,
+        ):
+            response = engine.process(BrainRequest(message=message))
+
+        load_context.assert_not_called()
+        load_bounded_context.assert_called_once_with(self.memory_manager, 2)
+        build_prompt.assert_called_once_with(
+            user_message=message,
+            learned_memory_context=bounded_context,
+        )
+        self.assertEqual(llm_provider.calls, [(provider_prompt, ())])
+        self.assertEqual(recording_extractor.calls, [message])
+        self.assertEqual(response.message, provider_response)
+        conversation_record = self.memory_manager.all()[-1]
+        self.assertEqual(conversation_record.metadata["user_message"], message)
+        self.assertEqual(
+            conversation_record.content,
+            f"User: {message}\nHypatia: {provider_response}",
+        )
+
+    def test_zero_learned_memory_context_limit_is_forwarded_exactly(self) -> None:
+        llm_provider = RecordingLLMProvider("No context needed.")
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+            learned_memory_context_limit=0,
+        )
+
+        with (
+            patch(
+                "cognition.CognitiveEngine.load_learned_memory_context",
+            ) as load_context,
+            patch(
+                "cognition.CognitiveEngine.load_bounded_learned_memory_context",
+                return_value="",
+            ) as load_bounded_context,
+        ):
+            response = engine.process(BrainRequest(message="Explain bounded memory"))
+
+        load_context.assert_not_called()
+        load_bounded_context.assert_called_once_with(self.memory_manager, 0)
+        self.assertTrue(response.success)
+        self.assertEqual(llm_provider.calls, [("Explain bounded memory", ())])
+
+    def test_negative_learned_memory_context_limit_reaches_bounded_loader(
+        self,
+    ) -> None:
+        llm_provider = RecordingLLMProvider("Must not run.")
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+            learned_memory_context_limit=-1,
+        )
+
+        with (
+            patch(
+                "cognition.CognitiveEngine.load_learned_memory_context",
+            ) as load_context,
+            patch(
+                "cognition.CognitiveEngine.load_bounded_learned_memory_context",
+                side_effect=ValueError("Learned memory limit must be non-negative."),
+            ) as load_bounded_context,
+            self.assertRaisesRegex(
+                ValueError,
+                r"^Learned memory limit must be non-negative\.$",
+            ),
+        ):
+            engine.process(BrainRequest(message="Explain bounded memory"))
+
+        load_context.assert_not_called()
+        load_bounded_context.assert_called_once_with(self.memory_manager, -1)
+        self.assertEqual(llm_provider.calls, [])
+        self.assertEqual(self.memory_manager.all(), [])
 
     def test_successful_llm_message_invokes_candidate_extractor_once(self) -> None:
         llm_provider = RecordingLLMProvider("I will remember that later.")
