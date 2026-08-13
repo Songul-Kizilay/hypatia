@@ -3,16 +3,58 @@ from __future__ import annotations
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import Mock, patch
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
 from memory.LearnedMemory import LearnedMemory
-from memory.LearnedMemoryContext import build_learned_memory_context
+from memory.LearnedMemoryContext import (
+    build_learned_memory_context,
+    load_learned_memory_context,
+)
+from memory.MemoryManager import MemoryManager
 
 
 class LearnedMemoryContextTests(unittest.TestCase):
+    def test_load_context_delegates_exact_authoritative_tuple_once(self) -> None:
+        memory_manager = Mock(spec=MemoryManager)
+        memories = (
+            LearnedMemory(
+                kind="preference",
+                key="preferred_language",
+                value="Rust",
+            ),
+            LearnedMemory(
+                kind="goal",
+                key="current_learning_goal",
+                value="Kali Linux",
+            ),
+        )
+        sentinel_context = "".join(("sentinel", "-context"))
+
+        with (
+            patch(
+                "memory.LearnedMemoryContext.load_learned_memories",
+                return_value=memories,
+            ) as load_learned_memories,
+            patch(
+                "memory.LearnedMemoryContext.build_learned_memory_context",
+                return_value=sentinel_context,
+            ) as build_learned_memory_context,
+        ):
+            result = load_learned_memory_context(memory_manager)
+
+        load_learned_memories.assert_called_once_with(memory_manager)
+        build_learned_memory_context.assert_called_once_with(memories)
+        self.assertIs(result, sentinel_context)
+
+    def test_load_context_from_real_empty_manager_returns_exact_empty_string(
+        self,
+    ) -> None:
+        self.assertEqual(load_learned_memory_context(MemoryManager()), "")
+
     def test_empty_memories_return_exact_empty_string(self) -> None:
         self.assertEqual(build_learned_memory_context(()), "")
 
