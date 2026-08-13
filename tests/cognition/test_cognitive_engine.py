@@ -36,8 +36,13 @@ from eventbus.EventBus import EventBus
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from llm.LLMConversationMessage import LLMConversationMessage
 from llm.LLMProvider import LLMError
+from memory.LearnedMemoryCandidate import LearnedMemoryCandidateBatch
+from memory.LearnedMemoryCandidateExtractor import LearnedMemoryCandidateExtractor
 from memory.MemoryManager import MemoryManager
 from memory.MemoryRecord import MemoryRecord
+from memory.NoOpLearnedMemoryCandidateExtractor import (
+    NoOpLearnedMemoryCandidateExtractor,
+)
 from memory.SessionMemoryPolicy import SessionMemoryPolicy
 from planner.Planner import Planner
 from response.ResponseComposer import ResponseComposer
@@ -218,6 +223,20 @@ class FailingLLMProvider:
         raise LLMError("Generation unavailable.")
 
 
+class RecordingCandidateExtractor:
+    """Records accidental extraction calls without producing candidates."""
+
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def extract(self, source_text: str) -> LearnedMemoryCandidateBatch:
+        self.calls.append(source_text)
+        return LearnedMemoryCandidateBatch(
+            source_text=source_text,
+            candidates=(),
+        )
+
+
 class CognitiveEngineTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary_directory = tempfile.TemporaryDirectory()
@@ -262,6 +281,34 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertIsInstance(service, SessionDeleteService)
         self.assertIs(service._session_manager, self.session_manager)
         self.assertIs(service._memory_manager, self.memory_manager)
+
+    def test_defaults_learning_candidate_extractor_to_no_op(self) -> None:
+        self.assertIsInstance(
+            self.engine._learned_memory_candidate_extractor,
+            NoOpLearnedMemoryCandidateExtractor,
+        )
+
+    def test_preserves_explicit_learning_candidate_extractor_without_calling_it(
+        self,
+    ) -> None:
+        recording_extractor = RecordingCandidateExtractor()
+        extractor: LearnedMemoryCandidateExtractor = recording_extractor
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            learned_memory_candidate_extractor=extractor,
+        )
+
+        response = engine.process(BrainRequest(message="Hello"))
+
+        self.assertTrue(response.success)
+        self.assertIs(engine._learned_memory_candidate_extractor, extractor)
+        self.assertEqual(recording_extractor.calls, [])
 
     def test_session_manager_is_a_required_cognitive_engine_dependency(self) -> None:
         with self.assertRaises(TypeError):
