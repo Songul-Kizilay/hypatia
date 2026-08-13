@@ -1,7 +1,10 @@
 """Deterministic LLM-readable representation of learned memories."""
 
 from memory.LearnedMemory import LearnedMemory
-from memory.LearnedMemoryRetrieval import select_latest_learned_memories
+from memory.LearnedMemoryRetrieval import (
+    select_latest_learned_memories,
+    select_recent_learned_memories,
+)
 from memory.LearnedMemoryStore import load_learned_memories
 from memory.MemoryManager import MemoryManager
 
@@ -17,6 +20,15 @@ def build_learned_memory_context(
         *(f"- {memory.kind} | {memory.key} | {memory.value}" for memory in memories),
     )
     return "\n".join(lines)
+
+
+def build_bounded_learned_memory_context(
+    memories: tuple[LearnedMemory, ...],
+    limit: int,
+) -> str:
+    latest_memories = select_latest_learned_memories(memories)
+    bounded_memories = select_recent_learned_memories(latest_memories, limit)
+    return build_learned_memory_context(bounded_memories)
 
 
 def load_learned_memory_context(memory_manager: MemoryManager) -> str:
