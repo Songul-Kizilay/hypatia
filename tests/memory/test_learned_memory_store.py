@@ -12,6 +12,7 @@ if str(SRC_DIR) not in sys.path:
 from memory.LearnedMemory import LearnedMemory
 from memory.LearnedMemoryStore import (
     append_learned_memory,
+    correct_learned_memory,
     load_latest_learned_memory,
     load_learned_memories,
 )
@@ -129,6 +130,31 @@ class LearnedMemoryStoreTests(unittest.TestCase):
         result = append_learned_memory(memory_manager, memory)
 
         persist_learned_memory.assert_called_once_with(memory_manager, memory)
+        self.assertIs(result, sentinel_record)
+        memory_manager.add.assert_not_called()
+        memory_manager.update.assert_not_called()
+        memory_manager.delete.assert_not_called()
+
+    @patch("memory.LearnedMemoryStore.append_learned_memory")
+    def test_corrects_through_append_once_without_updating_or_deleting(
+        self,
+        append_learned_memory,
+    ) -> None:
+        memory_manager = MagicMock(spec=MemoryManager)
+        memory = LearnedMemory(
+            kind="preference",
+            key="preferred_language",
+            value="Turkish",
+        )
+        sentinel_record = MemoryRecord(
+            memory_id="corrected-record",
+            content="content",
+        )
+        append_learned_memory.return_value = sentinel_record
+
+        result = correct_learned_memory(memory_manager, memory)
+
+        append_learned_memory.assert_called_once_with(memory_manager, memory)
         self.assertIs(result, sentinel_record)
         memory_manager.add.assert_not_called()
         memory_manager.update.assert_not_called()

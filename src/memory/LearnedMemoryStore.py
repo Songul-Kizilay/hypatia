@@ -32,3 +32,10 @@ def append_learned_memory(
     memory: LearnedMemory,
 ) -> MemoryRecord:
     return persist_learned_memory(memory_manager, memory)
+
+
+def correct_learned_memory(
+    memory_manager: MemoryManager,
+    memory: LearnedMemory,
+) -> MemoryRecord:
+    return append_learned_memory(memory_manager, memory)
