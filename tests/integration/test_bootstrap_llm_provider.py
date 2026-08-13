@@ -18,6 +18,10 @@ from llm.LLMConversationMessage import LLMConversationMessage
 from llm.LLMProvider import LLMProvider
 from llm.LLMRuntimeConfig import LLMRuntimeConfig
 from llm.OpenAICompatibleProvider import OpenAICompatibleProvider
+from memory.LearnedMemoryCandidate import LearnedMemoryCandidateBatch
+from memory.NoOpLearnedMemoryCandidateExtractor import (
+    NoOpLearnedMemoryCandidateExtractor,
+)
 
 
 class FakeLLMProvider(LLMProvider):
@@ -43,7 +47,82 @@ class RecordingLLMProvider(LLMProvider):
         return next(self._responses)
 
 
+class RecordingCandidateExtractor:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def extract(self, source_text: str) -> LearnedMemoryCandidateBatch:
+        self.calls.append(source_text)
+        return LearnedMemoryCandidateBatch(
+            source_text=source_text,
+            candidates=(),
+        )
+
+
 class BootstrapLLMProviderTests(unittest.TestCase):
+    def test_bootstrap_passes_explicit_learning_extractor_unchanged(self) -> None:
+        provider = RecordingLLMProvider(["Exact assistant response."])
+        extractor = RecordingCandidateExtractor()
+        source_text = "  Remember this exact source.  "
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary_path = Path(temporary_directory)
+            bootstrap = Bootstrap(
+                memory_path=temporary_path / "memory.json",
+                session_path=temporary_path / "sessions.json",
+                llm_provider=provider,
+                learned_memory_candidate_extractor=extractor,
+            )
+            bootstrap.initialize()
+
+            cognitive_engine = bootstrap.container.resolve(CognitiveEngine)
+            self.assertEqual(extractor.calls, [])
+            response = cognitive_engine.process(BrainRequest(message=source_text))
+            records = tuple(cognitive_engine._memory_manager.all())
+
+        self.assertIs(
+            cognitive_engine._learned_memory_candidate_extractor,
+            extractor,
+        )
+        self.assertEqual(extractor.calls, [source_text])
+        self.assertEqual(provider.calls, [(source_text, ())])
+        self.assertTrue(response.success)
+        self.assertEqual(response.message, "Exact assistant response.")
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0].tags, {"brain", "conversation"})
+        self.assertEqual(records[0].metadata["user_message"], source_text)
+        self.assertEqual(
+            records[0].metadata["assistant_message"],
+            "Exact assistant response.",
+        )
+
+    def test_bootstrap_without_learning_extractor_preserves_noop_default(
+        self,
+    ) -> None:
+        provider = RecordingLLMProvider(["Default assistant response."])
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary_path = Path(temporary_directory)
+            bootstrap = Bootstrap(
+                memory_path=temporary_path / "memory.json",
+                session_path=temporary_path / "sessions.json",
+                llm_provider=provider,
+            )
+            bootstrap.initialize()
+
+            cognitive_engine = bootstrap.container.resolve(CognitiveEngine)
+            response = cognitive_engine.process(
+                BrainRequest(message="Default behavior.")
+            )
+
+        self.assertIsInstance(
+            cognitive_engine._learned_memory_candidate_extractor,
+            NoOpLearnedMemoryCandidateExtractor,
+        )
+        self.assertEqual(provider.calls, [("Default behavior.", ())])
+        self.assertTrue(response.success)
+        self.assertEqual(response.message, "Default assistant response.")
+
     def test_invalid_process_history_cap_fails_before_provider_activation(
         self,
     ) -> None:
