@@ -23,6 +23,9 @@ from eventbus.EventBus import EventBus
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from llm.LLMProvider import LLMError, LLMProvider
 from memory.LearnedMemoryCandidateExtractor import LearnedMemoryCandidateExtractor
+from memory.LearnedMemoryCandidatePersistence import (
+    persist_learned_memory_candidate_batch,
+)
 from memory.MemoryManager import MemoryManager
 from memory.MemoryRecord import MemoryRecord
 from memory.NoOpLearnedMemoryCandidateExtractor import (
@@ -298,8 +301,12 @@ class CognitiveEngine:
                     intent="message",
                     memory_count=0,
                 )
-                _batch = self._learned_memory_candidate_extractor.extract(
+                batch = self._learned_memory_candidate_extractor.extract(
                     request.message
+                )
+                persist_learned_memory_candidate_batch(
+                    self._memory_manager,
+                    batch,
                 )
             except LLMError as error:
                 response = BrainResponse(

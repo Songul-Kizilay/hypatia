@@ -36,7 +36,11 @@ from eventbus.EventBus import EventBus
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from llm.LLMConversationMessage import LLMConversationMessage
 from llm.LLMProvider import LLMError
-from memory.LearnedMemoryCandidate import LearnedMemoryCandidateBatch
+from memory.LearnedMemory import LearnedMemory
+from memory.LearnedMemoryCandidate import (
+    LearnedMemoryCandidate,
+    LearnedMemoryCandidateBatch,
+)
 from memory.LearnedMemoryCandidateExtractor import LearnedMemoryCandidateExtractor
 from memory.MemoryManager import MemoryManager
 from memory.MemoryRecord import MemoryRecord
@@ -226,11 +230,17 @@ class FailingLLMProvider:
 class RecordingCandidateExtractor:
     """Records accidental extraction calls without producing candidates."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        batch: LearnedMemoryCandidateBatch | None = None,
+    ) -> None:
         self.calls: list[str] = []
+        self.batch = batch
 
     def extract(self, source_text: str) -> LearnedMemoryCandidateBatch:
         self.calls.append(source_text)
+        if self.batch is not None:
+            return self.batch
         return LearnedMemoryCandidateBatch(
             source_text=source_text,
             candidates=(),
@@ -392,6 +402,19 @@ class CognitiveEngineTests(unittest.TestCase):
         llm_provider = RecordingLLMProvider("I will remember that later.")
         recording_extractor = RecordingCandidateExtractor()
         message = "  Ben kahveyi şekersiz içerim.  "
+        candidate = LearnedMemoryCandidate(
+            memory=LearnedMemory(
+                kind="preference",
+                key="preferred_language",
+                value="Python",
+            ),
+            source_text=message,
+        )
+        batch = LearnedMemoryCandidateBatch(
+            source_text=message,
+            candidates=(candidate,),
+        )
+        recording_extractor.batch = batch
         engine = ProductionCognitiveEngine(
             self.knowledge_engine,
             self.memory_manager,
@@ -404,11 +427,15 @@ class CognitiveEngineTests(unittest.TestCase):
             learned_memory_candidate_extractor=recording_extractor,
         )
 
-        response = engine.process(BrainRequest(message=message))
+        with patch(
+            "cognition.CognitiveEngine.persist_learned_memory_candidate_batch"
+        ) as persist:
+            response = engine.process(BrainRequest(message=message))
 
         self.assertTrue(response.success)
         self.assertEqual(response.message, "I will remember that later.")
         self.assertEqual(recording_extractor.calls, [message])
+        persist.assert_called_once_with(self.memory_manager, batch)
         self.assertEqual(llm_provider.calls, [(message, ())])
 
     def test_failed_llm_message_does_not_invoke_candidate_extractor(self) -> None:
@@ -427,11 +454,15 @@ class CognitiveEngineTests(unittest.TestCase):
             learned_memory_candidate_extractor=recording_extractor,
         )
 
-        response = engine.process(BrainRequest(message=message))
+        with patch(
+            "cognition.CognitiveEngine.persist_learned_memory_candidate_batch"
+        ) as persist:
+            response = engine.process(BrainRequest(message=message))
 
         self.assertFalse(response.success)
         self.assertEqual(response.message, "Generation unavailable.")
         self.assertEqual(recording_extractor.calls, [])
+        persist.assert_not_called()
         self.assertEqual(llm_provider.calls, [(message, ())])
 
     def test_message_passes_existing_same_session_conversation_history(self) -> None:
