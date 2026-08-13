@@ -43,6 +43,7 @@ class Bootstrap:
         learned_memory_candidate_extractor: (
             LearnedMemoryCandidateExtractor | None
         ) = None,
+        learned_memory_context_limit: int | None = None,
     ) -> None:
         self._memory_path = memory_path
         self._session_path = session_path
@@ -52,6 +53,7 @@ class Bootstrap:
         self._llm_system_prompt = llm_system_prompt
         self._llm_history_max_turns = llm_history_max_turns
         self._learned_memory_candidate_extractor = learned_memory_candidate_extractor
+        self._learned_memory_context_limit = learned_memory_context_limit
 
     @classmethod
     def from_process_environment(
@@ -119,6 +121,7 @@ class Bootstrap:
             llm_provider=llm_provider,
             llm_history_max_turns=self._llm_history_max_turns,
             learned_memory_candidate_extractor=learned_memory_candidate_extractor,
+            learned_memory_context_limit=self._learned_memory_context_limit,
         )
         brain = Brain(cognitive_engine, memory_manager, event_bus)
 
