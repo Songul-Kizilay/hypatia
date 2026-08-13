@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 import tempfile
 import unittest
@@ -74,6 +75,95 @@ class RecordingCandidateExtractor:
 
 
 class BootstrapLLMProviderTests(unittest.TestCase):
+    def test_runtime_learning_uses_configured_provider_end_to_end(self) -> None:
+        source_text = "  I prefer Python for new projects.  "
+        provider = RecordingLLMProvider(
+            [
+                "Normal answer.",
+                '{"candidates":[{"kind":"preference",'
+                '"key":"preferred_language","value":"Python"}]}',
+            ]
+        )
+        expected_memory = LearnedMemory(
+            kind="preference",
+            key="preferred_language",
+            value="Python",
+        )
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary_path = Path(temporary_directory)
+            with patch.dict(
+                os.environ,
+                {"HYPATIA_LEARNING_ENABLED": "true"},
+            ):
+                bootstrap = Bootstrap(
+                    memory_path=temporary_path / "memory.json",
+                    session_path=temporary_path / "sessions.json",
+                    llm_provider=provider,
+                )
+                bootstrap.initialize()
+
+            cognitive_engine = bootstrap.container.resolve(CognitiveEngine)
+            response = cognitive_engine.process(BrainRequest(message=source_text))
+            learned_memories = load_learned_memories(cognitive_engine._memory_manager)
+            latest = load_latest_learned_memory(
+                cognitive_engine._memory_manager,
+                kind="preference",
+                key="preferred_language",
+            )
+            records = tuple(cognitive_engine._memory_manager.all())
+
+        extractor = cognitive_engine._learned_memory_candidate_extractor
+        self.assertIsInstance(extractor, LLMLearnedMemoryCandidateExtractor)
+        self.assertIs(extractor._provider, provider)
+        self.assertEqual(
+            provider.calls,
+            [
+                (source_text, ()),
+                (build_learned_memory_candidate_prompt(source_text), ()),
+            ],
+        )
+        self.assertTrue(response.success)
+        self.assertEqual(response.message, "Normal answer.")
+        self.assertEqual(learned_memories, (expected_memory,))
+        self.assertEqual(latest, expected_memory)
+        self.assertEqual(len(records), 2)
+
+        learned_records = tuple(
+            record for record in records if "learned" in record.tags
+        )
+        self.assertEqual(len(learned_records), 1)
+        self.assertEqual(
+            learned_records[0].metadata,
+            {
+                "kind": "preference",
+                "key": "preferred_language",
+                "value": "Python",
+            },
+        )
+        self.assertNotIn("source_text", learned_records[0].metadata)
+
+        conversation_records = tuple(
+            record
+            for record in records
+            if {"brain", "conversation"}.issubset(record.tags)
+        )
+        self.assertEqual(len(conversation_records), 1)
+        self.assertEqual(
+            build_llm_conversation_history(
+                records,
+                conversation_records[0].metadata["session_id"],
+                max_turns=8,
+            ),
+            (
+                LLMConversationMessage(role="user", content=source_text),
+                LLMConversationMessage(
+                    role="assistant",
+                    content="Normal answer.",
+                ),
+            ),
+        )
+
     def test_bootstrap_composes_real_llm_learning_extractor_end_to_end(
         self,
     ) -> None:
@@ -215,12 +305,13 @@ class BootstrapLLMProviderTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temporary_directory:
             temporary_path = Path(temporary_directory)
-            bootstrap = Bootstrap(
-                memory_path=temporary_path / "memory.json",
-                session_path=temporary_path / "sessions.json",
-                llm_provider=provider,
-            )
-            bootstrap.initialize()
+            with patch.dict(os.environ, {}, clear=True):
+                bootstrap = Bootstrap(
+                    memory_path=temporary_path / "memory.json",
+                    session_path=temporary_path / "sessions.json",
+                    llm_provider=provider,
+                )
+                bootstrap.initialize()
 
             cognitive_engine = bootstrap.container.resolve(CognitiveEngine)
             response = cognitive_engine.process(
@@ -234,6 +325,43 @@ class BootstrapLLMProviderTests(unittest.TestCase):
         self.assertEqual(provider.calls, [("Default behavior.", ())])
         self.assertTrue(response.success)
         self.assertEqual(response.message, "Default assistant response.")
+        self.assertEqual(
+            load_learned_memories(cognitive_engine._memory_manager),
+            (),
+        )
+
+    def test_runtime_learning_false_preserves_noop_default(self) -> None:
+        provider = RecordingLLMProvider(["Default assistant response."])
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary_path = Path(temporary_directory)
+            with patch.dict(
+                os.environ,
+                {"HYPATIA_LEARNING_ENABLED": "false"},
+            ):
+                bootstrap = Bootstrap(
+                    memory_path=temporary_path / "memory.json",
+                    session_path=temporary_path / "sessions.json",
+                    llm_provider=provider,
+                )
+                bootstrap.initialize()
+
+            cognitive_engine = bootstrap.container.resolve(CognitiveEngine)
+            response = cognitive_engine.process(
+                BrainRequest(message="Default behavior.")
+            )
+
+        self.assertIsInstance(
+            cognitive_engine._learned_memory_candidate_extractor,
+            NoOpLearnedMemoryCandidateExtractor,
+        )
+        self.assertEqual(provider.calls, [("Default behavior.", ())])
+        self.assertTrue(response.success)
+        self.assertEqual(response.message, "Default assistant response.")
+        self.assertEqual(
+            load_learned_memories(cognitive_engine._memory_manager),
+            (),
+        )
 
     def test_invalid_process_history_cap_fails_before_provider_activation(
         self,
