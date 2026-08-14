@@ -130,6 +130,36 @@ class KnowledgeEngineTests(unittest.TestCase):
                 document.document_id,
             )
 
+    def test_apply_document_relation_changes_only_the_derived_graph(self) -> None:
+        first = self._write_file("first.md", "First")
+        second = self._write_file("second.md", "Second")
+        engine = KnowledgeEngine()
+        first_document = engine.load(first)
+        second_document = engine.load(second)
+
+        application = engine.apply_document_relation(
+            first_document.document_id,
+            second_document.document_id,
+        )
+        second_view = engine.graph_for_chunks(engine.search("second"))
+
+        self.assertEqual(
+            application.preview.source.document_id, first_document.document_id
+        )
+        self.assertEqual(
+            application.preview.target.document_id, second_document.document_id
+        )
+        self.assertEqual(application.edge.relation, KnowledgeGraphRelation.RELATED_TO)
+        self.assertEqual(engine.graph_edge_count(), 3)
+        self.assertIn(application.edge, second_view.edges)
+        with self.assertRaisesRegex(
+            KnowledgeError, "Knowledge graph relation is already applied."
+        ):
+            engine.apply_document_relation(
+                first_document.document_id,
+                second_document.document_id,
+            )
+
     def test_loads_multiple_documents(self) -> None:
         first = self._write_file("first.md", "First\n\nHypatia")
         second = self._write_file("second.txt", "Second\n\nKnowledge")

@@ -253,8 +253,16 @@ to validate a proposed `related_to` link between two distinct catalogued local
 documents. It produces a pending-change view only: the graph, JSON memory, LLM
 context, and conversation memory remain unchanged.
 
+Use `apply knowledge relation <source_document_id> -- <target_document_id>`
+only when the proposed relation should take effect. It freshly validates the
+same two document IDs, adds one `related_to` edge to the current in-memory
+graph, and rejects duplicate or invalid links. The graph is still local and
+ephemeral: this command does not write JSON memory, call an LLM, add a
+conversation record, or persist after a restart.
+
 Use `knowledge graph <query>` to inspect the deterministic structure of local
 matching sources. It returns up to three cited document-to-paragraph
-`contains` relationships. This graph is derived in memory from loaded local
+`contains` relationships plus any explicitly applied `related_to` edge touching
+a matching document. This graph is derived in memory from loaded local
 documents; it neither calls an LLM nor changes conversation memory, and it does
 not persist graph data or infer semantic relationships between documents.

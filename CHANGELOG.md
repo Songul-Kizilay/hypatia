@@ -2,6 +2,28 @@
 
 All notable project changes are recorded here.
 
+## [0.3.3] - 2026-08-15
+
+### Added
+
+- An explicit `apply knowledge relation <source_document_id> --
+  <target_document_id>` command. It freshly validates the two documents, then
+  adds one `related_to` edge to the derived, in-memory local graph. Duplicate,
+  self, unknown, and non-user-selectable relations are rejected without a
+  partial change.
+- `knowledge graph <query>` now shows an explicitly applied `related_to` edge
+  when either selected document endpoint is relevant to the query.
+
+### Safety
+
+- Applying a relation changes only the current in-memory graph. It does not
+  write JSON memory, create a conversation-memory record, call an LLM, or
+  persist across restart.
+
+### Verification
+
+- The package-aware full local suite contains 858 passing automated tests.
+
 ## [0.3.2] - 2026-08-15
 
 ### Added

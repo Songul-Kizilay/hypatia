@@ -78,6 +78,78 @@ class KnowledgeGraphTests(unittest.TestCase):
             ],
         )
 
+    def test_adds_explicit_document_relation_and_exposes_it_from_either_endpoint(
+        self,
+    ) -> None:
+        related_document = Document(
+            document_id="document-2",
+            title="Related Notes",
+            content="Related",
+            source="related.md",
+            document_type=DocumentType.MARKDOWN,
+        )
+        related_chunk = Chunk(
+            chunk_id="chunk-related",
+            document_id=related_document.document_id,
+            index=0,
+            content="Related",
+        )
+        self.graph.index_document(self.document, [self.first, self.second])
+        self.graph.index_document(related_document, [related_chunk])
+
+        edge = self.graph.add_document_relation(
+            self.document.document_id,
+            KnowledgeGraphRelation.RELATED_TO,
+            related_document.document_id,
+        )
+        view = self.graph.view_for_chunks([related_chunk])
+
+        self.assertEqual(edge.relation, KnowledgeGraphRelation.RELATED_TO)
+        self.assertIn(edge, view.edges)
+        self.assertEqual(
+            [node.label for node in view.nodes],
+            ["Related Notes", "Paragraph 1", "Research Notes"],
+        )
+
+    def test_rejects_duplicate_or_nonselectable_document_relation(self) -> None:
+        related_document = Document(
+            document_id="document-2",
+            title="Related Notes",
+            content="Related",
+            source="related.md",
+            document_type=DocumentType.MARKDOWN,
+        )
+        related_chunk = Chunk(
+            chunk_id="chunk-related",
+            document_id=related_document.document_id,
+            index=0,
+            content="Related",
+        )
+        self.graph.index_document(self.document, [self.first, self.second])
+        self.graph.index_document(related_document, [related_chunk])
+        self.graph.add_document_relation(
+            self.document.document_id,
+            KnowledgeGraphRelation.RELATED_TO,
+            related_document.document_id,
+        )
+
+        with self.assertRaisesRegex(
+            KnowledgeError, "Knowledge graph relation is already applied."
+        ):
+            self.graph.add_document_relation(
+                self.document.document_id,
+                KnowledgeGraphRelation.RELATED_TO,
+                related_document.document_id,
+            )
+        with self.assertRaisesRegex(
+            KnowledgeError, "Knowledge graph relation is not user-selectable."
+        ):
+            self.graph.add_document_relation(
+                self.document.document_id,
+                KnowledgeGraphRelation.CONTAINS,
+                related_document.document_id,
+            )
+
     def test_rejects_chunk_from_another_document(self) -> None:
         foreign_chunk = Chunk(
             chunk_id="foreign",

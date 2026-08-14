@@ -28,6 +28,7 @@ from knowledge.KnowledgeGraph import (
     KnowledgeGraphRelation,
     KnowledgeGraphView,
 )
+from knowledge.KnowledgeRelationApplication import KnowledgeRelationApplication
 from knowledge.KnowledgeRelationPreview import KnowledgeRelationPreview
 from memory.MemoryRecord import MemoryRecord
 from planner.Planner import Planner
@@ -230,6 +231,33 @@ class ResponseComposerTests(unittest.TestCase):
         self.assertIs(response.knowledge_relation_preview, preview)
         self.assertIn("Relation: related_to", response.message)
         self.assertTrue(response.message.endswith("Changes: ready"))
+
+    def test_knowledge_relation_apply_exposes_the_in_memory_boundary(self) -> None:
+        source = KnowledgeDocumentReference(
+            "source", "Source", "source.md", DocumentType.MARKDOWN, 1
+        )
+        target = KnowledgeDocumentReference(
+            "target", "Target", "target.md", DocumentType.MARKDOWN, 1
+        )
+        preview = KnowledgeRelationPreview(
+            source, KnowledgeGraphRelation.RELATED_TO, target
+        )
+        application = KnowledgeRelationApplication(
+            preview,
+            KnowledgeGraphEdge(
+                "document:source", KnowledgeGraphRelation.RELATED_TO, "document:target"
+            ),
+        )
+
+        response = self.composer.knowledge_relation_apply_success(
+            self.request, application
+        )
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "knowledge_relation_apply")
+        self.assertIs(response.knowledge_relation_application, application)
+        self.assertIn("Graph state: updated (memory only)", response.message)
+        self.assertTrue(response.message.endswith("JSON memory: unchanged"))
 
     def test_plan_success_preserves_goal_and_task_order(self) -> None:
         plan = Planner().create_plan("Read a PDF and summarize it")

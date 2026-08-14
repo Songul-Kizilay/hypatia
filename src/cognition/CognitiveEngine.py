@@ -172,6 +172,9 @@ class CognitiveEngine:
         if self._is_knowledge_relation_preview_request(request):
             return self._process_knowledge_relation_preview(request)
 
+        if self._is_knowledge_relation_apply_request(request):
+            return self._process_knowledge_relation_apply(request)
+
         if self._is_search_request(request):
             query = self._search_query(request)
             if not query:
@@ -447,6 +450,51 @@ class CognitiveEngine:
             )
         return self._response_composer.knowledge_relation_preview_success(
             request, preview
+        )
+
+    @staticmethod
+    def _is_knowledge_relation_apply_request(request: BrainRequest) -> bool:
+        normalized_message = request.message.casefold().strip()
+        return (
+            request.metadata.get("intent") == "knowledge_relation_apply"
+            or normalized_message == "apply knowledge relation"
+            or normalized_message.startswith("apply knowledge relation ")
+        )
+
+    @staticmethod
+    def _knowledge_relation_apply_ids(
+        request: BrainRequest,
+    ) -> tuple[str, str] | None:
+        value = (
+            request.message.strip()
+            if request.metadata.get("intent") == "knowledge_relation_apply"
+            else request.message[len("apply knowledge relation") :].strip()
+        )
+        parts = value.split(" -- ")
+        if len(parts) != 2 or not all(part.strip() for part in parts):
+            return None
+        return parts[0].strip(), parts[1].strip()
+
+    def _process_knowledge_relation_apply(
+        self,
+        request: BrainRequest,
+    ) -> BrainResponse:
+        """Apply one explicit local document relationship without memory writes."""
+        document_ids = self._knowledge_relation_apply_ids(request)
+        if document_ids is None:
+            return self._response_composer.knowledge_relation_apply_failure(
+                request,
+                "Knowledge relation apply format: apply knowledge relation "
+                "<source_document_id> -- <target_document_id>",
+            )
+        try:
+            application = self._knowledge_engine.apply_document_relation(*document_ids)
+        except KnowledgeError as error:
+            return self._response_composer.knowledge_relation_apply_failure(
+                request, f"Knowledge relation apply failed: {error}"
+            )
+        return self._response_composer.knowledge_relation_apply_success(
+            request, application
         )
 
     @staticmethod

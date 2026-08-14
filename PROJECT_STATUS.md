@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.2 (Genesis)`
+`v0.3.3 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -64,6 +64,13 @@ with optional OpenAI-compatible LLM conversation support.
   a user-selectable `related_to` relationship and displays a pending change,
   without changing graph state, JSON memory, LLM traffic, or conversation
   memory.
+- An explicit `apply knowledge relation <source_document_id> --
+  <target_document_id>` command. It freshly validates the two documents and
+  adds exactly one `related_to` edge to the current in-memory graph. Duplicate,
+  unknown, self, and non-user-selectable relations fail without partial graph
+  mutation. A relevant `knowledge graph <query>` view includes the applied
+  edge. This does not write JSON memory, call an LLM, create conversation
+  memory, or survive a restart.
 - Deterministic Brain and CognitiveEngine routing for conversation, knowledge
   search, planning, lexical recall, semantic recall, and explicit session
   commands.
@@ -90,7 +97,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 853 automated tests pass through package-aware discovery.
+- 858 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -109,6 +116,6 @@ alter the project's persisted data.
 
 ## Next Milestone
 
-Define an explicit, separately confirmed relation-application transaction from
-a validated preview, while keeping automatic semantic extraction,
-ordinary-conversation augmentation, and graph persistence out of scope.
+Decide whether explicitly applied document relations need a local, versioned
+persistence contract. Automatic semantic extraction, ordinary-conversation
+augmentation, and implicit graph writes remain out of scope.

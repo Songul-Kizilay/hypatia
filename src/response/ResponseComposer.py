@@ -11,6 +11,7 @@ from knowledge.Chunk import Chunk
 from knowledge.KnowledgeCitation import KnowledgeCitation
 from knowledge.KnowledgeDocumentReference import KnowledgeDocumentReference
 from knowledge.KnowledgeGraph import KnowledgeGraphView
+from knowledge.KnowledgeRelationApplication import KnowledgeRelationApplication
 from knowledge.KnowledgeRelationPreview import KnowledgeRelationPreview
 from memory.MemoryRecord import MemoryRecord
 from planner.Plan import Plan
@@ -511,6 +512,46 @@ class ResponseComposer:
             message=message,
             request_id=request.request_id,
             intent="knowledge_relation_preview",
+            memory_count=0,
+            success=False,
+        )
+
+    def knowledge_relation_apply_success(
+        self,
+        request: BrainRequest,
+        application: KnowledgeRelationApplication,
+    ) -> BrainResponse:
+        """Compose a successful, explicit in-memory relation application."""
+        preview = application.preview
+        return BrainResponse(
+            message="\n".join(
+                [
+                    "Knowledge relation applied:",
+                    "Source: "
+                    f"{preview.source.title} | id: {preview.source.document_id}",
+                    f"Relation: {preview.relation.value}",
+                    "Target: "
+                    f"{preview.target.title} | id: {preview.target.document_id}",
+                    "Graph state: updated (memory only)",
+                    "JSON memory: unchanged",
+                ]
+            ),
+            request_id=request.request_id,
+            intent="knowledge_relation_apply",
+            memory_count=0,
+            knowledge_relation_application=application,
+        )
+
+    def knowledge_relation_apply_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Compose a failed explicit document-relation application."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="knowledge_relation_apply",
             memory_count=0,
             success=False,
         )
