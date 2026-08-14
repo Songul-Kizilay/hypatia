@@ -59,6 +59,17 @@ class ResponseComposerTests(unittest.TestCase):
         self.assertEqual(response.request_id, self.request.request_id)
         self.assertEqual(response.memory_count, 0)
 
+    def test_turkish_greeting_composes_a_turkish_response(self) -> None:
+        request = BrainRequest(message="Merhaba!")
+
+        response = self.composer.greeting(request)
+
+        self.assertEqual(response.message, "Merhaba! Ben Hypatia.")
+        self.assertEqual(response.intent, "greeting")
+        self.assertTrue(response.success)
+        self.assertEqual(response.request_id, request.request_id)
+        self.assertEqual(response.memory_count, 0)
+
     def test_message_composes_the_expected_response(self) -> None:
         request = BrainRequest(message="how are you")
 

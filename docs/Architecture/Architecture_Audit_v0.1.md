@@ -15,7 +15,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.9` today) are the executable package and GitHub
+- **Runtime releases** (`v0.3.10` today) are the executable package and GitHub
   release line. They are the source-backed implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
   engineering increments. Sprint 4.16.50 is complete and is already in the
@@ -67,6 +67,11 @@ Chat requests use a validated, non-secret timeout setting. An explicit
 `HYPATIA_LLM_TIMEOUT_SECONDS` override must be a positive finite number;
 otherwise loopback endpoints receive 120 seconds while non-local endpoints
 retain a 30-second default.
+
+Standalone English and Turkish greetings remain deterministic. A substantive
+request that begins with a greeting is classified as a normal conversation,
+so it reaches the configured LLM runtime rather than losing the user's actual
+question to the greeting shortcut.
 
 ## Memory State
 

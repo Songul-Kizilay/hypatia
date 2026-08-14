@@ -8,7 +8,9 @@ from brain.BrainRequest import BrainRequest
 class BrainRouter:
     """Identifies a small set of basic intents without an LLM."""
 
-    _GREETING_WORDS = frozenset({"hello", "hi", "hey", "merhaba", "selam"})
+    _GREETING_PHRASES = frozenset(
+        {"hello", "hi", "hey", "hello there", "merhaba", "selam"}
+    )
 
     def detect_intent(self, request: BrainRequest) -> str:
         """Return the deterministic intent for a request."""
@@ -89,5 +91,5 @@ class BrainRouter:
             "use session "
         ):
             return "session_use"
-        words = set(request.message.casefold().split())
-        return "greeting" if words.intersection(self._GREETING_WORDS) else "message"
+        greeting_candidate = normalized_message.rstrip("!?.")
+        return "greeting" if greeting_candidate in self._GREETING_PHRASES else "message"

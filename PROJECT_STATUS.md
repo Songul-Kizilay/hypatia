@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.9 (Genesis)`
+`v0.3.10 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.9`** is the current executable package and published
+- **Runtime release `v0.3.10`** is the current executable package and published
   GitHub release.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -32,6 +32,9 @@ with optional OpenAI-compatible LLM conversation support.
 ### Implemented
 
 - Application bootstrap, configuration, logging, and dependency injection.
+- Deterministic English and Turkish standalone greetings. A substantive request
+  that begins with a greeting remains a normal conversation request and reaches
+  the configured LLM runtime when one is enabled.
 - EventBus-backed lifecycle events.
 - Session registry with local JSON persistence, active-session selection,
   targeted read-only views, rename, preview, and guarded deletion.
