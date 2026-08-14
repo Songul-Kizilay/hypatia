@@ -159,7 +159,7 @@ Not implemented:
 
 The current local verification baseline is:
 
-- `python -m unittest discover -s tests -t .`: 885 tests passed. The top-level
+- `python -m unittest discover -s tests -t .`: 893 tests passed. The top-level
   package setting ensures nested test directories are included without
   shadowing source packages.
 - `python -m black --check src tests`: passed.
@@ -175,6 +175,11 @@ local Ollama service using `embeddinggemma`: Hypatia's adapter received a
 conversation and returned it through the named semantic-recall path. Temporary
 memory/session files were used, so this verification did not change project
 data.
+
+The published v0.3.9 local chat runtime was also exercised on 15 August 2026
+against `llama3.2:latest`. An ephemeral Bootstrap instance completed a Turkish
+greeting through Hypatia's OpenAI-compatible local chat path, using temporary
+memory/session files and leaving project data unchanged.
 
 ## Architecture Risks and Boundaries
 
