@@ -44,6 +44,22 @@ class DocumentLoaderTests(unittest.TestCase):
 
         self.assertEqual(document.source, str(path))
 
+    def test_reloads_the_same_local_source_with_a_stable_document_id(self) -> None:
+        path = self._write_file("stable.md", "Original")
+
+        first = self.loader.load(path)
+        path.write_text("Updated", encoding="utf-8")
+        second = self.loader.load(path.resolve())
+
+        self.assertEqual(first.document_id, second.document_id)
+        self.assertNotEqual(first.content, second.content)
+
+    def test_assigns_different_document_ids_to_distinct_local_sources(self) -> None:
+        first = self.loader.load(self._write_file("first.md", "Same content"))
+        second = self.loader.load(self._write_file("second.md", "Same content"))
+
+        self.assertNotEqual(first.document_id, second.document_id)
+
     def test_rejects_missing_file(self) -> None:
         with self.assertRaises(KnowledgeError):
             self.loader.load(self.directory / "missing.txt")

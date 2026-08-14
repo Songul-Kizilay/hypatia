@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from uuid import NAMESPACE_URL, uuid5
 
 from core.Exceptions import KnowledgeError
 from knowledge.Document import Document, DocumentType
@@ -40,4 +41,10 @@ class DocumentLoader:
             content=content,
             source=str(path),
             document_type=document_type,
+            document_id=self._document_id(path),
         )
+
+    @staticmethod
+    def _document_id(path: Path) -> str:
+        """Derive a repeatable local-source identity for relation references."""
+        return str(uuid5(NAMESPACE_URL, path.resolve().as_uri()))

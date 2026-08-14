@@ -2,6 +2,19 @@
 
 All notable project changes are recorded here.
 
+## [0.3.4] - 2026-08-15
+
+### Added
+
+- Stable document IDs for files loaded through the local Knowledge Foundation.
+  The ID is deterministically derived from the resolved local source path, so
+  reopening the same source retains its identity even when its content changes.
+  Distinct local source paths retain distinct identities.
+
+### Verification
+
+- The package-aware full local suite contains 861 passing automated tests.
+
 ## [0.3.3] - 2026-08-15
 
 ### Added

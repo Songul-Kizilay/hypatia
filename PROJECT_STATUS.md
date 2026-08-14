@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.3 (Genesis)`
+`v0.3.4 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -59,6 +59,10 @@ with optional OpenAI-compatible LLM conversation support.
   titles, source paths, types, and chunk counts in deterministic load order.
   It is read-only and creates neither LLM traffic nor a conversation-memory
   record.
+- Files loaded through the Knowledge Foundation receive a stable document ID
+  derived from their resolved local source path. Reopening the same source
+  retains its identity even if its content changes; different local sources
+  receive different IDs. Programmatically created documents remain independent.
 - An explicit `preview knowledge relation <source_document_id> --
   <target_document_id>` command. It validates distinct catalogued documents for
   a user-selectable `related_to` relationship and displays a pending change,
@@ -116,6 +120,7 @@ alter the project's persisted data.
 
 ## Next Milestone
 
-Decide whether explicitly applied document relations need a local, versioned
-persistence contract. Automatic semantic extraction, ordinary-conversation
+Persist explicitly applied document relations through a local, versioned,
+atomic store, then restore them only after both stable local document identities
+are available. Automatic semantic extraction, ordinary-conversation
 augmentation, and implicit graph writes remain out of scope.
