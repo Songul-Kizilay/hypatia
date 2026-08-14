@@ -35,13 +35,13 @@ class OpenAICompatibleProvider:
     def __init__(
         self,
         base_url: str,
-        api_key: str,
+        api_key: str | None,
         model: str,
         transport: ChatCompletionTransport,
         system_prompt: str | None = None,
     ) -> None:
         self._base_url = base_url
-        self._api_key = api_key
+        self._api_key = api_key if api_key is not None and api_key.strip() else None
         self._model = model
         self._transport = transport
         self._system_prompt = system_prompt
@@ -59,10 +59,15 @@ class OpenAICompatibleProvider:
             {"role": message.role, "content": message.content} for message in history
         )
         messages.append({"role": "user", "content": prompt})
+        headers = (
+            {"Authorization": f"Bearer {self._api_key}"}
+            if self._api_key is not None
+            else {}
+        )
         try:
             response = self._transport(
                 self._base_url,
-                {"Authorization": f"Bearer {self._api_key}"},
+                headers,
                 {
                     "model": self._model,
                     "messages": messages,

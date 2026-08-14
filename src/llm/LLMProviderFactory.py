@@ -9,7 +9,7 @@ from llm.UrllibChatCompletionTransport import UrllibChatCompletionTransport
 
 def create_llm_provider(
     base_url: str,
-    api_key: str,
+    api_key: str | None,
     model: str,
     system_prompt: str | None = None,
 ) -> LLMProvider:

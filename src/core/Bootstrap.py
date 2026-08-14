@@ -12,6 +12,7 @@ from eventbus.EventBus import EventBus
 from knowledge.JsonFileKnowledgeRelationStore import JsonFileKnowledgeRelationStore
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from llm.HypatiaSystemPrompt import HYPATIA_DEFAULT_SYSTEM_PROMPT
+from llm.LLMEndpointPolicy import is_loopback_llm_endpoint
 from llm.LLMEnvironmentSettings import (
     load_llm_process_environment_settings,
     load_llm_process_history_max_turns,
@@ -341,12 +342,14 @@ class Bootstrap:
             return self._llm_provider
         if self._llm_config is None or self._llm_config.enabled is False:
             return None
-        if self._llm_api_key is None or not self._llm_api_key.strip():
-            raise RuntimeError("LLM API key is required when LLM is enabled.")
         if not self._llm_config.base_url.strip():
             raise RuntimeError("LLM base URL is required when LLM is enabled.")
         if not self._llm_config.model.strip():
             raise RuntimeError("LLM model is required when LLM is enabled.")
+        if (
+            self._llm_api_key is None or not self._llm_api_key.strip()
+        ) and not is_loopback_llm_endpoint(self._llm_config.base_url):
+            raise RuntimeError("LLM API key is required when LLM is enabled.")
         return activate_llm(
             self._llm_config,
             self._llm_api_key,

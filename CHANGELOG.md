@@ -2,6 +2,24 @@
 
 All notable project changes are recorded here.
 
+## [0.3.8] - 2026-08-15
+
+### Added
+
+- Keyless chat-runtime activation for explicitly loopback OpenAI-compatible
+  endpoints such as local Ollama. In this mode Hypatia deliberately omits the
+  `Authorization` header instead of sending an empty bearer token.
+
+### Safety
+
+- Non-local endpoints continue to require an API key and HTTPS. Plain HTTP is
+  still restricted to `localhost`, `127.0.0.1`, and `::1`; redirects remain
+  rejected for chat-completion requests.
+
+### Verification
+
+- The package-aware full local suite contains 885 passing automated tests.
+
 ## [0.3.7] - 2026-08-15
 
 ### Added

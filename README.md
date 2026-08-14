@@ -96,16 +96,27 @@ endpoint. Set these values in the process environment before starting Hypatia:
 HYPATIA_LLM_ENABLED=true
 HYPATIA_LLM_BASE_URL=<OpenAI-compatible chat completions endpoint>
 HYPATIA_LLM_MODEL=<model name>
-HYPATIA_LLM_API_KEY=<required API key>
+HYPATIA_LLM_API_KEY=<required for non-local endpoints>
 ```
 
-The API key is required whenever the LLM runtime is enabled. Use a placeholder in
-documentation and scripts; never commit a real secret. To keep that key protected
-in transit, remote endpoints must use `https://`. Plain `http://` is accepted only
-for an explicitly local endpoint on `localhost`, `127.0.0.1`, or `::1` (for
-example, a local Ollama-compatible runtime). Completion requests do not follow
-HTTP redirects, preventing a bearer token from being forwarded to another
-endpoint.
+An API key is required for every non-local endpoint. It is optional only when
+the endpoint explicitly targets `localhost`, `127.0.0.1`, or `::1`, which lets
+a local Ollama-compatible runtime run without a placeholder secret. In that
+keyless local mode Hypatia sends no `Authorization` header. Use a placeholder
+in documentation and scripts; never commit a real secret. To keep a configured
+key protected in transit, remote endpoints must use `https://`. Plain `http://`
+is accepted only for an explicitly local endpoint. Completion requests do not
+follow HTTP redirects, preventing a bearer token from being forwarded to
+another endpoint.
+
+For a standard local Ollama chat runtime, set the endpoint and model, omit
+`HYPATIA_LLM_API_KEY`, then start Hypatia:
+
+```text
+HYPATIA_LLM_ENABLED=true
+HYPATIA_LLM_BASE_URL=http://localhost:11434/v1/chat/completions
+HYPATIA_LLM_MODEL=<your-installed-chat-model>
+```
 
 Optional process-environment settings:
 

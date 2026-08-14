@@ -7,6 +7,15 @@ from urllib.parse import urlparse
 _LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 
 
+def is_loopback_llm_endpoint(base_url: str) -> bool:
+    """Return whether a URL explicitly targets the local machine.
+
+    Callers must still validate the URL with ``validate_llm_endpoint`` before
+    using it as a network destination.
+    """
+    return urlparse(base_url).hostname in _LOOPBACK_HOSTS
+
+
 def validate_llm_endpoint(base_url: str) -> str:
     """Return a safe OpenAI-compatible endpoint or raise ``ValueError``.
 
@@ -29,7 +38,7 @@ def validate_llm_endpoint(base_url: str) -> str:
         raise ValueError("LLM base URL must be a valid HTTP(S) URL.")
     if port is not None and not 1 <= port <= 65535:
         raise ValueError("LLM base URL must be a valid HTTP(S) URL.")
-    if endpoint.scheme == "http" and endpoint.hostname not in _LOOPBACK_HOSTS:
+    if endpoint.scheme == "http" and not is_loopback_llm_endpoint(base_url):
         raise ValueError(
             "LLM base URL must use HTTPS unless it targets localhost, "
             "127.0.0.1, or ::1."

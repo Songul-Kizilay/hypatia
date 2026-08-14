@@ -1975,6 +1975,40 @@ class BootstrapLLMProviderTests(unittest.TestCase):
         self.assertIs(cognitive_engine._llm_provider, sentinel_provider)
         sentinel_provider.generate.assert_not_called()
 
+    def test_enabled_loopback_config_without_an_api_key_activates_provider(
+        self,
+    ) -> None:
+        config = LLMRuntimeConfig(
+            enabled=True,
+            base_url="http://localhost:11434/v1/chat/completions",
+            model="local-model",
+        )
+        sentinel_provider = Mock(spec=LLMProvider)
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary_path = Path(temporary_directory)
+            bootstrap = Bootstrap(
+                memory_path=temporary_path / "memory.json",
+                session_path=temporary_path / "sessions.json",
+                llm_config=config,
+            )
+
+            with patch(
+                "core.Bootstrap.activate_llm",
+                return_value=sentinel_provider,
+            ) as activate_llm:
+                bootstrap.initialize()
+
+            cognitive_engine = bootstrap.container.resolve(CognitiveEngine)
+
+        activate_llm.assert_called_once_with(
+            config,
+            None,
+            system_prompt=None,
+        )
+        self.assertIs(cognitive_engine._llm_provider, sentinel_provider)
+        sentinel_provider.generate.assert_not_called()
+
     def test_enabled_config_without_an_api_key_fails_before_activation(self) -> None:
         config = LLMRuntimeConfig(
             enabled=True,
