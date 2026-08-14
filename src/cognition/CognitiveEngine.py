@@ -163,6 +163,9 @@ class CognitiveEngine:
         if self._is_knowledge_context_request(request):
             return self._process_knowledge_context(request)
 
+        if self._is_knowledge_graph_request(request):
+            return self._process_knowledge_graph(request)
+
         if self._is_search_request(request):
             query = self._search_query(request)
             if not query:
@@ -344,6 +347,42 @@ class CognitiveEngine:
         return self._response_composer.knowledge_context_success(
             request,
             results[:KNOWLEDGE_CONTEXT_MAX_RESULTS],
+        )
+
+    @staticmethod
+    def _is_knowledge_graph_request(request: BrainRequest) -> bool:
+        declared_intent = request.metadata.get("intent")
+        normalized_message = request.message.casefold().strip()
+        return (
+            declared_intent == "knowledge_graph"
+            or normalized_message == "knowledge graph"
+            or normalized_message.startswith("knowledge graph ")
+        )
+
+    @staticmethod
+    def _knowledge_graph_query(request: BrainRequest) -> str:
+        if request.metadata.get("intent") == "knowledge_graph":
+            return request.message.strip()
+        return request.message[len("knowledge graph") :].strip()
+
+    def _process_knowledge_graph(self, request: BrainRequest) -> BrainResponse:
+        """Inspect deterministic local source structure without memory or LLM use."""
+        query = self._knowledge_graph_query(request)
+        if not query:
+            return self._response_composer.knowledge_graph_failure(
+                request, "A knowledge graph query is required."
+            )
+        try:
+            results = self._knowledge_engine.search(query)[
+                :KNOWLEDGE_CONTEXT_MAX_RESULTS
+            ]
+            graph_view = self._knowledge_engine.graph_for_chunks(results)
+        except KnowledgeError as error:
+            return self._response_composer.knowledge_graph_failure(
+                request, f"Knowledge graph failed: {error}"
+            )
+        return self._response_composer.knowledge_graph_success(
+            request, results, graph_view
         )
 
     @staticmethod

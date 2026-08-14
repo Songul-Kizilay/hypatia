@@ -19,6 +19,13 @@ if source_planner_dir not in planner.__path__:
 
 from brain.BrainRequest import BrainRequest
 from knowledge.Chunk import Chunk, ChunkType
+from knowledge.KnowledgeGraph import (
+    KnowledgeGraphEdge,
+    KnowledgeGraphNode,
+    KnowledgeGraphNodeKind,
+    KnowledgeGraphRelation,
+    KnowledgeGraphView,
+)
 from memory.MemoryRecord import MemoryRecord
 from planner.Planner import Planner
 from response.ResponseComposer import ResponseComposer
@@ -132,6 +139,47 @@ class ResponseComposerTests(unittest.TestCase):
         )
         self.assertIn("x" * 600 + "...", response.message)
         self.assertNotIn("x" * 601, response.message)
+
+    def test_knowledge_graph_formats_visible_structural_relationships(
+        self,
+    ) -> None:
+        result = Chunk(
+            document_id="document",
+            index=0,
+            content="Hypatia",
+            metadata={"document_title": "Local Notes", "document_source": "notes.md"},
+        )
+        view = KnowledgeGraphView(
+            nodes=(
+                KnowledgeGraphNode(
+                    "document:document",
+                    KnowledgeGraphNodeKind.DOCUMENT,
+                    "Local Notes",
+                ),
+                KnowledgeGraphNode(
+                    f"chunk:{result.chunk_id}",
+                    KnowledgeGraphNodeKind.CHUNK,
+                    "Paragraph 1",
+                ),
+            ),
+            edges=(
+                KnowledgeGraphEdge(
+                    "document:document",
+                    KnowledgeGraphRelation.CONTAINS,
+                    f"chunk:{result.chunk_id}",
+                ),
+            ),
+        )
+
+        response = self.composer.knowledge_graph_success(self.request, [result], view)
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "knowledge_graph")
+        self.assertEqual(
+            response.message,
+            "Knowledge graph:\n- Local Notes --contains--> Paragraph 1",
+        )
+        self.assertEqual(len(response.knowledge_citations), 1)
 
     def test_plan_success_preserves_goal_and_task_order(self) -> None:
         plan = Planner().create_plan("Read a PDF and summarize it")
