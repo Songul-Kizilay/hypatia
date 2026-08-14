@@ -19,6 +19,7 @@ from llm.LLMRuntimeActivator import activate_llm
 from llm.LLMRuntimeConfig import LLMRuntimeConfig
 from memory.JsonFileMemoryStore import JsonFileMemoryStore
 from memory.LearnedMemoryCandidateExtractor import LearnedMemoryCandidateExtractor
+from memory.LearnedMemorySelector import LearnedMemorySelector
 from memory.LLMLearnedMemoryCandidateExtractor import (
     LLMLearnedMemoryCandidateExtractor,
 )
@@ -44,6 +45,7 @@ class Bootstrap:
             LearnedMemoryCandidateExtractor | None
         ) = None,
         learned_memory_context_limit: int | None = None,
+        learned_memory_selector: LearnedMemorySelector | None = None,
     ) -> None:
         self._memory_path = memory_path
         self._session_path = session_path
@@ -54,6 +56,7 @@ class Bootstrap:
         self._llm_history_max_turns = llm_history_max_turns
         self._learned_memory_candidate_extractor = learned_memory_candidate_extractor
         self._learned_memory_context_limit = learned_memory_context_limit
+        self._learned_memory_selector = learned_memory_selector
 
     @classmethod
     def from_process_environment(
@@ -136,6 +139,7 @@ class Bootstrap:
             llm_history_max_turns=self._llm_history_max_turns,
             learned_memory_candidate_extractor=learned_memory_candidate_extractor,
             learned_memory_context_limit=self._learned_memory_context_limit,
+            learned_memory_selector=self._learned_memory_selector,
         )
         brain = Brain(cognitive_engine, memory_manager, event_bus)
 
