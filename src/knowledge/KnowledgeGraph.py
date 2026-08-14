@@ -229,6 +229,29 @@ class KnowledgeGraph:
         self._edges[key] = edge
         return edge
 
+    def has_document_relation(
+        self,
+        source_document_id: str,
+        relation: KnowledgeGraphRelation,
+        target_document_id: str,
+    ) -> bool:
+        """Return whether an explicit relation is currently represented."""
+        return (
+            self.document_node_id(source_document_id),
+            relation,
+            self.document_node_id(target_document_id),
+        ) in self._edges
+
+    def remove_document_relation(self, edge: KnowledgeGraphEdge) -> None:
+        """Remove one explicit relation to roll back a failed persistence write."""
+        key = (edge.source_node_id, edge.relation, edge.target_node_id)
+        if (
+            edge.relation is not KnowledgeGraphRelation.RELATED_TO
+            or self._edges.get(key) != edge
+        ):
+            raise KnowledgeError("Knowledge graph relation cannot be removed.")
+        del self._edges[key]
+
     def node_count(self) -> int:
         """Return the number of derived graph nodes."""
         return len(self._nodes)

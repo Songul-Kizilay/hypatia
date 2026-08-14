@@ -100,21 +100,27 @@ Implemented memory capabilities:
   then atomically adds one user-selected `related_to` edge to the derived
   in-memory graph. The graph view exposes the relation when either endpoint is
   selected. Duplicate, self, unknown, and derived relation requests fail before
-  mutating the graph; the command neither writes JSON memory nor calls an LLM.
+  mutating the graph; the command neither writes primary conversation memory
+  nor calls an LLM.
+- A distinct, versioned `relations.json` store for explicitly applied document
+  relations. It atomically replaces complete snapshots and validates every
+  record before use. On a storage failure the in-memory edge is rolled back.
+  On restart, a stored relation is restored only after both file-derived stable
+  source IDs have been loaded again; it is never guessed from a source title or
+  content.
 
 Not implemented:
 
 - Embedding persistence enabled by default.
 - Automatic semantic augmentation of ordinary messages or generic Brain search.
-- Knowledge-graph persistence, cross-document semantic relation extraction,
-  web retrieval, or automatic
+- Cross-document semantic relation extraction, web retrieval, or automatic
   citations in ordinary model prompts.
 
 ## Quality Baseline
 
 The current local verification baseline is:
 
-- `python -m unittest discover -s tests -t .`: 858 tests passed. The top-level
+- `python -m unittest discover -s tests -t .`: 869 tests passed. The top-level
   package setting ensures nested test directories are included without
   shadowing source packages.
 - `python -m black --check src tests`: passed.

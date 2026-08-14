@@ -9,6 +9,7 @@ from core.Config import Config
 from core.DependencyContainer import DependencyContainer
 from core.Logger import Logger
 from eventbus.EventBus import EventBus
+from knowledge.JsonFileKnowledgeRelationStore import JsonFileKnowledgeRelationStore
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from llm.HypatiaSystemPrompt import HYPATIA_DEFAULT_SYSTEM_PROMPT
 from llm.LLMEnvironmentSettings import (
@@ -50,6 +51,7 @@ class Bootstrap:
         self,
         memory_path: Path | None = None,
         session_path: Path | None = None,
+        knowledge_relation_path: Path | None = None,
         llm_provider: LLMProvider | None = None,
         llm_config: LLMRuntimeConfig | None = None,
         llm_api_key: str | None = None,
@@ -64,6 +66,7 @@ class Bootstrap:
     ) -> None:
         self._memory_path = memory_path
         self._session_path = session_path
+        self._knowledge_relation_path = knowledge_relation_path
         self._llm_provider = llm_provider
         self._llm_config = llm_config
         self._llm_api_key = llm_api_key
@@ -79,6 +82,7 @@ class Bootstrap:
         cls,
         memory_path: Path | None = None,
         session_path: Path | None = None,
+        knowledge_relation_path: Path | None = None,
     ) -> Bootstrap:
         """Create Bootstrap with LLM settings loaded from the process environment."""
         llm_config, llm_api_key = load_llm_process_environment_settings()
@@ -95,6 +99,7 @@ class Bootstrap:
         return cls(
             memory_path=memory_path,
             session_path=session_path,
+            knowledge_relation_path=knowledge_relation_path,
             llm_config=llm_config,
             llm_api_key=llm_api_key,
             llm_system_prompt=llm_system_prompt,
@@ -232,7 +237,11 @@ class Bootstrap:
             memory_manager=memory_manager,
             event_bus=event_bus,
         )
-        knowledge_engine = KnowledgeEngine()
+        relation_store = JsonFileKnowledgeRelationStore(
+            self._knowledge_relation_path
+            or self._knowledge_relation_store_path(self._memory_path)
+        )
+        knowledge_engine = KnowledgeEngine(relation_store=relation_store)
         planner = Planner()
         response_composer = ResponseComposer()
         llm_provider = self._configured_llm_provider()
@@ -269,6 +278,7 @@ class Bootstrap:
         container.register(session_manager)
         container.register(memory_store)
         container.register(memory_manager)
+        container.register(relation_store)
         if semantic_memory_index_runtime is not None:
             container.register(semantic_memory_index_runtime)
         container.register(session_rename_service)
@@ -314,6 +324,17 @@ class Bootstrap:
     def _default_session_path() -> Path:
         project_root = Path(__file__).resolve().parents[2]
         return project_root / "data" / "sessions" / "sessions.json"
+
+    @staticmethod
+    def _default_knowledge_relation_path() -> Path:
+        project_root = Path(__file__).resolve().parents[2]
+        return project_root / "data" / "knowledge" / "relations.json"
+
+    @classmethod
+    def _knowledge_relation_store_path(cls, memory_path: Path | None) -> Path:
+        if memory_path is None:
+            return cls._default_knowledge_relation_path()
+        return memory_path.with_name("knowledge_relations.json")
 
     def _configured_llm_provider(self) -> LLMProvider | None:
         if self._llm_provider is not None:
