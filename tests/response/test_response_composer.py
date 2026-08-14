@@ -30,6 +30,7 @@ from knowledge.KnowledgeGraph import (
 )
 from knowledge.KnowledgeRelationApplication import KnowledgeRelationApplication
 from knowledge.KnowledgeRelationPreview import KnowledgeRelationPreview
+from knowledge.KnowledgeRelationReference import KnowledgeRelationReference
 from knowledge.KnowledgeRelationRevocation import KnowledgeRelationRevocation
 from knowledge.KnowledgeRelationRevocationPreview import (
     KnowledgeRelationRevocationPreview,
@@ -298,6 +299,34 @@ class ResponseComposerTests(unittest.TestCase):
         self.assertIs(response.knowledge_relation_revocation, revocation)
         self.assertIn("Relation storage: removed", response.message)
         self.assertTrue(response.message.endswith("JSON memory: unchanged"))
+
+    def test_knowledge_relation_list_formats_active_links_and_empty_state(self) -> None:
+        source = KnowledgeDocumentReference(
+            "source", "Source", "source.md", DocumentType.MARKDOWN, 1
+        )
+        target = KnowledgeDocumentReference(
+            "target", "Target", "target.md", DocumentType.MARKDOWN, 1
+        )
+        relation = KnowledgeRelationReference(
+            source, KnowledgeGraphRelation.RELATED_TO, target, persisted=True
+        )
+
+        response = self.composer.knowledge_relation_list_success(
+            self.request, [relation]
+        )
+        empty_response = self.composer.knowledge_relation_list_success(self.request, [])
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "knowledge_relation_list")
+        self.assertEqual(response.knowledge_relations, [relation])
+        self.assertIn(
+            "Source | id: source --related_to--> Target | id: target",
+            response.message,
+        )
+        self.assertTrue(response.message.endswith("storage: persisted"))
+        self.assertEqual(
+            empty_response.message, "No applied local knowledge relations are loaded."
+        )
 
     def test_plan_success_preserves_goal_and_task_order(self) -> None:
         plan = Planner().create_plan("Read a PDF and summarize it")

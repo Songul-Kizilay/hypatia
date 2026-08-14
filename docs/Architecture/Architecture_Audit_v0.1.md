@@ -114,6 +114,10 @@ Implemented memory capabilities:
   removes an existing graph edge and any persisted record. If the replacement
   relation snapshot fails to save, the engine restores the graph edge before
   returning a failure.
+- A read-only `list knowledge relations` catalog. It exposes only active graph
+  relations in deterministic application order, together with loaded source and
+  target IDs plus the persistence status. The command does not materialize a
+  persisted relation whose sources are not loaded and does not mutate any state.
 
 Not implemented:
 
@@ -126,7 +130,7 @@ Not implemented:
 
 The current local verification baseline is:
 
-- `python -m unittest discover -s tests -t .`: 875 tests passed. The top-level
+- `python -m unittest discover -s tests -t .`: 880 tests passed. The top-level
   package setting ensures nested test directories are included without
   shadowing source packages.
 - `python -m black --check src tests`: passed.
