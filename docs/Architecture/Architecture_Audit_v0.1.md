@@ -71,6 +71,9 @@ Implemented memory capabilities:
 - Source attribution carried from loaded documents through paragraph chunks to
   ordered knowledge-search citations. This is a local explainability boundary,
   not an automatic RAG or prompt-augmentation feature.
+- An explicit bounded `knowledge context <query>` retrieval flow. It selects at
+  most three cited local chunks, limits display length, and does not mutate
+  conversation memory or automatically augment an LLM prompt.
 
 Not implemented:
 
@@ -82,7 +85,7 @@ Not implemented:
 
 The current local verification baseline is:
 
-- `python -m unittest discover -s tests -t .`: 822 tests passed. The top-level
+- `python -m unittest discover -s tests -t .`: 825 tests passed. The top-level
   package setting ensures nested test directories are included without
   shadowing source packages.
 - `python -m black --check src tests`: passed.

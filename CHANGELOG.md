@@ -2,6 +2,23 @@
 
 All notable project changes are recorded here.
 
+## [0.2.7] - 2026-08-15
+
+### Added
+
+- An explicit `knowledge context <query>` command that composes up to three
+  local knowledge chunks with visible ordered source citations. It does not
+  alter normal search or conversation behavior and does not create a memory
+  record.
+- Bounded context display: each rendered chunk is limited to 600 characters,
+  while the complete selected result remains available in the response model.
+
+### Verification
+
+- The package-aware full local suite contains 825 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass in the local development
+  environment.
+
 ## [0.2.6] - 2026-08-15
 
 ### Added
