@@ -12,6 +12,10 @@ if str(SRC_DIR) not in sys.path:
 from llm.LLMProvider import LLMProvider
 from llm.LLMRuntimeActivator import activate_llm
 from llm.LLMRuntimeConfig import LLMRuntimeConfig
+from llm.UrllibChatCompletionTransport import (
+    DEFAULT_TIMEOUT_SECONDS,
+    LOCAL_DEFAULT_TIMEOUT_SECONDS,
+)
 
 
 class LLMRuntimeActivatorTests(unittest.TestCase):
@@ -48,6 +52,7 @@ class LLMRuntimeActivatorTests(unittest.TestCase):
             api_key="test-api-key",
             model="test-model",
             system_prompt=None,
+            timeout_seconds=DEFAULT_TIMEOUT_SECONDS,
         )
         sentinel_provider.generate.assert_not_called()
 
@@ -75,6 +80,7 @@ class LLMRuntimeActivatorTests(unittest.TestCase):
             api_key="test-api-key",
             model="test-model",
             system_prompt="You are Hypatia.",
+            timeout_seconds=DEFAULT_TIMEOUT_SECONDS,
         )
         sentinel_provider.generate.assert_not_called()
 
@@ -98,6 +104,33 @@ class LLMRuntimeActivatorTests(unittest.TestCase):
             api_key=None,
             model="local-model",
             system_prompt=None,
+            timeout_seconds=LOCAL_DEFAULT_TIMEOUT_SECONDS,
+        )
+
+    def test_enabled_config_uses_an_explicit_timeout_over_the_endpoint_default(
+        self,
+    ) -> None:
+        config = LLMRuntimeConfig(
+            enabled=True,
+            base_url="http://localhost:11434/v1/chat/completions",
+            model="local-model",
+            timeout_seconds=7.5,
+        )
+        sentinel_provider = Mock(spec=LLMProvider)
+
+        with patch(
+            "llm.LLMRuntimeActivator.create_llm_provider",
+            return_value=sentinel_provider,
+        ) as provider_factory:
+            provider = activate_llm(config, None)
+
+        self.assertIs(provider, sentinel_provider)
+        provider_factory.assert_called_once_with(
+            base_url="http://localhost:11434/v1/chat/completions",
+            api_key=None,
+            model="local-model",
+            system_prompt=None,
+            timeout_seconds=7.5,
         )
 
     def test_enabled_remote_config_rejects_a_missing_api_key(self) -> None:

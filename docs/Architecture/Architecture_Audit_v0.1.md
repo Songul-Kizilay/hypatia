@@ -15,7 +15,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.8` today) are the executable package and GitHub
+- **Runtime releases** (`v0.3.9` today) are the executable package and GitHub
   release line. They are the source-backed implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
   engineering increments. Sprint 4.16.50 is complete and is already in the
@@ -62,6 +62,11 @@ The optional OpenAI-compatible chat runtime supports keyless activation only
 for explicit loopback endpoints (`localhost`, `127.0.0.1`, or `::1`), including
 local Ollama. It omits the authorization header in that mode; non-local
 endpoints continue to require an API key and HTTPS.
+
+Chat requests use a validated, non-secret timeout setting. An explicit
+`HYPATIA_LLM_TIMEOUT_SECONDS` override must be a positive finite number;
+otherwise loopback endpoints receive 120 seconds while non-local endpoints
+retain a 30-second default.
 
 ## Memory State
 

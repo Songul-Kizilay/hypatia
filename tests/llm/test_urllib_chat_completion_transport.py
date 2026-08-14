@@ -94,3 +94,30 @@ class UrllibChatCompletionTransportTests(unittest.TestCase):
         )
 
         self.assertIsNone(redirected_request)
+
+    def test_uses_a_valid_explicit_timeout(self) -> None:
+        timeouts: list[float] = []
+
+        def fake_open(request: Request, *, timeout: float) -> FakeResponse:
+            timeouts.append(timeout)
+            return FakeResponse()
+
+        transport = UrllibChatCompletionTransport(timeout_seconds=7.5)
+
+        with patch(
+            "llm.UrllibChatCompletionTransport._open_without_redirects",
+            side_effect=fake_open,
+        ):
+            transport(
+                "https://api.example.test/v1/chat/completions",
+                {},
+                {"model": "test-model", "messages": []},
+            )
+
+        self.assertEqual(timeouts, [7.5])
+
+    def test_rejects_invalid_timeouts(self) -> None:
+        for timeout in (True, 0, -1, float("inf"), "30"):
+            with self.subTest(timeout=timeout):
+                with self.assertRaisesRegex(ValueError, "positive number"):
+                    UrllibChatCompletionTransport(timeout_seconds=timeout)  # type: ignore[arg-type]

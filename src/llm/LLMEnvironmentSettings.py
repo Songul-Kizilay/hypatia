@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
+from math import isfinite
 
 from llm.LLMRuntimeConfig import LLMRuntimeConfig
 
@@ -27,6 +28,26 @@ def load_llm_history_max_turns(environment: Mapping[str, str]) -> int | None:
     return max_turns
 
 
+def load_llm_timeout_seconds(environment: Mapping[str, str]) -> float | None:
+    """Return the configured positive finite LLM request timeout in seconds."""
+    value = environment.get("HYPATIA_LLM_TIMEOUT_SECONDS")
+    if value is None:
+        return None
+
+    try:
+        timeout_seconds = float(value)
+    except ValueError as error:
+        raise ValueError(
+            "HYPATIA_LLM_TIMEOUT_SECONDS must be a positive finite number."
+        ) from error
+
+    if not isfinite(timeout_seconds) or timeout_seconds <= 0:
+        raise ValueError(
+            "HYPATIA_LLM_TIMEOUT_SECONDS must be a positive finite number."
+        )
+    return timeout_seconds
+
+
 def load_llm_environment_settings(
     environment: Mapping[str, str],
 ) -> tuple[LLMRuntimeConfig, str | None]:
@@ -38,6 +59,7 @@ def load_llm_environment_settings(
         enabled=environment["HYPATIA_LLM_ENABLED"] == "true",
         base_url=environment.get("HYPATIA_LLM_BASE_URL", ""),
         model=environment.get("HYPATIA_LLM_MODEL", ""),
+        timeout_seconds=load_llm_timeout_seconds(environment),
     )
 
     return config, environment.get("HYPATIA_LLM_API_KEY")

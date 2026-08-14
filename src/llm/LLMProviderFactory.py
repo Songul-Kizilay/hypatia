@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from llm.LLMProvider import LLMProvider
 from llm.OpenAICompatibleProvider import OpenAICompatibleProvider
-from llm.UrllibChatCompletionTransport import UrllibChatCompletionTransport
+from llm.UrllibChatCompletionTransport import (
+    DEFAULT_TIMEOUT_SECONDS,
+    UrllibChatCompletionTransport,
+)
 
 
 def create_llm_provider(
@@ -12,12 +15,13 @@ def create_llm_provider(
     api_key: str | None,
     model: str,
     system_prompt: str | None = None,
+    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
 ) -> LLMProvider:
     """Compose an OpenAI-compatible provider with the stdlib transport."""
     return OpenAICompatibleProvider(
         base_url=base_url,
         api_key=api_key,
         model=model,
-        transport=UrllibChatCompletionTransport(),
+        transport=UrllibChatCompletionTransport(timeout_seconds=timeout_seconds),
         system_prompt=system_prompt,
     )

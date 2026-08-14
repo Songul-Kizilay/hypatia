@@ -2,6 +2,25 @@
 
 All notable project changes are recorded here.
 
+## [0.3.9] - 2026-08-15
+
+### Added
+
+- A validated `HYPATIA_LLM_TIMEOUT_SECONDS` setting for the optional
+  OpenAI-compatible chat runtime. It accepts only positive finite seconds.
+- A 120-second default for explicitly loopback chat endpoints such as local
+  Ollama, while non-local endpoints retain their established 30-second default.
+
+### Safety
+
+- Invalid timeout settings fail during configuration rather than silently
+  altering network behavior. The configured value is non-secret and never
+  changes the keyless-loopback or remote HTTPS/API-key policy.
+
+### Verification
+
+- The package-aware full local suite contains 893 passing automated tests.
+
 ## [0.3.8] - 2026-08-15
 
 ### Added
