@@ -21,6 +21,8 @@ from session.SessionRenameResult import SessionRenameResult
 class ResponseComposer:
     """Creates user-facing response models without orchestration logic."""
 
+    _KNOWLEDGE_CONTEXT_MAX_CHARS_PER_RESULT = 600
+
     def greeting(self, request: BrainRequest) -> BrainResponse:
         """Compose the deterministic greeting response."""
         return BrainResponse(
@@ -360,6 +362,64 @@ class ResponseComposer:
             intent="search",
             memory_count=0,
             success=False,
+        )
+
+    def knowledge_context_success(
+        self,
+        request: BrainRequest,
+        results: list[Chunk],
+    ) -> BrainResponse:
+        """Compose an explicit, citation-visible bounded local context response."""
+        citations = [KnowledgeCitation.from_chunk(result) for result in results]
+        if not results:
+            message = "Knowledge context: no matching local knowledge found."
+        else:
+            items = "\n\n".join(
+                self._knowledge_context_item(index, result, citation)
+                for index, (result, citation) in enumerate(
+                    zip(results, citations, strict=True),
+                    start=1,
+                )
+            )
+            message = f"Knowledge context:\n\n{items}"
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="knowledge_context",
+            memory_count=0,
+            knowledge_results=results,
+            knowledge_citations=citations,
+        )
+
+    def knowledge_context_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Compose a failed explicit local knowledge-context response."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="knowledge_context",
+            memory_count=0,
+            success=False,
+        )
+
+    def _knowledge_context_item(
+        self,
+        index: int,
+        result: Chunk,
+        citation: KnowledgeCitation,
+    ) -> str:
+        source = citation.source or "local source unavailable"
+        content = result.content
+        if len(content) > self._KNOWLEDGE_CONTEXT_MAX_CHARS_PER_RESULT:
+            content = (
+                content[: self._KNOWLEDGE_CONTEXT_MAX_CHARS_PER_RESULT].rstrip() + "..."
+            )
+        return (
+            f"{index}. {citation.document_title} | {source} | "
+            f"paragraph {citation.chunk_index + 1}\n{content}"
         )
 
     def plan_success(

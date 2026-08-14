@@ -60,6 +60,7 @@ if TYPE_CHECKING:
 
 
 LLM_CONVERSATION_HISTORY_MAX_TURNS = 8
+KNOWLEDGE_CONTEXT_MAX_RESULTS = 3
 
 
 class CognitiveEngine:
@@ -153,6 +154,9 @@ class CognitiveEngine:
             return self._process_session_delete_preview(request)
         if intent == "session_delete":
             return self._process_session_delete(request)
+
+        if self._is_knowledge_context_request(request):
+            return self._process_knowledge_context(request)
 
         if self._is_search_request(request):
             query = self._search_query(request)
@@ -249,6 +253,42 @@ class CognitiveEngine:
             declared_intent == "search"
             or normalized_message == "search"
             or normalized_message.startswith("search ")
+        )
+
+    @staticmethod
+    def _is_knowledge_context_request(request: BrainRequest) -> bool:
+        declared_intent = request.metadata.get("intent")
+        normalized_message = request.message.casefold().strip()
+        return (
+            declared_intent == "knowledge_context"
+            or normalized_message == "knowledge context"
+            or normalized_message.startswith("knowledge context ")
+        )
+
+    @staticmethod
+    def _knowledge_context_query(request: BrainRequest) -> str:
+        if request.metadata.get("intent") == "knowledge_context":
+            return request.message.strip()
+        return request.message[len("knowledge context") :].strip()
+
+    def _process_knowledge_context(self, request: BrainRequest) -> BrainResponse:
+        """Return bounded local context without mutating conversation memory."""
+        query = self._knowledge_context_query(request)
+        if not query:
+            return self._response_composer.knowledge_context_failure(
+                request,
+                "A knowledge context query is required.",
+            )
+        try:
+            results = self._knowledge_engine.search(query)
+        except KnowledgeError as error:
+            return self._response_composer.knowledge_context_failure(
+                request,
+                f"Knowledge context failed: {error}",
+            )
+        return self._response_composer.knowledge_context_success(
+            request,
+            results[:KNOWLEDGE_CONTEXT_MAX_RESULTS],
         )
 
     @staticmethod

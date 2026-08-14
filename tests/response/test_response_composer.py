@@ -106,6 +106,33 @@ class ResponseComposerTests(unittest.TestCase):
         self.assertEqual(response.request_id, self.request.request_id)
         self.assertEqual(response.memory_count, 0)
 
+    def test_knowledge_context_truncates_display_without_changing_raw_results(
+        self,
+    ) -> None:
+        content = "x" * 650
+        results = [
+            Chunk(
+                document_id="document",
+                index=0,
+                content=content,
+                metadata={
+                    "document_title": "Local Notes",
+                    "document_source": "C:/knowledge/notes.md",
+                },
+            )
+        ]
+
+        response = self.composer.knowledge_context_success(self.request, results)
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "knowledge_context")
+        self.assertIs(response.knowledge_results, results)
+        self.assertIn(
+            "Local Notes | C:/knowledge/notes.md | paragraph 1", response.message
+        )
+        self.assertIn("x" * 600 + "...", response.message)
+        self.assertNotIn("x" * 601, response.message)
+
     def test_plan_success_preserves_goal_and_task_order(self) -> None:
         plan = Planner().create_plan("Read a PDF and summarize it")
 

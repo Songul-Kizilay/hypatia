@@ -231,3 +231,9 @@ ordered result chunks, Hypatia returns an ordered citation record for each
 match: document ID, title, local source path, paragraph index, and chunk ID.
 This makes the current local search result explainable without adding automatic
 prompt augmentation, web retrieval, or a RAG dependency.
+
+Use `knowledge context <query>` for an explicit bounded local context view. It
+returns at most three matching chunks, displays each with its source citation,
+and limits displayed chunk text to 600 characters. It does not add a
+conversation record, inject text into an LLM request, or affect ordinary
+`search <query>` behavior.
