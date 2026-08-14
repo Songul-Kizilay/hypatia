@@ -16,6 +16,7 @@ from memory.LearnedMemoryContext import (
     build_learned_memory_context,
     build_selected_learned_memory_context,
     load_bounded_learned_memory_context,
+    load_current_selected_learned_memory_context,
     load_learned_memory_context,
     load_selected_learned_memory_context,
 )
@@ -25,6 +26,147 @@ from memory.NoOpLearnedMemorySelector import NoOpLearnedMemorySelector
 
 
 class LearnedMemoryContextTests(unittest.TestCase):
+    def test_load_current_selected_context_delegates_exact_values_once(self) -> None:
+        memory_manager = Mock(spec=MemoryManager)
+        old_python = LearnedMemory(
+            kind="preference", key="preferred_language", value="Python"
+        )
+        goal = LearnedMemory(
+            kind="goal", key="current_learning_goal", value="Kali Linux"
+        )
+        new_rust = LearnedMemory(
+            kind="preference", key="preferred_language", value="Rust"
+        )
+        all_memories = (old_python, goal, new_rust)
+        latest_memories = (goal, new_rust)
+        selector = Mock()
+        sentinel = "".join(("current-selected", "-context"))
+
+        with (
+            patch(
+                "memory.LearnedMemoryContext.load_learned_memories",
+                return_value=all_memories,
+            ) as load_learned_memories,
+            patch(
+                "memory.LearnedMemoryContext.select_latest_learned_memories",
+                return_value=latest_memories,
+            ) as select_latest_learned_memories,
+            patch(
+                "memory.LearnedMemoryContext.build_selected_learned_memory_context",
+                return_value=sentinel,
+            ) as build_selected_learned_memory_context,
+        ):
+            result = load_current_selected_learned_memory_context(
+                memory_manager=memory_manager,
+                source_text="  What do I prefer?  ",
+                selector=selector,
+            )
+
+        load_learned_memories.assert_called_once_with(memory_manager)
+        select_latest_learned_memories.assert_called_once_with(all_memories)
+        self.assertIs(select_latest_learned_memories.call_args.args[0], all_memories)
+        build_selected_learned_memory_context.assert_called_once_with(
+            source_text="  What do I prefer?  ",
+            memories=latest_memories,
+            selector=selector,
+        )
+        self.assertIs(
+            build_selected_learned_memory_context.call_args.kwargs["memories"],
+            latest_memories,
+        )
+        self.assertIs(
+            build_selected_learned_memory_context.call_args.kwargs["selector"],
+            selector,
+        )
+        self.assertIs(result, sentinel)
+
+    def test_load_current_selected_context_real_noop_preserves_history(self) -> None:
+        memory_manager = MemoryManager()
+        old_python = LearnedMemory(
+            kind="preference", key="preferred_language", value="Python"
+        )
+        goal = LearnedMemory(
+            kind="goal", key="current_learning_goal", value="Kali Linux"
+        )
+        new_rust = LearnedMemory(
+            kind="preference", key="preferred_language", value="Rust"
+        )
+        for memory in (old_python, goal, new_rust):
+            append_learned_memory(memory_manager, memory)
+
+        result = load_current_selected_learned_memory_context(
+            memory_manager=memory_manager,
+            source_text="\tWhat is current?\n",
+            selector=NoOpLearnedMemorySelector(),
+        )
+
+        self.assertEqual(
+            result,
+            "Known learned memories:\n"
+            "- goal | current_learning_goal | Kali Linux\n"
+            "- preference | preferred_language | Rust",
+        )
+        self.assertNotIn("Python", result)
+        self.assertEqual(
+            load_learned_memories(memory_manager),
+            (old_python, goal, new_rust),
+        )
+        self.assertEqual(
+            load_current_selected_learned_memory_context(
+                memory_manager=MemoryManager(),
+                source_text="empty",
+                selector=NoOpLearnedMemorySelector(),
+            ),
+            "",
+        )
+
+    def test_load_current_selected_context_recording_selector_controls_result(
+        self,
+    ) -> None:
+        memory_manager = MemoryManager()
+        old_python = LearnedMemory(
+            kind="preference", key="preferred_language", value="Python"
+        )
+        goal = LearnedMemory(
+            kind="goal", key="current_learning_goal", value="Kali Linux"
+        )
+        new_rust = LearnedMemory(
+            kind="preference", key="preferred_language", value="Rust"
+        )
+        for memory in (old_python, goal, new_rust):
+            append_learned_memory(memory_manager, memory)
+        selector = Mock()
+        selector.select.side_effect = lambda *, source_text, memories: (
+            memories[1],
+            memories[0],
+        )
+
+        result = load_current_selected_learned_memory_context(
+            memory_manager=memory_manager,
+            source_text="  Exact source  ",
+            selector=selector,
+        )
+
+        self.assertEqual(
+            result,
+            "Known learned memories:\n"
+            "- preference | preferred_language | Rust\n"
+            "- goal | current_learning_goal | Kali Linux",
+        )
+        selector.select.assert_called_once()
+        self.assertEqual(
+            selector.select.call_args.kwargs["source_text"],
+            "  Exact source  ",
+        )
+        self.assertEqual(
+            selector.select.call_args.kwargs["memories"],
+            (goal, new_rust),
+        )
+        self.assertEqual(
+            load_learned_memories(memory_manager),
+            (old_python, goal, new_rust),
+        )
+
     def test_load_selected_context_delegates_exact_values_once(self) -> None:
         memory_manager = Mock(spec=MemoryManager)
         memory = LearnedMemory(kind="preference", key="language", value="Python")
