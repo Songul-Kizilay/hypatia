@@ -2037,6 +2037,53 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(response.message, "A knowledge context query is required.")
         self.assertEqual(self.memory_manager.all(), [])
 
+    def test_ask_knowledge_sends_only_cited_local_context_to_the_llm(self) -> None:
+        llm_provider = RecordingLLMProvider("Hypatia is in the local notes.")
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+        )
+
+        response = engine.process(BrainRequest(message="ask knowledge hypatia"))
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "ask_knowledge")
+        self.assertEqual(response.message, "Hypatia is in the local notes.")
+        self.assertEqual(len(response.knowledge_results), 2)
+        self.assertEqual(len(response.knowledge_citations), 2)
+        self.assertEqual(len(llm_provider.calls), 1)
+        prompt, history = llm_provider.calls[0]
+        self.assertIn("Answer the user using only the local context below.", prompt)
+        self.assertIn("User question: hypatia", prompt)
+        self.assertIn(str(Path(self.temporary_directory.name) / "knowledge.md"), prompt)
+        self.assertEqual(history, ())
+        self.assertEqual(self.memory_manager.all(), [])
+
+    def test_ask_knowledge_requires_an_llm_without_mutating_memory(self) -> None:
+        response = self.engine.process(BrainRequest(message="ask knowledge hypatia"))
+
+        self.assertFalse(response.success)
+        self.assertEqual(response.intent, "ask_knowledge")
+        self.assertEqual(
+            response.message,
+            "A language-model runtime is required for ask knowledge.",
+        )
+        self.assertEqual(self.memory_manager.all(), [])
+
+    def test_empty_ask_knowledge_returns_a_controlled_failure(self) -> None:
+        response = self.engine.process(BrainRequest(message="ask knowledge"))
+
+        self.assertFalse(response.success)
+        self.assertEqual(response.intent, "ask_knowledge")
+        self.assertEqual(response.message, "An ask knowledge query is required.")
+        self.assertEqual(self.memory_manager.all(), [])
+
     def test_successful_search_is_saved_to_memory(self) -> None:
         self.engine.process(BrainRequest(message="search hypatia"))
 

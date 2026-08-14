@@ -237,3 +237,7 @@ returns at most three matching chunks, displays each with its source citation,
 and limits displayed chunk text to 600 characters. It does not add a
 conversation record, inject text into an LLM request, or affect ordinary
 `search <query>` behavior.
+
+With an enabled LLM runtime, `ask knowledge <query>` sends only the bounded,
+cited local context to the model. It is explicit, keeps citations on the
+response, and does not add a conversation-memory record.

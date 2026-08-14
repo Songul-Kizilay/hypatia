@@ -2,6 +2,18 @@
 
 All notable project changes are recorded here.
 
+## [0.2.8] - 2026-08-15
+
+### Added
+
+- Explicit `ask knowledge <query>` local RAG answers. The LLM receives only up
+  to three cited local chunks and the answer retains those citations in its
+  response model; normal conversation is never automatically augmented.
+
+### Verification
+
+- The package-aware full local suite contains 828 passing automated tests.
+
 ## [0.2.7] - 2026-08-15
 
 ### Added
