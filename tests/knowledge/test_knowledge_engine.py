@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from core.Exceptions import KnowledgeError
 from knowledge.DocumentLoader import DocumentLoader
 from knowledge.Indexer import Indexer
 from knowledge.KnowledgeEngine import KnowledgeEngine
@@ -88,6 +89,46 @@ class KnowledgeEngineTests(unittest.TestCase):
             [reference.title for reference in references], ["first", "second"]
         )
         self.assertEqual([reference.chunk_count for reference in references], [2, 1])
+
+    def test_preview_document_relation_validates_distinct_loaded_documents(
+        self,
+    ) -> None:
+        first = self._write_file("first.md", "First")
+        second = self._write_file("second.txt", "Second")
+        engine = KnowledgeEngine()
+        first_document = engine.load(first)
+        second_document = engine.load(second)
+
+        preview = engine.preview_document_relation(
+            first_document.document_id,
+            second_document.document_id,
+        )
+
+        self.assertEqual(preview.source.document_id, first_document.document_id)
+        self.assertEqual(preview.relation, KnowledgeGraphRelation.RELATED_TO)
+        self.assertEqual(preview.target.document_id, second_document.document_id)
+        self.assertEqual(engine.graph_node_count(), 4)
+        self.assertEqual(engine.graph_edge_count(), 2)
+
+    def test_preview_document_relation_rejects_unknown_and_self_document_ids(
+        self,
+    ) -> None:
+        engine = KnowledgeEngine()
+        document = engine.load(self._write_file("only.md", "Only"))
+
+        with self.assertRaisesRegex(
+            KnowledgeError,
+            "Knowledge document was not found: missing",
+        ):
+            engine.preview_document_relation("missing", "other")
+        with self.assertRaisesRegex(
+            KnowledgeError,
+            "Knowledge relation source and target must differ.",
+        ):
+            engine.preview_document_relation(
+                document.document_id,
+                document.document_id,
+            )
 
     def test_loads_multiple_documents(self) -> None:
         first = self._write_file("first.md", "First\n\nHypatia")

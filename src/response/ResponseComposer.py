@@ -11,6 +11,7 @@ from knowledge.Chunk import Chunk
 from knowledge.KnowledgeCitation import KnowledgeCitation
 from knowledge.KnowledgeDocumentReference import KnowledgeDocumentReference
 from knowledge.KnowledgeGraph import KnowledgeGraphView
+from knowledge.KnowledgeRelationPreview import KnowledgeRelationPreview
 from memory.MemoryRecord import MemoryRecord
 from planner.Plan import Plan
 from session.SessionDeleteExecutionResult import SessionDeleteExecutionResult
@@ -474,6 +475,44 @@ class ResponseComposer:
             intent="knowledge_list",
             memory_count=0,
             knowledge_documents=documents,
+        )
+
+    def knowledge_relation_preview_success(
+        self,
+        request: BrainRequest,
+        preview: KnowledgeRelationPreview,
+    ) -> BrainResponse:
+        """Compose a no-side-effect preview for a manual document relation."""
+        return BrainResponse(
+            message="\n".join(
+                [
+                    "Knowledge relation preview:",
+                    "Source: "
+                    f"{preview.source.title} | id: {preview.source.document_id}",
+                    f"Relation: {preview.relation.value}",
+                    "Target: "
+                    f"{preview.target.title} | id: {preview.target.document_id}",
+                    "Changes: ready",
+                ]
+            ),
+            request_id=request.request_id,
+            intent="knowledge_relation_preview",
+            memory_count=0,
+            knowledge_relation_preview=preview,
+        )
+
+    def knowledge_relation_preview_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Compose a failed no-side-effect manual-relation preview."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="knowledge_relation_preview",
+            memory_count=0,
+            success=False,
         )
 
     def ask_knowledge_success(
