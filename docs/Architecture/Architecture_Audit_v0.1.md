@@ -10,6 +10,25 @@ This audit separates the executable Hypatia runtime from the long-term AI
 Operating System vision. It is a baseline for small, testable implementation
 sprints; it does not declare vision-only modules complete.
 
+## Delivery Terminology
+
+Hypatia uses three different labels that must not be compared as one version
+sequence:
+
+- **Runtime releases** (`v0.3.7` today) are the executable package and GitHub
+  release line. They are the source-backed implementation baseline.
+- **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
+  engineering increments. Sprint 4.16.50 is complete and is already in the
+  ancestry of the current runtime; it is not a newer runtime release waiting
+  to be merged.
+- **Vision-roadmap versions** under `docs/Roadmap/` describe long-term product
+  goals. They are not a statement that their named capabilities are currently
+  executable.
+
+For current implementation state, use this audit, `PROJECT_STATUS.md`, the
+changelog, the active source tree, and its tests—in that order of increasing
+specificity for a claimed behavior.
+
 ## Executable Baseline
 
 Hypatia is a Python 3.14+ local-first runtime. Its active source packages are:
@@ -135,7 +154,7 @@ The current local verification baseline is:
   shadowing source packages.
 - `python -m black --check src tests`: passed.
 - `python -m ruff check src tests`: passed.
-- `python -m mypy src tests`: passed with no issues in 223 files.
+- `python -m mypy src tests`: passed with no issues in 232 files.
 
 These checks verify the current local worktree; they do not create a release,
 tag, pull request, or GitHub deployment.

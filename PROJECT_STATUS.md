@@ -8,6 +8,22 @@ This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
 local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
+## Delivery Terminology
+
+The repository has three intentionally separate naming systems:
+
+- **Runtime release `v0.3.7`** is the current executable package and published
+  GitHub release.
+- **Sprint 4.16.50** is a completed historical engineering increment. Its
+  semantic-memory runtime work is included in the history leading to the
+  current main branch; it is not an unmerged or later release.
+- **Vision-roadmap versions** describe intended product horizons only. They do
+  not claim that desktop, voice, agent, robotics, or smart-home modules are
+  implemented.
+
+When two documents disagree, current source, tests, this status, and the
+changelog take precedence over vision-oriented documentation.
+
 ## Current Source State
 
 The current source tree provides a deterministic, local-first cognitive core
