@@ -445,7 +445,12 @@ class ResponseComposer:
             )
 
         items = "\n\n".join(
-            self._semantic_recall_item(index, record, score)
+            self._semantic_recall_item(
+                index,
+                record,
+                score,
+                score_label="rank score" if retrieval == "hybrid" else "similarity",
+            )
             for index, (record, score) in enumerate(records, start=1)
         )
         return BrainResponse(
@@ -474,10 +479,12 @@ class ResponseComposer:
         index: int,
         record: MemoryRecord,
         score: float | None,
+        *,
+        score_label: str,
     ) -> str:
         if score is None:
             return f"{index}. {record.content}"
-        return f"{index}. [similarity: {score:.3f}] {record.content}"
+        return f"{index}. [{score_label}: {score:.3f}] {record.content}"
 
     def recent_conversations(
         self,

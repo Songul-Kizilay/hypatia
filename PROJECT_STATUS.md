@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.2.3 (Genesis)`
+`v0.2.4 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, and
@@ -35,9 +35,9 @@ with optional OpenAI-compatible LLM conversation support.
   `semantic recall <query>` request path with deterministic lexical fallback.
   The runtime retains a safe diagnostic when its most recent incremental index
   update failed, without exposing provider-specific error details.
-- A pure reciprocal-rank fusion evaluator with versioned hybrid-ranking
-  fixtures. It is not connected to semantic recall and does not change runtime
-  ordering.
+- Deterministic reciprocal-rank fusion for explicit semantic recall when both
+  current-session semantic and lexical candidates exist. Hybrid responses use
+  rank scores; semantic-only responses retain cosine-similarity scores.
 - Deterministic Brain and CognitiveEngine routing for conversation, knowledge
   search, planning, lexical recall, semantic recall, and explicit session
   commands.
@@ -52,8 +52,8 @@ with optional OpenAI-compatible LLM conversation support.
 
 ### Intentionally Not Implemented
 
-- Persisted vectors, hybrid ranking in the request flow, automatic semantic
-  augmentation of ordinary messages, and a knowledge graph.
+- Persisted vectors, automatic semantic augmentation of ordinary messages, and
+  a knowledge graph.
 - Web research, citation collection, or a RAG pipeline.
 - Agent execution, tool gateway, browser/OS control, voice, vision, robotics,
   and smart-home integrations.
@@ -64,7 +64,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 811 automated tests pass through package-aware discovery.
+- 812 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -83,7 +83,6 @@ alter the project's persisted data.
 
 ## Next Milestone
 
-Review the bounded release scope, assign a release version, and publish
-reconciled release notes. Before hybrid ranking enters the request path, grow
-the fixture corpus and review relevance expectations; RAG remains a separate
-milestone.
+Validate and release the bounded hybrid-recall increment. Continue to grow the
+fixture corpus and review relevance expectations; persisted vectors and RAG
+remain separate milestones.

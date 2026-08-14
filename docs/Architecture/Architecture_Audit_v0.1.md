@@ -57,13 +57,14 @@ Implemented memory capabilities:
   response validation. An opt-in Bootstrap runtime owner rebuilds and registers
   the index at startup, swapping only after a complete successful build, then
   follows memory lifecycle events with best-effort incremental updates.
-- A bounded `semantic recall <query>` request path. It is session-filtered,
-  returns scored semantic matches only for conversation records, and uses
-  deterministic lexical recall when semantic retrieval is unavailable or empty.
-- A pure reciprocal-rank fusion evaluator and fixture corpus at
+- A bounded `semantic recall <query>` request path. It is session-filtered and
+  uses reciprocal-rank fusion when both semantic and lexical candidates exist.
+  Semantic-only responses retain cosine-similarity scores; unavailable or empty
+  semantic retrieval uses deterministic lexical fallback.
+- A versioned hybrid-ranking fixture corpus at
   `tests/fixtures/semantic_memory_hybrid_v1.json`. It verifies retained
   single-source candidates, duplicated-evidence promotion, deterministic ties,
-  and limits without changing any runtime path.
+  and limits used by the explicit semantic-recall path.
 
 Not implemented:
 
@@ -75,7 +76,7 @@ Not implemented:
 
 The current local verification baseline is:
 
-- `python -m unittest discover -s tests -t .`: 811 tests passed. The top-level
+- `python -m unittest discover -s tests -t .`: 812 tests passed. The top-level
   package setting ensures nested test directories are included without
   shadowing source packages.
 - `python -m black --check src tests`: passed.
@@ -133,8 +134,7 @@ generic knowledge search.
 - JSON schema migration or persisted vectors.
 - Prompt augmentation, automatic retrieval, and generic knowledge-search
   changes.
-- Hybrid lexical-plus-semantic ranking, reranking, RAG, and knowledge graph
-  work.
+- Reranking beyond reciprocal-rank fusion, RAG, and knowledge graph work.
 
 ### Acceptance Criteria
 
@@ -145,5 +145,5 @@ package-aware test suite, Black, Ruff, MyPy, and diff checks pass.
 
 ## Follow-on Sequence
 
-1. Expand hybrid-ranking fixtures with reviewed relevance expectations before
-   deciding whether to add hybrid ranking to the named semantic-recall path.
+1. Expand hybrid-ranking fixtures with reviewed relevance expectations and
+   monitor the bounded named semantic-recall path before considering reranking.
