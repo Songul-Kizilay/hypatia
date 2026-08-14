@@ -20,7 +20,7 @@ Hypatia is a Python 3.14+ local-first runtime. Its active source packages are:
 | `brain` and `cognition` | Request routing and deterministic orchestration |
 | `memory` | Immutable records, JSON snapshots, TTL, learned-memory extraction and selection |
 | `session` | Persistent session registry and targeted session operations |
-| `knowledge` | Local `.txt`/`.md` loading, chunks, lexical search, cited prompt context, structural graph |
+| `knowledge` | Local `.txt`/`.md` loading, source catalog, chunks, lexical search, cited prompt context, structural graph |
 | `llm` | Optional OpenAI-compatible chat-completions provider and history assembly |
 | `planner`, `response`, `eventbus` | Deterministic task planning, response composition, lifecycle events |
 
@@ -84,24 +84,29 @@ Implemented memory capabilities:
   JSON memory schema. `knowledge graph <query>` exposes a bounded, cited,
   document-to-paragraph structural view without calling an LLM or mutating
   conversation memory.
+- An explicit `list knowledge` source catalog. It presents stable local
+  document IDs with title, source path, type, and chunk count in load order so
+  a later user-controlled relationship command can identify documents without
+  guessing by title.
 
 Not implemented:
 
 - Embedding persistence enabled by default.
 - Automatic semantic augmentation of ordinary messages or generic Brain search.
-- Knowledge-graph persistence, cross-document semantic relation extraction,
-  web retrieval, or automatic citations in ordinary model prompts.
+- Knowledge-graph persistence, explicit cross-document relations,
+  cross-document semantic relation extraction, web retrieval, or automatic
+  citations in ordinary model prompts.
 
 ## Quality Baseline
 
 The current local verification baseline is:
 
-- `python -m unittest discover -s tests -t .`: 840 tests passed. The top-level
+- `python -m unittest discover -s tests -t .`: 846 tests passed. The top-level
   package setting ensures nested test directories are included without
   shadowing source packages.
 - `python -m black --check src tests`: passed.
 - `python -m ruff check src tests`: passed.
-- `python -m mypy src tests`: passed with no issues in 219 files.
+- `python -m mypy src tests`: passed with no issues in 221 files.
 
 These checks verify the current local worktree; they do not create a release,
 tag, pull request, or GitHub deployment.

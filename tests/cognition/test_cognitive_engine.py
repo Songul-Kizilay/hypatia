@@ -2067,6 +2067,37 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(response.message, "A knowledge graph query is required.")
         self.assertEqual(self.memory_manager.all(), [])
 
+    def test_list_knowledge_exposes_document_ids_without_remembering_the_request(
+        self,
+    ) -> None:
+        response = self.engine.process(BrainRequest(message="list knowledge"))
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "knowledge_list")
+        self.assertEqual(len(response.knowledge_documents), 1)
+        self.assertEqual(response.knowledge_documents[0].title, "knowledge")
+        self.assertIn("Knowledge sources:", response.message)
+        self.assertIn(response.knowledge_documents[0].document_id, response.message)
+        self.assertEqual(self.memory_manager.all(), [])
+
+    def test_list_knowledge_without_sources_is_a_successful_empty_catalog(self) -> None:
+        empty_engine = ProductionCognitiveEngine(
+            KnowledgeEngine(),
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+        )
+
+        response = empty_engine.process(BrainRequest(message="list knowledge"))
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "knowledge_list")
+        self.assertEqual(response.message, "No local knowledge sources are loaded.")
+        self.assertEqual(self.memory_manager.all(), [])
+
     def test_ask_knowledge_sends_only_cited_local_context_to_the_llm(self) -> None:
         llm_provider = RecordingLLMProvider("Hypatia is in the local notes.")
         engine = ProductionCognitiveEngine(

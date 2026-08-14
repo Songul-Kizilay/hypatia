@@ -2,6 +2,18 @@
 
 All notable project changes are recorded here.
 
+## [0.3.1] - 2026-08-15
+
+### Added
+
+- An explicit `list knowledge` catalog for loaded local sources. It returns
+  stable document IDs, titles, source paths, document types, and chunk counts
+  in load order, without LLM use or conversation-memory mutation.
+
+### Verification
+
+- The package-aware full local suite contains 846 passing automated tests.
+
 ## [0.3.0] - 2026-08-15
 
 ### Added
