@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -11,6 +12,7 @@ if str(SRC_DIR) not in sys.path:
 from core.Exceptions import MemoryError
 from eventbus.EventBus import EventBus
 from memory.Embedding import Embedding
+from memory.JsonFileSemanticEmbeddingCache import JsonFileSemanticEmbeddingCache
 from memory.MemoryManager import MemoryManager
 from memory.SemanticMemoryIndexBuilder import SemanticMemoryIndexBuilder
 from memory.SemanticMemoryIndexRuntime import SemanticMemoryIndexRuntime
@@ -130,6 +132,38 @@ class SemanticMemoryIndexRuntimeTests(unittest.TestCase):
         self.assertIsNotNone(memory_manager.get(record.memory_id))
         self.assertEqual(index.count(), 0)
         self.assertEqual(runtime.last_update_error(), "Semantic index update failed.")
+
+    def test_attached_runtime_updates_the_optional_embedding_cache(self) -> None:
+        event_bus = EventBus()
+        memory_manager = MemoryManager(event_bus)
+        provider = ToggleEmbeddingProvider(Embedding((1, 0)))
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            cache = JsonFileSemanticEmbeddingCache(
+                Path(temporary_directory) / "semantic_embeddings.json",
+                "provider",
+            )
+            runtime = SemanticMemoryIndexRuntime(
+                SemanticMemoryIndexBuilder(provider, cache)
+            )
+            runtime.refresh(memory_manager)
+            runtime.attach(event_bus)
+
+            record = memory_manager.add("Initial fact")
+            self.assertEqual(
+                cache.get(record.memory_id, "Initial fact"),
+                Embedding((1, 0)),
+            )
+
+            memory_manager.update(record.memory_id, content="Updated fact")
+            self.assertIsNone(cache.get(record.memory_id, "Initial fact"))
+            self.assertEqual(
+                cache.get(record.memory_id, "Updated fact"),
+                Embedding((1, 0)),
+            )
+
+            self.assertTrue(memory_manager.delete(record.memory_id))
+            self.assertIsNone(cache.get(record.memory_id, "Updated fact"))
 
 
 if __name__ == "__main__":

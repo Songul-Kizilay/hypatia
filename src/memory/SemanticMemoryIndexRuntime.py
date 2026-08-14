@@ -75,13 +75,17 @@ class SemanticMemoryIndexRuntime:
                     return
                 if event.name in {"memory.record.deleted", "memory.record.expired"}:
                     index.remove(memory_id)
+                    self._builder.remove_memory_record(memory_id)
                     self._last_update_error = None
                     return
 
                 content = event.payload.get("content")
                 if not isinstance(content, str):
                     return
-                index.upsert(memory_id, self._builder.embed(content))
+                index.upsert(
+                    memory_id,
+                    self._builder.embed_memory_record(memory_id, content),
+                )
                 self._last_update_error = None
         except Exception:
             # Semantic retrieval is optional. A provider failure must not roll
