@@ -2131,6 +2131,36 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertIn("Knowledge relation preview format:", response.message)
         self.assertEqual(self.memory_manager.all(), [])
 
+    def test_knowledge_relation_apply_changes_only_the_local_derived_graph(
+        self,
+    ) -> None:
+        extra_path = Path(self.temporary_directory.name) / "extra.md"
+        extra_path.write_text("Extra", encoding="utf-8")
+        self.knowledge_engine.load(extra_path)
+        source_id, target_id = [
+            document.document_id for document in self.knowledge_engine.documents()
+        ]
+
+        response = self.engine.process(
+            BrainRequest(
+                message=("apply knowledge relation " f"{source_id} -- {target_id}")
+            )
+        )
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "knowledge_relation_apply")
+        self.assertIsNotNone(response.knowledge_relation_application)
+        self.assertIn("Graph state: updated (memory only)", response.message)
+        self.assertEqual(self.memory_manager.all(), [])
+        duplicate = self.engine.process(
+            BrainRequest(
+                message=("apply knowledge relation " f"{source_id} -- {target_id}")
+            )
+        )
+        self.assertFalse(duplicate.success)
+        self.assertIn("Knowledge graph relation is already applied.", duplicate.message)
+        self.assertEqual(self.memory_manager.all(), [])
+
     def test_ask_knowledge_sends_only_cited_local_context_to_the_llm(self) -> None:
         llm_provider = RecordingLLMProvider("Hypatia is in the local notes.")
         engine = ProductionCognitiveEngine(

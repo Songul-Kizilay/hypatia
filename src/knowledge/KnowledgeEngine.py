@@ -15,6 +15,7 @@ from knowledge.KnowledgeGraph import (
     KnowledgeGraphRelation,
     KnowledgeGraphView,
 )
+from knowledge.KnowledgeRelationApplication import KnowledgeRelationApplication
 from knowledge.KnowledgeRelationPreview import KnowledgeRelationPreview
 from knowledge.Parser import Parser
 from knowledge.Search import Search
@@ -86,6 +87,20 @@ class KnowledgeEngine:
             relation=KnowledgeGraphRelation.RELATED_TO,
             target=self._document_reference(target, indexed_chunks),
         )
+
+    def apply_document_relation(
+        self,
+        source_document_id: str,
+        target_document_id: str,
+    ) -> KnowledgeRelationApplication:
+        """Apply one explicitly requested relation after fresh validation."""
+        preview = self.preview_document_relation(source_document_id, target_document_id)
+        edge = self._graph.add_document_relation(
+            preview.source.document_id,
+            preview.relation,
+            preview.target.document_id,
+        )
+        return KnowledgeRelationApplication(preview, edge)
 
     def document_count(self) -> int:
         """Return the number of loaded documents."""

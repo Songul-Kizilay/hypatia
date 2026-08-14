@@ -160,7 +160,7 @@ class KnowledgeGraph:
         self._edges.update(candidate_edges)
 
     def view_for_chunks(self, chunks: Iterable[Chunk]) -> KnowledgeGraphView:
-        """Return the containing-document relationships for selected chunks."""
+        """Return structural and explicit document relations for selected chunks."""
         selected_nodes: dict[str, KnowledgeGraphNode] = {}
         selected_edges: list[KnowledgeGraphEdge] = []
 
@@ -180,10 +180,54 @@ class KnowledgeGraph:
             if contains_edge not in selected_edges:
                 selected_edges.append(contains_edge)
 
+        selected_document_node_ids = {
+            node.node_id
+            for node in selected_nodes.values()
+            if node.kind is KnowledgeGraphNodeKind.DOCUMENT
+        }
+        for edge in self._edges.values():
+            if edge.relation is not KnowledgeGraphRelation.RELATED_TO or (
+                edge.source_node_id not in selected_document_node_ids
+                and edge.target_node_id not in selected_document_node_ids
+            ):
+                continue
+            selected_nodes.setdefault(
+                edge.source_node_id, self._nodes[edge.source_node_id]
+            )
+            selected_nodes.setdefault(
+                edge.target_node_id, self._nodes[edge.target_node_id]
+            )
+            selected_edges.append(edge)
+
         return KnowledgeGraphView(
             nodes=tuple(selected_nodes.values()),
             edges=tuple(selected_edges),
         )
+
+    def add_document_relation(
+        self,
+        source_document_id: str,
+        relation: KnowledgeGraphRelation,
+        target_document_id: str,
+    ) -> KnowledgeGraphEdge:
+        """Add one validated, explicit relation between existing document nodes."""
+        if relation is not KnowledgeGraphRelation.RELATED_TO:
+            raise KnowledgeError("Knowledge graph relation is not user-selectable.")
+        source_node_id = self.document_node_id(source_document_id)
+        target_node_id = self.document_node_id(target_document_id)
+        if source_node_id == target_node_id:
+            raise KnowledgeError("Knowledge graph relation endpoints must differ.")
+        if source_node_id not in self._nodes or target_node_id not in self._nodes:
+            raise KnowledgeError(
+                "Knowledge graph relation references an unknown document."
+            )
+
+        edge = KnowledgeGraphEdge(source_node_id, relation, target_node_id)
+        key = (edge.source_node_id, edge.relation, edge.target_node_id)
+        if key in self._edges:
+            raise KnowledgeError("Knowledge graph relation is already applied.")
+        self._edges[key] = edge
+        return edge
 
     def node_count(self) -> int:
         """Return the number of derived graph nodes."""

@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from knowledge.Chunk import Chunk
 from knowledge.KnowledgeCitation import KnowledgeCitation
 from knowledge.KnowledgeDocumentReference import KnowledgeDocumentReference
+from knowledge.KnowledgeRelationApplication import KnowledgeRelationApplication
 from knowledge.KnowledgeRelationPreview import KnowledgeRelationPreview
 
 
@@ -23,3 +24,4 @@ class BrainResponse:
     knowledge_citations: list[KnowledgeCitation] = field(default_factory=list)
     knowledge_documents: list[KnowledgeDocumentReference] = field(default_factory=list)
     knowledge_relation_preview: KnowledgeRelationPreview | None = None
+    knowledge_relation_application: KnowledgeRelationApplication | None = None
