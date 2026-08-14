@@ -20,6 +20,8 @@ from core.Exceptions import (
     SessionError,
 )
 from eventbus.EventBus import EventBus
+from knowledge.KnowledgeCitation import KnowledgeCitation
+from knowledge.KnowledgeContextPrompt import build_knowledge_context_prompt
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from llm.LLMProvider import LLMError, LLMProvider
 from memory.HybridSemanticMemoryRanker import HybridSemanticMemoryRanker
@@ -155,6 +157,9 @@ class CognitiveEngine:
         if intent == "session_delete":
             return self._process_session_delete(request)
 
+        if self._is_ask_knowledge_request(request):
+            return self._process_ask_knowledge(request)
+
         if self._is_knowledge_context_request(request):
             return self._process_knowledge_context(request)
 
@@ -263,6 +268,56 @@ class CognitiveEngine:
             declared_intent == "knowledge_context"
             or normalized_message == "knowledge context"
             or normalized_message.startswith("knowledge context ")
+        )
+
+    @staticmethod
+    def _is_ask_knowledge_request(request: BrainRequest) -> bool:
+        declared_intent = request.metadata.get("intent")
+        normalized_message = request.message.casefold().strip()
+        return (
+            declared_intent == "ask_knowledge"
+            or normalized_message == "ask knowledge"
+            or normalized_message.startswith("ask knowledge ")
+        )
+
+    @staticmethod
+    def _ask_knowledge_query(request: BrainRequest) -> str:
+        if request.metadata.get("intent") == "ask_knowledge":
+            return request.message.strip()
+        return request.message[len("ask knowledge") :].strip()
+
+    def _process_ask_knowledge(self, request: BrainRequest) -> BrainResponse:
+        """Answer an explicit local-knowledge request without conversation mutation."""
+        query = self._ask_knowledge_query(request)
+        if not query:
+            return self._response_composer.ask_knowledge_failure(
+                request, "An ask knowledge query is required."
+            )
+        if self._llm_provider is None:
+            return self._response_composer.ask_knowledge_failure(
+                request, "A language-model runtime is required for ask knowledge."
+            )
+        try:
+            results = self._knowledge_engine.search(query)[
+                :KNOWLEDGE_CONTEXT_MAX_RESULTS
+            ]
+        except KnowledgeError as error:
+            return self._response_composer.ask_knowledge_failure(
+                request, f"Knowledge retrieval failed: {error}"
+            )
+        if not results:
+            return self._response_composer.ask_knowledge_failure(
+                request, "No matching local knowledge was found."
+            )
+        citations = [KnowledgeCitation.from_chunk(result) for result in results]
+        try:
+            answer = self._llm_provider.generate(
+                build_knowledge_context_prompt(query, results, citations)
+            )
+        except LLMError as error:
+            return self._response_composer.ask_knowledge_failure(request, str(error))
+        return self._response_composer.ask_knowledge_success(
+            request, answer, results, citations
         )
 
     @staticmethod

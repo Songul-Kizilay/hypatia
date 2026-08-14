@@ -405,6 +405,37 @@ class ResponseComposer:
             success=False,
         )
 
+    def ask_knowledge_success(
+        self,
+        request: BrainRequest,
+        answer: str,
+        results: list[Chunk],
+        citations: list[KnowledgeCitation],
+    ) -> BrainResponse:
+        """Compose an explicit local RAG answer with its visible source records."""
+        return BrainResponse(
+            message=answer,
+            request_id=request.request_id,
+            intent="ask_knowledge",
+            memory_count=0,
+            knowledge_results=results,
+            knowledge_citations=citations,
+        )
+
+    def ask_knowledge_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Compose an unsuccessful explicit local RAG answer request."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="ask_knowledge",
+            memory_count=0,
+            success=False,
+        )
+
     def _knowledge_context_item(
         self,
         index: int,

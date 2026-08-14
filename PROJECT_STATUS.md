@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.2.7 (Genesis)`
+`v0.2.8 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, and
@@ -71,7 +71,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 825 automated tests pass through package-aware discovery.
+- 828 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
