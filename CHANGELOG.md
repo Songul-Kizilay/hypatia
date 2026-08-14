@@ -2,6 +2,17 @@
 
 All notable project changes are recorded here.
 
+## [0.2.10] - 2026-08-15
+
+### Fixed
+
+- Reconciled the runtime version, current verification baseline, and explicit
+  local-RAG boundary across the project status and architecture-audit documents.
+
+### Verification
+
+- The package-aware full local suite contains 830 passing automated tests.
+
 ## [0.2.9] - 2026-08-15
 
 ### Fixed
