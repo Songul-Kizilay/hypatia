@@ -2,6 +2,24 @@
 
 All notable project changes are recorded here.
 
+## [0.2.5] - 2026-08-15
+
+### Added
+
+- An optional, model-scoped local embedding cache for semantic memory. When
+  `HYPATIA_SEMANTIC_MEMORY_PERSIST_EMBEDDINGS=true`, unchanged local memory can
+  be indexed after restart without calling Ollama again.
+- Atomic cache replacement, source-content SHA-256 invalidation, strict cache
+  validation, and lifecycle updates for added, changed, expired, and deleted
+  memory records. The cache is separate from the primary memory schema and is
+  never required for a successful primary-memory operation.
+
+### Verification
+
+- The package-aware full local suite contains 819 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass in the local development
+  environment.
+
 ## [0.2.4] - 2026-08-15
 
 ### Added

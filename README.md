@@ -178,6 +178,7 @@ HYPATIA_SEMANTIC_MEMORY_ENABLED=true
 HYPATIA_SEMANTIC_MEMORY_OLLAMA_ENDPOINT=http://localhost:11434/api/embed
 HYPATIA_SEMANTIC_MEMORY_OLLAMA_MODEL=embeddinggemma
 HYPATIA_SEMANTIC_MEMORY_OLLAMA_TIMEOUT_SECONDS=120
+HYPATIA_SEMANTIC_MEMORY_PERSIST_EMBEDDINGS=true
 ```
 
 The endpoint and model shown are defaults when their optional settings are
@@ -195,6 +196,17 @@ request by default. Set `HYPATIA_SEMANTIC_MEMORY_OLLAMA_TIMEOUT_SECONDS` to a
 positive finite number when the local machine needs a different limit. This
 accommodates a cold local model load without making Hypatia wait indefinitely
 when the local service is unavailable.
+
+Embedding persistence is separately opt-in. With
+`HYPATIA_SEMANTIC_MEMORY_PERSIST_EMBEDDINGS=true`, Hypatia keeps a derived
+`semantic_embeddings.json` file beside the configured memory file. It contains
+validated vectors and SHA-256 fingerprints of source text, scoped to the
+configured local Ollama endpoint and model. A changed record, a deleted record,
+or a different model never reuses an old vector. The derived cache uses atomic
+writes, is not part of the primary-memory JSON schema, and a missing or corrupt
+cache falls back to a fresh local embedding request instead of blocking the
+primary memory flow. Leave it disabled when local embedding persistence is not
+appropriate for the device's storage policy.
 
 Use `semantic recall <query>` to retrieve conversation records from the active
 or explicitly selected session. When both indexed semantic and lexical matches

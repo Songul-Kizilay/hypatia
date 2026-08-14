@@ -65,10 +65,13 @@ Implemented memory capabilities:
   `tests/fixtures/semantic_memory_hybrid_v1.json`. It verifies retained
   single-source candidates, duplicated-evidence promotion, deterministic ties,
   and limits used by the explicit semantic-recall path.
+- An opt-in, model-scoped local embedding cache that is atomically replaced
+  after a successful rebuild. It verifies a SHA-256 source-content fingerprint
+  before reuse and does not alter primary memory persistence.
 
 Not implemented:
 
-- Persisted vectors.
+- Embedding persistence enabled by default.
 - Automatic semantic augmentation of ordinary messages or generic Brain search.
 - Knowledge graph, RAG, web retrieval, or citations.
 
@@ -76,7 +79,7 @@ Not implemented:
 
 The current local verification baseline is:
 
-- `python -m unittest discover -s tests -t .`: 812 tests passed. The top-level
+- `python -m unittest discover -s tests -t .`: 819 tests passed. The top-level
   package setting ensures nested test directories are included without
   shadowing source packages.
 - `python -m black --check src tests`: passed.
@@ -131,7 +134,7 @@ generic knowledge search.
 
 - Downloading or bundling an embedding model.
 - Remote embedding APIs, API keys, or new dependencies.
-- JSON schema migration or persisted vectors.
+- JSON schema migration or embedding persistence enabled by default.
 - Prompt augmentation, automatic retrieval, and generic knowledge-search
   changes.
 - Reranking beyond reciprocal-rank fusion, RAG, and knowledge graph work.

@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.2.4 (Genesis)`
+`v0.2.5 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, and
@@ -30,14 +30,17 @@ with optional OpenAI-compatible LLM conversation support.
   is available without third-party dependencies. Opt-in Bootstrap wiring builds
   and registers a replacement index at startup. After a successful startup it
   follows memory lifecycle events with best-effort incremental updates; an
-  embedding failure never reverses a completed primary-memory write. Vectors
-  are not persisted and semantic results are used only by the explicit
-  `semantic recall <query>` request path with deterministic lexical fallback.
+  embedding failure never reverses a completed primary-memory write. Semantic
+  results are used only by the explicit `semantic recall <query>` request path
+  with deterministic lexical fallback.
   The runtime retains a safe diagnostic when its most recent incremental index
   update failed, without exposing provider-specific error details.
 - Deterministic reciprocal-rank fusion for explicit semantic recall when both
   current-session semantic and lexical candidates exist. Hybrid responses use
   rank scores; semantic-only responses retain cosine-similarity scores.
+- An optional model-scoped local semantic-embedding cache. It is disabled by
+  default, validates a source-content fingerprint before reuse, updates with
+  memory lifecycle events, and remains separate from the primary memory schema.
 - Deterministic Brain and CognitiveEngine routing for conversation, knowledge
   search, planning, lexical recall, semantic recall, and explicit session
   commands.
@@ -52,8 +55,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 ### Intentionally Not Implemented
 
-- Persisted vectors, automatic semantic augmentation of ordinary messages, and
-  a knowledge graph.
+- Automatic semantic augmentation of ordinary messages and a knowledge graph.
 - Web research, citation collection, or a RAG pipeline.
 - Agent execution, tool gateway, browser/OS control, voice, vision, robotics,
   and smart-home integrations.
@@ -64,7 +66,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 812 automated tests pass through package-aware discovery.
+- 819 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -83,6 +85,6 @@ alter the project's persisted data.
 
 ## Next Milestone
 
-Validate and release the bounded hybrid-recall increment. Continue to grow the
-fixture corpus and review relevance expectations; persisted vectors and RAG
-remain separate milestones.
+Validate and release the opt-in local embedding-cache increment. Continue to
+grow the fixture corpus and review relevance expectations; RAG remains a
+separate milestone.

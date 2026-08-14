@@ -20,6 +20,7 @@ from llm.LLMProvider import LLMProvider
 from llm.LLMRuntimeActivator import activate_llm
 from llm.LLMRuntimeConfig import LLMRuntimeConfig
 from memory.JsonFileMemoryStore import JsonFileMemoryStore
+from memory.JsonFileSemanticEmbeddingCache import JsonFileSemanticEmbeddingCache
 from memory.KeywordLearnedMemorySelector import KeywordLearnedMemorySelector
 from memory.LearnedMemoryCandidateExtractor import LearnedMemoryCandidateExtractor
 from memory.LearnedMemorySelector import LearnedMemorySelector
@@ -85,8 +86,8 @@ class Bootstrap:
         llm_history_max_turns = load_llm_process_history_max_turns()
         learned_memory_context_limit = cls._load_process_learned_memory_context_limit()
         learned_memory_selector = cls._load_process_learned_memory_selector()
-        semantic_memory_index_runtime = (
-            cls._load_process_semantic_memory_index_runtime()
+        semantic_memory_index_runtime = cls._load_process_semantic_memory_index_runtime(
+            cls._semantic_embedding_cache_path(memory_path)
         )
         if llm_system_prompt is None:
             llm_system_prompt = HYPATIA_DEFAULT_SYSTEM_PROMPT
@@ -143,9 +144,9 @@ class Bootstrap:
         return int(raw_limit)
 
     @staticmethod
-    def _load_process_semantic_memory_index_runtime() -> (
-        SemanticMemoryIndexRuntime | None
-    ):
+    def _load_process_semantic_memory_index_runtime(
+        embedding_cache_path: Path,
+    ) -> SemanticMemoryIndexRuntime | None:
         if os.environ.get("HYPATIA_SEMANTIC_MEMORY_ENABLED") != "true":
             return None
 
@@ -178,7 +179,15 @@ class Bootstrap:
             model=model,
             transport=UrllibOllamaEmbeddingTransport(timeout_seconds=timeout_seconds),
         )
-        return SemanticMemoryIndexRuntime(SemanticMemoryIndexBuilder(provider))
+        embedding_cache = None
+        if os.environ.get("HYPATIA_SEMANTIC_MEMORY_PERSIST_EMBEDDINGS") == "true":
+            embedding_cache = JsonFileSemanticEmbeddingCache(
+                embedding_cache_path,
+                provider_key=f"ollama:{endpoint}:{model}",
+            )
+        return SemanticMemoryIndexRuntime(
+            SemanticMemoryIndexBuilder(provider, embedding_cache)
+        )
 
     @staticmethod
     def _load_process_semantic_memory_timeout_seconds() -> float:
@@ -294,6 +303,12 @@ class Bootstrap:
     def _default_memory_path() -> Path:
         project_root = Path(__file__).resolve().parents[2]
         return project_root / "data" / "memory" / "memory.json"
+
+    @classmethod
+    def _semantic_embedding_cache_path(cls, memory_path: Path | None) -> Path:
+        """Keep optional derived embeddings beside the selected memory snapshot."""
+        resolved_memory_path = memory_path or cls._default_memory_path()
+        return resolved_memory_path.with_name("semantic_embeddings.json")
 
     @staticmethod
     def _default_session_path() -> Path:

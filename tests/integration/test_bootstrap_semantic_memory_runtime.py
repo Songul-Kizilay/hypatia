@@ -153,6 +153,40 @@ class BootstrapSemanticMemoryRuntimeTests(unittest.TestCase):
         self.assertEqual(len(provider.sources), 2)
         self.assertIn("User: Hello Hypatia", provider.sources[0])
 
+    def test_opt_in_embedding_persistence_reuses_embeddings_after_restart(self) -> None:
+        record = MemoryRecord(memory_id="memory-1", content="Persistent fact")
+        provider = RecordingEmbeddingProvider(Embedding((1, 0)))
+
+        with (
+            tempfile.TemporaryDirectory() as temporary_directory,
+            patch.dict(
+                os.environ,
+                {
+                    "HYPATIA_SEMANTIC_MEMORY_ENABLED": "true",
+                    "HYPATIA_SEMANTIC_MEMORY_PERSIST_EMBEDDINGS": "true",
+                },
+                clear=True,
+            ),
+            patch("core.Bootstrap.OllamaEmbeddingProvider", return_value=provider),
+        ):
+            temporary_path = Path(temporary_directory)
+            memory_path = temporary_path / "memory.json"
+            session_path = temporary_path / "sessions.json"
+            JsonFileMemoryStore(memory_path).save([record])
+
+            first_bootstrap = Bootstrap.from_process_environment(
+                memory_path, session_path
+            )
+            first_bootstrap.initialize()
+            second_bootstrap = Bootstrap.from_process_environment(
+                memory_path, session_path
+            )
+            second_bootstrap.initialize()
+
+            self.assertTrue((temporary_path / "semantic_embeddings.json").exists())
+
+        self.assertEqual(provider.sources, ["Persistent fact"])
+
     def test_enabled_runtime_failure_stops_bootstrap_before_container_publish(
         self,
     ) -> None:
