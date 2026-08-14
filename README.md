@@ -243,6 +243,11 @@ cited local context to the model. It is explicit, limits each supplied source
 chunk to 600 characters, keeps citations on the response, and does not add a
 conversation-memory record.
 
+Use `list knowledge` to show the local source catalog before inspecting a
+specific source or creating a future explicit relationship. Every entry shows
+its stable document ID, title, local source path, type, and chunk count; this
+read-only command neither calls an LLM nor adds a conversation record.
+
 Use `knowledge graph <query>` to inspect the deterministic structure of local
 matching sources. It returns up to three cited document-to-paragraph
 `contains` relationships. This graph is derived in memory from loaded local

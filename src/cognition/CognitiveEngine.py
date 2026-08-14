@@ -166,6 +166,9 @@ class CognitiveEngine:
         if self._is_knowledge_graph_request(request):
             return self._process_knowledge_graph(request)
 
+        if self._is_knowledge_list_request(request):
+            return self._process_knowledge_list(request)
+
         if self._is_search_request(request):
             query = self._search_query(request)
             if not query:
@@ -383,6 +386,19 @@ class CognitiveEngine:
             )
         return self._response_composer.knowledge_graph_success(
             request, results, graph_view
+        )
+
+    @staticmethod
+    def _is_knowledge_list_request(request: BrainRequest) -> bool:
+        return (
+            request.metadata.get("intent") == "knowledge_list"
+            or request.message.casefold().strip() == "list knowledge"
+        )
+
+    def _process_knowledge_list(self, request: BrainRequest) -> BrainResponse:
+        """List local source identities without LLM or memory mutation."""
+        return self._response_composer.knowledge_list_success(
+            request, self._knowledge_engine.documents()
         )
 
     @staticmethod

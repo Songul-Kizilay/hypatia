@@ -69,6 +69,26 @@ class KnowledgeEngineTests(unittest.TestCase):
         self.assertEqual(len(view.edges), 1)
         self.assertEqual(view.edges[0].relation, KnowledgeGraphRelation.CONTAINS)
 
+    def test_documents_lists_stable_local_source_references_in_load_order(
+        self,
+    ) -> None:
+        first = self._write_file("first.md", "First\n\nHypatia")
+        second = self._write_file("second.txt", "Second")
+        engine = KnowledgeEngine()
+        first_document = engine.load(first)
+        second_document = engine.load(second)
+
+        references = engine.documents()
+
+        self.assertEqual(
+            [reference.document_id for reference in references],
+            [first_document.document_id, second_document.document_id],
+        )
+        self.assertEqual(
+            [reference.title for reference in references], ["first", "second"]
+        )
+        self.assertEqual([reference.chunk_count for reference in references], [2, 1])
+
     def test_loads_multiple_documents(self) -> None:
         first = self._write_file("first.md", "First\n\nHypatia")
         second = self._write_file("second.txt", "Second\n\nKnowledge")

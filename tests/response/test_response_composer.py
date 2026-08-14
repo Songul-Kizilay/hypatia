@@ -19,6 +19,8 @@ if source_planner_dir not in planner.__path__:
 
 from brain.BrainRequest import BrainRequest
 from knowledge.Chunk import Chunk, ChunkType
+from knowledge.Document import DocumentType
+from knowledge.KnowledgeDocumentReference import KnowledgeDocumentReference
 from knowledge.KnowledgeGraph import (
     KnowledgeGraphEdge,
     KnowledgeGraphNode,
@@ -180,6 +182,30 @@ class ResponseComposerTests(unittest.TestCase):
             "Knowledge graph:\n- Local Notes --contains--> Paragraph 1",
         )
         self.assertEqual(len(response.knowledge_citations), 1)
+
+    def test_knowledge_list_formats_document_identity_and_preserves_references(
+        self,
+    ) -> None:
+        documents = [
+            KnowledgeDocumentReference(
+                document_id="document-1",
+                title="Local Notes",
+                source="notes.md",
+                document_type=DocumentType.MARKDOWN,
+                chunk_count=2,
+            )
+        ]
+
+        response = self.composer.knowledge_list_success(self.request, documents)
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "knowledge_list")
+        self.assertEqual(response.knowledge_documents, documents)
+        self.assertEqual(
+            response.message,
+            "Knowledge sources:\n"
+            "- Local Notes | notes.md | chunks: 2 | id: document-1",
+        )
 
     def test_plan_success_preserves_goal_and_task_order(self) -> None:
         plan = Planner().create_plan("Read a PDF and summarize it")

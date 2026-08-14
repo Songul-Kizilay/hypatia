@@ -8,6 +8,7 @@ from knowledge.Chunk import Chunk
 from knowledge.Document import Document
 from knowledge.DocumentLoader import DocumentLoader
 from knowledge.Indexer import Indexer
+from knowledge.KnowledgeDocumentReference import KnowledgeDocumentReference
 from knowledge.KnowledgeGraph import KnowledgeGraph, KnowledgeGraphView
 from knowledge.Parser import Parser
 from knowledge.Search import Search
@@ -56,6 +57,23 @@ class KnowledgeEngine:
     def graph_for_chunks(self, chunks: list[Chunk]) -> KnowledgeGraphView:
         """Return the derived structural graph for indexed search results."""
         return self._graph.view_for_chunks(chunks)
+
+    def documents(self) -> list[KnowledgeDocumentReference]:
+        """List loaded source documents in deterministic load order."""
+        indexed_chunks = tuple(self._indexer.all().values())
+        return [
+            KnowledgeDocumentReference(
+                document_id=document.document_id,
+                title=document.title,
+                source=document.source,
+                document_type=document.document_type,
+                chunk_count=sum(
+                    chunk.document_id == document.document_id
+                    for chunk in indexed_chunks
+                ),
+            )
+            for document in self._documents.values()
+        ]
 
     def document_count(self) -> int:
         """Return the number of loaded documents."""

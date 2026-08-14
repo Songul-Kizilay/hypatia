@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 
 from knowledge.Chunk import Chunk
 from knowledge.KnowledgeCitation import KnowledgeCitation
+from knowledge.KnowledgeDocumentReference import KnowledgeDocumentReference
 
 
 @dataclass(frozen=True, slots=True)
@@ -19,3 +20,4 @@ class BrainResponse:
     success: bool = True
     knowledge_results: list[Chunk] = field(default_factory=list)
     knowledge_citations: list[KnowledgeCitation] = field(default_factory=list)
+    knowledge_documents: list[KnowledgeDocumentReference] = field(default_factory=list)

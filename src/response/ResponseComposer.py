@@ -9,6 +9,7 @@ from brain.BrainRequest import BrainRequest
 from brain.BrainResponse import BrainResponse
 from knowledge.Chunk import Chunk
 from knowledge.KnowledgeCitation import KnowledgeCitation
+from knowledge.KnowledgeDocumentReference import KnowledgeDocumentReference
 from knowledge.KnowledgeGraph import KnowledgeGraphView
 from memory.MemoryRecord import MemoryRecord
 from planner.Plan import Plan
@@ -447,6 +448,32 @@ class ResponseComposer:
             intent="knowledge_graph",
             memory_count=0,
             success=False,
+        )
+
+    def knowledge_list_success(
+        self,
+        request: BrainRequest,
+        documents: list[KnowledgeDocumentReference],
+    ) -> BrainResponse:
+        """Compose a deterministic catalog of loaded local source identities."""
+        if not documents:
+            message = "No local knowledge sources are loaded."
+        else:
+            lines = ["Knowledge sources:"]
+            for document in documents:
+                source = document.source or "local source unavailable"
+                lines.append(
+                    "- "
+                    f"{document.title} | {source} | "
+                    f"chunks: {document.chunk_count} | id: {document.document_id}"
+                )
+            message = "\n".join(lines)
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="knowledge_list",
+            memory_count=0,
+            knowledge_documents=documents,
         )
 
     def ask_knowledge_success(
