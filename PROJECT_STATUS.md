@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.5 (Genesis)`
+`v0.3.6 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -79,6 +79,12 @@ with optional OpenAI-compatible LLM conversation support.
   relation only after the graph change can be rolled back on a storage failure.
   On a later startup, it restores the edge only after both matching stable
   local source IDs are loaded; no relation is inferred from a title or content.
+- An explicit `preview remove knowledge relation <source_document_id> --
+  <target_document_id>` command validates an existing applied relation without
+  changing it. The separately confirmed `remove knowledge relation
+  <source_document_id> -- <target_document_id>` command removes the graph edge
+  and its persisted record when applicable. A relation-store failure restores
+  the in-memory edge before reporting the failure.
 - Deterministic Brain and CognitiveEngine routing for conversation, knowledge
   search, planning, lexical recall, semantic recall, and explicit session
   commands.
@@ -105,7 +111,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 869 automated tests pass through package-aware discovery.
+- 875 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -124,7 +130,7 @@ alter the project's persisted data.
 
 ## Next Milestone
 
-Define an explicit, separately confirmed relation-revocation transaction so a
-user can remove an applied local link safely. Automatic semantic extraction,
+Define a read-only relationship catalog so users can inspect explicitly applied
+links before targeting one for removal. Automatic semantic extraction,
 ordinary-conversation augmentation, and implicit graph writes remain out of
 scope.

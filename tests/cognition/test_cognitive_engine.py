@@ -2161,6 +2161,49 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertIn("Knowledge graph relation is already applied.", duplicate.message)
         self.assertEqual(self.memory_manager.all(), [])
 
+    def test_knowledge_relation_removal_is_previewed_then_applied_without_memory(
+        self,
+    ) -> None:
+        extra_path = Path(self.temporary_directory.name) / "extra.md"
+        extra_path.write_text("Extra", encoding="utf-8")
+        self.knowledge_engine.load(extra_path)
+        source_id, target_id = [
+            document.document_id for document in self.knowledge_engine.documents()
+        ]
+        self.engine.process(
+            BrainRequest(
+                message=("apply knowledge relation " f"{source_id} -- {target_id}")
+            )
+        )
+
+        preview = self.engine.process(
+            BrainRequest(
+                message=(
+                    "preview remove knowledge relation " f"{source_id} -- {target_id}"
+                )
+            )
+        )
+        removal = self.engine.process(
+            BrainRequest(
+                message=("remove knowledge relation " f"{source_id} -- {target_id}")
+            )
+        )
+        duplicate = self.engine.process(
+            BrainRequest(
+                message=("remove knowledge relation " f"{source_id} -- {target_id}")
+            )
+        )
+
+        self.assertTrue(preview.success)
+        self.assertEqual(preview.intent, "knowledge_relation_removal_preview")
+        self.assertIn("Changes: ready to remove", preview.message)
+        self.assertTrue(removal.success)
+        self.assertEqual(removal.intent, "knowledge_relation_remove")
+        self.assertIn("Knowledge relation removed:", removal.message)
+        self.assertFalse(duplicate.success)
+        self.assertIn("Knowledge graph relation is not applied.", duplicate.message)
+        self.assertEqual(self.memory_manager.all(), [])
+
     def test_ask_knowledge_sends_only_cited_local_context_to_the_llm(self) -> None:
         llm_provider = RecordingLLMProvider("Hypatia is in the local notes.")
         engine = ProductionCognitiveEngine(

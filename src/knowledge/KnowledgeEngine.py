@@ -19,6 +19,10 @@ from knowledge.KnowledgeGraph import (
 from knowledge.KnowledgeRelationApplication import KnowledgeRelationApplication
 from knowledge.KnowledgeRelationPreview import KnowledgeRelationPreview
 from knowledge.KnowledgeRelationRecord import KnowledgeRelationRecord
+from knowledge.KnowledgeRelationRevocation import KnowledgeRelationRevocation
+from knowledge.KnowledgeRelationRevocationPreview import (
+    KnowledgeRelationRevocationPreview,
+)
 from knowledge.Parser import Parser
 from knowledge.Search import Search
 
@@ -129,6 +133,71 @@ class KnowledgeEngine:
         return KnowledgeRelationApplication(
             preview, edge, persisted=self._relation_store is not None
         )
+
+    def preview_document_relation_removal(
+        self,
+        source_document_id: str,
+        target_document_id: str,
+    ) -> KnowledgeRelationRevocationPreview:
+        """Validate a requested relation removal without changing graph state."""
+        relation = self.preview_document_relation(
+            source_document_id, target_document_id
+        )
+        if not self._graph.has_document_relation(
+            relation.source.document_id,
+            relation.relation,
+            relation.target.document_id,
+        ):
+            raise KnowledgeError("Knowledge graph relation is not applied.")
+        record = KnowledgeRelationRecord(
+            relation.source.document_id,
+            relation.relation,
+            relation.target.document_id,
+        )
+        return KnowledgeRelationRevocationPreview(
+            relation=relation,
+            persisted=record in self._persisted_relations,
+        )
+
+    def remove_document_relation(
+        self,
+        source_document_id: str,
+        target_document_id: str,
+    ) -> KnowledgeRelationRevocation:
+        """Remove one explicit relationship with a persistence rollback boundary."""
+        preview = self.preview_document_relation_removal(
+            source_document_id, target_document_id
+        )
+        relation = preview.relation
+        edge = self._graph.document_relation(
+            relation.source.document_id,
+            relation.relation,
+            relation.target.document_id,
+        )
+        if edge is None:
+            raise KnowledgeError("Knowledge graph relation is not applied.")
+
+        record = KnowledgeRelationRecord(
+            relation.source.document_id,
+            relation.relation,
+            relation.target.document_id,
+        )
+        remaining_records = [
+            candidate for candidate in self._persisted_relations if candidate != record
+        ]
+        self._graph.remove_document_relation(edge)
+        if self._relation_store is not None and preview.persisted:
+            try:
+                self._relation_store.save(remaining_records)
+            except KnowledgeError:
+                self._graph.add_document_relation(
+                    relation.source.document_id,
+                    relation.relation,
+                    relation.target.document_id,
+                )
+                raise
+            self._persisted_relations = remaining_records
+        return KnowledgeRelationRevocation(preview, edge)
 
     def document_count(self) -> int:
         """Return the number of loaded documents."""

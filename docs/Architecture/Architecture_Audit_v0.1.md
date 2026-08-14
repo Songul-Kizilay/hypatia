@@ -108,6 +108,12 @@ Implemented memory capabilities:
   On restart, a stored relation is restored only after both file-derived stable
   source IDs have been loaded again; it is never guessed from a source title or
   content.
+- An explicit two-stage relationship-removal flow. `preview remove knowledge
+  relation <source_document_id> -- <target_document_id>` is read-only, while
+  `remove knowledge relation <source_document_id> -- <target_document_id>`
+  removes an existing graph edge and any persisted record. If the replacement
+  relation snapshot fails to save, the engine restores the graph edge before
+  returning a failure.
 
 Not implemented:
 
@@ -120,7 +126,7 @@ Not implemented:
 
 The current local verification baseline is:
 
-- `python -m unittest discover -s tests -t .`: 869 tests passed. The top-level
+- `python -m unittest discover -s tests -t .`: 875 tests passed. The top-level
   package setting ensures nested test directories are included without
   shadowing source packages.
 - `python -m black --check src tests`: passed.

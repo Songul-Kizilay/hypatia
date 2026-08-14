@@ -242,6 +242,21 @@ class KnowledgeGraph:
             self.document_node_id(target_document_id),
         ) in self._edges
 
+    def document_relation(
+        self,
+        source_document_id: str,
+        relation: KnowledgeGraphRelation,
+        target_document_id: str,
+    ) -> KnowledgeGraphEdge | None:
+        """Return one explicit document relation when it is currently present."""
+        return self._edges.get(
+            (
+                self.document_node_id(source_document_id),
+                relation,
+                self.document_node_id(target_document_id),
+            )
+        )
+
     def remove_document_relation(self, edge: KnowledgeGraphEdge) -> None:
         """Remove one explicit relation to roll back a failed persistence write."""
         key = (edge.source_node_id, edge.relation, edge.target_node_id)

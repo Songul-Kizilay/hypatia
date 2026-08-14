@@ -13,6 +13,10 @@ from knowledge.KnowledgeDocumentReference import KnowledgeDocumentReference
 from knowledge.KnowledgeGraph import KnowledgeGraphView
 from knowledge.KnowledgeRelationApplication import KnowledgeRelationApplication
 from knowledge.KnowledgeRelationPreview import KnowledgeRelationPreview
+from knowledge.KnowledgeRelationRevocation import KnowledgeRelationRevocation
+from knowledge.KnowledgeRelationRevocationPreview import (
+    KnowledgeRelationRevocationPreview,
+)
 from memory.MemoryRecord import MemoryRecord
 from planner.Plan import Plan
 from session.SessionDeleteExecutionResult import SessionDeleteExecutionResult
@@ -557,6 +561,95 @@ class ResponseComposer:
             message=message,
             request_id=request.request_id,
             intent="knowledge_relation_apply",
+            memory_count=0,
+            success=False,
+        )
+
+    def knowledge_relation_removal_preview_success(
+        self,
+        request: BrainRequest,
+        preview: KnowledgeRelationRevocationPreview,
+    ) -> BrainResponse:
+        """Compose a no-side-effect preview for explicit relation removal."""
+        relation = preview.relation
+        return BrainResponse(
+            message="\n".join(
+                [
+                    "Knowledge relation removal preview:",
+                    "Source: "
+                    f"{relation.source.title} | id: {relation.source.document_id}",
+                    f"Relation: {relation.relation.value}",
+                    "Target: "
+                    f"{relation.target.title} | id: {relation.target.document_id}",
+                    (
+                        "Relation storage: persisted"
+                        if preview.persisted
+                        else "Relation storage: in-memory only"
+                    ),
+                    "Changes: ready to remove",
+                ]
+            ),
+            request_id=request.request_id,
+            intent="knowledge_relation_removal_preview",
+            memory_count=0,
+            knowledge_relation_revocation_preview=preview,
+        )
+
+    def knowledge_relation_removal_preview_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Compose a failed no-side-effect relation-removal preview."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="knowledge_relation_removal_preview",
+            memory_count=0,
+            success=False,
+        )
+
+    def knowledge_relation_remove_success(
+        self,
+        request: BrainRequest,
+        revocation: KnowledgeRelationRevocation,
+    ) -> BrainResponse:
+        """Compose a successful explicit relation removal result."""
+        relation = revocation.preview.relation
+        return BrainResponse(
+            message="\n".join(
+                [
+                    "Knowledge relation removed:",
+                    "Source: "
+                    f"{relation.source.title} | id: {relation.source.document_id}",
+                    f"Relation: {relation.relation.value}",
+                    "Target: "
+                    f"{relation.target.title} | id: {relation.target.document_id}",
+                    "Graph state: updated (memory only)",
+                    (
+                        "Relation storage: removed"
+                        if revocation.preview.persisted
+                        else "Relation storage: in-memory only"
+                    ),
+                    "JSON memory: unchanged",
+                ]
+            ),
+            request_id=request.request_id,
+            intent="knowledge_relation_remove",
+            memory_count=0,
+            knowledge_relation_revocation=revocation,
+        )
+
+    def knowledge_relation_remove_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Compose a failed explicit relation removal result."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="knowledge_relation_remove",
             memory_count=0,
             success=False,
         )
