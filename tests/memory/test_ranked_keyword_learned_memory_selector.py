@@ -136,6 +136,80 @@ class RankedKeywordLearnedMemorySelectorTests(unittest.TestCase):
         self.assertEqual(memories, original_memories)
         self.assertEqual(memories, original_values)
 
+    def test_limit_two_returns_first_two_after_ranking(self) -> None:
+        memory_a = _memory(key="memory_a", value="A")
+        memory_b = _memory(key="memory_b", value="B")
+        memory_c = _memory(key="memory_c", value="C")
+        selector = RankedKeywordLearnedMemorySelector(limit=2)
+
+        with patch(SCORE_PATH, side_effect=(1, 3, 2)) as score:
+            result = selector.select(
+                source_text="source",
+                memories=(memory_a, memory_b, memory_c),
+            )
+
+        self.assertEqual(result, (memory_b, memory_c))
+        self.assertIs(result[0], memory_b)
+        self.assertIs(result[1], memory_c)
+        self.assertEqual(score.call_count, 3)
+
+    def test_limit_one_slices_after_stable_tie_ranking(self) -> None:
+        memory_a = _memory(key="memory_a", value="A")
+        memory_b = _memory(key="memory_b", value="B")
+        memory_c = _memory(key="memory_c", value="C")
+        selector = RankedKeywordLearnedMemorySelector(limit=1)
+
+        with patch(SCORE_PATH, side_effect=(2, 2, 1)):
+            result = selector.select(
+                source_text="source",
+                memories=(memory_a, memory_b, memory_c),
+            )
+
+        self.assertEqual(result, (memory_a,))
+        self.assertIs(result[0], memory_a)
+
+    def test_limit_zero_scores_every_position_then_returns_exact_empty(self) -> None:
+        memories = (
+            _memory(key="memory_a", value="A"),
+            _memory(key="memory_b", value="B"),
+        )
+        selector = RankedKeywordLearnedMemorySelector(limit=0)
+
+        with patch(SCORE_PATH, side_effect=(2, 1)) as score:
+            result = selector.select(source_text="source", memories=memories)
+
+        self.assertEqual(result, ())
+        self.assertEqual(score.call_count, 2)
+
+    def test_large_limit_returns_all_relevant_memories_in_ranked_order(self) -> None:
+        memory_a = _memory(key="memory_a", value="A")
+        memory_b = _memory(key="memory_b", value="B")
+        memory_c = _memory(key="memory_c", value="C")
+        selector = RankedKeywordLearnedMemorySelector(limit=10)
+
+        with patch(SCORE_PATH, side_effect=(1, 3, 2)):
+            result = selector.select(
+                source_text="source",
+                memories=(memory_a, memory_b, memory_c),
+            )
+
+        self.assertEqual(result, (memory_b, memory_c, memory_a))
+        self.assertIs(result[0], memory_b)
+        self.assertIs(result[1], memory_c)
+        self.assertIs(result[2], memory_a)
+
+    def test_negative_limit_fails_exactly_before_any_scoring(self) -> None:
+        expected_message = (
+            "Ranked keyword learned memory selector limit must be non-negative."
+        )
+
+        with patch(SCORE_PATH) as score:
+            with self.assertRaises(ValueError) as error:
+                RankedKeywordLearnedMemorySelector(limit=-1)
+
+        self.assertEqual(str(error.exception), expected_message)
+        score.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()
