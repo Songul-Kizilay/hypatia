@@ -169,6 +169,9 @@ class CognitiveEngine:
         if self._is_knowledge_list_request(request):
             return self._process_knowledge_list(request)
 
+        if self._is_knowledge_relation_list_request(request):
+            return self._process_knowledge_relation_list(request)
+
         if self._is_knowledge_relation_preview_request(request):
             return self._process_knowledge_relation_preview(request)
 
@@ -411,6 +414,19 @@ class CognitiveEngine:
         """List local source identities without LLM or memory mutation."""
         return self._response_composer.knowledge_list_success(
             request, self._knowledge_engine.documents()
+        )
+
+    @staticmethod
+    def _is_knowledge_relation_list_request(request: BrainRequest) -> bool:
+        return (
+            request.metadata.get("intent") == "knowledge_relation_list"
+            or request.message.casefold().strip() == "list knowledge relations"
+        )
+
+    def _process_knowledge_relation_list(self, request: BrainRequest) -> BrainResponse:
+        """List active explicit relations without mutating graph or memory state."""
+        return self._response_composer.knowledge_relation_list_success(
+            request, self._knowledge_engine.relations()
         )
 
     @staticmethod

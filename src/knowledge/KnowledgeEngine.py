@@ -19,6 +19,7 @@ from knowledge.KnowledgeGraph import (
 from knowledge.KnowledgeRelationApplication import KnowledgeRelationApplication
 from knowledge.KnowledgeRelationPreview import KnowledgeRelationPreview
 from knowledge.KnowledgeRelationRecord import KnowledgeRelationRecord
+from knowledge.KnowledgeRelationReference import KnowledgeRelationReference
 from knowledge.KnowledgeRelationRevocation import KnowledgeRelationRevocation
 from knowledge.KnowledgeRelationRevocationPreview import (
     KnowledgeRelationRevocationPreview,
@@ -84,6 +85,30 @@ class KnowledgeEngine:
             self._document_reference(document, indexed_chunks)
             for document in self._documents.values()
         ]
+
+    def relations(self) -> list[KnowledgeRelationReference]:
+        """List active explicit relations in deterministic graph insertion order."""
+        indexed_chunks = tuple(self._indexer.all().values())
+        references: list[KnowledgeRelationReference] = []
+        for edge in self._graph.document_relations():
+            source_document_id = self._document_id_from_node_id(edge.source_node_id)
+            target_document_id = self._document_id_from_node_id(edge.target_node_id)
+            source = self._document_by_id(source_document_id)
+            target = self._document_by_id(target_document_id)
+            record = KnowledgeRelationRecord(
+                source.document_id,
+                edge.relation,
+                target.document_id,
+            )
+            references.append(
+                KnowledgeRelationReference(
+                    source=self._document_reference(source, indexed_chunks),
+                    relation=edge.relation,
+                    target=self._document_reference(target, indexed_chunks),
+                    persisted=record in self._persisted_relations,
+                )
+            )
+        return references
 
     def preview_document_relation(
         self,
@@ -248,6 +273,13 @@ class KnowledgeEngine:
         if document is None:
             raise KnowledgeError(f"Knowledge document was not found: {normalized_id}")
         return document
+
+    @staticmethod
+    def _document_id_from_node_id(node_id: str) -> str:
+        prefix = "document:"
+        if not node_id.startswith(prefix):
+            raise KnowledgeError("Knowledge graph relation has an invalid endpoint.")
+        return node_id[len(prefix) :]
 
     @staticmethod
     def _document_reference(

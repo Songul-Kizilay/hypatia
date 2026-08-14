@@ -13,6 +13,7 @@ from knowledge.KnowledgeDocumentReference import KnowledgeDocumentReference
 from knowledge.KnowledgeGraph import KnowledgeGraphView
 from knowledge.KnowledgeRelationApplication import KnowledgeRelationApplication
 from knowledge.KnowledgeRelationPreview import KnowledgeRelationPreview
+from knowledge.KnowledgeRelationReference import KnowledgeRelationReference
 from knowledge.KnowledgeRelationRevocation import KnowledgeRelationRevocation
 from knowledge.KnowledgeRelationRevocationPreview import (
     KnowledgeRelationRevocationPreview,
@@ -480,6 +481,34 @@ class ResponseComposer:
             intent="knowledge_list",
             memory_count=0,
             knowledge_documents=documents,
+        )
+
+    def knowledge_relation_list_success(
+        self,
+        request: BrainRequest,
+        relations: list[KnowledgeRelationReference],
+    ) -> BrainResponse:
+        """Compose a deterministic catalog of active local relationships."""
+        if not relations:
+            message = "No applied local knowledge relations are loaded."
+        else:
+            lines = ["Applied knowledge relations:"]
+            for relation in relations:
+                storage = "persisted" if relation.persisted else "in-memory only"
+                lines.append(
+                    "- "
+                    f"{relation.source.title} | id: {relation.source.document_id} "
+                    f"--{relation.relation.value}--> "
+                    f"{relation.target.title} | id: {relation.target.document_id} "
+                    f"| storage: {storage}"
+                )
+            message = "\n".join(lines)
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="knowledge_relation_list",
+            memory_count=0,
+            knowledge_relations=relations,
         )
 
     def knowledge_relation_preview_success(

@@ -253,6 +253,32 @@ class KnowledgeEngineTests(unittest.TestCase):
         self.assertEqual(store.load(), [])
         self.assertEqual(reloaded_engine.graph_edge_count(), 2)
 
+    def test_relations_lists_only_active_relations_with_persistence_status(
+        self,
+    ) -> None:
+        first = self._write_file("first.md", "First")
+        second = self._write_file("second.md", "Second")
+        engine = KnowledgeEngine(
+            relation_store=JsonFileKnowledgeRelationStore(
+                self.directory / "relations.json"
+            )
+        )
+        first_document = engine.load(first)
+        second_document = engine.load(second)
+
+        self.assertEqual(engine.relations(), [])
+        engine.apply_document_relation(
+            first_document.document_id,
+            second_document.document_id,
+        )
+        relations = engine.relations()
+
+        self.assertEqual(len(relations), 1)
+        self.assertEqual(relations[0].source.document_id, first_document.document_id)
+        self.assertEqual(relations[0].target.document_id, second_document.document_id)
+        self.assertEqual(relations[0].relation, KnowledgeGraphRelation.RELATED_TO)
+        self.assertTrue(relations[0].persisted)
+
     def test_failed_relation_removal_persistence_restores_the_graph_edge(self) -> None:
         first = self._write_file("first.md", "First")
         second = self._write_file("second.md", "Second")

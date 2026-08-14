@@ -2204,6 +2204,30 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertIn("Knowledge graph relation is not applied.", duplicate.message)
         self.assertEqual(self.memory_manager.all(), [])
 
+    def test_knowledge_relation_list_is_read_only_and_exposes_active_link(
+        self,
+    ) -> None:
+        extra_path = Path(self.temporary_directory.name) / "extra.md"
+        extra_path.write_text("Extra", encoding="utf-8")
+        self.knowledge_engine.load(extra_path)
+        source_id, target_id = [
+            document.document_id for document in self.knowledge_engine.documents()
+        ]
+        self.engine.process(
+            BrainRequest(
+                message=("apply knowledge relation " f"{source_id} -- {target_id}")
+            )
+        )
+
+        response = self.engine.process(BrainRequest(message="list knowledge relations"))
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "knowledge_relation_list")
+        self.assertEqual(len(response.knowledge_relations), 1)
+        self.assertIn("Applied knowledge relations:", response.message)
+        self.assertIn("storage: in-memory only", response.message)
+        self.assertEqual(self.memory_manager.all(), [])
+
     def test_ask_knowledge_sends_only_cited_local_context_to_the_llm(self) -> None:
         llm_provider = RecordingLLMProvider("Hypatia is in the local notes.")
         engine = ProductionCognitiveEngine(

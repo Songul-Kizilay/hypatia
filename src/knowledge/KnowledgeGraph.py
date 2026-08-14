@@ -257,6 +257,14 @@ class KnowledgeGraph:
             )
         )
 
+    def document_relations(self) -> tuple[KnowledgeGraphEdge, ...]:
+        """Return active explicit document relations in application order."""
+        return tuple(
+            edge
+            for edge in self._edges.values()
+            if edge.relation is KnowledgeGraphRelation.RELATED_TO
+        )
+
     def remove_document_relation(self, edge: KnowledgeGraphEdge) -> None:
         """Remove one explicit relation to roll back a failed persistence write."""
         key = (edge.source_node_id, edge.relation, edge.target_node_id)

@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.6 (Genesis)`
+`v0.3.7 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -85,6 +85,10 @@ with optional OpenAI-compatible LLM conversation support.
   <source_document_id> -- <target_document_id>` command removes the graph edge
   and its persisted record when applicable. A relation-store failure restores
   the in-memory edge before reporting the failure.
+- An explicit `list knowledge relations` catalog that returns only active
+  explicit local links in deterministic application order. Each entry includes
+  loaded source/target IDs, `related_to`, and whether the relation is persisted
+  or in-memory only. It does not load missing sources or change any state.
 - Deterministic Brain and CognitiveEngine routing for conversation, knowledge
   search, planning, lexical recall, semantic recall, and explicit session
   commands.
@@ -111,7 +115,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 875 automated tests pass through package-aware discovery.
+- 880 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -130,7 +134,7 @@ alter the project's persisted data.
 
 ## Next Milestone
 
-Define a read-only relationship catalog so users can inspect explicitly applied
-links before targeting one for removal. Automatic semantic extraction,
+Define relationship-catalog filtering or direct inspection only if the current
+local graph grows beyond a usable list. Automatic semantic extraction,
 ordinary-conversation augmentation, and implicit graph writes remain out of
 scope.

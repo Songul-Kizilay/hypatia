@@ -2,6 +2,24 @@
 
 All notable project changes are recorded here.
 
+## [0.3.7] - 2026-08-15
+
+### Added
+
+- A read-only `list knowledge relations` catalog for active explicit local
+  document links. Each entry exposes loaded source and target document IDs,
+  the `related_to` type, and whether the link is persisted or in-memory only.
+
+### Safety
+
+- The catalog reports only relations active in the current graph. It does not
+  infer endpoints, materialize an unloaded persisted relation, change graph or
+  relation-store state, write conversation memory, or call an LLM.
+
+### Verification
+
+- The package-aware full local suite contains 880 passing automated tests.
+
 ## [0.3.6] - 2026-08-15
 
 ### Added

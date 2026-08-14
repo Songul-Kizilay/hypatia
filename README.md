@@ -277,6 +277,12 @@ removes the link. When the relation is persisted, Hypatia removes the graph
 edge and local record together; a relation-file write failure restores the
 graph edge and returns a controlled failure instead.
 
+Use `list knowledge relations` to inspect the active local links before
+removing one. Each line includes the source and target IDs, the `related_to`
+type, and whether it is persisted or in-memory only. This list never loads an
+unopened source and never changes graph, relation-file, conversation-memory, or
+LLM state.
+
 Use `knowledge graph <query>` to inspect the deterministic structure of local
 matching sources. It returns up to three cited document-to-paragraph
 `contains` relationships plus any explicitly applied `related_to` edge touching
