@@ -18,6 +18,7 @@ from llm.LLMProvider import LLMProvider
 from llm.LLMRuntimeActivator import activate_llm
 from llm.LLMRuntimeConfig import LLMRuntimeConfig
 from memory.JsonFileMemoryStore import JsonFileMemoryStore
+from memory.KeywordLearnedMemorySelector import KeywordLearnedMemorySelector
 from memory.LearnedMemoryCandidateExtractor import LearnedMemoryCandidateExtractor
 from memory.LearnedMemorySelector import LearnedMemorySelector
 from memory.LLMLearnedMemoryCandidateExtractor import (
@@ -69,6 +70,7 @@ class Bootstrap:
         llm_system_prompt = load_llm_process_system_prompt()
         llm_history_max_turns = load_llm_process_history_max_turns()
         learned_memory_context_limit = cls._load_process_learned_memory_context_limit()
+        learned_memory_selector = cls._load_process_learned_memory_selector()
         if llm_system_prompt is None:
             llm_system_prompt = HYPATIA_DEFAULT_SYSTEM_PROMPT
 
@@ -80,6 +82,7 @@ class Bootstrap:
             llm_system_prompt=llm_system_prompt,
             llm_history_max_turns=llm_history_max_turns,
             learned_memory_context_limit=learned_memory_context_limit,
+            learned_memory_selector=learned_memory_selector,
         )
 
     @staticmethod
@@ -93,6 +96,15 @@ class Bootstrap:
                 "non-negative integer."
             )
         return int(raw_limit)
+
+    @staticmethod
+    def _load_process_learned_memory_selector() -> LearnedMemorySelector | None:
+        raw_selector = os.environ.get("HYPATIA_LEARNED_MEMORY_SELECTOR")
+        if raw_selector is None:
+            return None
+        if raw_selector != "keyword":
+            raise ValueError("HYPATIA_LEARNED_MEMORY_SELECTOR must be 'keyword'.")
+        return KeywordLearnedMemorySelector()
 
     def initialize(self) -> None:
         config = Config()
