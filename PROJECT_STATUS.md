@@ -2,11 +2,11 @@
 
 ## Runtime Version
 
-`v0.2.8 (Genesis)`
+`v0.2.10 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
-the semantic-memory, ranked learned-memory, LLM transport-safety, and
-quality-gate work merged after `v0.2.0`.
+the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
+local-RAG, and quality-gate work merged after `v0.2.0`.
 
 ## Current Source State
 
@@ -46,6 +46,10 @@ with optional OpenAI-compatible LLM conversation support.
 - An explicit bounded `knowledge context <query>` flow that renders no more
   than three cited local chunks and does not persist a conversation-memory
   record.
+- An explicit `ask knowledge <query>` local-RAG flow. It sends only up to three
+  cited chunks to an enabled local LLM runtime, bounds each source chunk in the
+  prompt to 600 characters, retains citations on the answer, and does not
+  augment ordinary conversation or persist a conversation-memory record.
 - Deterministic Brain and CognitiveEngine routing for conversation, knowledge
   search, planning, lexical recall, semantic recall, and explicit session
   commands.
@@ -60,8 +64,9 @@ with optional OpenAI-compatible LLM conversation support.
 
 ### Intentionally Not Implemented
 
-- Automatic semantic augmentation of ordinary messages and a knowledge graph.
-- Web research, citation collection, or a RAG pipeline.
+- Automatic semantic augmentation of ordinary messages.
+- Web research, citation collection, automatic RAG augmentation, or a knowledge
+  graph.
 - Agent execution, tool gateway, browser/OS control, voice, vision, robotics,
   and smart-home integrations.
 - Encryption at rest, cloud synchronization, multi-process storage locking,
@@ -71,7 +76,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 828 automated tests pass through package-aware discovery.
+- 830 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -90,5 +95,5 @@ alter the project's persisted data.
 
 ## Next Milestone
 
-Validate and release the explicit bounded local-context increment. Local RAG
-prompt composition remains a separate opt-in milestone.
+Define the first small, inspectable knowledge-graph foundation without changing
+the local JSON memory schema or automatically augmenting ordinary conversation.

@@ -239,5 +239,6 @@ conversation record, inject text into an LLM request, or affect ordinary
 `search <query>` behavior.
 
 With an enabled LLM runtime, `ask knowledge <query>` sends only the bounded,
-cited local context to the model. It is explicit, keeps citations on the
-response, and does not add a conversation-memory record.
+cited local context to the model. It is explicit, limits each supplied source
+chunk to 600 characters, keeps citations on the response, and does not add a
+conversation-memory record.
