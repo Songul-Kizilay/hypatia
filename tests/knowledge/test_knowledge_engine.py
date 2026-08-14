@@ -57,6 +57,16 @@ class KnowledgeEngineTests(unittest.TestCase):
         self.assertEqual(engine.graph_edge_count(), 0)
         self.assertEqual(engine.search("hypatia"), [])
 
+    def test_reload_after_clear_preserves_a_file_source_document_id(self) -> None:
+        path = self._write_file("example.md", "Hello\n\nHypatia")
+        engine = KnowledgeEngine()
+        first_document = engine.load(path)
+
+        engine.clear()
+        second_document = engine.load(path)
+
+        self.assertEqual(first_document.document_id, second_document.document_id)
+
     def test_graph_for_search_results_exposes_containing_document_relationships(
         self,
     ) -> None:

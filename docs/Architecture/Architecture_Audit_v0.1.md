@@ -87,7 +87,9 @@ Implemented memory capabilities:
 - An explicit `list knowledge` source catalog. It presents stable local
   document IDs with title, source path, type, and chunk count in load order so
   a later user-controlled relationship command can identify documents without
-  guessing by title.
+  guessing by title. File-loaded IDs are deterministically derived from the
+  resolved local source path, allowing the same local source to be identified
+  after a restart even when its content changes.
 - An explicit `preview knowledge relation <source_document_id> --
   <target_document_id>` request. It accepts only two distinct catalogued
   documents and the first user-selectable relationship type, `related_to`; it

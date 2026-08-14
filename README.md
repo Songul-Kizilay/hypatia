@@ -247,6 +247,9 @@ Use `list knowledge` to show the local source catalog before inspecting a
 specific source or creating a future explicit relationship. Every entry shows
 its stable document ID, title, local source path, type, and chunk count; this
 read-only command neither calls an LLM nor adds a conversation record.
+For files loaded from disk, that ID is derived from the resolved local source
+path, so reopening the same file retains its identity even if the file content
+changes.
 
 Use `preview knowledge relation <source_document_id> -- <target_document_id>`
 to validate a proposed `related_to` link between two distinct catalogued local
