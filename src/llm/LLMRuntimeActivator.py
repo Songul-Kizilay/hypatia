@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from llm.LLMEndpointPolicy import validate_llm_endpoint
 from llm.LLMProvider import LLMProvider
 from llm.LLMProviderFactory import create_llm_provider
 from llm.LLMRuntimeConfig import LLMRuntimeConfig
@@ -17,7 +18,7 @@ def activate_llm(
         return None
 
     return create_llm_provider(
-        base_url=config.base_url,
+        base_url=validate_llm_endpoint(config.base_url),
         api_key=api_key,
         model=config.model,
         system_prompt=system_prompt,
