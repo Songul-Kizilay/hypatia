@@ -32,8 +32,11 @@ from memory.LearnedMemoryCandidatePersistence import (
 from memory.LearnedMemoryContext import (
     build_learned_memory_augmented_prompt,
     load_bounded_learned_memory_context,
+    load_current_selected_bounded_learned_memory_context,
+    load_current_selected_learned_memory_context,
     load_learned_memory_context,
 )
+from memory.LearnedMemorySelector import LearnedMemorySelector
 from memory.MemoryManager import MemoryManager
 from memory.MemoryRecord import MemoryRecord
 from memory.NoOpLearnedMemoryCandidateExtractor import (
@@ -74,6 +77,7 @@ class CognitiveEngine:
             LearnedMemoryCandidateExtractor | None
         ) = None,
         learned_memory_context_limit: int | None = None,
+        learned_memory_selector: LearnedMemorySelector | None = None,
     ) -> None:
         if llm_history_max_turns is not None and (
             isinstance(llm_history_max_turns, bool) or llm_history_max_turns <= 0
@@ -110,6 +114,7 @@ class CognitiveEngine:
             else NoOpLearnedMemoryCandidateExtractor()
         )
         self._learned_memory_context_limit = learned_memory_context_limit
+        self._learned_memory_selector = learned_memory_selector
         self._router = BrainRouter()
 
     def process(self, request: BrainRequest) -> BrainResponse:
@@ -302,7 +307,25 @@ class CognitiveEngine:
                     session_id,
                     max_turns=self._llm_history_max_turns,
                 )
-                if self._learned_memory_context_limit is None:
+                if self._learned_memory_selector is not None:
+                    if self._learned_memory_context_limit is None:
+                        learned_memory_context = (
+                            load_current_selected_learned_memory_context(
+                                memory_manager=self._memory_manager,
+                                source_text=request.message,
+                                selector=self._learned_memory_selector,
+                            )
+                        )
+                    else:
+                        learned_memory_context = (
+                            load_current_selected_bounded_learned_memory_context(
+                                memory_manager=self._memory_manager,
+                                source_text=request.message,
+                                selector=self._learned_memory_selector,
+                                limit=self._learned_memory_context_limit,
+                            )
+                        )
+                elif self._learned_memory_context_limit is None:
                     learned_memory_context = load_learned_memory_context(
                         self._memory_manager
                     )
