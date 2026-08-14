@@ -33,6 +33,8 @@ class LLMProviderFactoryTests(unittest.TestCase):
         self.assertEqual(provider._api_key, "test-api-key")
         self.assertEqual(provider._model, "test-model")
         self.assertIsNone(provider._system_prompt)
+        transport = cast(UrllibChatCompletionTransport, provider._transport)
+        self.assertEqual(transport._timeout_seconds, 30.0)
 
     def test_factory_forwards_an_optional_system_prompt(self) -> None:
         provider = cast(
@@ -47,3 +49,18 @@ class LLMProviderFactoryTests(unittest.TestCase):
 
         self.assertIsInstance(provider, OpenAICompatibleProvider)
         self.assertEqual(provider._system_prompt, "You are Hypatia.")
+
+    def test_factory_forwards_an_explicit_timeout_to_the_transport(self) -> None:
+        provider = cast(
+            OpenAICompatibleProvider,
+            create_llm_provider(
+                base_url="https://api.example.test/v1/chat/completions",
+                api_key="test-api-key",
+                model="test-model",
+                timeout_seconds=7.5,
+            ),
+        )
+
+        transport = cast(UrllibChatCompletionTransport, provider._transport)
+        self.assertIsInstance(transport, UrllibChatCompletionTransport)
+        self.assertEqual(transport._timeout_seconds, 7.5)

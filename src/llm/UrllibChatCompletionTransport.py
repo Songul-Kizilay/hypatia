@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from email.message import Message
+from math import isfinite
 from types import TracebackType
 from typing import Protocol, Self, cast
 from urllib.request import HTTPRedirectHandler, Request, build_opener
@@ -11,6 +12,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 from llm.OpenAICompatibleProvider import ChatCompletionResponse
 
 DEFAULT_TIMEOUT_SECONDS = 30.0
+LOCAL_DEFAULT_TIMEOUT_SECONDS = 120.0
 
 
 class _ReadableResponse(Protocol):
@@ -58,6 +60,18 @@ def _open_without_redirects(
 class UrllibChatCompletionTransport:
     """Send one JSON chat-completion request through urllib."""
 
+    def __init__(self, timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS) -> None:
+        if (
+            isinstance(timeout_seconds, bool)
+            or not isinstance(timeout_seconds, (int, float))
+            or not isfinite(timeout_seconds)
+            or timeout_seconds <= 0
+        ):
+            raise ValueError(
+                "Chat completion transport timeout must be a positive number."
+            )
+        self._timeout_seconds = float(timeout_seconds)
+
     def __call__(
         self,
         base_url: str,
@@ -72,6 +86,6 @@ class UrllibChatCompletionTransport:
         )
         with _open_without_redirects(
             request,
-            timeout=DEFAULT_TIMEOUT_SECONDS,
+            timeout=self._timeout_seconds,
         ) as response:
             return cast(ChatCompletionResponse, json.loads(response.read()))

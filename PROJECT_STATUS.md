@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.8 (Genesis)`
+`v0.3.9 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.8`** is the current executable package and published
+- **Runtime release `v0.3.9`** is the current executable package and published
   GitHub release.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -66,6 +66,10 @@ with optional OpenAI-compatible LLM conversation support.
   explicit loopback endpoints (`localhost`, `127.0.0.1`, or `::1`), including
   a standard local Ollama endpoint. It omits the authorization header in that
   mode; every non-local endpoint still requires an API key and HTTPS.
+- Chat-completion timeout is configurable through
+  `HYPATIA_LLM_TIMEOUT_SECONDS`. Without an override, explicitly loopback
+  endpoints such as local Ollama receive 120 seconds while non-local endpoints
+  retain the 30-second default.
 - An explicit `ask knowledge <query>` local-RAG flow. It sends only up to three
   cited chunks to an enabled local LLM runtime, bounds each source chunk in the
   prompt to 600 characters, retains citations on the answer, and does not

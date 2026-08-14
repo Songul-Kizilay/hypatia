@@ -103,11 +103,11 @@ An API key is required for every non-local endpoint. It is optional only when
 the endpoint explicitly targets `localhost`, `127.0.0.1`, or `::1`, which lets
 a local Ollama-compatible runtime run without a placeholder secret. In that
 keyless local mode Hypatia sends no `Authorization` header. Use a placeholder
-in documentation and scripts; never commit a real secret. To keep a configured
-key protected in transit, remote endpoints must use `https://`. Plain `http://`
-is accepted only for an explicitly local endpoint. Completion requests do not
-follow HTTP redirects, preventing a bearer token from being forwarded to
-another endpoint.
+only in examples that need to show a non-local key; never commit a real secret.
+To keep a configured key protected in transit, remote endpoints must use
+`https://`. Plain `http://` is accepted only for an explicitly local endpoint.
+Completion requests do not follow HTTP redirects, preventing a bearer token
+from being forwarded to another endpoint.
 
 For a standard local Ollama chat runtime, set the endpoint and model, omit
 `HYPATIA_LLM_API_KEY`, then start Hypatia:
@@ -123,10 +123,14 @@ Optional process-environment settings:
 ```text
 HYPATIA_LLM_SYSTEM_PROMPT=<custom prompt>
 HYPATIA_LLM_HISTORY_MAX_TURNS=<positive integer>
+HYPATIA_LLM_TIMEOUT_SECONDS=<positive finite seconds>
 ```
 
 If `HYPATIA_LLM_SYSTEM_PROMPT` is absent, Hypatia uses its default system prompt.
 If `HYPATIA_LLM_HISTORY_MAX_TURNS` is absent, the default is 8 conversation turns.
+If `HYPATIA_LLM_TIMEOUT_SECONDS` is absent, chat requests use 120 seconds for an
+explicit loopback endpoint such as local Ollama and 30 seconds for a non-local
+endpoint. A configured positive finite value overrides either default.
 A positive history limit sends only the most recent N structured turns from the
 same resolved session to the model, in order. The current request is not included
 in its own history.

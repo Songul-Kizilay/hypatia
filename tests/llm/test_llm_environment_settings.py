@@ -17,6 +17,7 @@ from llm.LLMEnvironmentSettings import (
     load_llm_process_history_max_turns,
     load_llm_process_system_prompt,
     load_llm_system_prompt,
+    load_llm_timeout_seconds,
 )
 from llm.LLMRuntimeConfig import LLMRuntimeConfig
 
@@ -36,6 +37,24 @@ class LLMEnvironmentSettingsTests(unittest.TestCase):
             with self.subTest(value=value):
                 with self.assertRaises(ValueError) as raised:
                     load_llm_history_max_turns({"HYPATIA_LLM_HISTORY_MAX_TURNS": value})
+                self.assertEqual(str(raised.exception), expected_message)
+
+    def test_timeout_loader_maps_optional_positive_finite_number(self) -> None:
+        environment = {"HYPATIA_LLM_TIMEOUT_SECONDS": "7.5"}
+
+        self.assertIsNone(load_llm_timeout_seconds({}))
+        self.assertEqual(load_llm_timeout_seconds(environment), 7.5)
+        self.assertEqual(environment, {"HYPATIA_LLM_TIMEOUT_SECONDS": "7.5"})
+
+    def test_timeout_loader_rejects_invalid_values(self) -> None:
+        expected_message = (
+            "HYPATIA_LLM_TIMEOUT_SECONDS must be a positive finite number."
+        )
+
+        for value in ("", " ", "0", "-1", "nan", "inf", "abc"):
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError) as raised:
+                    load_llm_timeout_seconds({"HYPATIA_LLM_TIMEOUT_SECONDS": value})
                 self.assertEqual(str(raised.exception), expected_message)
 
     def test_system_prompt_loader_preserves_value_and_mapping(self) -> None:
@@ -132,6 +151,7 @@ class LLMEnvironmentSettingsTests(unittest.TestCase):
             "HYPATIA_LLM_BASE_URL": "https://api.example.test/v1/chat/completions",
             "HYPATIA_LLM_MODEL": "test-model",
             "HYPATIA_LLM_API_KEY": "test-api-key",
+            "HYPATIA_LLM_TIMEOUT_SECONDS": "7.5",
         }
 
         config, api_key = load_llm_environment_settings(environment)
@@ -142,6 +162,7 @@ class LLMEnvironmentSettingsTests(unittest.TestCase):
                 enabled=True,
                 base_url="https://api.example.test/v1/chat/completions",
                 model="test-model",
+                timeout_seconds=7.5,
             ),
         )
         self.assertEqual(api_key, "test-api-key")
@@ -153,6 +174,7 @@ class LLMEnvironmentSettingsTests(unittest.TestCase):
                 "HYPATIA_LLM_BASE_URL": "https://api.example.test/v1/chat/completions",
                 "HYPATIA_LLM_MODEL": "test-model",
                 "HYPATIA_LLM_API_KEY": "test-api-key",
+                "HYPATIA_LLM_TIMEOUT_SECONDS": "7.5",
             },
         )
 

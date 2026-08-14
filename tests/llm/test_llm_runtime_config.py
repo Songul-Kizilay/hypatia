@@ -25,6 +25,28 @@ class LLMRuntimeConfigTests(unittest.TestCase):
             config.base_url, "https://api.example.test/v1/chat/completions"
         )
         self.assertEqual(config.model, "test-model")
+        self.assertIsNone(config.timeout_seconds)
 
         with self.assertRaises(FrozenInstanceError):
             config.enabled = False  # type: ignore[misc]
+
+    def test_config_preserves_valid_explicit_timeout(self) -> None:
+        config = LLMRuntimeConfig(
+            enabled=True,
+            base_url="https://api.example.test/v1/chat/completions",
+            model="test-model",
+            timeout_seconds=7.5,
+        )
+
+        self.assertEqual(config.timeout_seconds, 7.5)
+
+    def test_config_rejects_invalid_timeouts(self) -> None:
+        for timeout in (True, 0, -1, float("inf"), "30"):
+            with self.subTest(timeout=timeout):
+                with self.assertRaisesRegex(ValueError, "positive number"):
+                    LLMRuntimeConfig(
+                        enabled=True,
+                        base_url="https://api.example.test/v1/chat/completions",
+                        model="test-model",
+                        timeout_seconds=timeout,  # type: ignore[arg-type]
+                    )
