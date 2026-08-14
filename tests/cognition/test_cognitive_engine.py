@@ -1995,6 +1995,14 @@ class CognitiveEngineTests(unittest.TestCase):
             ["Hypatia", "Hypatia"],
         )
 
+    def test_search_response_keeps_result_citations_in_result_order(self) -> None:
+        response = self.engine.process(BrainRequest(message="search hypatia"))
+
+        self.assertEqual(
+            [citation.chunk_id for citation in response.knowledge_citations],
+            [chunk.chunk_id for chunk in response.knowledge_results],
+        )
+
     def test_successful_search_is_saved_to_memory(self) -> None:
         self.engine.process(BrainRequest(message="search hypatia"))
 

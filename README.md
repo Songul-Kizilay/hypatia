@@ -221,3 +221,13 @@ fallback`.
 Normal `recall <query>` remains lexical and does not call the semantic runtime.
 Semantic recall does not add a conversation record, alter ordinary messages, or
 search other sessions.
+
+---
+
+## Local knowledge sources
+
+Knowledge search results retain their source identity. Alongside the existing
+ordered result chunks, Hypatia returns an ordered citation record for each
+match: document ID, title, local source path, paragraph index, and chunk ID.
+This makes the current local search result explainable without adding automatic
+prompt augmentation, web retrieval, or a RAG dependency.

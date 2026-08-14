@@ -2,6 +2,23 @@
 
 All notable project changes are recorded here.
 
+## [0.2.6] - 2026-08-15
+
+### Added
+
+- Stable local source citations for knowledge-search results. Every response
+  now carries a matching ordered citation with document ID, title, local source,
+  paragraph index, and chunk ID, without changing the existing search text or
+  raw result list.
+- Parser propagation of source-document identity into indexed chunks, forming
+  the explainability boundary required by later local RAG work.
+
+### Verification
+
+- The package-aware full local suite contains 822 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass in the local development
+  environment.
+
 ## [0.2.5] - 2026-08-15
 
 ### Added

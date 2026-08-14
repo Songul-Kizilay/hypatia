@@ -8,6 +8,7 @@ from datetime import datetime
 from brain.BrainRequest import BrainRequest
 from brain.BrainResponse import BrainResponse
 from knowledge.Chunk import Chunk
+from knowledge.KnowledgeCitation import KnowledgeCitation
 from memory.MemoryRecord import MemoryRecord
 from planner.Plan import Plan
 from session.SessionDeleteExecutionResult import SessionDeleteExecutionResult
@@ -342,6 +343,9 @@ class ResponseComposer:
             intent="search",
             memory_count=0,
             knowledge_results=results,
+            knowledge_citations=[
+                KnowledgeCitation.from_chunk(result) for result in results
+            ],
         )
 
     def search_failure(
