@@ -533,6 +533,11 @@ class ResponseComposer:
                     "Target: "
                     f"{preview.target.title} | id: {preview.target.document_id}",
                     "Graph state: updated (memory only)",
+                    (
+                        "Relation storage: persisted"
+                        if application.persisted
+                        else "Relation storage: in-memory only"
+                    ),
                     "JSON memory: unchanged",
                 ]
             ),

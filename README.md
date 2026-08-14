@@ -260,12 +260,19 @@ Use `apply knowledge relation <source_document_id> -- <target_document_id>`
 only when the proposed relation should take effect. It freshly validates the
 same two document IDs, adds one `related_to` edge to the current in-memory
 graph, and rejects duplicate or invalid links. The graph is still local and
-ephemeral: this command does not write JSON memory, call an LLM, add a
-conversation record, or persist after a restart.
+ephemeral: this command does not write conversation memory, call an LLM, or
+add a conversation record.
+
+When running through Hypatia's standard Bootstrap runtime, an applied relation
+is also saved in a separate local, versioned relation file. After restart it is
+restored only when both original local source files have been loaded again.
+If that file cannot be written, Hypatia removes the in-memory edge instead of
+claiming success. This store is separate from conversation memory and is never
+sent to an LLM.
 
 Use `knowledge graph <query>` to inspect the deterministic structure of local
 matching sources. It returns up to three cited document-to-paragraph
 `contains` relationships plus any explicitly applied `related_to` edge touching
 a matching document. This graph is derived in memory from loaded local
 documents; it neither calls an LLM nor changes conversation memory, and it does
-not persist graph data or infer semantic relationships between documents.
+not infer semantic relationships between documents.

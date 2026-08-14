@@ -9,6 +9,7 @@ from knowledge.Chunk import Chunk
 from knowledge.Document import Document
 from knowledge.DocumentLoader import DocumentLoader
 from knowledge.Indexer import Indexer
+from knowledge.JsonFileKnowledgeRelationStore import JsonFileKnowledgeRelationStore
 from knowledge.KnowledgeDocumentReference import KnowledgeDocumentReference
 from knowledge.KnowledgeGraph import (
     KnowledgeGraph,
@@ -17,6 +18,7 @@ from knowledge.KnowledgeGraph import (
 )
 from knowledge.KnowledgeRelationApplication import KnowledgeRelationApplication
 from knowledge.KnowledgeRelationPreview import KnowledgeRelationPreview
+from knowledge.KnowledgeRelationRecord import KnowledgeRelationRecord
 from knowledge.Parser import Parser
 from knowledge.Search import Search
 
@@ -31,6 +33,7 @@ class KnowledgeEngine:
         indexer: Indexer | None = None,
         search: Search | None = None,
         graph: KnowledgeGraph | None = None,
+        relation_store: JsonFileKnowledgeRelationStore | None = None,
     ) -> None:
         self._loader = loader or DocumentLoader()
         self._parser = parser or Parser()
@@ -38,6 +41,10 @@ class KnowledgeEngine:
         self._search_engine = search or Search(self._indexer)
         self._graph = graph or KnowledgeGraph()
         self._documents: dict[str, Document] = {}
+        self._relation_store = relation_store
+        self._persisted_relations = (
+            relation_store.load() if relation_store is not None else []
+        )
 
     def load(self, path: str | Path) -> Document:
         """Load a document, parse it into chunks, and add them to the index."""
@@ -49,6 +56,7 @@ class KnowledgeEngine:
 
         self._graph.index_document(document, chunks)
         self._documents[document.document_id] = document
+        self._restore_persisted_relations_for(document.document_id)
         return document
 
     def search(self, query: str | None) -> list[Chunk]:
@@ -95,12 +103,32 @@ class KnowledgeEngine:
     ) -> KnowledgeRelationApplication:
         """Apply one explicitly requested relation after fresh validation."""
         preview = self.preview_document_relation(source_document_id, target_document_id)
-        edge = self._graph.add_document_relation(
+        record = KnowledgeRelationRecord(
             preview.source.document_id,
             preview.relation,
             preview.target.document_id,
         )
-        return KnowledgeRelationApplication(preview, edge)
+        if record in self._persisted_relations or self._graph.has_document_relation(
+            record.source_document_id,
+            record.relation,
+            record.target_document_id,
+        ):
+            raise KnowledgeError("Knowledge graph relation is already applied.")
+        edge = self._graph.add_document_relation(
+            record.source_document_id,
+            record.relation,
+            record.target_document_id,
+        )
+        if self._relation_store is not None:
+            try:
+                self._relation_store.save([*self._persisted_relations, record])
+            except KnowledgeError:
+                self._graph.remove_document_relation(edge)
+                raise
+            self._persisted_relations.append(record)
+        return KnowledgeRelationApplication(
+            preview, edge, persisted=self._relation_store is not None
+        )
 
     def document_count(self) -> int:
         """Return the number of loaded documents."""
@@ -117,6 +145,31 @@ class KnowledgeEngine:
     def graph_edge_count(self) -> int:
         """Return the count of derived local knowledge-graph edges."""
         return self._graph.edge_count()
+
+    def persisted_relation_count(self) -> int:
+        """Return the count of explicit relationships kept in the local store."""
+        return len(self._persisted_relations)
+
+    def _restore_persisted_relations_for(self, document_id: str) -> None:
+        for record in self._persisted_relations:
+            if document_id not in {
+                record.source_document_id,
+                record.target_document_id,
+            } or (
+                record.source_document_id not in self._documents
+                or record.target_document_id not in self._documents
+            ):
+                continue
+            if not self._graph.has_document_relation(
+                record.source_document_id,
+                record.relation,
+                record.target_document_id,
+            ):
+                self._graph.add_document_relation(
+                    record.source_document_id,
+                    record.relation,
+                    record.target_document_id,
+                )
 
     def _document_by_id(self, document_id: str) -> Document:
         if not isinstance(document_id, str) or not document_id.strip():

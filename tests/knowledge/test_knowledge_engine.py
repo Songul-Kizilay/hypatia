@@ -5,10 +5,12 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from core.Exceptions import KnowledgeError
 from knowledge.DocumentLoader import DocumentLoader
 from knowledge.Indexer import Indexer
+from knowledge.JsonFileKnowledgeRelationStore import JsonFileKnowledgeRelationStore
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from knowledge.KnowledgeGraph import KnowledgeGraphRelation
 from knowledge.Parser import Parser
@@ -169,6 +171,53 @@ class KnowledgeEngineTests(unittest.TestCase):
                 first_document.document_id,
                 second_document.document_id,
             )
+
+    def test_persisted_relation_restores_after_sources_reload_in_a_new_engine(
+        self,
+    ) -> None:
+        first = self._write_file("first.md", "First")
+        second = self._write_file("second.md", "Second")
+        relation_path = self.directory / "relations.json"
+        first_engine = KnowledgeEngine(
+            relation_store=JsonFileKnowledgeRelationStore(relation_path)
+        )
+        first_document = first_engine.load(first)
+        second_document = first_engine.load(second)
+
+        application = first_engine.apply_document_relation(
+            first_document.document_id,
+            second_document.document_id,
+        )
+        second_engine = KnowledgeEngine(
+            relation_store=JsonFileKnowledgeRelationStore(relation_path)
+        )
+        reloaded_first = second_engine.load(first)
+        reloaded_second = second_engine.load(second)
+
+        self.assertTrue(application.persisted)
+        self.assertEqual(second_engine.persisted_relation_count(), 1)
+        self.assertEqual(reloaded_first.document_id, first_document.document_id)
+        self.assertEqual(reloaded_second.document_id, second_document.document_id)
+        self.assertEqual(second_engine.graph_edge_count(), 3)
+
+    def test_failed_relation_persistence_rolls_back_the_graph_change(self) -> None:
+        first = self._write_file("first.md", "First")
+        second = self._write_file("second.md", "Second")
+        store = JsonFileKnowledgeRelationStore(self.directory / "relations.json")
+        engine = KnowledgeEngine(relation_store=store)
+        first_document = engine.load(first)
+        second_document = engine.load(second)
+        graph_edges_before = engine.graph_edge_count()
+
+        with patch.object(store, "save", side_effect=KnowledgeError("write failed")):
+            with self.assertRaisesRegex(KnowledgeError, "write failed"):
+                engine.apply_document_relation(
+                    first_document.document_id,
+                    second_document.document_id,
+                )
+
+        self.assertEqual(engine.graph_edge_count(), graph_edges_before)
+        self.assertEqual(engine.persisted_relation_count(), 0)
 
     def test_loads_multiple_documents(self) -> None:
         first = self._write_file("first.md", "First\n\nHypatia")

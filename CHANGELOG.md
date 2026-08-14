@@ -2,6 +2,29 @@
 
 All notable project changes are recorded here.
 
+## [0.3.5] - 2026-08-15
+
+### Added
+
+- A separate, versioned, atomically replaced local JSON store for explicitly
+  applied `related_to` document relations. The Bootstrap runtime wires the
+  store beside its other local data.
+- Restart-safe relation restoration: a persisted link is restored to the
+  derived graph only after both of its stable local source identities have been
+  loaded again.
+- Transactional relation application: if the local relation file cannot be
+  written, the just-added in-memory graph edge is removed again.
+
+### Safety
+
+- The store accepts only distinct `related_to` document IDs, rejects duplicate
+  records and unsupported schemas, and never writes conversation memory or
+  sends a request to an LLM.
+
+### Verification
+
+- The package-aware full local suite contains 869 passing automated tests.
+
 ## [0.3.4] - 2026-08-15
 
 ### Added

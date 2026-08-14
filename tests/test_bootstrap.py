@@ -18,6 +18,7 @@ from brain.BrainRequest import BrainRequest
 from core.Bootstrap import Bootstrap
 from core.Exceptions import MemoryError, SessionError
 from eventbus.EventBus import EventBus
+from knowledge.JsonFileKnowledgeRelationStore import JsonFileKnowledgeRelationStore
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from memory.JsonFileMemoryStore import JsonFileMemoryStore
 from memory.MemoryManager import MemoryManager
@@ -33,6 +34,9 @@ class BootstrapTests(unittest.TestCase):
         self.temporary_directory = tempfile.TemporaryDirectory()
         self.memory_path = Path(self.temporary_directory.name) / "memory.json"
         self.session_path = Path(self.temporary_directory.name) / "sessions.json"
+        self.knowledge_relation_path = (
+            Path(self.temporary_directory.name) / "knowledge_relations.json"
+        )
 
     def tearDown(self) -> None:
         self.temporary_directory.cleanup()
@@ -41,6 +45,7 @@ class BootstrapTests(unittest.TestCase):
         return Bootstrap(
             memory_path=self.memory_path,
             session_path=self.session_path,
+            knowledge_relation_path=self.knowledge_relation_path,
         )
 
     def test_bootstrap_registers_response_composer(self) -> None:
@@ -113,6 +118,7 @@ class BootstrapTests(unittest.TestCase):
 
         memory_store = bootstrap.container.resolve(JsonFileMemoryStore)
         session_store = bootstrap.container.resolve(JsonFileSessionStore)
+        relation_store = bootstrap.container.resolve(JsonFileKnowledgeRelationStore)
         project_root = Path(__file__).resolve().parents[1]
 
         self.assertEqual(
@@ -123,6 +129,18 @@ class BootstrapTests(unittest.TestCase):
             session_store._path,
             project_root / "data" / "sessions" / "sessions.json",
         )
+        self.assertEqual(
+            relation_store._path,
+            project_root / "data" / "knowledge" / "relations.json",
+        )
+
+    def test_bootstrap_registers_the_selected_knowledge_relation_store(self) -> None:
+        bootstrap = self._bootstrap()
+        bootstrap.initialize()
+
+        relation_store = bootstrap.container.resolve(JsonFileKnowledgeRelationStore)
+
+        self.assertEqual(relation_store._path, self.knowledge_relation_path)
 
     def test_missing_session_file_creates_and_persists_the_default_registry(
         self,
