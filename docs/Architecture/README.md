@@ -377,7 +377,12 @@ Distributed Intelligence
 
 ---
 
-# Project Status
+# Vision Delivery Status (Not Runtime Status)
+
+This table tracks the intended architecture. It is deliberately not an
+implementation claim: the current executable state and verified release line
+are recorded in [Architecture Audit v0.1](Architecture_Audit_v0.1.md) and
+[`PROJECT_STATUS.md`](../../PROJECT_STATUS.md).
 
 | Component | Status |
 |-----------|--------|

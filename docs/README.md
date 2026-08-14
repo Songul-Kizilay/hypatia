@@ -1,6 +1,12 @@
 # Hypatia Documentation
 
-This directory is the source of truth for Hypatia's product intent and technical design. Documents are written before implementation so that choices remain reviewable and the system can grow without losing its purpose.
+This directory is the source of truth for Hypatia's product intent and
+technical design. Documents are written before implementation so that choices
+remain reviewable and the system can grow without losing its purpose. For the
+executable current-state boundary, use the repository-level
+[`PROJECT_STATUS.md`](../PROJECT_STATUS.md) and the
+[Architecture Audit v0.1](Architecture/Architecture_Audit_v0.1.md); vision and
+roadmap documents do not by themselves prove implementation.
 
 ## Structure
 
