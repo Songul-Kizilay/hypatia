@@ -236,6 +236,33 @@ class OpenAICompatibleProviderTests(unittest.TestCase):
             ],
         )
 
+    def test_generate_omits_authorization_for_an_intentionally_keyless_provider(
+        self,
+    ) -> None:
+        transport = RecordingTransport()
+        provider = OpenAICompatibleProvider(
+            base_url="http://localhost:11434/v1/chat/completions",
+            api_key=None,
+            model="local-model",
+            transport=transport,
+        )
+
+        provider.generate("Merhaba Hypatia")
+
+        self.assertEqual(
+            transport.calls,
+            [
+                (
+                    "http://localhost:11434/v1/chat/completions",
+                    {},
+                    {
+                        "model": "local-model",
+                        "messages": [{"role": "user", "content": "Merhaba Hypatia"}],
+                    },
+                )
+            ],
+        )
+
     def test_generate_normalizes_a_json_decode_error(self) -> None:
         transport = MalformedJsonTransport()
         provider = OpenAICompatibleProvider(

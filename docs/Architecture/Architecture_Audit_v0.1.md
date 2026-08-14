@@ -15,7 +15,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.7` today) are the executable package and GitHub
+- **Runtime releases** (`v0.3.8` today) are the executable package and GitHub
   release line. They are the source-backed implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
   engineering increments. Sprint 4.16.50 is complete and is already in the
@@ -57,6 +57,11 @@ User request
 Persistent state is stored locally as validated JSON snapshots through
 `JsonFileMemoryStore` and `JsonFileSessionStore`. Snapshot writes are atomic.
 The knowledge index is in memory and uses case-insensitive lexical matching.
+
+The optional OpenAI-compatible chat runtime supports keyless activation only
+for explicit loopback endpoints (`localhost`, `127.0.0.1`, or `::1`), including
+local Ollama. It omits the authorization header in that mode; non-local
+endpoints continue to require an API key and HTTPS.
 
 ## Memory State
 
@@ -149,7 +154,7 @@ Not implemented:
 
 The current local verification baseline is:
 
-- `python -m unittest discover -s tests -t .`: 880 tests passed. The top-level
+- `python -m unittest discover -s tests -t .`: 885 tests passed. The top-level
   package setting ensures nested test directories are included without
   shadowing source packages.
 - `python -m black --check src tests`: passed.

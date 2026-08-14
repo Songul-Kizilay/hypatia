@@ -78,6 +78,46 @@ class LLMRuntimeActivatorTests(unittest.TestCase):
         )
         sentinel_provider.generate.assert_not_called()
 
+    def test_enabled_loopback_config_allows_no_api_key(self) -> None:
+        config = LLMRuntimeConfig(
+            enabled=True,
+            base_url="http://localhost:11434/v1/chat/completions",
+            model="local-model",
+        )
+        sentinel_provider = Mock(spec=LLMProvider)
+
+        with patch(
+            "llm.LLMRuntimeActivator.create_llm_provider",
+            return_value=sentinel_provider,
+        ) as provider_factory:
+            provider = activate_llm(config, None)
+
+        self.assertIs(provider, sentinel_provider)
+        provider_factory.assert_called_once_with(
+            base_url="http://localhost:11434/v1/chat/completions",
+            api_key=None,
+            model="local-model",
+            system_prompt=None,
+        )
+
+    def test_enabled_remote_config_rejects_a_missing_api_key(self) -> None:
+        config = LLMRuntimeConfig(
+            enabled=True,
+            base_url="https://api.example.test/v1/chat/completions",
+            model="test-model",
+        )
+
+        with (
+            patch("llm.LLMRuntimeActivator.create_llm_provider") as provider_factory,
+            self.assertRaisesRegex(
+                ValueError,
+                "^LLM API key is required for a non-local LLM endpoint\\.$",
+            ),
+        ):
+            activate_llm(config, None)
+
+        provider_factory.assert_not_called()
+
     def test_enabled_config_rejects_a_non_loopback_http_endpoint(self) -> None:
         config = LLMRuntimeConfig(
             enabled=True,

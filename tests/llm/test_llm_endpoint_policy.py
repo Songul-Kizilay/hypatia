@@ -8,10 +8,21 @@ SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
-from llm.LLMEndpointPolicy import validate_llm_endpoint
+from llm.LLMEndpointPolicy import is_loopback_llm_endpoint, validate_llm_endpoint
 
 
 class LLMEndpointPolicyTests(unittest.TestCase):
+    def test_loopback_detection_accepts_only_explicit_local_hosts(self) -> None:
+        for endpoint, expected in (
+            ("http://localhost:11434/v1/chat/completions", True),
+            ("http://127.0.0.1:11434/v1/chat/completions", True),
+            ("http://[::1]:11434/v1/chat/completions", True),
+            ("https://api.example.test/v1/chat/completions", False),
+            ("http://localhost.example.test/v1/chat/completions", False),
+        ):
+            with self.subTest(endpoint=endpoint):
+                self.assertIs(is_loopback_llm_endpoint(endpoint), expected)
+
     def test_accepts_https_and_explicit_loopback_http_endpoints(self) -> None:
         for endpoint in (
             "https://api.example.test/v1/chat/completions",
