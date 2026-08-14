@@ -5,8 +5,10 @@ from __future__ import annotations
 import sys
 import tempfile
 import unittest
+from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import cast
 from unittest.mock import patch
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
@@ -32,6 +34,7 @@ from core.Exceptions import (
     PlannerError,
     SessionDeleteEventError,
 )
+from eventbus.Event import Event
 from eventbus.EventBus import EventBus
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from llm.LLMConversationMessage import LLMConversationMessage
@@ -69,6 +72,7 @@ from session.SessionDeleteExecutionResult import SessionDeleteExecutionResult
 from session.SessionDeleteService import SessionDeleteService
 from session.SessionManager import SessionManager
 from session.SessionRenameTransactionService import SessionRenameTransactionService
+from session.SessionStore import SessionStore
 
 
 class StubSessionRenameService:
@@ -378,7 +382,7 @@ class CognitiveEngineTests(unittest.TestCase):
 
     def test_session_manager_is_a_required_cognitive_engine_dependency(self) -> None:
         with self.assertRaises(TypeError):
-            ProductionCognitiveEngine(
+            ProductionCognitiveEngine(  # type: ignore[call-arg]
                 self.knowledge_engine,
                 self.memory_manager,
                 self.planner,
@@ -390,7 +394,7 @@ class CognitiveEngineTests(unittest.TestCase):
         self,
     ) -> None:
         with self.assertRaises(TypeError):
-            ProductionCognitiveEngine(
+            ProductionCognitiveEngine(  # type: ignore[call-arg]
                 self.knowledge_engine,
                 self.memory_manager,
                 self.planner,
@@ -2044,7 +2048,7 @@ class CognitiveEngineTests(unittest.TestCase):
     def test_session_rename_executes_without_conversation_side_effects(self) -> None:
         self.memory_manager.add("Work", metadata={"session_id": "work-1"})
         self.session_manager.set_active("work-1")
-        events = []
+        events: list[Event] = []
         self.event_bus.subscribe("*", events.append)
 
         response = self.engine.process(
@@ -2212,7 +2216,7 @@ class CognitiveEngineTests(unittest.TestCase):
         self,
     ) -> None:
         self.memory_manager.add("Work", metadata={"session_id": "work-1"})
-        events = []
+        events: list[Event] = []
         self.event_bus.subscribe("*", events.append)
         sessions_before = self.session_manager.snapshot()
         memory_before = self.memory_manager.snapshot()
@@ -2373,7 +2377,7 @@ class CognitiveEngineTests(unittest.TestCase):
     def test_session_rename_help_has_no_rename_or_conversation_side_effects(
         self,
     ) -> None:
-        events = []
+        events: list[Event] = []
         self.event_bus.subscribe("*", events.append)
         memory_before = self.memory_manager.snapshot()
         sessions_before = self.session_manager.snapshot()
@@ -2427,7 +2431,7 @@ class CognitiveEngineTests(unittest.TestCase):
         )
 
     def test_session_help_has_no_runtime_side_effects(self) -> None:
-        events = []
+        events: list[Event] = []
         self.event_bus.subscribe("*", events.append)
         memory_before = self.memory_manager.snapshot()
         sessions_before = self.session_manager.snapshot()
@@ -2531,7 +2535,7 @@ class CognitiveEngineTests(unittest.TestCase):
         self.session_manager.create("archive")
         self.session_manager.set_active("archive")
         self.memory_manager.add("Conversation", metadata={"session_id": "archive"})
-        events = []
+        events: list[Event] = []
         self.event_bus.subscribe("*", events.append)
         sessions_before = self.session_manager.snapshot()
         memory_before = self.memory_manager.snapshot()
@@ -2598,7 +2602,7 @@ class CognitiveEngineTests(unittest.TestCase):
     def test_session_active_is_read_only_for_default_and_selected_sessions(
         self,
     ) -> None:
-        events = []
+        events: list[Event] = []
         self.event_bus.subscribe("*", events.append)
         sessions_before = self.session_manager.snapshot()
         memory_before = self.memory_manager.snapshot()
@@ -2663,7 +2667,7 @@ class CognitiveEngineTests(unittest.TestCase):
         self,
     ) -> None:
         self.session_manager.create("archive")
-        events = []
+        events: list[Event] = []
         self.event_bus.subscribe("*", events.append)
         sessions_before = self.session_manager.snapshot()
         memory_before = self.memory_manager.snapshot()
@@ -3315,7 +3319,7 @@ class CognitiveEngineTests(unittest.TestCase):
         memory_before = self.memory_manager.snapshot()
         events: list[object] = []
         self.event_bus.subscribe("*", events.append)
-        self.session_manager._store = FailingSessionStore()  # type: ignore[attr-defined]
+        self.session_manager._store = cast(SessionStore, FailingSessionStore())
 
         with (
             patch.object(
@@ -3352,7 +3356,7 @@ class CognitiveEngineTests(unittest.TestCase):
     def test_session_overview_counts_only_registered_normal_conversations(
         self,
     ) -> None:
-        records = (
+        records: tuple[tuple[str, Mapping[str, object], set[str]], ...] = (
             ("Legacy default", {}, {"brain", "conversation"}),
             (
                 "Default with extra tag",
@@ -3425,7 +3429,7 @@ class CognitiveEngineTests(unittest.TestCase):
         )
         engine = SessionOverviewMustNotResolveEngine(
             self.knowledge_engine,
-            memory_manager,  # type: ignore[arg-type]
+            memory_manager,
             self.planner,
             self.event_bus,
             self.response_composer,
@@ -3452,7 +3456,7 @@ class CognitiveEngineTests(unittest.TestCase):
         memory_manager = RecordingSessionOverviewMemoryManager([record])
         engine = CognitiveEngine(
             self.knowledge_engine,
-            memory_manager,  # type: ignore[arg-type]
+            memory_manager,
             self.planner,
             self.event_bus,
             self.response_composer,
@@ -3584,7 +3588,7 @@ class CognitiveEngineTests(unittest.TestCase):
         )
         engine = SessionDetailsMustNotResolveEngine(
             self.knowledge_engine,
-            memory_manager,  # type: ignore[arg-type]
+            memory_manager,
             self.planner,
             self.event_bus,
             self.response_composer,
@@ -3606,7 +3610,7 @@ class CognitiveEngineTests(unittest.TestCase):
     def test_session_details_empty_and_unknown_ids_do_not_read_memory(self) -> None:
         engine = CognitiveEngine(
             self.knowledge_engine,
-            RecentConversationsMustNotReadMemoryManager(),  # type: ignore[arg-type]
+            RecentConversationsMustNotReadMemoryManager(),
             self.planner,
             self.event_bus,
             self.response_composer,
@@ -3671,7 +3675,7 @@ class CognitiveEngineTests(unittest.TestCase):
         memory_manager = RecordingSessionOverviewMemoryManager([record])
         engine = CognitiveEngine(
             self.knowledge_engine,
-            memory_manager,  # type: ignore[arg-type]
+            memory_manager,
             self.planner,
             self.event_bus,
             self.response_composer,
@@ -3742,7 +3746,7 @@ class CognitiveEngineTests(unittest.TestCase):
         memory_manager = RecordingSessionOverviewMemoryManager(records)
         engine = SessionActivityMustNotResolveEngine(
             self.knowledge_engine,
-            memory_manager,  # type: ignore[arg-type]
+            memory_manager,
             self.planner,
             self.event_bus,
             self.response_composer,
@@ -3826,7 +3830,7 @@ class CognitiveEngineTests(unittest.TestCase):
     def test_session_activity_empty_and_unknown_ids_do_not_read_memory(self) -> None:
         engine = CognitiveEngine(
             self.knowledge_engine,
-            SessionActivityMustNotReadMemoryManager(),  # type: ignore[arg-type]
+            SessionActivityMustNotReadMemoryManager(),
             self.planner,
             self.event_bus,
             self.response_composer,
@@ -3849,7 +3853,7 @@ class CognitiveEngineTests(unittest.TestCase):
         memory_manager = RecordingSessionOverviewMemoryManager([])
         engine = CognitiveEngine(
             self.knowledge_engine,
-            memory_manager,  # type: ignore[arg-type]
+            memory_manager,
             self.planner,
             self.event_bus,
             self.response_composer,
@@ -3881,7 +3885,7 @@ class CognitiveEngineTests(unittest.TestCase):
         memory_manager = RecordingSessionOverviewMemoryManager([record])
         engine = CognitiveEngine(
             self.knowledge_engine,
-            memory_manager,  # type: ignore[arg-type]
+            memory_manager,
             self.planner,
             self.event_bus,
             self.response_composer,
@@ -3942,7 +3946,7 @@ class CognitiveEngineTests(unittest.TestCase):
         memory_manager = RecordingSessionOverviewMemoryManager(records)
         engine = SessionRecentMustNotResolveEngine(
             self.knowledge_engine,
-            memory_manager,  # type: ignore[arg-type]
+            memory_manager,
             self.planner,
             self.event_bus,
             self.response_composer,
@@ -4041,7 +4045,7 @@ class CognitiveEngineTests(unittest.TestCase):
         memory_manager = RecordingSessionOverviewMemoryManager([record])
         engine = CognitiveEngine(
             self.knowledge_engine,
-            memory_manager,  # type: ignore[arg-type]
+            memory_manager,
             self.planner,
             self.event_bus,
             self.response_composer,
@@ -4062,7 +4066,7 @@ class CognitiveEngineTests(unittest.TestCase):
     def test_session_recent_empty_and_unknown_ids_do_not_read_memory(self) -> None:
         engine = CognitiveEngine(
             self.knowledge_engine,
-            RecentConversationsMustNotReadMemoryManager(),  # type: ignore[arg-type]
+            RecentConversationsMustNotReadMemoryManager(),
             self.planner,
             self.event_bus,
             self.response_composer,
@@ -4118,8 +4122,8 @@ class CognitiveEngineTests(unittest.TestCase):
         )
         memory_manager = RecordingConversationSearchMemoryManager(records)
         engine = SessionSearchMustNotResolveEngine(
-            KnowledgeSearchMustNotRun(),  # type: ignore[arg-type]
-            memory_manager,  # type: ignore[arg-type]
+            KnowledgeSearchMustNotRun(),
+            memory_manager,
             self.planner,
             self.event_bus,
             self.response_composer,
@@ -4223,7 +4227,7 @@ class CognitiveEngineTests(unittest.TestCase):
         memory_manager = RecordingConversationSearchMemoryManager([record])
         engine = CognitiveEngine(
             self.knowledge_engine,
-            memory_manager,  # type: ignore[arg-type]
+            memory_manager,
             self.planner,
             self.event_bus,
             self.response_composer,
@@ -4245,8 +4249,8 @@ class CognitiveEngineTests(unittest.TestCase):
 
     def test_session_search_failures_do_not_read_memory(self) -> None:
         engine = CognitiveEngine(
-            KnowledgeSearchMustNotRun(),  # type: ignore[arg-type]
-            SessionSearchMustNotReadMemoryManager(),  # type: ignore[arg-type]
+            KnowledgeSearchMustNotRun(),
+            SessionSearchMustNotReadMemoryManager(),
             self.planner,
             self.event_bus,
             self.response_composer,
@@ -4317,7 +4321,7 @@ class CognitiveEngineTests(unittest.TestCase):
     def test_knowledge_error_returns_unsuccessful_response(self) -> None:
         memory_manager = MemoryManager()
         engine = CognitiveEngine(
-            FailingKnowledgeEngine(),  # type: ignore[arg-type]
+            FailingKnowledgeEngine(),
             memory_manager,
             Planner(),
             EventBus(),
@@ -4334,7 +4338,7 @@ class CognitiveEngineTests(unittest.TestCase):
     def test_knowledge_error_response_is_saved_to_memory(self) -> None:
         memory_manager = MemoryManager()
         engine = CognitiveEngine(
-            FailingKnowledgeEngine(),  # type: ignore[arg-type]
+            FailingKnowledgeEngine(),
             memory_manager,
             Planner(),
             EventBus(),
@@ -4353,7 +4357,7 @@ class CognitiveEngineTests(unittest.TestCase):
     def test_memory_error_does_not_prevent_a_successful_search_response(self) -> None:
         engine = CognitiveEngine(
             self.knowledge_engine,
-            FailingMemoryManager(),  # type: ignore[arg-type]
+            FailingMemoryManager(),
             self.planner,
             self.event_bus,
             self.response_composer,
@@ -4386,7 +4390,7 @@ class CognitiveEngineTests(unittest.TestCase):
         engine = CognitiveEngine(
             self.knowledge_engine,
             self.memory_manager,
-            FailingPlanner(),  # type: ignore[arg-type]
+            FailingPlanner(),
             self.event_bus,
             self.response_composer,
             self.session_manager,
@@ -4682,7 +4686,7 @@ class CognitiveEngineTests(unittest.TestCase):
     def test_invalid_session_id_prevents_recall_search(self) -> None:
         engine = CognitiveEngine(
             self.knowledge_engine,
-            RecallSearchMustNotRunMemoryManager(),  # type: ignore[arg-type]
+            RecallSearchMustNotRunMemoryManager(),
             self.planner,
             self.event_bus,
             self.response_composer,
@@ -4699,7 +4703,7 @@ class CognitiveEngineTests(unittest.TestCase):
     def test_unknown_session_override_prevents_recall_search(self) -> None:
         engine = CognitiveEngine(
             self.knowledge_engine,
-            RecallSearchMustNotRunMemoryManager(),  # type: ignore[arg-type]
+            RecallSearchMustNotRunMemoryManager(),
             self.planner,
             self.event_bus,
             self.response_composer,
@@ -4720,7 +4724,7 @@ class CognitiveEngineTests(unittest.TestCase):
             tags={"brain", "conversation"},
         )
         engine = CognitiveEngine(
-            KnowledgeSearchMustNotRun(),  # type: ignore[arg-type]
+            KnowledgeSearchMustNotRun(),
             self.memory_manager,
             self.planner,
             self.event_bus,
@@ -4750,8 +4754,8 @@ class CognitiveEngineTests(unittest.TestCase):
             ]
         )
         engine = CognitiveEngine(
-            KnowledgeSearchMustNotRun(),  # type: ignore[arg-type]
-            memory_manager,  # type: ignore[arg-type]
+            KnowledgeSearchMustNotRun(),
+            memory_manager,
             self.planner,
             self.event_bus,
             self.response_composer,
@@ -4769,8 +4773,8 @@ class CognitiveEngineTests(unittest.TestCase):
         self,
     ) -> None:
         engine = CognitiveEngine(
-            KnowledgeSearchMustNotRun(),  # type: ignore[arg-type]
-            RecentConversationsMustNotReadMemoryManager(),  # type: ignore[arg-type]
+            KnowledgeSearchMustNotRun(),
+            RecentConversationsMustNotReadMemoryManager(),
             self.planner,
             self.event_bus,
             self.response_composer,
@@ -4825,8 +4829,8 @@ class CognitiveEngineTests(unittest.TestCase):
         )
         memory_manager = RecordingConversationSearchMemoryManager(records)
         engine = CognitiveEngine(
-            KnowledgeSearchMustNotRun(),  # type: ignore[arg-type]
-            memory_manager,  # type: ignore[arg-type]
+            KnowledgeSearchMustNotRun(),
+            memory_manager,
             self.planner,
             self.event_bus,
             self.response_composer,
@@ -4947,8 +4951,8 @@ class CognitiveEngineTests(unittest.TestCase):
         events: list[str] = []
         self.event_bus.subscribe("*", lambda event: events.append(event.name))
         engine = CognitiveEngine(
-            KnowledgeSearchMustNotRun(),  # type: ignore[arg-type]
-            RecentConversationsMustNotReadMemoryManager(),  # type: ignore[arg-type]
+            KnowledgeSearchMustNotRun(),
+            RecentConversationsMustNotReadMemoryManager(),
             self.planner,
             self.event_bus,
             self.response_composer,
@@ -5187,7 +5191,7 @@ class CognitiveEngineTests(unittest.TestCase):
         self.event_bus.subscribe("*", lambda event: events.append(event.name))
         engine = CognitiveEngine(
             self.knowledge_engine,
-            RecentConversationsMustNotReadMemoryManager(),  # type: ignore[arg-type]
+            RecentConversationsMustNotReadMemoryManager(),
             self.planner,
             self.event_bus,
             self.response_composer,

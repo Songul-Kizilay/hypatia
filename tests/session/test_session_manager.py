@@ -8,12 +8,14 @@ import unittest
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Event, Thread
+from typing import cast
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
 from core.Exceptions import SessionError
+from eventbus.Event import Event as EventBusEvent
 from eventbus.EventBus import EventBus
 from session.SessionManager import SessionManager
 from session.SessionRecord import SessionRecord
@@ -34,6 +36,7 @@ class RecordingSessionStore:
     def save(self, snapshot: SessionRegistrySnapshot) -> None:
         self.save_completed = True
         copied_snapshot = self._copy(snapshot)
+        assert copied_snapshot is not None
         self.saved_snapshots.append(copied_snapshot)
         self.snapshot = copied_snapshot
 
@@ -104,6 +107,7 @@ class SessionManagerTests(unittest.TestCase):
         self.assertEqual(
             [session.session_id for session in manager.list()], ["default"]
         )
+        assert store.snapshot is not None
         self.assertEqual(store.snapshot.active_session_id, "default")
 
     def test_load_replaces_the_registry_with_a_valid_snapshot(self) -> None:
@@ -241,12 +245,12 @@ class SessionManagerTests(unittest.TestCase):
         store = RecordingSessionStore()
         manager = SessionManager(self.event_bus, store)
         session = manager.create("work-1").session
-        events = []
+        events: list[EventBusEvent] = []
         self.event_bus.subscribe("session.deleted", events.append)
         snapshot_before = manager.snapshot()
         saves_before = len(store.saved_snapshots)
 
-        self.assertIsNone(manager.emit_deleted(session))
+        manager.emit_deleted(session)
 
         self.assertEqual(manager.snapshot(), snapshot_before)
         self.assertEqual(len(store.saved_snapshots), saves_before)
@@ -268,7 +272,7 @@ class SessionManagerTests(unittest.TestCase):
         snapshot_before = manager.snapshot()
         saves_before = len(store.saved_snapshots)
 
-        self.assertIsNone(manager.emit_deleted(session))
+        manager.emit_deleted(session)
 
         self.assertEqual(manager.snapshot(), snapshot_before)
         self.assertEqual(len(store.saved_snapshots), saves_before)
@@ -292,6 +296,7 @@ class SessionManagerTests(unittest.TestCase):
 
         result = manager.create("work-1")
 
+        assert store.snapshot is not None
         self.assertIsNot(store.snapshot.sessions[-1], result.session)
         self.assertEqual(store.snapshot.sessions[-1], result.session)
 
@@ -299,7 +304,7 @@ class SessionManagerTests(unittest.TestCase):
         for session_id, message in ((123, "string"), ("   ", "empty")):
             with self.subTest(session_id=session_id):
                 with self.assertRaisesRegex(SessionError, message):
-                    self.manager.create(session_id)
+                    self.manager.create(session_id)  # type: ignore[arg-type]
 
         self.assertEqual(
             [session.session_id for session in self.manager.list()], ["default"]
@@ -330,7 +335,7 @@ class SessionManagerTests(unittest.TestCase):
         events: list[str] = []
         self.event_bus.subscribe("*", lambda event: events.append(event.name))
 
-        self.assertIsNone(manager.persist_snapshot(candidate))
+        manager.persist_snapshot(candidate)
 
         self.assertEqual(store.saved_snapshots[-1], candidate)
         self.assertEqual(manager.snapshot().active_session_id, "default")
@@ -339,7 +344,7 @@ class SessionManagerTests(unittest.TestCase):
     def test_persist_snapshot_is_a_validated_no_op_without_a_store(self) -> None:
         candidate = self._snapshot(active_session_id="work-1")
 
-        self.assertIsNone(self.manager.persist_snapshot(candidate))
+        self.manager.persist_snapshot(candidate)
         self.assertEqual(self.manager.get_active().session_id, "default")
 
     def test_persist_snapshot_propagates_store_failure_without_ram_or_event_changes(
@@ -364,7 +369,7 @@ class SessionManagerTests(unittest.TestCase):
         self.event_bus.subscribe("*", lambda event: events.append(event.name))
         candidate = self._snapshot(active_session_id="work-1")
 
-        self.assertIsNone(manager.commit_snapshot(candidate))
+        manager.commit_snapshot(candidate)
 
         self.assertEqual(
             [session.session_id for session in manager.list()], ["default", "work-1"]
@@ -383,7 +388,7 @@ class SessionManagerTests(unittest.TestCase):
         events: list[str] = []
         self.event_bus.subscribe("*", lambda event: events.append(event.name))
 
-        self.assertIsNone(manager.apply_snapshot_if_current(expected, candidate))
+        manager.apply_snapshot_if_current(expected, candidate)
 
         self.assertEqual(store.saved_snapshots, [candidate])
         self.assertEqual(manager.snapshot(), candidate)
@@ -442,9 +447,12 @@ class SessionManagerTests(unittest.TestCase):
             target=lambda: manager.apply_snapshot_if_current(expected, candidate)
         )
         create_complete = Event()
-        create_thread = Thread(
-            target=lambda: (manager.create("work-2"), create_complete.set())
-        )
+
+        def create_session() -> None:
+            manager.create("work-2")
+            create_complete.set()
+
+        create_thread = Thread(target=create_session)
 
         apply_thread.start()
         self.assertTrue(store.save_started.wait(timeout=1))
@@ -472,7 +480,7 @@ class SessionManagerTests(unittest.TestCase):
                 "Session snapshot must contain at least one session.",
             ),
             (
-                SessionRegistrySnapshot("default", ("bad",)),
+                SessionRegistrySnapshot("default", (cast(SessionRecord, "bad"),)),
                 "Session snapshot contains an invalid session record.",
             ),
             (

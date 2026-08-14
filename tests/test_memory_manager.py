@@ -79,7 +79,9 @@ class MemoryManagerTests(unittest.TestCase):
 
         updated = self.memory.update(record.memory_id, content="New", tags={"final"})
 
-        self.assertIsNotNone(updated)
+        assert updated is not None
+        assert updated.created_at is not None
+        assert updated.updated_at is not None
         self.assertEqual(updated.content, "New")
         self.assertEqual(updated.tags, frozenset({"final"}))
         self.assertGreaterEqual(updated.updated_at, updated.created_at)
@@ -306,7 +308,9 @@ class MemoryManagerTests(unittest.TestCase):
 
             after_update = MemoryManager(store=JsonFileMemoryStore(path))
             after_update.load()
-            self.assertEqual(after_update.get(record.memory_id).content, "Updated")
+            updated_record = after_update.get(record.memory_id)
+            assert updated_record is not None
+            self.assertEqual(updated_record.content, "Updated")
 
             after_update.delete(record.memory_id)
             after_delete = MemoryManager(store=JsonFileMemoryStore(path))
@@ -362,7 +366,7 @@ class MemoryManagerTests(unittest.TestCase):
         events: list[str] = []
         self.bus.subscribe("*", lambda event: events.append(event.name))
 
-        self.assertIsNone(memory.persist_snapshot(candidate))
+        memory.persist_snapshot(candidate)
 
         self.assertEqual(store.saved_snapshots[-1], list(candidate))
         self.assertEqual(memory.snapshot(), (original,))
@@ -372,7 +376,7 @@ class MemoryManagerTests(unittest.TestCase):
         self,
     ) -> None:
         candidate = (MemoryRecord(memory_id="candidate", content="Candidate"),)
-        self.assertIsNone(self.memory.persist_snapshot(candidate))
+        self.memory.persist_snapshot(candidate)
         self.assertEqual(self.memory.snapshot(), ())
 
         store = FailingMemoryStore()
@@ -394,7 +398,7 @@ class MemoryManagerTests(unittest.TestCase):
         events: list[str] = []
         self.bus.subscribe("*", lambda event: events.append(event.name))
 
-        self.assertIsNone(memory.commit_snapshot((second, first)))
+        memory.commit_snapshot((second, first))
 
         self.assertEqual(memory.snapshot(), (second, first))
         self.assertEqual(store.saved_snapshots, [])

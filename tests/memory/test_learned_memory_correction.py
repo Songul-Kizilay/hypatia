@@ -3,13 +3,14 @@ from __future__ import annotations
 import sys
 import unittest
 from pathlib import Path
+from typing import cast
 from unittest.mock import MagicMock, patch
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
-from memory.LearnedMemory import LearnedMemory
+from memory.LearnedMemory import LearnedMemory, LearnedMemoryKind
 from memory.LearnedMemoryCorrection import (
     correct_learned_memory_value,
     correct_learned_memory_value_if_changed,
@@ -155,7 +156,7 @@ class LearnedMemoryCorrectionTests(unittest.TestCase):
                 self.assertIs(
                     should_correct_learned_memory(
                         candidate,
-                        kind=kind,
+                        kind=cast(LearnedMemoryKind, kind),
                         key=key,
                         value=value,
                     ),

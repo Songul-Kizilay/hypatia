@@ -27,4 +27,4 @@ class LLMRuntimeConfigTests(unittest.TestCase):
         self.assertEqual(config.model, "test-model")
 
         with self.assertRaises(FrozenInstanceError):
-            config.enabled = False
+            config.enabled = False  # type: ignore[misc]

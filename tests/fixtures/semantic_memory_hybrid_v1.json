@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "name": "shared_evidence_beats_single_source_candidates",
+      "semantic_order": ["semantic-first", "shared"],
+      "lexical_order": ["lexical-first", "shared"],
+      "expected_order": ["shared", "lexical-first", "semantic-first"]
+    },
+    {
+      "name": "semantic_only_candidate_is_retained",
+      "semantic_order": ["semantic-only"],
+      "lexical_order": [],
+      "expected_order": ["semantic-only"]
+    },
+    {
+      "name": "lexical_only_candidate_is_retained",
+      "semantic_order": [],
+      "lexical_order": ["lexical-only"],
+      "expected_order": ["lexical-only"]
+    },
+    {
+      "name": "equal_single_source_scores_break_by_memory_id",
+      "semantic_order": ["beta"],
+      "lexical_order": ["alpha"],
+      "expected_order": ["alpha", "beta"]
+    }
+  ]
+}

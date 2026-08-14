@@ -14,6 +14,7 @@ if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
 from core.Exceptions import SessionError, SessionRenameRollbackError
+from eventbus.Event import Event as EventBusEvent
 from eventbus.EventBus import EventBus
 from memory.MemoryManager import MemoryManager
 from memory.MemoryRecord import MemoryRecord
@@ -107,7 +108,7 @@ class SessionRenameTransactionServiceTests(unittest.TestCase):
 
     def test_successful_rename_has_exact_order_result_and_aggregate_event(self) -> None:
         bus = EventBus()
-        events = []
+        events: list[EventBusEvent] = []
         bus.subscribe("*", events.append)
         bus.subscribe("session.renamed", lambda _event: self.calls.append("event"))
         service = self._service(event_bus=bus)
@@ -197,7 +198,7 @@ class SessionRenameTransactionServiceTests(unittest.TestCase):
         planner = _FailingPlanner(error)
         builder = _FailingBuilder(SessionError("builder must not run"))
         bus = EventBus()
-        events = []
+        events: list[EventBusEvent] = []
         bus.subscribe("*", events.append)
 
         with self.assertRaises(SessionError) as raised:
@@ -216,7 +217,7 @@ class SessionRenameTransactionServiceTests(unittest.TestCase):
         error = SessionError("builder failed")
         builder = _FailingBuilder(error)
         bus = EventBus()
-        events = []
+        events: list[EventBusEvent] = []
         bus.subscribe("*", events.append)
 
         with self.assertRaises(SessionError) as raised:
@@ -253,10 +254,10 @@ class SessionRenameTransactionServiceTests(unittest.TestCase):
                 session_store=session_store is not None,
                 memory_store=memory_store is not None,
             ):
-                sessions = SessionManager(store=session_store)  # type: ignore[arg-type]
+                sessions = SessionManager(store=session_store)
                 sessions.create("work")
                 sessions.set_active("work")
-                memories = MemoryManager(store=memory_store)  # type: ignore[arg-type]
+                memories = MemoryManager(store=memory_store)
                 memories.add("Work", metadata={"session_id": "work"})
 
                 result = SessionRenameTransactionService(
@@ -350,7 +351,7 @@ class SessionRenameTransactionServiceTests(unittest.TestCase):
 
     def test_preview_is_read_only_and_reports_the_planned_effect(self) -> None:
         bus = EventBus()
-        events = []
+        events: list[EventBusEvent] = []
         bus.subscribe("*", events.append)
         session_before = self.session.state
         memory_before = self.memory.state

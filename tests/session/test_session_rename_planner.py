@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 import unittest
+from collections.abc import Mapping
 from pathlib import Path
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
@@ -175,7 +176,7 @@ class SessionRenamePlannerTests(unittest.TestCase):
         )
 
     @staticmethod
-    def _record(memory_id: str, metadata: dict[str, object]) -> MemoryRecord:
+    def _record(memory_id: str, metadata: Mapping[str, object]) -> MemoryRecord:
         return MemoryRecord(
             memory_id=memory_id,
             content=memory_id,

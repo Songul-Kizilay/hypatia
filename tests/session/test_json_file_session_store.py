@@ -45,8 +45,10 @@ class JsonFileSessionStoreTests(unittest.TestCase):
         self.store.save(snapshot)
 
         self.assertEqual(self.store.load(), snapshot)
+        loaded_snapshot = self.store.load()
+        assert loaded_snapshot is not None
         self.assertEqual(
-            [session.session_id for session in self.store.load().sessions],
+            [session.session_id for session in loaded_snapshot.sessions],
             ["default", "work-1"],
         )
 
@@ -62,8 +64,10 @@ class JsonFileSessionStoreTests(unittest.TestCase):
 
         self.store.save(snapshot)
 
+        loaded_snapshot = self.store.load()
+        assert loaded_snapshot is not None
         self.assertEqual(
-            [session.session_id for session in self.store.load().sessions],
+            [session.session_id for session in loaded_snapshot.sessions],
             ["default", "Work-1", "work-1"],
         )
 

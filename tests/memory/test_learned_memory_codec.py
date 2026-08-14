@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import sys
 import unittest
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any, cast
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
@@ -137,8 +139,8 @@ class LearnedMemoryCodecTests(unittest.TestCase):
                 record = MemoryRecord(
                     memory_id=name,
                     content="ignored",
-                    tags=case["tags"],
-                    metadata=case["metadata"],
+                    tags=cast(frozenset[str], case["tags"]),
+                    metadata=cast(Mapping[str, Any], case["metadata"]),
                 )
 
                 self.assertIsNone(decode_learned_memory(record))

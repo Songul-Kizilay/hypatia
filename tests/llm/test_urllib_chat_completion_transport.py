@@ -66,6 +66,7 @@ class UrllibChatCompletionTransportTests(unittest.TestCase):
         self.assertEqual(request.get_method(), "POST")
         self.assertEqual(request.get_header("Content-type"), "application/json")
         self.assertEqual(request.get_header("Authorization"), "Bearer test-api-key")
+        assert isinstance(request.data, bytes)
         self.assertEqual(
             json.loads(request.data.decode("utf-8")),
             {

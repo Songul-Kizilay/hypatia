@@ -42,6 +42,8 @@ from memory.MemoryRecord import MemoryRecord
 from memory.NoOpLearnedMemoryCandidateExtractor import (
     NoOpLearnedMemoryCandidateExtractor,
 )
+from memory.SemanticMemoryIndexRuntime import SemanticMemoryIndexRuntime
+from memory.SemanticMemoryMatch import SemanticMemoryMatch
 from memory.SessionMemoryPolicy import SessionMemoryPolicy
 from response.ResponseComposer import ResponseComposer
 from session.SessionCreateService import SessionCreateService
@@ -78,6 +80,7 @@ class CognitiveEngine:
         ) = None,
         learned_memory_context_limit: int | None = None,
         learned_memory_selector: LearnedMemorySelector | None = None,
+        semantic_memory_index_runtime: SemanticMemoryIndexRuntime | None = None,
     ) -> None:
         if llm_history_max_turns is not None and (
             isinstance(llm_history_max_turns, bool) or llm_history_max_turns <= 0
@@ -115,6 +118,7 @@ class CognitiveEngine:
         )
         self._learned_memory_context_limit = learned_memory_context_limit
         self._learned_memory_selector = learned_memory_selector
+        self._semantic_memory_index_runtime = semantic_memory_index_runtime
         self._router = BrainRouter()
 
     def process(self, request: BrainRequest) -> BrainResponse:
@@ -219,6 +223,9 @@ class CognitiveEngine:
                 return self._response_composer.recall_failure(request, str(error))
             return self._response_composer.recall_success(request, session_records[:5])
 
+        if self._is_semantic_recall_request(request):
+            return self._process_semantic_recall(request)
+
         if intent in {"session_create", "session_list", "session_use"}:
             return self._process_session_command(request, intent)
         if intent == "session_overview":
@@ -279,6 +286,96 @@ class CognitiveEngine:
         if request.metadata.get("intent") == "recall":
             return request.message.strip()
         return request.message[7:].strip()
+
+    @staticmethod
+    def _is_semantic_recall_request(request: BrainRequest) -> bool:
+        declared_intent = request.metadata.get("intent")
+        normalized_message = request.message.casefold().strip()
+        return (
+            declared_intent == "semantic_recall"
+            or normalized_message == "semantic recall"
+            or normalized_message.startswith("semantic recall ")
+        )
+
+    @staticmethod
+    def _semantic_recall_query(request: BrainRequest) -> str:
+        if request.metadata.get("intent") == "semantic_recall":
+            return request.message.strip()
+        return request.message[len("semantic recall") :].strip()
+
+    def _process_semantic_recall(self, request: BrainRequest) -> BrainResponse:
+        """Use opt-in semantic results and fall back to lexical recall safely."""
+        try:
+            session_id = self._resolve_session_id(request)
+            query = self._semantic_recall_query(request)
+            if not query:
+                return self._response_composer.semantic_recall_failure(
+                    request,
+                    "A semantic recall query is required.",
+                )
+        except SessionError as error:
+            return self._response_composer.session_failure(request, str(error))
+
+        runtime = self._semantic_memory_index_runtime
+        if runtime is not None:
+            try:
+                matches = runtime.search(query, limit=None)
+                semantic_records = self._semantic_session_records(matches, session_id)
+            except MemoryError:
+                semantic_records = []
+            if semantic_records:
+                return self._response_composer.semantic_recall_success(
+                    request,
+                    semantic_records[:5],
+                    retrieval="semantic",
+                )
+
+        try:
+            lexical_records = self._lexical_recall_records(query, session_id)
+        except MemoryError as error:
+            return self._response_composer.semantic_recall_failure(request, str(error))
+        return self._response_composer.semantic_recall_success(
+            request,
+            [(record, None) for record in lexical_records[:5]],
+            retrieval="lexical fallback",
+        )
+
+    def _semantic_session_records(
+        self,
+        matches: tuple[SemanticMemoryMatch, ...],
+        session_id: str,
+    ) -> list[tuple[MemoryRecord, float]]:
+        records: list[tuple[MemoryRecord, float]] = []
+        for match in matches:
+            record = self._memory_manager.get(match.memory_id)
+            if record is None or not self._is_session_conversation_record(
+                record, session_id
+            ):
+                continue
+            records.append((record, match.score))
+        return records
+
+    def _lexical_recall_records(
+        self,
+        query: str,
+        session_id: str,
+    ) -> list[MemoryRecord]:
+        records = self._memory_manager.search(
+            query,
+            tags={"brain", "conversation"},
+            limit=None,
+        )
+        return [
+            record
+            for record in records
+            if self._is_session_conversation_record(record, session_id)
+        ]
+
+    @staticmethod
+    def _is_session_conversation_record(record: MemoryRecord, session_id: str) -> bool:
+        return {"brain", "conversation"}.issubset(record.tags) and record.metadata.get(
+            "session_id", "default"
+        ) == session_id
 
     def _process_conversation(self, request: BrainRequest) -> BrainResponse:
         """Process the deterministic greeting and message conversation flow."""
