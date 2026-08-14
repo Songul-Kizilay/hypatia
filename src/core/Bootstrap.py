@@ -25,6 +25,9 @@ from memory.LLMLearnedMemoryCandidateExtractor import (
     LLMLearnedMemoryCandidateExtractor,
 )
 from memory.MemoryManager import MemoryManager
+from memory.RankedKeywordLearnedMemorySelector import (
+    RankedKeywordLearnedMemorySelector,
+)
 from planner.Planner import Planner
 from response.ResponseComposer import ResponseComposer
 from session.JsonFileSessionStore import JsonFileSessionStore
@@ -102,9 +105,13 @@ class Bootstrap:
         raw_selector = os.environ.get("HYPATIA_LEARNED_MEMORY_SELECTOR")
         if raw_selector is None:
             return None
-        if raw_selector != "keyword":
-            raise ValueError("HYPATIA_LEARNED_MEMORY_SELECTOR must be 'keyword'.")
-        return KeywordLearnedMemorySelector()
+        if raw_selector == "keyword":
+            return KeywordLearnedMemorySelector()
+        if raw_selector == "ranked":
+            return RankedKeywordLearnedMemorySelector()
+        raise ValueError(
+            "HYPATIA_LEARNED_MEMORY_SELECTOR must be 'keyword' or 'ranked'."
+        )
 
     def initialize(self) -> None:
         config = Config()
