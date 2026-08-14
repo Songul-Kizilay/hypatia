@@ -75,7 +75,7 @@ Not implemented:
 
 The current local verification baseline is:
 
-- `python -m unittest discover -s tests -t .`: 802 tests passed. The top-level
+- `python -m unittest discover -s tests -t .`: 805 tests passed. The top-level
   package setting ensures nested test directories are included without
   shadowing source packages.
 - `python -m black --check src tests`: passed.

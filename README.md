@@ -172,6 +172,7 @@ an embedding model available, then set:
 HYPATIA_SEMANTIC_MEMORY_ENABLED=true
 HYPATIA_SEMANTIC_MEMORY_OLLAMA_ENDPOINT=http://localhost:11434/api/embed
 HYPATIA_SEMANTIC_MEMORY_OLLAMA_MODEL=embeddinggemma
+HYPATIA_SEMANTIC_MEMORY_OLLAMA_TIMEOUT_SECONDS=120
 ```
 
 The endpoint and model shown are defaults when their optional settings are
@@ -183,6 +184,12 @@ memory add, update, delete, and expiry events update the derived index on a
 best-effort basis. An embedding failure never undoes an already-completed
 primary-memory operation. The vectors remain in RAM and are recreated from
 local memory on the next successful startup.
+
+The built-in local HTTP transport allows up to 120 seconds for each embedding
+request by default. Set `HYPATIA_SEMANTIC_MEMORY_OLLAMA_TIMEOUT_SECONDS` to a
+positive finite number when the local machine needs a different limit. This
+accommodates a cold local model load without making Hypatia wait indefinitely
+when the local service is unavailable.
 
 Use `semantic recall <query>` to retrieve conversation records from the active
 or explicitly selected session. When an indexed semantic result is available,

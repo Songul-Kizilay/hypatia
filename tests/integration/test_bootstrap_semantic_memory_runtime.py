@@ -94,6 +94,32 @@ class BootstrapSemanticMemoryRuntimeTests(unittest.TestCase):
         assert runtime.current() is not None
         self.assertEqual(runtime.current().count(), 1)
 
+    def test_enabled_runtime_passes_configured_timeout_to_local_transport(self) -> None:
+        provider = RecordingEmbeddingProvider(Embedding((1, 0)))
+
+        with (
+            tempfile.TemporaryDirectory() as temporary_directory,
+            patch.dict(
+                os.environ,
+                {
+                    "HYPATIA_SEMANTIC_MEMORY_ENABLED": "true",
+                    "HYPATIA_SEMANTIC_MEMORY_OLLAMA_TIMEOUT_SECONDS": "7.5",
+                },
+                clear=True,
+            ),
+            patch(
+                "core.Bootstrap.UrllibOllamaEmbeddingTransport"
+            ) as construct_transport,
+            patch("core.Bootstrap.OllamaEmbeddingProvider", return_value=provider),
+        ):
+            temporary_path = Path(temporary_directory)
+            Bootstrap.from_process_environment(
+                temporary_path / "memory.json",
+                temporary_path / "sessions.json",
+            )
+
+        construct_transport.assert_called_once_with(timeout_seconds=7.5)
+
     def test_enabled_runtime_indexes_new_conversation_memory_after_bootstrap(
         self,
     ) -> None:
@@ -185,6 +211,13 @@ class BootstrapSemanticMemoryRuntimeTests(unittest.TestCase):
                     ),
                 },
                 "must be a local HTTP endpoint",
+            ),
+            (
+                {
+                    "HYPATIA_SEMANTIC_MEMORY_ENABLED": "true",
+                    "HYPATIA_SEMANTIC_MEMORY_OLLAMA_TIMEOUT_SECONDS": "nan",
+                },
+                "must be a positive finite number",
             ),
         ):
             with self.subTest(environment=environment):

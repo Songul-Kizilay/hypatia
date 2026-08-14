@@ -27,6 +27,8 @@ All notable project changes are recorded here.
   the last successful derived index. After startup, lifecycle events keep the
   derived index current without allowing embedding failures to disrupt primary
   memory writes.
+- A validated configurable local embedding-transport timeout with a 120-second
+  default for cold local-model startup.
 - A bounded `semantic recall <query>` path that exposes similarity scores only
   for current-session conversation records and falls back to deterministic
   lexical recall when semantic retrieval is unavailable or empty.
@@ -43,7 +45,7 @@ All notable project changes are recorded here.
 
 ### Verification
 
-- The package-aware full local suite contains 802 passing automated tests.
+- The package-aware full local suite contains 805 passing automated tests.
 - Black, Ruff, MyPy, and whitespace validation pass in the local development
   environment.
 

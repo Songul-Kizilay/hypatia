@@ -62,6 +62,32 @@ class UrllibOllamaEmbeddingTransportTests(unittest.TestCase):
             {"model": "embeddinggemma", "input": "Exact source"},
         )
 
+    def test_uses_a_valid_explicit_timeout(self) -> None:
+        timeouts: list[float] = []
+
+        def fake_urlopen(request: Request, timeout: float) -> FakeResponse:
+            timeouts.append(timeout)
+            return FakeResponse()
+
+        transport = UrllibOllamaEmbeddingTransport(timeout_seconds=7.5)
+
+        with patch(
+            "memory.UrllibOllamaEmbeddingTransport.urlopen",
+            side_effect=fake_urlopen,
+        ):
+            transport(
+                "http://localhost:11434/api/embed",
+                {"model": "embeddinggemma", "input": "Exact source"},
+            )
+
+        self.assertEqual(timeouts, [7.5])
+
+    def test_rejects_invalid_timeouts(self) -> None:
+        for timeout in (True, 0, -1, float("inf"), "30"):
+            with self.subTest(timeout=timeout):
+                with self.assertRaisesRegex(ValueError, "positive number"):
+                    UrllibOllamaEmbeddingTransport(timeout_seconds=timeout)  # type: ignore[arg-type]
+
 
 if __name__ == "__main__":
     unittest.main()

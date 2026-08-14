@@ -38,6 +38,7 @@ class SemanticMemoryIndexRuntimeTests(unittest.TestCase):
         )
 
         self.assertIsNone(runtime.current())
+        self.assertIsNone(runtime.last_update_error())
 
     def test_refresh_publishes_a_complete_replacement_index(self) -> None:
         memory_manager = MemoryManager()
@@ -74,6 +75,7 @@ class SemanticMemoryIndexRuntimeTests(unittest.TestCase):
 
         self.assertIs(runtime.current(), stable_index)
         self.assertEqual(stable_index.count(), 1)
+        self.assertIsNone(runtime.last_update_error())
 
     def test_attached_runtime_tracks_added_updated_and_deleted_records(self) -> None:
         event_bus = EventBus()
@@ -95,6 +97,7 @@ class SemanticMemoryIndexRuntimeTests(unittest.TestCase):
         self.assertEqual(index.count(), 1)
         self.assertTrue(memory_manager.delete(record.memory_id))
         self.assertEqual(index.count(), 0)
+        self.assertIsNone(runtime.last_update_error())
 
     def test_attached_runtime_preserves_last_good_index_when_embedding_fails(
         self,
@@ -111,6 +114,7 @@ class SemanticMemoryIndexRuntimeTests(unittest.TestCase):
 
         self.assertEqual(memory_manager.count(), 1)
         self.assertEqual(index.count(), 0)
+        self.assertEqual(runtime.last_update_error(), "Semantic index update failed.")
 
     def test_attached_runtime_does_not_surface_unexpected_provider_errors(self) -> None:
         event_bus = EventBus()
@@ -125,6 +129,7 @@ class SemanticMemoryIndexRuntimeTests(unittest.TestCase):
 
         self.assertIsNotNone(memory_manager.get(record.memory_id))
         self.assertEqual(index.count(), 0)
+        self.assertEqual(runtime.last_update_error(), "Semantic index update failed.")
 
 
 if __name__ == "__main__":

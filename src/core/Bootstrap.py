@@ -1,4 +1,5 @@
 import os
+from math import isfinite
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -32,7 +33,10 @@ from memory.RankedKeywordLearnedMemorySelector import (
 )
 from memory.SemanticMemoryIndexBuilder import SemanticMemoryIndexBuilder
 from memory.SemanticMemoryIndexRuntime import SemanticMemoryIndexRuntime
-from memory.UrllibOllamaEmbeddingTransport import UrllibOllamaEmbeddingTransport
+from memory.UrllibOllamaEmbeddingTransport import (
+    DEFAULT_TIMEOUT_SECONDS,
+    UrllibOllamaEmbeddingTransport,
+)
 from planner.Planner import Planner
 from response.ResponseComposer import ResponseComposer
 from session.JsonFileSessionStore import JsonFileSessionStore
@@ -167,13 +171,33 @@ class Bootstrap:
             )
         if not model.strip():
             raise ValueError("HYPATIA_SEMANTIC_MEMORY_OLLAMA_MODEL cannot be empty.")
+        timeout_seconds = Bootstrap._load_process_semantic_memory_timeout_seconds()
 
         provider = OllamaEmbeddingProvider(
             endpoint=endpoint,
             model=model,
-            transport=UrllibOllamaEmbeddingTransport(),
+            transport=UrllibOllamaEmbeddingTransport(timeout_seconds=timeout_seconds),
         )
         return SemanticMemoryIndexRuntime(SemanticMemoryIndexBuilder(provider))
+
+    @staticmethod
+    def _load_process_semantic_memory_timeout_seconds() -> float:
+        raw_timeout = os.environ.get("HYPATIA_SEMANTIC_MEMORY_OLLAMA_TIMEOUT_SECONDS")
+        if raw_timeout is None:
+            return DEFAULT_TIMEOUT_SECONDS
+        try:
+            timeout_seconds = float(raw_timeout)
+        except ValueError as error:
+            raise ValueError(
+                "HYPATIA_SEMANTIC_MEMORY_OLLAMA_TIMEOUT_SECONDS must be a "
+                "positive finite number."
+            ) from error
+        if not isfinite(timeout_seconds) or timeout_seconds <= 0:
+            raise ValueError(
+                "HYPATIA_SEMANTIC_MEMORY_OLLAMA_TIMEOUT_SECONDS must be a "
+                "positive finite number."
+            )
+        return timeout_seconds
 
     def initialize(self) -> None:
         config = Config()

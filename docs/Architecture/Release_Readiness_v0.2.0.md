@@ -47,7 +47,7 @@ tek bir commit iki bağımsız sprinti karıştırır.
 15 Ağustos 2026 tarihinde yerel sanal ortam ile aşağıdaki denetimler geçti:
 
 ```text
-python -m unittest discover -s tests -t .  -> 802 test, OK
+python -m unittest discover -s tests -t .  -> 805 test, OK
 black --check src tests                    -> 208 dosya değişmeden kalır
 ruff check src tests                       -> başarılı
 mypy src tests                             -> 208 kaynak dosyada hata yok

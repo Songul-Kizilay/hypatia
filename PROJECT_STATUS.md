@@ -33,6 +33,8 @@ with optional OpenAI-compatible LLM conversation support.
   embedding failure never reverses a completed primary-memory write. Vectors
   are not persisted and semantic results are used only by the explicit
   `semantic recall <query>` request path with deterministic lexical fallback.
+  The runtime retains a safe diagnostic when its most recent incremental index
+  update failed, without exposing provider-specific error details.
 - A pure reciprocal-rank fusion evaluator with versioned hybrid-ranking
   fixtures. It is not connected to semantic recall and does not change runtime
   ordering.
@@ -58,7 +60,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 802 automated tests pass through package-aware discovery.
+- 805 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.

@@ -18,6 +18,7 @@ class SemanticMemoryIndexRuntime:
     def __init__(self, builder: SemanticMemoryIndexBuilder) -> None:
         self._builder = builder
         self._index: InMemorySemanticMemoryIndex | None = None
+        self._last_update_error: str | None = None
         self._lock = RLock()
 
     def current(self) -> InMemorySemanticMemoryIndex | None:
@@ -30,7 +31,13 @@ class SemanticMemoryIndexRuntime:
         with self._lock:
             replacement = self._builder.build(memory_manager)
             self._index = replacement
+            self._last_update_error = None
             return replacement
+
+    def last_update_error(self) -> str | None:
+        """Return a safe diagnostic when the latest incremental update failed."""
+        with self._lock:
+            return self._last_update_error
 
     def attach(self, event_bus: EventBus) -> None:
         """Keep the derived index current without making memory writes fail."""
@@ -68,13 +75,17 @@ class SemanticMemoryIndexRuntime:
                     return
                 if event.name in {"memory.record.deleted", "memory.record.expired"}:
                     index.remove(memory_id)
+                    self._last_update_error = None
                     return
 
                 content = event.payload.get("content")
                 if not isinstance(content, str):
                     return
                 index.upsert(memory_id, self._builder.embed(content))
+                self._last_update_error = None
         except Exception:
             # Semantic retrieval is optional. A provider failure must not roll
             # back or surface from an already successful memory operation.
+            with self._lock:
+                self._last_update_error = "Semantic index update failed."
             return
