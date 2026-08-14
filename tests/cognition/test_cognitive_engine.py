@@ -51,6 +51,7 @@ from memory.LearnedMemoryContext import (
     load_bounded_learned_memory_context,
     load_learned_memory_context,
 )
+from memory.LearnedMemorySelector import LearnedMemorySelector
 from memory.LearnedMemoryStore import (
     append_learned_memory,
     load_latest_learned_memory,
@@ -259,6 +260,22 @@ class RecordingCandidateExtractor:
             source_text=source_text,
             candidates=(),
         )
+
+
+class RecordingLearnedMemorySelector:
+    """Records exact request-specific learned-memory selection inputs."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, tuple[LearnedMemory, ...]]] = []
+
+    def select(
+        self,
+        *,
+        source_text: str,
+        memories: tuple[LearnedMemory, ...],
+    ) -> tuple[LearnedMemory, ...]:
+        self.calls.append((source_text, memories))
+        return memories
 
 
 class RecordingCandidateSequenceExtractor:
@@ -572,6 +589,134 @@ class CognitiveEngineTests(unittest.TestCase):
             conversation_record.content,
             f"User: {message}\nHypatia: {provider_response}",
         )
+
+    def test_explicit_selector_uses_only_exact_selected_context_for_provider(
+        self,
+    ) -> None:
+        message = "  What language do I prefer?  "
+        selected_context = "selected-context"
+        provider_prompt = "provider-prompt"
+        provider_response = "You prefer Rust."
+        llm_provider = RecordingLLMProvider(provider_response)
+        recording_extractor = RecordingCandidateExtractor()
+        selector: LearnedMemorySelector = RecordingLearnedMemorySelector()
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+            learned_memory_candidate_extractor=recording_extractor,
+            learned_memory_selector=selector,
+        )
+
+        with (
+            patch(
+                "cognition.CognitiveEngine.load_learned_memory_context",
+            ) as load_context,
+            patch(
+                "cognition.CognitiveEngine.load_bounded_learned_memory_context",
+            ) as load_bounded_context,
+            patch(
+                "cognition.CognitiveEngine.load_current_selected_learned_memory_context",
+                return_value=selected_context,
+            ) as load_selected_context,
+            patch(
+                "cognition.CognitiveEngine."
+                "load_current_selected_bounded_learned_memory_context",
+            ) as load_selected_bounded_context,
+            patch(
+                "cognition.CognitiveEngine.build_learned_memory_augmented_prompt",
+                return_value=provider_prompt,
+            ) as build_prompt,
+        ):
+            response = engine.process(BrainRequest(message=message))
+
+        load_context.assert_not_called()
+        load_bounded_context.assert_not_called()
+        load_selected_context.assert_called_once_with(
+            memory_manager=self.memory_manager,
+            source_text=message,
+            selector=selector,
+        )
+        load_selected_bounded_context.assert_not_called()
+        build_prompt.assert_called_once_with(
+            user_message=message,
+            learned_memory_context=selected_context,
+        )
+        self.assertEqual(llm_provider.calls, [(provider_prompt, ())])
+        self.assertEqual(recording_extractor.calls, [message])
+        self.assertEqual(response.message, provider_response)
+        conversation_record = self.memory_manager.all()[-1]
+        self.assertEqual(conversation_record.metadata["user_message"], message)
+
+    def test_explicit_selector_and_limit_use_only_exact_selected_bounded_context(
+        self,
+    ) -> None:
+        message = "  What language do I prefer?  "
+        selected_context = "selected-bounded-context"
+        provider_prompt = "provider-prompt"
+        provider_response = "You prefer Rust."
+        llm_provider = RecordingLLMProvider(provider_response)
+        recording_extractor = RecordingCandidateExtractor()
+        selector: LearnedMemorySelector = RecordingLearnedMemorySelector()
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+            learned_memory_candidate_extractor=recording_extractor,
+            learned_memory_context_limit=2,
+            learned_memory_selector=selector,
+        )
+
+        with (
+            patch(
+                "cognition.CognitiveEngine.load_learned_memory_context",
+            ) as load_context,
+            patch(
+                "cognition.CognitiveEngine.load_bounded_learned_memory_context",
+            ) as load_bounded_context,
+            patch(
+                "cognition.CognitiveEngine.load_current_selected_learned_memory_context",
+            ) as load_selected_context,
+            patch(
+                "cognition.CognitiveEngine."
+                "load_current_selected_bounded_learned_memory_context",
+                return_value=selected_context,
+            ) as load_selected_bounded_context,
+            patch(
+                "cognition.CognitiveEngine.build_learned_memory_augmented_prompt",
+                return_value=provider_prompt,
+            ) as build_prompt,
+        ):
+            response = engine.process(BrainRequest(message=message))
+
+        load_context.assert_not_called()
+        load_bounded_context.assert_not_called()
+        load_selected_context.assert_not_called()
+        load_selected_bounded_context.assert_called_once_with(
+            memory_manager=self.memory_manager,
+            source_text=message,
+            selector=selector,
+            limit=2,
+        )
+        build_prompt.assert_called_once_with(
+            user_message=message,
+            learned_memory_context=selected_context,
+        )
+        self.assertEqual(llm_provider.calls, [(provider_prompt, ())])
+        self.assertEqual(recording_extractor.calls, [message])
+        self.assertEqual(response.message, provider_response)
+        conversation_record = self.memory_manager.all()[-1]
+        self.assertEqual(conversation_record.metadata["user_message"], message)
 
     def test_zero_learned_memory_context_limit_is_forwarded_exactly(self) -> None:
         llm_provider = RecordingLLMProvider("No context needed.")
