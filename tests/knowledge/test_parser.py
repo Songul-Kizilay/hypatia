@@ -42,6 +42,24 @@ class ParserTests(unittest.TestCase):
             all(chunk.chunk_type is ChunkType.PARAGRAPH for chunk in chunks)
         )
 
+    def test_preserves_document_identity_for_later_result_citations(self) -> None:
+        document = Document(
+            title="Project Notes",
+            content="One\n\nTwo",
+            source="C:/knowledge/project-notes.md",
+        )
+
+        chunks = self.parser.parse(document)
+
+        self.assertEqual(
+            chunks[0].metadata,
+            {
+                "document_title": "Project Notes",
+                "document_source": "C:/knowledge/project-notes.md",
+                "document_type": "unknown",
+            },
+        )
+
     def test_ignores_extra_blank_lines(self) -> None:
         document = Document(title="Example", content="One\n\n\n\nTwo")
 

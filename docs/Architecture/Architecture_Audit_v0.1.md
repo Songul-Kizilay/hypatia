@@ -68,18 +68,21 @@ Implemented memory capabilities:
 - An opt-in, model-scoped local embedding cache that is atomically replaced
   after a successful rebuild. It verifies a SHA-256 source-content fingerprint
   before reuse and does not alter primary memory persistence.
+- Source attribution carried from loaded documents through paragraph chunks to
+  ordered knowledge-search citations. This is a local explainability boundary,
+  not an automatic RAG or prompt-augmentation feature.
 
 Not implemented:
 
 - Embedding persistence enabled by default.
 - Automatic semantic augmentation of ordinary messages or generic Brain search.
-- Knowledge graph, RAG, web retrieval, or citations.
+- Knowledge graph, RAG, web retrieval, or automatic citations in model prompts.
 
 ## Quality Baseline
 
 The current local verification baseline is:
 
-- `python -m unittest discover -s tests -t .`: 819 tests passed. The top-level
+- `python -m unittest discover -s tests -t .`: 822 tests passed. The top-level
   package setting ensures nested test directories are included without
   shadowing source packages.
 - `python -m black --check src tests`: passed.

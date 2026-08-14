@@ -28,6 +28,11 @@ class Parser:
                 index=index,
                 content=paragraph,
                 chunk_type=ChunkType.PARAGRAPH,
+                metadata={
+                    "document_title": document.title,
+                    "document_source": document.source,
+                    "document_type": document.document_type.value,
+                },
             )
             for index, paragraph in enumerate(paragraphs)
             if paragraph

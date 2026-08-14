@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.2.5 (Genesis)`
+`v0.2.6 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, and
@@ -41,6 +41,8 @@ with optional OpenAI-compatible LLM conversation support.
 - An optional model-scoped local semantic-embedding cache. It is disabled by
   default, validates a source-content fingerprint before reuse, updates with
   memory lifecycle events, and remains separate from the primary memory schema.
+- Ordered local source citations for knowledge-search responses, preserving
+  document identity, title, source path, paragraph index, and chunk ID.
 - Deterministic Brain and CognitiveEngine routing for conversation, knowledge
   search, planning, lexical recall, semantic recall, and explicit session
   commands.
@@ -66,7 +68,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 819 automated tests pass through package-aware discovery.
+- 822 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -85,6 +87,5 @@ alter the project's persisted data.
 
 ## Next Milestone
 
-Validate and release the opt-in local embedding-cache increment. Continue to
-grow the fixture corpus and review relevance expectations; RAG remains a
-separate milestone.
+Validate and release the local source-citation increment. Bounded local RAG
+composition remains the next milestone.

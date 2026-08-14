@@ -66,6 +66,30 @@ class ResponseComposerTests(unittest.TestCase):
         self.assertEqual(response.intent, "search")
         self.assertTrue(response.success)
         self.assertIs(response.knowledge_results, results)
+
+    def test_search_success_exposes_one_citation_per_result(self) -> None:
+        results = [
+            Chunk(
+                document_id="document-1",
+                index=2,
+                content="Hypatia source text",
+                metadata={
+                    "document_title": "Research Notes",
+                    "document_source": "C:/knowledge/notes.md",
+                },
+                chunk_id="chunk-1",
+            )
+        ]
+
+        response = self.composer.search_success(self.request, results)
+
+        self.assertEqual(len(response.knowledge_citations), 1)
+        citation = response.knowledge_citations[0]
+        self.assertEqual(citation.document_id, "document-1")
+        self.assertEqual(citation.document_title, "Research Notes")
+        self.assertEqual(citation.source, "C:/knowledge/notes.md")
+        self.assertEqual(citation.chunk_index, 2)
+        self.assertEqual(citation.chunk_id, "chunk-1")
         self.assertEqual(response.request_id, self.request.request_id)
         self.assertEqual(response.memory_count, 0)
 

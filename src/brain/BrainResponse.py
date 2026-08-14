@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from knowledge.Chunk import Chunk
+from knowledge.KnowledgeCitation import KnowledgeCitation
 
 
 @dataclass(frozen=True, slots=True)
@@ -17,3 +18,4 @@ class BrainResponse:
     memory_count: int
     success: bool = True
     knowledge_results: list[Chunk] = field(default_factory=list)
+    knowledge_citations: list[KnowledgeCitation] = field(default_factory=list)
