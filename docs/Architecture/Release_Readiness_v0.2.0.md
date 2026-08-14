@@ -11,8 +11,8 @@ oluşturulmadı.**
 
 Kalite kontrolleri geçmişti; ancak release kimliği ve commit kapsamı
 belirsizdi. Bu belge, çalışır durumdaki geliştirmeyi yayınlanabilir bir sürüm
-sanmamak için hazırlanmıştır. Runtime ve paket sürümü güncel `main` üzerinde
-hâlâ `0.2.0` olduğundan, release kimliği borcu devam eder.
+sanmamak için hazırlanmıştır. Bu tarihteki release kimliği borcu daha sonra
+`v0.2.1` release'i ile kapatılmıştır; aşağıdaki tablo tarihsel bulguyu korur.
 
 ## Kanıtlanan durum
 
@@ -26,9 +26,8 @@ hâlâ `0.2.0` olduğundan, release kimliği borcu devam eder.
 | Güncel `v0.2.0` sonrasındaki commit sayısı | 236 |
 | Güncel remote eşitliği | Yerel `main`, `origin/main` ile aynı |
 
-Bu nedenle `0.2.0` etiketi, güncel ana dalın içeriğini temsil etmez. Yeni
-sürüm adı ve sürüm kapsamı belirlenmeden sürüm numarası veya tag
-oluşturulmamalıdır.
+Bu nedenle `0.2.0` etiketi, denetim anındaki güncel ana dalın içeriğini temsil
+etmiyordu. Bu bulgu, kapsamı doğrulanmış `v0.2.1` release'i için temel oldu.
 
 ## Tarihsel yerel değişiklik kapsamı
 
@@ -62,7 +61,7 @@ git diff --check                           -> başarılı
 Bu sonuçlar, yerel birleşik çalışma ağacının teknik kalite sinyalidir; tek
 başına release sürümü veya commit kapsamı onayı değildir.
 
-## Release için hâlâ gerekli kararlar
+## Tarihsel olarak gerekli kararlar
 
 1. Hedef sürüm adını ve hangi sprintlerin o sürüme gireceğini tanımla.
 2. Ranked-selector top-k çalışmasını semantik bellek çalışmasından ayrı bir
@@ -74,5 +73,5 @@ başına release sürümü veya commit kapsamı onayı değildir.
 ## Bu denetimin kapsamı dışında kalanlar
 
 Bu belge GitHub'a hiçbir değişiklik göndermez, tag oluşturmaz ve sürüm numarası
-değiştirmez. PR #238'ün merge edilmesi yalnızca doğrulanmış kodun `main`e
-alındığını gösterir; bağımsız bir release kararı değildir.
+değiştirmez. PR #238'ün merge edilmesi doğrulanmış kodun `main`e alındığını
+gösterdi; sonraki `v0.2.1` release'i ise bu denetimdeki sürüm borcunu kapattı.

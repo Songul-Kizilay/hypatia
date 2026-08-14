@@ -2,7 +2,7 @@
 
 All notable project changes are recorded here.
 
-## Unreleased
+## [0.2.1] - 2026-08-15
 
 ### Added
 
@@ -45,7 +45,7 @@ All notable project changes are recorded here.
 
 ### Verification
 
-- The package-aware full local suite contains 805 passing automated tests.
+- The package-aware full local suite contains 806 passing automated tests.
 - Black, Ruff, MyPy, and whitespace validation pass in the local development
   environment.
 

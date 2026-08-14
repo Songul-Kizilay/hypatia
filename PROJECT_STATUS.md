@@ -2,11 +2,11 @@
 
 ## Runtime Version
 
-`v0.2.0 (Genesis)`
+`v0.2.1 (Genesis)`
 
-This is the version reported by the runtime. The repository also contains
-post-`v0.2.0` development that has not been assigned a new release version or
-tag yet.
+This is the version reported by the runtime and package metadata. It captures
+the semantic-memory, ranked learned-memory, and quality-gate work merged after
+`v0.2.0`.
 
 ## Current Source State
 
@@ -60,7 +60,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 805 automated tests pass through package-aware discovery.
+- 806 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
