@@ -853,6 +853,43 @@ class ResponseComposer:
             success=False,
         )
 
+    def semantic_recall_status(
+        self,
+        request: BrainRequest,
+        *,
+        runtime_state: str,
+        indexed_memory_records: int | None,
+        embedding_dimension: int | None,
+        last_update_error: str | None,
+    ) -> BrainResponse:
+        """Compose a read-only diagnostic for the optional semantic runtime."""
+        available = indexed_memory_records is not None
+        dimension = (
+            embedding_dimension
+            if embedding_dimension is not None
+            else "not established"
+        )
+        last_update = (
+            last_update_error
+            if last_update_error is not None
+            else "healthy" if runtime_state != "disabled" else "unavailable"
+        )
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Semantic recall status:",
+                    f"Runtime: {runtime_state}",
+                    "Indexed memory records: "
+                    f"{indexed_memory_records if available else 'unavailable'}",
+                    f"Embedding dimension: {dimension if available else 'unavailable'}",
+                    f"Last incremental update: {last_update}",
+                )
+            ),
+            request_id=request.request_id,
+            intent="semantic_recall_status",
+            memory_count=0,
+        )
+
     @staticmethod
     def _semantic_recall_item(
         index: int,

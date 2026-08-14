@@ -78,7 +78,8 @@ To create the world's most capable personal AI research companion.
 - Opt-in learned-memory extraction with append-only corrections, bounded
   context, deterministic keyword selection, and ranked top-k selection
 - A local, derived semantic-memory index core with validated embeddings and
-  deterministic cosine ranking; it is not yet connected to the request flow
+  deterministic cosine ranking, available through the explicit semantic-recall
+  request flow
 - Deterministic Planner task generation
 - Knowledge Foundation: `.txt` and `.md` document loading, paragraph parsing, in-memory chunk indexing, and case-insensitive search
 - KnowledgeEngine orchestration for the full document-to-search pipeline
@@ -234,6 +235,11 @@ cosine-similarity scores. If semantic runtime is disabled, its index has no
 eligible record, or the local provider fails, the same command falls back to
 deterministic lexical conversation recall and labels the result `lexical
 fallback`.
+
+Use `semantic recall status` to inspect the optional runtime without generating
+an embedding or changing memory. It reports whether the runtime is disabled,
+initializing, or ready; a ready runtime also reports its indexed-record count,
+embedding dimension, and its safe most-recent incremental-update diagnostic.
 
 Normal `recall <query>` remains lexical and does not call the semantic runtime.
 Semantic recall does not add a conversation record, alter ordinary messages, or

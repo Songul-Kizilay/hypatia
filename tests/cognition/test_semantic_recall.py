@@ -170,6 +170,106 @@ class SemanticRecallTests(unittest.TestCase):
         self.assertIn(record.content, response.message)
         self.assertNotIn("[similarity:", response.message)
 
+    def test_semantic_recall_status_reports_a_disabled_runtime_without_mutation(
+        self,
+    ) -> None:
+        memory_count = self.memory_manager.count()
+
+        response = self._engine().process(
+            BrainRequest(message="semantic recall status", request_id="request-1")
+        )
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "semantic_recall_status")
+        self.assertEqual(response.request_id, "request-1")
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(
+            response.message,
+            "Semantic recall status:\n"
+            "Runtime: disabled\n"
+            "Indexed memory records: unavailable\n"
+            "Embedding dimension: unavailable\n"
+            "Last incremental update: unavailable",
+        )
+        self.assertEqual(self.memory_manager.count(), memory_count)
+
+    def test_semantic_recall_status_reports_index_health_without_query_embedding(
+        self,
+    ) -> None:
+        content = "Indexed conversation"
+        self.memory_manager.add(
+            content,
+            metadata={"session_id": "default"},
+            tags={"brain", "conversation"},
+        )
+        runtime, provider = self._runtime({content: Embedding((1, 0))})
+        calls_before_status = list(provider.calls)
+        memory_count = self.memory_manager.count()
+
+        response = self._engine(runtime).process(
+            BrainRequest(message="semantic recall status")
+        )
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "semantic_recall_status")
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(
+            response.message,
+            "Semantic recall status:\n"
+            "Runtime: ready\n"
+            "Indexed memory records: 1\n"
+            "Embedding dimension: 2\n"
+            "Last incremental update: healthy",
+        )
+        self.assertEqual(provider.calls, calls_before_status)
+        self.assertEqual(self.memory_manager.count(), memory_count)
+
+    def test_semantic_recall_status_marks_an_empty_ready_index_as_unestablished(
+        self,
+    ) -> None:
+        runtime, provider = self._runtime({})
+        calls_before_status = list(provider.calls)
+
+        response = self._engine(runtime).process(
+            BrainRequest(message="semantic recall status")
+        )
+
+        self.assertEqual(
+            response.message,
+            "Semantic recall status:\n"
+            "Runtime: ready\n"
+            "Indexed memory records: 0\n"
+            "Embedding dimension: not established\n"
+            "Last incremental update: healthy",
+        )
+        self.assertEqual(provider.calls, calls_before_status)
+
+    def test_semantic_recall_status_exposes_only_the_safe_incremental_error(
+        self,
+    ) -> None:
+        content = "Indexed conversation"
+        self.memory_manager.add(
+            content,
+            metadata={"session_id": "default"},
+            tags={"brain", "conversation"},
+        )
+        runtime, provider = self._runtime({content: Embedding((1, 0))})
+        runtime.attach(self.event_bus)
+        provider.should_fail = True
+        self.memory_manager.add("Update that cannot be embedded")
+
+        response = self._engine(runtime).process(
+            BrainRequest(message="semantic recall status")
+        )
+
+        self.assertTrue(response.success)
+        self.assertIn("Runtime: ready", response.message)
+        self.assertIn(
+            "Last incremental update: Semantic index update failed.",
+            response.message,
+        )
+        self.assertNotIn("Embedding provider unavailable.", response.message)
+
     def test_provider_failure_uses_deterministic_lexical_fallback(self) -> None:
         content = "User: I like cats\nHypatia: Noted."
         record = self.memory_manager.add(
