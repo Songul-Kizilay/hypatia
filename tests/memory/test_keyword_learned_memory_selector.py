@@ -79,7 +79,47 @@ class KeywordLearnedMemorySelectorTests(unittest.TestCase):
         self.assertEqual(language, original)
         self.assertEqual(language.key, "Preferred_LANGUAGE")
 
-    def test_requires_exact_key_token_overlap_only(self) -> None:
+    def test_selects_by_value_token_without_key_overlap(self) -> None:
+        language = LearnedMemory(
+            kind="preference",
+            key="preferred_language",
+            value="Rust",
+        )
+        selector = KeywordLearnedMemorySelector()
+
+        result = selector.select(
+            source_text="Was it Rust that I chose?",
+            memories=(language,),
+        )
+
+        self.assertEqual(result, (language,))
+        self.assertIs(result[0], language)
+
+    def test_value_matching_is_case_insensitive_and_splits_punctuation(self) -> None:
+        language = LearnedMemory(
+            kind="preference",
+            key="preferred_language",
+            value="Rust",
+        )
+        goal = LearnedMemory(
+            kind="goal",
+            key="current_learning_goal",
+            value="Kali Linux",
+        )
+        selector = KeywordLearnedMemorySelector()
+
+        rust_result = selector.select(source_text="RUST", memories=(language, goal))
+        kali_result = selector.select(
+            source_text="Are we using Kali?",
+            memories=(language, goal),
+        )
+
+        self.assertEqual(rust_result, (language,))
+        self.assertIs(rust_result[0], language)
+        self.assertEqual(kali_result, (goal,))
+        self.assertIs(kali_result[0], goal)
+
+    def test_requires_exact_key_or_value_token_overlap(self) -> None:
         language = LearnedMemory(
             kind="preference",
             key="preferred_language",
@@ -92,13 +132,49 @@ class KeywordLearnedMemorySelectorTests(unittest.TestCase):
             (),
         )
         self.assertEqual(
-            selector.select(source_text="Rust", memories=(language,)),
+            selector.select(source_text="Rus", memories=(language,)),
             (),
         )
         self.assertEqual(
             selector.select(source_text="preference", memories=(language,)),
             (),
         )
+
+    def test_kind_remains_irrelevant(self) -> None:
+        language = LearnedMemory(
+            kind="preference",
+            key="preferred_language",
+            value="Rust",
+        )
+        selector = KeywordLearnedMemorySelector()
+
+        self.assertEqual(
+            selector.select(source_text="preference", memories=(language,)),
+            (),
+        )
+
+    def test_key_and_value_matches_preserve_order_and_duplicates(self) -> None:
+        language = LearnedMemory(
+            kind="preference",
+            key="preferred_language",
+            value="Rust",
+        )
+        project = LearnedMemory(
+            kind="project_fact",
+            key="rust_project",
+            value="Hypatia",
+        )
+        memories = (project, language, project)
+        original_memories = tuple(memories)
+        selector = KeywordLearnedMemorySelector()
+
+        result = selector.select(source_text="Rust", memories=memories)
+
+        self.assertEqual(result, memories)
+        self.assertEqual(memories, original_memories)
+        self.assertIs(result[0], project)
+        self.assertIs(result[1], language)
+        self.assertIs(result[2], project)
         self.assertEqual(
             selector.select(source_text="unrelated question", memories=(language,)),
             (),

@@ -1,4 +1,4 @@
-"""Deterministic key-token learned-memory relevance selection."""
+"""Deterministic key-or-value-token learned-memory relevance selection."""
 
 import re
 
@@ -22,5 +22,5 @@ class KeywordLearnedMemorySelector:
         return tuple(
             memory
             for memory in memories
-            if source_tokens.intersection(_tokens(memory.key))
+            if source_tokens.intersection(_tokens(memory.key) | _tokens(memory.value))
         )
