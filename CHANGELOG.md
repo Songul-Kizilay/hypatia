@@ -2,6 +2,17 @@
 
 All notable project changes are recorded here.
 
+## [0.2.9] - 2026-08-15
+
+### Fixed
+
+- Bound each source chunk in an `ask knowledge` LLM prompt to 600 characters,
+  matching the visible context limit and preventing an oversized local prompt.
+
+### Verification
+
+- The package-aware full local suite contains 830 passing automated tests.
+
 ## [0.2.8] - 2026-08-15
 
 ### Added

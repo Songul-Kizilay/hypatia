@@ -7,6 +7,8 @@ from collections.abc import Sequence
 from knowledge.Chunk import Chunk
 from knowledge.KnowledgeCitation import KnowledgeCitation
 
+MAX_CHARS_PER_KNOWLEDGE_CONTEXT_RESULT = 600
+
 
 def build_knowledge_context_prompt(
     user_message: str,
@@ -20,7 +22,7 @@ def build_knowledge_context_prompt(
         (
             f"[{index}] {citation.document_title} | "
             f"{citation.source or 'local source unavailable'} | "
-            f"paragraph {citation.chunk_index + 1}\n{result.content}"
+            f"paragraph {citation.chunk_index + 1}\n{_bounded_content(result.content)}"
         )
         for index, (result, citation) in enumerate(
             zip(results, citations, strict=True),
@@ -33,3 +35,9 @@ def build_knowledge_context_prompt(
         f"Local context:\n{context_items}\n\n"
         f"User question: {user_message}"
     )
+
+
+def _bounded_content(content: str) -> str:
+    if len(content) <= MAX_CHARS_PER_KNOWLEDGE_CONTEXT_RESULT:
+        return content
+    return content[:MAX_CHARS_PER_KNOWLEDGE_CONTEXT_RESULT].rstrip() + "..."
