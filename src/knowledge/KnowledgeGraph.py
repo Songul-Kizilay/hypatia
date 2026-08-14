@@ -25,6 +25,7 @@ class KnowledgeGraphRelation(StrEnum):
 
     CONTAINS = "contains"
     PRECEDES = "precedes"
+    RELATED_TO = "related_to"
 
 
 @dataclass(frozen=True, slots=True)

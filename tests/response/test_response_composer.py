@@ -28,6 +28,7 @@ from knowledge.KnowledgeGraph import (
     KnowledgeGraphRelation,
     KnowledgeGraphView,
 )
+from knowledge.KnowledgeRelationPreview import KnowledgeRelationPreview
 from memory.MemoryRecord import MemoryRecord
 from planner.Planner import Planner
 from response.ResponseComposer import ResponseComposer
@@ -206,6 +207,29 @@ class ResponseComposerTests(unittest.TestCase):
             "Knowledge sources:\n"
             "- Local Notes | notes.md | chunks: 2 | id: document-1",
         )
+
+    def test_knowledge_relation_preview_exposes_only_a_pending_change(self) -> None:
+        source = KnowledgeDocumentReference(
+            "source", "Source", "source.md", DocumentType.MARKDOWN, 1
+        )
+        target = KnowledgeDocumentReference(
+            "target", "Target", "target.md", DocumentType.MARKDOWN, 1
+        )
+        preview = KnowledgeRelationPreview(
+            source,
+            KnowledgeGraphRelation.RELATED_TO,
+            target,
+        )
+
+        response = self.composer.knowledge_relation_preview_success(
+            self.request, preview
+        )
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "knowledge_relation_preview")
+        self.assertIs(response.knowledge_relation_preview, preview)
+        self.assertIn("Relation: related_to", response.message)
+        self.assertTrue(response.message.endswith("Changes: ready"))
 
     def test_plan_success_preserves_goal_and_task_order(self) -> None:
         plan = Planner().create_plan("Read a PDF and summarize it")

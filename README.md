@@ -248,6 +248,11 @@ specific source or creating a future explicit relationship. Every entry shows
 its stable document ID, title, local source path, type, and chunk count; this
 read-only command neither calls an LLM nor adds a conversation record.
 
+Use `preview knowledge relation <source_document_id> -- <target_document_id>`
+to validate a proposed `related_to` link between two distinct catalogued local
+documents. It produces a pending-change view only: the graph, JSON memory, LLM
+context, and conversation memory remain unchanged.
+
 Use `knowledge graph <query>` to inspect the deterministic structure of local
 matching sources. It returns up to three cited document-to-paragraph
 `contains` relationships. This graph is derived in memory from loaded local

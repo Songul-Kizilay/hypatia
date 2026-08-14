@@ -88,12 +88,17 @@ Implemented memory capabilities:
   document IDs with title, source path, type, and chunk count in load order so
   a later user-controlled relationship command can identify documents without
   guessing by title.
+- An explicit `preview knowledge relation <source_document_id> --
+  <target_document_id>` request. It accepts only two distinct catalogued
+  documents and the first user-selectable relationship type, `related_to`; it
+  creates a typed pending-change response without changing graph state, JSON
+  memory, LLM context, or conversation memory.
 
 Not implemented:
 
 - Embedding persistence enabled by default.
 - Automatic semantic augmentation of ordinary messages or generic Brain search.
-- Knowledge-graph persistence, explicit cross-document relations,
+- Knowledge-graph persistence, applied cross-document relations,
   cross-document semantic relation extraction, web retrieval, or automatic
   citations in ordinary model prompts.
 
@@ -101,12 +106,12 @@ Not implemented:
 
 The current local verification baseline is:
 
-- `python -m unittest discover -s tests -t .`: 846 tests passed. The top-level
+- `python -m unittest discover -s tests -t .`: 853 tests passed. The top-level
   package setting ensures nested test directories are included without
   shadowing source packages.
 - `python -m black --check src tests`: passed.
 - `python -m ruff check src tests`: passed.
-- `python -m mypy src tests`: passed with no issues in 221 files.
+- `python -m mypy src tests`: passed with no issues in 223 files.
 
 These checks verify the current local worktree; they do not create a release,
 tag, pull request, or GitHub deployment.

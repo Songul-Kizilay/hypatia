@@ -2,6 +2,19 @@
 
 All notable project changes are recorded here.
 
+## [0.3.2] - 2026-08-15
+
+### Added
+
+- An explicit, read-only `preview knowledge relation <source_document_id> --
+  <target_document_id>` command. It validates two distinct catalogued local
+  documents for the first user-selectable `related_to` relationship, but does
+  not alter graph state, JSON memory, or conversation memory.
+
+### Verification
+
+- The package-aware full local suite contains 853 passing automated tests.
+
 ## [0.3.1] - 2026-08-15
 
 ### Added

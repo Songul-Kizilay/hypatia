@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.1 (Genesis)`
+`v0.3.2 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -59,6 +59,11 @@ with optional OpenAI-compatible LLM conversation support.
   titles, source paths, types, and chunk counts in deterministic load order.
   It is read-only and creates neither LLM traffic nor a conversation-memory
   record.
+- An explicit `preview knowledge relation <source_document_id> --
+  <target_document_id>` command. It validates distinct catalogued documents for
+  a user-selectable `related_to` relationship and displays a pending change,
+  without changing graph state, JSON memory, LLM traffic, or conversation
+  memory.
 - Deterministic Brain and CognitiveEngine routing for conversation, knowledge
   search, planning, lexical recall, semantic recall, and explicit session
   commands.
@@ -85,7 +90,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 846 automated tests pass through package-aware discovery.
+- 853 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -104,6 +109,6 @@ alter the project's persisted data.
 
 ## Next Milestone
 
-Implement the first explicit, user-controlled document relation with a
-read-only preview, while keeping automatic semantic extraction,
+Define an explicit, separately confirmed relation-application transaction from
+a validated preview, while keeping automatic semantic extraction,
 ordinary-conversation augmentation, and graph persistence out of scope.

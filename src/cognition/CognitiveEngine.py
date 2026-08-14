@@ -169,6 +169,9 @@ class CognitiveEngine:
         if self._is_knowledge_list_request(request):
             return self._process_knowledge_list(request)
 
+        if self._is_knowledge_relation_preview_request(request):
+            return self._process_knowledge_relation_preview(request)
+
         if self._is_search_request(request):
             query = self._search_query(request)
             if not query:
@@ -399,6 +402,51 @@ class CognitiveEngine:
         """List local source identities without LLM or memory mutation."""
         return self._response_composer.knowledge_list_success(
             request, self._knowledge_engine.documents()
+        )
+
+    @staticmethod
+    def _is_knowledge_relation_preview_request(request: BrainRequest) -> bool:
+        normalized_message = request.message.casefold().strip()
+        return (
+            request.metadata.get("intent") == "knowledge_relation_preview"
+            or normalized_message == "preview knowledge relation"
+            or normalized_message.startswith("preview knowledge relation ")
+        )
+
+    @staticmethod
+    def _knowledge_relation_preview_ids(
+        request: BrainRequest,
+    ) -> tuple[str, str] | None:
+        value = (
+            request.message.strip()
+            if request.metadata.get("intent") == "knowledge_relation_preview"
+            else request.message[len("preview knowledge relation") :].strip()
+        )
+        parts = value.split(" -- ")
+        if len(parts) != 2 or not all(part.strip() for part in parts):
+            return None
+        return parts[0].strip(), parts[1].strip()
+
+    def _process_knowledge_relation_preview(
+        self,
+        request: BrainRequest,
+    ) -> BrainResponse:
+        """Validate an explicit document relationship without changing graph state."""
+        document_ids = self._knowledge_relation_preview_ids(request)
+        if document_ids is None:
+            return self._response_composer.knowledge_relation_preview_failure(
+                request,
+                "Knowledge relation preview format: preview knowledge relation "
+                "<source_document_id> -- <target_document_id>",
+            )
+        try:
+            preview = self._knowledge_engine.preview_document_relation(*document_ids)
+        except KnowledgeError as error:
+            return self._response_composer.knowledge_relation_preview_failure(
+                request, f"Knowledge relation preview failed: {error}"
+            )
+        return self._response_composer.knowledge_relation_preview_success(
+            request, preview
         )
 
     @staticmethod

@@ -4,12 +4,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from core.Exceptions import KnowledgeError
 from knowledge.Chunk import Chunk
 from knowledge.Document import Document
 from knowledge.DocumentLoader import DocumentLoader
 from knowledge.Indexer import Indexer
 from knowledge.KnowledgeDocumentReference import KnowledgeDocumentReference
-from knowledge.KnowledgeGraph import KnowledgeGraph, KnowledgeGraphView
+from knowledge.KnowledgeGraph import (
+    KnowledgeGraph,
+    KnowledgeGraphRelation,
+    KnowledgeGraphView,
+)
+from knowledge.KnowledgeRelationPreview import KnowledgeRelationPreview
 from knowledge.Parser import Parser
 from knowledge.Search import Search
 
@@ -62,18 +68,24 @@ class KnowledgeEngine:
         """List loaded source documents in deterministic load order."""
         indexed_chunks = tuple(self._indexer.all().values())
         return [
-            KnowledgeDocumentReference(
-                document_id=document.document_id,
-                title=document.title,
-                source=document.source,
-                document_type=document.document_type,
-                chunk_count=sum(
-                    chunk.document_id == document.document_id
-                    for chunk in indexed_chunks
-                ),
-            )
+            self._document_reference(document, indexed_chunks)
             for document in self._documents.values()
         ]
+
+    def preview_document_relation(
+        self,
+        source_document_id: str,
+        target_document_id: str,
+    ) -> KnowledgeRelationPreview:
+        """Validate a manual document relation without changing graph state."""
+        source = self._document_by_id(source_document_id)
+        target = self._document_by_id(target_document_id)
+        indexed_chunks = tuple(self._indexer.all().values())
+        return KnowledgeRelationPreview(
+            source=self._document_reference(source, indexed_chunks),
+            relation=KnowledgeGraphRelation.RELATED_TO,
+            target=self._document_reference(target, indexed_chunks),
+        )
 
     def document_count(self) -> int:
         """Return the number of loaded documents."""
@@ -90,3 +102,27 @@ class KnowledgeEngine:
     def graph_edge_count(self) -> int:
         """Return the count of derived local knowledge-graph edges."""
         return self._graph.edge_count()
+
+    def _document_by_id(self, document_id: str) -> Document:
+        if not isinstance(document_id, str) or not document_id.strip():
+            raise KnowledgeError("Knowledge document ID cannot be empty.")
+        normalized_id = document_id.strip()
+        document = self._documents.get(normalized_id)
+        if document is None:
+            raise KnowledgeError(f"Knowledge document was not found: {normalized_id}")
+        return document
+
+    @staticmethod
+    def _document_reference(
+        document: Document,
+        indexed_chunks: tuple[Chunk, ...],
+    ) -> KnowledgeDocumentReference:
+        return KnowledgeDocumentReference(
+            document_id=document.document_id,
+            title=document.title,
+            source=document.source,
+            document_type=document.document_type,
+            chunk_count=sum(
+                chunk.document_id == document.document_id for chunk in indexed_chunks
+            ),
+        )
