@@ -7,6 +7,13 @@ from memory.LearnedMemory import LearnedMemory
 
 
 class RankedKeywordLearnedMemorySelector:
+    def __init__(self, limit: int | None = None) -> None:
+        if limit is not None and limit < 0:
+            raise ValueError(
+                "Ranked keyword learned memory selector limit must be non-negative."
+            )
+        self._limit = limit
+
     def select(
         self,
         *,
@@ -26,7 +33,7 @@ class RankedKeywordLearnedMemorySelector:
         relevant_memories = (
             scored_memory for scored_memory in scored_memories if scored_memory[0] > 0
         )
-        return tuple(
+        ranked_memories = tuple(
             memory
             for _, memory in sorted(
                 relevant_memories,
@@ -34,3 +41,6 @@ class RankedKeywordLearnedMemorySelector:
                 reverse=True,
             )
         )
+        if self._limit is None:
+            return ranked_memories
+        return ranked_memories[: self._limit]
