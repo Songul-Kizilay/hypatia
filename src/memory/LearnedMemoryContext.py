@@ -67,6 +67,21 @@ def load_selected_learned_memory_context(
     )
 
 
+def load_current_selected_learned_memory_context(
+    *,
+    memory_manager: MemoryManager,
+    source_text: str,
+    selector: LearnedMemorySelector,
+) -> str:
+    memories = load_learned_memories(memory_manager)
+    latest_memories = select_latest_learned_memories(memories)
+    return build_selected_learned_memory_context(
+        source_text=source_text,
+        memories=latest_memories,
+        selector=selector,
+    )
+
+
 def load_learned_memory_context(memory_manager: MemoryManager) -> str:
     memories = load_learned_memories(memory_manager)
     latest_memories = select_latest_learned_memories(memories)
