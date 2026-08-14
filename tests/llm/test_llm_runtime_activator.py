@@ -77,3 +77,23 @@ class LLMRuntimeActivatorTests(unittest.TestCase):
             system_prompt="You are Hypatia.",
         )
         sentinel_provider.generate.assert_not_called()
+
+    def test_enabled_config_rejects_a_non_loopback_http_endpoint(self) -> None:
+        config = LLMRuntimeConfig(
+            enabled=True,
+            base_url="http://api.example.test/v1/chat/completions",
+            model="test-model",
+        )
+
+        with (
+            patch("llm.LLMRuntimeActivator.create_llm_provider") as provider_factory,
+            self.assertRaises(ValueError) as raised,
+        ):
+            activate_llm(config, "test-api-key")
+
+        self.assertEqual(
+            str(raised.exception),
+            "LLM base URL must use HTTPS unless it targets localhost, "
+            "127.0.0.1, or ::1.",
+        )
+        provider_factory.assert_not_called()

@@ -100,7 +100,10 @@ HYPATIA_LLM_API_KEY=<required API key>
 ```
 
 The API key is required whenever the LLM runtime is enabled. Use a placeholder in
-documentation and scripts; never commit a real secret.
+documentation and scripts; never commit a real secret. To keep that key protected
+in transit, remote endpoints must use `https://`. Plain `http://` is accepted only
+for an explicitly local endpoint on `localhost`, `127.0.0.1`, or `::1` (for
+example, a local Ollama-compatible runtime).
 
 Optional process-environment settings:
 

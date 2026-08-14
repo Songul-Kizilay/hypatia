@@ -2,11 +2,11 @@
 
 ## Runtime Version
 
-`v0.2.1 (Genesis)`
+`v0.2.2 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
-the semantic-memory, ranked learned-memory, and quality-gate work merged after
-`v0.2.0`.
+the semantic-memory, ranked learned-memory, LLM transport-safety, and
+quality-gate work merged after `v0.2.0`.
 
 ## Current Source State
 
@@ -44,7 +44,9 @@ with optional OpenAI-compatible LLM conversation support.
 - Knowledge Foundation for `.txt` and `.md` loading, paragraph chunking,
   in-memory indexing, and case-insensitive lexical search.
 - Optional OpenAI-compatible chat-completions transport, system prompt, and
-  bounded same-session conversation history.
+  bounded same-session conversation history. Remote endpoints are required to
+  use HTTPS; plain HTTP is limited to explicit loopback local runtimes so an
+  API key is not sent over a remote unencrypted connection.
 
 ### Intentionally Not Implemented
 
@@ -60,7 +62,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 806 automated tests pass through package-aware discovery.
+- 810 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.

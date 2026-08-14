@@ -2,6 +2,24 @@
 
 All notable project changes are recorded here.
 
+## [0.2.2] - 2026-08-15
+
+### Security
+
+- Added a validated endpoint policy for optional authenticated LLM runtimes:
+  remote providers must use HTTPS, while plain HTTP is limited to explicit
+  loopback endpoints (`localhost`, `127.0.0.1`, and `::1`).
+- Rejected malformed endpoint URLs and URLs containing embedded credentials
+  before the provider factory can receive an API key.
+- Added an initial responsible-disclosure and runtime-security baseline in the
+  repository security documentation.
+
+### Verification
+
+- The package-aware full local suite contains 810 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass in the local development
+  environment.
+
 ## [0.2.1] - 2026-08-15
 
 ### Added
