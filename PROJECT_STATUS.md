@@ -139,7 +139,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 885 automated tests pass through package-aware discovery.
+- 893 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -155,6 +155,14 @@ valid 768-dimensional embedding, then an ephemeral Bootstrap instance indexed
 a newly created conversation and returned it through `semantic recall` as a
 semantic result. This check used temporary memory/session files and did not
 alter the project's persisted data.
+
+### Live local chat-runtime check
+
+On 15 August 2026, the published v0.3.9 chat runtime was exercised against
+the local Ollama service with `llama3.2:latest`. An ephemeral Bootstrap
+instance completed a Turkish greeting request through Hypatia's
+OpenAI-compatible local chat path. Temporary memory/session files were used,
+so this check did not alter the project's persisted data.
 
 ## Next Milestone
 
