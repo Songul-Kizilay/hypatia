@@ -2,6 +2,20 @@
 
 All notable project changes are recorded here.
 
+## [0.2.3] - 2026-08-15
+
+### Security
+
+- Disabled automatic HTTP redirect following for authenticated LLM completion
+  requests, so an `Authorization` bearer token cannot be forwarded to a
+  redirect target.
+
+### Verification
+
+- The package-aware full local suite contains 811 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass in the local development
+  environment.
+
 ## [0.2.2] - 2026-08-15
 
 ### Security
