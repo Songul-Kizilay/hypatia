@@ -306,6 +306,27 @@ class BrainRouterTests(unittest.TestCase):
             "message",
         )
 
+    def test_substantive_messages_that_begin_with_a_greeting_remain_messages(
+        self,
+    ) -> None:
+        for message in (
+            "Merhaba Hypatia. Tek Türkçe cümleyle kendini tanıt.",
+            "Hello Hypatia, explain local memory.",
+        ):
+            with self.subTest(message=message):
+                self.assertEqual(
+                    self.router.detect_intent(BrainRequest(message=message)),
+                    "message",
+                )
+
+    def test_punctuated_standalone_greetings_are_detected(self) -> None:
+        for message in ("hello!", "Merhaba!!!", "selam?"):
+            with self.subTest(message=message):
+                self.assertEqual(
+                    self.router.detect_intent(BrainRequest(message=message)),
+                    "greeting",
+                )
+
     def test_create_session_command_is_detected_and_preserves_its_id_case(self) -> None:
         request = BrainRequest(message="CREATE SESSION Work-1")
 

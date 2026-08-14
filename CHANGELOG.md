@@ -2,6 +2,22 @@
 
 All notable project changes are recorded here.
 
+## [0.3.10] - 2026-08-15
+
+### Fixed
+
+- Requests that begin with an English or Turkish greeting but contain a
+  substantive question now use the normal conversation path instead of being
+  reduced to a standalone greeting response.
+- Standalone `merhaba` and `selam` greetings now receive a deterministic
+  Turkish response.
+
+### Verification
+
+- The package-aware full local suite contains 897 passing automated tests.
+- The local Ollama runtime was exercised with a Turkish substantive greeting;
+  it reached the LLM conversation path and returned a successful response.
+
 ## [0.3.9] - 2026-08-15
 
 ### Added

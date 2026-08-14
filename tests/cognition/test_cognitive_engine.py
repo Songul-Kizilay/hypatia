@@ -458,6 +458,29 @@ class CognitiveEngineTests(unittest.TestCase):
             ],
         )
 
+    def test_substantive_turkish_greeting_reaches_an_injected_llm_provider(
+        self,
+    ) -> None:
+        llm_provider = RecordingLLMProvider("Merhaba! Ben Hypatia.")
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+        )
+        message = "Merhaba Hypatia. Tek Türkçe cümleyle kendini tanıt."
+
+        response = engine.process(BrainRequest(message=message))
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "message")
+        self.assertEqual(response.message, "Merhaba! Ben Hypatia.")
+        self.assertEqual(llm_provider.calls, [(message, ())])
+
     def test_message_augments_only_provider_prompt_with_learned_memory(
         self,
     ) -> None:

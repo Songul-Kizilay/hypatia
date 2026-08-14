@@ -70,6 +70,8 @@ To create the world's most capable personal AI research companion.
 - Session creation, activation, targeted overview/details/activity/recent views,
   conversation search, rename, and guarded deletion
 - Deterministic Brain request flow when the LLM runtime is disabled
+- Deterministic English and Turkish standalone greetings; substantive messages
+  that begin with a greeting continue through the normal conversation path
 - OpenAI-compatible chat-completions provider with an optional system prompt
 - Turkish and English user-message transport through the LLM conversation path
 - Bounded, same-session multi-turn history with a configurable turn limit

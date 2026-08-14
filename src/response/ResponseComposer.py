@@ -31,11 +31,17 @@ class ResponseComposer:
     """Creates user-facing response models without orchestration logic."""
 
     _KNOWLEDGE_CONTEXT_MAX_CHARS_PER_RESULT = 600
+    _TURKISH_GREETING_PHRASES = frozenset({"merhaba", "selam"})
 
     def greeting(self, request: BrainRequest) -> BrainResponse:
         """Compose the deterministic greeting response."""
+        greeting_candidate = request.message.casefold().strip().rstrip("!?.")
         return BrainResponse(
-            message="Hello! I am Hypatia.",
+            message=(
+                "Merhaba! Ben Hypatia."
+                if greeting_candidate in self._TURKISH_GREETING_PHRASES
+                else "Hello! I am Hypatia."
+            ),
             request_id=request.request_id,
             intent="greeting",
             memory_count=0,
