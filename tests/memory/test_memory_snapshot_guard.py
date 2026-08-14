@@ -79,12 +79,12 @@ class MemorySnapshotGuardTests(unittest.TestCase):
                 self.memory.run_if_snapshot_current(snapshot, operation)
             )
         )
-        mutation_thread = Thread(
-            target=lambda: (
-                self.memory.add("concurrent record"),
-                mutation_finished.set(),
-            )
-        )
+
+        def mutate_memory() -> None:
+            self.memory.add("concurrent record")
+            mutation_finished.set()
+
+        mutation_thread = Thread(target=mutate_memory)
 
         guard_thread.start()
         self.assertTrue(callback_started.wait(timeout=1))

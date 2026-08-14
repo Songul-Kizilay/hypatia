@@ -12,6 +12,7 @@ if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
 from core.Exceptions import MemoryError, SessionDeleteEventError, SessionError
+from eventbus.Event import Event as EventBusEvent
 from eventbus.EventBus import EventBus
 from memory.MemoryManager import MemoryManager
 from session.SessionDeleteService import SessionDeleteService
@@ -22,7 +23,7 @@ from session.SessionManager import SessionManager
 class SnapshotMutatingMemoryManager(MemoryManager):
     """Make the guard observe one independently changed memory snapshot."""
 
-    def run_if_snapshot_current(self, expected_snapshot, operation):  # type: ignore[no-untyped-def]
+    def run_if_snapshot_current(self, expected_snapshot, operation):
         self.add("Intervening", metadata={"session_id": "work"})
         return super().run_if_snapshot_current(expected_snapshot, operation)
 
@@ -30,11 +31,11 @@ class SnapshotMutatingMemoryManager(MemoryManager):
 class GuardTrackingMemoryManager(MemoryManager):
     """Expose whether a guarded callback is currently running."""
 
-    def __init__(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.inside_guard = False
 
-    def run_if_snapshot_current(self, expected_snapshot, operation):  # type: ignore[no-untyped-def]
+    def run_if_snapshot_current(self, expected_snapshot, operation):
         self.inside_guard = True
         try:
             return super().run_if_snapshot_current(expected_snapshot, operation)
@@ -49,7 +50,7 @@ class BlockingTransactionService(SessionDeleteTransactionService):
         self.commit_entered = Event()
         self.release_commit = Event()
 
-    def commit(self, context, sessions):  # type: ignore[no-untyped-def]
+    def commit(self, context, sessions):
         self.commit_entered.set()
         self.release_commit.wait(timeout=2)
         return super().commit(context, sessions)
@@ -62,7 +63,7 @@ class ApplyMutatingSessionManager(SessionManager):
         super().__init__(event_bus)
         self.mutate_before_apply = False
 
-    def apply_snapshot_if_current(self, expected, candidate):  # type: ignore[no-untyped-def]
+    def apply_snapshot_if_current(self, expected, candidate):
         if self.mutate_before_apply:
             self.mutate_before_apply = False
             self.create("research")
@@ -81,7 +82,7 @@ class SessionDeleteServiceTests(unittest.TestCase):
     def test_delete_commits_an_inactive_zero_memory_session_and_emits_once(
         self,
     ) -> None:
-        events: list[object] = []
+        events: list[EventBusEvent] = []
         self.event_bus.subscribe("*", events.append)
 
         result = self.service.delete("work")
@@ -102,7 +103,7 @@ class SessionDeleteServiceTests(unittest.TestCase):
         self.sessions.set_active("work")
         sessions_before = self.sessions.snapshot()
         memory_before = self.memory.snapshot()
-        events: list[object] = []
+        events: list[EventBusEvent] = []
         self.event_bus.subscribe("*", events.append)
 
         for session_id, reason in (
@@ -126,7 +127,7 @@ class SessionDeleteServiceTests(unittest.TestCase):
         )
         sessions_before = self.sessions.snapshot()
         memory_before = self.memory.snapshot()
-        events: list[object] = []
+        events: list[EventBusEvent] = []
         self.event_bus.subscribe("*", events.append)
 
         with self.assertRaisesRegex(SessionError, "^session has attached memories$"):
@@ -143,7 +144,7 @@ class SessionDeleteServiceTests(unittest.TestCase):
         memory = SnapshotMutatingMemoryManager(event_bus=self.event_bus)
         service = SessionDeleteService(self.sessions, memory)
         sessions_before = self.sessions.snapshot()
-        events: list[object] = []
+        events: list[EventBusEvent] = []
         self.event_bus.subscribe("*", events.append)
 
         with self.assertRaisesRegex(MemoryError, "^Memory snapshot changed\\.$"):
@@ -229,7 +230,7 @@ class SessionDeleteServiceTests(unittest.TestCase):
         sessions.create("work")
         sessions.mutate_before_apply = True
         service = SessionDeleteService(sessions, MemoryManager(event_bus=event_bus))
-        deleted_events: list[object] = []
+        deleted_events: list[EventBusEvent] = []
         event_bus.subscribe("session.deleted", deleted_events.append)
 
         with self.assertRaisesRegex(SessionError, "^Session snapshot changed\\.$"):
@@ -245,10 +246,10 @@ class SessionDeleteServiceTests(unittest.TestCase):
         self,
     ) -> None:
         class FailingSessionStore:
-            def load(self):  # type: ignore[no-untyped-def]
+            def load(self):
                 return None
 
-            def save(self, snapshot):  # type: ignore[no-untyped-def]
+            def save(self, snapshot):
                 raise RuntimeError("session store unavailable")
 
         event_bus = EventBus()
@@ -260,9 +261,9 @@ class SessionDeleteServiceTests(unittest.TestCase):
         sessions = SessionManager(event_bus)
         sessions.create("work")
         original = sessions.snapshot()
-        sessions._store = FailingSessionStore()  # type: ignore[attr-defined]
+        sessions._store = FailingSessionStore()
         service = SessionDeleteService(sessions, MemoryManager(event_bus=event_bus))
-        events: list[object] = []
+        events: list[EventBusEvent] = []
         event_bus.subscribe("*", events.append)
 
         with self.assertRaisesRegex(RuntimeError, "^session store unavailable$"):

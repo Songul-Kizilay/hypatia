@@ -67,10 +67,16 @@ To create the world's most capable personal AI research companion.
 
 - Application bootstrap, configuration, logging, and dependency injection
 - Sessions and persisted structured conversation memory
+- Session creation, activation, targeted overview/details/activity/recent views,
+  conversation search, rename, and guarded deletion
 - Deterministic Brain request flow when the LLM runtime is disabled
 - OpenAI-compatible chat-completions provider with an optional system prompt
 - Turkish and English user-message transport through the LLM conversation path
 - Bounded, same-session multi-turn history with a configurable turn limit
+- Opt-in learned-memory extraction with append-only corrections, bounded
+  context, deterministic keyword selection, and ranked top-k selection
+- A local, derived semantic-memory index core with validated embeddings and
+  deterministic cosine ranking; it is not yet connected to the request flow
 - Deterministic Planner task generation
 - Knowledge Foundation: `.txt` and `.md` document loading, paragraph parsing, in-memory chunk indexing, and case-insensitive search
 - KnowledgeEngine orchestration for the full document-to-search pipeline
@@ -113,3 +119,78 @@ Turkish and English user messages can travel through this conversational path.
 Previous conversation turns from the same resolved session are supplied as
 context. When the LLM runtime is disabled, Hypatia preserves its existing
 deterministic behavior.
+
+---
+
+## Learned-memory runtime settings
+
+Learned-memory extraction is opt-in. It is activated only when both the LLM
+runtime is configured and this exact process-environment value is set:
+
+```text
+HYPATIA_LEARNING_ENABLED=true
+```
+
+The following optional settings control which learned memories are supplied to
+the LLM as additional context:
+
+```text
+HYPATIA_LEARNED_MEMORY_CONTEXT_LIMIT=<non-negative integer>
+HYPATIA_LEARNED_MEMORY_SELECTOR=keyword|ranked
+HYPATIA_RANKED_LEARNED_MEMORY_SELECTOR_LIMIT=<non-negative integer>
+```
+
+`HYPATIA_LEARNED_MEMORY_CONTEXT_LIMIT` limits the final learned-memory context.
+With no selector configured, Hypatia keeps its existing current-memory order.
+`keyword` selects matching memories deterministically; `ranked` orders relevant
+memories by deterministic keyword relevance. The ranked selector limit is
+applied first, then the final context limit is applied. A ranked limit of `0`
+therefore selects no learned memories. The ranked selector limit is ignored
+unless `HYPATIA_LEARNED_MEMORY_SELECTOR=ranked`.
+
+All numeric learned-memory limits must be non-negative integers. Invalid values
+or a selector value other than the exact lowercase `keyword` or `ranked` cause
+startup configuration to fail clearly instead of silently changing context.
+
+The semantic-memory index is currently a tested, in-memory building block. An
+explicit Ollama `/api/embed` adapter is available for a local Ollama service,
+but Hypatia does not activate it automatically unless its opt-in settings are
+set. It does not download a model, persist vectors, or change the response path
+except through the explicit semantic-recall command documented below. See the
+[Architecture Audit v0.1](docs/Architecture/Architecture_Audit_v0.1.md) for
+its staged rollout boundary.
+
+---
+
+## Semantic-memory local runtime
+
+Semantic memory is disabled by default. To build a derived in-memory index from
+the active local memory records at startup, install and run Ollama locally, make
+an embedding model available, then set:
+
+```text
+HYPATIA_SEMANTIC_MEMORY_ENABLED=true
+HYPATIA_SEMANTIC_MEMORY_OLLAMA_ENDPOINT=http://localhost:11434/api/embed
+HYPATIA_SEMANTIC_MEMORY_OLLAMA_MODEL=embeddinggemma
+```
+
+The endpoint and model shown are defaults when their optional settings are
+absent. No API key is used. Startup calls the configured local endpoint only
+when the enabled value is exactly lowercase `true`. A successful refresh swaps
+in a complete replacement index; if the first refresh fails, bootstrap stops
+before publishing its dependency container. After a successful startup, local
+memory add, update, delete, and expiry events update the derived index on a
+best-effort basis. An embedding failure never undoes an already-completed
+primary-memory operation. The vectors remain in RAM and are recreated from
+local memory on the next successful startup.
+
+Use `semantic recall <query>` to retrieve conversation records from the active
+or explicitly selected session. When an indexed semantic result is available,
+the response labels it as `semantic` and includes a three-decimal similarity
+score. If semantic runtime is disabled, its index has no eligible record, or
+the local provider fails, the same command falls back to deterministic lexical
+conversation recall and labels the result `lexical fallback`.
+
+Normal `recall <query>` remains lexical and does not call the semantic runtime.
+Semantic recall does not add a conversation record, alter ordinary messages, or
+search other sessions.

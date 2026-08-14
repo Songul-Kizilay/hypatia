@@ -11,9 +11,9 @@ SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
-from llm.UrllibChatCompletionTransport import (
+from memory.UrllibOllamaEmbeddingTransport import (
     DEFAULT_TIMEOUT_SECONDS,
-    UrllibChatCompletionTransport,
+    UrllibOllamaEmbeddingTransport,
 )
 
 
@@ -25,11 +25,11 @@ class FakeResponse:
         return None
 
     def read(self) -> bytes:
-        return b'{"choices": [{"message": {"content": "Generated answer."}}]}'
+        return b'{"embeddings": [[0.25, -0.5]]}'
 
 
-class UrllibChatCompletionTransportTests(unittest.TestCase):
-    def test_transport_posts_a_json_request_without_using_the_network(self) -> None:
+class UrllibOllamaEmbeddingTransportTests(unittest.TestCase):
+    def test_posts_single_embedding_payload_without_using_the_network(self) -> None:
         requests: list[Request] = []
         timeouts: list[float] = []
 
@@ -38,39 +38,30 @@ class UrllibChatCompletionTransportTests(unittest.TestCase):
             timeouts.append(timeout)
             return FakeResponse()
 
-        transport = UrllibChatCompletionTransport()
+        transport = UrllibOllamaEmbeddingTransport()
 
         with patch(
-            "llm.UrllibChatCompletionTransport.urlopen",
+            "memory.UrllibOllamaEmbeddingTransport.urlopen",
             side_effect=fake_urlopen,
         ):
             response = transport(
-                "https://api.example.test/v1/chat/completions",
-                {"Authorization": "Bearer test-api-key"},
-                {
-                    "model": "test-model",
-                    "messages": [{"role": "user", "content": "Tell me something."}],
-                },
+                "http://localhost:11434/api/embed",
+                {"model": "embeddinggemma", "input": "Exact source"},
             )
 
-        self.assertEqual(
-            response,
-            {"choices": [{"message": {"content": "Generated answer."}}]},
-        )
-        self.assertEqual(len(requests), 1)
+        self.assertEqual(response, {"embeddings": [[0.25, -0.5]]})
         self.assertEqual(timeouts, [DEFAULT_TIMEOUT_SECONDS])
+        self.assertEqual(len(requests), 1)
         request = requests[0]
-        self.assertEqual(
-            request.full_url, "https://api.example.test/v1/chat/completions"
-        )
+        self.assertEqual(request.full_url, "http://localhost:11434/api/embed")
         self.assertEqual(request.get_method(), "POST")
         self.assertEqual(request.get_header("Content-type"), "application/json")
-        self.assertEqual(request.get_header("Authorization"), "Bearer test-api-key")
         assert isinstance(request.data, bytes)
         self.assertEqual(
             json.loads(request.data.decode("utf-8")),
-            {
-                "model": "test-model",
-                "messages": [{"role": "user", "content": "Tell me something."}],
-            },
+            {"model": "embeddinggemma", "input": "Exact source"},
         )
+
+
+if __name__ == "__main__":
+    unittest.main()

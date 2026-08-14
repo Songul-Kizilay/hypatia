@@ -12,6 +12,7 @@ if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
 from core.Exceptions import SessionError
+from eventbus.Event import Event as EventBusEvent
 from eventbus.EventBus import EventBus
 from memory.MemoryManager import MemoryManager
 from session.SessionDeletePlan import SessionDeletePlan
@@ -102,7 +103,7 @@ class SessionDeleteTransactionServiceTests(unittest.TestCase):
         memories.add("Work", metadata={"session_id": "work"})
         sessions_before = sessions.snapshot()
         memories_before = memories.snapshot()
-        events: list[object] = []
+        events: list[EventBusEvent] = []
         event_bus.subscribe("*", events.append)
 
         context = self.service.prepare(self._allowed_plan())
@@ -157,7 +158,7 @@ class SessionDeleteTransactionServiceTests(unittest.TestCase):
         sessions.create("research")
         snapshot = sessions.snapshot()
         context = self.service.prepare(self._allowed_plan())
-        events: list[object] = []
+        events: list[EventBusEvent] = []
         event_bus.subscribe("*", events.append)
 
         candidate = self.service.build_candidate(context, snapshot)
@@ -202,7 +203,7 @@ class SessionDeleteTransactionServiceTests(unittest.TestCase):
         store.manager = sessions
         sessions.create("work")
         original = sessions.snapshot()
-        events: list[object] = []
+        events: list[EventBusEvent] = []
         event_bus.subscribe("*", events.append)
 
         result = self.service.execute(
@@ -240,7 +241,7 @@ class SessionDeleteTransactionServiceTests(unittest.TestCase):
         store.manager = sessions
         sessions.create("work")
         original = sessions.snapshot()
-        events: list[object] = []
+        events: list[EventBusEvent] = []
         event_bus.subscribe("*", events.append)
 
         result, deleted_session = self.service.commit(
@@ -264,7 +265,7 @@ class SessionDeleteTransactionServiceTests(unittest.TestCase):
         sessions = SessionManager(event_bus, store)
         store.manager = sessions
         original = sessions.snapshot()
-        events: list[object] = []
+        events: list[EventBusEvent] = []
         event_bus.subscribe("*", events.append)
 
         with self.assertRaisesRegex(
@@ -291,7 +292,7 @@ class SessionDeleteTransactionServiceTests(unittest.TestCase):
         sessions.set_active("work")
         original = sessions.snapshot()
         saves_before = len(store.saved)
-        events: list[object] = []
+        events: list[EventBusEvent] = []
         event_bus.subscribe("*", events.append)
 
         with self.assertRaisesRegex(
@@ -313,7 +314,7 @@ class SessionDeleteTransactionServiceTests(unittest.TestCase):
         sessions.create("work")
         original = sessions.snapshot()
         store.fail_on_save = True
-        events: list[object] = []
+        events: list[EventBusEvent] = []
         event_bus.subscribe("*", events.append)
 
         with self.assertRaisesRegex(RuntimeError, "^session store unavailable$"):
@@ -330,7 +331,7 @@ class SessionDeleteTransactionServiceTests(unittest.TestCase):
         sessions = SnapshotMutatingSessionManager(event_bus, store)
         store.manager = sessions
         sessions.create("work")
-        events: list[object] = []
+        events: list[EventBusEvent] = []
         event_bus.subscribe("*", events.append)
         saves_before = len(store.saved)
         sessions.mutate_before_next_atomic_apply()
@@ -355,7 +356,7 @@ class SessionDeleteTransactionServiceTests(unittest.TestCase):
         store.manager = sessions
         sessions.create("work")
         original = sessions.snapshot()
-        events: list[object] = []
+        events: list[EventBusEvent] = []
         event_bus.subscribe("*", events.append)
 
         for context, message in (

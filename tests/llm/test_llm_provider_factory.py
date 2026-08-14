@@ -3,12 +3,12 @@ from __future__ import annotations
 import sys
 import unittest
 from pathlib import Path
+from typing import cast
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
-from llm.LLMProvider import LLMProvider
 from llm.LLMProviderFactory import create_llm_provider
 from llm.OpenAICompatibleProvider import OpenAICompatibleProvider
 from llm.UrllibChatCompletionTransport import UrllibChatCompletionTransport
@@ -16,10 +16,13 @@ from llm.UrllibChatCompletionTransport import UrllibChatCompletionTransport
 
 class LLMProviderFactoryTests(unittest.TestCase):
     def test_factory_composes_the_default_provider_without_generating(self) -> None:
-        provider: LLMProvider = create_llm_provider(
-            base_url="https://api.example.test/v1/chat/completions",
-            api_key="test-api-key",
-            model="test-model",
+        provider = cast(
+            OpenAICompatibleProvider,
+            create_llm_provider(
+                base_url="https://api.example.test/v1/chat/completions",
+                api_key="test-api-key",
+                model="test-model",
+            ),
         )
 
         self.assertIsInstance(provider, OpenAICompatibleProvider)
@@ -32,11 +35,14 @@ class LLMProviderFactoryTests(unittest.TestCase):
         self.assertIsNone(provider._system_prompt)
 
     def test_factory_forwards_an_optional_system_prompt(self) -> None:
-        provider = create_llm_provider(
-            base_url="https://api.example.test/v1/chat/completions",
-            api_key="test-api-key",
-            model="test-model",
-            system_prompt="You are Hypatia.",
+        provider = cast(
+            OpenAICompatibleProvider,
+            create_llm_provider(
+                base_url="https://api.example.test/v1/chat/completions",
+                api_key="test-api-key",
+                model="test-model",
+                system_prompt="You are Hypatia.",
+            ),
         )
 
         self.assertIsInstance(provider, OpenAICompatibleProvider)

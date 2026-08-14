@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
 
 from brain.BrainRequest import BrainRequest
@@ -423,6 +424,60 @@ class ResponseComposer:
             memory_count=0,
             success=False,
         )
+
+    def semantic_recall_success(
+        self,
+        request: BrainRequest,
+        records: Sequence[tuple[MemoryRecord, float | None]],
+        *,
+        retrieval: str,
+    ) -> BrainResponse:
+        """Compose explicit semantic recall with a visible retrieval mode."""
+        if not records:
+            return BrainResponse(
+                message=(
+                    f"Semantic recall ({retrieval}): "
+                    "no matching conversation records found."
+                ),
+                request_id=request.request_id,
+                intent="semantic_recall",
+                memory_count=0,
+            )
+
+        items = "\n\n".join(
+            self._semantic_recall_item(index, record, score)
+            for index, (record, score) in enumerate(records, start=1)
+        )
+        return BrainResponse(
+            message=f"Semantic recall ({retrieval}):\n\n{items}",
+            request_id=request.request_id,
+            intent="semantic_recall",
+            memory_count=len(records),
+        )
+
+    def semantic_recall_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Compose an unsuccessful semantic recall response."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="semantic_recall",
+            memory_count=0,
+            success=False,
+        )
+
+    @staticmethod
+    def _semantic_recall_item(
+        index: int,
+        record: MemoryRecord,
+        score: float | None,
+    ) -> str:
+        if score is None:
+            return f"{index}. {record.content}"
+        return f"{index}. [similarity: {score:.3f}] {record.content}"
 
     def recent_conversations(
         self,

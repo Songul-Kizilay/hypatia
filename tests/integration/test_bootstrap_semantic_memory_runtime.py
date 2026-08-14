@@ -1,0 +1,209 @@
+from __future__ import annotations
+
+import os
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+SRC_DIR = Path(__file__).resolve().parents[2] / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.append(str(SRC_DIR))
+
+from brain.BrainRequest import BrainRequest
+from cognition.CognitiveEngine import CognitiveEngine
+from core.Bootstrap import Bootstrap
+from core.Exceptions import ContainerError, MemoryError
+from memory.Embedding import Embedding
+from memory.JsonFileMemoryStore import JsonFileMemoryStore
+from memory.MemoryRecord import MemoryRecord
+from memory.SemanticMemoryIndexRuntime import SemanticMemoryIndexRuntime
+
+
+class RecordingEmbeddingProvider:
+    def __init__(self, embedding: Embedding, error: Exception | None = None) -> None:
+        self._embedding = embedding
+        self._error = error
+        self.sources: list[str] = []
+
+    def embed(self, source_text: str) -> Embedding:
+        self.sources.append(source_text)
+        if self._error is not None:
+            raise self._error
+        return self._embedding
+
+
+class BootstrapSemanticMemoryRuntimeTests(unittest.TestCase):
+    def test_disabled_process_runtime_does_not_construct_or_register_provider(
+        self,
+    ) -> None:
+        with (
+            tempfile.TemporaryDirectory() as temporary_directory,
+            patch.dict(os.environ, {}, clear=True),
+            patch("core.Bootstrap.OllamaEmbeddingProvider") as construct_provider,
+        ):
+            temporary_path = Path(temporary_directory)
+            memory_path = temporary_path / "memory.json"
+            JsonFileMemoryStore(memory_path).save(
+                [MemoryRecord(memory_id="memory-1", content="Persistent fact")]
+            )
+            bootstrap = Bootstrap.from_process_environment(
+                memory_path,
+                temporary_path / "sessions.json",
+            )
+            bootstrap.initialize()
+
+            with self.assertRaises(ContainerError):
+                bootstrap.container.resolve(SemanticMemoryIndexRuntime)
+
+        construct_provider.assert_not_called()
+
+    def test_enabled_process_runtime_builds_and_registers_local_index(self) -> None:
+        record = MemoryRecord(memory_id="memory-1", content="Persistent fact")
+        provider = RecordingEmbeddingProvider(Embedding((1, 0)))
+
+        with (
+            tempfile.TemporaryDirectory() as temporary_directory,
+            patch.dict(
+                os.environ,
+                {"HYPATIA_SEMANTIC_MEMORY_ENABLED": "true"},
+                clear=True,
+            ),
+            patch(
+                "core.Bootstrap.OllamaEmbeddingProvider",
+                return_value=provider,
+            ) as construct_provider,
+        ):
+            temporary_path = Path(temporary_directory)
+            memory_path = temporary_path / "memory.json"
+            JsonFileMemoryStore(memory_path).save([record])
+            bootstrap = Bootstrap.from_process_environment(
+                memory_path,
+                temporary_path / "sessions.json",
+            )
+            bootstrap.initialize()
+            runtime = bootstrap.container.resolve(SemanticMemoryIndexRuntime)
+
+        construct_provider.assert_called_once_with(
+            endpoint="http://localhost:11434/api/embed",
+            model="embeddinggemma",
+            transport=unittest.mock.ANY,
+        )
+        self.assertEqual(provider.sources, ["Persistent fact"])
+        assert runtime.current() is not None
+        self.assertEqual(runtime.current().count(), 1)
+
+    def test_enabled_runtime_indexes_new_conversation_memory_after_bootstrap(
+        self,
+    ) -> None:
+        provider = RecordingEmbeddingProvider(Embedding((1, 0)))
+
+        with (
+            tempfile.TemporaryDirectory() as temporary_directory,
+            patch.dict(
+                os.environ,
+                {"HYPATIA_SEMANTIC_MEMORY_ENABLED": "true"},
+                clear=True,
+            ),
+            patch("core.Bootstrap.OllamaEmbeddingProvider", return_value=provider),
+        ):
+            temporary_path = Path(temporary_directory)
+            bootstrap = Bootstrap.from_process_environment(
+                temporary_path / "memory.json",
+                temporary_path / "sessions.json",
+            )
+            bootstrap.initialize()
+            runtime = bootstrap.container.resolve(SemanticMemoryIndexRuntime)
+            engine = bootstrap.container.resolve(CognitiveEngine)
+
+            engine.process(BrainRequest(message="Hello Hypatia"))
+            response = engine.process(BrainRequest(message="semantic recall greeting"))
+
+        assert runtime.current() is not None
+        self.assertEqual(runtime.current().count(), 1)
+        self.assertTrue(response.success)
+        self.assertIn("Semantic recall (semantic):", response.message)
+        self.assertEqual(len(provider.sources), 2)
+        self.assertIn("User: Hello Hypatia", provider.sources[0])
+
+    def test_enabled_runtime_failure_stops_bootstrap_before_container_publish(
+        self,
+    ) -> None:
+        provider = RecordingEmbeddingProvider(
+            Embedding((1, 0)),
+            error=MemoryError("Embedding transport failed."),
+        )
+
+        with (
+            tempfile.TemporaryDirectory() as temporary_directory,
+            patch.dict(
+                os.environ,
+                {"HYPATIA_SEMANTIC_MEMORY_ENABLED": "true"},
+                clear=True,
+            ),
+            patch("core.Bootstrap.OllamaEmbeddingProvider", return_value=provider),
+        ):
+            temporary_path = Path(temporary_directory)
+            memory_path = temporary_path / "memory.json"
+            JsonFileMemoryStore(memory_path).save(
+                [MemoryRecord(memory_id="memory-1", content="Persistent fact")]
+            )
+            bootstrap = Bootstrap.from_process_environment(
+                memory_path,
+                temporary_path / "sessions.json",
+            )
+
+            with self.assertRaisesRegex(MemoryError, "transport failed"):
+                bootstrap.initialize()
+
+        self.assertFalse(hasattr(bootstrap, "container"))
+
+    def test_enabled_runtime_rejects_empty_endpoint_or_model_before_provider_constructs(
+        self,
+    ) -> None:
+        for environment, expected_message in (
+            (
+                {
+                    "HYPATIA_SEMANTIC_MEMORY_ENABLED": "true",
+                    "HYPATIA_SEMANTIC_MEMORY_OLLAMA_ENDPOINT": "  ",
+                },
+                "ENDPOINT cannot be empty",
+            ),
+            (
+                {
+                    "HYPATIA_SEMANTIC_MEMORY_ENABLED": "true",
+                    "HYPATIA_SEMANTIC_MEMORY_OLLAMA_MODEL": "",
+                },
+                "MODEL cannot be empty",
+            ),
+            (
+                {
+                    "HYPATIA_SEMANTIC_MEMORY_ENABLED": "true",
+                    "HYPATIA_SEMANTIC_MEMORY_OLLAMA_ENDPOINT": (
+                        "https://embedding.example.test/api/embed"
+                    ),
+                },
+                "must be a local HTTP endpoint",
+            ),
+        ):
+            with self.subTest(environment=environment):
+                with (
+                    tempfile.TemporaryDirectory() as temporary_directory,
+                    patch.dict(os.environ, environment, clear=True),
+                    patch(
+                        "core.Bootstrap.OllamaEmbeddingProvider"
+                    ) as construct_provider,
+                ):
+                    temporary_path = Path(temporary_directory)
+                    with self.assertRaisesRegex(ValueError, expected_message):
+                        Bootstrap.from_process_environment(
+                            temporary_path / "memory.json",
+                            temporary_path / "sessions.json",
+                        )
+
+                construct_provider.assert_not_called()
+
+
+if __name__ == "__main__":
+    unittest.main()

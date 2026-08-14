@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 
 from brain.Brain import Brain
 from cognition.CognitiveEngine import CognitiveEngine
@@ -25,9 +26,13 @@ from memory.LLMLearnedMemoryCandidateExtractor import (
     LLMLearnedMemoryCandidateExtractor,
 )
 from memory.MemoryManager import MemoryManager
+from memory.OllamaEmbeddingProvider import OllamaEmbeddingProvider
 from memory.RankedKeywordLearnedMemorySelector import (
     RankedKeywordLearnedMemorySelector,
 )
+from memory.SemanticMemoryIndexBuilder import SemanticMemoryIndexBuilder
+from memory.SemanticMemoryIndexRuntime import SemanticMemoryIndexRuntime
+from memory.UrllibOllamaEmbeddingTransport import UrllibOllamaEmbeddingTransport
 from planner.Planner import Planner
 from response.ResponseComposer import ResponseComposer
 from session.JsonFileSessionStore import JsonFileSessionStore
@@ -50,6 +55,7 @@ class Bootstrap:
         ) = None,
         learned_memory_context_limit: int | None = None,
         learned_memory_selector: LearnedMemorySelector | None = None,
+        semantic_memory_index_runtime: SemanticMemoryIndexRuntime | None = None,
     ) -> None:
         self._memory_path = memory_path
         self._session_path = session_path
@@ -61,6 +67,7 @@ class Bootstrap:
         self._learned_memory_candidate_extractor = learned_memory_candidate_extractor
         self._learned_memory_context_limit = learned_memory_context_limit
         self._learned_memory_selector = learned_memory_selector
+        self._semantic_memory_index_runtime = semantic_memory_index_runtime
 
     @classmethod
     def from_process_environment(
@@ -74,6 +81,9 @@ class Bootstrap:
         llm_history_max_turns = load_llm_process_history_max_turns()
         learned_memory_context_limit = cls._load_process_learned_memory_context_limit()
         learned_memory_selector = cls._load_process_learned_memory_selector()
+        semantic_memory_index_runtime = (
+            cls._load_process_semantic_memory_index_runtime()
+        )
         if llm_system_prompt is None:
             llm_system_prompt = HYPATIA_DEFAULT_SYSTEM_PROMPT
 
@@ -86,6 +96,7 @@ class Bootstrap:
             llm_history_max_turns=llm_history_max_turns,
             learned_memory_context_limit=learned_memory_context_limit,
             learned_memory_selector=learned_memory_selector,
+            semantic_memory_index_runtime=semantic_memory_index_runtime,
         )
 
     @staticmethod
@@ -108,10 +119,61 @@ class Bootstrap:
         if raw_selector == "keyword":
             return KeywordLearnedMemorySelector()
         if raw_selector == "ranked":
-            return RankedKeywordLearnedMemorySelector()
+            return RankedKeywordLearnedMemorySelector(
+                limit=Bootstrap._load_process_ranked_learned_memory_selector_limit()
+            )
         raise ValueError(
             "HYPATIA_LEARNED_MEMORY_SELECTOR must be 'keyword' or 'ranked'."
         )
+
+    @staticmethod
+    def _load_process_ranked_learned_memory_selector_limit() -> int | None:
+        raw_limit = os.environ.get("HYPATIA_RANKED_LEARNED_MEMORY_SELECTOR_LIMIT")
+        if raw_limit is None:
+            return None
+        if not raw_limit.isascii() or not raw_limit.isdecimal():
+            raise ValueError(
+                "HYPATIA_RANKED_LEARNED_MEMORY_SELECTOR_LIMIT must be a "
+                "non-negative integer."
+            )
+        return int(raw_limit)
+
+    @staticmethod
+    def _load_process_semantic_memory_index_runtime() -> (
+        SemanticMemoryIndexRuntime | None
+    ):
+        if os.environ.get("HYPATIA_SEMANTIC_MEMORY_ENABLED") != "true":
+            return None
+
+        endpoint = os.environ.get(
+            "HYPATIA_SEMANTIC_MEMORY_OLLAMA_ENDPOINT",
+            "http://localhost:11434/api/embed",
+        )
+        model = os.environ.get(
+            "HYPATIA_SEMANTIC_MEMORY_OLLAMA_MODEL",
+            "embeddinggemma",
+        )
+        if not endpoint.strip():
+            raise ValueError("HYPATIA_SEMANTIC_MEMORY_OLLAMA_ENDPOINT cannot be empty.")
+        parsed_endpoint = urlparse(endpoint)
+        if parsed_endpoint.scheme != "http" or parsed_endpoint.hostname not in {
+            "localhost",
+            "127.0.0.1",
+            "::1",
+        }:
+            raise ValueError(
+                "HYPATIA_SEMANTIC_MEMORY_OLLAMA_ENDPOINT must be a local HTTP "
+                "endpoint."
+            )
+        if not model.strip():
+            raise ValueError("HYPATIA_SEMANTIC_MEMORY_OLLAMA_MODEL cannot be empty.")
+
+        provider = OllamaEmbeddingProvider(
+            endpoint=endpoint,
+            model=model,
+            transport=UrllibOllamaEmbeddingTransport(),
+        )
+        return SemanticMemoryIndexRuntime(SemanticMemoryIndexBuilder(provider))
 
     def initialize(self) -> None:
         config = Config()
@@ -128,6 +190,10 @@ class Bootstrap:
         )
         memory_manager = MemoryManager(event_bus, memory_store)
         memory_manager.load()
+        semantic_memory_index_runtime = self._semantic_memory_index_runtime
+        if semantic_memory_index_runtime is not None:
+            semantic_memory_index_runtime.refresh(memory_manager)
+            semantic_memory_index_runtime.attach(event_bus)
         session_rename_service = SessionRenameTransactionService(
             session_manager=session_manager,
             memory_manager=memory_manager,
@@ -159,6 +225,7 @@ class Bootstrap:
             learned_memory_candidate_extractor=learned_memory_candidate_extractor,
             learned_memory_context_limit=self._learned_memory_context_limit,
             learned_memory_selector=self._learned_memory_selector,
+            semantic_memory_index_runtime=semantic_memory_index_runtime,
         )
         brain = Brain(cognitive_engine, memory_manager, event_bus)
 
@@ -169,6 +236,8 @@ class Bootstrap:
         container.register(session_manager)
         container.register(memory_store)
         container.register(memory_manager)
+        if semantic_memory_index_runtime is not None:
+            container.register(semantic_memory_index_runtime)
         container.register(session_rename_service)
         container.register(knowledge_engine)
         container.register(response_composer)
