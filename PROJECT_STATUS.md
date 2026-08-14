@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.10 (Genesis)`
+`v0.3.11 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.10`** is the current executable package and published
+- **Runtime release `v0.3.11`** is the current executable package and published
   GitHub release.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -57,6 +57,10 @@ with optional OpenAI-compatible LLM conversation support.
 - Deterministic reciprocal-rank fusion for explicit semantic recall when both
   current-session semantic and lexical candidates exist. Hybrid responses use
   rank scores; semantic-only responses retain cosine-similarity scores.
+- A read-only `semantic recall status` diagnostic. It reports the optional
+  runtime's state, index size and dimension when ready, and only the safe
+  latest incremental-update diagnostic; it does not generate an embedding or
+  change conversation memory.
 - An optional model-scoped local semantic-embedding cache. It is disabled by
   default, validates a source-content fingerprint before reuse, updates with
   memory lifecycle events, and remains separate from the primary memory schema.
@@ -142,7 +146,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 893 automated tests pass through package-aware discovery.
+- 902 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.

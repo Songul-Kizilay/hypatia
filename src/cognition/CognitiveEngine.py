@@ -255,6 +255,9 @@ class CognitiveEngine:
                 return self._response_composer.recall_failure(request, str(error))
             return self._response_composer.recall_success(request, session_records[:5])
 
+        if self._is_semantic_recall_status_request(request):
+            return self._process_semantic_recall_status(request)
+
         if self._is_semantic_recall_request(request):
             return self._process_semantic_recall(request)
 
@@ -657,6 +660,44 @@ class CognitiveEngine:
             declared_intent == "semantic_recall"
             or normalized_message == "semantic recall"
             or normalized_message.startswith("semantic recall ")
+        )
+
+    @staticmethod
+    def _is_semantic_recall_status_request(request: BrainRequest) -> bool:
+        """Return whether a request asks for a read-only semantic status view."""
+        return (
+            request.metadata.get("intent") == "semantic_recall_status"
+            or request.message.casefold().strip() == "semantic recall status"
+        )
+
+    def _process_semantic_recall_status(self, request: BrainRequest) -> BrainResponse:
+        """Expose derived semantic-index health without querying or mutating it."""
+        runtime = self._semantic_memory_index_runtime
+        if runtime is None:
+            return self._response_composer.semantic_recall_status(
+                request,
+                runtime_state="disabled",
+                indexed_memory_records=None,
+                embedding_dimension=None,
+                last_update_error=None,
+            )
+
+        index = runtime.current()
+        if index is None:
+            return self._response_composer.semantic_recall_status(
+                request,
+                runtime_state="initializing",
+                indexed_memory_records=None,
+                embedding_dimension=None,
+                last_update_error=runtime.last_update_error(),
+            )
+
+        return self._response_composer.semantic_recall_status(
+            request,
+            runtime_state="ready",
+            indexed_memory_records=index.count(),
+            embedding_dimension=index.dimension,
+            last_update_error=runtime.last_update_error(),
         )
 
     @staticmethod

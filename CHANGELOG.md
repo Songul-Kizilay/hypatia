@@ -2,6 +2,20 @@
 
 All notable project changes are recorded here.
 
+## [0.3.11] - 2026-08-15
+
+### Added
+
+- A read-only `semantic recall status` command that makes the opt-in local
+  semantic-memory runtime observable without embedding a query or changing
+  conversation memory. It reports disabled, initializing, or ready state; a
+  ready runtime also reports its index size, embedding dimension, and safe
+  latest incremental-update diagnostic.
+
+### Verification
+
+- The package-aware full local suite contains 902 passing automated tests.
+
 ## [0.3.10] - 2026-08-15
 
 ### Fixed

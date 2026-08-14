@@ -94,6 +94,28 @@ class ResponseComposerTests(unittest.TestCase):
         self.assertTrue(response.success)
         self.assertIs(response.knowledge_results, results)
 
+    def test_semantic_recall_status_composes_a_ready_read_only_response(self) -> None:
+        response = self.composer.semantic_recall_status(
+            self.request,
+            runtime_state="ready",
+            indexed_memory_records=3,
+            embedding_dimension=768,
+            last_update_error=None,
+        )
+
+        self.assertEqual(
+            response.message,
+            "Semantic recall status:\n"
+            "Runtime: ready\n"
+            "Indexed memory records: 3\n"
+            "Embedding dimension: 768\n"
+            "Last incremental update: healthy",
+        )
+        self.assertEqual(response.intent, "semantic_recall_status")
+        self.assertTrue(response.success)
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(response.request_id, self.request.request_id)
+
     def test_search_success_exposes_one_citation_per_result(self) -> None:
         results = [
             Chunk(

@@ -15,7 +15,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.10` today) are the executable package and GitHub
+- **Runtime releases** (`v0.3.11` today) are the executable package and GitHub
   release line. They are the source-backed implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
   engineering increments. Sprint 4.16.50 is complete and is already in the
@@ -95,6 +95,10 @@ Implemented memory capabilities:
   uses reciprocal-rank fusion when both semantic and lexical candidates exist.
   Semantic-only responses retain cosine-similarity scores; unavailable or empty
   semantic retrieval uses deterministic lexical fallback.
+- A read-only `semantic recall status` diagnostic. It exposes the optional
+  runtime state, and when ready its index size, embedding dimension, and safe
+  last incremental-update diagnostic without generating an embedding, querying
+  memory, or changing persisted state.
 - A versioned hybrid-ranking fixture corpus at
   `tests/fixtures/semantic_memory_hybrid_v1.json`. It verifies retained
   single-source candidates, duplicated-evidence promotion, deterministic ties,
@@ -164,7 +168,7 @@ Not implemented:
 
 The current local verification baseline is:
 
-- `python -m unittest discover -s tests -t .`: 893 tests passed. The top-level
+- `python -m unittest discover -s tests -t .`: 902 tests passed. The top-level
   package setting ensures nested test directories are included without
   shadowing source packages.
 - `python -m black --check src tests`: passed.
