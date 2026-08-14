@@ -8,6 +8,8 @@ Hypatia currently runs as a local-first CLI. The initial security boundary is:
 - external OpenAI-compatible LLM endpoints require HTTPS;
 - plain HTTP is allowed only for loopback local runtimes (`localhost`,
   `127.0.0.1`, or `::1`);
+- authenticated LLM completion requests do not follow HTTP redirects, so a
+  bearer token cannot be forwarded to a redirect target;
 - semantic embeddings are opt-in and restricted to the local Ollama endpoint
   policy enforced at bootstrap.
 

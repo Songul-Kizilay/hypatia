@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sys
 import unittest
+from email.message import Message
 from pathlib import Path
 from unittest.mock import patch
 from urllib.request import Request
@@ -14,6 +15,7 @@ if str(SRC_DIR) not in sys.path:
 from llm.UrllibChatCompletionTransport import (
     DEFAULT_TIMEOUT_SECONDS,
     UrllibChatCompletionTransport,
+    _NoRedirectHandler,
 )
 
 
@@ -33,7 +35,7 @@ class UrllibChatCompletionTransportTests(unittest.TestCase):
         requests: list[Request] = []
         timeouts: list[float] = []
 
-        def fake_urlopen(request: Request, timeout: float) -> FakeResponse:
+        def fake_open(request: Request, *, timeout: float) -> FakeResponse:
             requests.append(request)
             timeouts.append(timeout)
             return FakeResponse()
@@ -41,8 +43,8 @@ class UrllibChatCompletionTransportTests(unittest.TestCase):
         transport = UrllibChatCompletionTransport()
 
         with patch(
-            "llm.UrllibChatCompletionTransport.urlopen",
-            side_effect=fake_urlopen,
+            "llm.UrllibChatCompletionTransport._open_without_redirects",
+            side_effect=fake_open,
         ):
             response = transport(
                 "https://api.example.test/v1/chat/completions",
@@ -74,3 +76,21 @@ class UrllibChatCompletionTransportTests(unittest.TestCase):
                 "messages": [{"role": "user", "content": "Tell me something."}],
             },
         )
+
+    def test_redirect_handler_never_follows_an_authenticated_redirect(self) -> None:
+        request = Request(
+            "https://api.example.test/v1/chat/completions",
+            headers={"Authorization": "Bearer test-api-key"},
+            method="POST",
+        )
+
+        redirected_request = _NoRedirectHandler().redirect_request(
+            request,
+            object(),
+            302,
+            "Found",
+            Message(),
+            "https://other.example.test/collect",
+        )
+
+        self.assertIsNone(redirected_request)

@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.2.2 (Genesis)`
+`v0.2.3 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, and
@@ -46,7 +46,9 @@ with optional OpenAI-compatible LLM conversation support.
 - Optional OpenAI-compatible chat-completions transport, system prompt, and
   bounded same-session conversation history. Remote endpoints are required to
   use HTTPS; plain HTTP is limited to explicit loopback local runtimes so an
-  API key is not sent over a remote unencrypted connection.
+  API key is not sent over a remote unencrypted connection. Authenticated
+  completion requests also reject redirects so a bearer token cannot cross to
+  a different endpoint.
 
 ### Intentionally Not Implemented
 
@@ -62,7 +64,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 810 automated tests pass through package-aware discovery.
+- 811 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
