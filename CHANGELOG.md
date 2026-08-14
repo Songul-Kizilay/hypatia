@@ -2,6 +2,26 @@
 
 All notable project changes are recorded here.
 
+## [0.3.6] - 2026-08-15
+
+### Added
+
+- A read-only `preview remove knowledge relation <source_document_id> --
+  <target_document_id>` command for an existing explicit local relation.
+- An explicit `remove knowledge relation <source_document_id> --
+  <target_document_id>` command. It removes the derived graph edge and, when
+  present, its separate persisted relation record.
+
+### Safety
+
+- Removal requires an existing relation, rejects a repeated request, and makes
+  no conversation-memory or LLM call. If the relation snapshot cannot be
+  written, the removed graph edge is restored before the failure is returned.
+
+### Verification
+
+- The package-aware full local suite contains 875 passing automated tests.
+
 ## [0.3.5] - 2026-08-15
 
 ### Added

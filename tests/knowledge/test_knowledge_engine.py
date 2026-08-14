@@ -219,6 +219,63 @@ class KnowledgeEngineTests(unittest.TestCase):
         self.assertEqual(engine.graph_edge_count(), graph_edges_before)
         self.assertEqual(engine.persisted_relation_count(), 0)
 
+    def test_relation_removal_updates_graph_and_persisted_snapshot(self) -> None:
+        first = self._write_file("first.md", "First")
+        second = self._write_file("second.md", "Second")
+        relation_path = self.directory / "relations.json"
+        store = JsonFileKnowledgeRelationStore(relation_path)
+        engine = KnowledgeEngine(relation_store=store)
+        first_document = engine.load(first)
+        second_document = engine.load(second)
+        engine.apply_document_relation(
+            first_document.document_id,
+            second_document.document_id,
+        )
+
+        preview = engine.preview_document_relation_removal(
+            first_document.document_id,
+            second_document.document_id,
+        )
+        revocation = engine.remove_document_relation(
+            first_document.document_id,
+            second_document.document_id,
+        )
+        reloaded_engine = KnowledgeEngine(
+            relation_store=JsonFileKnowledgeRelationStore(relation_path)
+        )
+        reloaded_engine.load(first)
+        reloaded_engine.load(second)
+
+        self.assertTrue(preview.persisted)
+        self.assertTrue(revocation.preview.persisted)
+        self.assertEqual(engine.graph_edge_count(), 2)
+        self.assertEqual(engine.persisted_relation_count(), 0)
+        self.assertEqual(store.load(), [])
+        self.assertEqual(reloaded_engine.graph_edge_count(), 2)
+
+    def test_failed_relation_removal_persistence_restores_the_graph_edge(self) -> None:
+        first = self._write_file("first.md", "First")
+        second = self._write_file("second.md", "Second")
+        store = JsonFileKnowledgeRelationStore(self.directory / "relations.json")
+        engine = KnowledgeEngine(relation_store=store)
+        first_document = engine.load(first)
+        second_document = engine.load(second)
+        engine.apply_document_relation(
+            first_document.document_id,
+            second_document.document_id,
+        )
+
+        with patch.object(store, "save", side_effect=KnowledgeError("write failed")):
+            with self.assertRaisesRegex(KnowledgeError, "write failed"):
+                engine.remove_document_relation(
+                    first_document.document_id,
+                    second_document.document_id,
+                )
+
+        self.assertEqual(engine.graph_edge_count(), 3)
+        self.assertEqual(engine.persisted_relation_count(), 1)
+        self.assertEqual(len(store.load()), 1)
+
     def test_loads_multiple_documents(self) -> None:
         first = self._write_file("first.md", "First\n\nHypatia")
         second = self._write_file("second.txt", "Second\n\nKnowledge")

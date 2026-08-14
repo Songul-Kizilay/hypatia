@@ -175,6 +175,12 @@ class CognitiveEngine:
         if self._is_knowledge_relation_apply_request(request):
             return self._process_knowledge_relation_apply(request)
 
+        if self._is_knowledge_relation_removal_preview_request(request):
+            return self._process_knowledge_relation_removal_preview(request)
+
+        if self._is_knowledge_relation_remove_request(request):
+            return self._process_knowledge_relation_remove(request)
+
         if self._is_search_request(request):
             query = self._search_query(request)
             if not query:
@@ -495,6 +501,98 @@ class CognitiveEngine:
             )
         return self._response_composer.knowledge_relation_apply_success(
             request, application
+        )
+
+    @staticmethod
+    def _is_knowledge_relation_removal_preview_request(request: BrainRequest) -> bool:
+        normalized_message = request.message.casefold().strip()
+        return (
+            request.metadata.get("intent") == "knowledge_relation_removal_preview"
+            or normalized_message == "preview remove knowledge relation"
+            or normalized_message.startswith("preview remove knowledge relation ")
+        )
+
+    @staticmethod
+    def _knowledge_relation_removal_preview_ids(
+        request: BrainRequest,
+    ) -> tuple[str, str] | None:
+        value = (
+            request.message.strip()
+            if request.metadata.get("intent") == "knowledge_relation_removal_preview"
+            else request.message[len("preview remove knowledge relation") :].strip()
+        )
+        parts = value.split(" -- ")
+        if len(parts) != 2 or not all(part.strip() for part in parts):
+            return None
+        return parts[0].strip(), parts[1].strip()
+
+    def _process_knowledge_relation_removal_preview(
+        self,
+        request: BrainRequest,
+    ) -> BrainResponse:
+        """Preview an explicit relation removal without changing graph state."""
+        document_ids = self._knowledge_relation_removal_preview_ids(request)
+        if document_ids is None:
+            return self._response_composer.knowledge_relation_removal_preview_failure(
+                request,
+                "Knowledge relation removal preview format: preview remove "
+                "knowledge relation <source_document_id> -- <target_document_id>",
+            )
+        try:
+            preview = self._knowledge_engine.preview_document_relation_removal(
+                *document_ids
+            )
+        except KnowledgeError as error:
+            return self._response_composer.knowledge_relation_removal_preview_failure(
+                request, f"Knowledge relation removal preview failed: {error}"
+            )
+        return self._response_composer.knowledge_relation_removal_preview_success(
+            request, preview
+        )
+
+    @staticmethod
+    def _is_knowledge_relation_remove_request(request: BrainRequest) -> bool:
+        normalized_message = request.message.casefold().strip()
+        return (
+            request.metadata.get("intent") == "knowledge_relation_remove"
+            or normalized_message == "remove knowledge relation"
+            or normalized_message.startswith("remove knowledge relation ")
+        )
+
+    @staticmethod
+    def _knowledge_relation_remove_ids(
+        request: BrainRequest,
+    ) -> tuple[str, str] | None:
+        value = (
+            request.message.strip()
+            if request.metadata.get("intent") == "knowledge_relation_remove"
+            else request.message[len("remove knowledge relation") :].strip()
+        )
+        parts = value.split(" -- ")
+        if len(parts) != 2 or not all(part.strip() for part in parts):
+            return None
+        return parts[0].strip(), parts[1].strip()
+
+    def _process_knowledge_relation_remove(
+        self,
+        request: BrainRequest,
+    ) -> BrainResponse:
+        """Remove one explicit local relationship without conversation writes."""
+        document_ids = self._knowledge_relation_remove_ids(request)
+        if document_ids is None:
+            return self._response_composer.knowledge_relation_remove_failure(
+                request,
+                "Knowledge relation remove format: remove knowledge relation "
+                "<source_document_id> -- <target_document_id>",
+            )
+        try:
+            revocation = self._knowledge_engine.remove_document_relation(*document_ids)
+        except KnowledgeError as error:
+            return self._response_composer.knowledge_relation_remove_failure(
+                request, f"Knowledge relation remove failed: {error}"
+            )
+        return self._response_composer.knowledge_relation_remove_success(
+            request, revocation
         )
 
     @staticmethod

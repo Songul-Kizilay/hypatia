@@ -30,6 +30,10 @@ from knowledge.KnowledgeGraph import (
 )
 from knowledge.KnowledgeRelationApplication import KnowledgeRelationApplication
 from knowledge.KnowledgeRelationPreview import KnowledgeRelationPreview
+from knowledge.KnowledgeRelationRevocation import KnowledgeRelationRevocation
+from knowledge.KnowledgeRelationRevocationPreview import (
+    KnowledgeRelationRevocationPreview,
+)
 from memory.MemoryRecord import MemoryRecord
 from planner.Planner import Planner
 from response.ResponseComposer import ResponseComposer
@@ -257,6 +261,42 @@ class ResponseComposerTests(unittest.TestCase):
         self.assertEqual(response.intent, "knowledge_relation_apply")
         self.assertIs(response.knowledge_relation_application, application)
         self.assertIn("Graph state: updated (memory only)", response.message)
+        self.assertTrue(response.message.endswith("JSON memory: unchanged"))
+
+    def test_knowledge_relation_removal_exposes_preview_and_persistence_boundary(
+        self,
+    ) -> None:
+        source = KnowledgeDocumentReference(
+            "source", "Source", "source.md", DocumentType.MARKDOWN, 1
+        )
+        target = KnowledgeDocumentReference(
+            "target", "Target", "target.md", DocumentType.MARKDOWN, 1
+        )
+        relation = KnowledgeRelationPreview(
+            source, KnowledgeGraphRelation.RELATED_TO, target
+        )
+        preview = KnowledgeRelationRevocationPreview(relation, persisted=True)
+        revocation = KnowledgeRelationRevocation(
+            preview,
+            KnowledgeGraphEdge(
+                "document:source", KnowledgeGraphRelation.RELATED_TO, "document:target"
+            ),
+        )
+
+        preview_response = self.composer.knowledge_relation_removal_preview_success(
+            self.request, preview
+        )
+        response = self.composer.knowledge_relation_remove_success(
+            self.request, revocation
+        )
+
+        self.assertTrue(preview_response.success)
+        self.assertIs(preview_response.knowledge_relation_revocation_preview, preview)
+        self.assertIn("Relation storage: persisted", preview_response.message)
+        self.assertTrue(preview_response.message.endswith("Changes: ready to remove"))
+        self.assertTrue(response.success)
+        self.assertIs(response.knowledge_relation_revocation, revocation)
+        self.assertIn("Relation storage: removed", response.message)
         self.assertTrue(response.message.endswith("JSON memory: unchanged"))
 
     def test_plan_success_preserves_goal_and_task_order(self) -> None:
