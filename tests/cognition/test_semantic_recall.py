@@ -98,6 +98,63 @@ class SemanticRecallTests(unittest.TestCase):
         self.assertEqual(provider.calls, [content, "cats"])
         self.assertEqual(self.memory_manager.count(), memory_count)
 
+    def test_semantic_recall_fuses_current_session_semantic_and_lexical_results(
+        self,
+    ) -> None:
+        semantic_only = "User: I enjoy felines\nHypatia: Noted."
+        shared = "User: Cats are companion animals\nHypatia: Noted."
+        lexical_only = "User: Cats have different sleep patterns\nHypatia: Noted."
+        other_session = "User: Cats are private to another session\nHypatia: Noted."
+        self.memory_manager.add(
+            semantic_only,
+            metadata={"session_id": "default"},
+            tags={"brain", "conversation"},
+        )
+        self.memory_manager.add(
+            shared,
+            metadata={"session_id": "default"},
+            tags={"brain", "conversation"},
+        )
+        self.memory_manager.add(
+            lexical_only,
+            metadata={"session_id": "default"},
+            tags={"brain", "conversation"},
+        )
+        self.session_manager.create("other")
+        self.memory_manager.add(
+            other_session,
+            metadata={"session_id": "other"},
+            tags={"brain", "conversation"},
+        )
+        runtime, _ = self._runtime(
+            {
+                semantic_only: Embedding((1, 0)),
+                shared: Embedding((0.9, 0.1)),
+                lexical_only: Embedding((0.1, 0.9)),
+                other_session: Embedding((1, 0)),
+                "cats": Embedding((1, 0)),
+            }
+        )
+
+        response = self._engine(runtime).process(
+            BrainRequest(message="semantic recall cats")
+        )
+
+        self.assertTrue(response.success)
+        self.assertIn("Semantic recall (hybrid):", response.message)
+        self.assertIn("[rank score:", response.message)
+        self.assertNotIn("[similarity:", response.message)
+        self.assertLess(
+            response.message.index(shared),
+            response.message.index(semantic_only),
+        )
+        self.assertLess(
+            response.message.index(lexical_only),
+            response.message.index(semantic_only),
+        )
+        self.assertNotIn(other_session, response.message)
+        self.assertEqual(response.memory_count, 3)
+
     def test_missing_runtime_uses_deterministic_lexical_fallback(self) -> None:
         record = self.memory_manager.add(
             "User: I like cats\nHypatia: Noted.",

@@ -2,6 +2,23 @@
 
 All notable project changes are recorded here.
 
+## [0.2.4] - 2026-08-15
+
+### Added
+
+- Connected reciprocal-rank fusion to the explicit `semantic recall <query>`
+  path when both current-session semantic and lexical candidates are present.
+  The response labels this mode `hybrid` and clearly identifies its displayed
+  values as rank scores rather than cosine-similarity scores.
+- Preserved semantic-only results, deterministic lexical fallback, and
+  current-session isolation when hybrid evidence is unavailable.
+
+### Verification
+
+- The package-aware full local suite contains 812 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass in the local development
+  environment.
+
 ## [0.2.3] - 2026-08-15
 
 ### Security

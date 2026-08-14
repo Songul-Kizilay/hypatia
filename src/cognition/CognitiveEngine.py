@@ -22,6 +22,7 @@ from core.Exceptions import (
 from eventbus.EventBus import EventBus
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from llm.LLMProvider import LLMError, LLMProvider
+from memory.HybridSemanticMemoryRanker import HybridSemanticMemoryRanker
 from memory.LearnedMemoryCandidateExtractionError import (
     LearnedMemoryCandidateExtractionError,
 )
@@ -119,6 +120,7 @@ class CognitiveEngine:
         self._learned_memory_context_limit = learned_memory_context_limit
         self._learned_memory_selector = learned_memory_selector
         self._semantic_memory_index_runtime = semantic_memory_index_runtime
+        self._hybrid_semantic_memory_ranker = HybridSemanticMemoryRanker()
         self._router = BrainRouter()
 
     def process(self, request: BrainRequest) -> BrainResponse:
@@ -324,6 +326,22 @@ class CognitiveEngine:
             except MemoryError:
                 semantic_records = []
             if semantic_records:
+                try:
+                    lexical_records = self._lexical_recall_records(query, session_id)
+                except MemoryError:
+                    lexical_records = []
+                if lexical_records:
+                    hybrid_records = self._hybrid_session_records(
+                        semantic_records,
+                        lexical_records,
+                        session_id,
+                    )
+                    if hybrid_records:
+                        return self._response_composer.semantic_recall_success(
+                            request,
+                            hybrid_records[:5],
+                            retrieval="hybrid",
+                        )
                 return self._response_composer.semantic_recall_success(
                     request,
                     semantic_records[:5],
@@ -347,6 +365,30 @@ class CognitiveEngine:
     ) -> list[tuple[MemoryRecord, float]]:
         records: list[tuple[MemoryRecord, float]] = []
         for match in matches:
+            record = self._memory_manager.get(match.memory_id)
+            if record is None or not self._is_session_conversation_record(
+                record, session_id
+            ):
+                continue
+            records.append((record, match.score))
+        return records
+
+    def _hybrid_session_records(
+        self,
+        semantic_records: list[tuple[MemoryRecord, float]],
+        lexical_records: list[MemoryRecord],
+        session_id: str,
+    ) -> list[tuple[MemoryRecord, float]]:
+        """Fuse already session-scoped candidates, then re-check live records."""
+        ranked_matches = self._hybrid_semantic_memory_ranker.rank(
+            tuple(
+                SemanticMemoryMatch(memory_id=record.memory_id, score=score)
+                for record, score in semantic_records
+            ),
+            tuple(lexical_records),
+        )
+        records: list[tuple[MemoryRecord, float]] = []
+        for match in ranked_matches:
             record = self._memory_manager.get(match.memory_id)
             if record is None or not self._is_session_conversation_record(
                 record, session_id

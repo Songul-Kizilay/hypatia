@@ -197,11 +197,14 @@ accommodates a cold local model load without making Hypatia wait indefinitely
 when the local service is unavailable.
 
 Use `semantic recall <query>` to retrieve conversation records from the active
-or explicitly selected session. When an indexed semantic result is available,
-the response labels it as `semantic` and includes a three-decimal similarity
-score. If semantic runtime is disabled, its index has no eligible record, or
-the local provider fails, the same command falls back to deterministic lexical
-conversation recall and labels the result `lexical fallback`.
+or explicitly selected session. When both indexed semantic and lexical matches
+exist in that session, Hypatia uses deterministic reciprocal-rank fusion and
+labels the response `hybrid`; its three-decimal values are rank scores. When
+only semantic matches exist, the response remains `semantic` and displays
+cosine-similarity scores. If semantic runtime is disabled, its index has no
+eligible record, or the local provider fails, the same command falls back to
+deterministic lexical conversation recall and labels the result `lexical
+fallback`.
 
 Normal `recall <query>` remains lexical and does not call the semantic runtime.
 Semantic recall does not add a conversation record, alter ordinary messages, or
