@@ -240,7 +240,7 @@ docs/Architecture/
 | 36 | Travel Intelligence |
 | 37 | Culinary Intelligence |
 | Audit | [Architecture Audit v0.1](Architecture_Audit_v0.1.md) |
-| Release readiness | [v0.2.0 sonrası durum](Release_Readiness_v0.2.0.md) |
+| Historical release readiness | [v0.2.0 sonrası durum](Release_Readiness_v0.2.0.md) |
 
 ---
 

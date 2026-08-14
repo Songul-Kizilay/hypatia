@@ -1,15 +1,18 @@
-# Hypatia Release Readiness — v0.2.0 sonrası durum
+# Historical Release Readiness — v0.2.0 sonrası durum
 
 Tarih: 15 Ağustos 2026
-Kapsam: yerel çalışma ağacı ve `origin/main` ile aynı olan `HEAD` (`1d07abb`)
+Bu belge 15 Ağustos 2026 tarihinde, PR #238 merge edilmeden önceki durumu
+kaydeder. Tarihsel denetim kapsamındaki `HEAD`, `1d07abb` idi.
 
 ## Karar
 
-**Yeni bir release, tag veya push için henüz onay yok.**
+**PR #238 daha sonra `main`e merge edildi; yeni bir release veya tag henüz
+oluşturulmadı.**
 
-Kalite kontrolleri geçmektedir; ancak release kimliği ve commit kapsamı
-belirsizdir. Bu belge, çalışır durumdaki geliştirmeyi yayınlanabilir bir sürüm
-sanmamak için hazırlanmıştır.
+Kalite kontrolleri geçmişti; ancak release kimliği ve commit kapsamı
+belirsizdi. Bu belge, çalışır durumdaki geliştirmeyi yayınlanabilir bir sürüm
+sanmamak için hazırlanmıştır. Runtime ve paket sürümü güncel `main` üzerinde
+hâlâ `0.2.0` olduğundan, release kimliği borcu devam eder.
 
 ## Kanıtlanan durum
 
@@ -18,14 +21,16 @@ sanmamak için hazırlanmıştır.
 | Runtime sürümü (`src/core/Version.py`) | `0.2.0` |
 | Paket sürümü (`pyproject.toml`) | `0.2.0` |
 | En son `v0.2.0` tag'i | `955bc2d8dc3f2b1be92d1cc3f05241102a869b98` |
-| Güncel `HEAD` | `1d07abb` |
-| `v0.2.0` sonrasındaki commit sayısı | 233 |
-| Remote eşitliği | Yerel `HEAD`, `origin/main` ile aynı |
+| Tarihsel denetim `HEAD` | `1d07abb` |
+| Güncel `main` | `1dabe7884c8415c98ff3dda624a8524df216520d` (PR #238 merge) |
+| Güncel `v0.2.0` sonrasındaki commit sayısı | 236 |
+| Güncel remote eşitliği | Yerel `main`, `origin/main` ile aynı |
 
 Bu nedenle `0.2.0` etiketi, güncel ana dalın içeriğini temsil etmez. Yeni
-sürüm adı ve sürüm kapsamı belirlenmeden sürüm numarası değiştirilmemelidir.
+sürüm adı ve sürüm kapsamı belirlenmeden sürüm numarası veya tag
+oluşturulmamalıdır.
 
-## Yerel değişikliklerin kapsamı
+## Tarihsel yerel değişiklik kapsamı
 
 Çalışma ağacı tek bir değişiklikten oluşmamaktadır:
 
@@ -42,7 +47,7 @@ sürüm adı ve sürüm kapsamı belirlenmeden sürüm numarası değiştirilmem
 semantik bellek bağlantısını içerir. Bu dosya parçalı olarak hazırlanmadıkça,
 tek bir commit iki bağımsız sprinti karıştırır.
 
-## Son doğrulama
+## Tarihsel doğrulama
 
 15 Ağustos 2026 tarihinde yerel sanal ortam ile aşağıdaki denetimler geçti:
 
@@ -57,7 +62,7 @@ git diff --check                           -> başarılı
 Bu sonuçlar, yerel birleşik çalışma ağacının teknik kalite sinyalidir; tek
 başına release sürümü veya commit kapsamı onayı değildir.
 
-## Release öncesi gerekli kararlar
+## Release için hâlâ gerekli kararlar
 
 1. Hedef sürüm adını ve hangi sprintlerin o sürüme gireceğini tanımla.
 2. Ranked-selector top-k çalışmasını semantik bellek çalışmasından ayrı bir
@@ -66,7 +71,8 @@ başına release sürümü veya commit kapsamı onayı değildir.
 4. Aynı kalite kapılarını temiz bir çalışma ağacında yeniden çalıştır.
 5. Ancak bundan sonra commit, push ve tag işlemlerini planla.
 
-## Bu denetimin dışında kalanlar
+## Bu denetimin kapsamı dışında kalanlar
 
 Bu belge GitHub'a hiçbir değişiklik göndermez, tag oluşturmaz ve sürüm numarası
-değiştirmez.
+değiştirmez. PR #238'ün merge edilmesi yalnızca doğrulanmış kodun `main`e
+alındığını gösterir; bağımsız bir release kararı değildir.
