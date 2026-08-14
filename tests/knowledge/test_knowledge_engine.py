@@ -9,6 +9,7 @@ from pathlib import Path
 from knowledge.DocumentLoader import DocumentLoader
 from knowledge.Indexer import Indexer
 from knowledge.KnowledgeEngine import KnowledgeEngine
+from knowledge.KnowledgeGraph import KnowledgeGraphRelation
 from knowledge.Parser import Parser
 from knowledge.Search import Search
 
@@ -30,6 +31,8 @@ class KnowledgeEngineTests(unittest.TestCase):
         self.assertEqual(document.title, "example")
         self.assertEqual(engine.document_count(), 1)
         self.assertEqual(engine.chunk_count(), 3)
+        self.assertEqual(engine.graph_node_count(), 4)
+        self.assertEqual(engine.graph_edge_count(), 5)
 
     def test_search_returns_indexed_chunk(self) -> None:
         path = self._write_file("example.md", "Hello\n\nHypatia")
@@ -49,7 +52,22 @@ class KnowledgeEngineTests(unittest.TestCase):
 
         self.assertEqual(engine.document_count(), 0)
         self.assertEqual(engine.chunk_count(), 0)
+        self.assertEqual(engine.graph_node_count(), 0)
+        self.assertEqual(engine.graph_edge_count(), 0)
         self.assertEqual(engine.search("hypatia"), [])
+
+    def test_graph_for_search_results_exposes_containing_document_relationships(
+        self,
+    ) -> None:
+        path = self._write_file("example.md", "Hello\n\nHypatia")
+        engine = KnowledgeEngine()
+        engine.load(path)
+
+        view = engine.graph_for_chunks(engine.search("hypatia"))
+
+        self.assertEqual(len(view.nodes), 2)
+        self.assertEqual(len(view.edges), 1)
+        self.assertEqual(view.edges[0].relation, KnowledgeGraphRelation.CONTAINS)
 
     def test_loads_multiple_documents(self) -> None:
         first = self._write_file("first.md", "First\n\nHypatia")

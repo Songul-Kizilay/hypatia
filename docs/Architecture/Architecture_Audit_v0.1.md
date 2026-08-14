@@ -20,7 +20,7 @@ Hypatia is a Python 3.14+ local-first runtime. Its active source packages are:
 | `brain` and `cognition` | Request routing and deterministic orchestration |
 | `memory` | Immutable records, JSON snapshots, TTL, learned-memory extraction and selection |
 | `session` | Persistent session registry and targeted session operations |
-| `knowledge` | Local `.txt`/`.md` loading, chunks, lexical search, cited prompt context |
+| `knowledge` | Local `.txt`/`.md` loading, chunks, lexical search, cited prompt context, structural graph |
 | `llm` | Optional OpenAI-compatible chat-completions provider and history assembly |
 | `planner`, `response`, `eventbus` | Deterministic task planning, response composition, lifecycle events |
 
@@ -78,24 +78,30 @@ Implemented memory capabilities:
   sends only up to three cited local chunks and the user question, with each
   source chunk bounded to 600 characters. It preserves citations on the answer,
   uses no conversation history, and does not mutate conversation memory.
+- A derived, in-memory local knowledge graph built from loaded documents and
+  paragraph chunks. It uses typed `contains` and `precedes` edges, validates a
+  whole document graph before changing state, and remains separate from the
+  JSON memory schema. `knowledge graph <query>` exposes a bounded, cited,
+  document-to-paragraph structural view without calling an LLM or mutating
+  conversation memory.
 
 Not implemented:
 
 - Embedding persistence enabled by default.
 - Automatic semantic augmentation of ordinary messages or generic Brain search.
-- Knowledge graph, web retrieval, or automatic citations in ordinary model
-  prompts.
+- Knowledge-graph persistence, cross-document semantic relation extraction,
+  web retrieval, or automatic citations in ordinary model prompts.
 
 ## Quality Baseline
 
 The current local verification baseline is:
 
-- `python -m unittest discover -s tests -t .`: 830 tests passed. The top-level
+- `python -m unittest discover -s tests -t .`: 840 tests passed. The top-level
   package setting ensures nested test directories are included without
   shadowing source packages.
 - `python -m black --check src tests`: passed.
 - `python -m ruff check src tests`: passed.
-- `python -m mypy src tests`: passed with no issues in 217 files.
+- `python -m mypy src tests`: passed with no issues in 219 files.
 
 These checks verify the current local worktree; they do not create a release,
 tag, pull request, or GitHub deployment.
@@ -148,7 +154,8 @@ generic knowledge search.
 - JSON schema migration or embedding persistence enabled by default.
 - Prompt augmentation, automatic retrieval, and generic knowledge-search
   changes.
-- Reranking beyond reciprocal-rank fusion, RAG, and knowledge graph work.
+- Reranking beyond reciprocal-rank fusion, generic RAG expansion, and
+  cross-document semantic relation extraction.
 
 ### Acceptance Criteria
 

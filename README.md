@@ -242,3 +242,9 @@ With an enabled LLM runtime, `ask knowledge <query>` sends only the bounded,
 cited local context to the model. It is explicit, limits each supplied source
 chunk to 600 characters, keeps citations on the response, and does not add a
 conversation-memory record.
+
+Use `knowledge graph <query>` to inspect the deterministic structure of local
+matching sources. It returns up to three cited document-to-paragraph
+`contains` relationships. This graph is derived in memory from loaded local
+documents; it neither calls an LLM nor changes conversation memory, and it does
+not persist graph data or infer semantic relationships between documents.

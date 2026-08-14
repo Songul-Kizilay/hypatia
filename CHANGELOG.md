@@ -2,6 +2,21 @@
 
 All notable project changes are recorded here.
 
+## [0.3.0] - 2026-08-15
+
+### Added
+
+- An explicit `knowledge graph <query>` view for locally loaded sources. It
+  exposes deterministic document-to-paragraph `contains` relationships with
+  visible source citations, without LLM use or conversation-memory mutation.
+- A derived, in-memory local knowledge-graph foundation. It keeps document and
+  paragraph nodes plus `contains` and `precedes` edges separate from the JSON
+  memory schema, and indexes each source atomically.
+
+### Verification
+
+- The package-aware full local suite contains 840 passing automated tests.
+
 ## [0.2.10] - 2026-08-15
 
 ### Fixed

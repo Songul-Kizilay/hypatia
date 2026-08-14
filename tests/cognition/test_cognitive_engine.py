@@ -2037,6 +2037,36 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(response.message, "A knowledge context query is required.")
         self.assertEqual(self.memory_manager.all(), [])
 
+    def test_explicit_knowledge_graph_is_bounded_cited_and_not_remembered(
+        self,
+    ) -> None:
+        extra_path = Path(self.temporary_directory.name) / "extra.md"
+        extra_path.write_text(
+            "Hypatia\n\nHypatia\n\nHypatia",
+            encoding="utf-8",
+        )
+        self.knowledge_engine.load(extra_path)
+
+        response = self.engine.process(BrainRequest(message="knowledge graph hypatia"))
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "knowledge_graph")
+        self.assertEqual(len(response.knowledge_results), 3)
+        self.assertEqual(len(response.knowledge_citations), 3)
+        self.assertIn("Knowledge graph:", response.message)
+        self.assertIn("--contains-->", response.message)
+        self.assertEqual(self.memory_manager.all(), [])
+
+    def test_empty_explicit_knowledge_graph_returns_a_controlled_failure(
+        self,
+    ) -> None:
+        response = self.engine.process(BrainRequest(message="knowledge graph"))
+
+        self.assertFalse(response.success)
+        self.assertEqual(response.intent, "knowledge_graph")
+        self.assertEqual(response.message, "A knowledge graph query is required.")
+        self.assertEqual(self.memory_manager.all(), [])
+
     def test_ask_knowledge_sends_only_cited_local_context_to_the_llm(self) -> None:
         llm_provider = RecordingLLMProvider("Hypatia is in the local notes.")
         engine = ProductionCognitiveEngine(

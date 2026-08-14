@@ -9,6 +9,7 @@ from brain.BrainRequest import BrainRequest
 from brain.BrainResponse import BrainResponse
 from knowledge.Chunk import Chunk
 from knowledge.KnowledgeCitation import KnowledgeCitation
+from knowledge.KnowledgeGraph import KnowledgeGraphView
 from memory.MemoryRecord import MemoryRecord
 from planner.Plan import Plan
 from session.SessionDeleteExecutionResult import SessionDeleteExecutionResult
@@ -401,6 +402,49 @@ class ResponseComposer:
             message=message,
             request_id=request.request_id,
             intent="knowledge_context",
+            memory_count=0,
+            success=False,
+        )
+
+    def knowledge_graph_success(
+        self,
+        request: BrainRequest,
+        results: list[Chunk],
+        graph_view: KnowledgeGraphView,
+    ) -> BrainResponse:
+        """Compose an explicit, citation-visible local structural graph view."""
+        citations = [KnowledgeCitation.from_chunk(result) for result in results]
+        nodes_by_id = {node.node_id: node for node in graph_view.nodes}
+        if not results:
+            message = "Knowledge graph: no matching local knowledge found."
+        else:
+            edges = "\n".join(
+                "- "
+                f"{nodes_by_id[edge.source_node_id].label} "
+                f"--{edge.relation.value}--> "
+                f"{nodes_by_id[edge.target_node_id].label}"
+                for edge in graph_view.edges
+            )
+            message = f"Knowledge graph:\n{edges}"
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="knowledge_graph",
+            memory_count=0,
+            knowledge_results=results,
+            knowledge_citations=citations,
+        )
+
+    def knowledge_graph_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Compose a failed explicit local structural-graph request."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="knowledge_graph",
             memory_count=0,
             success=False,
         )
