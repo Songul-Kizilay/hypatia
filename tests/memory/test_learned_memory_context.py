@@ -17,12 +17,116 @@ from memory.LearnedMemoryContext import (
     build_selected_learned_memory_context,
     load_bounded_learned_memory_context,
     load_learned_memory_context,
+    load_selected_learned_memory_context,
 )
 from memory.LearnedMemoryStore import append_learned_memory, load_learned_memories
 from memory.MemoryManager import MemoryManager
+from memory.NoOpLearnedMemorySelector import NoOpLearnedMemorySelector
 
 
 class LearnedMemoryContextTests(unittest.TestCase):
+    def test_load_selected_context_delegates_exact_values_once(self) -> None:
+        memory_manager = Mock(spec=MemoryManager)
+        memory = LearnedMemory(kind="preference", key="language", value="Python")
+        memories = (memory,)
+        selector = Mock()
+        sentinel = "".join(("selected", "-context"))
+
+        with (
+            patch(
+                "memory.LearnedMemoryContext.load_learned_memories",
+                return_value=memories,
+            ) as load_learned_memories,
+            patch(
+                "memory.LearnedMemoryContext.build_selected_learned_memory_context",
+                return_value=sentinel,
+            ) as build_selected_learned_memory_context,
+        ):
+            result = load_selected_learned_memory_context(
+                memory_manager=memory_manager,
+                source_text="  What do I prefer?  ",
+                selector=selector,
+            )
+
+        load_learned_memories.assert_called_once_with(memory_manager)
+        build_selected_learned_memory_context.assert_called_once_with(
+            source_text="  What do I prefer?  ",
+            memories=memories,
+            selector=selector,
+        )
+        self.assertIs(
+            build_selected_learned_memory_context.call_args.kwargs["memories"],
+            memories,
+        )
+        self.assertIs(
+            build_selected_learned_memory_context.call_args.kwargs["selector"],
+            selector,
+        )
+        self.assertIs(result, sentinel)
+
+    def test_load_selected_context_real_noop_preserves_store_and_empty(self) -> None:
+        memory_manager = MemoryManager()
+        first = LearnedMemory(kind="preference", key="language", value="Python")
+        second = LearnedMemory(kind="goal", key="learning", value="Kali Linux")
+        append_learned_memory(memory_manager, first)
+        append_learned_memory(memory_manager, second)
+        selector = NoOpLearnedMemorySelector()
+
+        self.assertEqual(
+            load_selected_learned_memory_context(
+                memory_manager=memory_manager,
+                source_text="\tExact source\n",
+                selector=selector,
+            ),
+            "Known learned memories:\n"
+            "- preference | language | Python\n"
+            "- goal | learning | Kali Linux",
+        )
+        self.assertEqual(load_learned_memories(memory_manager), (first, second))
+        self.assertEqual(
+            load_selected_learned_memory_context(
+                memory_manager=MemoryManager(),
+                source_text="empty",
+                selector=selector,
+            ),
+            "",
+        )
+
+    def test_load_selected_context_real_recording_selector_controls_result(
+        self,
+    ) -> None:
+        memory_manager = MemoryManager()
+        first = LearnedMemory(kind="preference", key="language", value="Python")
+        second = LearnedMemory(kind="goal", key="learning", value="Kali Linux")
+        third = LearnedMemory(kind="project_fact", key="project", value="Hypatia")
+        for memory in (first, second, third):
+            append_learned_memory(memory_manager, memory)
+        selector = Mock()
+        selector.select.return_value = (third, first)
+
+        result = load_selected_learned_memory_context(
+            memory_manager=memory_manager,
+            source_text="  What matters?  ",
+            selector=selector,
+        )
+
+        self.assertEqual(
+            result,
+            "Known learned memories:\n"
+            "- project_fact | project | Hypatia\n"
+            "- preference | language | Python",
+        )
+        selector.select.assert_called_once()
+        self.assertEqual(
+            selector.select.call_args.kwargs["source_text"],
+            "  What matters?  ",
+        )
+        self.assertEqual(
+            selector.select.call_args.kwargs["memories"],
+            (first, second, third),
+        )
+        self.assertEqual(load_learned_memories(memory_manager), (first, second, third))
+
     def test_selected_context_delegates_exact_inputs_and_result_once(self) -> None:
         first = LearnedMemory(kind="preference", key="language", value="Python")
         second = LearnedMemory(kind="goal", key="learning", value="Kali Linux")
