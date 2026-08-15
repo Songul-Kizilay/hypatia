@@ -143,6 +143,21 @@ class DesktopControllerTests(unittest.TestCase):
 
         self.assertEqual(self.brain.requests, [])
 
+    def test_ask_knowledge_uses_the_explicit_local_rag_command(self) -> None:
+        response = self.controller.ask_knowledge("  what is the project plan?  ")
+
+        self.assertIs(response, self.response)
+        self.assertEqual(
+            self.brain.requests,
+            ["ask knowledge what is the project plan?"],
+        )
+
+    def test_ask_knowledge_rejects_empty_query_without_calling_brain(self) -> None:
+        with self.assertRaisesRegex(ValueError, "cannot be empty"):
+            self.controller.ask_knowledge(" \t\n ")
+
+        self.assertEqual(self.brain.requests, [])
+
     def test_list_knowledge_uses_the_existing_read_only_catalog_command(self) -> None:
         response = self.controller.list_knowledge()
 

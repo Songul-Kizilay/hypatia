@@ -2,6 +2,23 @@
 
 All notable project changes are recorded here.
 
+## [0.3.21] - 2026-08-15
+
+### Added
+
+- The desktop shell now exposes `Ask sources`, an explicit user-initiated local
+  RAG question action. It delegates to the established `ask knowledge` command,
+  passes only the entered question, and preserves the runtime's controlled
+  unavailable/failure result. It never augments ordinary chat or changes
+  conversation memory.
+
+### Verification
+
+- The package-aware full local suite contains 926 passing automated tests.
+- Black, Ruff, MyPy, whitespace validation, and a real Tkinter unavailable-
+  runtime `Ask sources` smoke test pass with the documented project virtual
+  environment.
+
 ## [0.3.20] - 2026-08-15
 
 ### Added

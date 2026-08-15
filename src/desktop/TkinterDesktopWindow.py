@@ -122,9 +122,14 @@ class TkinterDesktopWindow:
         ).grid(row=0, column=2, sticky="ew", padx=(8, 0))
         ttk.Button(
             knowledge_frame,
+            text="Ask sources",
+            command=self._ask_knowledge,
+        ).grid(row=0, column=3, sticky="ew", padx=(8, 0))
+        ttk.Button(
+            knowledge_frame,
             text="Loaded sources",
             command=self._show_knowledge_list,
-        ).grid(row=0, column=3, sticky="ew", padx=(8, 0))
+        ).grid(row=0, column=4, sticky="ew", padx=(8, 0))
 
         ttk.Label(container, textvariable=self._status).grid(
             row=3, column=0, sticky="w", pady=(8, 4)
@@ -185,6 +190,9 @@ class TkinterDesktopWindow:
 
     def _show_knowledge_graph(self) -> None:
         self._show_knowledge_response(self._controller.knowledge_graph)
+
+    def _ask_knowledge(self) -> None:
+        self._show_knowledge_response(self._controller.ask_knowledge)
 
     def _show_knowledge_list(self) -> None:
         self._append_response(self._controller.list_knowledge())

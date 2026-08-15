@@ -102,6 +102,10 @@ The same explicitly entered query can request the existing bounded, cited
 `Knowledge graph` view, while `Loaded sources` opens the existing read-only
 local source catalog. Neither action calls an LLM, augments ordinary chat, or
 changes conversation memory or knowledge state.
+`Ask sources` is separately user initiated: it sends the entered question only
+through the existing `ask knowledge` local-RAG path. The runtime keeps its
+bounded cited-source and safe unavailable/failure behavior; this action never
+augments ordinary chat or changes conversation memory.
 
 ## Mutation flows
 
