@@ -2,6 +2,24 @@
 
 All notable project changes are recorded here.
 
+## [0.3.16] - 2026-08-15
+
+### Added
+
+- The desktop shell now refreshes a read-only session overview, displaying the
+  ordered session IDs, active-session marker, and conversation counts returned
+  through the existing Brain boundary. Selecting a listed ID only fills the
+  input; the existing explicit activation action still performs the change.
+- `BrainResponse` now carries ordered `SessionSummary` values for existing
+  session-list and session-overview responses, so presentation adapters do not
+  need to parse formatted text or read session persistence directly.
+
+### Verification
+
+- The package-aware full local suite contains 912 passing automated tests.
+- Black, Ruff, MyPy, whitespace validation, and a Windows Tkinter session-list
+  smoke test pass locally.
+
 ## [0.3.15] - 2026-08-15
 
 ### Added

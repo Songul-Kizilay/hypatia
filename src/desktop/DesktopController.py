@@ -33,6 +33,10 @@ class DesktopController:
             raise ValueError("A session ID cannot be empty.")
         return self._brain.process(f"use session {normalized_session_id}")
 
+    def session_overview(self) -> BrainResponse:
+        """Request existing read-only session facts for desktop presentation."""
+        return self._brain.process("session overview")
+
     def semantic_status(self) -> BrainResponse:
         """Request the read-only semantic runtime status without a query."""
         return self._brain.process("semantic recall status")

@@ -84,9 +84,10 @@ To create the world's most capable personal AI research companion.
 - Knowledge Foundation: `.txt` and `.md` document loading, paragraph parsing, in-memory chunk indexing, and case-insensitive search
 - KnowledgeEngine orchestration for the full document-to-search pipeline
 - A full automated test suite and shared code-quality standards
-- An initial local desktop shell for text chat, explicit session selection, and
-  semantic-memory runtime status; it delegates every action to the existing
-  Brain runtime and introduces no browser, cloud, or duplicate data store
+- An initial local desktop shell for text chat, a refreshable session overview,
+  explicit session selection, and semantic-memory runtime status; it delegates
+  every action to the existing Brain runtime and introduces no browser, cloud,
+  or duplicate data store
 
 Roadmap modules listed above are product direction, not a claim that every module is
 already implemented.
@@ -96,18 +97,19 @@ already implemented.
 ## Desktop shell (initial)
 
 The first desktop window is a local Tkinter shell for normal text chat,
-selecting an existing session, and reading semantic-memory status. Start it
-from the repository root after setting any desired local runtime environment
-variables:
+refreshing a read-only session overview, selecting an existing session, and
+reading semantic-memory status. Start it from the repository root after setting
+any desired local runtime environment variables:
 
 ```powershell
 .\.venv\Scripts\python.exe src\desktop_main.py
 ```
 
-The window uses the same Bootstrap and Brain as the terminal entry point. It
-does not yet include voice, document import, knowledge drawers, browser tools,
-automatic retrieval, or mutation workflows; those remain separate, test-first
-increments.
+The window uses the same Bootstrap and Brain as the terminal entry point. A
+clicked session only fills the selection field; choosing it remains explicit.
+It does not yet include voice, document import, knowledge drawers, browser
+tools, automatic retrieval, or mutation workflows; those remain separate,
+test-first increments.
 
 ---
 

@@ -6,6 +6,7 @@ import tkinter as tk
 from tkinter import scrolledtext, ttk
 
 from brain.BrainResponse import BrainResponse
+from brain.SessionSummary import SessionSummary
 from desktop.DesktopController import DesktopController
 
 
@@ -21,6 +22,7 @@ class TkinterDesktopWindow:
         self._root = root or tk.Tk()
         self._status = tk.StringVar(value="Ready")
         self._session_id = tk.StringVar()
+        self._session_summaries: list[SessionSummary] = []
 
         self._root.title("Hypatia")
         self._root.minsize(760, 520)
@@ -41,19 +43,31 @@ class TkinterDesktopWindow:
         session_frame = ttk.LabelFrame(container, text="Session", padding=8)
         session_frame.grid(row=0, column=0, sticky="ew")
         session_frame.columnconfigure(0, weight=1)
+        self._session_list = tk.Listbox(
+            session_frame,
+            height=4,
+            exportselection=False,
+        )
+        self._session_list.grid(row=0, column=0, columnspan=4, sticky="ew", pady=(0, 8))
+        self._session_list.bind("<<ListboxSelect>>", self._choose_session)
         ttk.Entry(session_frame, textvariable=self._session_id).grid(
-            row=0, column=0, sticky="ew", padx=(0, 8)
+            row=1, column=0, sticky="ew", padx=(0, 8)
         )
         ttk.Button(
             session_frame,
             text="Select session",
             command=self._select_session,
-        ).grid(row=0, column=1, sticky="ew")
+        ).grid(row=1, column=1, sticky="ew")
+        ttk.Button(
+            session_frame,
+            text="Refresh sessions",
+            command=self._refresh_sessions,
+        ).grid(row=1, column=2, sticky="ew", padx=(8, 0))
         ttk.Button(
             session_frame,
             text="Semantic status",
             command=self._show_semantic_status,
-        ).grid(row=0, column=2, sticky="ew", padx=(8, 0))
+        ).grid(row=1, column=3, sticky="ew", padx=(8, 0))
 
         ttk.Label(container, textvariable=self._status).grid(
             row=1, column=0, sticky="w", pady=(8, 4)
@@ -102,6 +116,32 @@ class TkinterDesktopWindow:
 
     def _show_semantic_status(self) -> None:
         self._append_response(self._controller.semantic_status())
+
+    def _refresh_sessions(self) -> None:
+        response = self._controller.session_overview()
+        self._render_session_summaries(response)
+        self._append_response(response)
+
+    def _choose_session(self, _event: tk.Event[tk.Listbox]) -> None:
+        selected_indices = self._session_list.curselection()
+        if not selected_indices:
+            return
+        self._session_id.set(self._session_summaries[selected_indices[0]].session_id)
+
+    def _render_session_summaries(self, response: BrainResponse) -> None:
+        """Show only current successful Brain data, never a stale local copy."""
+        self._session_list.delete(0, tk.END)
+        self._session_summaries = []
+        if not response.success:
+            return
+        self._session_summaries = response.session_summaries
+        for summary in self._session_summaries:
+            active_label = " (active)" if summary.active else ""
+            conversations = summary.conversation_count
+            label = (
+                f"{summary.session_id}{active_label} — {conversations} conversations"
+            )
+            self._session_list.insert(tk.END, label)
 
     def _append_exchange(
         self,
