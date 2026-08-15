@@ -4,12 +4,31 @@ from __future__ import annotations
 
 import tkinter as tk
 from collections.abc import Callable
-from tkinter import scrolledtext, ttk
+from tkinter import messagebox, scrolledtext, ttk
+from typing import Protocol
 
 from brain.BrainResponse import BrainResponse
 from brain.SessionSummary import SessionSummary
 from desktop.DesktopController import DesktopController
 from knowledge.KnowledgeCitation import KnowledgeCitation
+
+
+class KnowledgeRelationProcessor(Protocol):
+    """Small mutable relation boundary used by the confirmation helper."""
+
+    def preview_knowledge_relation(
+        self,
+        source_document_id: str,
+        target_document_id: str,
+    ) -> BrainResponse:
+        """Return a validated relation preview without changing graph state."""
+
+    def apply_knowledge_relation(
+        self,
+        source_document_id: str,
+        target_document_id: str,
+    ) -> BrainResponse:
+        """Apply the runtime-validated relation after confirmation."""
 
 
 class TkinterDesktopWindow:
@@ -26,6 +45,8 @@ class TkinterDesktopWindow:
         self._session_id = tk.StringVar()
         self._recall_query = tk.StringVar()
         self._knowledge_query = tk.StringVar()
+        self._relation_source_id = tk.StringVar()
+        self._relation_target_id = tk.StringVar()
         self._session_summaries: list[SessionSummary] = []
 
         self._root.title("Hypatia")
@@ -42,7 +63,7 @@ class TkinterDesktopWindow:
         self._root.columnconfigure(0, weight=1)
         self._root.rowconfigure(0, weight=1)
         container.columnconfigure(0, weight=1)
-        container.rowconfigure(4, weight=1)
+        container.rowconfigure(5, weight=1)
 
         session_frame = ttk.LabelFrame(container, text="Session", padding=8)
         session_frame.grid(row=0, column=0, sticky="ew")
@@ -132,8 +153,36 @@ class TkinterDesktopWindow:
             command=self._show_knowledge_list,
         ).grid(row=0, column=4, sticky="ew", padx=(8, 0))
 
+        relation_frame = ttk.LabelFrame(
+            container,
+            text="Local source relation",
+            padding=8,
+        )
+        relation_frame.grid(row=3, column=0, sticky="ew", pady=(8, 0))
+        relation_frame.columnconfigure(1, weight=1)
+        relation_frame.columnconfigure(3, weight=1)
+        ttk.Label(relation_frame, text="Source ID").grid(row=0, column=0, sticky="w")
+        ttk.Entry(relation_frame, textvariable=self._relation_source_id).grid(
+            row=0,
+            column=1,
+            sticky="ew",
+            padx=(8, 12),
+        )
+        ttk.Label(relation_frame, text="Target ID").grid(row=0, column=2, sticky="w")
+        ttk.Entry(relation_frame, textvariable=self._relation_target_id).grid(
+            row=0,
+            column=3,
+            sticky="ew",
+            padx=(8, 12),
+        )
+        ttk.Button(
+            relation_frame,
+            text="Preview and link",
+            command=self._preview_and_link_knowledge_relation,
+        ).grid(row=0, column=4, sticky="ew")
+
         ttk.Label(container, textvariable=self._status).grid(
-            row=3, column=0, sticky="w", pady=(8, 4)
+            row=4, column=0, sticky="w", pady=(8, 4)
         )
 
         self._transcript = scrolledtext.ScrolledText(
@@ -142,10 +191,10 @@ class TkinterDesktopWindow:
             state=tk.DISABLED,
             height=18,
         )
-        self._transcript.grid(row=4, column=0, sticky="nsew")
+        self._transcript.grid(row=5, column=0, sticky="nsew")
 
         composer_frame = ttk.LabelFrame(container, text="Message", padding=8)
-        composer_frame.grid(row=5, column=0, sticky="ew", pady=(8, 0))
+        composer_frame.grid(row=6, column=0, sticky="ew", pady=(8, 0))
         composer_frame.columnconfigure(0, weight=1)
         self._composer = tk.Text(composer_frame, height=4, wrap=tk.WORD)
         self._composer.grid(row=0, column=0, sticky="ew", padx=(0, 8))
@@ -197,6 +246,32 @@ class TkinterDesktopWindow:
 
     def _show_knowledge_list(self) -> None:
         self._append_response(self._controller.list_knowledge())
+
+    def _preview_and_link_knowledge_relation(self) -> None:
+        try:
+            preview, application = _preview_and_confirm_knowledge_relation(
+                self._controller,
+                self._relation_source_id.get(),
+                self._relation_target_id.get(),
+                self._confirm_knowledge_relation,
+            )
+        except ValueError as error:
+            self._status.set(str(error))
+            return
+        self._append_response(preview)
+        if application is None:
+            if preview.success:
+                self._status.set("knowledge relation: not applied")
+            return
+        self._append_response(application)
+
+    def _confirm_knowledge_relation(self, preview: BrainResponse) -> bool:
+        """Display only the existing runtime preview before mutation."""
+        return messagebox.askyesno(
+            "Create local relation?",
+            f"{preview.message}\n\nCreate this local relation?",
+            parent=self._root,
+        )
 
     def _show_knowledge_response(
         self,
@@ -298,4 +373,23 @@ def _format_citations(citations: list[KnowledgeCitation]) -> str:
             f"(paragraph {citation.chunk_index + 1}; {citation.chunk_id})"
         )
         for index, citation in enumerate(citations, start=1)
+    )
+
+
+def _preview_and_confirm_knowledge_relation(
+    controller: KnowledgeRelationProcessor,
+    source_document_id: str,
+    target_document_id: str,
+    confirm: Callable[[BrainResponse], bool],
+) -> tuple[BrainResponse, BrainResponse | None]:
+    """Preview first; invoke the mutating command only after explicit approval."""
+    preview = controller.preview_knowledge_relation(
+        source_document_id,
+        target_document_id,
+    )
+    if not preview.success or not confirm(preview):
+        return preview, None
+    return preview, controller.apply_knowledge_relation(
+        source_document_id,
+        target_document_id,
     )

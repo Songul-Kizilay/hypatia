@@ -109,6 +109,11 @@ augments ordinary chat or changes conversation memory.
 For every knowledge response that already carries source records, the transcript
 also renders those records in response order: title, local path, paragraph, and
 chunk ID. It does not invent, resolve, persist, or reorder citations.
+The shell also implements the first mutation flow for an explicit local source
+relation: two entered IDs first receive the runtime's read-only preview. The
+window presents that exact preview in a confirmation dialog; only an explicit
+approval calls the existing revalidating apply command. A declined or failed
+preview leaves the graph, JSON memory, and conversation memory unchanged.
 
 ## Mutation flows
 

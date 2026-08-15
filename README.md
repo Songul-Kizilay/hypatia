@@ -130,6 +130,10 @@ changes conversation memory.
 Whenever a knowledge response carries existing source records, the desktop
 transcript shows them in returned order with title, local path, paragraph, and
 chunk ID. It does not manufacture or persist source information.
+To make an explicit local `related_to` link, enter two source IDs and select
+`Preview and link`. Hypatia first shows the existing runtime preview and only
+sends the revalidating relation command after a separate confirmation. Declining
+or failing the preview leaves the local graph and conversation memory unchanged.
 It does not yet include voice, document import, knowledge drawers, browser
 tools, automatic retrieval, or mutation workflows; those remain separate,
 test-first increments.

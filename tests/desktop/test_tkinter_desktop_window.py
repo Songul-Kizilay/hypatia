@@ -10,7 +10,11 @@ SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
-from desktop.TkinterDesktopWindow import _format_citations
+from brain.BrainResponse import BrainResponse
+from desktop.TkinterDesktopWindow import (
+    _format_citations,
+    _preview_and_confirm_knowledge_relation,
+)
 from knowledge.KnowledgeCitation import KnowledgeCitation
 
 
@@ -56,3 +60,97 @@ class CitationFormattingTests(unittest.TestCase):
             _format_citations([citation]),
             "1. (untitled) — local source unavailable (paragraph 1; untitled:0)",
         )
+
+
+class RelationConfirmationTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.preview = BrainResponse(
+            message="Changes: ready",
+            request_id="preview",
+            intent="knowledge_relation_preview",
+            memory_count=0,
+        )
+        self.application = BrainResponse(
+            message="Graph state: updated",
+            request_id="apply",
+            intent="knowledge_relation_apply",
+            memory_count=0,
+        )
+        self.controller = RecordingRelationController(self.preview, self.application)
+
+    def test_applies_only_after_a_successful_preview_is_confirmed(self) -> None:
+        preview, application = _preview_and_confirm_knowledge_relation(
+            self.controller,
+            "source",
+            "target",
+            lambda response: response is self.preview,
+        )
+
+        self.assertIs(preview, self.preview)
+        self.assertIs(application, self.application)
+        self.assertEqual(
+            self.controller.calls,
+            [("preview", "source", "target"), ("apply", "source", "target")],
+        )
+
+    def test_does_not_apply_when_the_user_declines_the_preview(self) -> None:
+        preview, application = _preview_and_confirm_knowledge_relation(
+            self.controller,
+            "source",
+            "target",
+            lambda _response: False,
+        )
+
+        self.assertIs(preview, self.preview)
+        self.assertIsNone(application)
+        self.assertEqual(self.controller.calls, [("preview", "source", "target")])
+
+    def test_does_not_offer_or_apply_a_failed_preview(self) -> None:
+        failed_preview = BrainResponse(
+            message="The relation is invalid.",
+            request_id="failed-preview",
+            intent="knowledge_relation_preview",
+            memory_count=0,
+            success=False,
+        )
+        controller = RecordingRelationController(failed_preview, self.application)
+        confirmations: list[BrainResponse] = []
+
+        def confirm(response: BrainResponse) -> bool:
+            confirmations.append(response)
+            return True
+
+        preview, application = _preview_and_confirm_knowledge_relation(
+            controller,
+            "source",
+            "target",
+            confirm,
+        )
+
+        self.assertIs(preview, failed_preview)
+        self.assertIsNone(application)
+        self.assertEqual(confirmations, [])
+        self.assertEqual(controller.calls, [("preview", "source", "target")])
+
+
+class RecordingRelationController:
+    def __init__(self, preview: BrainResponse, application: BrainResponse) -> None:
+        self.calls: list[tuple[str, str, str]] = []
+        self._preview = preview
+        self._application = application
+
+    def preview_knowledge_relation(
+        self,
+        source_document_id: str,
+        target_document_id: str,
+    ) -> BrainResponse:
+        self.calls.append(("preview", source_document_id, target_document_id))
+        return self._preview
+
+    def apply_knowledge_relation(
+        self,
+        source_document_id: str,
+        target_document_id: str,
+    ) -> BrainResponse:
+        self.calls.append(("apply", source_document_id, target_document_id))
+        return self._application
