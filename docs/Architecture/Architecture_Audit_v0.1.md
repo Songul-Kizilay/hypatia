@@ -15,7 +15,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.23` today) are the executable package and GitHub
+- **Runtime releases** (`v0.3.24` today) are the executable package and GitHub
   release line. They are the source-backed implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
   engineering increments. Sprint 4.16.50 is complete and is already in the
@@ -76,6 +76,11 @@ without weakening it: a user enters two source IDs, receives the current
 read-only runtime preview, and must explicitly confirm before the desktop sends
 the separate revalidating apply command. It does not retain a pending relation
 locally, infer IDs, or apply a relation after a failed or declined preview.
+
+The matching desktop relation-removal flow follows the same boundary: it asks
+the runtime for a current removal preview and sends the separate revalidating
+removal command only after an explicit confirmation. The desktop retains no
+pending removal and cannot remove a relation after a declined or failed preview.
 
 Persistent state is stored locally as validated JSON snapshots through
 `JsonFileMemoryStore` and `JsonFileSessionStore`. Snapshot writes are atomic.

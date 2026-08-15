@@ -14,6 +14,7 @@ from brain.BrainResponse import BrainResponse
 from desktop.TkinterDesktopWindow import (
     _format_citations,
     _preview_and_confirm_knowledge_relation,
+    _preview_and_confirm_knowledge_relation_removal,
 )
 from knowledge.KnowledgeCitation import KnowledgeCitation
 
@@ -154,3 +155,100 @@ class RecordingRelationController:
     ) -> BrainResponse:
         self.calls.append(("apply", source_document_id, target_document_id))
         return self._application
+
+
+class RelationRemovalConfirmationTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.preview = BrainResponse(
+            message="Changes: ready to remove",
+            request_id="removal-preview",
+            intent="knowledge_relation_removal_preview",
+            memory_count=0,
+        )
+        self.removal = BrainResponse(
+            message="Graph state: updated",
+            request_id="remove",
+            intent="knowledge_relation_remove",
+            memory_count=0,
+        )
+        self.controller = RecordingRelationRemovalController(
+            self.preview,
+            self.removal,
+        )
+
+    def test_removes_only_after_a_successful_preview_is_confirmed(self) -> None:
+        preview, removal = _preview_and_confirm_knowledge_relation_removal(
+            self.controller,
+            "source",
+            "target",
+            lambda response: response is self.preview,
+        )
+
+        self.assertIs(preview, self.preview)
+        self.assertIs(removal, self.removal)
+        self.assertEqual(
+            self.controller.calls,
+            [("preview", "source", "target"), ("remove", "source", "target")],
+        )
+
+    def test_does_not_remove_when_the_user_declines_the_preview(self) -> None:
+        preview, removal = _preview_and_confirm_knowledge_relation_removal(
+            self.controller,
+            "source",
+            "target",
+            lambda _response: False,
+        )
+
+        self.assertIs(preview, self.preview)
+        self.assertIsNone(removal)
+        self.assertEqual(self.controller.calls, [("preview", "source", "target")])
+
+    def test_does_not_offer_or_remove_a_failed_preview(self) -> None:
+        failed_preview = BrainResponse(
+            message="The relation is unavailable.",
+            request_id="failed-removal-preview",
+            intent="knowledge_relation_removal_preview",
+            memory_count=0,
+            success=False,
+        )
+        controller = RecordingRelationRemovalController(failed_preview, self.removal)
+        confirmations: list[BrainResponse] = []
+
+        def confirm(response: BrainResponse) -> bool:
+            confirmations.append(response)
+            return True
+
+        preview, removal = _preview_and_confirm_knowledge_relation_removal(
+            controller,
+            "source",
+            "target",
+            confirm,
+        )
+
+        self.assertIs(preview, failed_preview)
+        self.assertIsNone(removal)
+        self.assertEqual(confirmations, [])
+        self.assertEqual(controller.calls, [("preview", "source", "target")])
+
+
+class RecordingRelationRemovalController:
+    def __init__(self, preview: BrainResponse, removal: BrainResponse) -> None:
+        self.calls: list[tuple[str, str, str]] = []
+        self._preview = preview
+        self._removal = removal
+
+    def preview_knowledge_relation_removal(
+        self,
+        source_document_id: str,
+        target_document_id: str,
+    ) -> BrainResponse:
+        self.calls.append(("preview", source_document_id, target_document_id))
+        return self._preview
+
+    def remove_knowledge_relation(
+        self,
+        source_document_id: str,
+        target_document_id: str,
+    ) -> BrainResponse:
+        self.calls.append(("remove", source_document_id, target_document_id))
+        return self._removal
