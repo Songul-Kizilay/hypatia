@@ -87,8 +87,9 @@ To create the world's most capable personal AI research companion.
 - An initial local desktop shell for text chat, a refreshable session overview,
   explicit session selection, session details/recent conversations/activity,
   explicit lexical/semantic conversation recall, and semantic-memory runtime
-  status; it delegates every action to the existing Brain runtime and
-  introduces no browser, cloud, or duplicate data store
+  status, and bounded cited local knowledge context; it delegates every action
+  to the existing Brain runtime and introduces no browser, cloud, or duplicate
+  data store
 
 Roadmap modules listed above are product direction, not a claim that every module is
 already implemented.
@@ -114,6 +115,9 @@ The separate `Recall` and `Semantic recall` buttons require a user-entered
 query; they never add retrieval automatically to ordinary chat. Semantic recall
 uses the existing configured fallback behavior when its optional runtime is not
 available.
+`Knowledge context` is separately user-initiated and returns only the bounded,
+cited local context already exposed by the runtime. It neither calls an LLM nor
+changes conversation memory.
 It does not yet include voice, document import, knowledge drawers, browser
 tools, automatic retrieval, or mutation workflows; those remain separate,
 test-first increments.

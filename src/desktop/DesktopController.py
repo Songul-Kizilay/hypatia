@@ -57,6 +57,10 @@ class DesktopController:
         """Request explicit semantic recall through the existing opt-in path."""
         return self._recall_command("semantic recall", query)
 
+    def knowledge_context(self, query: str) -> BrainResponse:
+        """Request bounded cited local knowledge context without an LLM call."""
+        return self._knowledge_command("knowledge context", query)
+
     def semantic_status(self) -> BrainResponse:
         """Request the read-only semantic runtime status without a query."""
         return self._brain.process("semantic recall status")
@@ -77,4 +81,11 @@ class DesktopController:
         normalized_query = query.strip()
         if not normalized_query:
             raise ValueError("A recall query cannot be empty.")
+        return self._brain.process(f"{command} {normalized_query}")
+
+    def _knowledge_command(self, command: str, query: str) -> BrainResponse:
+        """Keep local knowledge retrieval explicit and query-bounded."""
+        normalized_query = query.strip()
+        if not normalized_query:
+            raise ValueError("A knowledge query cannot be empty.")
         return self._brain.process(f"{command} {normalized_query}")

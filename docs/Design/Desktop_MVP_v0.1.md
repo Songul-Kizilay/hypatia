@@ -96,6 +96,8 @@ Provides explicit, user-selected views instead of automatic retrieval:
 
 The initial shell implements the Recall and Semantic recall actions as separate
 query controls. It does not issue either request from ordinary chat text.
+It also implements the separate, bounded, cited `Knowledge context` action;
+this local retrieval does not call an LLM or mutate conversation memory.
 
 ## Mutation flows
 

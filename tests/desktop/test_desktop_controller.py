@@ -119,6 +119,18 @@ class DesktopControllerTests(unittest.TestCase):
 
         self.assertEqual(self.brain.requests, [])
 
+    def test_knowledge_context_uses_the_explicit_local_command(self) -> None:
+        response = self.controller.knowledge_context("  project plan  ")
+
+        self.assertIs(response, self.response)
+        self.assertEqual(self.brain.requests, ["knowledge context project plan"])
+
+    def test_knowledge_context_rejects_empty_query_without_calling_brain(self) -> None:
+        with self.assertRaisesRegex(ValueError, "cannot be empty"):
+            self.controller.knowledge_context(" \t\n ")
+
+        self.assertEqual(self.brain.requests, [])
+
     def test_semantic_status_uses_the_read_only_runtime_command(self) -> None:
         response = self.controller.semantic_status()
 
