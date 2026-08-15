@@ -233,6 +233,14 @@ class DesktopControllerTests(unittest.TestCase):
 
         self.assertEqual(self.brain.requests, [])
 
+    def test_list_knowledge_relations_uses_the_existing_read_only_command(
+        self,
+    ) -> None:
+        response = self.controller.list_knowledge_relations()
+
+        self.assertIs(response, self.response)
+        self.assertEqual(self.brain.requests, ["list knowledge relations"])
+
     def test_list_knowledge_uses_the_existing_read_only_catalog_command(self) -> None:
         response = self.controller.list_knowledge()
 

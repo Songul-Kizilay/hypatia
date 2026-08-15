@@ -121,6 +121,10 @@ class DesktopController:
         """Request the existing read-only catalog of loaded local sources."""
         return self._brain.process("list knowledge")
 
+    def list_knowledge_relations(self) -> BrainResponse:
+        """Request the read-only catalog of active local source relations."""
+        return self._brain.process("list knowledge relations")
+
     def semantic_status(self) -> BrainResponse:
         """Request the read-only semantic runtime status without a query."""
         return self._brain.process("semantic recall status")

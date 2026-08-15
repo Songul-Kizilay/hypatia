@@ -203,6 +203,11 @@ class TkinterDesktopWindow:
             text="Preview and remove",
             command=self._preview_and_remove_knowledge_relation,
         ).grid(row=0, column=5, sticky="ew")
+        ttk.Button(
+            relation_frame,
+            text="Active links",
+            command=self._show_knowledge_relation_list,
+        ).grid(row=0, column=6, sticky="ew", padx=(8, 0))
 
         ttk.Label(container, textvariable=self._status).grid(
             row=4, column=0, sticky="w", pady=(8, 4)
@@ -305,6 +310,9 @@ class TkinterDesktopWindow:
                 self._status.set("knowledge relation: not removed")
             return
         self._append_response(removal)
+
+    def _show_knowledge_relation_list(self) -> None:
+        self._append_response(self._controller.list_knowledge_relations())
 
     def _confirm_knowledge_relation(self, preview: BrainResponse) -> bool:
         """Display only the existing runtime preview before mutation."""
