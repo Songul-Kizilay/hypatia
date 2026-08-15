@@ -2,14 +2,20 @@
 
 All notable project changes are recorded here.
 
-## [Unreleased]
+## [0.3.12] - 2026-08-15
+
+### Fixed
+
+- Knowledge loading now rejects a source that is already loaded before parsing
+  or indexing it, so a failed duplicate load cannot leave orphaned chunks in
+  the search index.
 
 ### Verification
 
 - A versioned v2 hybrid semantic-ranking corpus adds Turkish and English query
   cases with explicit expected ordering and relevance rationales. The runtime
   ranking algorithm remains unchanged.
-- The package-aware full local suite contains 903 passing automated tests.
+- The package-aware full local suite contains 904 passing automated tests.
 
 ## [0.3.11] - 2026-08-15
 
