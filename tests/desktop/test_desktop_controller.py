@@ -69,6 +69,36 @@ class DesktopControllerTests(unittest.TestCase):
         self.assertIs(response, self.response)
         self.assertEqual(self.brain.requests, ["session overview"])
 
+    def test_session_details_uses_the_explicit_read_only_command(self) -> None:
+        response = self.controller.session_details("  Work-1  ")
+
+        self.assertIs(response, self.response)
+        self.assertEqual(self.brain.requests, ["session details Work-1"])
+
+    def test_session_recent_uses_the_explicit_read_only_command(self) -> None:
+        response = self.controller.session_recent("  Work-1  ")
+
+        self.assertIs(response, self.response)
+        self.assertEqual(self.brain.requests, ["session recent Work-1"])
+
+    def test_session_activity_uses_the_explicit_read_only_command(self) -> None:
+        response = self.controller.session_activity("  Work-1  ")
+
+        self.assertIs(response, self.response)
+        self.assertEqual(self.brain.requests, ["session activity Work-1"])
+
+    def test_session_specific_views_reject_empty_id_without_calling_brain(self) -> None:
+        for action in (
+            self.controller.session_details,
+            self.controller.session_recent,
+            self.controller.session_activity,
+        ):
+            with self.subTest(action=action.__name__):
+                with self.assertRaisesRegex(ValueError, "cannot be empty"):
+                    action("   ")
+
+        self.assertEqual(self.brain.requests, [])
+
     def test_semantic_status_uses_the_read_only_runtime_command(self) -> None:
         response = self.controller.semantic_status()
 

@@ -37,6 +37,29 @@ class DesktopController:
         """Request existing read-only session facts for desktop presentation."""
         return self._brain.process("session overview")
 
+    def session_details(self, session_id: str) -> BrainResponse:
+        """Request read-only details for the explicitly selected session."""
+        return self._selected_session_command("session details", session_id)
+
+    def session_recent(self, session_id: str) -> BrainResponse:
+        """Request the selected session's read-only recent conversation view."""
+        return self._selected_session_command("session recent", session_id)
+
+    def session_activity(self, session_id: str) -> BrainResponse:
+        """Request read-only first and last activity for the selected session."""
+        return self._selected_session_command("session activity", session_id)
+
     def semantic_status(self) -> BrainResponse:
         """Request the read-only semantic runtime status without a query."""
         return self._brain.process("semantic recall status")
+
+    def _selected_session_command(
+        self,
+        command: str,
+        session_id: str,
+    ) -> BrainResponse:
+        """Keep session-specific desktop actions explicit and side-effect free."""
+        normalized_session_id = session_id.strip()
+        if not normalized_session_id:
+            raise ValueError("A session ID cannot be empty.")
+        return self._brain.process(f"{command} {normalized_session_id}")

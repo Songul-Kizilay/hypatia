@@ -64,9 +64,10 @@ flowchart LR
 Shows the active session and an ordered list of known session IDs. The initial
 shell refreshes this list and its conversation counts through a read-only Brain
 overview; selecting a row fills the session field, while activation remains an
-explicit separate action. A user can later open read-only activity and recent
-conversation views. The rail must not display data from an unknown session as
-a substitute for a failed lookup.
+explicit separate action. The initial shell also provides explicit read-only
+details, activity, and recent-conversation views for the selected session. The
+rail must not display data from an unknown session as a substitute for a failed
+lookup.
 
 ### 2. Conversation workspace
 
