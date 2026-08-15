@@ -2,6 +2,21 @@
 
 All notable project changes are recorded here.
 
+## [0.3.22] - 2026-08-15
+
+### Added
+
+- The desktop transcript now renders source records already returned on a
+  knowledge response, in their existing order. Each visible citation keeps its
+  title, local path, one-based paragraph, and chunk ID; the UI performs no
+  additional lookup or citation construction.
+
+### Verification
+
+- The package-aware full local suite contains 928 passing automated tests.
+- Black, Ruff, MyPy, whitespace validation, and a real Tkinter citation-
+  rendering smoke test pass with the documented project virtual environment.
+
 ## [0.3.21] - 2026-08-15
 
 ### Added

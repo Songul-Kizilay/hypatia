@@ -9,6 +9,7 @@ from tkinter import scrolledtext, ttk
 from brain.BrainResponse import BrainResponse
 from brain.SessionSummary import SessionSummary
 from desktop.DesktopController import DesktopController
+from knowledge.KnowledgeCitation import KnowledgeCitation
 
 
 class TkinterDesktopWindow:
@@ -277,10 +278,24 @@ class TkinterDesktopWindow:
     def _append_response(self, response: BrainResponse) -> None:
         outcome = "completed" if response.success else "failed"
         self._status.set(f"{response.intent}: {outcome}")
-        self._append_to_transcript(f"Hypatia: {response.message}\n")
+        citation_text = _format_citations(response.knowledge_citations)
+        citations = f"\nSources:\n{citation_text}" if citation_text else ""
+        self._append_to_transcript(f"Hypatia: {response.message}{citations}\n")
 
     def _append_to_transcript(self, value: str) -> None:
         self._transcript.configure(state=tk.NORMAL)
         self._transcript.insert(tk.END, value)
         self._transcript.see(tk.END)
         self._transcript.configure(state=tk.DISABLED)
+
+
+def _format_citations(citations: list[KnowledgeCitation]) -> str:
+    """Render existing source records in response order without new lookups."""
+    return "\n".join(
+        (
+            f"{index}. {citation.document_title} — "
+            f"{citation.source or 'local source unavailable'} "
+            f"(paragraph {citation.chunk_index + 1}; {citation.chunk_id})"
+        )
+        for index, citation in enumerate(citations, start=1)
+    )
