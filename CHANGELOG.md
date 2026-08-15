@@ -2,6 +2,22 @@
 
 All notable project changes are recorded here.
 
+## [0.3.27] - 2026-08-15
+
+### Added
+
+- The desktop shell now exposes `Preview delete` for a selected session. It
+  opens confirmation only when the existing structured runtime preview marks
+  deletion allowed; blocked or failed previews cannot show confirmation or
+  issue a delete request. A successful delete clears the selection and refreshes
+  the session list from Brain.
+
+### Verification
+
+- The package-aware full local suite contains 947 passing automated tests.
+- Black, Ruff, MyPy, whitespace validation, and real Tkinter allowed/blocked
+  session-delete smoke tests pass with the documented project virtual environment.
+
 ## [0.3.26] - 2026-08-15
 
 ### Added

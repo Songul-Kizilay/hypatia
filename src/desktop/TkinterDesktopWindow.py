@@ -164,6 +164,11 @@ class TkinterDesktopWindow:
             text="Preview rename",
             command=self._preview_and_rename_session,
         ).grid(row=3, column=3, sticky="ew", pady=(8, 0))
+        ttk.Button(
+            session_frame,
+            text="Preview delete",
+            command=self._preview_and_delete_session,
+        ).grid(row=4, column=3, sticky="ew", pady=(8, 0))
 
         recall_frame = ttk.LabelFrame(container, text="Conversation recall", padding=8)
         recall_frame.grid(row=1, column=0, sticky="ew", pady=(8, 0))
@@ -409,6 +414,28 @@ class TkinterDesktopWindow:
         self._append_response(renamed)
         if renamed.success:
             self._session_id.set(target_id.strip())
+            self._refresh_sessions()
+
+    def _preview_and_delete_session(self) -> None:
+        try:
+            preview = self._controller.preview_session_delete(self._session_id.get())
+        except ValueError as error:
+            self._status.set(str(error))
+            return
+        self._append_response(preview)
+        if not preview.success or preview.session_delete_allowed is not True:
+            return
+        if not messagebox.askyesno(
+            "Delete session?",
+            f"{preview.message}\n\nDelete this session permanently?",
+            parent=self._root,
+        ):
+            self._status.set("session delete: not applied")
+            return
+        response = self._controller.delete_session(self._session_id.get())
+        self._append_response(response)
+        if response.success:
+            self._session_id.set("")
             self._refresh_sessions()
 
     def _confirm_session_rename(self, preview: BrainResponse) -> bool:

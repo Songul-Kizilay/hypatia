@@ -73,6 +73,14 @@ class DesktopController:
             target_session_id,
         )
 
+    def preview_session_delete(self, session_id: str) -> BrainResponse:
+        """Request the existing read-only delete decision for one session."""
+        return self._selected_session_command("preview delete session", session_id)
+
+    def delete_session(self, session_id: str) -> BrainResponse:
+        """Send the existing guarded delete command after an allowed preview."""
+        return self._selected_session_command("delete session", session_id)
+
     def recall(self, query: str) -> BrainResponse:
         """Request explicit lexical recall without changing conversation memory."""
         return self._recall_command("recall", query)

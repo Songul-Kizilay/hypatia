@@ -166,6 +166,7 @@ class ResponseComposer:
             request_id=request.request_id,
             intent="session_delete_preview",
             memory_count=len(memory_ids),
+            session_delete_allowed=decision_status is SessionDeleteStatus.ALLOW,
         )
 
     def session_delete_preview_failure(
