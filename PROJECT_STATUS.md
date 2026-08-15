@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.29 (Genesis)`
+`v0.3.30 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,8 +12,8 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.29`** is the current executable package pending its
-  published GitHub release.
+- **Runtime release `v0.3.30`** is the current executable package and GitHub
+  release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
   current main branch; it is not an unmerged or later release.
@@ -51,6 +51,13 @@ with optional OpenAI-compatible LLM conversation support.
   sends a structured request through Brain to the existing knowledge pipeline.
   It validates and indexes the selected source without an LLM call,
   conversation-memory write, or desktop-side source store.
+- The Windows desktop entry point persists its own local runtime state beneath
+  `%LOCALAPPDATA%\Hypatia` by default, avoiding writes beside an installed
+  executable. A documented absolute-path override supports deliberate local
+  backup/storage choices; no automatic data migration occurs.
+- A reproducible Windows onedir package can be built with the pinned local
+  PyInstaller tool and `tools/build_desktop.ps1`. The initial update policy is
+  manual, with no self-update, bundled credentials, or telemetry channel.
 - An explicit desktop `Ask sources` action submits a user-entered question to
   the existing local-RAG command. When the configured runtime is enabled, it
   receives only up to three bounded cited local chunks; it does not augment
@@ -194,7 +201,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 949 automated tests pass through package-aware discovery.
+- 963 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.

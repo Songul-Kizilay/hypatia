@@ -2,6 +2,28 @@
 
 All notable project changes are recorded here.
 
+## [0.3.30] - 2026-08-15
+
+### Added
+
+- The desktop entry point now uses user-writable persistence paths instead of
+  an installed application directory: `%LOCALAPPDATA%\Hypatia` on Windows by
+  default, with an absolute-only `HYPATIA_DESKTOP_DATA_DIR` override. The
+  terminal developer entry point keeps its repository data-path behavior.
+- The first Windows desktop packaging path is defined by ADR 0002: a pinned
+  PyInstaller `6.21.0` dependency and `tools/build_desktop.ps1` produce an
+  inspectable onedir package at `dist/Hypatia/Hypatia.exe`. Updates remain
+  manual; the package does not self-update, migrate data, or bundle secrets.
+
+### Verification
+
+- The package-aware full local suite contains 963 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass with the documented
+  project virtual environment.
+- The Windows build script produced `dist/Hypatia/Hypatia.exe` and its bundled
+  Tcl/Tk runtime assets. A sandbox policy prevented an automated background GUI
+  launch, so this release does not claim an executable-startup smoke test.
+
 ## [0.3.29] - 2026-08-15
 
 ### Added

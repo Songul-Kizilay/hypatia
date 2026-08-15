@@ -5,12 +5,18 @@ from __future__ import annotations
 from brain.Brain import Brain
 from core.Application import HypatiaApplication
 from desktop.DesktopController import DesktopController
+from desktop.DesktopDataPaths import DesktopDataPaths
 from desktop.TkinterDesktopWindow import TkinterDesktopWindow
 
 
 def main() -> None:
     """Start Hypatia's runtime, then hand its Brain to the desktop adapter."""
-    app = HypatiaApplication.from_process_environment()
+    data_paths = DesktopDataPaths.from_process_environment()
+    app = HypatiaApplication.from_process_environment(
+        memory_path=data_paths.memory_path,
+        session_path=data_paths.session_path,
+        knowledge_relation_path=data_paths.knowledge_relation_path,
+    )
     app.start()
 
     try:

@@ -155,6 +155,23 @@ It does not yet include voice, PDF/web import, browser tools, automatic
 retrieval, or automatic knowledge mutations; those remain separate, test-first
 increments.
 
+### Windows desktop package
+
+The first distributable target is Windows. Build it from the repository root:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-desktop-build.txt
+.\tools\build_desktop.ps1
+```
+
+The resulting application is `dist\Hypatia\Hypatia.exe`. It uses local data
+under `%LOCALAPPDATA%\Hypatia` rather than writing beside the executable:
+conversation memory, sessions, and explicit knowledge relations remain on this
+device. Set `HYPATIA_DESKTOP_DATA_DIR` to an **absolute** path only when you
+deliberately need a different local data root. The initial package has manual
+updates; it does not self-update or automatically migrate data from a developer
+checkout.
+
 ---
 
 ## LLM runtime quickstart

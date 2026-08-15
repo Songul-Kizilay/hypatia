@@ -204,14 +204,15 @@ optimistic local update is retained.
    mutation drawers are added only after their read-only and confirmation paths
    are individually tested.
 5. **Partially met:** Tkinter and the no-web-view policy are recorded in ADR
-   0001. Packaging, update policy, and accessibility verification remain open
-   before a distributable desktop release.
+   0001. ADR 0002 now defines and verifies a Windows onedir package, local
+   data boundary, and manual-update policy. Accessibility verification remains
+   open before claiming a fully accessible desktop release.
 
 ## Open decisions
 
 - The first shell uses native Python Tkinter; see
-  [ADR 0001](../Decisions/0001-tkinter-desktop-shell.md). Packaging remains a
-  separate decision.
+  [ADR 0001](../Decisions/0001-tkinter-desktop-shell.md). The first Windows
+  package is defined by [ADR 0002](../Decisions/0002-windows-desktop-distribution.md).
 - Cross-platform support target for the first release.
 - The visual identity, color system, and typography, which belong in separate
   design documents rather than runtime code.
