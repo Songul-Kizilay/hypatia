@@ -15,7 +15,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.18` today) are the executable package and GitHub
+- **Runtime releases** (`v0.3.19` today) are the executable package and GitHub
   release line. They are the source-backed implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
   engineering increments. Sprint 4.16.50 is complete and is already in the
@@ -42,7 +42,7 @@ Hypatia is a Python 3.14+ local-first runtime. Its active source packages are:
 | `knowledge` | Local `.txt`/`.md` loading, source catalog, chunks, lexical search, cited prompt context, structural graph |
 | `llm` | Optional OpenAI-compatible chat-completions provider and history assembly |
 | `planner`, `response`, `eventbus` | Deterministic task planning, response composition, lifecycle events |
-| `desktop` | Initial local Tkinter adapter for existing text chat, session views/selection, explicit recall, and semantic status |
+| `desktop` | Initial local Tkinter adapter for existing text chat, session views/selection, explicit recall/context, and semantic status |
 
 The current request flow is:
 
@@ -60,11 +60,12 @@ passes non-empty user text to `Brain`, maps a refreshable session overview to
 the existing `session overview` command, maps explicit selection to `use
 session`, maps selected-session details/recent/activity to their existing
 read-only commands, and maps user-entered lexical/semantic recall plus status
-to their existing commands. It does not augment ordinary chat. Its ordered
-`SessionSummary` response data avoids parsing human-formatted output or reading
-persistence directly. It owns neither persistent state nor a provider client;
-the UI window does not add a browser, web server, or background network
-channel.
+to their existing commands. It additionally maps an explicit knowledge-context
+query to its bounded cited local command without invoking an LLM. It does not
+augment ordinary chat. Its ordered `SessionSummary` response data avoids parsing
+human-formatted output or reading persistence directly. It owns neither
+persistent state nor a provider client; the UI window does not add a browser,
+web server, or background network channel.
 
 Persistent state is stored locally as validated JSON snapshots through
 `JsonFileMemoryStore` and `JsonFileSessionStore`. Snapshot writes are atomic.
@@ -184,7 +185,7 @@ Not implemented:
 
 The current local verification baseline is:
 
-- `python -m unittest discover -s tests -t .`: 919 tests passed. The top-level
+- `python -m unittest discover -s tests -t .`: 921 tests passed. The top-level
   package setting ensures nested test directories are included without
   shadowing source packages.
 - `python -m black --check src tests`: passed.

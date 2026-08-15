@@ -2,6 +2,21 @@
 
 All notable project changes are recorded here.
 
+## [0.3.19] - 2026-08-15
+
+### Added
+
+- The desktop shell now provides an explicit `Knowledge context` action for a
+  user-entered query. It delegates to the existing bounded, cited local context
+  command, rejects an empty query locally, and does not call an LLM or change
+  conversation memory.
+
+### Verification
+
+- The package-aware full local suite contains 921 passing automated tests.
+- Black, Ruff, MyPy, whitespace validation, and a real Tkinter knowledge-
+  context smoke test pass with the documented project virtual environment.
+
 ## [0.3.18] - 2026-08-15
 
 ### Added

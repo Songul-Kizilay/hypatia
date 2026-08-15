@@ -24,6 +24,7 @@ class TkinterDesktopWindow:
         self._status = tk.StringVar(value="Ready")
         self._session_id = tk.StringVar()
         self._recall_query = tk.StringVar()
+        self._knowledge_query = tk.StringVar()
         self._session_summaries: list[SessionSummary] = []
 
         self._root.title("Hypatia")
@@ -40,7 +41,7 @@ class TkinterDesktopWindow:
         self._root.columnconfigure(0, weight=1)
         self._root.rowconfigure(0, weight=1)
         container.columnconfigure(0, weight=1)
-        container.rowconfigure(3, weight=1)
+        container.rowconfigure(4, weight=1)
 
         session_frame = ttk.LabelFrame(container, text="Session", padding=8)
         session_frame.grid(row=0, column=0, sticky="ew")
@@ -103,8 +104,20 @@ class TkinterDesktopWindow:
             command=self._show_semantic_recall,
         ).grid(row=0, column=2, sticky="ew", padx=(8, 0))
 
+        knowledge_frame = ttk.LabelFrame(container, text="Local knowledge", padding=8)
+        knowledge_frame.grid(row=2, column=0, sticky="ew", pady=(8, 0))
+        knowledge_frame.columnconfigure(0, weight=1)
+        ttk.Entry(knowledge_frame, textvariable=self._knowledge_query).grid(
+            row=0, column=0, sticky="ew", padx=(0, 8)
+        )
+        ttk.Button(
+            knowledge_frame,
+            text="Knowledge context",
+            command=self._show_knowledge_context,
+        ).grid(row=0, column=1, sticky="ew")
+
         ttk.Label(container, textvariable=self._status).grid(
-            row=2, column=0, sticky="w", pady=(8, 4)
+            row=3, column=0, sticky="w", pady=(8, 4)
         )
 
         self._transcript = scrolledtext.ScrolledText(
@@ -113,10 +126,10 @@ class TkinterDesktopWindow:
             state=tk.DISABLED,
             height=18,
         )
-        self._transcript.grid(row=3, column=0, sticky="nsew")
+        self._transcript.grid(row=4, column=0, sticky="nsew")
 
         composer_frame = ttk.LabelFrame(container, text="Message", padding=8)
-        composer_frame.grid(row=4, column=0, sticky="ew", pady=(8, 0))
+        composer_frame.grid(row=5, column=0, sticky="ew", pady=(8, 0))
         composer_frame.columnconfigure(0, weight=1)
         self._composer = tk.Text(composer_frame, height=4, wrap=tk.WORD)
         self._composer.grid(row=0, column=0, sticky="ew", padx=(0, 8))
@@ -156,6 +169,14 @@ class TkinterDesktopWindow:
 
     def _show_semantic_recall(self) -> None:
         self._show_recall_response(self._controller.semantic_recall)
+
+    def _show_knowledge_context(self) -> None:
+        try:
+            response = self._controller.knowledge_context(self._knowledge_query.get())
+        except ValueError as error:
+            self._status.set(str(error))
+            return
+        self._append_response(response)
 
     def _show_session_details(self) -> None:
         self._show_selected_session_response(self._controller.session_details)
