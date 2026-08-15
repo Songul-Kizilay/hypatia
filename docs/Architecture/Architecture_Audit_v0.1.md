@@ -15,7 +15,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.12` today) are the executable package and GitHub
+- **Runtime releases** (`v0.3.13` today) are the executable package and GitHub
   release line. They are the source-backed implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
   engineering increments. Sprint 4.16.50 is complete and is already in the
@@ -88,7 +88,8 @@ Implemented memory capabilities:
   keyed by existing memory IDs. A builder produces a fresh index from the
   current active memory-record snapshot without changing persistence.
 - An explicit stdlib-based Ollama `/api/embed` adapter with strict single-vector
-  response validation. An opt-in Bootstrap runtime owner rebuilds and registers
+  response validation and redirect rejection, keeping opted-in requests at the
+  validated local endpoint. An opt-in Bootstrap runtime owner rebuilds and registers
   the index at startup, swapping only after a complete successful build, then
   follows memory lifecycle events with best-effort incremental updates.
 - A bounded `semantic recall <query>` request path. It is session-filtered and
@@ -170,7 +171,7 @@ Not implemented:
 
 The current local verification baseline is:
 
-- `python -m unittest discover -s tests -t .`: 904 tests passed. The top-level
+- `python -m unittest discover -s tests -t .`: 905 tests passed. The top-level
   package setting ensures nested test directories are included without
   shadowing source packages.
 - `python -m black --check src tests`: passed.

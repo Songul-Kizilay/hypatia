@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sys
 import unittest
+from email.message import Message
 from pathlib import Path
 from unittest.mock import patch
 from urllib.request import Request
@@ -14,6 +15,7 @@ if str(SRC_DIR) not in sys.path:
 from memory.UrllibOllamaEmbeddingTransport import (
     DEFAULT_TIMEOUT_SECONDS,
     UrllibOllamaEmbeddingTransport,
+    _NoRedirectHandler,
 )
 
 
@@ -33,7 +35,7 @@ class UrllibOllamaEmbeddingTransportTests(unittest.TestCase):
         requests: list[Request] = []
         timeouts: list[float] = []
 
-        def fake_urlopen(request: Request, timeout: float) -> FakeResponse:
+        def fake_open(request: Request, *, timeout: float) -> FakeResponse:
             requests.append(request)
             timeouts.append(timeout)
             return FakeResponse()
@@ -41,8 +43,8 @@ class UrllibOllamaEmbeddingTransportTests(unittest.TestCase):
         transport = UrllibOllamaEmbeddingTransport()
 
         with patch(
-            "memory.UrllibOllamaEmbeddingTransport.urlopen",
-            side_effect=fake_urlopen,
+            "memory.UrllibOllamaEmbeddingTransport._open_without_redirects",
+            side_effect=fake_open,
         ):
             response = transport(
                 "http://localhost:11434/api/embed",
@@ -65,15 +67,15 @@ class UrllibOllamaEmbeddingTransportTests(unittest.TestCase):
     def test_uses_a_valid_explicit_timeout(self) -> None:
         timeouts: list[float] = []
 
-        def fake_urlopen(request: Request, timeout: float) -> FakeResponse:
+        def fake_open(request: Request, *, timeout: float) -> FakeResponse:
             timeouts.append(timeout)
             return FakeResponse()
 
         transport = UrllibOllamaEmbeddingTransport(timeout_seconds=7.5)
 
         with patch(
-            "memory.UrllibOllamaEmbeddingTransport.urlopen",
-            side_effect=fake_urlopen,
+            "memory.UrllibOllamaEmbeddingTransport._open_without_redirects",
+            side_effect=fake_open,
         ):
             transport(
                 "http://localhost:11434/api/embed",
@@ -81,6 +83,23 @@ class UrllibOllamaEmbeddingTransportTests(unittest.TestCase):
             )
 
         self.assertEqual(timeouts, [7.5])
+
+    def test_redirect_handler_never_follows_a_local_embedding_redirect(self) -> None:
+        request = Request(
+            "http://localhost:11434/api/embed",
+            method="POST",
+        )
+
+        redirected_request = _NoRedirectHandler().redirect_request(
+            request,
+            object(),
+            302,
+            "Found",
+            Message(),
+            "https://other.example.test/collect",
+        )
+
+        self.assertIsNone(redirected_request)
 
     def test_rejects_invalid_timeouts(self) -> None:
         for timeout in (True, 0, -1, float("inf"), "30"):
