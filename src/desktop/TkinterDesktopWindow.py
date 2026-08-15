@@ -49,6 +49,24 @@ class KnowledgeRelationRemovalProcessor(Protocol):
         """Remove the runtime-validated relation after confirmation."""
 
 
+class SessionRenameProcessor(Protocol):
+    """Small session-rename boundary used by the confirmation helper."""
+
+    def preview_session_rename(
+        self,
+        source_session_id: str,
+        target_session_id: str,
+    ) -> BrainResponse:
+        """Return a validated session-rename preview without changing state."""
+
+    def rename_session(
+        self,
+        source_session_id: str,
+        target_session_id: str,
+    ) -> BrainResponse:
+        """Run the transactional rename after confirmation."""
+
+
 class TkinterDesktopWindow:
     """Render conversation, session selection, and semantic status locally."""
 
@@ -61,6 +79,7 @@ class TkinterDesktopWindow:
         self._root = root or tk.Tk()
         self._status = tk.StringVar(value="Ready")
         self._session_id = tk.StringVar()
+        self._session_rename_target = tk.StringVar()
         self._recall_query = tk.StringVar()
         self._knowledge_query = tk.StringVar()
         self._relation_source_id = tk.StringVar()
@@ -126,6 +145,25 @@ class TkinterDesktopWindow:
             text="Session activity",
             command=self._show_session_activity,
         ).grid(row=2, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ttk.Label(session_frame, text="New session ID").grid(
+            row=3,
+            column=0,
+            sticky="w",
+            pady=(8, 0),
+        )
+        ttk.Entry(session_frame, textvariable=self._session_rename_target).grid(
+            row=3,
+            column=1,
+            columnspan=2,
+            sticky="ew",
+            padx=(8, 8),
+            pady=(8, 0),
+        )
+        ttk.Button(
+            session_frame,
+            text="Preview rename",
+            command=self._preview_and_rename_session,
+        ).grid(row=3, column=3, sticky="ew", pady=(8, 0))
 
         recall_frame = ttk.LabelFrame(container, text="Conversation recall", padding=8)
         recall_frame.grid(row=1, column=0, sticky="ew", pady=(8, 0))
@@ -350,6 +388,37 @@ class TkinterDesktopWindow:
     def _show_session_activity(self) -> None:
         self._show_selected_session_response(self._controller.session_activity)
 
+    def _preview_and_rename_session(self) -> None:
+        source_id = self._session_id.get()
+        target_id = self._session_rename_target.get()
+        try:
+            preview, renamed = _preview_and_confirm_session_rename(
+                self._controller,
+                source_id,
+                target_id,
+                self._confirm_session_rename,
+            )
+        except ValueError as error:
+            self._status.set(str(error))
+            return
+        self._append_response(preview)
+        if renamed is None:
+            if preview.success:
+                self._status.set("session rename: not applied")
+            return
+        self._append_response(renamed)
+        if renamed.success:
+            self._session_id.set(target_id.strip())
+            self._refresh_sessions()
+
+    def _confirm_session_rename(self, preview: BrainResponse) -> bool:
+        """Show only the existing runtime rename preview before mutation."""
+        return messagebox.askyesno(
+            "Rename session?",
+            f"{preview.message}\n\nRename this session?",
+            parent=self._root,
+        )
+
     def _refresh_sessions(self) -> None:
         response = self._controller.session_overview()
         self._render_session_summaries(response)
@@ -469,3 +538,16 @@ def _preview_and_confirm_knowledge_relation_removal(
         source_document_id,
         target_document_id,
     )
+
+
+def _preview_and_confirm_session_rename(
+    controller: SessionRenameProcessor,
+    source_session_id: str,
+    target_session_id: str,
+    confirm: Callable[[BrainResponse], bool],
+) -> tuple[BrainResponse, BrainResponse | None]:
+    """Preview a session rename first; execute only after explicit approval."""
+    preview = controller.preview_session_rename(source_session_id, target_session_id)
+    if not preview.success or not confirm(preview):
+        return preview, None
+    return preview, controller.rename_session(source_session_id, target_session_id)

@@ -49,6 +49,30 @@ class DesktopController:
         """Request read-only first and last activity for the selected session."""
         return self._selected_session_command("session activity", session_id)
 
+    def preview_session_rename(
+        self,
+        source_session_id: str,
+        target_session_id: str,
+    ) -> BrainResponse:
+        """Validate a requested session rename without changing either store."""
+        return self._session_rename_command(
+            "preview rename session",
+            source_session_id,
+            target_session_id,
+        )
+
+    def rename_session(
+        self,
+        source_session_id: str,
+        target_session_id: str,
+    ) -> BrainResponse:
+        """Rename only after the desktop has shown the runtime preview."""
+        return self._session_rename_command(
+            "rename session",
+            source_session_id,
+            target_session_id,
+        )
+
     def recall(self, query: str) -> BrainResponse:
         """Request explicit lexical recall without changing conversation memory."""
         return self._recall_command("recall", query)
@@ -146,6 +170,19 @@ class DesktopController:
         if not normalized_query:
             raise ValueError("A recall query cannot be empty.")
         return self._brain.process(f"{command} {normalized_query}")
+
+    def _session_rename_command(
+        self,
+        command: str,
+        source_session_id: str,
+        target_session_id: str,
+    ) -> BrainResponse:
+        """Keep desktop rename input explicit before the transactional runtime path."""
+        source_id = source_session_id.strip()
+        target_id = target_session_id.strip()
+        if not source_id or not target_id:
+            raise ValueError("Both session IDs are required for a rename.")
+        return self._brain.process(f"{command} {source_id} -- {target_id}")
 
     def _knowledge_command(self, command: str, query: str) -> BrainResponse:
         """Keep local knowledge retrieval explicit and query-bounded."""

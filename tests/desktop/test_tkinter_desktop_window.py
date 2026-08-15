@@ -15,6 +15,7 @@ from desktop.TkinterDesktopWindow import (
     _format_citations,
     _preview_and_confirm_knowledge_relation,
     _preview_and_confirm_knowledge_relation_removal,
+    _preview_and_confirm_session_rename,
 )
 from knowledge.KnowledgeCitation import KnowledgeCitation
 
@@ -252,3 +253,89 @@ class RecordingRelationRemovalController:
     ) -> BrainResponse:
         self.calls.append(("remove", source_document_id, target_document_id))
         return self._removal
+
+
+class SessionRenameConfirmationTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.preview = BrainResponse(
+            message="Changes: ready",
+            request_id="rename-preview",
+            intent="session_rename_preview",
+            memory_count=2,
+        )
+        self.renamed = BrainResponse(
+            message="Status: committed",
+            request_id="rename",
+            intent="session_rename",
+            memory_count=2,
+        )
+        self.controller = RecordingSessionRenameController(self.preview, self.renamed)
+
+    def test_renames_only_after_a_successful_preview_is_confirmed(self) -> None:
+        preview, renamed = _preview_and_confirm_session_rename(
+            self.controller,
+            "work",
+            "archive",
+            lambda response: response is self.preview,
+        )
+
+        self.assertIs(preview, self.preview)
+        self.assertIs(renamed, self.renamed)
+        self.assertEqual(
+            self.controller.calls,
+            [("preview", "work", "archive"), ("rename", "work", "archive")],
+        )
+
+    def test_does_not_rename_when_the_user_declines_or_preview_fails(self) -> None:
+        preview, renamed = _preview_and_confirm_session_rename(
+            self.controller,
+            "work",
+            "archive",
+            lambda _response: False,
+        )
+
+        self.assertIs(preview, self.preview)
+        self.assertIsNone(renamed)
+        self.assertEqual(self.controller.calls, [("preview", "work", "archive")])
+
+        failed = BrainResponse(
+            message="Session already exists.",
+            request_id="failed-preview",
+            intent="session_rename_preview",
+            memory_count=0,
+            success=False,
+        )
+        failed_controller = RecordingSessionRenameController(failed, self.renamed)
+        preview, renamed = _preview_and_confirm_session_rename(
+            failed_controller,
+            "work",
+            "archive",
+            lambda _response: True,
+        )
+
+        self.assertIs(preview, failed)
+        self.assertIsNone(renamed)
+        self.assertEqual(failed_controller.calls, [("preview", "work", "archive")])
+
+
+class RecordingSessionRenameController:
+    def __init__(self, preview: BrainResponse, renamed: BrainResponse) -> None:
+        self.calls: list[tuple[str, str, str]] = []
+        self._preview = preview
+        self._renamed = renamed
+
+    def preview_session_rename(
+        self,
+        source_session_id: str,
+        target_session_id: str,
+    ) -> BrainResponse:
+        self.calls.append(("preview", source_session_id, target_session_id))
+        return self._preview
+
+    def rename_session(
+        self,
+        source_session_id: str,
+        target_session_id: str,
+    ) -> BrainResponse:
+        self.calls.append(("rename", source_session_id, target_session_id))
+        return self._renamed

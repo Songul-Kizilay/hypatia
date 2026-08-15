@@ -122,6 +122,11 @@ unchanged.
 `Active links` opens the existing deterministic read-only local relation
 catalog, including the persistence state of each active link. It does not load
 sources, call an LLM, or modify graph, JSON memory, or conversation memory.
+The shell also implements session rename through the existing two-stage runtime
+contract: select a source session, enter a replacement ID, inspect the exact
+read-only preview, then explicitly confirm before the revalidating rename call.
+After success it refreshes the session list from Brain; a failed or declined
+preview leaves session and memory state unchanged.
 
 ## Mutation flows
 

@@ -141,6 +141,10 @@ preview leaves the local graph and conversation memory unchanged.
 `Active links` shows the existing read-only catalog of local source relations
 and their persistence state. It does not load sources, call an LLM, or change
 the graph or conversation memory.
+To rename a session, select it, enter a new session ID, and use `Preview rename`.
+Hypatia shows the existing runtime preview first and only sends the
+transactional rename command after confirmation; on success it refreshes the
+session list from Brain.
 It does not yet include voice, document import, knowledge drawers, browser
 tools, automatic retrieval, or mutation workflows; those remain separate,
 test-first increments.

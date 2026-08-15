@@ -15,7 +15,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.25` today) are the executable package and GitHub
+- **Runtime releases** (`v0.3.26` today) are the executable package and GitHub
   release line. They are the source-backed implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
   engineering increments. Sprint 4.16.50 is complete and is already in the
@@ -86,6 +86,11 @@ The desktop exposes the existing `list knowledge relations` command as its
 read-only active-link catalog. It preserves the runtime's deterministic order
 and persistence status without loading sources or changing graph, memory, or
 provider state.
+
+The desktop maps session rename to the existing transactional preview-and-rename
+commands. It retains no rename plan, requires an explicit confirmation after
+the runtime preview, and refreshes the session view from Brain only after a
+successful result.
 
 Persistent state is stored locally as validated JSON snapshots through
 `JsonFileMemoryStore` and `JsonFileSessionStore`. Snapshot writes are atomic.

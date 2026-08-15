@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.25 (Genesis)`
+`v0.3.26 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.25`** is the current executable package pending its
+- **Runtime release `v0.3.26`** is the current executable package pending its
   published GitHub release.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -66,6 +66,11 @@ with optional OpenAI-compatible LLM conversation support.
 - The desktop `Active links` action exposes the existing deterministic catalog
   of active local source relations and their persistence state. It is read-only
   and does not load sources, call an LLM, or change graph or memory state.
+- The desktop supports session renaming only through the existing transaction:
+  it shows the exact read-only preview first, requires a separate confirmation,
+  and calls the revalidating rename command only on approval. A successful
+  response refreshes the session list from Brain; a declined or failed preview
+  leaves all session and memory state unchanged.
 - Deterministic English and Turkish standalone greetings. A substantive request
   that begins with a greeting remains a normal conversation request and reaches
   the configured LLM runtime when one is enabled.
@@ -181,7 +186,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 941 automated tests pass through package-aware discovery.
+- 946 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
