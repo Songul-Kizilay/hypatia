@@ -54,6 +54,8 @@ class KnowledgeEngine:
     def load(self, path: str | Path) -> Document:
         """Load a document, parse it into chunks, and add them to the index."""
         document = self._loader.load(path)
+        if document.document_id in self._documents:
+            raise KnowledgeError("Knowledge document is already loaded.")
         chunks = self._parser.parse(document)
 
         for chunk in chunks:

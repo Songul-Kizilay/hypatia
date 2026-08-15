@@ -69,6 +69,44 @@ class KnowledgeEngineTests(unittest.TestCase):
 
         self.assertEqual(first_document.document_id, second_document.document_id)
 
+    def test_rejects_duplicate_local_source_without_partially_changing_state(
+        self,
+    ) -> None:
+        path = self._write_file("example.md", "Hypatia\n\nKnowledge")
+        engine = KnowledgeEngine()
+        first_document = engine.load(path)
+        counts_before = (
+            engine.document_count(),
+            engine.chunk_count(),
+            engine.graph_node_count(),
+            engine.graph_edge_count(),
+        )
+        search_ids_before = [chunk.chunk_id for chunk in engine.search("hypatia")]
+
+        with self.assertRaisesRegex(
+            KnowledgeError,
+            "Knowledge document is already loaded.",
+        ):
+            engine.load(path)
+
+        self.assertEqual(
+            (
+                engine.document_count(),
+                engine.chunk_count(),
+                engine.graph_node_count(),
+                engine.graph_edge_count(),
+            ),
+            counts_before,
+        )
+        self.assertEqual(
+            [chunk.chunk_id for chunk in engine.search("hypatia")],
+            search_ids_before,
+        )
+        self.assertEqual(
+            [reference.document_id for reference in engine.documents()],
+            [first_document.document_id],
+        )
+
     def test_graph_for_search_results_exposes_containing_document_relationships(
         self,
     ) -> None:
