@@ -65,6 +65,10 @@ class DesktopController:
         """Request a bounded cited local source-structure view without an LLM."""
         return self._knowledge_command("knowledge graph", query)
 
+    def ask_knowledge(self, query: str) -> BrainResponse:
+        """Ask the enabled runtime using only bounded cited local knowledge."""
+        return self._knowledge_command("ask knowledge", query)
+
     def list_knowledge(self) -> BrainResponse:
         """Request the existing read-only catalog of loaded local sources."""
         return self._brain.process("list knowledge")
