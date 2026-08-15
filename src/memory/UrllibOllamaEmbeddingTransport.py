@@ -3,11 +3,55 @@
 from __future__ import annotations
 
 import json
+from email.message import Message
 from math import isfinite
-from typing import cast
-from urllib.request import Request, urlopen
+from types import TracebackType
+from typing import Protocol, Self, cast
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 DEFAULT_TIMEOUT_SECONDS = 120.0
+
+
+class _ReadableResponse(Protocol):
+    """Minimum response interface used by the transport."""
+
+    def __enter__(self) -> Self: ...
+
+    def __exit__(
+        self,
+        exception_type: type[BaseException] | None,
+        exception: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None: ...
+
+    def read(self) -> bytes: ...
+
+
+class _NoRedirectHandler(HTTPRedirectHandler):
+    """Keep embedding traffic at the validated local Ollama endpoint."""
+
+    def redirect_request(
+        self,
+        request: Request,
+        file_pointer: object,
+        code: int,
+        message: str,
+        headers: Message,
+        new_url: str,
+    ) -> Request | None:
+        return None
+
+
+def _open_without_redirects(
+    request: Request,
+    *,
+    timeout: float,
+) -> _ReadableResponse:
+    """Open one embedding request without following endpoint redirects."""
+    return cast(
+        _ReadableResponse,
+        build_opener(_NoRedirectHandler).open(request, timeout=timeout),
+    )
 
 
 class UrllibOllamaEmbeddingTransport:
@@ -30,5 +74,8 @@ class UrllibOllamaEmbeddingTransport:
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urlopen(request, timeout=self._timeout_seconds) as response:
+        with _open_without_redirects(
+            request,
+            timeout=self._timeout_seconds,
+        ) as response:
             return cast(object, json.loads(response.read()))

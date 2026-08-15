@@ -179,7 +179,9 @@ The semantic-memory index is currently a tested, in-memory building block. An
 explicit Ollama `/api/embed` adapter is available for a local Ollama service,
 but Hypatia does not activate it automatically unless its opt-in settings are
 set. It does not download a model, persist vectors, or change the response path
-except through the explicit semantic-recall command documented below. See the
+except through the explicit semantic-recall command documented below. The
+embedding transport rejects HTTP redirects, so an opted-in request remains at
+its validated local endpoint. See the
 [Architecture Audit v0.1](docs/Architecture/Architecture_Audit_v0.1.md) for
 its staged rollout boundary.
 

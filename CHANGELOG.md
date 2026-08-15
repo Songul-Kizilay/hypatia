@@ -2,6 +2,17 @@
 
 All notable project changes are recorded here.
 
+## [0.3.13] - 2026-08-15
+
+### Security
+
+- The local Ollama embedding transport now rejects HTTP redirects, keeping an
+  opted-in semantic request at its validated local endpoint.
+
+### Verification
+
+- The package-aware full local suite contains 905 passing automated tests.
+
 ## [0.3.12] - 2026-08-15
 
 ### Fixed
