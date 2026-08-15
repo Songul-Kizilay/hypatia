@@ -119,6 +119,9 @@ contract: it first displays its read-only removal preview and sends the
 separate revalidating removal command only after explicit approval. Declining
 or failing the preview leaves the graph, JSON memory, and conversation memory
 unchanged.
+`Active links` opens the existing deterministic read-only local relation
+catalog, including the persistence state of each active link. It does not load
+sources, call an LLM, or modify graph, JSON memory, or conversation memory.
 
 ## Mutation flows
 

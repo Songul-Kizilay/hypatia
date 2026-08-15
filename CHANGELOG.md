@@ -2,6 +2,21 @@
 
 All notable project changes are recorded here.
 
+## [0.3.25] - 2026-08-15
+
+### Added
+
+- The desktop shell now exposes `Active links`, delegating only to the existing
+  deterministic read-only local source-relation catalog. It reports active
+  links and their persistence state without calling an LLM or changing source,
+  graph, or conversation-memory state.
+
+### Verification
+
+- The package-aware full local suite contains 941 passing automated tests.
+- Black, Ruff, MyPy, whitespace validation, and a real Tkinter active-links
+  smoke test pass with the documented project virtual environment.
+
 ## [0.3.24] - 2026-08-15
 
 ### Added

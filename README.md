@@ -138,6 +138,9 @@ Use `Preview and remove` with the same two IDs to remove an existing local
 relation. Hypatia first shows the runtime removal preview and sends the separate
 revalidating removal command only after confirmation; declining or failing the
 preview leaves the local graph and conversation memory unchanged.
+`Active links` shows the existing read-only catalog of local source relations
+and their persistence state. It does not load sources, call an LLM, or change
+the graph or conversation memory.
 It does not yet include voice, document import, knowledge drawers, browser
 tools, automatic retrieval, or mutation workflows; those remain separate,
 test-first increments.
