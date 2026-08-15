@@ -9,6 +9,8 @@ complete lifecycle of the Hypatia runtime.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from core.Bootstrap import Bootstrap
 
 
@@ -23,8 +25,26 @@ class HypatiaApplication:
         self.bootstrap = bootstrap or Bootstrap()
 
     @classmethod
-    def from_process_environment(cls) -> HypatiaApplication:
-        bootstrap = Bootstrap.from_process_environment()
+    def from_process_environment(
+        cls,
+        *,
+        memory_path: Path | None = None,
+        session_path: Path | None = None,
+        knowledge_relation_path: Path | None = None,
+    ) -> HypatiaApplication:
+        """Create an application with optional caller-owned local data paths."""
+        if (
+            memory_path is None
+            and session_path is None
+            and knowledge_relation_path is None
+        ):
+            bootstrap = Bootstrap.from_process_environment()
+        else:
+            bootstrap = Bootstrap.from_process_environment(
+                memory_path=memory_path,
+                session_path=session_path,
+                knowledge_relation_path=knowledge_relation_path,
+            )
         return cls(bootstrap=bootstrap)
 
     def start(self) -> None:

@@ -40,3 +40,28 @@ class HypatiaApplicationTests(unittest.TestCase):
         self.assertIs(application.bootstrap, sentinel_bootstrap)
         sentinel_bootstrap.initialize.assert_called_once_with()
         sentinel_bootstrap.shutdown.assert_called_once_with()
+
+    def test_process_environment_factory_passes_explicit_local_data_paths(
+        self,
+    ) -> None:
+        sentinel_bootstrap = Mock(spec=Bootstrap)
+        memory_path = Path("C:/Hypatia/memory/memory.json")
+        session_path = Path("C:/Hypatia/sessions/sessions.json")
+        relation_path = Path("C:/Hypatia/knowledge/relations.json")
+
+        with patch(
+            "core.Application.Bootstrap.from_process_environment",
+            return_value=sentinel_bootstrap,
+        ) as bootstrap_factory:
+            application = HypatiaApplication.from_process_environment(
+                memory_path=memory_path,
+                session_path=session_path,
+                knowledge_relation_path=relation_path,
+            )
+
+        bootstrap_factory.assert_called_once_with(
+            memory_path=memory_path,
+            session_path=session_path,
+            knowledge_relation_path=relation_path,
+        )
+        self.assertIs(application.bootstrap, sentinel_bootstrap)

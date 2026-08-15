@@ -15,7 +15,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.29` today) are the executable package and GitHub
+- **Runtime releases** (`v0.3.30` today) are the executable package and GitHub
   release line. They are the source-backed implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
   engineering increments. Sprint 4.16.50 is complete and is already in the
@@ -70,6 +70,10 @@ their response order without constructing or looking up new records. Its ordered
 `SessionSummary` response data avoids parsing human-formatted output or reading
 persistence directly. It owns neither persistent state nor a provider client;
 the UI window does not add a browser, web server, or background network channel.
+When launched as the desktop application, Bootstrap receives user-writable
+memory, session, and relation paths beneath `%LOCALAPPDATA%\Hypatia` on
+Windows (or an explicit absolute override), rather than writing beside an
+installed executable. The terminal developer entry point remains unchanged.
 
 The desktop also exposes the existing source-relation preview-and-apply contract
 without weakening it: a user enters two source IDs, receives the current
@@ -210,12 +214,12 @@ Not implemented:
 
 The current local verification baseline is:
 
-- `python -m unittest discover -s tests -t .`: 921 tests passed. The top-level
+- `python -m unittest discover -s tests -t .`: 963 tests passed. The top-level
   package setting ensures nested test directories are included without
   shadowing source packages.
 - `python -m black --check src tests`: passed.
 - `python -m ruff check src tests`: passed.
-- `python -m mypy src tests`: passed with no issues in 239 files.
+- `python -m mypy src tests`: passed with no issues in 243 files.
 
 These checks verify the current local worktree; they do not create a release,
 tag, pull request, or GitHub deployment.
