@@ -80,6 +80,7 @@ class TkinterDesktopWindow:
         self._status = tk.StringVar(value="Ready")
         self._session_id = tk.StringVar()
         self._session_rename_target = tk.StringVar()
+        self._session_search_query = tk.StringVar()
         self._recall_query = tk.StringVar()
         self._knowledge_query = tk.StringVar()
         self._relation_source_id = tk.StringVar()
@@ -169,6 +170,17 @@ class TkinterDesktopWindow:
             text="Preview delete",
             command=self._preview_and_delete_session,
         ).grid(row=4, column=3, sticky="ew", pady=(8, 0))
+        ttk.Label(session_frame, text="Search this session").grid(
+            row=5, column=0, sticky="w", pady=(8, 0)
+        )
+        ttk.Entry(session_frame, textvariable=self._session_search_query).grid(
+            row=5, column=1, columnspan=2, sticky="ew", padx=(8, 8), pady=(8, 0)
+        )
+        ttk.Button(
+            session_frame,
+            text="Search",
+            command=self._show_session_search,
+        ).grid(row=5, column=3, sticky="ew", pady=(8, 0))
 
         recall_frame = ttk.LabelFrame(container, text="Conversation recall", padding=8)
         recall_frame.grid(row=1, column=0, sticky="ew", pady=(8, 0))
@@ -392,6 +404,17 @@ class TkinterDesktopWindow:
 
     def _show_session_activity(self) -> None:
         self._show_selected_session_response(self._controller.session_activity)
+
+    def _show_session_search(self) -> None:
+        try:
+            response = self._controller.session_search(
+                self._session_id.get(),
+                self._session_search_query.get(),
+            )
+        except ValueError as error:
+            self._status.set(str(error))
+            return
+        self._append_response(response)
 
     def _preview_and_rename_session(self) -> None:
         source_id = self._session_id.get()
