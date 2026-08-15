@@ -10,8 +10,8 @@ voice, browser, cloud, or storage behavior.
 
 This document defines the design-first boundary in
 [Desktop Application](../Modules/Desktop.md). ADR 0001 records the selected
-Tkinter technology, and the first tested shell implements only its smallest
-three flows: text chat, explicit session selection, and semantic status.
+Tkinter technology; the tested shell incrementally exposes only the existing
+Brain capabilities described below.
 
 ## Source-backed capability boundary
 
@@ -24,10 +24,11 @@ The MVP may present only current Brain/CognitiveEngine capabilities:
   status;
 - read-only local knowledge context, graph, source-catalog, and relation-catalog
   views;
+- explicit loading of one user-selected local Markdown or plain-text source;
 - the existing explicit `ask knowledge` request; and
 - preview-and-confirm application or removal of an explicit knowledge relation.
 
-The MVP must not claim or silently add voice capture, document import, web
+The MVP must not claim or silently add voice capture, PDF/web import, web
 research, automatic prompt augmentation, cross-document semantic extraction,
 agent/tool execution, synchronization, telemetry, or multi-user access.
 
@@ -102,6 +103,13 @@ The same explicitly entered query can request the existing bounded, cited
 `Knowledge graph` view, while `Loaded sources` opens the existing read-only
 local source catalog. Neither action calls an LLM, augments ordinary chat, or
 changes conversation memory or knowledge state.
+`Load file` opens a native picker for exactly one `.md` or `.txt` file. The
+desktop passes that selected path to the existing Brain boundary as a structured
+local-source request; the runtime validates and indexes it before returning its
+title, source path, type, chunk count, and stable ID. Cancelling selection,
+unsupported types, empty/missing files, and duplicate sources remain controlled
+runtime outcomes: the desktop does not create a second store, alter
+conversation memory, invoke an LLM, or retain a partial local source.
 `Ask sources` is separately user initiated: it sends the entered question only
 through the existing `ask knowledge` local-RAG path. The runtime keeps its
 bounded cited-source and safe unavailable/failure behavior; this action never

@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from brain.BrainRequest import BrainRequest
 from brain.BrainResponse import BrainResponse
 
 
 class BrainProcessor(Protocol):
     """Minimum existing runtime capability needed by the desktop adapter."""
 
-    def process(self, request: str) -> BrainResponse:
+    def process(self, request: BrainRequest | str) -> BrainResponse:
         """Process a user request through the established Brain boundary."""
 
 
@@ -112,6 +113,22 @@ class DesktopController:
     def ask_knowledge(self, query: str) -> BrainResponse:
         """Ask the enabled runtime using only bounded cited local knowledge."""
         return self._knowledge_command("ask knowledge", query)
+
+    def load_knowledge(self, path: str) -> BrainResponse:
+        """Load one explicitly selected local text or Markdown source through Brain."""
+        normalized_path = path.strip()
+        if not normalized_path:
+            raise ValueError("A local knowledge source path cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="Load selected local knowledge source",
+                source="desktop",
+                metadata={
+                    "intent": "knowledge_load",
+                    "knowledge_path": normalized_path,
+                },
+            )
+        )
 
     def preview_knowledge_relation(
         self,

@@ -5536,3 +5536,62 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertTrue(response.success)
         self.assertEqual(self.memory_manager.count(), memory_count)
         self.assertEqual(events, [])
+
+    def test_structured_knowledge_load_indexes_one_source_without_memory_side_effects(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "project notes.md"
+            path.write_text("Hypatia\n\nLocal knowledge", encoding="utf-8")
+            events: list[str] = []
+            self.event_bus.subscribe("*", lambda event: events.append(event.name))
+            memory_count = self.memory_manager.count()
+
+            response = self.engine.process(
+                BrainRequest(
+                    message="Load selected local knowledge source",
+                    metadata={
+                        "intent": "knowledge_load",
+                        "knowledge_path": str(path),
+                    },
+                )
+            )
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "knowledge_load")
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(self.memory_manager.count(), memory_count)
+        self.assertEqual(events, [])
+        self.assertEqual(len(response.knowledge_documents), 1)
+        self.assertEqual(response.knowledge_documents[0].title, "project notes")
+        self.assertEqual(response.knowledge_documents[0].chunk_count, 2)
+        self.assertIn("Local knowledge source loaded:", response.message)
+
+    def test_structured_knowledge_load_rejects_missing_or_invalid_paths_without_loading(
+        self,
+    ) -> None:
+        documents_before = self.knowledge_engine.documents()
+        memory_count = self.memory_manager.count()
+        for path in (None, "  ", 123):
+            with self.subTest(path=path):
+                response = self.engine.process(
+                    BrainRequest(
+                        message="Load selected local knowledge source",
+                        metadata={
+                            "intent": "knowledge_load",
+                            "knowledge_path": path,
+                        },
+                    )
+                )
+
+                self.assertFalse(response.success)
+                self.assertEqual(response.intent, "knowledge_load")
+                self.assertEqual(response.memory_count, 0)
+                self.assertEqual(response.knowledge_documents, [])
+                self.assertEqual(
+                    response.message,
+                    "A local knowledge source path is required.",
+                )
+
+        self.assertEqual(self.knowledge_engine.documents(), documents_before)
+        self.assertEqual(self.memory_manager.count(), memory_count)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import tkinter as tk
 from collections.abc import Callable
-from tkinter import messagebox, scrolledtext, ttk
+from tkinter import filedialog, messagebox, scrolledtext, ttk
 from typing import Protocol
 
 from brain.BrainResponse import BrainResponse
@@ -225,6 +225,11 @@ class TkinterDesktopWindow:
             text="Loaded sources",
             command=self._show_knowledge_list,
         ).grid(row=0, column=4, sticky="ew", padx=(8, 0))
+        ttk.Button(
+            knowledge_frame,
+            text="Load file",
+            command=self._load_knowledge,
+        ).grid(row=0, column=5, sticky="ew", padx=(8, 0))
 
         relation_frame = ttk.LabelFrame(
             container,
@@ -329,6 +334,27 @@ class TkinterDesktopWindow:
 
     def _show_knowledge_list(self) -> None:
         self._append_response(self._controller.list_knowledge())
+
+    def _load_knowledge(self) -> None:
+        """Ask the user to choose one supported local source before loading it."""
+        path = filedialog.askopenfilename(
+            parent=self._root,
+            title="Load local knowledge source",
+            filetypes=[
+                ("Knowledge files", "*.md *.txt"),
+                ("Markdown files", "*.md"),
+                ("Text files", "*.txt"),
+            ],
+        )
+        if not path:
+            self._status.set("knowledge load: cancelled")
+            return
+        try:
+            response = self._controller.load_knowledge(path)
+        except ValueError as error:
+            self._status.set(str(error))
+            return
+        self._append_response(response)
 
     def _preview_and_link_knowledge_relation(self) -> None:
         try:

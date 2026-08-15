@@ -2,6 +2,26 @@
 
 All notable project changes are recorded here.
 
+## [0.3.29] - 2026-08-15
+
+### Added
+
+- The desktop shell now provides `Load file` for one explicitly selected local
+  Markdown (`.md`) or plain-text (`.txt`) source. The selected path reaches
+  `KnowledgeEngine` only through a structured Brain request, avoiding command
+  parsing of Windows paths. The runtime validates the source before indexing it
+  and returns its title, source path, type, chunk count, and stable ID.
+- Cancelling selection, an empty path, unsupported/missing/empty files, and an
+  already loaded source return controlled outcomes. The load path does not call
+  an LLM, write conversation memory, emit a conversation event, or maintain a
+  desktop-side source store.
+
+### Verification
+
+- The package-aware full local suite contains 957 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass with the documented
+  project virtual environment.
+
 ## [0.3.28] - 2026-08-15
 
 ### Added
