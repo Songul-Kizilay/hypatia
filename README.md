@@ -123,6 +123,12 @@ changes conversation memory.
 source structure, and `Loaded sources` shows the read-only catalog of currently
 loaded local documents. Neither action calls an LLM or changes conversation
 memory or local knowledge state.
+`Load file` opens a native file picker for a single local Markdown (`.md`) or
+plain-text (`.txt`) file. Its structured request passes through the same Brain
+and knowledge pipeline as every other desktop action; a successful load reports
+the source identity and indexed chunk count. It neither calls an LLM nor adds a
+conversation-memory record. Unsupported, empty, missing, or already loaded
+files return the existing safe runtime failure instead of a partial load.
 `Ask sources` deliberately invokes the existing `ask knowledge` local-RAG path
 only when its button is selected. It provides the configured runtime with up to
 three bounded cited local chunks and never adds retrieval to ordinary chat or
@@ -145,9 +151,9 @@ To rename a session, select it, enter a new session ID, and use `Preview rename`
 Hypatia shows the existing runtime preview first and only sends the
 transactional rename command after confirmation; on success it refreshes the
 session list from Brain.
-It does not yet include voice, document import, knowledge drawers, browser
-tools, automatic retrieval, or mutation workflows; those remain separate,
-test-first increments.
+It does not yet include voice, PDF/web import, browser tools, automatic
+retrieval, or automatic knowledge mutations; those remain separate, test-first
+increments.
 
 ---
 

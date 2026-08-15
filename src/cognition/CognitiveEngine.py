@@ -157,6 +157,9 @@ class CognitiveEngine:
         if intent == "session_delete":
             return self._process_session_delete(request)
 
+        if self._is_knowledge_load_request(request):
+            return self._process_knowledge_load(request)
+
         if self._is_ask_knowledge_request(request):
             return self._process_ask_knowledge(request)
 
@@ -292,6 +295,36 @@ class CognitiveEngine:
             declared_intent == "knowledge_context"
             or normalized_message == "knowledge context"
             or normalized_message.startswith("knowledge context ")
+        )
+
+    @staticmethod
+    def _is_knowledge_load_request(request: BrainRequest) -> bool:
+        """Recognize only an explicit structured local-source request."""
+        return request.metadata.get("intent") == "knowledge_load"
+
+    def _process_knowledge_load(self, request: BrainRequest) -> BrainResponse:
+        """Load one user-selected local source without LLM or memory side effects."""
+        path = request.metadata.get("knowledge_path")
+        if not isinstance(path, str) or not path.strip():
+            return self._response_composer.knowledge_load_failure(
+                request,
+                "A local knowledge source path is required.",
+            )
+        try:
+            document = self._knowledge_engine.load(path.strip())
+        except KnowledgeError as error:
+            return self._response_composer.knowledge_load_failure(
+                request,
+                f"Local knowledge source could not be loaded: {error}",
+            )
+        loaded_document = next(
+            reference
+            for reference in self._knowledge_engine.documents()
+            if reference.document_id == document.document_id
+        )
+        return self._response_composer.knowledge_load_success(
+            request,
+            loaded_document,
         )
 
     @staticmethod

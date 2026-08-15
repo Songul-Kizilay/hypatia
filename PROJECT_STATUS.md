@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.28 (Genesis)`
+`v0.3.29 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.28`** is the current executable package pending its
+- **Runtime release `v0.3.29`** is the current executable package pending its
   published GitHub release.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -47,6 +47,10 @@ with optional OpenAI-compatible LLM conversation support.
   existing bounded, cited source structure and read-only source catalog. They
   use only explicit user actions, do not call an LLM, and do not change
   conversation memory or the local knowledge store.
+- A desktop `Load file` action chooses one local `.md` or `.txt` source and
+  sends a structured request through Brain to the existing knowledge pipeline.
+  It validates and indexes the selected source without an LLM call,
+  conversation-memory write, or desktop-side source store.
 - An explicit desktop `Ask sources` action submits a user-entered question to
   the existing local-RAG command. When the configured runtime is enabled, it
   receives only up to three bounded cited local chunks; it does not augment

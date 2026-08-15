@@ -10,6 +10,7 @@ SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
+from brain.BrainRequest import BrainRequest
 from brain.BrainResponse import BrainResponse
 from desktop.DesktopController import DesktopController
 
@@ -18,10 +19,10 @@ class RecordingBrain:
     """Minimal deterministic Brain substitute for desktop adapter tests."""
 
     def __init__(self, response: BrainResponse) -> None:
-        self.requests: list[str] = []
+        self.requests: list[BrainRequest | str] = []
         self._response = response
 
-    def process(self, request: str) -> BrainResponse:
+    def process(self, request: BrainRequest | str) -> BrainResponse:
         self.requests.append(request)
         return self._response
 
@@ -199,6 +200,32 @@ class DesktopControllerTests(unittest.TestCase):
     def test_knowledge_graph_rejects_empty_query_without_calling_brain(self) -> None:
         with self.assertRaisesRegex(ValueError, "cannot be empty"):
             self.controller.knowledge_graph(" \t\n ")
+
+        self.assertEqual(self.brain.requests, [])
+
+    def test_load_knowledge_uses_a_structured_brain_request_for_a_spaced_path(
+        self,
+    ) -> None:
+        response = self.controller.load_knowledge("  C:/Local Notes/project plan.md  ")
+
+        self.assertIs(response, self.response)
+        self.assertEqual(len(self.brain.requests), 1)
+        request = self.brain.requests[0]
+        self.assertIsInstance(request, BrainRequest)
+        assert isinstance(request, BrainRequest)
+        self.assertEqual(request.message, "Load selected local knowledge source")
+        self.assertEqual(request.source, "desktop")
+        self.assertEqual(
+            request.metadata,
+            {
+                "intent": "knowledge_load",
+                "knowledge_path": "C:/Local Notes/project plan.md",
+            },
+        )
+
+    def test_load_knowledge_rejects_an_empty_path_without_calling_brain(self) -> None:
+        with self.assertRaisesRegex(ValueError, "cannot be empty"):
+            self.controller.load_knowledge(" \t ")
 
         self.assertEqual(self.brain.requests, [])
 

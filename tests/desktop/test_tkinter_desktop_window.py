@@ -5,6 +5,8 @@ from __future__ import annotations
 import sys
 import unittest
 from pathlib import Path
+from typing import Any
+from unittest.mock import patch
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
@@ -12,6 +14,7 @@ if str(SRC_DIR) not in sys.path:
 
 from brain.BrainResponse import BrainResponse
 from desktop.TkinterDesktopWindow import (
+    TkinterDesktopWindow,
     _format_citations,
     _preview_and_confirm_knowledge_relation,
     _preview_and_confirm_knowledge_relation_removal,
@@ -62,6 +65,75 @@ class CitationFormattingTests(unittest.TestCase):
             _format_citations([citation]),
             "1. (untitled) — local source unavailable (paragraph 1; untitled:0)",
         )
+
+
+class LocalKnowledgeFileSelectionTests(unittest.TestCase):
+    def test_selected_file_is_passed_to_the_existing_controller_boundary(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingKnowledgeLoadController()
+        responses: list[BrainResponse] = []
+        window._root = object()
+        window._controller = controller
+        window._status = RecordingStatus()
+        window._append_response = responses.append
+
+        with patch(
+            "desktop.TkinterDesktopWindow.filedialog.askopenfilename",
+            return_value="C:/Local Notes/project plan.md",
+        ) as choose_file:
+            window._load_knowledge()
+
+        self.assertEqual(controller.paths, ["C:/Local Notes/project plan.md"])
+        self.assertEqual(responses, [controller.response])
+        self.assertEqual(
+            choose_file.call_args.kwargs["title"],
+            "Load local knowledge source",
+        )
+        self.assertEqual(
+            choose_file.call_args.kwargs["filetypes"][0],
+            ("Knowledge files", "*.md *.txt"),
+        )
+
+    def test_cancelled_file_selection_does_not_call_the_controller(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingKnowledgeLoadController()
+        status = RecordingStatus()
+        window._root = object()
+        window._controller = controller
+        window._status = status
+        window._append_response = lambda _response: self.fail("must not append")
+
+        with patch(
+            "desktop.TkinterDesktopWindow.filedialog.askopenfilename",
+            return_value="",
+        ):
+            window._load_knowledge()
+
+        self.assertEqual(controller.paths, [])
+        self.assertEqual(status.values, ["knowledge load: cancelled"])
+
+
+class RecordingKnowledgeLoadController:
+    def __init__(self) -> None:
+        self.paths: list[str] = []
+        self.response = BrainResponse(
+            message="Loaded.",
+            request_id="load",
+            intent="knowledge_load",
+            memory_count=0,
+        )
+
+    def load_knowledge(self, path: str) -> BrainResponse:
+        self.paths.append(path)
+        return self.response
+
+
+class RecordingStatus:
+    def __init__(self) -> None:
+        self.values: list[str] = []
+
+    def set(self, value: str) -> None:
+        self.values.append(value)
 
 
 class RelationConfirmationTests(unittest.TestCase):

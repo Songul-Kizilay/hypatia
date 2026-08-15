@@ -1293,3 +1293,46 @@ class ResponseComposerTests(unittest.TestCase):
             session_id=session_id,
             created_at=datetime(2026, 8, 4, 15, 0, tzinfo=UTC),
         )
+
+
+class KnowledgeLoadResponseComposerTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.composer = ResponseComposer()
+        self.request = BrainRequest(message="Load selected local knowledge source")
+
+    def test_success_preserves_loaded_document_and_local_only_contract(self) -> None:
+        document = KnowledgeDocumentReference(
+            "source-1",
+            "Project Notes",
+            "C:/knowledge/project notes.md",
+            DocumentType.MARKDOWN,
+            2,
+        )
+
+        response = self.composer.knowledge_load_success(self.request, document)
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "knowledge_load")
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(response.knowledge_documents, [document])
+        self.assertEqual(
+            response.message,
+            "Local knowledge source loaded:\n"
+            "Title: Project Notes\n"
+            "Source: C:/knowledge/project notes.md\n"
+            "Type: markdown\n"
+            "Chunks: 2\n"
+            "ID: source-1",
+        )
+
+    def test_failure_preserves_message_without_a_loaded_document(self) -> None:
+        response = self.composer.knowledge_load_failure(
+            self.request,
+            "A local knowledge source path is required.",
+        )
+
+        self.assertFalse(response.success)
+        self.assertEqual(response.intent, "knowledge_load")
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(response.knowledge_documents, [])
+        self.assertEqual(response.message, "A local knowledge source path is required.")

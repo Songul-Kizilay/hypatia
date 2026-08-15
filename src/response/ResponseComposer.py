@@ -491,6 +491,43 @@ class ResponseComposer:
             knowledge_documents=documents,
         )
 
+    def knowledge_load_success(
+        self,
+        request: BrainRequest,
+        document: KnowledgeDocumentReference,
+    ) -> BrainResponse:
+        """Report one explicitly selected source after successful local indexing."""
+        return BrainResponse(
+            message="\n".join(
+                [
+                    "Local knowledge source loaded:",
+                    f"Title: {document.title}",
+                    f"Source: {document.source}",
+                    f"Type: {document.document_type.value}",
+                    f"Chunks: {document.chunk_count}",
+                    f"ID: {document.document_id}",
+                ]
+            ),
+            request_id=request.request_id,
+            intent="knowledge_load",
+            memory_count=0,
+            knowledge_documents=[document],
+        )
+
+    def knowledge_load_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Report a rejected or failed local-source load without side effects."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="knowledge_load",
+            memory_count=0,
+            success=False,
+        )
+
     def knowledge_relation_list_success(
         self,
         request: BrainRequest,

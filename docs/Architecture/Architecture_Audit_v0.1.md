@@ -15,7 +15,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.28` today) are the executable package and GitHub
+- **Runtime releases** (`v0.3.29` today) are the executable package and GitHub
   release line. They are the source-backed implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
   engineering increments. Sprint 4.16.50 is complete and is already in the
@@ -42,7 +42,7 @@ Hypatia is a Python 3.14+ local-first runtime. Its active source packages are:
 | `knowledge` | Local `.txt`/`.md` loading, source catalog, chunks, lexical search, cited prompt context, structural graph |
 | `llm` | Optional OpenAI-compatible chat-completions provider and history assembly |
 | `planner`, `response`, `eventbus` | Deterministic task planning, response composition, lifecycle events |
-| `desktop` | Initial local Tkinter adapter for existing text chat, session views/selection, explicit recall/context, and semantic status |
+| `desktop` | Local Tkinter adapter for text chat, session views/selection, explicit recall/context, selected `.md`/`.txt` loading, source graph/catalog, and guarded mutations |
 
 The current request flow is:
 
