@@ -69,6 +69,30 @@ class DesktopController:
         """Ask the enabled runtime using only bounded cited local knowledge."""
         return self._knowledge_command("ask knowledge", query)
 
+    def preview_knowledge_relation(
+        self,
+        source_document_id: str,
+        target_document_id: str,
+    ) -> BrainResponse:
+        """Validate a requested local document relation without changing it."""
+        return self._knowledge_relation_command(
+            "preview knowledge relation",
+            source_document_id,
+            target_document_id,
+        )
+
+    def apply_knowledge_relation(
+        self,
+        source_document_id: str,
+        target_document_id: str,
+    ) -> BrainResponse:
+        """Apply a relation only after the desktop has shown its preview."""
+        return self._knowledge_relation_command(
+            "apply knowledge relation",
+            source_document_id,
+            target_document_id,
+        )
+
     def list_knowledge(self) -> BrainResponse:
         """Request the existing read-only catalog of loaded local sources."""
         return self._brain.process("list knowledge")
@@ -101,3 +125,16 @@ class DesktopController:
         if not normalized_query:
             raise ValueError("A knowledge query cannot be empty.")
         return self._brain.process(f"{command} {normalized_query}")
+
+    def _knowledge_relation_command(
+        self,
+        command: str,
+        source_document_id: str,
+        target_document_id: str,
+    ) -> BrainResponse:
+        """Send two explicit document IDs through the existing relation boundary."""
+        source_id = source_document_id.strip()
+        target_id = target_document_id.strip()
+        if not source_id or not target_id:
+            raise ValueError("Both knowledge source IDs are required.")
+        return self._brain.process(f"{command} {source_id} -- {target_id}")

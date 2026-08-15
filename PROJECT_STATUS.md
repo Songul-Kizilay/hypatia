@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.22 (Genesis)`
+`v0.3.23 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.22`** is the current executable package pending its
+- **Runtime release `v0.3.23`** is the current executable package pending its
   published GitHub release.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -55,6 +55,10 @@ with optional OpenAI-compatible LLM conversation support.
   returned by any knowledge response, including title, source path, paragraph,
   and chunk identifier. It does not look up, fabricate, persist, or reorder
   source records.
+- The desktop can now create one explicit local `related_to` source relation
+  only through its existing two-stage runtime contract: it first shows the
+  runtime preview, then issues the revalidated apply command only after a
+  separate confirmation. Declining or failing the preview makes no mutation.
 - Deterministic English and Turkish standalone greetings. A substantive request
   that begins with a greeting remains a normal conversation request and reaches
   the configured LLM runtime when one is enabled.
@@ -170,7 +174,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 928 automated tests pass through package-aware discovery.
+- 934 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.

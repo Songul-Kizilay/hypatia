@@ -2,6 +2,23 @@
 
 All notable project changes are recorded here.
 
+## [0.3.23] - 2026-08-15
+
+### Added
+
+- The desktop shell now exposes a `Preview and link` source-relation flow. It
+  first delegates both entered source IDs to the existing read-only runtime
+  preview, displays that exact preview for confirmation, and calls the existing
+  revalidating apply command only after the user confirms. Cancellation and a
+  failed preview make no relation change.
+
+### Verification
+
+- The package-aware full local suite contains 934 passing automated tests.
+- Black, Ruff, MyPy, whitespace validation, and a real Tkinter preview-and-
+  confirm relation smoke test pass with the documented project virtual
+  environment.
+
 ## [0.3.22] - 2026-08-15
 
 ### Added
