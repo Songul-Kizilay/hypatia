@@ -15,7 +15,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.19` today) are the executable package and GitHub
+- **Runtime releases** (`v0.3.20` today) are the executable package and GitHub
   release line. They are the source-backed implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
   engineering increments. Sprint 4.16.50 is complete and is already in the
@@ -61,7 +61,8 @@ the existing `session overview` command, maps explicit selection to `use
 session`, maps selected-session details/recent/activity to their existing
 read-only commands, and maps user-entered lexical/semantic recall plus status
 to their existing commands. It additionally maps an explicit knowledge-context
-query to its bounded cited local command without invoking an LLM. It does not
+or knowledge-graph query to bounded cited local commands without invoking an
+LLM, and exposes the existing read-only local source catalog. It does not
 augment ordinary chat. Its ordered `SessionSummary` response data avoids parsing
 human-formatted output or reading persistence directly. It owns neither
 persistent state nor a provider client; the UI window does not add a browser,
