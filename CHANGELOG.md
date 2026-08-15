@@ -2,6 +2,18 @@
 
 All notable project changes are recorded here.
 
+## [0.3.14] - 2026-08-15
+
+### Security
+
+- The local Ollama embedding transport now reads at most 1 MiB before JSON
+  parsing, rejecting oversized responses before they can consume unbounded
+  process memory.
+
+### Verification
+
+- The package-aware full local suite contains 906 passing automated tests.
+
 ## [0.3.13] - 2026-08-15
 
 ### Security

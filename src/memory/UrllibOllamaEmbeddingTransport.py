@@ -10,6 +10,7 @@ from typing import Protocol, Self, cast
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 DEFAULT_TIMEOUT_SECONDS = 120.0
+MAX_RESPONSE_BYTES = 1_048_576
 
 
 class _ReadableResponse(Protocol):
@@ -24,7 +25,7 @@ class _ReadableResponse(Protocol):
         traceback: TracebackType | None,
     ) -> None: ...
 
-    def read(self) -> bytes: ...
+    def read(self, size: int = -1) -> bytes: ...
 
 
 class _NoRedirectHandler(HTTPRedirectHandler):
@@ -54,6 +55,14 @@ def _open_without_redirects(
     )
 
 
+def _read_response_body(response: _ReadableResponse) -> bytes:
+    """Read one bounded embedding response before JSON parsing."""
+    body = response.read(MAX_RESPONSE_BYTES + 1)
+    if len(body) > MAX_RESPONSE_BYTES:
+        raise OSError("Embedding response exceeds the maximum allowed size.")
+    return body
+
+
 class UrllibOllamaEmbeddingTransport:
     """Send one JSON embedding request through urllib."""
 
@@ -78,4 +87,4 @@ class UrllibOllamaEmbeddingTransport:
             request,
             timeout=self._timeout_seconds,
         ) as response:
-            return cast(object, json.loads(response.read()))
+            return cast(object, json.loads(_read_response_body(response)))
