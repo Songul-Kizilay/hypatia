@@ -14,6 +14,7 @@ if str(SRC_DIR) not in sys.path:
 
 from memory.UrllibOllamaEmbeddingTransport import (
     DEFAULT_TIMEOUT_SECONDS,
+    MAX_RESPONSE_BYTES,
     UrllibOllamaEmbeddingTransport,
     _NoRedirectHandler,
 )
@@ -26,8 +27,13 @@ class FakeResponse:
     def __exit__(self, *args: object) -> None:
         return None
 
-    def read(self) -> bytes:
+    def read(self, size: int = -1) -> bytes:
         return b'{"embeddings": [[0.25, -0.5]]}'
+
+
+class OversizedFakeResponse(FakeResponse):
+    def read(self, size: int = -1) -> bytes:
+        return b"x" * (MAX_RESPONSE_BYTES + 1)
 
 
 class UrllibOllamaEmbeddingTransportTests(unittest.TestCase):
@@ -100,6 +106,22 @@ class UrllibOllamaEmbeddingTransportTests(unittest.TestCase):
         )
 
         self.assertIsNone(redirected_request)
+
+    def test_rejects_an_oversized_embedding_response_before_json_parsing(self) -> None:
+        transport = UrllibOllamaEmbeddingTransport()
+
+        with patch(
+            "memory.UrllibOllamaEmbeddingTransport._open_without_redirects",
+            return_value=OversizedFakeResponse(),
+        ):
+            with self.assertRaisesRegex(
+                OSError,
+                "Embedding response exceeds the maximum allowed size.",
+            ):
+                transport(
+                    "http://localhost:11434/api/embed",
+                    {"model": "embeddinggemma", "input": "Exact source"},
+                )
 
     def test_rejects_invalid_timeouts(self) -> None:
         for timeout in (True, 0, -1, float("inf"), "30"):

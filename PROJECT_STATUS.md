@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.13 (Genesis)`
+`v0.3.14 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.13`** is the current executable package and published
+- **Runtime release `v0.3.14`** is the current executable package and published
   GitHub release.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -46,8 +46,8 @@ with optional OpenAI-compatible LLM conversation support.
 - A derived, in-memory semantic retrieval core with validated embeddings, an
   embedding-provider boundary, deterministic cosine ranking, and a fresh-index
   builder for current active records. An explicit Ollama `/api/embed` adapter
-  is available without third-party dependencies and rejects HTTP redirects.
-  Opt-in Bootstrap wiring builds
+  is available without third-party dependencies, rejects HTTP redirects, and
+  reads at most 1 MiB before parsing an embedding response. Opt-in Bootstrap wiring builds
   and registers a replacement index at startup. After a successful startup it
   follows memory lifecycle events with best-effort incremental updates; an
   embedding failure never reverses a completed primary-memory write. Semantic
@@ -147,7 +147,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 905 automated tests pass through package-aware discovery.
+- 906 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
