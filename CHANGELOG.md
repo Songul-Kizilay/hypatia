@@ -2,6 +2,27 @@
 
 All notable project changes are recorded here.
 
+## [0.3.17] - 2026-08-15
+
+### Added
+
+- The desktop shell now provides explicit, read-only actions for the selected
+  session's details, five most recent conversations, and first/last activity.
+  Each action delegates to the existing Brain command and rejects an empty
+  session selection before any runtime call.
+
+### Fixed
+
+- The project virtual environment now uses the complete local Python 3.14
+  installation, allowing the documented Tkinter desktop command to create a
+  real window instead of failing to locate Tcl/Tk runtime files.
+
+### Verification
+
+- The package-aware full local suite contains 916 passing automated tests.
+- Black, Ruff, MyPy, whitespace validation, and a real Tkinter session-views
+  smoke test pass with the documented project virtual environment.
+
 ## [0.3.16] - 2026-08-15
 
 ### Added

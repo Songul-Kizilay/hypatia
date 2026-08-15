@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import tkinter as tk
+from collections.abc import Callable
 from tkinter import scrolledtext, ttk
 
 from brain.BrainResponse import BrainResponse
@@ -68,6 +69,21 @@ class TkinterDesktopWindow:
             text="Semantic status",
             command=self._show_semantic_status,
         ).grid(row=1, column=3, sticky="ew", padx=(8, 0))
+        ttk.Button(
+            session_frame,
+            text="Session details",
+            command=self._show_session_details,
+        ).grid(row=2, column=1, sticky="ew", pady=(8, 0))
+        ttk.Button(
+            session_frame,
+            text="Recent chats",
+            command=self._show_session_recent,
+        ).grid(row=2, column=2, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ttk.Button(
+            session_frame,
+            text="Session activity",
+            command=self._show_session_activity,
+        ).grid(row=2, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
 
         ttk.Label(container, textvariable=self._status).grid(
             row=1, column=0, sticky="w", pady=(8, 4)
@@ -117,9 +133,29 @@ class TkinterDesktopWindow:
     def _show_semantic_status(self) -> None:
         self._append_response(self._controller.semantic_status())
 
+    def _show_session_details(self) -> None:
+        self._show_selected_session_response(self._controller.session_details)
+
+    def _show_session_recent(self) -> None:
+        self._show_selected_session_response(self._controller.session_recent)
+
+    def _show_session_activity(self) -> None:
+        self._show_selected_session_response(self._controller.session_activity)
+
     def _refresh_sessions(self) -> None:
         response = self._controller.session_overview()
         self._render_session_summaries(response)
+        self._append_response(response)
+
+    def _show_selected_session_response(
+        self,
+        action: Callable[[str], BrainResponse],
+    ) -> None:
+        try:
+            response = action(self._session_id.get())
+        except ValueError as error:
+            self._status.set(str(error))
+            return
         self._append_response(response)
 
     def _choose_session(self, _event: tk.Event[tk.Listbox]) -> None:

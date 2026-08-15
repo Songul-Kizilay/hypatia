@@ -85,9 +85,9 @@ To create the world's most capable personal AI research companion.
 - KnowledgeEngine orchestration for the full document-to-search pipeline
 - A full automated test suite and shared code-quality standards
 - An initial local desktop shell for text chat, a refreshable session overview,
-  explicit session selection, and semantic-memory runtime status; it delegates
-  every action to the existing Brain runtime and introduces no browser, cloud,
-  or duplicate data store
+  explicit session selection, session details/recent conversations/activity,
+  and semantic-memory runtime status; it delegates every action to the existing
+  Brain runtime and introduces no browser, cloud, or duplicate data store
 
 Roadmap modules listed above are product direction, not a claim that every module is
 already implemented.
@@ -98,8 +98,10 @@ already implemented.
 
 The first desktop window is a local Tkinter shell for normal text chat,
 refreshing a read-only session overview, selecting an existing session, and
-reading semantic-memory status. Start it from the repository root after setting
-any desired local runtime environment variables:
+reading semantic-memory status. After choosing a session, its detail, recent,
+and activity views are available as separate read-only actions. Start it from
+the repository root after setting any desired local runtime environment
+variables:
 
 ```powershell
 .\.venv\Scripts\python.exe src\desktop_main.py
