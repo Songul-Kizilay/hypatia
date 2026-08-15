@@ -1,0 +1,1 @@
+"""Desktop adapter test package."""

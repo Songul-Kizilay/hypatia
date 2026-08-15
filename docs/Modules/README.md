@@ -14,7 +14,7 @@ Each module document will state its purpose, user value, boundaries, permissions
 | [Teacher](Teacher.md) | Future | Adaptive, evidence-aware learning. |
 | [Voice](Voice.md) | Planned | Private, accessible voice interaction. |
 | [Vision](Vision.md) | Future | Consent-aware visual understanding. |
-| [Desktop](Desktop.md) | Planned | The first user-facing product surface. |
+| [Desktop](Desktop.md) | Initial shell | Local text chat, session selection, and semantic status. |
 | [Mobile](Mobile.md) | Future | Mobile companion experience. |
 | [Watch](Watch.md) | Future | Wearable interactions. |
 | [XR](XR.md) | Future | Spatial experiences. |

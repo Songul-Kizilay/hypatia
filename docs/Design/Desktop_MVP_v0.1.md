@@ -1,6 +1,6 @@
 # Desktop MVP v0.1
 
-**Status:** Draft — technology-independent; no desktop implementation exists.
+**Status:** Initial Tkinter shell implemented; broader MVP views remain planned.
 
 ## Purpose
 
@@ -8,9 +8,10 @@ Define the smallest private desktop surface that makes Hypatia's existing,
 local-first runtime understandable and useful without inventing new agent,
 voice, browser, cloud, or storage behavior.
 
-This document satisfies the design-first boundary in
-[Desktop Application](../Modules/Desktop.md): user flows are specified before
-a desktop technology stack is selected.
+This document defines the design-first boundary in
+[Desktop Application](../Modules/Desktop.md). ADR 0001 records the selected
+Tkinter technology, and the first tested shell implements only its smallest
+three flows: text chat, explicit session selection, and semantic status.
 
 ## Source-backed capability boundary
 
@@ -141,26 +142,27 @@ optimistic local update is retained.
 - The interface does not queue or replay messages automatically after failure.
   The user chooses whether to retry.
 
-## Acceptance criteria before implementation
+## Acceptance criteria for the first shell and follow-up views
 
-1. A selected framework can call the existing Python runtime without bypassing
-   `Brain`, writing a duplicate store, or adding a background network channel.
+1. **Met:** Tkinter calls the existing Python runtime without bypassing `Brain`,
+   writing a duplicate store, or adding a background network channel.
 2. Each source-backed view in this document has an automated adapter or
    end-to-end test for normal, disabled/unavailable, and failure states.
 3. Each mutation flow proves preview, confirmation, final runtime validation,
    and failure/rollback presentation.
-4. The first implementation starts with text chat, session selection, and
-   runtime status. Knowledge and mutation drawers are added only after their
-   read-only and confirmation paths are individually tested.
-5. The selected technology, packaging model, update policy, accessibility
-   verification method, and any web-view/network policy are recorded in a
-   separate decision before UI code is merged.
+4. **Met for the first shell:** text chat, session selection, and runtime
+   status are implemented through a headless-tested controller. Knowledge and
+   mutation drawers are added only after their read-only and confirmation paths
+   are individually tested.
+5. **Partially met:** Tkinter and the no-web-view policy are recorded in ADR
+   0001. Packaging, update policy, and accessibility verification remain open
+   before a distributable desktop release.
 
 ## Open decisions
 
-- Desktop framework and packaging approach.
-- Whether the first window is a native Python UI, a local web view, or another
-  technology with equivalent local-only guarantees.
+- The first shell uses native Python Tkinter; see
+  [ADR 0001](../Decisions/0001-tkinter-desktop-shell.md). Packaging remains a
+  separate decision.
 - Cross-platform support target for the first release.
 - The visual identity, color system, and typography, which belong in separate
   design documents rather than runtime code.
