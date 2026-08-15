@@ -2,6 +2,23 @@
 
 All notable project changes are recorded here.
 
+## [0.3.26] - 2026-08-15
+
+### Added
+
+- The desktop shell now exposes `Preview rename` for the selected session and a
+  user-entered replacement ID. It shows the existing transactional runtime
+  preview, calls the revalidating rename command only after confirmation, then
+  refreshes the session list from Brain after a successful rename. A declined
+  or failed preview makes no session or memory change.
+
+### Verification
+
+- The package-aware full local suite contains 946 passing automated tests.
+- Black, Ruff, MyPy, whitespace validation, and a real Tkinter preview-and-
+  confirm session-rename smoke test pass with the documented project virtual
+  environment.
+
 ## [0.3.25] - 2026-08-15
 
 ### Added

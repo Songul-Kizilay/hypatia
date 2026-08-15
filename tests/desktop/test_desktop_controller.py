@@ -99,6 +99,35 @@ class DesktopControllerTests(unittest.TestCase):
 
         self.assertEqual(self.brain.requests, [])
 
+    def test_session_rename_preview_uses_the_existing_read_only_command(self) -> None:
+        response = self.controller.preview_session_rename("  Work-1  ", " Archive ")
+
+        self.assertIs(response, self.response)
+        self.assertEqual(
+            self.brain.requests,
+            ["preview rename session Work-1 -- Archive"],
+        )
+
+    def test_session_rename_uses_the_existing_transactional_command(self) -> None:
+        response = self.controller.rename_session("  Work-1  ", " Archive ")
+
+        self.assertIs(response, self.response)
+        self.assertEqual(self.brain.requests, ["rename session Work-1 -- Archive"])
+
+    def test_session_rename_actions_reject_missing_ids_without_calling_brain(
+        self,
+    ) -> None:
+        for action in (
+            self.controller.preview_session_rename,
+            self.controller.rename_session,
+        ):
+            for source_id, target_id in (("", "Archive"), ("Work-1", " \t ")):
+                with self.subTest(action=action.__name__, ids=(source_id, target_id)):
+                    with self.assertRaisesRegex(ValueError, "Both session IDs"):
+                        action(source_id, target_id)
+
+        self.assertEqual(self.brain.requests, [])
+
     def test_recall_uses_the_explicit_lexical_command(self) -> None:
         response = self.controller.recall("  project plan  ")
 
