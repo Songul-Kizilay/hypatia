@@ -2,6 +2,21 @@
 
 All notable project changes are recorded here.
 
+## [0.3.20] - 2026-08-15
+
+### Added
+
+- The desktop shell now provides explicit `Knowledge graph` and `Loaded
+  sources` actions. They delegate to the existing bounded, cited graph and
+  read-only local source-catalog commands; neither action calls an LLM nor
+  changes conversation memory or local knowledge state.
+
+### Verification
+
+- The package-aware full local suite contains 924 passing automated tests.
+- Black, Ruff, MyPy, whitespace validation, and a real Tkinter knowledge-view
+  smoke test pass with the documented project virtual environment.
+
 ## [0.3.19] - 2026-08-15
 
 ### Added

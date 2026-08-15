@@ -98,6 +98,10 @@ The initial shell implements the Recall and Semantic recall actions as separate
 query controls. It does not issue either request from ordinary chat text.
 It also implements the separate, bounded, cited `Knowledge context` action;
 this local retrieval does not call an LLM or mutate conversation memory.
+The same explicitly entered query can request the existing bounded, cited
+`Knowledge graph` view, while `Loaded sources` opens the existing read-only
+local source catalog. Neither action calls an LLM, augments ordinary chat, or
+changes conversation memory or knowledge state.
 
 ## Mutation flows
 

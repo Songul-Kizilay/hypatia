@@ -61,6 +61,14 @@ class DesktopController:
         """Request bounded cited local knowledge context without an LLM call."""
         return self._knowledge_command("knowledge context", query)
 
+    def knowledge_graph(self, query: str) -> BrainResponse:
+        """Request a bounded cited local source-structure view without an LLM."""
+        return self._knowledge_command("knowledge graph", query)
+
+    def list_knowledge(self) -> BrainResponse:
+        """Request the existing read-only catalog of loaded local sources."""
+        return self._brain.process("list knowledge")
+
     def semantic_status(self) -> BrainResponse:
         """Request the read-only semantic runtime status without a query."""
         return self._brain.process("semantic recall status")

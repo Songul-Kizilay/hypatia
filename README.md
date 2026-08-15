@@ -87,9 +87,9 @@ To create the world's most capable personal AI research companion.
 - An initial local desktop shell for text chat, a refreshable session overview,
   explicit session selection, session details/recent conversations/activity,
   explicit lexical/semantic conversation recall, and semantic-memory runtime
-  status, and bounded cited local knowledge context; it delegates every action
-  to the existing Brain runtime and introduces no browser, cloud, or duplicate
-  data store
+  status, bounded cited local knowledge context/graph, and a read-only local
+  source catalog; it delegates every action to the existing Brain runtime and
+  introduces no browser, cloud, or duplicate data store
 
 Roadmap modules listed above are product direction, not a claim that every module is
 already implemented.
@@ -118,6 +118,10 @@ available.
 `Knowledge context` is separately user-initiated and returns only the bounded,
 cited local context already exposed by the runtime. It neither calls an LLM nor
 changes conversation memory.
+`Knowledge graph` uses the same explicit query to show the bounded, cited local
+source structure, and `Loaded sources` shows the read-only catalog of currently
+loaded local documents. Neither action calls an LLM or changes conversation
+memory or local knowledge state.
 It does not yet include voice, document import, knowledge drawers, browser
 tools, automatic retrieval, or mutation workflows; those remain separate,
 test-first increments.
