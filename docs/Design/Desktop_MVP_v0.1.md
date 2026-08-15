@@ -127,6 +127,10 @@ contract: select a source session, enter a replacement ID, inspect the exact
 read-only preview, then explicitly confirm before the revalidating rename call.
 After success it refreshes the session list from Brain; a failed or declined
 preview leaves session and memory state unchanged.
+Session deletion first reads the existing structured runtime preview. The UI
+offers confirmation only when that preview explicitly allows deletion; blocked
+or failed previews cannot invoke the delete command. A successful deletion
+clears the selection and refreshes the session list from Brain.
 
 ## Mutation flows
 

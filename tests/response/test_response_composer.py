@@ -638,6 +638,10 @@ class ResponseComposerTests(unittest.TestCase):
             "default session cannot be deleted",
         )
 
+        self.assertTrue(allow.session_delete_allowed)
+        self.assertFalse(pending.session_delete_allowed)
+        self.assertFalse(denied.session_delete_allowed)
+
         self.assertEqual(
             allow.message,
             "Delete preview:\nSession: work-1\nDecision: ALLOW\n"

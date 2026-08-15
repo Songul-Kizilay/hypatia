@@ -37,3 +37,4 @@ class BrainResponse:
     )
     knowledge_relation_revocation: KnowledgeRelationRevocation | None = None
     session_summaries: list[SessionSummary] = field(default_factory=list)
+    session_delete_allowed: bool | None = None

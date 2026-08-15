@@ -128,6 +128,17 @@ class DesktopControllerTests(unittest.TestCase):
 
         self.assertEqual(self.brain.requests, [])
 
+    def test_session_delete_actions_use_existing_guarded_commands(self) -> None:
+        preview = self.controller.preview_session_delete("  Work-1  ")
+        deleted = self.controller.delete_session("  Work-1  ")
+
+        self.assertIs(preview, self.response)
+        self.assertIs(deleted, self.response)
+        self.assertEqual(
+            self.brain.requests,
+            ["preview delete session Work-1", "delete session Work-1"],
+        )
+
     def test_recall_uses_the_explicit_lexical_command(self) -> None:
         response = self.controller.recall("  project plan  ")
 
