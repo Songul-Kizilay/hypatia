@@ -99,6 +99,25 @@ class DesktopControllerTests(unittest.TestCase):
 
         self.assertEqual(self.brain.requests, [])
 
+    def test_session_search_uses_the_existing_read_only_command(self) -> None:
+        response = self.controller.session_search("  Work-1  ", " project plan ")
+
+        self.assertIs(response, self.response)
+        self.assertEqual(
+            self.brain.requests,
+            ["session search Work-1 -- project plan"],
+        )
+
+    def test_session_search_rejects_missing_session_or_query_without_brain_call(
+        self,
+    ) -> None:
+        for session_id, query in (("", "project"), ("Work-1", " \t ")):
+            with self.subTest(session_id=session_id, query=query):
+                with self.assertRaisesRegex(ValueError, "cannot be empty"):
+                    self.controller.session_search(session_id, query)
+
+        self.assertEqual(self.brain.requests, [])
+
     def test_session_rename_preview_uses_the_existing_read_only_command(self) -> None:
         response = self.controller.preview_session_rename("  Work-1  ", " Archive ")
 

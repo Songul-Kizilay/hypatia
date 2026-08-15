@@ -49,6 +49,18 @@ class DesktopController:
         """Request read-only first and last activity for the selected session."""
         return self._selected_session_command("session activity", session_id)
 
+    def session_search(self, session_id: str, query: str) -> BrainResponse:
+        """Search only the explicitly selected session without changing it."""
+        normalized_session_id = session_id.strip()
+        normalized_query = query.strip()
+        if not normalized_session_id:
+            raise ValueError("A session ID cannot be empty.")
+        if not normalized_query:
+            raise ValueError("A session search query cannot be empty.")
+        return self._brain.process(
+            f"session search {normalized_session_id} -- {normalized_query}"
+        )
+
     def preview_session_rename(
         self,
         source_session_id: str,

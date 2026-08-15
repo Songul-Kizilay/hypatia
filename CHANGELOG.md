@@ -2,6 +2,21 @@
 
 All notable project changes are recorded here.
 
+## [0.3.28] - 2026-08-15
+
+### Added
+
+- The desktop shell now provides `Search this session`, delegating only to the
+  existing explicit selected-session conversation search. Empty session IDs and
+  queries are rejected locally; successful or empty search responses remain
+  read-only and do not change sessions, memory, or provider state.
+
+### Verification
+
+- The package-aware full local suite contains 949 passing automated tests.
+- Black, Ruff, MyPy, whitespace validation, and a real Tkinter session-search
+  smoke test pass with the documented project virtual environment.
+
 ## [0.3.27] - 2026-08-15
 
 ### Added
