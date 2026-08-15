@@ -86,8 +86,9 @@ To create the world's most capable personal AI research companion.
 - A full automated test suite and shared code-quality standards
 - An initial local desktop shell for text chat, a refreshable session overview,
   explicit session selection, session details/recent conversations/activity,
-  and semantic-memory runtime status; it delegates every action to the existing
-  Brain runtime and introduces no browser, cloud, or duplicate data store
+  explicit lexical/semantic conversation recall, and semantic-memory runtime
+  status; it delegates every action to the existing Brain runtime and
+  introduces no browser, cloud, or duplicate data store
 
 Roadmap modules listed above are product direction, not a claim that every module is
 already implemented.
@@ -109,6 +110,10 @@ variables:
 
 The window uses the same Bootstrap and Brain as the terminal entry point. A
 clicked session only fills the selection field; choosing it remains explicit.
+The separate `Recall` and `Semantic recall` buttons require a user-entered
+query; they never add retrieval automatically to ordinary chat. Semantic recall
+uses the existing configured fallback behavior when its optional runtime is not
+available.
 It does not yet include voice, document import, knowledge drawers, browser
 tools, automatic retrieval, or mutation workflows; those remain separate,
 test-first increments.

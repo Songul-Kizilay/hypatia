@@ -2,6 +2,21 @@
 
 All notable project changes are recorded here.
 
+## [0.3.18] - 2026-08-15
+
+### Added
+
+- The desktop shell now has separate user-initiated lexical `Recall` and
+  opt-in `Semantic recall` actions. They reject an empty query locally and
+  delegate only the explicit existing Brain command; ordinary chat remains
+  free of automatic retrieval or prompt augmentation.
+
+### Verification
+
+- The package-aware full local suite contains 919 passing automated tests.
+- Black, Ruff, MyPy, whitespace validation, and a real Tkinter recall-window
+  smoke test pass with the documented project virtual environment.
+
 ## [0.3.17] - 2026-08-15
 
 ### Added

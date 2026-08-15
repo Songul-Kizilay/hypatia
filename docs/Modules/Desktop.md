@@ -4,7 +4,8 @@
 
 The first local Tkinter shell is implemented for text chat, refreshable session
 overview and explicit selection, selected-session details/recent/activity, and
-semantic-runtime status. Broader MVP views remain planned.
+explicit lexical/semantic recall, and semantic-runtime status. Broader MVP
+views remain planned.
 
 ## Purpose
 

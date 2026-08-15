@@ -94,6 +94,9 @@ Provides explicit, user-selected views instead of automatic retrieval:
 | Knowledge graph | Request a graph view | Show only bounded, cited relationships returned by the runtime. |
 | Sessions | Select overview/detail/activity/recent/search | Keep these requests read-only unless the user enters a mutation flow. |
 
+The initial shell implements the Recall and Semantic recall actions as separate
+query controls. It does not issue either request from ordinary chat text.
+
 ## Mutation flows
 
 The interface must use the current two-stage runtime contracts. A visual
