@@ -2,13 +2,17 @@
 
 ## Status
 
-Design draft available; implementation remains planned for v0.1.
+The first local Tkinter shell is implemented for text chat, explicit session
+selection, and semantic-runtime status. Broader MVP views remain planned.
 
 ## Purpose
 
-Provide the first private, approachable place to interact with Hypatia's chat, memory, and voice capabilities.
+Provide the first private, approachable place to interact with Hypatia's chat,
+sessions, and explicitly requested memory status.
 
 ## Scope boundary
 
-The interface and user flows must be specified before a desktop technology stack is selected. See the
-[Desktop MVP v0.1 draft](../Design/Desktop_MVP_v0.1.md).
+The implemented shell is deliberately narrow and delegates to `Brain`; it does
+not add voice, a second data store, or a web surface. See the
+[Desktop MVP v0.1 design](../Design/Desktop_MVP_v0.1.md) and
+[ADR 0001](../Decisions/0001-tkinter-desktop-shell.md).

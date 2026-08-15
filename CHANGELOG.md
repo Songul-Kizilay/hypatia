@@ -2,6 +2,22 @@
 
 All notable project changes are recorded here.
 
+## [0.3.15] - 2026-08-15
+
+### Added
+
+- The first local Tkinter desktop shell. It starts the existing Hypatia
+  application lifecycle and delegates text chat, explicit session selection,
+  and read-only semantic-runtime status to the already constructed `Brain`.
+- A headless-tested desktop controller prevents empty input locally while
+  preserving non-empty conversation text and without creating a second store,
+  provider, or network client.
+
+### Verification
+
+- The package-aware full local suite contains 911 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass for the full repository.
+
 ## [0.3.14] - 2026-08-15
 
 ### Security
