@@ -243,5 +243,8 @@ package-aware test suite, Black, Ruff, MyPy, and diff checks pass.
 
 ## Follow-on Sequence
 
-1. Expand hybrid-ranking fixtures with reviewed relevance expectations and
-   monitor the bounded named semantic-recall path before considering reranking.
+1. A read-only `semantic recall status` command now monitors the bounded named
+   semantic-recall path. The versioned v2 hybrid-ranking corpus supplements the
+   original rank-only fixtures with Turkish and English queries, maintained
+   expected relevance ordering, and a rationale for each retained candidate.
+   Treat these fixtures as the acceptance baseline before considering reranking.

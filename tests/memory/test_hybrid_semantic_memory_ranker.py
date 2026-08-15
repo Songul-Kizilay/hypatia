@@ -14,14 +14,17 @@ from memory.HybridSemanticMemoryRanker import HybridSemanticMemoryRanker
 from memory.MemoryRecord import MemoryRecord
 from memory.SemanticMemoryMatch import SemanticMemoryMatch
 
-FIXTURE_PATH = (
+V1_FIXTURE_PATH = (
     Path(__file__).resolve().parents[1] / "fixtures" / "semantic_memory_hybrid_v1.json"
+)
+V2_FIXTURE_PATH = (
+    Path(__file__).resolve().parents[1] / "fixtures" / "semantic_memory_hybrid_v2.json"
 )
 
 
 class HybridSemanticMemoryRankerTests(unittest.TestCase):
     def test_versioned_evaluation_fixture_matches_expected_orders(self) -> None:
-        document = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+        document = json.loads(V1_FIXTURE_PATH.read_text(encoding="utf-8"))
 
         self.assertEqual(document["schema_version"], 1)
         for case_data in cast(list[dict[str, object]], document["cases"]):
@@ -29,6 +32,49 @@ class HybridSemanticMemoryRankerTests(unittest.TestCase):
                 semantic_order = cast(list[str], case_data["semantic_order"])
                 lexical_order = cast(list[str], case_data["lexical_order"])
                 expected_order = cast(list[str], case_data["expected_order"])
+
+                ranked = HybridSemanticMemoryRanker().rank(
+                    tuple(
+                        SemanticMemoryMatch(memory_id=memory_id, score=1.0)
+                        for memory_id in semantic_order
+                    ),
+                    tuple(
+                        MemoryRecord(memory_id=memory_id, content=memory_id)
+                        for memory_id in lexical_order
+                    ),
+                )
+
+                self.assertEqual(
+                    [match.memory_id for match in ranked],
+                    expected_order,
+                )
+
+    def test_curated_relevance_fixture_matches_expected_orders(self) -> None:
+        document = json.loads(V2_FIXTURE_PATH.read_text(encoding="utf-8"))
+
+        self.assertEqual(document["schema_version"], 2)
+        self.assertEqual(
+            document["evaluation_scope"], "explicit semantic recall rank-only"
+        )
+        for case_data in cast(list[dict[str, object]], document["cases"]):
+            with self.subTest(name=case_data["name"]):
+                query = cast(str, case_data["query"])
+                semantic_order = cast(list[str], case_data["semantic_order"])
+                lexical_order = cast(list[str], case_data["lexical_order"])
+                expected_order = cast(list[str], case_data["expected_order"])
+                relevance_rationale = cast(
+                    dict[str, str], case_data["relevance_rationale"]
+                )
+                candidate_ids = set(semantic_order).union(lexical_order)
+
+                self.assertIsInstance(query, str)
+                self.assertTrue(query.strip())
+                self.assertEqual(len(expected_order), len(set(expected_order)))
+                self.assertEqual(set(expected_order), candidate_ids)
+                self.assertEqual(set(relevance_rationale), candidate_ids)
+                self.assertTrue(
+                    all(rationale.strip() for rationale in relevance_rationale.values())
+                )
 
                 ranked = HybridSemanticMemoryRanker().rank(
                     tuple(

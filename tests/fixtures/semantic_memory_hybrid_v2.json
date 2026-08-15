@@ -1,0 +1,86 @@
+{
+  "schema_version": 2,
+  "evaluation_scope": "explicit semantic recall rank-only",
+  "cases": [
+    {
+      "name": "turkish_shared_pet_context_is_promoted",
+      "query": "Kedim hakkında daha önce ne konuşmuştuk?",
+      "semantic_order": [
+        "memory-cat-preference",
+        "memory-pet-health"
+      ],
+      "lexical_order": [
+        "memory-pet-health",
+        "memory-cat-care"
+      ],
+      "expected_order": [
+        "memory-pet-health",
+        "memory-cat-preference",
+        "memory-cat-care"
+      ],
+      "relevance_rationale": {
+        "memory-cat-preference": "A semantic match for the user's cat preference.",
+        "memory-pet-health": "A shared semantic and lexical match about the user's pet.",
+        "memory-cat-care": "A lexical match about cat care retained as supporting context."
+      }
+    },
+    {
+      "name": "english_shared_project_decision_is_promoted",
+      "query": "What did we decide about the local memory project?",
+      "semantic_order": [
+        "memory-local-first-goal",
+        "memory-storage-decision"
+      ],
+      "lexical_order": [
+        "memory-storage-decision",
+        "memory-project-timeline"
+      ],
+      "expected_order": [
+        "memory-storage-decision",
+        "memory-local-first-goal",
+        "memory-project-timeline"
+      ],
+      "relevance_rationale": {
+        "memory-local-first-goal": "A semantic match for the local-first project objective.",
+        "memory-storage-decision": "A shared match containing the requested project decision.",
+        "memory-project-timeline": "A lexical project match retained after the direct decision."
+      }
+    },
+    {
+      "name": "single_source_evidence_remains_visible",
+      "query": "Which book did I want to read next?",
+      "semantic_order": [
+        "memory-reading-goal"
+      ],
+      "lexical_order": [
+        "memory-book-title"
+      ],
+      "expected_order": [
+        "memory-book-title",
+        "memory-reading-goal"
+      ],
+      "relevance_rationale": {
+        "memory-reading-goal": "A semantic-only reading goal that must remain visible.",
+        "memory-book-title": "A lexical-only exact book reference that must remain visible."
+      }
+    },
+    {
+      "name": "equal_single_source_evidence_uses_stable_id_tie_breaking",
+      "query": "Show the paired research notes.",
+      "semantic_order": [
+        "memory-zeta-note"
+      ],
+      "lexical_order": [
+        "memory-alpha-note"
+      ],
+      "expected_order": [
+        "memory-alpha-note",
+        "memory-zeta-note"
+      ],
+      "relevance_rationale": {
+        "memory-alpha-note": "A relevant lexical-only note ordered deterministically on a tie.",
+        "memory-zeta-note": "A relevant semantic-only note ordered deterministically on a tie."
+      }
+    }
+  ]
+}
