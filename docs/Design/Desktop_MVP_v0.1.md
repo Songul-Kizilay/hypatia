@@ -106,6 +106,9 @@ changes conversation memory or knowledge state.
 through the existing `ask knowledge` local-RAG path. The runtime keeps its
 bounded cited-source and safe unavailable/failure behavior; this action never
 augments ordinary chat or changes conversation memory.
+For every knowledge response that already carries source records, the transcript
+also renders those records in response order: title, local path, paragraph, and
+chunk ID. It does not invent, resolve, persist, or reorder citations.
 
 ## Mutation flows
 

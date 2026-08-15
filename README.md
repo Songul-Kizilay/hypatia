@@ -127,6 +127,9 @@ memory or local knowledge state.
 only when its button is selected. It provides the configured runtime with up to
 three bounded cited local chunks and never adds retrieval to ordinary chat or
 changes conversation memory.
+Whenever a knowledge response carries existing source records, the desktop
+transcript shows them in returned order with title, local path, paragraph, and
+chunk ID. It does not manufacture or persist source information.
 It does not yet include voice, document import, knowledge drawers, browser
 tools, automatic retrieval, or mutation workflows; those remain separate,
 test-first increments.
