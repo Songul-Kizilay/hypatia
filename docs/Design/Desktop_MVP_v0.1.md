@@ -114,6 +114,11 @@ relation: two entered IDs first receive the runtime's read-only preview. The
 window presents that exact preview in a confirmation dialog; only an explicit
 approval calls the existing revalidating apply command. A declined or failed
 preview leaves the graph, JSON memory, and conversation memory unchanged.
+The matching `Preview and remove` action follows the existing relation-removal
+contract: it first displays its read-only removal preview and sends the
+separate revalidating removal command only after explicit approval. Declining
+or failing the preview leaves the graph, JSON memory, and conversation memory
+unchanged.
 
 ## Mutation flows
 

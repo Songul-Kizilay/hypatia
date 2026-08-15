@@ -2,6 +2,23 @@
 
 All notable project changes are recorded here.
 
+## [0.3.24] - 2026-08-15
+
+### Added
+
+- The desktop shell now exposes a `Preview and remove` source-relation flow.
+  It delegates first to the existing read-only removal preview, shows that
+  exact preview for confirmation, and calls the existing revalidating removal
+  command only after approval. Cancellation and a failed preview make no
+  relation change.
+
+### Verification
+
+- The package-aware full local suite contains 940 passing automated tests.
+- Black, Ruff, MyPy, whitespace validation, and a real Tkinter preview-and-
+  confirm relation-removal smoke test pass with the documented project virtual
+  environment.
+
 ## [0.3.23] - 2026-08-15
 
 ### Added

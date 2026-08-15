@@ -194,6 +194,45 @@ class DesktopControllerTests(unittest.TestCase):
 
         self.assertEqual(self.brain.requests, [])
 
+    def test_knowledge_relation_removal_preview_uses_the_existing_command(
+        self,
+    ) -> None:
+        response = self.controller.preview_knowledge_relation_removal(
+            "  source  ",
+            " target ",
+        )
+
+        self.assertIs(response, self.response)
+        self.assertEqual(
+            self.brain.requests,
+            ["preview remove knowledge relation source -- target"],
+        )
+
+    def test_knowledge_relation_removal_uses_the_existing_mutating_command(
+        self,
+    ) -> None:
+        response = self.controller.remove_knowledge_relation("  source  ", " target ")
+
+        self.assertIs(response, self.response)
+        self.assertEqual(
+            self.brain.requests,
+            ["remove knowledge relation source -- target"],
+        )
+
+    def test_knowledge_relation_removal_actions_reject_missing_ids(self) -> None:
+        for action in (
+            self.controller.preview_knowledge_relation_removal,
+            self.controller.remove_knowledge_relation,
+        ):
+            for source_id, target_id in (("", "target"), ("source", " \t ")):
+                with self.subTest(action=action.__name__, ids=(source_id, target_id)):
+                    with self.assertRaisesRegex(
+                        ValueError, "Both knowledge source IDs"
+                    ):
+                        action(source_id, target_id)
+
+        self.assertEqual(self.brain.requests, [])
+
     def test_list_knowledge_uses_the_existing_read_only_catalog_command(self) -> None:
         response = self.controller.list_knowledge()
 

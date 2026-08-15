@@ -93,6 +93,30 @@ class DesktopController:
             target_document_id,
         )
 
+    def preview_knowledge_relation_removal(
+        self,
+        source_document_id: str,
+        target_document_id: str,
+    ) -> BrainResponse:
+        """Validate removal of an existing relation without changing it."""
+        return self._knowledge_relation_command(
+            "preview remove knowledge relation",
+            source_document_id,
+            target_document_id,
+        )
+
+    def remove_knowledge_relation(
+        self,
+        source_document_id: str,
+        target_document_id: str,
+    ) -> BrainResponse:
+        """Remove a relation only after its desktop preview is confirmed."""
+        return self._knowledge_relation_command(
+            "remove knowledge relation",
+            source_document_id,
+            target_document_id,
+        )
+
     def list_knowledge(self) -> BrainResponse:
         """Request the existing read-only catalog of loaded local sources."""
         return self._brain.process("list knowledge")

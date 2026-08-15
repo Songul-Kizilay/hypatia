@@ -31,6 +31,24 @@ class KnowledgeRelationProcessor(Protocol):
         """Apply the runtime-validated relation after confirmation."""
 
 
+class KnowledgeRelationRemovalProcessor(Protocol):
+    """Small removal boundary used by the relation-removal confirmation helper."""
+
+    def preview_knowledge_relation_removal(
+        self,
+        source_document_id: str,
+        target_document_id: str,
+    ) -> BrainResponse:
+        """Return a validated relation-removal preview without changing it."""
+
+    def remove_knowledge_relation(
+        self,
+        source_document_id: str,
+        target_document_id: str,
+    ) -> BrainResponse:
+        """Remove the runtime-validated relation after confirmation."""
+
+
 class TkinterDesktopWindow:
     """Render conversation, session selection, and semantic status locally."""
 
@@ -179,7 +197,12 @@ class TkinterDesktopWindow:
             relation_frame,
             text="Preview and link",
             command=self._preview_and_link_knowledge_relation,
-        ).grid(row=0, column=4, sticky="ew")
+        ).grid(row=0, column=4, sticky="ew", padx=(0, 8))
+        ttk.Button(
+            relation_frame,
+            text="Preview and remove",
+            command=self._preview_and_remove_knowledge_relation,
+        ).grid(row=0, column=5, sticky="ew")
 
         ttk.Label(container, textvariable=self._status).grid(
             row=4, column=0, sticky="w", pady=(8, 4)
@@ -265,11 +288,37 @@ class TkinterDesktopWindow:
             return
         self._append_response(application)
 
+    def _preview_and_remove_knowledge_relation(self) -> None:
+        try:
+            preview, removal = _preview_and_confirm_knowledge_relation_removal(
+                self._controller,
+                self._relation_source_id.get(),
+                self._relation_target_id.get(),
+                self._confirm_knowledge_relation_removal,
+            )
+        except ValueError as error:
+            self._status.set(str(error))
+            return
+        self._append_response(preview)
+        if removal is None:
+            if preview.success:
+                self._status.set("knowledge relation: not removed")
+            return
+        self._append_response(removal)
+
     def _confirm_knowledge_relation(self, preview: BrainResponse) -> bool:
         """Display only the existing runtime preview before mutation."""
         return messagebox.askyesno(
             "Create local relation?",
             f"{preview.message}\n\nCreate this local relation?",
+            parent=self._root,
+        )
+
+    def _confirm_knowledge_relation_removal(self, preview: BrainResponse) -> bool:
+        """Display only the existing runtime removal preview before mutation."""
+        return messagebox.askyesno(
+            "Remove local relation?",
+            f"{preview.message}\n\nRemove this local relation?",
             parent=self._root,
         )
 
@@ -390,6 +439,25 @@ def _preview_and_confirm_knowledge_relation(
     if not preview.success or not confirm(preview):
         return preview, None
     return preview, controller.apply_knowledge_relation(
+        source_document_id,
+        target_document_id,
+    )
+
+
+def _preview_and_confirm_knowledge_relation_removal(
+    controller: KnowledgeRelationRemovalProcessor,
+    source_document_id: str,
+    target_document_id: str,
+    confirm: Callable[[BrainResponse], bool],
+) -> tuple[BrainResponse, BrainResponse | None]:
+    """Preview removal first; mutate only after explicit approval."""
+    preview = controller.preview_knowledge_relation_removal(
+        source_document_id,
+        target_document_id,
+    )
+    if not preview.success or not confirm(preview):
+        return preview, None
+    return preview, controller.remove_knowledge_relation(
         source_document_id,
         target_document_id,
     )
