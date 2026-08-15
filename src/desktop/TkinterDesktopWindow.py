@@ -23,6 +23,7 @@ class TkinterDesktopWindow:
         self._root = root or tk.Tk()
         self._status = tk.StringVar(value="Ready")
         self._session_id = tk.StringVar()
+        self._recall_query = tk.StringVar()
         self._session_summaries: list[SessionSummary] = []
 
         self._root.title("Hypatia")
@@ -39,7 +40,7 @@ class TkinterDesktopWindow:
         self._root.columnconfigure(0, weight=1)
         self._root.rowconfigure(0, weight=1)
         container.columnconfigure(0, weight=1)
-        container.rowconfigure(2, weight=1)
+        container.rowconfigure(3, weight=1)
 
         session_frame = ttk.LabelFrame(container, text="Session", padding=8)
         session_frame.grid(row=0, column=0, sticky="ew")
@@ -85,8 +86,25 @@ class TkinterDesktopWindow:
             command=self._show_session_activity,
         ).grid(row=2, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
 
+        recall_frame = ttk.LabelFrame(container, text="Conversation recall", padding=8)
+        recall_frame.grid(row=1, column=0, sticky="ew", pady=(8, 0))
+        recall_frame.columnconfigure(0, weight=1)
+        ttk.Entry(recall_frame, textvariable=self._recall_query).grid(
+            row=0, column=0, sticky="ew", padx=(0, 8)
+        )
+        ttk.Button(
+            recall_frame,
+            text="Recall",
+            command=self._show_recall,
+        ).grid(row=0, column=1, sticky="ew")
+        ttk.Button(
+            recall_frame,
+            text="Semantic recall",
+            command=self._show_semantic_recall,
+        ).grid(row=0, column=2, sticky="ew", padx=(8, 0))
+
         ttk.Label(container, textvariable=self._status).grid(
-            row=1, column=0, sticky="w", pady=(8, 4)
+            row=2, column=0, sticky="w", pady=(8, 4)
         )
 
         self._transcript = scrolledtext.ScrolledText(
@@ -95,10 +113,10 @@ class TkinterDesktopWindow:
             state=tk.DISABLED,
             height=18,
         )
-        self._transcript.grid(row=2, column=0, sticky="nsew")
+        self._transcript.grid(row=3, column=0, sticky="nsew")
 
         composer_frame = ttk.LabelFrame(container, text="Message", padding=8)
-        composer_frame.grid(row=3, column=0, sticky="ew", pady=(8, 0))
+        composer_frame.grid(row=4, column=0, sticky="ew", pady=(8, 0))
         composer_frame.columnconfigure(0, weight=1)
         self._composer = tk.Text(composer_frame, height=4, wrap=tk.WORD)
         self._composer.grid(row=0, column=0, sticky="ew", padx=(0, 8))
@@ -133,6 +151,12 @@ class TkinterDesktopWindow:
     def _show_semantic_status(self) -> None:
         self._append_response(self._controller.semantic_status())
 
+    def _show_recall(self) -> None:
+        self._show_recall_response(self._controller.recall)
+
+    def _show_semantic_recall(self) -> None:
+        self._show_recall_response(self._controller.semantic_recall)
+
     def _show_session_details(self) -> None:
         self._show_selected_session_response(self._controller.session_details)
 
@@ -153,6 +177,17 @@ class TkinterDesktopWindow:
     ) -> None:
         try:
             response = action(self._session_id.get())
+        except ValueError as error:
+            self._status.set(str(error))
+            return
+        self._append_response(response)
+
+    def _show_recall_response(
+        self,
+        action: Callable[[str], BrainResponse],
+    ) -> None:
+        try:
+            response = action(self._recall_query.get())
         except ValueError as error:
             self._status.set(str(error))
             return

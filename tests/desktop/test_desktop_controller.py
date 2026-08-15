@@ -99,6 +99,26 @@ class DesktopControllerTests(unittest.TestCase):
 
         self.assertEqual(self.brain.requests, [])
 
+    def test_recall_uses_the_explicit_lexical_command(self) -> None:
+        response = self.controller.recall("  project plan  ")
+
+        self.assertIs(response, self.response)
+        self.assertEqual(self.brain.requests, ["recall project plan"])
+
+    def test_semantic_recall_uses_the_explicit_opt_in_command(self) -> None:
+        response = self.controller.semantic_recall("  project plan  ")
+
+        self.assertIs(response, self.response)
+        self.assertEqual(self.brain.requests, ["semantic recall project plan"])
+
+    def test_recall_actions_reject_empty_query_without_calling_brain(self) -> None:
+        for action in (self.controller.recall, self.controller.semantic_recall):
+            with self.subTest(action=action.__name__):
+                with self.assertRaisesRegex(ValueError, "cannot be empty"):
+                    action(" \t\n ")
+
+        self.assertEqual(self.brain.requests, [])
+
     def test_semantic_status_uses_the_read_only_runtime_command(self) -> None:
         response = self.controller.semantic_status()
 

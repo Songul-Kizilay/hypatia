@@ -49,6 +49,14 @@ class DesktopController:
         """Request read-only first and last activity for the selected session."""
         return self._selected_session_command("session activity", session_id)
 
+    def recall(self, query: str) -> BrainResponse:
+        """Request explicit lexical recall without changing conversation memory."""
+        return self._recall_command("recall", query)
+
+    def semantic_recall(self, query: str) -> BrainResponse:
+        """Request explicit semantic recall through the existing opt-in path."""
+        return self._recall_command("semantic recall", query)
+
     def semantic_status(self) -> BrainResponse:
         """Request the read-only semantic runtime status without a query."""
         return self._brain.process("semantic recall status")
@@ -63,3 +71,10 @@ class DesktopController:
         if not normalized_session_id:
             raise ValueError("A session ID cannot be empty.")
         return self._brain.process(f"{command} {normalized_session_id}")
+
+    def _recall_command(self, command: str, query: str) -> BrainResponse:
+        """Keep memory retrieval user-initiated and reject empty queries locally."""
+        normalized_query = query.strip()
+        if not normalized_query:
+            raise ValueError("A recall query cannot be empty.")
+        return self._brain.process(f"{command} {normalized_query}")
