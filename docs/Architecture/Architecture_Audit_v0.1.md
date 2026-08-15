@@ -99,10 +99,12 @@ Implemented memory capabilities:
   runtime state, and when ready its index size, embedding dimension, and safe
   last incremental-update diagnostic without generating an embedding, querying
   memory, or changing persisted state.
-- A versioned hybrid-ranking fixture corpus at
-  `tests/fixtures/semantic_memory_hybrid_v1.json`. It verifies retained
-  single-source candidates, duplicated-evidence promotion, deterministic ties,
-  and limits used by the explicit semantic-recall path.
+- Versioned hybrid-ranking fixture corpora at
+  `tests/fixtures/semantic_memory_hybrid_v1.json` and
+  `tests/fixtures/semantic_memory_hybrid_v2.json`. Together they verify
+  retained single-source candidates, duplicated-evidence promotion,
+  deterministic ties, result limits, Turkish and English query expectations,
+  and a maintained relevance rationale for every retained candidate.
 - An opt-in, model-scoped local embedding cache that is atomically replaced
   after a successful rebuild. It verifies a SHA-256 source-content fingerprint
   before reuse and does not alter primary memory persistence.
@@ -168,7 +170,7 @@ Not implemented:
 
 The current local verification baseline is:
 
-- `python -m unittest discover -s tests -t .`: 902 tests passed. The top-level
+- `python -m unittest discover -s tests -t .`: 903 tests passed. The top-level
   package setting ensures nested test directories are included without
   shadowing source packages.
 - `python -m black --check src tests`: passed.
