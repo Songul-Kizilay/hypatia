@@ -63,6 +63,12 @@ class DesktopControllerTests(unittest.TestCase):
 
         self.assertEqual(self.brain.requests, [])
 
+    def test_session_overview_uses_the_read_only_runtime_command(self) -> None:
+        response = self.controller.session_overview()
+
+        self.assertIs(response, self.response)
+        self.assertEqual(self.brain.requests, ["session overview"])
+
     def test_semantic_status_uses_the_read_only_runtime_command(self) -> None:
         response = self.controller.semantic_status()
 

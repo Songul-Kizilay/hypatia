@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from brain.SessionSummary import SessionSummary
 from knowledge.Chunk import Chunk
 from knowledge.KnowledgeCitation import KnowledgeCitation
 from knowledge.KnowledgeDocumentReference import KnowledgeDocumentReference
@@ -35,3 +36,4 @@ class BrainResponse:
         None
     )
     knowledge_relation_revocation: KnowledgeRelationRevocation | None = None
+    session_summaries: list[SessionSummary] = field(default_factory=list)

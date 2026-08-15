@@ -7,6 +7,7 @@ from datetime import datetime
 
 from brain.BrainRequest import BrainRequest
 from brain.BrainResponse import BrainResponse
+from brain.SessionSummary import SessionSummary
 from knowledge.Chunk import Chunk
 from knowledge.KnowledgeCitation import KnowledgeCitation
 from knowledge.KnowledgeDocumentReference import KnowledgeDocumentReference
@@ -1054,7 +1055,28 @@ class ResponseComposer:
             request_id=request.request_id,
             intent="session_list",
             memory_count=0,
+            session_summaries=self._session_summaries(
+                sessions,
+                active_session.session_id,
+                {},
+            ),
         )
+
+    @staticmethod
+    def _session_summaries(
+        sessions: list[SessionRecord],
+        active_session_id: str,
+        conversation_counts: dict[str, int],
+    ) -> list[SessionSummary]:
+        """Expose ordered read-only session facts without a second store."""
+        return [
+            SessionSummary(
+                session_id=session.session_id,
+                active=session.session_id == active_session_id,
+                conversation_count=conversation_counts.get(session.session_id, 0),
+            )
+            for session in sessions
+        ]
 
     def session_overview(
         self,
@@ -1081,6 +1103,11 @@ class ResponseComposer:
             request_id=request.request_id,
             intent="session_overview",
             memory_count=memory_count,
+            session_summaries=self._session_summaries(
+                sessions,
+                active_session_id,
+                conversation_counts,
+            ),
         )
 
     def session_overview_failure(

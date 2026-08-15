@@ -61,8 +61,10 @@ flowchart LR
 
 ### 1. Session rail
 
-Shows the active session and an ordered list of known session IDs. A user can
-select a session, request its overview, or open read-only activity and recent
+Shows the active session and an ordered list of known session IDs. The initial
+shell refreshes this list and its conversation counts through a read-only Brain
+overview; selecting a row fills the session field, while activation remains an
+explicit separate action. A user can later open read-only activity and recent
 conversation views. The rail must not display data from an unknown session as
 a substitute for a failed lookup.
 

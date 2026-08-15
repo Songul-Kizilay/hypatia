@@ -18,6 +18,7 @@ if source_planner_dir not in planner.__path__:
     planner.__path__.append(source_planner_dir)
 
 from brain.BrainRequest import BrainRequest
+from brain.SessionSummary import SessionSummary
 from knowledge.Chunk import Chunk, ChunkType
 from knowledge.Document import DocumentType
 from knowledge.KnowledgeDocumentReference import KnowledgeDocumentReference
@@ -751,6 +752,14 @@ class ResponseComposerTests(unittest.TestCase):
         self.assertTrue(response.success)
         self.assertEqual(response.memory_count, 0)
         self.assertEqual(response.message.count("(active)"), 1)
+        self.assertEqual(
+            response.session_summaries,
+            [
+                SessionSummary("default", active=False, conversation_count=0),
+                SessionSummary("work-1", active=True, conversation_count=0),
+                SessionSummary("personal", active=False, conversation_count=0),
+            ],
+        )
 
     def test_session_overview_preserves_registry_order_and_formats_counts(self) -> None:
         sessions = [
@@ -778,6 +787,14 @@ class ResponseComposerTests(unittest.TestCase):
         self.assertEqual(response.memory_count, 9)
         self.assertEqual(response.request_id, self.request.request_id)
         self.assertEqual(response.message.count("[active]"), 1)
+        self.assertEqual(
+            response.session_summaries,
+            [
+                SessionSummary("default", active=False, conversation_count=0),
+                SessionSummary("work-1", active=True, conversation_count=1),
+                SessionSummary("research", active=False, conversation_count=8),
+            ],
+        )
 
     def test_session_overview_defaults_missing_counts_and_excludes_orphans(
         self,
@@ -812,6 +829,7 @@ class ResponseComposerTests(unittest.TestCase):
         self.assertTrue(response.success)
         self.assertEqual(response.memory_count, 0)
         self.assertEqual(response.request_id, self.request.request_id)
+        self.assertEqual(response.session_summaries, [])
 
     def test_session_overview_failure_preserves_the_given_message(self) -> None:
         response = self.composer.session_overview_failure(
