@@ -4,8 +4,9 @@
 
 Partially implemented: explicit public-HTTPS source acquisition, local
 knowledge indexing, and persistent research-run audit records are available.
-Source discovery, explicit evidence records, multi-source synthesis, evidence
-ranking, and contradiction detection remain planned.
+User-selected evidence records are also persistent. Source discovery,
+automatic evidence extraction, multi-source synthesis, evidence ranking, and
+contradiction detection remain planned.
 
 ## Purpose
 
@@ -31,6 +32,16 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
 - The audit snapshot does not duplicate downloaded page content. Knowledge
   chunks remain in memory and therefore are not reconstructed from a run after
   restart.
+- The user can select one currently indexed paragraph from a source attached
+  to the run and add a required note. The evidence record stores the source and
+  chunk IDs, paragraph position, at most 1,000 excerpt characters, whether the
+  excerpt was truncated, a SHA-256 fingerprint of the complete paragraph, and
+  its recording time. It does not infer whether the evidence proves a claim.
+- Stored evidence can be viewed after restart without live page content. New
+  evidence still requires its source paragraph to be loaded in the current
+  in-memory knowledge index.
+- Schema v2 reads v1 run snapshots as evidence-empty and upgrades them only on
+  a later successful atomic save.
 - If source indexing succeeds but the run snapshot cannot be saved, the newly
   indexed unlinked document is removed before a controlled failure is returned.
   Persistent failure reasons do not retain a rejected URL.
@@ -40,10 +51,11 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
 
 ## Next increment
 
-Add explicit evidence records and completion-state transitions, then define a
-replaceable source-discovery provider before synthesis. Discovery queries,
-candidate-source decisions, evidence-to-source links, and later summaries must
-remain auditable; no unattended crawling should be enabled at this boundary.
+Add explicit completion-state transitions, then define a replaceable
+source-discovery provider before synthesis. Discovery queries,
+candidate-source decisions, future claim/evidence links, and later summaries
+must remain auditable; no unattended crawling should be enabled at this
+boundary.
 
 ## Known boundary
 

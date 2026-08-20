@@ -156,6 +156,51 @@ class DesktopController:
             )
         )
 
+    def record_research_evidence(
+        self,
+        research_run_id: str,
+        chunk_id: str,
+        note: str,
+    ) -> BrainResponse:
+        """Record one explicit indexed paragraph as research evidence."""
+        normalized_run_id = research_run_id.strip()
+        normalized_chunk_id = chunk_id.strip()
+        normalized_note = note.strip()
+        if not normalized_run_id:
+            raise ValueError("A research run ID cannot be empty.")
+        if not normalized_chunk_id:
+            raise ValueError("A research chunk ID cannot be empty.")
+        if not normalized_note:
+            raise ValueError("A research evidence note cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="Record selected research evidence",
+                source="desktop",
+                metadata={
+                    "intent": "research_evidence_record",
+                    "research_run_id": normalized_run_id,
+                    "research_chunk_id": normalized_chunk_id,
+                    "research_evidence_note": normalized_note,
+                },
+            )
+        )
+
+    def list_research_evidence(self, research_run_id: str) -> BrainResponse:
+        """List persisted bounded evidence for one explicitly selected run."""
+        normalized_run_id = research_run_id.strip()
+        if not normalized_run_id:
+            raise ValueError("A research run ID cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="List selected research evidence",
+                source="desktop",
+                metadata={
+                    "intent": "research_evidence_list",
+                    "research_run_id": normalized_run_id,
+                },
+            )
+        )
+
     def load_research_source(
         self,
         url: str,

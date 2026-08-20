@@ -248,6 +248,58 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         self.assertEqual(controller.sources, [])
         self.assertEqual(responses, [controller.list_response])
 
+    def test_selected_chunk_and_note_are_passed_to_evidence_boundary(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchSourceLoadController()
+        responses: list[BrainResponse] = []
+        window._controller = controller
+        window._research_run_id = RecordingInput("run-123")
+        window._research_chunk_id = RecordingInput("chunk-456")
+        window._research_evidence_note = RecordingInput("Supports the comparison.")
+        window._status = RecordingStatus()
+        window._append_response = responses.append
+
+        window._record_research_evidence()
+
+        self.assertEqual(
+            controller.evidence_calls,
+            [("run-123", "chunk-456", "Supports the comparison.")],
+        )
+        self.assertEqual(responses, [controller.evidence_response])
+
+    def test_empty_evidence_note_stays_local_and_is_shown_as_status(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchSourceLoadController()
+        status = RecordingStatus()
+        window._controller = controller
+        window._research_run_id = RecordingInput("run-123")
+        window._research_chunk_id = RecordingInput("chunk-456")
+        window._research_evidence_note = RecordingInput(" ")
+        window._status = status
+        window._append_response = lambda _response: self.fail("must not append")
+
+        window._record_research_evidence()
+
+        self.assertEqual(controller.evidence_calls, [])
+        self.assertEqual(
+            status.values,
+            ["A research evidence note cannot be empty."],
+        )
+
+    def test_selected_run_evidence_catalog_is_requested_read_only(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchSourceLoadController()
+        responses: list[BrainResponse] = []
+        window._controller = controller
+        window._research_run_id = RecordingInput("run-123")
+        window._status = RecordingStatus()
+        window._append_response = responses.append
+
+        window._show_research_evidence()
+
+        self.assertEqual(controller.evidence_list_calls, ["run-123"])
+        self.assertEqual(responses, [controller.evidence_list_response])
+
 
 class RecordingKnowledgeLoadController:
     def __init__(self) -> None:
@@ -269,6 +321,8 @@ class RecordingResearchSourceLoadController:
         self.sources: list[tuple[str, str]] = []
         self.questions: list[str] = []
         self.list_calls = 0
+        self.evidence_calls: list[tuple[str, str, str]] = []
+        self.evidence_list_calls: list[str] = []
         self.response = BrainResponse(
             message="Loaded.",
             request_id="research-source-load",
@@ -299,6 +353,20 @@ class RecordingResearchSourceLoadController:
             memory_count=0,
             research_runs=[run],
         )
+        self.evidence_response = BrainResponse(
+            message="Evidence recorded.",
+            request_id="research-evidence-record",
+            intent="research_evidence_record",
+            memory_count=0,
+            research_runs=[run],
+        )
+        self.evidence_list_response = BrainResponse(
+            message="Evidence listed.",
+            request_id="research-evidence-list",
+            intent="research_evidence_list",
+            memory_count=0,
+            research_runs=[run],
+        )
 
     def load_research_source(
         self, url: str, research_run_id: str = ""
@@ -317,6 +385,27 @@ class RecordingResearchSourceLoadController:
     def list_research_runs(self) -> BrainResponse:
         self.list_calls += 1
         return self.list_response
+
+    def record_research_evidence(
+        self,
+        run_id: str,
+        chunk_id: str,
+        note: str,
+    ) -> BrainResponse:
+        if not run_id.strip():
+            raise ValueError("A research run ID cannot be empty.")
+        if not chunk_id.strip():
+            raise ValueError("A research chunk ID cannot be empty.")
+        if not note.strip():
+            raise ValueError("A research evidence note cannot be empty.")
+        self.evidence_calls.append((run_id, chunk_id, note))
+        return self.evidence_response
+
+    def list_research_evidence(self, run_id: str) -> BrainResponse:
+        if not run_id.strip():
+            raise ValueError("A research run ID cannot be empty.")
+        self.evidence_list_calls.append(run_id)
+        return self.evidence_list_response
 
 
 class RecordingInput:

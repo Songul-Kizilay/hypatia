@@ -65,6 +65,21 @@ class KnowledgeEngineTests(unittest.TestCase):
 
         self.assertEqual([chunk.content for chunk in results], ["Hypatia"])
 
+    def test_get_chunk_returns_only_the_explicit_indexed_chunk(self) -> None:
+        path = self._write_file("example.md", "Hello\n\nHypatia")
+        engine = KnowledgeEngine()
+        document = engine.load(path)
+        expected = engine.search("hypatia")[0]
+
+        selected = engine.get_chunk(f"  {expected.chunk_id}  ")
+
+        self.assertIs(selected, expected)
+        self.assertEqual(selected.document_id, document.document_id)
+        with self.assertRaisesRegex(KnowledgeError, "cannot be empty"):
+            engine.get_chunk("  ")
+        with self.assertRaisesRegex(KnowledgeError, "was not found"):
+            engine.get_chunk("missing-chunk")
+
     def test_clear_removes_documents_and_chunks(self) -> None:
         path = self._write_file("example.md", "Hello\n\nHypatia")
         engine = KnowledgeEngine()

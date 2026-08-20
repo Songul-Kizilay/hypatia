@@ -132,6 +132,8 @@ class TkinterDesktopWindow:
         self._research_question = tk.StringVar()
         self._research_run_id = tk.StringVar()
         self._research_url = tk.StringVar()
+        self._research_chunk_id = tk.StringVar()
+        self._research_evidence_note = tk.StringVar()
         self._relation_source_id = tk.StringVar()
         self._relation_target_id = tk.StringVar()
         self._session_summaries: list[SessionSummary] = []
@@ -370,6 +372,44 @@ class TkinterDesktopWindow:
             text="Load source",
             command=self._load_research_source,
         ).grid(row=2, column=3, sticky="ew", pady=(8, 0))
+        ttk.Label(research_frame, text="Chunk ID").grid(
+            row=3,
+            column=0,
+            sticky="w",
+            pady=(8, 0),
+        )
+        ttk.Entry(research_frame, textvariable=self._research_chunk_id).grid(
+            row=3,
+            column=1,
+            columnspan=3,
+            sticky="ew",
+            padx=(8, 0),
+            pady=(8, 0),
+        )
+        ttk.Label(research_frame, text="Evidence note").grid(
+            row=4,
+            column=0,
+            sticky="w",
+            pady=(8, 0),
+        )
+        ttk.Entry(research_frame, textvariable=self._research_evidence_note).grid(
+            row=4,
+            column=1,
+            columnspan=2,
+            sticky="ew",
+            padx=(8, 8),
+            pady=(8, 0),
+        )
+        ttk.Button(
+            research_frame,
+            text="Save evidence",
+            command=self._record_research_evidence,
+        ).grid(row=4, column=3, sticky="ew", pady=(8, 0))
+        ttk.Button(
+            research_frame,
+            text="View evidence",
+            command=self._show_research_evidence,
+        ).grid(row=5, column=3, sticky="ew", pady=(8, 0))
 
         relation_frame = ttk.LabelFrame(
             container,
@@ -604,6 +644,30 @@ class TkinterDesktopWindow:
     def _show_research_runs(self) -> None:
         """Render the current persisted run catalog without network access."""
         self._append_response(self._controller.list_research_runs())
+
+    def _record_research_evidence(self) -> None:
+        """Persist one user-selected indexed paragraph under the current run."""
+        try:
+            response = self._controller.record_research_evidence(
+                self._research_run_id.get(),
+                self._research_chunk_id.get(),
+                self._research_evidence_note.get(),
+            )
+        except ValueError as error:
+            self._status.set(str(error))
+            return
+        self._append_response(response)
+
+    def _show_research_evidence(self) -> None:
+        """Display persisted evidence for only the explicitly selected run."""
+        try:
+            response = self._controller.list_research_evidence(
+                self._research_run_id.get()
+            )
+        except ValueError as error:
+            self._status.set(str(error))
+            return
+        self._append_response(response)
 
     def _preview_and_link_knowledge_relation(self) -> None:
         try:

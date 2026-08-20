@@ -5932,6 +5932,184 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(fetcher.calls, [])
         self.assertEqual(self.knowledge_engine.documents(), documents_before)
 
+    def test_research_evidence_records_an_attached_chunk_without_side_effects(
+        self,
+    ) -> None:
+        store = ToggleResearchRunStore()
+        manager = ResearchRunManager(
+            store,
+            id_factory=lambda: "run-123",
+            evidence_id_factory=lambda: "evidence-123",
+        )
+        run = manager.create("Compare local models")
+        source = ResearchSource(
+            url="https://example.com/research",
+            title="Example research",
+            content="First finding.\n\nSecond finding.",
+            content_type="text/plain",
+            fetched_at=datetime(2026, 8, 20, 12, 30, tzinfo=UTC),
+        )
+        document = self.knowledge_engine.add_document(source.to_document())
+        manager.add_source(run.run_id, source, document.document_id)
+        chunk = self.knowledge_engine.search("second")[0]
+        llm_provider = RecordingLLMProvider("must not run")
+        extractor = RecordingCandidateExtractor()
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+            learned_memory_candidate_extractor=extractor,
+            research_run_manager=manager,
+        )
+        memory_count = self.memory_manager.count()
+        events: list[str] = []
+        self.event_bus.subscribe("*", lambda event: events.append(event.name))
+
+        response = engine.process(
+            BrainRequest(
+                message="Record selected research evidence",
+                metadata={
+                    "intent": "research_evidence_record",
+                    "research_run_id": run.run_id,
+                    "research_chunk_id": chunk.chunk_id,
+                    "research_evidence_note": "  Supports the comparison.  ",
+                },
+            )
+        )
+        listed = engine.process(
+            BrainRequest(
+                message="List selected research evidence",
+                metadata={
+                    "intent": "research_evidence_list",
+                    "research_run_id": run.run_id,
+                },
+            )
+        )
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "research_evidence_record")
+        self.assertEqual(response.memory_count, 0)
+        evidence = response.research_runs[0].evidence[0]
+        self.assertEqual(evidence.evidence_id, "evidence-123")
+        self.assertEqual(evidence.chunk_id, chunk.chunk_id)
+        self.assertEqual(evidence.source_document_id, document.document_id)
+        self.assertEqual(evidence.note, "Supports the comparison.")
+        self.assertTrue(listed.success)
+        self.assertEqual(listed.intent, "research_evidence_list")
+        self.assertEqual(listed.research_runs, response.research_runs)
+        self.assertIn("Second finding.", listed.message)
+        self.assertIn("paragraph: 2", listed.message)
+        self.assertEqual(store.runs, response.research_runs)
+        self.assertEqual(self.memory_manager.count(), memory_count)
+        self.assertEqual(llm_provider.calls, [])
+        self.assertEqual(extractor.calls, [])
+        self.assertEqual(events, [])
+
+    def test_research_evidence_rejects_missing_or_unattached_chunks_without_mutation(
+        self,
+    ) -> None:
+        store = ToggleResearchRunStore()
+        manager = ResearchRunManager(store, id_factory=lambda: "run-123")
+        run = manager.create("Compare local models")
+        other_document = self.knowledge_engine.add_document(
+            ResearchSource(
+                url="https://example.org/other",
+                title="Other source",
+                content="Other evidence.",
+                content_type="text/plain",
+                fetched_at=datetime(2026, 8, 20, 12, 30, tzinfo=UTC),
+            ).to_document()
+        )
+        other_chunk = self.knowledge_engine.search("other")[0]
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            research_run_manager=manager,
+        )
+        run_before = manager.get(run.run_id)
+        documents_before = self.knowledge_engine.documents()
+
+        for chunk_id, expected in (
+            ("missing-chunk", "chunk was not found"),
+            (other_chunk.chunk_id, "could not be saved"),
+        ):
+            with self.subTest(chunk_id=chunk_id):
+                response = engine.process(
+                    BrainRequest(
+                        message="Record selected research evidence",
+                        metadata={
+                            "intent": "research_evidence_record",
+                            "research_run_id": run.run_id,
+                            "research_chunk_id": chunk_id,
+                            "research_evidence_note": "Relevant.",
+                        },
+                    )
+                )
+
+                self.assertFalse(response.success)
+                self.assertIn(expected, response.message)
+
+        self.assertEqual(other_chunk.document_id, other_document.document_id)
+        self.assertEqual(manager.get(run.run_id), run_before)
+        self.assertEqual(self.knowledge_engine.documents(), documents_before)
+
+    def test_failed_research_evidence_save_does_not_publish_candidate(self) -> None:
+        store = ToggleResearchRunStore()
+        manager = ResearchRunManager(
+            store,
+            id_factory=lambda: "run-123",
+            evidence_id_factory=lambda: "evidence-123",
+        )
+        run = manager.create("Compare local models")
+        source = ResearchSource(
+            url="https://example.com/research",
+            title="Example research",
+            content="Evidence paragraph.",
+            content_type="text/plain",
+            fetched_at=datetime(2026, 8, 20, 12, 30, tzinfo=UTC),
+        )
+        document = self.knowledge_engine.add_document(source.to_document())
+        attached_run = manager.add_source(run.run_id, source, document.document_id)
+        chunk = self.knowledge_engine.search("evidence")[0]
+        store.fail_saves = True
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            research_run_manager=manager,
+        )
+
+        response = engine.process(
+            BrainRequest(
+                message="Record selected research evidence",
+                metadata={
+                    "intent": "research_evidence_record",
+                    "research_run_id": run.run_id,
+                    "research_chunk_id": chunk.chunk_id,
+                    "research_evidence_note": "Relevant.",
+                },
+            )
+        )
+
+        self.assertFalse(response.success)
+        self.assertEqual(response.message, "Research evidence could not be saved.")
+        self.assertEqual(manager.get(run.run_id), attached_run)
+        self.assertEqual(manager.get(run.run_id).evidence, ())
+
     def test_research_source_load_requires_explicit_url_and_fetcher(self) -> None:
         for metadata, expected in (
             ({"intent": "research_source_load"}, "URL is required"),

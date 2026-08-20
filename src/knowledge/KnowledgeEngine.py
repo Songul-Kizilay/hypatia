@@ -107,6 +107,12 @@ class KnowledgeEngine:
         """Return the derived structural graph for indexed search results."""
         return self._graph.view_for_chunks(chunks)
 
+    def get_chunk(self, chunk_id: str) -> Chunk:
+        """Return one explicitly identified indexed chunk without searching."""
+        if not isinstance(chunk_id, str) or not chunk_id.strip():
+            raise KnowledgeError("Knowledge chunk ID cannot be empty.")
+        return self._indexer.get(chunk_id.strip())
+
     def documents(self) -> list[KnowledgeDocumentReference]:
         """List loaded source documents in deterministic load order."""
         indexed_chunks = tuple(self._indexer.all().values())

@@ -14,6 +14,9 @@ indexed through Brain without background traffic or conversation-memory writes.
 The shell can also create/list persistent research runs and attach that source
 to a selected run ID while leaving page content in the existing in-memory
 knowledge boundary.
+For an attached source, `Save evidence` records one explicitly entered chunk ID
+and note; `View evidence` displays the persisted bounded excerpt and locator.
+Neither action extracts, ranks, or interprets evidence automatically.
 Its first Windows onedir package and local-data boundary are defined in ADR
 0002; broader MVP views remain planned.
 

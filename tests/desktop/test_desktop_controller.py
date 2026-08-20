@@ -283,6 +283,64 @@ class DesktopControllerTests(unittest.TestCase):
         self.assertEqual(request.source, "desktop")
         self.assertEqual(request.metadata, {"intent": "research_run_list"})
 
+    def test_record_research_evidence_uses_an_explicit_structured_request(self) -> None:
+        response = self.controller.record_research_evidence(
+            " run-123 ",
+            " chunk-456 ",
+            " This paragraph supports the comparison. ",
+        )
+
+        self.assertIs(response, self.response)
+        request = self.brain.requests[0]
+        self.assertIsInstance(request, BrainRequest)
+        assert isinstance(request, BrainRequest)
+        self.assertEqual(request.message, "Record selected research evidence")
+        self.assertEqual(request.source, "desktop")
+        self.assertEqual(
+            request.metadata,
+            {
+                "intent": "research_evidence_record",
+                "research_run_id": "run-123",
+                "research_chunk_id": "chunk-456",
+                "research_evidence_note": ("This paragraph supports the comparison."),
+            },
+        )
+
+    def test_record_research_evidence_rejects_empty_fields_locally(self) -> None:
+        for run_id, chunk_id, note in (
+            ("", "chunk-1", "Note"),
+            ("run-1", " ", "Note"),
+            ("run-1", "chunk-1", "\t"),
+        ):
+            with self.subTest(values=(run_id, chunk_id, note)):
+                with self.assertRaisesRegex(ValueError, "cannot be empty"):
+                    self.controller.record_research_evidence(run_id, chunk_id, note)
+
+        self.assertEqual(self.brain.requests, [])
+
+    def test_list_research_evidence_uses_a_structured_read_only_request(self) -> None:
+        response = self.controller.list_research_evidence(" run-123 ")
+
+        self.assertIs(response, self.response)
+        request = self.brain.requests[0]
+        self.assertIsInstance(request, BrainRequest)
+        assert isinstance(request, BrainRequest)
+        self.assertEqual(request.message, "List selected research evidence")
+        self.assertEqual(request.source, "desktop")
+        self.assertEqual(
+            request.metadata,
+            {
+                "intent": "research_evidence_list",
+                "research_run_id": "run-123",
+            },
+        )
+
+    def test_list_research_evidence_rejects_empty_run_id_locally(self) -> None:
+        with self.assertRaisesRegex(ValueError, "cannot be empty"):
+            self.controller.list_research_evidence(" \t ")
+
+        self.assertEqual(self.brain.requests, [])
+
     def test_load_research_source_can_attach_to_an_explicit_run(self) -> None:
         response = self.controller.load_research_source(
             " https://example.com/research ",

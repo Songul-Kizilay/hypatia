@@ -2,6 +2,27 @@
 
 All notable project changes are recorded here.
 
+## [0.3.34] - 2026-08-20
+
+### Added
+
+- A user can explicitly select an indexed paragraph from a source already
+  attached to a research run and persist it as evidence with a bounded note,
+  source/chunk locator, paragraph index, up-to-1,000-character excerpt,
+  truncation marker, and SHA-256 fingerprint of the complete paragraph.
+- The desktop exposes separate `Save evidence` and read-only `View evidence`
+  actions. Evidence recording/listing remains inside the Brain boundary and
+  does not call an LLM, write conversation memory, or infer a claim.
+- Research-run JSON schema v2 persists evidence and loads v1 snapshots with an
+  empty evidence collection, rewriting them as v2 only on the next successful
+  save.
+
+### Verification
+
+- The package-aware full local suite contains 1,034 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass with the documented
+  project virtual environment.
+
 ## [0.3.33] - 2026-08-20
 
 ### Added
