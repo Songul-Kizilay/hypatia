@@ -83,6 +83,11 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
   explicit Brain/desktop request reports only ready or unavailable state plus
   restored document and paragraph counts. It does not reread persistence,
   fetch content, invoke an LLM, mutate runtime state, or expose record details.
+- A separately requested evidence integrity audit accepts at most 20,000 runs,
+  persisted evidence records, and indexed in-memory paragraphs.
+  Matching requires document, paragraph position, opaque ID, and complete text
+  fingerprint agreement. Missing and changed states are aggregate counts only;
+  no content, record identifier, path, hash, or repair action is exposed.
 - The user can select one currently indexed paragraph from a source attached
   to the run and add a required note. The evidence record stores the source and
   chunk IDs, paragraph position, at most 1,000 excerpt characters, whether the
@@ -163,10 +168,10 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
 
 ## Next increment
 
-Add a bounded read-only evidence/restored-content integrity audit. Report only
-matched, missing, or changed aggregate counts without rewriting legacy
-evidence, repairing content, accessing the network, or weakening startup
-validation.
+Define explicit collection and physical-file bounds for the research-run JSON
+snapshot. Reject oversized reads before unbounded JSON parsing and oversized
+writes before publication without changing schema v6 or weakening atomic
+replacement and legacy compatibility.
 
 ## Known boundary
 

@@ -15,6 +15,7 @@ from knowledge.KnowledgeRelationRevocation import KnowledgeRelationRevocation
 from knowledge.KnowledgeRelationRevocationPreview import (
     KnowledgeRelationRevocationPreview,
 )
+from research.ResearchEvidenceIntegrityStatus import ResearchEvidenceIntegrityStatus
 from research.ResearchRun import ResearchRun
 from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
@@ -86,5 +87,6 @@ class BrainResponse:
     research_source_content_restoration_status: (
         ResearchSourceContentRestorationStatus | None
     ) = None
+    research_evidence_integrity_status: ResearchEvidenceIntegrityStatus | None = None
     session_summaries: list[SessionSummary] = field(default_factory=list)
     session_delete_allowed: bool | None = None

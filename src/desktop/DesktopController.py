@@ -701,6 +701,10 @@ class DesktopController:
         """Request the captured accepted-content startup restoration status."""
         return self._brain.process("research content status")
 
+    def research_evidence_status(self) -> BrainResponse:
+        """Request the read-only evidence-to-restored-content integrity audit."""
+        return self._brain.process("research evidence status")
+
     def _selected_session_command(
         self,
         command: str,

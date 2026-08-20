@@ -49,6 +49,7 @@ from research.JsonFileResearchRunStore import JsonFileResearchRunStore
 from research.JsonFileResearchSourceContentStore import (
     JsonFileResearchSourceContentStore,
 )
+from research.ResearchEvidenceIntegrityAuditor import ResearchEvidenceIntegrityAuditor
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchSourceContentRestorer import ResearchSourceContentRestorer
 from research.ResearchSourceDiscoveryProvider import ResearchSourceDiscoveryProvider
@@ -309,6 +310,9 @@ class Bootstrap:
         research_source_content_restoration_status = (
             research_source_content_restorer.restore(research_run_manager.list())
         )
+        research_evidence_integrity_auditor = ResearchEvidenceIntegrityAuditor(
+            knowledge_engine
+        )
         research_source_fetcher = (
             self._research_source_fetcher or HttpResearchSourceFetcher()
         )
@@ -347,6 +351,7 @@ class Bootstrap:
             research_source_content_restoration_status=(
                 research_source_content_restoration_status
             ),
+            research_evidence_integrity_auditor=(research_evidence_integrity_auditor),
         )
         brain = Brain(cognitive_engine, memory_manager, event_bus)
 
@@ -367,6 +372,7 @@ class Bootstrap:
         container.register(research_source_content_store)
         container.register(research_source_content_restorer)
         container.register(research_source_content_restoration_status)
+        container.register(research_evidence_integrity_auditor)
         container.register(research_source_fetcher)
         if self._research_source_discovery_provider is not None:
             container.register(self._research_source_discovery_provider)

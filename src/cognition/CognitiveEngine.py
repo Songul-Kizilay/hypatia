@@ -49,6 +49,8 @@ from memory.NoOpLearnedMemoryCandidateExtractor import (
 from memory.SemanticMemoryIndexRuntime import SemanticMemoryIndexRuntime
 from memory.SemanticMemoryMatch import SemanticMemoryMatch
 from memory.SessionMemoryPolicy import SessionMemoryPolicy
+from research.ResearchEvidenceIntegrityAuditor import ResearchEvidenceIntegrityAuditor
+from research.ResearchEvidenceIntegrityStatus import ResearchEvidenceIntegrityStatus
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSourceCandidate import ResearchSourceCandidate
@@ -105,6 +107,9 @@ class CognitiveEngine:
         research_source_content_restoration_status: (
             ResearchSourceContentRestorationStatus | None
         ) = None,
+        research_evidence_integrity_auditor: (
+            ResearchEvidenceIntegrityAuditor | None
+        ) = None,
     ) -> None:
         if llm_history_max_turns is not None and (
             isinstance(llm_history_max_turns, bool) or llm_history_max_turns <= 0
@@ -150,6 +155,7 @@ class CognitiveEngine:
         self._research_source_content_restoration_status = (
             research_source_content_restoration_status
         )
+        self._research_evidence_integrity_auditor = research_evidence_integrity_auditor
         self._hybrid_semantic_memory_ranker = HybridSemanticMemoryRanker()
         self._router = BrainRouter()
 
@@ -243,6 +249,9 @@ class CognitiveEngine:
 
         if self._is_research_source_content_restoration_status_request(request):
             return self._process_research_source_content_restoration_status(request)
+
+        if self._is_research_evidence_integrity_status_request(request):
+            return self._process_research_evidence_integrity_status(request)
 
         if self._is_knowledge_load_request(request):
             return self._process_knowledge_load(request)
@@ -528,6 +537,37 @@ class CognitiveEngine:
         if status is None:
             status = ResearchSourceContentRestorationStatus.unavailable()
         return self._response_composer.research_source_content_restoration_status(
+            request,
+            status,
+        )
+
+    @staticmethod
+    def _is_research_evidence_integrity_status_request(
+        request: BrainRequest,
+    ) -> bool:
+        """Recognize the bounded read-only evidence integrity audit."""
+        return (
+            request.metadata.get("intent") == "research_evidence_integrity_status"
+            or request.message.casefold().strip() == "research evidence status"
+        )
+
+    def _process_research_evidence_integrity_status(
+        self,
+        request: BrainRequest,
+    ) -> BrainResponse:
+        """Audit in-memory runs and chunks without persistence or mutation."""
+        status = ResearchEvidenceIntegrityStatus.unavailable()
+        if (
+            self._research_run_manager is not None
+            and self._research_evidence_integrity_auditor is not None
+        ):
+            try:
+                status = self._research_evidence_integrity_auditor.audit(
+                    self._research_run_manager.list()
+                )
+            except ResearchError:
+                pass
+        return self._response_composer.research_evidence_integrity_status(
             request,
             status,
         )

@@ -27,6 +27,7 @@ from research.JsonFileResearchRunStore import JsonFileResearchRunStore
 from research.JsonFileResearchSourceContentStore import (
     JsonFileResearchSourceContentStore,
 )
+from research.ResearchEvidenceIntegrityAuditor import ResearchEvidenceIntegrityAuditor
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchSource import ResearchSource
 from research.ResearchSourceCandidate import ResearchSourceCandidate
@@ -306,6 +307,12 @@ class BootstrapTests(unittest.TestCase):
         store = bootstrap.container.resolve(JsonFileResearchSourceContentStore)
         restorer = bootstrap.container.resolve(ResearchSourceContentRestorer)
         status = bootstrap.container.resolve(ResearchSourceContentRestorationStatus)
+        integrity_auditor = bootstrap.container.resolve(
+            ResearchEvidenceIntegrityAuditor
+        )
+        integrity_response = bootstrap.container.resolve(Brain).process(
+            "research evidence status"
+        )
 
         self.assertEqual(store._path, self.research_source_content_path)
         self.assertEqual(store.load(), [])
@@ -313,6 +320,14 @@ class BootstrapTests(unittest.TestCase):
         self.assertTrue(status.available)
         self.assertEqual(status.restored_document_count, 0)
         self.assertEqual(status.restored_paragraph_count, 0)
+        self.assertIsInstance(integrity_auditor, ResearchEvidenceIntegrityAuditor)
+        self.assertIsNotNone(integrity_response.research_evidence_integrity_status)
+        assert integrity_response.research_evidence_integrity_status is not None
+        self.assertTrue(integrity_response.research_evidence_integrity_status.available)
+        self.assertEqual(
+            integrity_response.research_evidence_integrity_status.recorded_evidence_count,
+            0,
+        )
 
     def test_bootstrap_rejects_orphaned_research_content(self) -> None:
         source = ResearchSource(
@@ -558,6 +573,9 @@ class BootstrapTests(unittest.TestCase):
         restored_chunk = restarted.container.resolve(KnowledgeEngine).get_chunk(
             chunk.chunk_id
         )
+        integrity_response = restarted.container.resolve(Brain).process(
+            "research evidence status"
+        )
         listed = restarted.container.resolve(Brain).process(
             BrainRequest(
                 message="List internet research runs",
@@ -592,6 +610,14 @@ class BootstrapTests(unittest.TestCase):
             recorded.research_runs[0].evidence[0].chunk_id,
             restored_chunk.chunk_id,
         )
+        integrity_status = integrity_response.research_evidence_integrity_status
+        self.assertIsNotNone(integrity_status)
+        assert integrity_status is not None
+        self.assertTrue(integrity_status.available)
+        self.assertEqual(integrity_status.recorded_evidence_count, 1)
+        self.assertEqual(integrity_status.matched_evidence_count, 1)
+        self.assertEqual(integrity_status.missing_evidence_count, 0)
+        self.assertEqual(integrity_status.changed_evidence_count, 0)
         self.assertTrue(assessment_preview.success)
         self.assertTrue(assessment_recorded.success)
         self.assertTrue(correction_preview.success)

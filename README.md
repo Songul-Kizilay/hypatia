@@ -100,7 +100,9 @@ To create the world's most capable personal AI research companion.
   restored document/paragraph counts; it does not reread persistence. Accepted
   paragraphs use the same opaque content-bound identity during initial indexing
   and startup restoration so newly recorded evidence retains its locator across
-  restarts
+  restarts. The explicit `Evidence integrity` action compares recorded evidence
+  with the current accepted paragraphs and reports only aggregate matched,
+  missing, or changed counts without reading or writing persistence
 - A read-only discovered-candidate acceptance preview followed by separate
   confirmation and final revalidation through the existing guarded HTTPS
   source loader

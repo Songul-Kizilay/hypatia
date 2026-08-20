@@ -168,6 +168,10 @@ paths, hashes, source metadata, record IDs, or internal validation errors.
 Accepted-source paragraphs use a versioned identity bound to document ID,
 position, and exact text during both initial indexing and startup restoration.
 The desktop does not calculate or persist this identity itself.
+`Evidence integrity` separately reports only aggregate recorded, matched,
+missing, and changed counts from an in-memory bounded audit. It does not display
+evidence IDs, source IDs, content, paths, hashes, or internal errors and does not
+repair either the run snapshot or accepted content.
 `Find sources` separately sends the selected collecting run's persisted
 question to the fixed Crossref REST v1 metadata endpoint and displays at most
 five ordered DOI candidates. The endpoint and its same-origin redirects use

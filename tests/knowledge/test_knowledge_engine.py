@@ -80,6 +80,20 @@ class KnowledgeEngineTests(unittest.TestCase):
         with self.assertRaisesRegex(KnowledgeError, "was not found"):
             engine.get_chunk("missing-chunk")
 
+    def test_chunks_returns_an_ordered_snapshot_without_exposing_the_index_list(
+        self,
+    ) -> None:
+        engine = KnowledgeEngine()
+        engine.add_document(Document(title="Example", content="First\n\nSecond"))
+
+        snapshot = engine.chunks()
+        snapshot.clear()
+
+        self.assertEqual(
+            [chunk.content for chunk in engine.chunks()],
+            ["First", "Second"],
+        )
+
     def test_clear_removes_documents_and_chunks(self) -> None:
         path = self._write_file("example.md", "Hello\n\nHypatia")
         engine = KnowledgeEngine()
