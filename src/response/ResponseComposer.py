@@ -32,6 +32,9 @@ from research.ResearchSourceAssessmentWritePreview import (
 from research.ResearchSourceCandidateAcceptancePreview import (
     ResearchSourceCandidateAcceptancePreview,
 )
+from research.ResearchSourceComparisonNoteWritePreview import (
+    ResearchSourceComparisonNoteWritePreview,
+)
 from research.ResearchSourceComparisonPreview import ResearchSourceComparisonPreview
 from session.SessionDeleteExecutionResult import SessionDeleteExecutionResult
 from session.SessionDeletePolicy import SessionDeleteStatus
@@ -685,6 +688,7 @@ class ResponseComposer:
                     f"Discoveries: {len(run.discoveries)}",
                     f"Evidence: {len(run.evidence)}",
                     f"Assessments: {len(run.assessments)}",
+                    f"Comparison notes: {len(run.comparison_notes)}",
                     f"Failures: {len(run.failures)}",
                     f"ID: {run.run_id}",
                 ]
@@ -713,6 +717,7 @@ class ResponseComposer:
                     f"discoveries: {len(run.discoveries)} | "
                     f"evidence: {len(run.evidence)} | "
                     f"assessments: {len(run.assessments)} | "
+                    f"comparison notes: {len(run.comparison_notes)} | "
                     f"failures: {len(run.failures)} | "
                     f"id: {run.run_id}"
                 )
@@ -949,6 +954,21 @@ class ResponseComposer:
                     ]
                 )
         lines.append(
+            "Authored comparison notes: showing "
+            f"{len(preview.comparison_notes)} of "
+            f"{preview.total_comparison_note_count}"
+        )
+        for note in preview.comparison_notes:
+            lines.extend(
+                [
+                    f"- Note: {note.note_id}",
+                    f"  evidence IDs: {', '.join(note.evidence_ids)}",
+                    f"  assessment IDs: {', '.join(note.assessment_ids)}",
+                    f"  text: {note.text}",
+                    f"  recorded: {note.recorded_at.isoformat()}",
+                ]
+            )
+        lines.append(
             "Status: manual side-by-side preview only; no verdict, trust score, "
             "or automatic evidence selection"
         )
@@ -970,6 +990,94 @@ class ResponseComposer:
             message=message,
             request_id=request.request_id,
             intent="research_source_comparison_preview",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_source_comparison_note_write_preview_success(
+        self,
+        request: BrainRequest,
+        preview: ResearchSourceComparisonNoteWritePreview,
+    ) -> BrainResponse:
+        """Render exact authored text and persisted references before consent."""
+        comparison = preview.comparison
+        lines = [
+            "Research comparison note write preview:",
+            f"Run: {comparison.run_id}",
+            f"Run status: {comparison.run_status.value}",
+            f"Question: {comparison.question}",
+            "Selected source IDs: "
+            + ", ".join(item.source.document_id for item in comparison.sources),
+            f"Authored note: {preview.text}",
+            "Explicit evidence:",
+        ]
+        lines.extend(
+            (
+                f"- {record.evidence_id} | source: "
+                f"{record.source_document_id} | note: {record.note}"
+            )
+            for record in preview.evidence
+        )
+        lines.append("Current assessments:")
+        lines.extend(
+            (
+                f"- {record.assessment_id} | source: "
+                f"{record.source_document_id} | text: {record.text}"
+            )
+            for record in preview.assessments
+        )
+        lines.extend(
+            [
+                f"Allowed: {'yes' if preview.allowed else 'no'}",
+                f"Reason: {preview.reason}",
+                "Status: user-authored text and explicit persisted references only; "
+                "no verdict, score, or automatic evidence selection",
+            ]
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_source_comparison_note_write_preview",
+            memory_count=0,
+            success=preview.allowed,
+            research_source_comparison_note_write_preview=preview,
+        )
+
+    def research_source_comparison_note_record_success(
+        self,
+        request: BrainRequest,
+        run: ResearchRun,
+    ) -> BrainResponse:
+        """Report one comparison note only after its snapshot commits."""
+        note = run.comparison_notes[-1]
+        return BrainResponse(
+            message=(
+                "Research comparison note recorded:\n"
+                f"ID: {note.note_id}\n"
+                f"Source document IDs: {', '.join(note.source_document_ids)}\n"
+                f"Evidence IDs: {', '.join(note.evidence_ids)}\n"
+                f"Assessment IDs: {', '.join(note.assessment_ids)}\n"
+                f"Authored note: {note.text}\n"
+                "Status: committed user-authored note; no generated verdict or score"
+            ),
+            request_id=request.request_id,
+            intent="research_source_comparison_note_record",
+            memory_count=0,
+            research_runs=[run],
+        )
+
+    def research_source_comparison_note_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+        *,
+        intent: str,
+    ) -> BrainResponse:
+        """Report invalid comparison-note preview or record input safely."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent=intent,
             memory_count=0,
             success=False,
         )

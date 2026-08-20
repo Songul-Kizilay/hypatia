@@ -16,6 +16,9 @@ from research.ResearchRun import ResearchRun
 from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
 from research.ResearchSourceCandidate import ResearchSourceCandidate
+from research.ResearchSourceComparisonNoteRecord import (
+    ResearchSourceComparisonNoteRecord,
+)
 from research.ResearchSourceDiscoveryRecord import ResearchSourceDiscoveryRecord
 from research.ResearchSourceRecord import ResearchSourceRecord
 
@@ -23,8 +26,8 @@ from research.ResearchSourceRecord import ResearchSourceRecord
 class JsonFileResearchRunStore:
     """Load and atomically replace a strict versioned research-run document."""
 
-    _SCHEMA_VERSION = 5
-    _SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5}
+    _SCHEMA_VERSION = 6
+    _SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5, 6}
     _DOCUMENT_FIELDS = {"schema_version", "runs"}
     _RUN_FIELDS_V1 = {
         "run_id",
@@ -39,6 +42,7 @@ class JsonFileResearchRunStore:
     _RUN_FIELDS_V3 = _RUN_FIELDS_V2 | {"discoveries"}
     _RUN_FIELDS_V4 = _RUN_FIELDS_V3 | {"assessments"}
     _RUN_FIELDS_V5 = _RUN_FIELDS_V4
+    _RUN_FIELDS_V6 = _RUN_FIELDS_V5 | {"comparison_notes"}
     _SOURCE_FIELDS = {
         "document_id",
         "url",
@@ -75,6 +79,14 @@ class JsonFileResearchRunStore:
         "recorded_at",
     }
     _ASSESSMENT_FIELDS_V5 = _ASSESSMENT_FIELDS_V4 | {"supersedes_assessment_id"}
+    _COMPARISON_NOTE_FIELDS = {
+        "note_id",
+        "source_document_ids",
+        "evidence_ids",
+        "assessment_ids",
+        "text",
+        "recorded_at",
+    }
 
     def __init__(self, path: Path) -> None:
         self._path = path
@@ -153,6 +165,7 @@ class JsonFileResearchRunStore:
             3: self._RUN_FIELDS_V3,
             4: self._RUN_FIELDS_V4,
             5: self._RUN_FIELDS_V5,
+            6: self._RUN_FIELDS_V6,
         }[schema_version]
         if not isinstance(value, dict) or set(value) != expected_fields:
             raise ResearchError("Research run store contains an invalid run record.")
@@ -167,12 +180,14 @@ class JsonFileResearchRunStore:
         evidence_data = [] if schema_version == 1 else value["evidence"]
         discoveries_data = [] if schema_version < 3 else value["discoveries"]
         assessments_data = [] if schema_version < 4 else value["assessments"]
+        comparison_notes_data = [] if schema_version < 6 else value["comparison_notes"]
         if (
             not isinstance(sources_data, list)
             or not isinstance(failures_data, list)
             or not isinstance(evidence_data, list)
             or not isinstance(discoveries_data, list)
             or not isinstance(assessments_data, list)
+            or not isinstance(comparison_notes_data, list)
         ):
             raise ResearchError("Research run store contains invalid run collections.")
         return ResearchRun(
@@ -188,6 +203,9 @@ class JsonFileResearchRunStore:
             assessments=tuple(
                 self._parse_assessment(item, schema_version)
                 for item in assessments_data
+            ),
+            comparison_notes=tuple(
+                self._parse_comparison_note(item) for item in comparison_notes_data
             ),
         )
 
@@ -297,6 +315,33 @@ class JsonFileResearchRunStore:
             ),
         )
 
+    def _parse_comparison_note(
+        self,
+        value: Any,
+    ) -> ResearchSourceComparisonNoteRecord:
+        if not isinstance(value, dict) or set(value) != self._COMPARISON_NOTE_FIELDS:
+            raise ResearchError(
+                "Research run store contains an invalid comparison note."
+            )
+        source_document_ids = value["source_document_ids"]
+        evidence_ids = value["evidence_ids"]
+        assessment_ids = value["assessment_ids"]
+        if not all(
+            isinstance(values, list)
+            for values in (source_document_ids, evidence_ids, assessment_ids)
+        ):
+            raise ResearchError(
+                "Research run store comparison note references must be lists."
+            )
+        return ResearchSourceComparisonNoteRecord(
+            note_id=value["note_id"],
+            source_document_ids=tuple(source_document_ids),
+            evidence_ids=tuple(evidence_ids),
+            assessment_ids=tuple(assessment_ids),
+            text=value["text"],
+            recorded_at=self._parse_datetime(value["recorded_at"], "recorded_at"),
+        )
+
     def _parse_datetime(self, value: Any, field_name: str) -> datetime:
         if not isinstance(value, str):
             raise ResearchError(
@@ -381,6 +426,17 @@ class JsonFileResearchRunStore:
                 }
                 for assessment in run.assessments
             ],
+            "comparison_notes": [
+                {
+                    "note_id": note.note_id,
+                    "source_document_ids": list(note.source_document_ids),
+                    "evidence_ids": list(note.evidence_ids),
+                    "assessment_ids": list(note.assessment_ids),
+                    "text": note.text,
+                    "recorded_at": note.recorded_at.isoformat(),
+                }
+                for note in run.comparison_notes
+            ],
             "created_at": run.created_at.isoformat(),
             "updated_at": run.updated_at.isoformat(),
         }
@@ -397,6 +453,11 @@ class JsonFileResearchRunStore:
         ]
         if len(assessment_ids) != len(set(assessment_ids)):
             raise ResearchError("Research run store contains duplicate assessment IDs.")
+        note_ids = [note.note_id for run in runs for note in run.comparison_notes]
+        if len(note_ids) != len(set(note_ids)):
+            raise ResearchError(
+                "Research run store contains duplicate comparison note IDs."
+            )
 
     @staticmethod
     def _remove_temporary_file(path: Path | None) -> None:

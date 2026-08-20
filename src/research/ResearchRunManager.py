@@ -35,7 +35,17 @@ from research.ResearchSourceComparisonItem import (
     MAX_COMPARISON_EVIDENCE_PER_SOURCE,
     ResearchSourceComparisonItem,
 )
+from research.ResearchSourceComparisonNoteRecord import (
+    MAX_COMPARISON_NOTE_ASSESSMENTS,
+    MAX_COMPARISON_NOTE_CHARACTERS,
+    MAX_COMPARISON_NOTE_EVIDENCE,
+    ResearchSourceComparisonNoteRecord,
+)
+from research.ResearchSourceComparisonNoteWritePreview import (
+    ResearchSourceComparisonNoteWritePreview,
+)
 from research.ResearchSourceComparisonPreview import (
+    MAX_COMPARISON_NOTES,
     MAX_COMPARISON_SOURCES,
     MIN_COMPARISON_SOURCES,
     ResearchSourceComparisonPreview,
@@ -56,6 +66,7 @@ class ResearchRunManager:
         evidence_id_factory: Callable[[], str] | None = None,
         discovery_id_factory: Callable[[], str] | None = None,
         assessment_id_factory: Callable[[], str] | None = None,
+        comparison_note_id_factory: Callable[[], str] | None = None,
     ) -> None:
         self._store = store
         self._clock = clock or (lambda: datetime.now(UTC))
@@ -63,6 +74,9 @@ class ResearchRunManager:
         self._evidence_id_factory = evidence_id_factory or (lambda: str(uuid4()))
         self._discovery_id_factory = discovery_id_factory or (lambda: str(uuid4()))
         self._assessment_id_factory = assessment_id_factory or (lambda: str(uuid4()))
+        self._comparison_note_id_factory = comparison_note_id_factory or (
+            lambda: str(uuid4())
+        )
         self._runs: tuple[ResearchRun, ...] = ()
         self._lock = RLock()
 
@@ -89,6 +103,7 @@ class ResearchRunManager:
                 updated_at=now,
                 discoveries=(),
                 assessments=(),
+                comparison_notes=(),
             )
             candidate = (*self._runs, run)
             self._persist(candidate)
@@ -154,6 +169,7 @@ class ResearchRunManager:
                 evidence=run.evidence,
                 discoveries=run.discoveries,
                 assessments=run.assessments,
+                comparison_notes=run.comparison_notes,
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -183,6 +199,7 @@ class ResearchRunManager:
                 evidence=run.evidence,
                 discoveries=run.discoveries,
                 assessments=run.assessments,
+                comparison_notes=run.comparison_notes,
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -224,6 +241,7 @@ class ResearchRunManager:
                 evidence=(*run.evidence, evidence),
                 discoveries=run.discoveries,
                 assessments=run.assessments,
+                comparison_notes=run.comparison_notes,
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -279,6 +297,7 @@ class ResearchRunManager:
                 evidence=run.evidence,
                 discoveries=(*run.discoveries, discovery),
                 assessments=run.assessments,
+                comparison_notes=run.comparison_notes,
             )
             candidate_runs = list(self._runs)
             candidate_runs[index] = updated
@@ -429,6 +448,11 @@ class ResearchRunManager:
                 )
                 for document_id in normalized_document_ids
             )
+            matching_notes = tuple(
+                note
+                for note in run.comparison_notes
+                if note.source_document_ids == normalized_document_ids
+            )
             return ResearchSourceComparisonPreview(
                 run_id=run.run_id,
                 question=run.question,
@@ -437,6 +461,11 @@ class ResearchRunManager:
                 reason=(
                     f"{len(items)} explicitly selected accepted sources are shown "
                     "side by side for manual review."
+                ),
+                comparison_notes=matching_notes[:MAX_COMPARISON_NOTES],
+                omitted_comparison_note_count=max(
+                    0,
+                    len(matching_notes) - MAX_COMPARISON_NOTES,
                 ),
             )
 
@@ -584,6 +613,111 @@ class ResearchRunManager:
                 evidence=run.evidence,
                 discoveries=run.discoveries,
                 assessments=(*run.assessments, assessment),
+                comparison_notes=run.comparison_notes,
+            )
+            candidate = list(self._runs)
+            candidate[index] = updated
+            candidate_tuple = tuple(candidate)
+            self._persist(candidate_tuple)
+            self._runs = candidate_tuple
+        return updated
+
+    def preview_source_comparison_note_write(
+        self,
+        run_id: str,
+        document_ids: Sequence[str],
+        evidence_ids: Sequence[str],
+        assessment_ids: Sequence[str],
+        text: str,
+    ) -> ResearchSourceComparisonNoteWritePreview:
+        """Validate exact authored comparison references without mutation."""
+        normalized_run_id = self._normalize_run_id(run_id)
+        normalized_document_ids = self._normalize_comparison_document_ids(document_ids)
+        normalized_evidence_ids = self._normalize_comparison_note_evidence_ids(
+            evidence_ids
+        )
+        normalized_assessment_ids = self._normalize_comparison_note_assessment_ids(
+            assessment_ids
+        )
+        normalized_text = self._normalize_comparison_note_text(text)
+        with self._lock:
+            _, run = self._find_with_index(normalized_run_id)
+            comparison = self.preview_source_comparison(
+                normalized_run_id,
+                normalized_document_ids,
+            )
+            evidence, assessments = self._comparison_note_references(
+                run,
+                normalized_document_ids,
+                normalized_evidence_ids,
+                normalized_assessment_ids,
+            )
+            allowed = not run.status.terminal
+            return ResearchSourceComparisonNoteWritePreview(
+                comparison=comparison,
+                evidence=evidence,
+                assessments=assessments,
+                text=normalized_text,
+                allowed=allowed,
+                reason=(
+                    "Research comparison note can be recorded after confirmation."
+                    if allowed
+                    else "A closed research run cannot accept comparison notes."
+                ),
+            )
+
+    def record_source_comparison_note(
+        self,
+        run_id: str,
+        document_ids: Sequence[str],
+        evidence_ids: Sequence[str],
+        assessment_ids: Sequence[str],
+        text: str,
+    ) -> ResearchRun:
+        """Revalidate and atomically append one authored comparison note."""
+        normalized_run_id = self._normalize_run_id(run_id)
+        normalized_document_ids = self._normalize_comparison_document_ids(document_ids)
+        normalized_evidence_ids = self._normalize_comparison_note_evidence_ids(
+            evidence_ids
+        )
+        normalized_assessment_ids = self._normalize_comparison_note_assessment_ids(
+            assessment_ids
+        )
+        normalized_text = self._normalize_comparison_note_text(text)
+        with self._lock:
+            index, run = self._find_with_index(normalized_run_id)
+            self.preview_source_comparison(
+                normalized_run_id,
+                normalized_document_ids,
+            )
+            evidence, assessments = self._comparison_note_references(
+                run,
+                normalized_document_ids,
+                normalized_evidence_ids,
+                normalized_assessment_ids,
+            )
+            self._require_collecting(run)
+            now = self._now()
+            note = ResearchSourceComparisonNoteRecord(
+                note_id=self._new_comparison_note_id(),
+                source_document_ids=normalized_document_ids,
+                evidence_ids=tuple(record.evidence_id for record in evidence),
+                assessment_ids=tuple(record.assessment_id for record in assessments),
+                text=normalized_text,
+                recorded_at=now,
+            )
+            updated = ResearchRun(
+                run_id=run.run_id,
+                question=run.question,
+                status=run.status,
+                sources=run.sources,
+                failures=run.failures,
+                created_at=run.created_at,
+                updated_at=now,
+                evidence=run.evidence,
+                discoveries=run.discoveries,
+                assessments=run.assessments,
+                comparison_notes=(*run.comparison_notes, note),
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -618,6 +752,7 @@ class ResearchRunManager:
                 evidence=run.evidence,
                 discoveries=run.discoveries,
                 assessments=run.assessments,
+                comparison_notes=run.comparison_notes,
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -735,6 +870,65 @@ class ResearchRunManager:
         ):
             raise ResearchError("Research source assessment ID already exists.")
         return assessment_id
+
+    def _new_comparison_note_id(self) -> str:
+        note_id = self._normalize_comparison_note_id(self._comparison_note_id_factory())
+        if any(
+            record.note_id == note_id
+            for run in self._runs
+            for record in run.comparison_notes
+        ):
+            raise ResearchError("Research comparison note ID already exists.")
+        return note_id
+
+    @staticmethod
+    def _comparison_note_references(
+        run: ResearchRun,
+        document_ids: tuple[str, ...],
+        evidence_ids: tuple[str, ...],
+        assessment_ids: tuple[str, ...],
+    ) -> tuple[
+        tuple[ResearchEvidenceRecord, ...],
+        tuple[ResearchSourceAssessmentRecord, ...],
+    ]:
+        selected_source_ids = set(document_ids)
+        evidence_by_id = {record.evidence_id: record for record in run.evidence}
+        assessments_by_id = {record.assessment_id: record for record in run.assessments}
+        try:
+            evidence = tuple(
+                evidence_by_id[evidence_id] for evidence_id in evidence_ids
+            )
+            assessments = tuple(
+                assessments_by_id[assessment_id] for assessment_id in assessment_ids
+            )
+        except KeyError as error:
+            raise ResearchError(
+                "Research comparison note references were not found in this run."
+            ) from error
+        if {record.source_document_id for record in evidence} != selected_source_ids:
+            raise ResearchError(
+                "Research comparison note evidence must cover every selected source."
+            )
+        if {record.source_document_id for record in assessments} != selected_source_ids:
+            raise ResearchError(
+                "Research comparison note assessments must cover every selected source."
+            )
+        superseded_ids = {
+            record.supersedes_assessment_id
+            for record in run.assessments
+            if record.supersedes_assessment_id is not None
+        }
+        if any(record.assessment_id in superseded_ids for record in assessments):
+            raise ResearchError("Research comparison note assessments must be current.")
+        selected_evidence_ids = set(evidence_ids)
+        if any(
+            not set(assessment.evidence_ids).issubset(selected_evidence_ids)
+            for assessment in assessments
+        ):
+            raise ResearchError(
+                "Research comparison note must cite each assessment's evidence."
+            )
+        return evidence, assessments
 
     @staticmethod
     def _source_and_evidence_for_assessment(
@@ -902,6 +1096,75 @@ class ResearchRunManager:
         normalized = text.strip()
         if len(normalized) > MAX_SOURCE_ASSESSMENT_CHARACTERS:
             raise ResearchError("Research source assessment text is too long.")
+        return normalized
+
+    @staticmethod
+    def _normalize_comparison_note_id(note_id: str) -> str:
+        if not isinstance(note_id, str) or not note_id.strip():
+            raise ResearchError("Research comparison note ID cannot be empty.")
+        normalized = note_id.strip()
+        if len(normalized) > 200:
+            raise ResearchError("Research comparison note ID is too long.")
+        return normalized
+
+    @staticmethod
+    def _normalize_comparison_note_evidence_ids(
+        evidence_ids: Sequence[str],
+    ) -> tuple[str, ...]:
+        if isinstance(evidence_ids, (str, bytes)) or not isinstance(
+            evidence_ids, Sequence
+        ):
+            raise ResearchError("Research comparison note evidence IDs must be a list.")
+        normalized = tuple(
+            ResearchRunManager._normalize_evidence_id(value) for value in evidence_ids
+        )
+        if not normalized:
+            raise ResearchError(
+                "Research comparison note requires explicit evidence IDs."
+            )
+        if len(normalized) != len(set(normalized)):
+            raise ResearchError(
+                "Research comparison note contains duplicate evidence IDs."
+            )
+        if len(normalized) > MAX_COMPARISON_NOTE_EVIDENCE:
+            raise ResearchError(
+                "Research comparison note cites too many evidence records."
+            )
+        return normalized
+
+    @staticmethod
+    def _normalize_comparison_note_assessment_ids(
+        assessment_ids: Sequence[str],
+    ) -> tuple[str, ...]:
+        if isinstance(assessment_ids, (str, bytes)) or not isinstance(
+            assessment_ids, Sequence
+        ):
+            raise ResearchError(
+                "Research comparison note assessment IDs must be a list."
+            )
+        normalized = tuple(
+            ResearchRunManager._normalize_assessment_id(value)
+            for value in assessment_ids
+        )
+        if not normalized:
+            raise ResearchError(
+                "Research comparison note requires current assessment IDs."
+            )
+        if len(normalized) != len(set(normalized)):
+            raise ResearchError(
+                "Research comparison note contains duplicate assessment IDs."
+            )
+        if len(normalized) > MAX_COMPARISON_NOTE_ASSESSMENTS:
+            raise ResearchError("Research comparison note cites too many assessments.")
+        return normalized
+
+    @staticmethod
+    def _normalize_comparison_note_text(text: str) -> str:
+        if not isinstance(text, str) or not text.strip():
+            raise ResearchError("Research comparison note text cannot be empty.")
+        normalized = text.strip()
+        if len(normalized) > MAX_COMPARISON_NOTE_CHARACTERS:
+            raise ResearchError("Research comparison note text is too long.")
         return normalized
 
     @staticmethod

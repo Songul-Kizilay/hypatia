@@ -2,6 +2,40 @@
 
 All notable project changes are recorded here.
 
+## [0.3.43] - 2026-08-21
+
+### Added
+
+- A collecting research run can preview and separately append one
+  user-authored comparison note for two to five explicitly ordered accepted
+  sources.
+- Each note cites exact persisted evidence IDs and exact current assessment
+  IDs. Every selected source must be covered by both reference types, and every
+  cited assessment's evidence must also be cited explicitly.
+- The existing comparison preview is the read boundary after restart: it shows
+  matching notes for the exact selected source order, bounded to 20 notes while
+  reporting the complete count.
+- Research-run schema v6 stores comparison notes append-only and loads v1-v5
+  snapshots with an empty comparison-note collection until a later successful
+  mutation rewrites the snapshot.
+
+### Safety
+
+- Preview performs no write. Confirmed recording revalidates the open run,
+  accepted sources, evidence ownership, current assessments, assessment
+  evidence, and complete per-source coverage before atomically replacing the
+  research snapshot.
+- Hypatia does not generate the note, choose references, score sources, produce
+  a verdict, call an LLM or provider, fetch content, write conversation memory,
+  or change knowledge and graph state through this flow.
+- Existing notes remain immutable when a cited assessment is corrected later;
+  the correction is appended separately and historical note references remain
+  intact.
+
+### Verification
+
+- The package-aware full local suite contains 1,158 passing automated tests.
+
 ## [0.3.42] - 2026-08-20
 
 ### Added

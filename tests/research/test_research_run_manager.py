@@ -8,10 +8,12 @@ from functools import partial
 
 from core.Exceptions import ResearchError
 from knowledge.Chunk import Chunk
+from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchRun import ResearchRun
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSource import ResearchSource
+from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
 from research.ResearchSourceCandidate import ResearchSourceCandidate
 
 
@@ -54,7 +56,49 @@ class ResearchRunManagerTests(unittest.TestCase):
             evidence_id_factory=evidence_ids.__next__,
             discovery_id_factory=lambda: "discovery-1",
             assessment_id_factory=assessment_ids.__next__,
+            comparison_note_id_factory=lambda: "comparison-note-1",
         )
+
+    def _prepare_comparison_material(
+        self,
+    ) -> tuple[
+        ResearchRun,
+        tuple[ResearchEvidenceRecord, ...],
+        tuple[ResearchSourceAssessmentRecord, ...],
+    ]:
+        run = self.manager.create("Compare sources")
+        for number in (1, 2):
+            self.manager.add_source(
+                run.run_id,
+                ResearchSource(
+                    f"https://example.com/{number}",
+                    f"Source {number}",
+                    f"Evidence {number}.",
+                    "text/plain",
+                    self.start,
+                ),
+                f"document-{number}",
+            )
+            self.manager.add_evidence(
+                run.run_id,
+                Chunk(
+                    f"document-{number}",
+                    0,
+                    f"Evidence {number}.",
+                    chunk_id=f"chunk-{number}",
+                ),
+                f"Note {number}.",
+            )
+        evidence = self.manager.get(run.run_id).evidence
+        for number, record in enumerate(evidence, start=1):
+            self.manager.record_source_assessment(
+                run.run_id,
+                f"document-{number}",
+                [record.evidence_id],
+                f"Assessment {number}.",
+            )
+        assessments = self.manager.get(run.run_id).assessments
+        return run, evidence, assessments
 
     def test_create_persists_before_publishing_the_run(self) -> None:
         run = self.manager.create("  What should Hypatia research?  ")
@@ -620,6 +664,161 @@ class ResearchRunManagerTests(unittest.TestCase):
         self.assertEqual(len(item.current_assessments), 10)
         self.assertEqual(item.total_current_assessment_count, 11)
         self.assertEqual(item.omitted_current_assessment_count, 1)
+
+    def test_comparison_note_preview_is_read_only_and_record_is_atomic(self) -> None:
+        run, evidence, assessments = self._prepare_comparison_material()
+        evidence_ids = [record.evidence_id for record in evidence]
+        assessment_ids = [record.assessment_id for record in assessments]
+        saves_before = len(self.store.saved)
+
+        preview = self.manager.preview_source_comparison_note_write(
+            run.run_id,
+            ["document-2", "document-1"],
+            list(reversed(evidence_ids)),
+            list(reversed(assessment_ids)),
+            "  My comparison note.  ",
+        )
+
+        self.assertTrue(preview.allowed)
+        self.assertEqual(
+            tuple(item.source.document_id for item in preview.comparison.sources),
+            ("document-2", "document-1"),
+        )
+        self.assertEqual(
+            tuple(record.evidence_id for record in preview.evidence),
+            tuple(reversed(evidence_ids)),
+        )
+        self.assertEqual(preview.text, "My comparison note.")
+        self.assertEqual(len(self.store.saved), saves_before)
+
+        updated = self.manager.record_source_comparison_note(
+            run.run_id,
+            ["document-2", "document-1"],
+            list(reversed(evidence_ids)),
+            list(reversed(assessment_ids)),
+            "My comparison note.",
+        )
+
+        note = updated.comparison_notes[-1]
+        self.assertEqual(note.note_id, "comparison-note-1")
+        self.assertEqual(note.source_document_ids, ("document-2", "document-1"))
+        self.assertEqual(note.evidence_ids, tuple(reversed(evidence_ids)))
+        self.assertEqual(note.assessment_ids, tuple(reversed(assessment_ids)))
+        self.assertEqual(self.store.runs, [updated])
+        read_back = self.manager.preview_source_comparison(
+            run.run_id,
+            ["document-2", "document-1"],
+        )
+        self.assertEqual(read_back.comparison_notes, (note,))
+        self.assertEqual(read_back.total_comparison_note_count, 1)
+        reversed_order = self.manager.preview_source_comparison(
+            run.run_id,
+            ["document-1", "document-2"],
+        )
+        self.assertEqual(reversed_order.comparison_notes, ())
+
+    def test_comparison_note_requires_complete_current_references(self) -> None:
+        run, evidence, assessments = self._prepare_comparison_material()
+
+        with self.assertRaisesRegex(ResearchError, "cover every selected source"):
+            self.manager.preview_source_comparison_note_write(
+                run.run_id,
+                ["document-1", "document-2"],
+                [evidence[0].evidence_id],
+                [record.assessment_id for record in assessments],
+                "Incomplete evidence.",
+            )
+        alternate = self.manager.add_evidence(
+            run.run_id,
+            Chunk(
+                "document-1",
+                1,
+                "Alternate evidence.",
+                chunk_id="chunk-1-alternate",
+            ),
+            "Alternate note.",
+        ).evidence[-1]
+        with self.assertRaisesRegex(ResearchError, "cite each assessment's evidence"):
+            self.manager.preview_source_comparison_note_write(
+                run.run_id,
+                ["document-1", "document-2"],
+                [alternate.evidence_id, evidence[1].evidence_id],
+                [record.assessment_id for record in assessments],
+                "Missing assessment evidence.",
+            )
+
+        corrected = self.manager.record_source_assessment(
+            run.run_id,
+            "document-1",
+            [evidence[0].evidence_id],
+            "Corrected assessment.",
+            assessments[0].assessment_id,
+        ).assessments[-1]
+        with self.assertRaisesRegex(ResearchError, "must be current"):
+            self.manager.preview_source_comparison_note_write(
+                run.run_id,
+                ["document-1", "document-2"],
+                [record.evidence_id for record in evidence],
+                [assessments[0].assessment_id, assessments[1].assessment_id],
+                "Stale assessment.",
+            )
+        preview = self.manager.preview_source_comparison_note_write(
+            run.run_id,
+            ["document-1", "document-2"],
+            [record.evidence_id for record in evidence],
+            [corrected.assessment_id, assessments[1].assessment_id],
+            "Current assessments.",
+        )
+        self.assertTrue(preview.allowed)
+
+    def test_comparison_note_closed_run_and_failed_save_do_not_mutate(self) -> None:
+        run, evidence, assessments = self._prepare_comparison_material()
+        values = (
+            run.run_id,
+            ["document-1", "document-2"],
+            [record.evidence_id for record in evidence],
+            [record.assessment_id for record in assessments],
+            "Comparison note.",
+        )
+        self.store.error = ResearchError("save failed")
+
+        with self.assertRaisesRegex(ResearchError, "save failed"):
+            self.manager.record_source_comparison_note(*values)
+
+        self.assertEqual(self.manager.get(run.run_id).comparison_notes, ())
+        self.store.error = None
+        self.manager.transition_status(run.run_id, ResearchRunStatus.CANCELLED)
+        saves_before = len(self.store.saved)
+
+        preview = self.manager.preview_source_comparison_note_write(*values)
+
+        self.assertFalse(preview.allowed)
+        with self.assertRaisesRegex(ResearchError, "closed"):
+            self.manager.record_source_comparison_note(*values)
+        self.assertEqual(len(self.store.saved), saves_before)
+
+    def test_comparison_note_remains_valid_after_later_assessment_correction(
+        self,
+    ) -> None:
+        run, evidence, assessments = self._prepare_comparison_material()
+        updated = self.manager.record_source_comparison_note(
+            run.run_id,
+            ["document-1", "document-2"],
+            [record.evidence_id for record in evidence],
+            [record.assessment_id for record in assessments],
+            "Historical comparison.",
+        )
+        note = updated.comparison_notes[-1]
+
+        corrected = self.manager.record_source_assessment(
+            run.run_id,
+            "document-1",
+            [evidence[0].evidence_id],
+            "Later correction.",
+            assessments[0].assessment_id,
+        )
+
+        self.assertEqual(corrected.comparison_notes, (note,))
 
     def test_source_assessment_preview_is_read_only_for_terminal_run(self) -> None:
         run = self.manager.create("Question")

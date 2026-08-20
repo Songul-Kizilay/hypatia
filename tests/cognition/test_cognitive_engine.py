@@ -6657,6 +6657,168 @@ class CognitiveEngineTests(unittest.TestCase):
 
         self.assertEqual(manager.get(run.run_id), run)
 
+    def test_authored_comparison_note_previews_then_commits_without_providers(
+        self,
+    ) -> None:
+        store = ToggleResearchRunStore()
+        evidence_ids = iter(("evidence-1", "evidence-2"))
+        assessment_ids = iter(("assessment-1", "assessment-2"))
+        manager = ResearchRunManager(
+            store,
+            id_factory=lambda: "run-123",
+            evidence_id_factory=evidence_ids.__next__,
+            assessment_id_factory=assessment_ids.__next__,
+            comparison_note_id_factory=lambda: "comparison-note-1",
+        )
+        run = manager.create("Compare sources")
+        documents = []
+        for number in (1, 2):
+            source = ResearchSource(
+                f"https://example.com/{number}",
+                f"Source {number}",
+                f"Unique comparison evidence {number}.",
+                "text/plain",
+                datetime(2026, 8, 20, 12, 30, tzinfo=UTC),
+            )
+            document = self.knowledge_engine.add_document(source.to_document())
+            documents.append(document)
+            manager.add_source(run.run_id, source, document.document_id)
+            chunk = next(
+                item
+                for item in self.knowledge_engine.search("unique comparison evidence")
+                if item.document_id == document.document_id
+            )
+            manager.add_evidence(run.run_id, chunk, f"Note {number}.")
+        evidence = manager.get(run.run_id).evidence
+        for number, record in enumerate(evidence):
+            manager.record_source_assessment(
+                run.run_id,
+                documents[number].document_id,
+                [record.evidence_id],
+                f"Assessment {number + 1}.",
+            )
+        assessments = manager.get(run.run_id).assessments
+        fetcher = RecordingResearchSourceFetcher()
+        llm_provider = RecordingLLMProvider("must not run")
+        extractor = RecordingCandidateExtractor()
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+            learned_memory_candidate_extractor=extractor,
+            research_source_fetcher=fetcher,
+            research_run_manager=manager,
+        )
+        metadata = {
+            "research_run_id": run.run_id,
+            "research_source_document_ids": [
+                documents[1].document_id,
+                documents[0].document_id,
+            ],
+            "research_comparison_evidence_ids": [
+                evidence[1].evidence_id,
+                evidence[0].evidence_id,
+            ],
+            "research_comparison_assessment_ids": [
+                assessments[1].assessment_id,
+                assessments[0].assessment_id,
+            ],
+            "research_comparison_note_text": "My comparison note.",
+        }
+        documents_before = self.knowledge_engine.documents()
+        memory_count = self.memory_manager.count()
+        saves_before = store.save_calls
+        events: list[str] = []
+        self.event_bus.subscribe("*", lambda event: events.append(event.name))
+
+        preview_response = engine.process(
+            BrainRequest(
+                "Preview comparison note",
+                metadata={
+                    "intent": "research_source_comparison_note_write_preview",
+                    **metadata,
+                },
+            )
+        )
+
+        self.assertTrue(preview_response.success)
+        preview = preview_response.research_source_comparison_note_write_preview
+        self.assertIsNotNone(preview)
+        assert preview is not None
+        self.assertTrue(preview.allowed)
+        self.assertEqual(preview.text, "My comparison note.")
+        self.assertIn("no verdict, score", preview_response.message)
+        self.assertEqual(store.save_calls, saves_before)
+
+        recorded = engine.process(
+            BrainRequest(
+                "Record comparison note",
+                metadata={
+                    "intent": "research_source_comparison_note_record",
+                    **metadata,
+                },
+            )
+        )
+
+        self.assertTrue(recorded.success)
+        self.assertEqual(
+            recorded.intent,
+            "research_source_comparison_note_record",
+        )
+        note = recorded.research_runs[0].comparison_notes[-1]
+        self.assertEqual(note.note_id, "comparison-note-1")
+        self.assertEqual(
+            note.source_document_ids,
+            (documents[1].document_id, documents[0].document_id),
+        )
+        self.assertEqual(store.save_calls, saves_before + 1)
+        self.assertEqual(fetcher.calls, [])
+        self.assertEqual(llm_provider.calls, [])
+        self.assertEqual(extractor.calls, [])
+        self.assertEqual(events, [])
+        self.assertEqual(self.knowledge_engine.documents(), documents_before)
+        self.assertEqual(self.memory_manager.count(), memory_count)
+
+    def test_authored_comparison_note_invalid_input_fails_without_mutation(
+        self,
+    ) -> None:
+        manager = ResearchRunManager(id_factory=lambda: "run-123")
+        run = manager.create("Question")
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            research_run_manager=manager,
+        )
+        metadata = {
+            "research_run_id": run.run_id,
+            "research_source_document_ids": ["document-1", "document-2"],
+            "research_comparison_evidence_ids": [],
+            "research_comparison_assessment_ids": ["assessment-1"],
+            "research_comparison_note_text": "Note.",
+        }
+
+        for intent in (
+            "research_source_comparison_note_write_preview",
+            "research_source_comparison_note_record",
+        ):
+            response = engine.process(
+                BrainRequest("Comparison note", metadata={"intent": intent, **metadata})
+            )
+            self.assertFalse(response.success)
+            self.assertEqual(response.intent, intent)
+
+        self.assertEqual(manager.get(run.run_id), run)
+
     def test_source_assessment_rejects_unknown_or_cross_run_source(self) -> None:
         manager = ResearchRunManager(id_factory=lambda: "run-123")
         run = manager.create("Question")

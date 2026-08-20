@@ -18,6 +18,9 @@ from research.ResearchRun import ResearchRun
 from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
 from research.ResearchSourceCandidate import ResearchSourceCandidate
+from research.ResearchSourceComparisonNoteRecord import (
+    ResearchSourceComparisonNoteRecord,
+)
 from research.ResearchSourceDiscoveryRecord import ResearchSourceDiscoveryRecord
 from research.ResearchSourceRecord import ResearchSourceRecord
 
@@ -115,7 +118,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
 
     def test_rejects_unknown_fields_schema_and_duplicate_ids(self) -> None:
         for document in (
-            {"schema_version": 6, "runs": []},
+            {"schema_version": 7, "runs": []},
             {"schema_version": True, "runs": []},
             {"schema_version": 1, "runs": [], "unexpected": True},
         ):
@@ -136,7 +139,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
         with self.assertRaisesRegex(ResearchError, "duplicate run IDs"):
             self.store.save([run, run])
 
-    def test_loads_v1_without_new_collections_and_rewrites_as_v5(self) -> None:
+    def test_loads_v1_without_new_collections_and_rewrites_as_v6(self) -> None:
         legacy_document = {
             "schema_version": 1,
             "runs": [
@@ -159,13 +162,15 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
         self.assertEqual(runs[0].evidence, ())
         self.assertEqual(runs[0].discoveries, ())
         self.assertEqual(runs[0].assessments, ())
+        self.assertEqual(runs[0].comparison_notes, ())
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 5)
+        self.assertEqual(rewritten["schema_version"], 6)
         self.assertEqual(rewritten["runs"][0]["evidence"], [])
         self.assertEqual(rewritten["runs"][0]["discoveries"], [])
         self.assertEqual(rewritten["runs"][0]["assessments"], [])
+        self.assertEqual(rewritten["runs"][0]["comparison_notes"], [])
 
-    def test_loads_v2_without_discoveries_and_rewrites_as_v5(self) -> None:
+    def test_loads_v2_without_discoveries_and_rewrites_as_v6(self) -> None:
         legacy_document = {
             "schema_version": 2,
             "runs": [
@@ -188,11 +193,12 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
 
         self.assertEqual(runs[0].discoveries, ())
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 5)
+        self.assertEqual(rewritten["schema_version"], 6)
         self.assertEqual(rewritten["runs"][0]["discoveries"], [])
         self.assertEqual(rewritten["runs"][0]["assessments"], [])
+        self.assertEqual(rewritten["runs"][0]["comparison_notes"], [])
 
-    def test_loads_v3_without_assessments_and_rewrites_as_v5(self) -> None:
+    def test_loads_v3_without_assessments_and_rewrites_as_v6(self) -> None:
         legacy_document = {
             "schema_version": 3,
             "runs": [
@@ -216,10 +222,11 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
 
         self.assertEqual(runs[0].assessments, ())
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 5)
+        self.assertEqual(rewritten["schema_version"], 6)
         self.assertEqual(rewritten["runs"][0]["assessments"], [])
+        self.assertEqual(rewritten["runs"][0]["comparison_notes"], [])
 
-    def test_loads_v4_assessments_without_supersession_and_rewrites_as_v5(
+    def test_loads_v4_assessments_without_supersession_and_rewrites_as_v6(
         self,
     ) -> None:
         legacy_document = {
@@ -275,10 +282,100 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
 
         self.assertIsNone(runs[0].assessments[0].supersedes_assessment_id)
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 5)
+        self.assertEqual(rewritten["schema_version"], 6)
         self.assertIsNone(
             rewritten["runs"][0]["assessments"][0]["supersedes_assessment_id"]
         )
+        self.assertEqual(rewritten["runs"][0]["comparison_notes"], [])
+
+    def test_loads_v5_without_comparison_notes_and_rewrites_as_v6(self) -> None:
+        legacy_document = {
+            "schema_version": 5,
+            "runs": [
+                {
+                    "run_id": "legacy-run",
+                    "question": "Legacy question",
+                    "status": "collecting",
+                    "sources": [],
+                    "failures": [],
+                    "evidence": [],
+                    "discoveries": [],
+                    "assessments": [],
+                    "created_at": self.now.isoformat(),
+                    "updated_at": self.now.isoformat(),
+                }
+            ],
+        }
+        self.path.write_text(json.dumps(legacy_document), encoding="utf-8")
+
+        runs = self.store.load()
+        self.store.save(runs)
+
+        self.assertEqual(runs[0].comparison_notes, ())
+        rewritten = json.loads(self.path.read_text(encoding="utf-8"))
+        self.assertEqual(rewritten["schema_version"], 6)
+        self.assertEqual(rewritten["runs"][0]["comparison_notes"], [])
+
+    def test_round_trip_preserves_comparison_note_references(self) -> None:
+        sources = tuple(
+            ResearchSourceRecord(
+                document_id=f"document-{number}",
+                url=f"https://example.com/{number}",
+                title=f"Source {number}",
+                content_type="text/plain",
+                fetched_at=self.now,
+                added_at=self.now,
+            )
+            for number in (1, 2)
+        )
+        evidence = tuple(
+            ResearchEvidenceRecord(
+                evidence_id=f"evidence-{number}",
+                source_document_id=f"document-{number}",
+                chunk_id=f"chunk-{number}",
+                chunk_index=number - 1,
+                excerpt=f"Evidence {number}.",
+                excerpt_truncated=False,
+                chunk_sha256=str(number) * 64,
+                note=f"Note {number}",
+                recorded_at=self.now,
+            )
+            for number in (1, 2)
+        )
+        assessments = tuple(
+            ResearchSourceAssessmentRecord(
+                assessment_id=f"assessment-{number}",
+                source_document_id=f"document-{number}",
+                evidence_ids=(f"evidence-{number}",),
+                text=f"Assessment {number}",
+                recorded_at=self.now,
+            )
+            for number in (1, 2)
+        )
+        note = ResearchSourceComparisonNoteRecord(
+            note_id="comparison-note-1",
+            source_document_ids=("document-1", "document-2"),
+            evidence_ids=("evidence-1", "evidence-2"),
+            assessment_ids=("assessment-1", "assessment-2"),
+            text="My comparison note.",
+            recorded_at=self.now,
+        )
+        run = ResearchRun(
+            run_id="run-1",
+            question="Compare sources",
+            status=ResearchRunStatus.COLLECTING,
+            sources=sources,
+            failures=(),
+            created_at=self.now,
+            updated_at=self.now,
+            evidence=evidence,
+            assessments=assessments,
+            comparison_notes=(note,),
+        )
+
+        self.store.save([run])
+
+        self.assertEqual(self.store.load(), [run])
 
     def test_invalid_json_is_reported_without_exposing_raw_content(self) -> None:
         self.path.write_text("{secret", encoding="utf-8")

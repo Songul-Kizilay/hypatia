@@ -269,6 +269,102 @@ class DesktopController:
             )
         )
 
+    def preview_research_source_comparison_note_write(
+        self,
+        research_run_id: str,
+        source_document_ids: str,
+        evidence_ids: str,
+        assessment_ids: str,
+        note_text: str,
+    ) -> BrainResponse:
+        """Preview one authored comparison note and its exact references."""
+        metadata = self._research_source_comparison_note_metadata(
+            research_run_id,
+            source_document_ids,
+            evidence_ids,
+            assessment_ids,
+            note_text,
+        )
+        return self._brain.process(
+            BrainRequest(
+                message="Preview user-authored research comparison note",
+                source="desktop",
+                metadata={
+                    "intent": "research_source_comparison_note_write_preview",
+                    **metadata,
+                },
+            )
+        )
+
+    def record_research_source_comparison_note(
+        self,
+        research_run_id: str,
+        source_document_ids: str,
+        evidence_ids: str,
+        assessment_ids: str,
+        note_text: str,
+    ) -> BrainResponse:
+        """Submit one comparison note only after desktop confirmation."""
+        metadata = self._research_source_comparison_note_metadata(
+            research_run_id,
+            source_document_ids,
+            evidence_ids,
+            assessment_ids,
+            note_text,
+        )
+        return self._brain.process(
+            BrainRequest(
+                message="Record user-authored research comparison note",
+                source="desktop",
+                metadata={
+                    "intent": "research_source_comparison_note_record",
+                    **metadata,
+                },
+            )
+        )
+
+    @staticmethod
+    def _research_source_comparison_note_metadata(
+        research_run_id: str,
+        source_document_ids: str,
+        evidence_ids: str,
+        assessment_ids: str,
+        note_text: str,
+    ) -> dict[str, object]:
+        normalized_run_id = research_run_id.strip()
+        normalized_text = note_text.strip()
+        normalized_document_ids = [
+            value.strip() for value in source_document_ids.split(",") if value.strip()
+        ]
+        normalized_evidence_ids = [
+            value.strip() for value in evidence_ids.split(",") if value.strip()
+        ]
+        normalized_assessment_ids = [
+            value.strip() for value in assessment_ids.split(",") if value.strip()
+        ]
+        if not normalized_run_id:
+            raise ValueError("A research run ID cannot be empty.")
+        if not 2 <= len(normalized_document_ids) <= 5:
+            raise ValueError("Enter 2 to 5 research source document IDs.")
+        for values, label in (
+            (normalized_document_ids, "Research source document IDs"),
+            (normalized_evidence_ids, "Research comparison evidence IDs"),
+            (normalized_assessment_ids, "Research comparison assessment IDs"),
+        ):
+            if not values:
+                raise ValueError(f"{label} cannot be empty.")
+            if len(values) != len(set(values)):
+                raise ValueError(f"{label} cannot be duplicated.")
+        if not normalized_text:
+            raise ValueError("Research comparison note text cannot be empty.")
+        return {
+            "research_run_id": normalized_run_id,
+            "research_source_document_ids": normalized_document_ids,
+            "research_comparison_evidence_ids": normalized_evidence_ids,
+            "research_comparison_assessment_ids": normalized_assessment_ids,
+            "research_comparison_note_text": normalized_text,
+        }
+
     def preview_research_source_assessment_write(
         self,
         research_run_id: str,

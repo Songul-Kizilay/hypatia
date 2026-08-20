@@ -10,9 +10,11 @@ runtime includes an explicit Crossref scholarly-metadata provider. An exact
 persisted candidate can be previewed, confirmed, revalidated, and loaded through
 the existing guarded HTTPS boundary. An accepted source also has a read-only
 manual-assessment view and an append-only user-authored assessment record based
-only on persisted provenance and explicitly recorded evidence. Automatic
-evidence extraction, multi-source synthesis, evidence ranking, and
-contradiction detection remain planned.
+only on persisted provenance and explicitly recorded evidence. The manual
+multi-source comparison also supports append-only user-authored notes with
+explicit evidence and current-assessment references. Automatic evidence
+extraction, multi-source synthesis, evidence ranking, and contradiction
+detection remain planned.
 
 ## Purpose
 
@@ -84,9 +86,10 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
   appended only when the predecessor belongs to the same run and source and has
   no existing successor. History remains ordered and immutable while the view
   labels current and superseded records.
-- Schema v5 reads v1-v4 run snapshots with later collections absent and empty
-  and v4 assessments carrying no supersession link, upgrading a legacy snapshot
-  only on a later successful atomic save.
+- Schema v6 reads v1-v5 run snapshots with later collections absent and empty,
+  v4 assessments carrying no supersession link, and v1-v5 snapshots carrying no
+  comparison notes. A legacy snapshot is upgraded only on a later successful
+  atomic save.
 - A collecting run may be previewed and then explicitly closed as `completed`,
   `failed`, or `cancelled`. Completion requires at least one accepted source
   and evidence record; failure requires at least one failure record;
@@ -110,14 +113,20 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
   score, or automatic evidence selection. It bounds each source column to 20
   evidence records and 10 current assessments and reports the full counts when
   additional persisted records are omitted from the display.
+- A collecting run can preview and separately append one bounded, user-authored
+  comparison note for the exact selected-source order. The user must cite
+  persisted evidence and current assessment IDs covering every selected source;
+  each assessment's own evidence must also be cited. Final recording revalidates
+  all references and atomically replaces the run snapshot. The comparison view
+  reads up to 20 matching notes after restart and reports the complete count.
+  No provider, fetcher, LLM, memory, graph, or automatic scoring path is used.
 
 ## Next increment
 
-Define an append-only, user-authored comparison note through a preview-confirm
-boundary. It must cite exact current assessments and evidence from explicitly
-selected accepted sources, revalidate those references before atomic storage,
-and never generate comparison text, select evidence, score trust, or produce a
-verdict. Discovery and selection remain separate from fetching and may not
+Add Linux desktop distribution support with a platform-appropriate local data
+directory, a reproducible package command, and real Linux build/startup
+verification. Windows defaults and explicit storage overrides must remain
+stable. Discovery and selection remain separate from fetching and may not
 become unattended crawling.
 
 ## Known boundary

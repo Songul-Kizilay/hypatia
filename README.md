@@ -106,6 +106,10 @@ To create the world's most capable personal AI research companion.
   side by side without generating a verdict, score, or evidence selection. The
   view shows at most 20 evidence records and 10 current assessments per source
   while reporting the complete counts
+- An append-only, user-authored comparison note for the exact selected-source
+  order. It requires explicit evidence and current assessment IDs covering
+  every source, uses a separate preview and confirmation, revalidates every
+  reference before atomic persistence, and remains readable after restart
 - An initial local desktop shell for text chat, a refreshable session overview,
   explicit session selection, session details/recent conversations/activity,
   explicit lexical/semantic conversation recall, and semantic-memory runtime
@@ -196,7 +200,14 @@ assessments. The preview works for collecting and closed runs and makes no
 network, LLM, memory, graph, knowledge-index, event-bus, or persistence call. It
 does not decide which source is correct or assign a trust score. To keep the
 desktop responsive, it shows at most 20 evidence records and 10 current
-assessments per source and reports both displayed and complete counts.
+assessments per source and reports both displayed and complete counts. For a
+collecting run, `Preview & save comparison note` accepts the user's own note and
+comma-separated evidence and current assessment IDs. The runtime requires both
+reference types to cover every selected source, shows an exact no-write preview,
+asks for confirmation, and revalidates before an atomic append. A later
+`Compare sources` view shows up to 20 notes recorded for that exact source order
+and reports the complete count; Hypatia does not write the note, choose its
+references, or generate a verdict.
 The `Final status` control previews `completed`, `failed`, or `cancelled` before
 asking for separate confirmation. Completion requires at least one accepted
 source and one evidence record, while failure requires a recorded failure. A

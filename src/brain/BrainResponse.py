@@ -26,6 +26,9 @@ from research.ResearchSourceAssessmentWritePreview import (
 from research.ResearchSourceCandidateAcceptancePreview import (
     ResearchSourceCandidateAcceptancePreview,
 )
+from research.ResearchSourceComparisonNoteWritePreview import (
+    ResearchSourceComparisonNoteWritePreview,
+)
 from research.ResearchSourceComparisonPreview import ResearchSourceComparisonPreview
 
 
@@ -57,6 +60,9 @@ class BrainResponse:
     ) = None
     research_source_assessment_preview: ResearchSourceAssessmentPreview | None = None
     research_source_comparison_preview: ResearchSourceComparisonPreview | None = None
+    research_source_comparison_note_write_preview: (
+        ResearchSourceComparisonNoteWritePreview | None
+    ) = None
     research_source_assessment_write_preview: (
         ResearchSourceAssessmentWritePreview | None
     ) = None
