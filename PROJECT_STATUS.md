@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.37 (Genesis)`
+`v0.3.38 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.37`** is the current executable package and GitHub
+- **Runtime release `v0.3.38`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -84,6 +84,11 @@ with optional OpenAI-compatible LLM conversation support.
   JSON limit, and DOI/title/venue/year metadata. The desktop shows persisted
   candidates and can copy one selected DOI URL into the existing load field,
   but selection never invokes source acquisition.
+- The desktop can preview one exact persisted candidate before acceptance. The
+  preview is read-only and performs no network or indexing work. After explicit
+  confirmation, the runtime revalidates the run, discovery ID, and candidate
+  URL before using the existing guarded source loader; stale, unlisted, or
+  closed-run selections stop before network access.
 - A desktop `Save evidence` action accepts the selected run ID, an indexed
   paragraph/chunk ID, and an explicit user note. The runtime permits the
   selection only when the paragraph belongs to a source already attached to
@@ -242,7 +247,8 @@ with optional OpenAI-compatible LLM conversation support.
 ### Intentionally Not Implemented
 
 - Automatic semantic augmentation of ordinary messages.
-- General web discovery, automatic candidate acceptance, multi-source research
+- General web discovery, automatic or unattended candidate acceptance,
+  multi-source research
   planning/synthesis,
   contradiction detection, evidence ranking, automatic RAG augmentation, or
   cross-document semantic relation extraction.
@@ -255,7 +261,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 1,079 automated tests pass through package-aware discovery.
+- 1,091 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -282,7 +288,7 @@ so this check did not alter the project's persisted data.
 
 ## Next Milestone
 
-Add a preview-and-confirm candidate acceptance flow that revalidates a selected
-DOI URL through the existing public-HTTPS acquisition boundary. Automatic
-evidence extraction, ordinary-conversation augmentation, autonomous crawling,
-multi-source synthesis, and implicit graph writes remain out of scope.
+Add an explicit accepted-source assessment preview without automatic evidence
+selection. Ordinary-conversation augmentation, autonomous crawling,
+multi-source synthesis, unattended acceptance, and implicit graph writes
+remain out of scope.

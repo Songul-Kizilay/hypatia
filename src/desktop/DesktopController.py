@@ -267,6 +267,66 @@ class DesktopController:
             )
         )
 
+    def preview_research_source_candidate_acceptance(
+        self,
+        research_run_id: str,
+        discovery_id: str,
+        candidate_url: str,
+    ) -> BrainResponse:
+        """Preview one persisted discovery candidate without loading it."""
+        return self._research_candidate_request(
+            "research_source_candidate_acceptance_preview",
+            "Preview selected research source candidate",
+            research_run_id,
+            discovery_id,
+            candidate_url,
+        )
+
+    def accept_research_source_candidate(
+        self,
+        research_run_id: str,
+        discovery_id: str,
+        candidate_url: str,
+    ) -> BrainResponse:
+        """Accept one confirmed candidate through the guarded source loader."""
+        return self._research_candidate_request(
+            "research_source_candidate_accept",
+            "Accept selected research source candidate",
+            research_run_id,
+            discovery_id,
+            candidate_url,
+        )
+
+    def _research_candidate_request(
+        self,
+        intent: str,
+        message: str,
+        research_run_id: str,
+        discovery_id: str,
+        candidate_url: str,
+    ) -> BrainResponse:
+        normalized_run_id = research_run_id.strip()
+        normalized_discovery_id = discovery_id.strip()
+        normalized_url = candidate_url.strip()
+        if not normalized_run_id:
+            raise ValueError("A research run ID cannot be empty.")
+        if not normalized_discovery_id:
+            raise ValueError("A research source discovery ID cannot be empty.")
+        if not normalized_url:
+            raise ValueError("A research source candidate URL cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message=message,
+                source="desktop",
+                metadata={
+                    "intent": intent,
+                    "research_run_id": normalized_run_id,
+                    "research_discovery_id": normalized_discovery_id,
+                    "research_url": normalized_url,
+                },
+            )
+        )
+
     def preview_knowledge_relation(
         self,
         source_document_id: str,

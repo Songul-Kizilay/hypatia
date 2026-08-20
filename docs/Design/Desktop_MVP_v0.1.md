@@ -136,9 +136,12 @@ while an audit-write failure rolls the new unlinked knowledge document back.
 question to the fixed Crossref REST v1 metadata endpoint and displays at most
 five ordered DOI candidates. `Use selected URL` copies only the chosen DOI URL
 into the HTTPS field; it does not invoke `Load source`, and a candidate rendered
-for another run cannot be reused after the run ID changes. The Crossref action
-does not retrieve a paper, crawl links, invoke an LLM, write conversation
-memory, or duplicate document content in the run store.
+for another run cannot be reused after the run ID changes. `Preview & load`
+requests a no-side-effect runtime decision for the exact run, discovery, and
+candidate, asks for confirmation, and then revalidates before delegating to the
+existing source loader. The Crossref and preview actions do not retrieve a
+paper, crawl links, invoke an LLM, write conversation memory, or duplicate
+document content in the run store.
 `Save evidence` requires the selected run ID, a currently indexed chunk ID, and
 a user note. The runtime accepts it only from a source attached to that run and
 stores a bounded excerpt plus its exact source/chunk locator and full-chunk

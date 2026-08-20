@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.37` today) are the executable package and GitHub
+- **Runtime releases** (`v0.3.38` today) are the executable package and GitHub
   release line. They are the source-backed implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
   engineering increments. Sprint 4.16.50 is complete and is already in the
@@ -128,7 +128,9 @@ collections and v2 snapshots with empty discoveries, rewriting either only on
 a subsequent successful mutation. The source-discovery boundary keeps ordered
 candidate metadata auditable without accepting or fetching content. The
 process-environment runtime provides a bounded Crossref REST v1 adapter, while
-the desktop keeps candidate selection separate from source loading.
+the desktop keeps candidate selection separate from source loading. Candidate
+acceptance now uses a read-only run/discovery/URL-bound preview and a separately
+confirmed request that revalidates before entering the existing guarded loader.
 
 The optional OpenAI-compatible chat runtime supports keyless activation only
 for explicit loopback endpoints (`localhost`, `127.0.0.1`, or `::1`), including
@@ -244,12 +246,13 @@ Not implemented:
 
 The current local verification baseline is:
 
-- `python -m unittest discover -s tests -t .`: 1,079 tests passed. The top-level
-  package setting ensures nested test directories are included without
-  shadowing source packages.
+- package-aware `python -m unittest`: 1,091 tests passed. Explicit `tests.*`
+  module names ensure nested test directories are included without shadowing
+  source packages.
 - `python -m black --check src tests`: passed.
 - `python -m ruff check src tests`: passed.
-- `python -m mypy src tests`: passed with no issues in 271 files.
+- `python -m mypy src tests`: passed with no issues in 276 files.
+- `git diff --check`: passed.
 
 These checks verify the current local worktree; they do not create a release,
 tag, pull request, or GitHub deployment.
