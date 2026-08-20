@@ -1314,7 +1314,10 @@ class CognitiveEngine:
                 )
         try:
             source = self._research_source_fetcher.fetch(url.strip())
-            document = self._knowledge_engine.add_document(source.to_document())
+            document = self._knowledge_engine.add_document(
+                source.to_document(),
+                stable_chunk_ids=bool(run_id),
+            )
         except (ResearchError, KnowledgeError) as error:
             if run_id and self._research_run_manager is not None:
                 audit_reason = (

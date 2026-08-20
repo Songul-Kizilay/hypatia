@@ -165,6 +165,9 @@ before partial use of orphaned, conflicting, or modified records.
 `Research content` displays the immutable status captured by that startup
 operation. It does not reopen the content store and never displays content,
 paths, hashes, source metadata, record IDs, or internal validation errors.
+Accepted-source paragraphs use a versioned identity bound to document ID,
+position, and exact text during both initial indexing and startup restoration.
+The desktop does not calculate or persist this identity itself.
 `Find sources` separately sends the selected collecting run's persisted
 question to the fixed Crossref REST v1 metadata endpoint and displays at most
 five ordered DOI candidates. The endpoint and its same-origin redirects use

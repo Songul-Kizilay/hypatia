@@ -74,6 +74,11 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
   content is saved transactionally before run provenance is published. Startup
   reconstructs only records that exactly match accepted run provenance and
   stable document identity, with a 20,000-paragraph aggregate bound.
+- Initial indexing for a selected persistent run and startup restoration use
+  the same opaque v1 paragraph identity derived from document ID, paragraph
+  position, and exact-content SHA-256. New evidence locators therefore remain
+  resolvable after restart when the accepted content is unchanged. Temporary
+  run-free parsing remains ephemeral, and no persisted schema is changed.
 - Bootstrap captures an immutable restoration status after validation. The
   explicit Brain/desktop request reports only ready or unavailable state plus
   restored document and paragraph counts. It does not reread persistence,
@@ -158,9 +163,10 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
 
 ## Next increment
 
-Define and test deterministic paragraph identities for accepted content
-restored after restart. Preserve evidence audit history and all current startup
-bounds without automatically migrating or rewriting existing snapshots.
+Add a bounded read-only evidence/restored-content integrity audit. Report only
+matched, missing, or changed aggregate counts without rewriting legacy
+evidence, repairing content, accessing the network, or weakening startup
+validation.
 
 ## Known boundary
 

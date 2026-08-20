@@ -55,13 +55,18 @@ class KnowledgeEngine:
         """Load a document, parse it into chunks, and add them to the index."""
         return self.add_document(self._loader.load(path))
 
-    def add_document(self, document: Document) -> Document:
+    def add_document(
+        self,
+        document: Document,
+        *,
+        stable_chunk_ids: bool = False,
+    ) -> Document:
         """Index one already acquired source through the common knowledge pipeline."""
         if not isinstance(document, Document):
             raise KnowledgeError("KnowledgeEngine expects a Document instance.")
         if document.document_id in self._documents:
             raise KnowledgeError("Knowledge document is already loaded.")
-        chunks = self._parser.parse(document)
+        chunks = self._parser.parse(document, stable_chunk_ids=stable_chunk_ids)
 
         for chunk in chunks:
             self._indexer.add(chunk)
