@@ -16,6 +16,8 @@ Hypatia currently runs as a local-first CLI. The initial security boundary is:
 - the fixed Crossref metadata endpoint and same-origin redirects share that
   address-pinned TLS boundary without widening explicit discovery into general
   search or page acquisition;
+- connection fallback uses only the ordered public addresses from the same DNS
+  validation and shares one decreasing timeout across TCP and TLS attempts;
 - semantic embeddings are opt-in and restricted to the local Ollama endpoint
   policy enforced at bootstrap.
 

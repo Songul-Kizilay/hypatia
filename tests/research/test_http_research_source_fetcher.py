@@ -6,7 +6,7 @@ import ssl
 import unittest
 from http.client import HTTPMessage
 from io import BytesIO
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 from urllib.error import URLError
 from urllib.request import Request
 
@@ -168,9 +168,10 @@ class HttpResearchSourceFetcherTests(unittest.TestCase):
         context.wrap_socket.return_value = tls_socket
         connection = PinnedHttpsConnection(
             "example.com",
-            pinned_address="93.184.216.34",
+            pinned_addresses=("93.184.216.34",),
             timeout=3.0,
             context=context,
+            clock=iter((0.0, 0.0, 1.0, 1.5)).__next__,
         )
 
         with patch(
@@ -188,12 +189,14 @@ class HttpResearchSourceFetcherTests(unittest.TestCase):
             raw_socket,
             server_hostname="example.com",
         )
+        raw_socket.settimeout.assert_called_once_with(2.0)
+        tls_socket.settimeout.assert_called_once_with(1.5)
         self.assertIs(connection.sock, tls_socket)
 
     def test_pinned_connection_rejects_a_proxy_tunnel_before_connecting(self) -> None:
         connection = PinnedHttpsConnection(
             "example.com",
-            pinned_address="93.184.216.34",
+            pinned_addresses=("93.184.216.34",),
             context=Mock(),
         )
         connection.set_tunnel("proxy.example")
@@ -208,8 +211,95 @@ class HttpResearchSourceFetcherTests(unittest.TestCase):
 
         create_connection.assert_not_called()
 
+    def test_pinned_connection_falls_back_within_one_total_timeout(self) -> None:
+        context = Mock()
+        first_socket = Mock()
+        second_socket = Mock()
+        tls_socket = Mock()
+        context.wrap_socket.side_effect = [OSError("TLS unavailable"), tls_socket]
+        connection = PinnedHttpsConnection(
+            "example.com",
+            pinned_addresses=("93.184.216.34", "93.184.216.35"),
+            timeout=5.0,
+            context=context,
+            clock=iter((0.0, 0.0, 1.0, 2.0, 3.0, 4.0)).__next__,
+        )
+
+        with patch(
+            "research.PinnedHttpsTransport.socket.create_connection",
+            side_effect=[first_socket, second_socket],
+        ) as create_connection:
+            connection.connect()
+
+        self.assertEqual(
+            create_connection.call_args_list,
+            [
+                call(("93.184.216.34", 443), 5.0, None),
+                call(("93.184.216.35", 443), 3.0, None),
+            ],
+        )
+        first_socket.settimeout.assert_called_once_with(4.0)
+        first_socket.close.assert_called_once_with()
+        second_socket.settimeout.assert_called_once_with(2.0)
+        tls_socket.settimeout.assert_called_once_with(1.0)
+        self.assertEqual(connection.pinned_address, "93.184.216.35")
+        self.assertIs(connection.sock, tls_socket)
+
+    def test_pinned_connection_stops_when_shared_timeout_is_exhausted(self) -> None:
+        connection = PinnedHttpsConnection(
+            "example.com",
+            pinned_addresses=(
+                "93.184.216.34",
+                "93.184.216.35",
+                "93.184.216.36",
+            ),
+            timeout=3.0,
+            context=Mock(),
+            clock=iter((0.0, 0.0, 2.0, 3.0)).__next__,
+        )
+
+        with (
+            patch(
+                "research.PinnedHttpsTransport.socket.create_connection",
+                side_effect=[OSError("first"), OSError("second")],
+            ) as create_connection,
+            self.assertRaisesRegex(OSError, "All validated research addresses"),
+        ):
+            connection.connect()
+
+        self.assertEqual(create_connection.call_count, 2)
+
+    def test_pinned_connection_reports_safe_error_after_all_addresses_fail(
+        self,
+    ) -> None:
+        connection = PinnedHttpsConnection(
+            "example.com",
+            pinned_addresses=("93.184.216.34", "93.184.216.35"),
+            context=Mock(),
+        )
+
+        with (
+            patch(
+                "research.PinnedHttpsTransport.socket.create_connection",
+                side_effect=[OSError("first secret"), OSError("second secret")],
+            ) as create_connection,
+            self.assertRaisesRegex(
+                OSError,
+                "All validated research addresses failed",
+            ) as captured,
+        ):
+            connection.connect()
+
+        self.assertEqual(
+            [call_args.args[0][0] for call_args in create_connection.call_args_list],
+            ["93.184.216.34", "93.184.216.35"],
+        )
+        self.assertNotIn("secret", str(captured.exception))
+
     def test_pinned_handler_uses_the_address_from_its_own_validation(self) -> None:
-        validator = PublicHttpsUrlValidator(lambda _host: ("93.184.216.34",))
+        validator = PublicHttpsUrlValidator(
+            lambda _host: ("93.184.216.34", "93.184.216.35")
+        )
         handler = PinnedHttpsHandler(
             validator.validate_and_resolve,
         )
@@ -223,6 +313,10 @@ class HttpResearchSourceFetcherTests(unittest.TestCase):
         self.assertIs(result, sentinel)
         self.assertIsInstance(connection, PinnedHttpsConnection)
         self.assertEqual(connection.pinned_address, "93.184.216.34")
+        self.assertEqual(
+            connection.pinned_addresses,
+            ("93.184.216.34", "93.184.216.35"),
+        )
         self.assertTrue(handler.tls_context.check_hostname)
         self.assertEqual(handler.tls_context.verify_mode, ssl.CERT_REQUIRED)
 

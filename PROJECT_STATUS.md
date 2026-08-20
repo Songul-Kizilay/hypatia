@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.49 (Genesis)`
+`v0.3.50 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.49`** is the current executable package and GitHub
+- **Runtime release `v0.3.50`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -58,8 +58,10 @@ with optional OpenAI-compatible LLM conversation support.
 - A desktop `Load source` action accepts one explicitly entered public HTTPS
   URL. The runtime validates the scheme, credentials, port, every resolved IP,
   and redirects, then connects to one exact validated address while retaining
-  hostname-based TLS and certificate checks. It bounds content type, response
-  size, and text encoding before extracting readable HTML/plain text and
+  hostname-based TLS and certificate checks. A failed connection advances only
+  to the next address from the same public-only answer set, with all attempts
+  sharing one decreasing time budget. It bounds content type, response size,
+  and text encoding before extracting readable HTML/plain text and
   indexing it through the existing knowledge pipeline. It preserves the final
   URL as provenance and does not invoke an LLM, write conversation memory, run
   in the background, or discover sources automatically.
@@ -328,7 +330,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 1,209 automated tests pass through package-aware discovery.
+- 1,212 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -355,7 +357,7 @@ so this check did not alter the project's persisted data.
 
 ## Next Milestone
 
-Design bounded connection fallback across multiple already validated public
-addresses. Fallback must never perform a new unvalidated resolution, must keep
-hostname-based TLS and certificate verification, and must remain within the
-existing timeout and explicit-only research boundaries.
+Design bounded local persistence for explicitly accepted research-source text
+so a run can resume after restart without silently refetching the web page.
+The design must retain provenance and integrity, enforce storage bounds, avoid
+duplicating unrelated knowledge state, and preserve explicit user control.

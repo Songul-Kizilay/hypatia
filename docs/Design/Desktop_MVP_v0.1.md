@@ -145,9 +145,11 @@ conversation memory, invoke an LLM, or retain a partial local source.
 `Load source` sends exactly one explicitly entered URL through the structured
 research-source request. The runtime validates public HTTPS resolution and
 redirects, pins each connection to an exact validated public address while
-retaining hostname-based TLS certificate checks, bounds response
-type/size/time, extracts readable text, and indexes the source with its final
-URL. `Start research` persists one question and
+retaining hostname-based TLS certificate checks. A failed setup advances only
+through the remaining addresses from that validation within one shared time
+budget. The runtime bounds response type/size/time, extracts readable text,
+and indexes the source with its final URL. `Start research` persists one
+question and
 selects the returned run ID; `Research runs` lists the current audit catalog.
 When a run ID is present, a successful source load also persists provenance,
 while an audit-write failure rolls the new unlinked knowledge document back.
@@ -155,8 +157,8 @@ while an audit-write failure rolls the new unlinked knowledge document back.
 question to the fixed Crossref REST v1 metadata endpoint and displays at most
 five ordered DOI candidates. The endpoint and its same-origin redirects use
 public-address-pinned, hostname-verified TLS. `Use selected URL` copies only
-the chosen DOI URL
-into the HTTPS field; it does not invoke `Load source`, and a candidate rendered
+the chosen DOI URL into the HTTPS field; it does not invoke `Load source`, and
+a candidate rendered
 for another run cannot be reused after the run ID changes. `Preview & load`
 requests a no-side-effect runtime decision for the exact run, discovery, and
 candidate, asks for confirmation, and then revalidates before delegating to the

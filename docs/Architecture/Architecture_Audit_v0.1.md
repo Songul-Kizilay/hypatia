@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.49` in the current release candidate) are the
+- **Runtime releases** (`v0.3.50` in the current release candidate) are the
   executable package and GitHub release line. They are the source-backed
   implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
@@ -75,8 +75,9 @@ persistence directly. It owns neither persistent state nor a provider client;
 the UI window does not add a browser, web server, or background network channel.
 Its explicit research-source action delegates one user-entered HTTPS URL to the
 Brain-owned bounded fetcher and never runs implicitly. The default fetcher
-connects to one exact public address from its own validation while retaining
-hostname-based TLS certificate checks; redirects repeat that boundary.
+tries only the ordered public addresses from its own validation, once each and
+within one decreasing connection-time budget, while retaining hostname-based
+TLS certificate checks; redirects repeat that boundary.
 It can create/list a persistent research run and pass a selected run ID with
 the source request. Bootstrap—not the UI—owns the atomic run store and records
 only question/status, source provenance, safe failures, and timestamps; page
@@ -285,7 +286,7 @@ Not implemented:
 
 The current local verification baseline is:
 
-- package-aware `python -m unittest`: 1,209 tests passed. Explicit `tests.*`
+- package-aware `python -m unittest`: 1,212 tests passed. Explicit `tests.*`
   module names ensure nested test directories are included without shadowing
   source packages.
 - `python -m black --check src tests`: passed.
