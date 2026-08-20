@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import unittest
 from datetime import UTC, datetime, timedelta
+from functools import partial
 
 from core.Exceptions import ResearchError
 from knowledge.Chunk import Chunk
@@ -150,6 +151,155 @@ class ResearchRunManagerTests(unittest.TestCase):
 
         self.assertEqual(self.manager.get(run.run_id), attached_run)
         self.assertEqual(self.manager.get(run.run_id).evidence, ())
+
+    def test_completed_preview_requires_source_and_evidence_without_saving(
+        self,
+    ) -> None:
+        run = self.manager.create("Question")
+        saves_after_create = len(self.store.saved)
+
+        without_source = self.manager.preview_status_transition(
+            run.run_id,
+            ResearchRunStatus.COMPLETED,
+        )
+        source = ResearchSource(
+            url="https://example.com/research",
+            title="Example",
+            content="Evidence.",
+            content_type="text/plain",
+            fetched_at=self.start,
+        )
+        self.manager.add_source(run.run_id, source, "document-1")
+        saves_after_source = len(self.store.saved)
+        without_evidence = self.manager.preview_status_transition(
+            run.run_id,
+            ResearchRunStatus.COMPLETED,
+        )
+        self.manager.add_evidence(
+            run.run_id,
+            Chunk(
+                document_id="document-1",
+                index=0,
+                content="Evidence.",
+                chunk_id="chunk-1",
+            ),
+            "Supports completion.",
+        )
+        saves_after_evidence = len(self.store.saved)
+
+        allowed = self.manager.preview_status_transition(
+            run.run_id,
+            ResearchRunStatus.COMPLETED,
+        )
+
+        self.assertFalse(without_source.allowed)
+        self.assertIn("accepted source", without_source.reason)
+        self.assertFalse(without_evidence.allowed)
+        self.assertIn("evidence record", without_evidence.reason)
+        self.assertTrue(allowed.allowed)
+        self.assertEqual(allowed.current_status, ResearchRunStatus.COLLECTING)
+        self.assertEqual(allowed.target_status, ResearchRunStatus.COMPLETED)
+        self.assertEqual(len(self.store.saved), saves_after_evidence)
+        self.assertEqual(saves_after_create + 1, saves_after_source)
+
+    def test_terminal_transition_is_persisted_and_closes_further_mutation(self) -> None:
+        run = self.manager.create("Question")
+        source = ResearchSource(
+            url="https://example.com/research",
+            title="Example",
+            content="Evidence.",
+            content_type="text/plain",
+            fetched_at=self.start,
+        )
+        self.manager.add_source(run.run_id, source, "document-1")
+        chunk = Chunk(
+            document_id="document-1",
+            index=0,
+            content="Evidence.",
+            chunk_id="chunk-1",
+        )
+        self.manager.add_evidence(run.run_id, chunk, "Supports completion.")
+
+        completed = self.manager.transition_status(
+            run.run_id,
+            ResearchRunStatus.COMPLETED,
+        )
+
+        self.assertEqual(completed.status, ResearchRunStatus.COMPLETED)
+        self.assertTrue(completed.status.terminal)
+        self.assertEqual(self.store.runs, [completed])
+        blocked = self.manager.preview_status_transition(
+            run.run_id,
+            ResearchRunStatus.CANCELLED,
+        )
+        self.assertFalse(blocked.allowed)
+        self.assertIn("closed", blocked.reason)
+        for mutation in (
+            lambda: self.manager.add_source(run.run_id, source, "document-2"),
+            lambda: self.manager.add_evidence(
+                run.run_id,
+                chunk,
+                "Another note.",
+            ),
+            lambda: self.manager.record_failure(run.run_id, "stage", "Reason."),
+        ):
+            with self.assertRaisesRegex(ResearchError, "closed"):
+                mutation()
+
+    def test_cancelled_is_valid_when_empty_but_failed_requires_a_failure(self) -> None:
+        cancelled_store = RecordingRunStore()
+        cancelled_manager = ResearchRunManager(
+            cancelled_store,
+            id_factory=partial(str, "run-cancelled"),
+        )
+        cancelled_run = cancelled_manager.create("Question")
+
+        cancelled_preview = cancelled_manager.preview_status_transition(
+            cancelled_run.run_id,
+            ResearchRunStatus.CANCELLED,
+        )
+        cancelled = cancelled_manager.transition_status(
+            cancelled_run.run_id,
+            ResearchRunStatus.CANCELLED,
+        )
+
+        failed_store = RecordingRunStore()
+        failed_manager = ResearchRunManager(
+            failed_store,
+            id_factory=partial(str, "run-failed"),
+        )
+        failed_run = failed_manager.create("Question")
+        blocked = failed_manager.preview_status_transition(
+            failed_run.run_id,
+            ResearchRunStatus.FAILED,
+        )
+        failed_manager.record_failure(failed_run.run_id, "source_load", "Timed out.")
+        allowed = failed_manager.preview_status_transition(
+            failed_run.run_id,
+            ResearchRunStatus.FAILED,
+        )
+        failed = failed_manager.transition_status(
+            failed_run.run_id,
+            ResearchRunStatus.FAILED,
+        )
+
+        self.assertTrue(cancelled_preview.allowed)
+        self.assertEqual(cancelled.status, ResearchRunStatus.CANCELLED)
+        self.assertEqual(cancelled_store.runs, [cancelled])
+        self.assertFalse(blocked.allowed)
+        self.assertIn("failure record", blocked.reason)
+        self.assertTrue(allowed.allowed)
+        self.assertEqual(failed.status, ResearchRunStatus.FAILED)
+        self.assertEqual(failed_store.runs, [failed])
+
+    def test_failed_status_save_does_not_publish_terminal_state(self) -> None:
+        run = self.manager.create("Question")
+        self.store.error = ResearchError("Store unavailable.")
+
+        with self.assertRaisesRegex(ResearchError, "Store unavailable"):
+            self.manager.transition_status(run.run_id, ResearchRunStatus.CANCELLED)
+
+        self.assertEqual(self.manager.get(run.run_id), run)
 
     def test_failed_save_does_not_publish_candidate_state(self) -> None:
         run = self.manager.create("Question")

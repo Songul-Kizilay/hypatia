@@ -16,6 +16,9 @@ from knowledge.KnowledgeRelationRevocationPreview import (
     KnowledgeRelationRevocationPreview,
 )
 from research.ResearchRun import ResearchRun
+from research.ResearchRunStatusTransitionPreview import (
+    ResearchRunStatusTransitionPreview,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,5 +41,8 @@ class BrainResponse:
     )
     knowledge_relation_revocation: KnowledgeRelationRevocation | None = None
     research_runs: list[ResearchRun] = field(default_factory=list)
+    research_run_status_transition_preview: (
+        ResearchRunStatusTransitionPreview | None
+    ) = None
     session_summaries: list[SessionSummary] = field(default_factory=list)
     session_delete_allowed: bool | None = None

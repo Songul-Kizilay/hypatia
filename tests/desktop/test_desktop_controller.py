@@ -341,6 +341,48 @@ class DesktopControllerTests(unittest.TestCase):
 
         self.assertEqual(self.brain.requests, [])
 
+    def test_research_status_preview_and_update_use_structured_requests(self) -> None:
+        preview = self.controller.preview_research_run_status(
+            " run-123 ",
+            " CANCELLED ",
+        )
+        updated = self.controller.update_research_run_status(
+            " run-123 ",
+            " CANCELLED ",
+        )
+
+        self.assertIs(preview, self.response)
+        self.assertIs(updated, self.response)
+        requests = self.brain.requests
+        self.assertEqual(len(requests), 2)
+        self.assertTrue(all(isinstance(request, BrainRequest) for request in requests))
+        assert isinstance(requests[0], BrainRequest)
+        assert isinstance(requests[1], BrainRequest)
+        expected_values = {
+            "research_run_id": "run-123",
+            "research_target_status": "cancelled",
+        }
+        self.assertEqual(
+            requests[0].metadata,
+            {"intent": "research_run_status_preview", **expected_values},
+        )
+        self.assertEqual(
+            requests[1].metadata,
+            {"intent": "research_run_status_update", **expected_values},
+        )
+
+    def test_research_status_actions_reject_invalid_values_locally(self) -> None:
+        for action in (
+            self.controller.preview_research_run_status,
+            self.controller.update_research_run_status,
+        ):
+            for run_id, target in (("", "completed"), ("run-1", "collecting")):
+                with self.subTest(action=action.__name__, values=(run_id, target)):
+                    with self.assertRaises(ValueError):
+                        action(run_id, target)
+
+        self.assertEqual(self.brain.requests, [])
+
     def test_load_research_source_can_attach_to_an_explicit_run(self) -> None:
         response = self.controller.load_research_source(
             " https://example.com/research ",

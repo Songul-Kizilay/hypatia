@@ -26,6 +26,9 @@ from desktop.TkinterDesktopWindow import (
 from knowledge.KnowledgeCitation import KnowledgeCitation
 from research.ResearchRun import ResearchRun
 from research.ResearchRunStatus import ResearchRunStatus
+from research.ResearchRunStatusTransitionPreview import (
+    ResearchRunStatusTransitionPreview,
+)
 
 
 class AccessibilityPreferenceTests(unittest.TestCase):
@@ -300,6 +303,83 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         self.assertEqual(controller.evidence_list_calls, ["run-123"])
         self.assertEqual(responses, [controller.evidence_list_response])
 
+    def test_allowed_research_status_preview_requires_confirmation_before_update(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchSourceLoadController()
+        responses: list[BrainResponse] = []
+        window._root = object()
+        window._controller = controller
+        window._research_run_id = RecordingInput("run-123")
+        window._research_target_status = RecordingInput("cancelled")
+        window._status = RecordingStatus()
+        window._append_response = responses.append
+
+        with patch(
+            "desktop.TkinterDesktopWindow.messagebox.askyesno",
+            return_value=True,
+        ) as confirm:
+            window._preview_and_update_research_status()
+
+        self.assertEqual(controller.status_previews, [("run-123", "cancelled")])
+        self.assertEqual(controller.status_updates, [("run-123", "cancelled")])
+        self.assertEqual(
+            responses,
+            [controller.status_preview_response, controller.status_update_response],
+        )
+        confirm.assert_called_once()
+
+    def test_declined_research_status_preview_does_not_update(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchSourceLoadController()
+        status = RecordingStatus()
+        window._root = object()
+        window._controller = controller
+        window._research_run_id = RecordingInput("run-123")
+        window._research_target_status = RecordingInput("cancelled")
+        window._status = status
+        window._append_response = lambda _response: None
+
+        with patch(
+            "desktop.TkinterDesktopWindow.messagebox.askyesno",
+            return_value=False,
+        ):
+            window._preview_and_update_research_status()
+
+        self.assertEqual(controller.status_updates, [])
+        self.assertEqual(status.values, ["research status: not updated"])
+
+    def test_blocked_research_status_preview_cannot_request_confirmation(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchSourceLoadController()
+        blocked = ResearchRunStatusTransitionPreview(
+            run_id="run-123",
+            current_status=ResearchRunStatus.COLLECTING,
+            target_status=ResearchRunStatus.COMPLETED,
+            allowed=False,
+            reason="A completed research run requires evidence.",
+        )
+        controller.status_preview_response = BrainResponse(
+            message="Preview blocked.",
+            request_id="research-status-preview-blocked",
+            intent="research_run_status_preview",
+            memory_count=0,
+            research_run_status_transition_preview=blocked,
+        )
+        window._root = object()
+        window._controller = controller
+        window._research_run_id = RecordingInput("run-123")
+        window._research_target_status = RecordingInput("completed")
+        window._status = RecordingStatus()
+        window._append_response = lambda _response: None
+
+        with patch("desktop.TkinterDesktopWindow.messagebox.askyesno") as confirm:
+            window._preview_and_update_research_status()
+
+        confirm.assert_not_called()
+        self.assertEqual(controller.status_updates, [])
+
 
 class RecordingKnowledgeLoadController:
     def __init__(self) -> None:
@@ -323,6 +403,8 @@ class RecordingResearchSourceLoadController:
         self.list_calls = 0
         self.evidence_calls: list[tuple[str, str, str]] = []
         self.evidence_list_calls: list[str] = []
+        self.status_previews: list[tuple[str, str]] = []
+        self.status_updates: list[tuple[str, str]] = []
         self.response = BrainResponse(
             message="Loaded.",
             request_id="research-source-load",
@@ -367,6 +449,27 @@ class RecordingResearchSourceLoadController:
             memory_count=0,
             research_runs=[run],
         )
+        status_preview = ResearchRunStatusTransitionPreview(
+            run_id="run-123",
+            current_status=ResearchRunStatus.COLLECTING,
+            target_status=ResearchRunStatus.CANCELLED,
+            allowed=True,
+            reason="Research run can be marked cancelled.",
+        )
+        self.status_preview_response = BrainResponse(
+            message="Preview allowed.",
+            request_id="research-status-preview",
+            intent="research_run_status_preview",
+            memory_count=0,
+            research_run_status_transition_preview=status_preview,
+        )
+        self.status_update_response = BrainResponse(
+            message="Updated.",
+            request_id="research-status-update",
+            intent="research_run_status_update",
+            memory_count=0,
+            research_runs=[run],
+        )
 
     def load_research_source(
         self, url: str, research_run_id: str = ""
@@ -406,6 +509,22 @@ class RecordingResearchSourceLoadController:
             raise ValueError("A research run ID cannot be empty.")
         self.evidence_list_calls.append(run_id)
         return self.evidence_list_response
+
+    def preview_research_run_status(
+        self,
+        run_id: str,
+        target_status: str,
+    ) -> BrainResponse:
+        self.status_previews.append((run_id, target_status))
+        return self.status_preview_response
+
+    def update_research_run_status(
+        self,
+        run_id: str,
+        target_status: str,
+    ) -> BrainResponse:
+        self.status_updates.append((run_id, target_status))
+        return self.status_update_response
 
 
 class RecordingInput:

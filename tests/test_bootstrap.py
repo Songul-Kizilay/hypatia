@@ -280,6 +280,16 @@ class BootstrapTests(unittest.TestCase):
                 },
             )
         )
+        closed = brain.process(
+            BrainRequest(
+                message="Update selected research status",
+                metadata={
+                    "intent": "research_run_status_update",
+                    "research_run_id": run.run_id,
+                    "research_target_status": "completed",
+                },
+            )
+        )
 
         restarted = self._bootstrap()
         restarted.initialize()
@@ -300,10 +310,12 @@ class BootstrapTests(unittest.TestCase):
         )
 
         self.assertTrue(recorded.success)
+        self.assertTrue(closed.success)
+        self.assertEqual(closed.research_runs[0].status.value, "completed")
         self.assertEqual(len(recorded.research_runs[0].evidence), 1)
-        self.assertEqual(listed.research_runs, recorded.research_runs)
+        self.assertEqual(listed.research_runs, closed.research_runs)
         self.assertTrue(evidence_listed.success)
-        self.assertEqual(evidence_listed.research_runs, recorded.research_runs)
+        self.assertEqual(evidence_listed.research_runs, closed.research_runs)
         self.assertIn("Second finding.", evidence_listed.message)
 
     def test_missing_session_file_creates_and_persists_the_default_registry(

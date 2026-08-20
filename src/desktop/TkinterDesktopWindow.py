@@ -134,6 +134,7 @@ class TkinterDesktopWindow:
         self._research_url = tk.StringVar()
         self._research_chunk_id = tk.StringVar()
         self._research_evidence_note = tk.StringVar()
+        self._research_target_status = tk.StringVar(value="completed")
         self._relation_source_id = tk.StringVar()
         self._relation_target_id = tk.StringVar()
         self._session_summaries: list[SessionSummary] = []
@@ -410,6 +411,23 @@ class TkinterDesktopWindow:
             text="View evidence",
             command=self._show_research_evidence,
         ).grid(row=5, column=3, sticky="ew", pady=(8, 0))
+        ttk.Label(research_frame, text="Final status").grid(
+            row=5,
+            column=0,
+            sticky="w",
+            pady=(8, 0),
+        )
+        ttk.Combobox(
+            research_frame,
+            textvariable=self._research_target_status,
+            values=("completed", "failed", "cancelled"),
+            state="readonly",
+        ).grid(row=5, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
+        ttk.Button(
+            research_frame,
+            text="Preview status",
+            command=self._preview_and_update_research_status,
+        ).grid(row=5, column=2, sticky="ew", pady=(8, 0))
 
         relation_frame = ttk.LabelFrame(
             container,
@@ -667,6 +685,39 @@ class TkinterDesktopWindow:
         except ValueError as error:
             self._status.set(str(error))
             return
+        self._append_response(response)
+
+    def _preview_and_update_research_status(self) -> None:
+        """Preview and separately confirm one irreversible terminal status."""
+        run_id = self._research_run_id.get()
+        target_status = self._research_target_status.get()
+        try:
+            preview_response = self._controller.preview_research_run_status(
+                run_id,
+                target_status,
+            )
+        except ValueError as error:
+            self._status.set(str(error))
+            return
+        self._append_response(preview_response)
+        preview = preview_response.research_run_status_transition_preview
+        if not preview_response.success or preview is None or not preview.allowed:
+            return
+        if not messagebox.askyesno(
+            "Close research run?",
+            (
+                f"{preview_response.message}\n\n"
+                "This closes the run and prevents further source, evidence, "
+                "or failure changes. Continue?"
+            ),
+            parent=self._root,
+        ):
+            self._status.set("research status: not updated")
+            return
+        response = self._controller.update_research_run_status(
+            run_id,
+            target_status,
+        )
         self._append_response(response)
 
     def _preview_and_link_knowledge_relation(self) -> None:

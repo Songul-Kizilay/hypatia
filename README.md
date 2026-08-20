@@ -144,6 +144,12 @@ to a source attached to the selected run. It keeps a bounded excerpt, source
 and paragraph locator, full-paragraph fingerprint, note, and timestamp;
 `View evidence` remains available after restart. Hypatia does not yet select or
 interpret evidence automatically.
+The `Final status` control previews `completed`, `failed`, or `cancelled` before
+asking for separate confirmation. Completion requires at least one accepted
+source and one evidence record, while failure requires a recorded failure. A
+closed run is permanent and cannot accept
+more sources, evidence, or failure records; Hypatia rejects a closed-run source
+request before opening the network connection.
 `Ask sources` deliberately invokes the existing `ask knowledge` local-RAG path
 only when its button is selected. It provides the configured runtime with up to
 three bounded cited local chunks and never adds retrieval to ordinary chat or

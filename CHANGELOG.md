@@ -2,6 +2,30 @@
 
 All notable project changes are recorded here.
 
+## [0.3.35] - 2026-08-20
+
+### Added
+
+- Research runs now have explicit `collecting`, `completed`, `failed`, and
+  `cancelled` lifecycle states. A completed run requires at least one accepted
+  source and one evidence record; a failed run requires a failure record;
+  cancellation may close an otherwise empty run honestly.
+- The desktop uses a read-only preview followed by a separate confirmation for
+  every terminal transition. The update revalidates current state before its
+  atomic snapshot write.
+
+### Changed
+
+- Terminal research runs are immutable: they cannot accept further sources,
+  evidence, or failure records, and they cannot transition to a different
+  status. A source request for a closed run is rejected before network access.
+
+### Verification
+
+- The package-aware full local suite contains 1,047 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass with the documented
+  project virtual environment.
+
 ## [0.3.34] - 2026-08-20
 
 ### Added

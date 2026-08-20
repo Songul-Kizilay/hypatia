@@ -201,6 +201,32 @@ class DesktopController:
             )
         )
 
+    def preview_research_run_status(
+        self,
+        research_run_id: str,
+        target_status: str,
+    ) -> BrainResponse:
+        """Preview one requested terminal research status without mutation."""
+        return self._research_status_request(
+            "research_run_status_preview",
+            "Preview selected research status",
+            research_run_id,
+            target_status,
+        )
+
+    def update_research_run_status(
+        self,
+        research_run_id: str,
+        target_status: str,
+    ) -> BrainResponse:
+        """Apply one terminal status only after the desktop preview."""
+        return self._research_status_request(
+            "research_run_status_update",
+            "Update selected research status",
+            research_run_id,
+            target_status,
+        )
+
     def load_research_source(
         self,
         url: str,
@@ -335,3 +361,28 @@ class DesktopController:
         if not source_id or not target_id:
             raise ValueError("Both knowledge source IDs are required.")
         return self._brain.process(f"{command} {source_id} -- {target_id}")
+
+    def _research_status_request(
+        self,
+        intent: str,
+        message: str,
+        research_run_id: str,
+        target_status: str,
+    ) -> BrainResponse:
+        normalized_run_id = research_run_id.strip()
+        normalized_status = target_status.strip().casefold()
+        if not normalized_run_id:
+            raise ValueError("A research run ID cannot be empty.")
+        if normalized_status not in {"completed", "failed", "cancelled"}:
+            raise ValueError("A valid terminal research status is required.")
+        return self._brain.process(
+            BrainRequest(
+                message=message,
+                source="desktop",
+                metadata={
+                    "intent": intent,
+                    "research_run_id": normalized_run_id,
+                    "research_target_status": normalized_status,
+                },
+            )
+        )

@@ -42,6 +42,15 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
   in-memory knowledge index.
 - Schema v2 reads v1 run snapshots as evidence-empty and upgrades them only on
   a later successful atomic save.
+- A collecting run may be previewed and then explicitly closed as `completed`,
+  `failed`, or `cancelled`. Completion requires at least one accepted source
+  and evidence record; failure requires at least one failure record;
+  cancellation may close an empty run. The
+  update revalidates current state and persists before publishing the terminal
+  status.
+- Terminal runs are immutable and cannot be reopened, moved to another terminal
+  status, or receive sources, evidence, or failures. A source request for a
+  terminal run is rejected before network acquisition.
 - If source indexing succeeds but the run snapshot cannot be saved, the newly
   indexed unlinked document is removed before a controlled failure is returned.
   Persistent failure reasons do not retain a rejected URL.
@@ -51,11 +60,10 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
 
 ## Next increment
 
-Add explicit completion-state transitions, then define a replaceable
-source-discovery provider before synthesis. Discovery queries,
-candidate-source decisions, future claim/evidence links, and later summaries
-must remain auditable; no unattended crawling should be enabled at this
-boundary.
+Define a replaceable read-only source-discovery provider and auditable
+candidate-source records before synthesis. Discovery queries, candidate-source
+decisions, future claim/evidence links, and later summaries must remain
+auditable; no unattended crawling should be enabled at this boundary.
 
 ## Known boundary
 

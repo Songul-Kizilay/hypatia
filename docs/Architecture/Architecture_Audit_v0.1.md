@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.34` today) are the executable package and GitHub
+- **Runtime releases** (`v0.3.35` today) are the executable package and GitHub
   release line. They are the source-backed implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
   engineering increments. Sprint 4.16.50 is complete and is already in the
@@ -84,6 +84,12 @@ v2 snapshot retains a bounded excerpt, full-chunk SHA-256 fingerprint, source
 and paragraph locator, user note, and timestamp. A read-only action renders
 that record after restart without an LLM or live knowledge lookup; no evidence
 is selected or interpreted automatically.
+Research lifecycle mutation also remains explicit. The desktop requests a
+read-only transition preview and confirms only an allowed `completed`, `failed`,
+or `cancelled` outcome; the update revalidates and atomically persists it.
+Completion requires source plus evidence, while failure requires a recorded
+failure. Every terminal run is immutable, and a closed-run source request is
+rejected before the fetcher is called.
 When launched as the desktop application, Bootstrap receives user-writable
 memory, session, relation, and research-run paths beneath
 `%LOCALAPPDATA%\Hypatia` on
@@ -234,12 +240,12 @@ Not implemented:
 
 The current local verification baseline is:
 
-- `python -m unittest discover -s tests -t .`: 1,034 tests passed. The top-level
+- `python -m unittest discover -s tests -t .`: 1,047 tests passed. The top-level
   package setting ensures nested test directories are included without
   shadowing source packages.
 - `python -m black --check src tests`: passed.
 - `python -m ruff check src tests`: passed.
-- `python -m mypy src tests`: passed with no issues in 265 files.
+- `python -m mypy src tests`: passed with no issues in 266 files.
 
 These checks verify the current local worktree; they do not create a release,
 tag, pull request, or GitHub deployment.

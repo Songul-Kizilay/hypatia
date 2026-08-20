@@ -13,6 +13,9 @@ from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchFailureRecord import ResearchFailureRecord
 from research.ResearchRun import ResearchRun
 from research.ResearchRunStatus import ResearchRunStatus
+from research.ResearchRunStatusTransitionPreview import (
+    ResearchRunStatusTransitionPreview,
+)
 from research.ResearchRunStore import ResearchRunStore
 from research.ResearchSource import ResearchSource
 from research.ResearchSourceRecord import ResearchSourceRecord
@@ -98,6 +101,7 @@ class ResearchRunManager:
         normalized_document_id = self._normalize_document_id(document_id)
         with self._lock:
             index, run = self._find_with_index(normalized_id)
+            self._require_collecting(run)
             if any(
                 record.document_id == normalized_document_id for record in run.sources
             ):
@@ -132,6 +136,7 @@ class ResearchRunManager:
         normalized_id = self._normalize_run_id(run_id)
         with self._lock:
             index, run = self._find_with_index(normalized_id)
+            self._require_collecting(run)
             now = self._now()
             updated = ResearchRun(
                 run_id=run.run_id,
@@ -161,6 +166,7 @@ class ResearchRunManager:
         normalized_note = self._normalize_evidence_note(note)
         with self._lock:
             index, run = self._find_with_index(normalized_id)
+            self._require_collecting(run)
             if not any(
                 source.document_id == chunk.document_id for source in run.sources
             ):
@@ -190,6 +196,109 @@ class ResearchRunManager:
             self._persist(candidate_tuple)
             self._runs = candidate_tuple
         return updated
+
+    def preview_status_transition(
+        self,
+        run_id: str,
+        target_status: ResearchRunStatus,
+    ) -> ResearchRunStatusTransitionPreview:
+        """Return a no-side-effect decision for one terminal transition."""
+        normalized_id = self._normalize_run_id(run_id)
+        if not isinstance(target_status, ResearchRunStatus):
+            raise ResearchError("Research run target status is invalid.")
+        with self._lock:
+            _, run = self._find_with_index(normalized_id)
+            return self._status_transition_preview(run, target_status)
+
+    def transition_status(
+        self,
+        run_id: str,
+        target_status: ResearchRunStatus,
+    ) -> ResearchRun:
+        """Revalidate and atomically persist one terminal status transition."""
+        normalized_id = self._normalize_run_id(run_id)
+        if not isinstance(target_status, ResearchRunStatus):
+            raise ResearchError("Research run target status is invalid.")
+        with self._lock:
+            index, run = self._find_with_index(normalized_id)
+            preview = self._status_transition_preview(run, target_status)
+            if not preview.allowed:
+                raise ResearchError(preview.reason)
+            now = self._now()
+            updated = ResearchRun(
+                run_id=run.run_id,
+                question=run.question,
+                status=target_status,
+                sources=run.sources,
+                failures=run.failures,
+                created_at=run.created_at,
+                updated_at=now,
+                evidence=run.evidence,
+            )
+            candidate = list(self._runs)
+            candidate[index] = updated
+            candidate_tuple = tuple(candidate)
+            self._persist(candidate_tuple)
+            self._runs = candidate_tuple
+        return updated
+
+    @staticmethod
+    def _status_transition_preview(
+        run: ResearchRun,
+        target_status: ResearchRunStatus,
+    ) -> ResearchRunStatusTransitionPreview:
+        if target_status is ResearchRunStatus.COLLECTING:
+            return ResearchRunStatusTransitionPreview(
+                run.run_id,
+                run.status,
+                target_status,
+                False,
+                "A research run can transition only to a terminal status.",
+            )
+        if run.status.terminal:
+            return ResearchRunStatusTransitionPreview(
+                run.run_id,
+                run.status,
+                target_status,
+                False,
+                "A closed research run cannot change status.",
+            )
+        if target_status is ResearchRunStatus.COMPLETED and not run.sources:
+            return ResearchRunStatusTransitionPreview(
+                run.run_id,
+                run.status,
+                target_status,
+                False,
+                "A completed research run requires at least one accepted source.",
+            )
+        if target_status is ResearchRunStatus.COMPLETED and not run.evidence:
+            return ResearchRunStatusTransitionPreview(
+                run.run_id,
+                run.status,
+                target_status,
+                False,
+                "A completed research run requires at least one evidence record.",
+            )
+        if target_status is ResearchRunStatus.FAILED and not run.failures:
+            return ResearchRunStatusTransitionPreview(
+                run.run_id,
+                run.status,
+                target_status,
+                False,
+                "A failed research run requires at least one failure record.",
+            )
+        return ResearchRunStatusTransitionPreview(
+            run.run_id,
+            run.status,
+            target_status,
+            True,
+            f"Research run can be marked {target_status.value}.",
+        )
+
+    @staticmethod
+    def _require_collecting(run: ResearchRun) -> None:
+        if run.status.terminal:
+            raise ResearchError("A closed research run cannot be changed.")
 
     def _find_with_index(self, run_id: str) -> tuple[int, ResearchRun]:
         for index, run in enumerate(self._runs):

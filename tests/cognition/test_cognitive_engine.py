@@ -70,6 +70,7 @@ from memory.SessionMemoryPolicy import SessionMemoryPolicy
 from planner.Planner import Planner
 from research.ResearchRun import ResearchRun
 from research.ResearchRunManager import ResearchRunManager
+from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSource import ResearchSource
 from response.ResponseComposer import ResponseComposer
 from session.SessionDeleteExecutionResult import SessionDeleteExecutionResult
@@ -6109,6 +6110,216 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(response.message, "Research evidence could not be saved.")
         self.assertEqual(manager.get(run.run_id), attached_run)
         self.assertEqual(manager.get(run.run_id).evidence, ())
+
+    def test_research_status_preview_and_update_close_a_complete_run_safely(
+        self,
+    ) -> None:
+        store = ToggleResearchRunStore()
+        manager = ResearchRunManager(
+            store,
+            id_factory=lambda: "run-123",
+            evidence_id_factory=lambda: "evidence-123",
+        )
+        run = manager.create("Compare local models")
+        source = ResearchSource(
+            url="https://example.com/research",
+            title="Example research",
+            content="Evidence paragraph.",
+            content_type="text/plain",
+            fetched_at=datetime(2026, 8, 20, 12, 30, tzinfo=UTC),
+        )
+        document = self.knowledge_engine.add_document(source.to_document())
+        manager.add_source(run.run_id, source, document.document_id)
+        manager.add_evidence(
+            run.run_id,
+            self.knowledge_engine.search("evidence")[0],
+            "Supports completion.",
+        )
+        llm_provider = RecordingLLMProvider("must not run")
+        extractor = RecordingCandidateExtractor()
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+            learned_memory_candidate_extractor=extractor,
+            research_run_manager=manager,
+        )
+        memory_count = self.memory_manager.count()
+        events: list[str] = []
+        self.event_bus.subscribe("*", lambda event: events.append(event.name))
+        metadata = {
+            "research_run_id": run.run_id,
+            "research_target_status": "completed",
+        }
+
+        preview_response = engine.process(
+            BrainRequest(
+                message="Preview selected research status",
+                metadata={"intent": "research_run_status_preview", **metadata},
+            )
+        )
+
+        self.assertTrue(preview_response.success)
+        preview = preview_response.research_run_status_transition_preview
+        self.assertIsNotNone(preview)
+        assert preview is not None
+        self.assertTrue(preview.allowed)
+        self.assertEqual(manager.get(run.run_id).status, ResearchRunStatus.COLLECTING)
+
+        updated = engine.process(
+            BrainRequest(
+                message="Update selected research status",
+                metadata={"intent": "research_run_status_update", **metadata},
+            )
+        )
+
+        self.assertTrue(updated.success)
+        self.assertEqual(updated.intent, "research_run_status_update")
+        self.assertEqual(updated.research_runs[0].status, ResearchRunStatus.COMPLETED)
+        self.assertEqual(store.runs, updated.research_runs)
+        self.assertEqual(self.memory_manager.count(), memory_count)
+        self.assertEqual(llm_provider.calls, [])
+        self.assertEqual(extractor.calls, [])
+        self.assertEqual(events, [])
+
+    def test_research_status_completion_is_blocked_without_auditable_content(
+        self,
+    ) -> None:
+        manager = ResearchRunManager(id_factory=lambda: "run-123")
+        run = manager.create("Compare local models")
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            research_run_manager=manager,
+        )
+        metadata = {
+            "research_run_id": run.run_id,
+            "research_target_status": "completed",
+        }
+
+        preview_response = engine.process(
+            BrainRequest(
+                message="Preview selected research status",
+                metadata={"intent": "research_run_status_preview", **metadata},
+            )
+        )
+        update_response = engine.process(
+            BrainRequest(
+                message="Update selected research status",
+                metadata={"intent": "research_run_status_update", **metadata},
+            )
+        )
+        invalid_response = engine.process(
+            BrainRequest(
+                message="Preview selected research status",
+                metadata={
+                    "intent": "research_run_status_preview",
+                    "research_run_id": run.run_id,
+                    "research_target_status": "collecting-again",
+                },
+            )
+        )
+
+        self.assertTrue(preview_response.success)
+        preview = preview_response.research_run_status_transition_preview
+        self.assertIsNotNone(preview)
+        assert preview is not None
+        self.assertFalse(preview.allowed)
+        self.assertIn("accepted source", preview.reason)
+        self.assertFalse(update_response.success)
+        self.assertFalse(invalid_response.success)
+        self.assertIn("valid research run ID", invalid_response.message)
+        self.assertEqual(manager.get(run.run_id), run)
+
+    def test_closed_research_run_rejects_source_before_network_access(self) -> None:
+        manager = ResearchRunManager(id_factory=lambda: "run-123")
+        run = manager.create("Compare local models")
+        manager.transition_status(run.run_id, ResearchRunStatus.CANCELLED)
+        source = ResearchSource(
+            url="https://example.com/research",
+            title="Example",
+            content="Evidence.",
+            content_type="text/plain",
+            fetched_at=datetime(2026, 8, 20, 12, 30, tzinfo=UTC),
+        )
+        fetcher = RecordingResearchSourceFetcher(source=source)
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            research_source_fetcher=fetcher,
+            research_run_manager=manager,
+        )
+        documents_before = self.knowledge_engine.documents()
+
+        response = engine.process(
+            BrainRequest(
+                message="Load selected internet research source",
+                metadata={
+                    "intent": "research_source_load",
+                    "research_url": source.url,
+                    "research_run_id": run.run_id,
+                },
+            )
+        )
+
+        self.assertFalse(response.success)
+        self.assertIn("closed", response.message)
+        self.assertEqual(fetcher.calls, [])
+        self.assertEqual(self.knowledge_engine.documents(), documents_before)
+
+    def test_research_status_update_revalidates_after_preview(self) -> None:
+        manager = ResearchRunManager(id_factory=lambda: "run-123")
+        run = manager.create("Compare local models")
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            research_run_manager=manager,
+        )
+        metadata = {
+            "research_run_id": run.run_id,
+            "research_target_status": "cancelled",
+        }
+        preview_response = engine.process(
+            BrainRequest(
+                message="Preview selected research status",
+                metadata={"intent": "research_run_status_preview", **metadata},
+            )
+        )
+        manager.transition_status(run.run_id, ResearchRunStatus.CANCELLED)
+
+        update_response = engine.process(
+            BrainRequest(
+                message="Update selected research status",
+                metadata={"intent": "research_run_status_update", **metadata},
+            )
+        )
+
+        preview = preview_response.research_run_status_transition_preview
+        self.assertIsNotNone(preview)
+        assert preview is not None
+        self.assertTrue(preview.allowed)
+        self.assertFalse(update_response.success)
+        self.assertEqual(manager.get(run.run_id).status, ResearchRunStatus.CANCELLED)
 
     def test_research_source_load_requires_explicit_url_and_fetcher(self) -> None:
         for metadata, expected in (

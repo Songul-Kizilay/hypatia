@@ -50,6 +50,7 @@ from memory.SemanticMemoryIndexRuntime import SemanticMemoryIndexRuntime
 from memory.SemanticMemoryMatch import SemanticMemoryMatch
 from memory.SessionMemoryPolicy import SessionMemoryPolicy
 from research.ResearchRunManager import ResearchRunManager
+from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSourceFetcher import ResearchSourceFetcher
 from response.ResponseComposer import ResponseComposer
 from session.SessionCreateService import SessionCreateService
@@ -175,6 +176,12 @@ class CognitiveEngine:
 
         if self._is_research_evidence_list_request(request):
             return self._process_research_evidence_list(request)
+
+        if self._is_research_run_status_preview_request(request):
+            return self._process_research_run_status_preview(request)
+
+        if self._is_research_run_status_update_request(request):
+            return self._process_research_run_status_update(request)
 
         if self._is_research_source_load_request(request):
             return self._process_research_source_load(request)
@@ -349,6 +356,16 @@ class CognitiveEngine:
         """Recognize one explicit read-only research evidence catalog request."""
         return request.metadata.get("intent") == "research_evidence_list"
 
+    @staticmethod
+    def _is_research_run_status_preview_request(request: BrainRequest) -> bool:
+        """Recognize one explicit read-only lifecycle transition preview."""
+        return request.metadata.get("intent") == "research_run_status_preview"
+
+    @staticmethod
+    def _is_research_run_status_update_request(request: BrainRequest) -> bool:
+        """Recognize one explicit lifecycle transition mutation."""
+        return request.metadata.get("intent") == "research_run_status_update"
+
     def _process_research_run_create(self, request: BrainRequest) -> BrainResponse:
         question = request.metadata.get("research_question")
         if not isinstance(question, str) or not question.strip():
@@ -450,6 +467,86 @@ class CognitiveEngine:
             )
         return self._response_composer.research_evidence_list_success(request, run)
 
+    def _process_research_run_status_preview(
+        self,
+        request: BrainRequest,
+    ) -> BrainResponse:
+        values = self._research_run_status_values(request)
+        if values is None:
+            return self._response_composer.research_run_status_failure(
+                request,
+                "A valid research run ID and target status are required.",
+                intent="research_run_status_preview",
+            )
+        if self._research_run_manager is None:
+            return self._response_composer.research_run_status_failure(
+                request,
+                "Research run persistence is unavailable.",
+                intent="research_run_status_preview",
+            )
+        run_id, target_status = values
+        try:
+            preview = self._research_run_manager.preview_status_transition(
+                run_id,
+                target_status,
+            )
+        except ResearchError:
+            return self._response_composer.research_run_status_failure(
+                request,
+                "Research run was not found.",
+                intent="research_run_status_preview",
+            )
+        return self._response_composer.research_run_status_preview_success(
+            request,
+            preview,
+        )
+
+    def _process_research_run_status_update(
+        self,
+        request: BrainRequest,
+    ) -> BrainResponse:
+        values = self._research_run_status_values(request)
+        if values is None:
+            return self._response_composer.research_run_status_failure(
+                request,
+                "A valid research run ID and target status are required.",
+            )
+        if self._research_run_manager is None:
+            return self._response_composer.research_run_status_failure(
+                request,
+                "Research run persistence is unavailable.",
+            )
+        run_id, target_status = values
+        try:
+            run = self._research_run_manager.transition_status(
+                run_id,
+                target_status,
+            )
+        except ResearchError:
+            return self._response_composer.research_run_status_failure(
+                request,
+                "Research run status could not be updated.",
+            )
+        return self._response_composer.research_run_status_update_success(request, run)
+
+    @staticmethod
+    def _research_run_status_values(
+        request: BrainRequest,
+    ) -> tuple[str, ResearchRunStatus] | None:
+        run_id = request.metadata.get("research_run_id")
+        target_value = request.metadata.get("research_target_status")
+        if (
+            not isinstance(run_id, str)
+            or not run_id.strip()
+            or not isinstance(target_value, str)
+        ):
+            return None
+        try:
+            target_status = ResearchRunStatus(target_value.strip().casefold())
+        except ValueError:
+            return None
+        return run_id.strip(), target_status
+
     def _process_research_source_load(self, request: BrainRequest) -> BrainResponse:
         """Acquire and index one explicit source without LLM or memory side effects."""
         url = request.metadata.get("research_url")
@@ -478,11 +575,16 @@ class CognitiveEngine:
         if run_id:
             assert self._research_run_manager is not None
             try:
-                self._research_run_manager.get(run_id)
+                selected_run = self._research_run_manager.get(run_id)
             except ResearchError:
                 return self._response_composer.research_source_load_failure(
                     request,
                     "Research run was not found.",
+                )
+            if selected_run.status.terminal:
+                return self._response_composer.research_source_load_failure(
+                    request,
+                    "Research run is closed and cannot accept new sources.",
                 )
         try:
             source = self._research_source_fetcher.fetch(url.strip())
