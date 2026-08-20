@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.39 (Genesis)`
+`v0.3.40 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.39`** is the current executable package and GitHub
+- **Runtime release `v0.3.40`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -98,20 +98,26 @@ with optional OpenAI-compatible LLM conversation support.
   requiring the page content or an LLM.
 - A separate accepted-source assessment preview binds the exact run and source
   document ID, then renders persisted provenance and only evidence explicitly
-  recorded for that source. It works read-only for collecting and terminal
-  runs, makes no live knowledge or provider call, performs no write, and assigns
-  no automatic trust, quality, relevance, or credibility score.
-- Research-run schema v3 remains backward compatible with v1 and v2 snapshots.
-  Legacy runs load with absent evidence/discovery collections represented as
-  empty and are rewritten only after a later successful mutation; no eager or
-  partial migration occurs.
+  recorded for that source, plus any persisted user-authored assessments. It
+  works read-only for collecting and terminal runs, makes no live knowledge or
+  provider call, performs no write, and assigns no automatic trust, quality,
+  relevance, or credibility score.
+- A collecting run accepts an authored assessment only through its own
+  preview-confirm boundary. The user supplies assessment text and explicit
+  evidence IDs; final recording revalidates that the run is open, the source is
+  accepted, and every evidence record belongs to that source before atomically
+  appending the audit record.
+- Research-run schema v4 remains backward compatible with v1-v3 snapshots.
+  Legacy runs load with absent evidence, discovery, or assessment collections
+  represented as empty and are rewritten only after a later successful
+  mutation; no eager or partial migration occurs.
 - Research runs have a persisted terminal lifecycle. The desktop previews a
   requested `completed`, `failed`, or `cancelled` transition and requires a
   separate confirmation before the runtime revalidates and atomically saves
   it. Completion requires at least one accepted source and evidence record;
   failure requires a recorded failure; cancellation can honestly close an
   empty run. Closed runs cannot be
-  reopened, retargeted, or receive further source, evidence, or failure
+  reopened, retargeted, or receive further source, evidence, assessment, or failure
   mutations. Closed-run source requests stop before network access.
 - The Windows desktop entry point persists its own local runtime state beneath
   `%LOCALAPPDATA%\Hypatia` by default, avoiding writes beside an installed
@@ -266,7 +272,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 1,103 automated tests pass through package-aware discovery.
+- 1,121 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -293,7 +299,7 @@ so this check did not alter the project's persisted data.
 
 ## Next Milestone
 
-Define a separately reviewed, user-authored source-assessment record without
-automatic scoring or evidence selection. Ordinary-conversation augmentation,
-autonomous crawling, multi-source synthesis, unattended acceptance, and
-implicit graph writes remain out of scope.
+Define an explicit append-only correction/supersession relationship for
+user-authored assessments without deleting audit history. Ordinary-conversation
+augmentation, autonomous crawling, multi-source synthesis, unattended
+acceptance, automatic scoring, and implicit graph writes remain out of scope.

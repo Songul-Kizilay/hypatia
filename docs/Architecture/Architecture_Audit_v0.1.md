@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.39` today) are the executable package and GitHub
+- **Runtime releases** (`v0.3.40` today) are the executable package and GitHub
   release line. They are the source-backed implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
   engineering increments. Sprint 4.16.50 is complete and is already in the
@@ -123,17 +123,20 @@ Persistent state is stored locally as validated JSON snapshots through
 writes are atomic. The knowledge index is in memory and uses case-insensitive
 lexical matching; research-run provenance does not reconstruct page content
 after restart.
-Research-run schema v3 loads v1 snapshots with empty evidence and discovery
-collections and v2 snapshots with empty discoveries, rewriting either only on
-a subsequent successful mutation. The source-discovery boundary keeps ordered
+Research-run schema v4 loads v1-v3 snapshots with absent evidence, discovery,
+or assessment collections represented as empty, rewriting a legacy snapshot
+only on a subsequent successful mutation. The source-discovery boundary keeps ordered
 candidate metadata auditable without accepting or fetching content. The
 process-environment runtime provides a bounded Crossref REST v1 adapter, while
 the desktop keeps candidate selection separate from source loading. Candidate
 acceptance now uses a read-only run/discovery/URL-bound preview and a separately
 confirmed request that revalidates before entering the existing guarded loader.
 Accepted-source assessment is also read-only: an exact run/document binding
-returns persisted provenance and only explicitly recorded evidence, without a
-network, live-index, LLM, memory, graph, or persistence side effect.
+returns persisted provenance, explicitly recorded evidence, and authored
+assessment history without a network, live-index, LLM, memory, graph, or
+persistence side effect. A separate preview-confirm write boundary requires the
+user to provide assessment text and exact evidence IDs, then revalidates the
+open run, accepted source, and same-source evidence before an atomic append.
 
 The optional OpenAI-compatible chat runtime supports keyless activation only
 for explicit loopback endpoints (`localhost`, `127.0.0.1`, or `::1`), including
@@ -249,12 +252,12 @@ Not implemented:
 
 The current local verification baseline is:
 
-- package-aware `python -m unittest`: 1,103 tests passed. Explicit `tests.*`
+- package-aware `python -m unittest`: 1,121 tests passed. Explicit `tests.*`
   module names ensure nested test directories are included without shadowing
   source packages.
 - `python -m black --check src tests`: passed.
 - `python -m ruff check src tests`: passed.
-- `python -m mypy src tests`: passed with no issues in 278 files.
+- `python -m mypy src tests`: passed with no issues in 281 files.
 - `git diff --check`: passed.
 
 These checks verify the current local worktree; they do not create a release,

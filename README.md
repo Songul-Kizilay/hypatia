@@ -94,6 +94,9 @@ To create the world's most capable personal AI research companion.
 - A read-only accepted-source assessment preview that binds the exact run and
   document ID, then shows persisted provenance and only user-selected evidence
   without assigning a trust or quality score
+- An append-only user-authored source-assessment record with explicit evidence
+  IDs, a read-only confirmation preview, final revalidation, and atomic local
+  persistence; no evidence or score is selected automatically
 - An initial local desktop shell for text chat, a refreshable session overview,
   explicit session selection, session details/recent conversations/activity,
   explicit lexical/semantic conversation recall, and semantic-memory runtime
@@ -165,15 +168,20 @@ and paragraph locator, full-paragraph fingerprint, note, and timestamp;
 interpret evidence automatically.
 `Preview assessment` reads one accepted source by its selected document ID and
 shows that source's persisted provenance plus only its already recorded
-evidence. A successful source attachment fills the document ID field, but the
-preview remains a separate action. It performs no network, LLM, memory, graph,
-knowledge-index, or persistence operation and does not claim that the source is
-trustworthy, relevant, or high quality.
+evidence and user-authored assessment history. A successful source attachment
+fills the document ID field, but the preview remains a separate action. It
+performs no network, LLM, memory, graph, knowledge-index, or persistence
+operation and does not claim that the source is trustworthy, relevant, or high
+quality. `Preview & save assessment` requires comma-separated evidence IDs and
+the user's own assessment text. Hypatia verifies that every cited record belongs
+to the selected accepted source, shows an exact no-write preview, asks for
+confirmation, and revalidates before appending the assessment to the atomic run
+snapshot. It never chooses evidence or assigns a score automatically.
 The `Final status` control previews `completed`, `failed`, or `cancelled` before
 asking for separate confirmation. Completion requires at least one accepted
 source and one evidence record, while failure requires a recorded failure. A
 closed run is permanent and cannot accept
-more sources, evidence, or failure records; Hypatia rejects a closed-run source
+more sources, evidence, assessments, or failure records; Hypatia rejects a closed-run source
 request before opening the network connection.
 `Ask sources` deliberately invokes the existing `ask knowledge` local-RAG path
 only when its button is selected. It provides the configured runtime with up to

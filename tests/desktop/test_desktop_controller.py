@@ -430,6 +430,64 @@ class DesktopControllerTests(unittest.TestCase):
 
         self.assertEqual(self.brain.requests, [])
 
+    def test_assessment_write_preview_and_record_use_explicit_evidence(self) -> None:
+        values = (
+            " run-123 ",
+            " document-456 ",
+            " evidence-1, evidence-2 ",
+            "  The source supports the claim.  ",
+        )
+
+        preview = self.controller.preview_research_source_assessment_write(*values)
+        recorded = self.controller.record_research_source_assessment(*values)
+
+        self.assertIs(preview, self.response)
+        self.assertIs(recorded, self.response)
+        preview_request = self.brain.requests[0]
+        record_request = self.brain.requests[1]
+        self.assertIsInstance(preview_request, BrainRequest)
+        self.assertIsInstance(record_request, BrainRequest)
+        assert isinstance(preview_request, BrainRequest)
+        assert isinstance(record_request, BrainRequest)
+        expected = {
+            "research_run_id": "run-123",
+            "research_source_document_id": "document-456",
+            "research_assessment_evidence_ids": ["evidence-1", "evidence-2"],
+            "research_assessment_text": "The source supports the claim.",
+        }
+        self.assertEqual(
+            preview_request.metadata,
+            {"intent": "research_source_assessment_write_preview", **expected},
+        )
+        self.assertEqual(
+            record_request.metadata,
+            {"intent": "research_source_assessment_record", **expected},
+        )
+
+    def test_assessment_write_rejects_empty_or_duplicate_values_locally(self) -> None:
+        invalid_values = (
+            ("", "document-1", "evidence-1", "Assessment."),
+            ("run-1", "", "evidence-1", "Assessment."),
+            ("run-1", "document-1", "", "Assessment."),
+            ("run-1", "document-1", "evidence-1", ""),
+            (
+                "run-1",
+                "document-1",
+                "evidence-1, evidence-1",
+                "Assessment.",
+            ),
+        )
+        for action in (
+            self.controller.preview_research_source_assessment_write,
+            self.controller.record_research_source_assessment,
+        ):
+            for values in invalid_values:
+                with self.subTest(action=action.__name__, values=values):
+                    with self.assertRaises(ValueError):
+                        action(*values)
+
+        self.assertEqual(self.brain.requests, [])
+
     def test_research_status_preview_and_update_use_structured_requests(self) -> None:
         preview = self.controller.preview_research_run_status(
             " run-123 ",

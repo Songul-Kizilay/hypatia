@@ -137,6 +137,8 @@ class TkinterDesktopWindow:
         self._research_source_document_id = tk.StringVar()
         self._research_chunk_id = tk.StringVar()
         self._research_evidence_note = tk.StringVar()
+        self._research_assessment_evidence_ids = tk.StringVar()
+        self._research_assessment_text = tk.StringVar()
         self._research_target_status = tk.StringVar(value="completed")
         self._relation_source_id = tk.StringVar()
         self._relation_target_id = tk.StringVar()
@@ -444,11 +446,16 @@ class TkinterDesktopWindow:
         ttk.Entry(research_frame, textvariable=self._research_chunk_id).grid(
             row=5,
             column=1,
-            columnspan=3,
+            columnspan=2,
             sticky="ew",
-            padx=(8, 0),
+            padx=(8, 8),
             pady=(8, 0),
         )
+        ttk.Button(
+            research_frame,
+            text="View evidence",
+            command=self._show_research_evidence,
+        ).grid(row=5, column=3, sticky="ew", pady=(8, 0))
         ttk.Label(research_frame, text="Evidence note").grid(
             row=6,
             column=0,
@@ -468,13 +475,47 @@ class TkinterDesktopWindow:
             text="Save evidence",
             command=self._record_research_evidence,
         ).grid(row=6, column=3, sticky="ew", pady=(8, 0))
+        ttk.Label(research_frame, text="Assessment evidence IDs").grid(
+            row=7,
+            column=0,
+            sticky="w",
+            pady=(8, 0),
+        )
+        ttk.Entry(
+            research_frame,
+            textvariable=self._research_assessment_evidence_ids,
+        ).grid(
+            row=7,
+            column=1,
+            columnspan=3,
+            sticky="ew",
+            padx=(8, 0),
+            pady=(8, 0),
+        )
+        ttk.Label(research_frame, text="Assessment text").grid(
+            row=8,
+            column=0,
+            sticky="w",
+            pady=(8, 0),
+        )
+        ttk.Entry(
+            research_frame,
+            textvariable=self._research_assessment_text,
+        ).grid(
+            row=8,
+            column=1,
+            columnspan=2,
+            sticky="ew",
+            padx=(8, 8),
+            pady=(8, 0),
+        )
         ttk.Button(
             research_frame,
-            text="View evidence",
-            command=self._show_research_evidence,
-        ).grid(row=7, column=3, sticky="ew", pady=(8, 0))
+            text="Preview & save assessment",
+            command=self._preview_and_record_research_source_assessment,
+        ).grid(row=8, column=3, sticky="ew", pady=(8, 0))
         ttk.Label(research_frame, text="Final status").grid(
-            row=7,
+            row=9,
             column=0,
             sticky="w",
             pady=(8, 0),
@@ -484,12 +525,12 @@ class TkinterDesktopWindow:
             textvariable=self._research_target_status,
             values=("completed", "failed", "cancelled"),
             state="readonly",
-        ).grid(row=7, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
+        ).grid(row=9, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
         ttk.Button(
             research_frame,
             text="Preview status",
             command=self._preview_and_update_research_status,
-        ).grid(row=7, column=2, sticky="ew", pady=(8, 0))
+        ).grid(row=9, column=2, sticky="ew", pady=(8, 0))
 
         relation_frame = ttk.LabelFrame(
             container,
@@ -862,6 +903,39 @@ class TkinterDesktopWindow:
         except ValueError as error:
             self._status.set(str(error))
             return
+        self._append_response(response)
+
+    def _preview_and_record_research_source_assessment(self) -> None:
+        """Preview, confirm, and revalidate one user-authored assessment."""
+        values = (
+            self._research_run_id.get(),
+            self._research_source_document_id.get(),
+            self._research_assessment_evidence_ids.get(),
+            self._research_assessment_text.get(),
+        )
+        try:
+            preview_response = (
+                self._controller.preview_research_source_assessment_write(*values)
+            )
+        except ValueError as error:
+            self._status.set(str(error))
+            return
+        self._append_response(preview_response)
+        preview = preview_response.research_source_assessment_write_preview
+        if not preview_response.success or preview is None or not preview.allowed:
+            return
+        if not messagebox.askyesno(
+            "Save research source assessment?",
+            (
+                f"{preview_response.message}\n\n"
+                "This appends your text and the listed evidence IDs to the "
+                "research audit record. Continue?"
+            ),
+            parent=self._root,
+        ):
+            self._status.set("research assessment: not saved")
+            return
+        response = self._controller.record_research_source_assessment(*values)
         self._append_response(response)
 
     def _record_research_evidence(self) -> None:

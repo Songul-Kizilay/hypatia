@@ -6,8 +6,10 @@ import unittest
 from datetime import UTC, datetime
 
 from core.Exceptions import ResearchError
+from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchRun import ResearchRun
 from research.ResearchRunStatus import ResearchRunStatus
+from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
 from research.ResearchSourceDiscoveryRecord import ResearchSourceDiscoveryRecord
 from research.ResearchSourceRecord import ResearchSourceRecord
 
@@ -89,6 +91,51 @@ class ResearchRunTests(unittest.TestCase):
                 created_at=now,
                 updated_at=now,
                 discoveries=(discovery, discovery),
+            )
+
+    def test_assessment_requires_evidence_from_the_same_accepted_source(self) -> None:
+        now = datetime(2026, 8, 20, 12, 0, tzinfo=UTC)
+        sources = tuple(
+            ResearchSourceRecord(
+                f"document-{number}",
+                f"https://example.com/{number}",
+                f"Source {number}",
+                "text/plain",
+                now,
+                now,
+            )
+            for number in (1, 2)
+        )
+        evidence = ResearchEvidenceRecord(
+            "evidence-1",
+            "document-2",
+            "chunk-1",
+            0,
+            "Evidence.",
+            False,
+            "a" * 64,
+            "Relevant.",
+            now,
+        )
+        assessment = ResearchSourceAssessmentRecord(
+            "assessment-1",
+            "document-1",
+            ("evidence-1",),
+            "Assessment.",
+            now,
+        )
+
+        with self.assertRaisesRegex(ResearchError, "belong to its source"):
+            ResearchRun(
+                "run-1",
+                "Question",
+                ResearchRunStatus.COLLECTING,
+                sources,
+                (),
+                now,
+                now,
+                evidence=(evidence,),
+                assessments=(assessment,),
             )
 
 
