@@ -229,6 +229,32 @@ class DesktopControllerTests(unittest.TestCase):
 
         self.assertEqual(self.brain.requests, [])
 
+    def test_load_research_source_uses_a_structured_explicit_request(self) -> None:
+        response = self.controller.load_research_source(
+            "  https://example.com/research  "
+        )
+
+        self.assertIs(response, self.response)
+        self.assertEqual(len(self.brain.requests), 1)
+        request = self.brain.requests[0]
+        self.assertIsInstance(request, BrainRequest)
+        assert isinstance(request, BrainRequest)
+        self.assertEqual(request.message, "Load selected internet research source")
+        self.assertEqual(request.source, "desktop")
+        self.assertEqual(
+            request.metadata,
+            {
+                "intent": "research_source_load",
+                "research_url": "https://example.com/research",
+            },
+        )
+
+    def test_load_research_source_rejects_empty_url_without_calling_brain(self) -> None:
+        with self.assertRaisesRegex(ValueError, "cannot be empty"):
+            self.controller.load_research_source(" \t ")
+
+        self.assertEqual(self.brain.requests, [])
+
     def test_ask_knowledge_uses_the_explicit_local_rag_command(self) -> None:
         response = self.controller.ask_knowledge("  what is the project plan?  ")
 

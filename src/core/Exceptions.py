@@ -80,6 +80,10 @@ class KnowledgeError(HypatiaError):
     """Knowledge engine error."""
 
 
+class ResearchError(HypatiaError):
+    """Research source acquisition or validation error."""
+
+
 class AgentError(HypatiaError):
     """Agent error."""
 

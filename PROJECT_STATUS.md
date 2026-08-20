@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.31 (Genesis)`
+`v0.3.32 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.31`** is the current executable package and GitHub
+- **Runtime release `v0.3.32`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -55,6 +55,13 @@ with optional OpenAI-compatible LLM conversation support.
   sends a structured request through Brain to the existing knowledge pipeline.
   It validates and indexes the selected source without an LLM call,
   conversation-memory write, or desktop-side source store.
+- A desktop `Load source` action accepts one explicitly entered public HTTPS
+  URL. The runtime validates the scheme, credentials, port, every resolved IP,
+  redirects, content type, response size, and text encoding before extracting
+  readable HTML/plain text and indexing it through the existing knowledge
+  pipeline. It preserves the final URL as provenance and does not invoke an
+  LLM, write conversation memory, run in the background, or discover sources
+  automatically.
 - The Windows desktop entry point persists its own local runtime state beneath
   `%LOCALAPPDATA%\Hypatia` by default, avoiding writes beside an installed
   executable. A documented absolute-path override supports deliberate local
@@ -194,7 +201,8 @@ with optional OpenAI-compatible LLM conversation support.
 ### Intentionally Not Implemented
 
 - Automatic semantic augmentation of ordinary messages.
-- Web research, citation collection, automatic RAG augmentation, or
+- Automatic web source discovery, multi-source research planning/synthesis,
+  contradiction detection, evidence ranking, automatic RAG augmentation, or
   cross-document semantic relation extraction.
 - Agent execution, tool gateway, browser/OS control, voice, vision, robotics,
   and smart-home integrations.
@@ -205,7 +213,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 966 automated tests pass through package-aware discovery.
+- 990 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -232,7 +240,7 @@ so this check did not alter the project's persisted data.
 
 ## Next Milestone
 
-Define relationship-catalog filtering or direct inspection only if the current
-local graph grows beyond a usable list. Automatic semantic extraction,
-ordinary-conversation augmentation, and implicit graph writes remain out of
-scope.
+Extend the explicit research-source foundation with a stored research run,
+source discovery provider boundary, evidence records, and multi-source
+comparison. Automatic semantic extraction, ordinary-conversation augmentation,
+and implicit graph writes remain out of scope.

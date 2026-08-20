@@ -129,6 +129,7 @@ class TkinterDesktopWindow:
         self._session_search_query = tk.StringVar()
         self._recall_query = tk.StringVar()
         self._knowledge_query = tk.StringVar()
+        self._research_url = tk.StringVar()
         self._relation_source_id = tk.StringVar()
         self._relation_target_id = tk.StringVar()
         self._session_summaries: list[SessionSummary] = []
@@ -152,7 +153,7 @@ class TkinterDesktopWindow:
         self._root.columnconfigure(0, weight=1)
         self._root.rowconfigure(0, weight=1)
         container.columnconfigure(0, weight=1)
-        container.rowconfigure(6, weight=1)
+        container.rowconfigure(7, weight=1)
 
         accessibility_frame = ttk.LabelFrame(
             container,
@@ -310,12 +311,32 @@ class TkinterDesktopWindow:
             command=self._load_knowledge,
         ).grid(row=0, column=5, sticky="ew", padx=(8, 0))
 
+        research_frame = ttk.LabelFrame(
+            container,
+            text="Internet research source",
+            padding=8,
+        )
+        research_frame.grid(row=4, column=0, sticky="ew", pady=(8, 0))
+        research_frame.columnconfigure(1, weight=1)
+        ttk.Label(research_frame, text="HTTPS URL").grid(row=0, column=0, sticky="w")
+        ttk.Entry(research_frame, textvariable=self._research_url).grid(
+            row=0,
+            column=1,
+            sticky="ew",
+            padx=(8, 8),
+        )
+        ttk.Button(
+            research_frame,
+            text="Load source",
+            command=self._load_research_source,
+        ).grid(row=0, column=2, sticky="ew")
+
         relation_frame = ttk.LabelFrame(
             container,
             text="Local source relation",
             padding=8,
         )
-        relation_frame.grid(row=4, column=0, sticky="ew", pady=(8, 0))
+        relation_frame.grid(row=5, column=0, sticky="ew", pady=(8, 0))
         relation_frame.columnconfigure(1, weight=1)
         relation_frame.columnconfigure(3, weight=1)
         ttk.Label(relation_frame, text="Source ID").grid(row=0, column=0, sticky="w")
@@ -349,7 +370,7 @@ class TkinterDesktopWindow:
         ).grid(row=0, column=6, sticky="ew", padx=(8, 0))
 
         ttk.Label(container, textvariable=self._status).grid(
-            row=5, column=0, sticky="w", pady=(8, 4)
+            row=6, column=0, sticky="w", pady=(8, 4)
         )
 
         self._transcript = scrolledtext.ScrolledText(
@@ -358,10 +379,10 @@ class TkinterDesktopWindow:
             state=tk.DISABLED,
             height=18,
         )
-        self._transcript.grid(row=6, column=0, sticky="nsew")
+        self._transcript.grid(row=7, column=0, sticky="nsew")
 
         composer_frame = ttk.LabelFrame(container, text="Message", padding=8)
-        composer_frame.grid(row=7, column=0, sticky="ew", pady=(8, 0))
+        composer_frame.grid(row=8, column=0, sticky="ew", pady=(8, 0))
         composer_frame.columnconfigure(0, weight=1)
         self._composer = tk.Text(composer_frame, height=4, wrap=tk.WORD)
         self._composer.grid(row=0, column=0, sticky="ew", padx=(0, 8))
@@ -510,6 +531,15 @@ class TkinterDesktopWindow:
             return
         try:
             response = self._controller.load_knowledge(path)
+        except ValueError as error:
+            self._status.set(str(error))
+            return
+        self._append_response(response)
+
+    def _load_research_source(self) -> None:
+        """Fetch only the HTTPS source explicitly entered by the user."""
+        try:
+            response = self._controller.load_research_source(self._research_url.get())
         except ValueError as error:
             self._status.set(str(error))
             return

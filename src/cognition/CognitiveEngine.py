@@ -16,6 +16,7 @@ from core.Exceptions import (
     KnowledgeError,
     MemoryError,
     PlannerError,
+    ResearchError,
     SessionDeleteEventError,
     SessionError,
 )
@@ -48,6 +49,7 @@ from memory.NoOpLearnedMemoryCandidateExtractor import (
 from memory.SemanticMemoryIndexRuntime import SemanticMemoryIndexRuntime
 from memory.SemanticMemoryMatch import SemanticMemoryMatch
 from memory.SessionMemoryPolicy import SessionMemoryPolicy
+from research.ResearchSourceFetcher import ResearchSourceFetcher
 from response.ResponseComposer import ResponseComposer
 from session.SessionCreateService import SessionCreateService
 from session.SessionDeletePreviewService import SessionDeletePreviewService
@@ -85,6 +87,7 @@ class CognitiveEngine:
         learned_memory_context_limit: int | None = None,
         learned_memory_selector: LearnedMemorySelector | None = None,
         semantic_memory_index_runtime: SemanticMemoryIndexRuntime | None = None,
+        research_source_fetcher: ResearchSourceFetcher | None = None,
     ) -> None:
         if llm_history_max_turns is not None and (
             isinstance(llm_history_max_turns, bool) or llm_history_max_turns <= 0
@@ -123,6 +126,7 @@ class CognitiveEngine:
         self._learned_memory_context_limit = learned_memory_context_limit
         self._learned_memory_selector = learned_memory_selector
         self._semantic_memory_index_runtime = semantic_memory_index_runtime
+        self._research_source_fetcher = research_source_fetcher
         self._hybrid_semantic_memory_ranker = HybridSemanticMemoryRanker()
         self._router = BrainRouter()
 
@@ -156,6 +160,9 @@ class CognitiveEngine:
             return self._process_session_delete_preview(request)
         if intent == "session_delete":
             return self._process_session_delete(request)
+
+        if self._is_research_source_load_request(request):
+            return self._process_research_source_load(request)
 
         if self._is_knowledge_load_request(request):
             return self._process_knowledge_load(request)
@@ -301,6 +308,42 @@ class CognitiveEngine:
     def _is_knowledge_load_request(request: BrainRequest) -> bool:
         """Recognize only an explicit structured local-source request."""
         return request.metadata.get("intent") == "knowledge_load"
+
+    @staticmethod
+    def _is_research_source_load_request(request: BrainRequest) -> bool:
+        """Recognize only an explicit structured internet-source request."""
+        return request.metadata.get("intent") == "research_source_load"
+
+    def _process_research_source_load(self, request: BrainRequest) -> BrainResponse:
+        """Acquire and index one explicit source without LLM or memory side effects."""
+        url = request.metadata.get("research_url")
+        if not isinstance(url, str) or not url.strip():
+            return self._response_composer.research_source_load_failure(
+                request,
+                "A research source URL is required.",
+            )
+        if self._research_source_fetcher is None:
+            return self._response_composer.research_source_load_failure(
+                request,
+                "Internet research source loading is unavailable.",
+            )
+        try:
+            source = self._research_source_fetcher.fetch(url.strip())
+            document = self._knowledge_engine.add_document(source.to_document())
+        except (ResearchError, KnowledgeError) as error:
+            return self._response_composer.research_source_load_failure(
+                request,
+                f"Research source could not be loaded: {error}",
+            )
+        loaded_document = next(
+            reference
+            for reference in self._knowledge_engine.documents()
+            if reference.document_id == document.document_id
+        )
+        return self._response_composer.research_source_load_success(
+            request,
+            loaded_document,
+        )
 
     def _process_knowledge_load(self, request: BrainRequest) -> BrainResponse:
         """Load one user-selected local source without LLM or memory side effects."""

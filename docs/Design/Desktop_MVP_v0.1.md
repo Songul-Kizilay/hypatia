@@ -1,12 +1,13 @@
 # Desktop MVP v0.1
 
-**Status:** Initial Tkinter shell implemented; broader MVP views remain planned.
+**Status:** Initial Tkinter shell and explicit HTTPS source intake implemented;
+broader MVP views remain planned.
 
 ## Purpose
 
 Define the smallest private desktop surface that makes Hypatia's existing,
 local-first runtime understandable and useful without inventing new agent,
-voice, browser, cloud, or storage behavior.
+voice, browser, cloud, or duplicate storage behavior.
 
 This document defines the design-first boundary in
 [Desktop Application](../Modules/Desktop.md). ADR 0001 records the selected
@@ -25,18 +26,21 @@ The MVP may present only current Brain/CognitiveEngine capabilities:
 - read-only local knowledge context, graph, source-catalog, and relation-catalog
   views;
 - explicit loading of one user-selected local Markdown or plain-text source;
+- explicit loading of one user-entered public HTTPS text source through the
+  current research acquisition boundary;
 - the existing explicit `ask knowledge` request; and
 - preview-and-confirm application or removal of an explicit knowledge relation.
 
-The MVP must not claim or silently add voice capture, PDF/web import, web
-research, automatic prompt augmentation, cross-document semantic extraction,
-agent/tool execution, synchronization, telemetry, or multi-user access.
+The MVP must not claim or silently add voice capture, PDF import, automatic
+source discovery, multi-source web research/synthesis, automatic prompt
+augmentation, cross-document semantic extraction, agent/tool execution,
+synchronization, telemetry, or multi-user access.
 
 ## Design principles
 
-- **Local by default:** local state and current runtime status are visible; no
-  data leaves the device except through an already enabled user-configured LLM
-  or Ollama runtime.
+- **Local by default:** local state and current runtime status are visible; data
+  leaves the device only through an already enabled user-configured LLM/Ollama
+  runtime or an explicit user-entered HTTPS source request.
 - **Explicit before mutation:** session rename/delete and knowledge-relation
   application/removal always show the existing preview first and require an
   explicit final user action.
@@ -110,6 +114,11 @@ title, source path, type, chunk count, and stable ID. Cancelling selection,
 unsupported types, empty/missing files, and duplicate sources remain controlled
 runtime outcomes: the desktop does not create a second store, alter
 conversation memory, invoke an LLM, or retain a partial local source.
+`Load source` sends exactly one explicitly entered URL through the structured
+research-source request. The runtime validates public HTTPS resolution and
+redirects, bounds response type/size/time, extracts readable text, and indexes
+the source with its final URL. It does not discover other sources, crawl links,
+invoke an LLM, write conversation memory, or persist a research run.
 `Ask sources` is separately user initiated: it sends the entered question only
 through the existing `ask knowledge` local-RAG path. The runtime keeps its
 bounded cited-source and safe unavailable/failure behavior; this action never

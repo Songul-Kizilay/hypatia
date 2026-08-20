@@ -181,6 +181,36 @@ class LocalKnowledgeFileSelectionTests(unittest.TestCase):
         self.assertEqual(status.values, ["knowledge load: cancelled"])
 
 
+class InternetResearchSourceSelectionTests(unittest.TestCase):
+    def test_entered_url_is_passed_to_the_existing_controller_boundary(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchSourceLoadController()
+        responses: list[BrainResponse] = []
+        window._controller = controller
+        window._research_url = RecordingInput("https://example.com/research")
+        window._status = RecordingStatus()
+        window._append_response = responses.append
+
+        window._load_research_source()
+
+        self.assertEqual(controller.urls, ["https://example.com/research"])
+        self.assertEqual(responses, [controller.response])
+
+    def test_empty_url_stays_local_and_is_shown_as_status(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchSourceLoadController()
+        status = RecordingStatus()
+        window._controller = controller
+        window._research_url = RecordingInput("  ")
+        window._status = status
+        window._append_response = lambda _response: self.fail("must not append")
+
+        window._load_research_source()
+
+        self.assertEqual(controller.urls, [])
+        self.assertEqual(status.values, ["A research source URL cannot be empty."])
+
+
 class RecordingKnowledgeLoadController:
     def __init__(self) -> None:
         self.paths: list[str] = []
@@ -194,6 +224,31 @@ class RecordingKnowledgeLoadController:
     def load_knowledge(self, path: str) -> BrainResponse:
         self.paths.append(path)
         return self.response
+
+
+class RecordingResearchSourceLoadController:
+    def __init__(self) -> None:
+        self.urls: list[str] = []
+        self.response = BrainResponse(
+            message="Loaded.",
+            request_id="research-source-load",
+            intent="research_source_load",
+            memory_count=0,
+        )
+
+    def load_research_source(self, url: str) -> BrainResponse:
+        if not url.strip():
+            raise ValueError("A research source URL cannot be empty.")
+        self.urls.append(url)
+        return self.response
+
+
+class RecordingInput:
+    def __init__(self, value: str) -> None:
+        self._value = value
+
+    def get(self) -> str:
+        return self._value
 
 
 class RecordingStatus:

@@ -23,10 +23,21 @@ from knowledge.KnowledgeEngine import KnowledgeEngine
 from memory.JsonFileMemoryStore import JsonFileMemoryStore
 from memory.MemoryManager import MemoryManager
 from memory.MemoryRecord import MemoryRecord
+from research.ResearchSource import ResearchSource
 from response.ResponseComposer import ResponseComposer
 from session.JsonFileSessionStore import JsonFileSessionStore
 from session.SessionManager import SessionManager
 from session.SessionRenameTransactionService import SessionRenameTransactionService
+
+
+class RecordingResearchSourceFetcher:
+    def __init__(self, source: ResearchSource) -> None:
+        self.source = source
+        self.calls: list[str] = []
+
+    def fetch(self, url: str) -> ResearchSource:
+        self.calls.append(url)
+        return self.source
 
 
 class BootstrapTests(unittest.TestCase):
@@ -55,6 +66,37 @@ class BootstrapTests(unittest.TestCase):
         response_composer = bootstrap.container.resolve(ResponseComposer)
 
         self.assertIsInstance(response_composer, ResponseComposer)
+
+    def test_bootstrap_wires_an_injected_research_source_fetcher_to_brain(self) -> None:
+        source = ResearchSource(
+            url="https://example.com/research",
+            title="Example research",
+            content="Evidence paragraph.",
+            content_type="text/plain",
+            fetched_at=datetime(2026, 8, 20, 12, 30, tzinfo=UTC),
+        )
+        fetcher = RecordingResearchSourceFetcher(source)
+        bootstrap = Bootstrap(
+            memory_path=self.memory_path,
+            session_path=self.session_path,
+            knowledge_relation_path=self.knowledge_relation_path,
+            research_source_fetcher=fetcher,
+        )
+        bootstrap.initialize()
+
+        response = bootstrap.container.resolve(Brain).process(
+            BrainRequest(
+                message="Load selected internet research source",
+                metadata={
+                    "intent": "research_source_load",
+                    "research_url": source.url,
+                },
+            )
+        )
+
+        self.assertTrue(response.success)
+        self.assertEqual(fetcher.calls, [source.url])
+        self.assertEqual(response.knowledge_documents[0].source, source.url)
 
     def test_bootstrap_wires_cognitive_search_to_shared_memory_manager(
         self,
