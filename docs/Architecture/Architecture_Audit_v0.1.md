@@ -15,7 +15,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.31` today) are the executable package and GitHub
+- **Runtime releases** (`v0.3.32` today) are the executable package and GitHub
   release line. They are the source-backed implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
   engineering increments. Sprint 4.16.50 is complete and is already in the
@@ -70,6 +70,8 @@ their response order without constructing or looking up new records. Its ordered
 `SessionSummary` response data avoids parsing human-formatted output or reading
 persistence directly. It owns neither persistent state nor a provider client;
 the UI window does not add a browser, web server, or background network channel.
+Its explicit research-source action delegates one user-entered HTTPS URL to the
+Brain-owned bounded fetcher and never runs implicitly.
 When launched as the desktop application, Bootstrap receives user-writable
 memory, session, and relation paths beneath `%LOCALAPPDATA%\Hypatia` on
 Windows (or an explicit absolute override), rather than writing beside an
@@ -214,7 +216,7 @@ Not implemented:
 
 The current local verification baseline is:
 
-- `python -m unittest discover -s tests -t .`: 966 tests passed. The top-level
+- `python -m unittest discover -s tests -t .`: 990 tests passed. The top-level
   package setting ensures nested test directories are included without
   shadowing source packages.
 - `python -m black --check src tests`: passed.

@@ -10,7 +10,7 @@ from knowledge.Document import DocumentType
 
 @dataclass(frozen=True, slots=True)
 class KnowledgeDocumentReference:
-    """Identifies one loaded local document for explicit user selection."""
+    """Identifies one loaded source document for explicit user selection."""
 
     document_id: str
     title: str

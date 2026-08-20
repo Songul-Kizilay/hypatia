@@ -130,6 +130,22 @@ class DesktopController:
             )
         )
 
+    def load_research_source(self, url: str) -> BrainResponse:
+        """Load one explicitly selected HTTPS source through the Brain boundary."""
+        normalized_url = url.strip()
+        if not normalized_url:
+            raise ValueError("A research source URL cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="Load selected internet research source",
+                source="desktop",
+                metadata={
+                    "intent": "research_source_load",
+                    "research_url": normalized_url,
+                },
+            )
+        )
+
     def preview_knowledge_relation(
         self,
         source_document_id: str,

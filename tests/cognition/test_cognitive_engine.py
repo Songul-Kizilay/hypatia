@@ -32,6 +32,7 @@ from core.Exceptions import (
     KnowledgeError,
     MemoryError,
     PlannerError,
+    ResearchError,
     SessionDeleteEventError,
 )
 from eventbus.Event import Event
@@ -67,6 +68,7 @@ from memory.NoOpLearnedMemoryCandidateExtractor import (
 )
 from memory.SessionMemoryPolicy import SessionMemoryPolicy
 from planner.Planner import Planner
+from research.ResearchSource import ResearchSource
 from response.ResponseComposer import ResponseComposer
 from session.SessionDeleteExecutionResult import SessionDeleteExecutionResult
 from session.SessionDeleteService import SessionDeleteService
@@ -244,6 +246,26 @@ class FailingLLMProvider:
     ) -> str:
         self.calls.append((prompt, history))
         raise LLMError("Generation unavailable.")
+
+
+class RecordingResearchSourceFetcher:
+    """Returns one traceable source while recording explicit acquisition calls."""
+
+    def __init__(
+        self,
+        source: ResearchSource | None = None,
+        error: ResearchError | None = None,
+    ) -> None:
+        self.calls: list[str] = []
+        self.source = source
+        self.error = error
+
+    def fetch(self, url: str) -> ResearchSource:
+        self.calls.append(url)
+        if self.error is not None:
+            raise self.error
+        assert self.source is not None
+        return self.source
 
 
 class RecordingCandidateExtractor:
@@ -5595,3 +5617,112 @@ class CognitiveEngineTests(unittest.TestCase):
 
         self.assertEqual(self.knowledge_engine.documents(), documents_before)
         self.assertEqual(self.memory_manager.count(), memory_count)
+
+    def test_structured_research_source_load_indexes_provenance_without_side_effects(
+        self,
+    ) -> None:
+        source = ResearchSource(
+            url="https://example.com/research",
+            title="Example research",
+            content="First finding.\n\nSecond finding.",
+            content_type="text/html",
+            fetched_at=datetime(2026, 8, 20, 12, 30, tzinfo=UTC),
+        )
+        fetcher = RecordingResearchSourceFetcher(source=source)
+        llm_provider = RecordingLLMProvider("must not run")
+        extractor = RecordingCandidateExtractor()
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+            learned_memory_candidate_extractor=extractor,
+            research_source_fetcher=fetcher,
+        )
+        memory_count = self.memory_manager.count()
+        events: list[str] = []
+        self.event_bus.subscribe("*", lambda event: events.append(event.name))
+
+        response = engine.process(
+            BrainRequest(
+                message="Load selected internet research source",
+                metadata={
+                    "intent": "research_source_load",
+                    "research_url": "  https://example.com/research  ",
+                },
+            )
+        )
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "research_source_load")
+        self.assertEqual(response.memory_count, 0)
+        self.assertEqual(fetcher.calls, ["https://example.com/research"])
+        self.assertEqual(llm_provider.calls, [])
+        self.assertEqual(extractor.calls, [])
+        self.assertEqual(self.memory_manager.count(), memory_count)
+        self.assertEqual(events, [])
+        self.assertEqual(len(response.knowledge_documents), 1)
+        document = response.knowledge_documents[0]
+        self.assertEqual(document.source, source.url)
+        self.assertEqual(document.chunk_count, 2)
+        self.assertEqual(
+            self.knowledge_engine.search("second")[0].document_id, document.document_id
+        )
+
+    def test_research_source_load_fails_safely_without_partial_indexing(self) -> None:
+        fetcher = RecordingResearchSourceFetcher(
+            error=ResearchError("Host is not public.")
+        )
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            research_source_fetcher=fetcher,
+        )
+        documents_before = self.knowledge_engine.documents()
+
+        response = engine.process(
+            BrainRequest(
+                message="Load selected internet research source",
+                metadata={
+                    "intent": "research_source_load",
+                    "research_url": "https://localhost/private",
+                },
+            )
+        )
+
+        self.assertFalse(response.success)
+        self.assertEqual(response.intent, "research_source_load")
+        self.assertIn("Host is not public.", response.message)
+        self.assertEqual(self.knowledge_engine.documents(), documents_before)
+
+    def test_research_source_load_requires_explicit_url_and_fetcher(self) -> None:
+        for metadata, expected in (
+            ({"intent": "research_source_load"}, "URL is required"),
+            (
+                {
+                    "intent": "research_source_load",
+                    "research_url": "https://example.com",
+                },
+                "loading is unavailable",
+            ),
+        ):
+            with self.subTest(metadata=metadata):
+                response = self.engine.process(
+                    BrainRequest(
+                        message="Load selected internet research source",
+                        metadata=metadata,
+                    )
+                )
+
+                self.assertFalse(response.success)
+                self.assertEqual(response.intent, "research_source_load")
+                self.assertIn(expected, response.message)

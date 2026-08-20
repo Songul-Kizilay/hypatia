@@ -88,9 +88,9 @@ To create the world's most capable personal AI research companion.
   explicit session selection, session details/recent conversations/activity,
   explicit lexical/semantic conversation recall, and semantic-memory runtime
   status, bounded cited local knowledge context/graph, a read-only local source
-  catalog, and explicit local-RAG questions; it delegates every action to the
-  existing Brain runtime and introduces no browser, cloud, or duplicate data
-  store
+  catalog, explicit local-RAG questions, and user-initiated public HTTPS source
+  loading; it delegates every action to the existing Brain runtime and adds no
+  browser, cloud store, background crawler, or duplicate data store
 
 Roadmap modules listed above are product direction, not a claim that every module is
 already implemented.
@@ -129,6 +129,11 @@ and knowledge pipeline as every other desktop action; a successful load reports
 the source identity and indexed chunk count. It neither calls an LLM nor adds a
 conversation-memory record. Unsupported, empty, missing, or already loaded
 files return the existing safe runtime failure instead of a partial load.
+`Load source` accepts one explicitly entered public HTTPS URL. Hypatia validates
+the URL and every redirect against private-network access, accepts only bounded
+HTML/plain-text/Markdown content, extracts readable text, and indexes it through
+the same knowledge pipeline with its final URL preserved. It does not search for
+sources, run in the background, call an LLM, or write conversation memory.
 `Ask sources` deliberately invokes the existing `ask knowledge` local-RAG path
 only when its button is selected. It provides the configured runtime with up to
 three bounded cited local chunks and never adds retrieval to ordinary chat or
@@ -151,9 +156,9 @@ To rename a session, select it, enter a new session ID, and use `Preview rename`
 Hypatia shows the existing runtime preview first and only sends the
 transactional rename command after confirmation; on success it refreshes the
 session list from Brain.
-It does not yet include voice, PDF/web import, browser tools, automatic
-retrieval, or automatic knowledge mutations; those remain separate, test-first
-increments.
+It does not yet include voice, PDF import, source discovery, multi-source
+research synthesis, browser tools, automatic retrieval, or automatic knowledge
+mutations; those remain separate, test-first increments.
 
 ### Windows desktop package
 

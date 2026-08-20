@@ -2,6 +2,30 @@
 
 All notable project changes are recorded here.
 
+## [0.3.32] - 2026-08-20
+
+### Added
+
+- The first real internet-research acquisition slice: the desktop can load one
+  explicitly entered public HTTPS page into the existing in-memory knowledge
+  pipeline with its final URL, title, content type, fetch time, and stable
+  source identity preserved.
+- External source acquisition is provider-independent and bounded: credentials,
+  non-HTTPS URLs, nonstandard ports, private/loopback/link-local DNS answers,
+  unsafe redirects, unsupported content types, responses over 1 MiB, and
+  unreadable encodings fail before indexing.
+- Standard-library HTML extraction removes active and non-readable content and
+  keeps readable block text. Plain-text and Markdown HTTPS sources are also
+  accepted.
+
+### Verification
+
+- A live bounded fetch of `https://example.com/` returned its final source URL,
+  page title, and readable text.
+- The package-aware full local suite contains 990 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass with the documented
+  project virtual environment.
+
 ## [0.3.31] - 2026-08-20
 
 ### Added

@@ -528,6 +528,43 @@ class ResponseComposer:
             success=False,
         )
 
+    def research_source_load_success(
+        self,
+        request: BrainRequest,
+        document: KnowledgeDocumentReference,
+    ) -> BrainResponse:
+        """Report one explicitly selected internet source after local indexing."""
+        return BrainResponse(
+            message="\n".join(
+                [
+                    "Research source loaded:",
+                    f"Title: {document.title}",
+                    f"Source: {document.source}",
+                    f"Type: {document.document_type.value}",
+                    f"Chunks: {document.chunk_count}",
+                    f"ID: {document.document_id}",
+                ]
+            ),
+            request_id=request.request_id,
+            intent="research_source_load",
+            memory_count=0,
+            knowledge_documents=[document],
+        )
+
+    def research_source_load_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Report rejected external acquisition without hiding its safe reason."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="research_source_load",
+            memory_count=0,
+            success=False,
+        )
+
     def knowledge_relation_list_success(
         self,
         request: BrainRequest,

@@ -41,6 +41,8 @@ from memory.UrllibOllamaEmbeddingTransport import (
     UrllibOllamaEmbeddingTransport,
 )
 from planner.Planner import Planner
+from research.HttpResearchSourceFetcher import HttpResearchSourceFetcher
+from research.ResearchSourceFetcher import ResearchSourceFetcher
 from response.ResponseComposer import ResponseComposer
 from session.JsonFileSessionStore import JsonFileSessionStore
 from session.SessionManager import SessionManager
@@ -64,6 +66,7 @@ class Bootstrap:
         learned_memory_context_limit: int | None = None,
         learned_memory_selector: LearnedMemorySelector | None = None,
         semantic_memory_index_runtime: SemanticMemoryIndexRuntime | None = None,
+        research_source_fetcher: ResearchSourceFetcher | None = None,
     ) -> None:
         self._memory_path = memory_path
         self._session_path = session_path
@@ -77,6 +80,7 @@ class Bootstrap:
         self._learned_memory_context_limit = learned_memory_context_limit
         self._learned_memory_selector = learned_memory_selector
         self._semantic_memory_index_runtime = semantic_memory_index_runtime
+        self._research_source_fetcher = research_source_fetcher
 
     @classmethod
     def from_process_environment(
@@ -243,6 +247,9 @@ class Bootstrap:
             or self._knowledge_relation_store_path(self._memory_path)
         )
         knowledge_engine = KnowledgeEngine(relation_store=relation_store)
+        research_source_fetcher = (
+            self._research_source_fetcher or HttpResearchSourceFetcher()
+        )
         planner = Planner()
         response_composer = ResponseComposer()
         llm_provider = self._configured_llm_provider()
@@ -269,6 +276,7 @@ class Bootstrap:
             learned_memory_context_limit=self._learned_memory_context_limit,
             learned_memory_selector=self._learned_memory_selector,
             semantic_memory_index_runtime=semantic_memory_index_runtime,
+            research_source_fetcher=research_source_fetcher,
         )
         brain = Brain(cognitive_engine, memory_manager, event_bus)
 
@@ -284,6 +292,7 @@ class Bootstrap:
             container.register(semantic_memory_index_runtime)
         container.register(session_rename_service)
         container.register(knowledge_engine)
+        container.register(research_source_fetcher)
         container.register(response_composer)
         container.register(cognitive_engine)
         container.register(brain)

@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from core.Exceptions import KnowledgeError
+from knowledge.Document import Document, DocumentType
 from knowledge.DocumentLoader import DocumentLoader
 from knowledge.Indexer import Indexer
 from knowledge.JsonFileKnowledgeRelationStore import JsonFileKnowledgeRelationStore
@@ -36,6 +37,24 @@ class KnowledgeEngineTests(unittest.TestCase):
         self.assertEqual(engine.chunk_count(), 3)
         self.assertEqual(engine.graph_node_count(), 4)
         self.assertEqual(engine.graph_edge_count(), 5)
+
+    def test_add_document_indexes_an_already_acquired_web_source(self) -> None:
+        engine = KnowledgeEngine()
+        document = Document(
+            title="Example research",
+            content="First finding.\n\nSecond finding.",
+            source="https://example.com/research",
+            document_type=DocumentType.WEB,
+            document_id="research-source",
+        )
+
+        added = engine.add_document(document)
+
+        self.assertIs(added, document)
+        self.assertEqual(engine.document_count(), 1)
+        self.assertEqual(engine.chunk_count(), 2)
+        self.assertEqual(engine.search("second")[0].document_id, "research-source")
+        self.assertEqual(engine.documents()[0].source, document.source)
 
     def test_search_returns_indexed_chunk(self) -> None:
         path = self._write_file("example.md", "Hello\n\nHypatia")
