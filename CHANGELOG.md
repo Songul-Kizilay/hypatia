@@ -2,6 +2,31 @@
 
 All notable project changes are recorded here.
 
+## [0.3.38] - 2026-08-20
+
+### Added
+
+- A discovered source candidate now has a read-only acceptance preview that
+  proves the exact run, discovery record, and persisted candidate URL before
+  any source content is fetched.
+- The desktop adds `Preview & load`: it displays the runtime decision, asks for
+  explicit confirmation only when allowed, and then sends a separate acceptance
+  request through the existing guarded public-HTTPS source loader.
+
+### Security
+
+- Final acceptance revalidates the candidate against current persisted run
+  state. Unknown discoveries, unlisted or stale URLs, and closed runs are
+  rejected before network access.
+- Preview performs no network, indexing, LLM, graph, or conversation-memory
+  operation. Existing source-audit failure rollback remains authoritative.
+
+### Verification
+
+- The package-aware full local suite contains 1,091 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass in an isolated local tool
+  environment.
+
 ## [0.3.37] - 2026-08-20
 
 ### Added

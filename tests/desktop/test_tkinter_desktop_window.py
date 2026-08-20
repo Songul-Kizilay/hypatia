@@ -30,6 +30,9 @@ from research.ResearchRunStatusTransitionPreview import (
     ResearchRunStatusTransitionPreview,
 )
 from research.ResearchSourceCandidate import ResearchSourceCandidate
+from research.ResearchSourceCandidateAcceptancePreview import (
+    ResearchSourceCandidateAcceptancePreview,
+)
 from research.ResearchSourceDiscoveryRecord import ResearchSourceDiscoveryRecord
 
 
@@ -513,6 +516,78 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         confirm.assert_not_called()
         self.assertEqual(controller.status_updates, [])
 
+    def test_allowed_candidate_preview_requires_confirmation_before_accept(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchSourceLoadController()
+        responses: list[BrainResponse] = []
+        window._root = object()
+        window._controller = controller
+        window._research_run_id = RecordingInput("run-123")
+        window._research_candidate_run_id = "run-123"
+        window._research_candidate_discovery_id = "discovery-1"
+        window._research_candidates = controller.candidates
+        window._research_candidate_selector = RecordingCandidateSelector(0)
+        window._status = RecordingStatus()
+        window._append_response = responses.append
+
+        with patch(
+            "desktop.TkinterDesktopWindow.messagebox.askyesno", return_value=True
+        ) as confirm:
+            window._preview_and_accept_research_candidate()
+
+        expected = ("run-123", "discovery-1", controller.candidates[0].url)
+        self.assertEqual(controller.candidate_previews, [expected])
+        self.assertEqual(controller.candidate_accepts, [expected])
+        self.assertEqual(
+            responses,
+            [
+                controller.candidate_preview_response,
+                controller.candidate_accept_response,
+            ],
+        )
+        confirm.assert_called_once()
+
+    def test_declined_candidate_preview_does_not_accept(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchSourceLoadController()
+        status = RecordingStatus()
+        window._root = object()
+        window._controller = controller
+        window._research_run_id = RecordingInput("run-123")
+        window._research_candidate_run_id = "run-123"
+        window._research_candidate_discovery_id = "discovery-1"
+        window._research_candidates = controller.candidates
+        window._research_candidate_selector = RecordingCandidateSelector(0)
+        window._status = status
+        window._append_response = lambda _response: None
+
+        with patch(
+            "desktop.TkinterDesktopWindow.messagebox.askyesno", return_value=False
+        ):
+            window._preview_and_accept_research_candidate()
+
+        self.assertEqual(controller.candidate_accepts, [])
+        self.assertEqual(status.values, ["research candidate: not loaded"])
+
+    def test_stale_candidate_selection_never_requests_preview(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchSourceLoadController()
+        status = RecordingStatus()
+        window._controller = controller
+        window._research_run_id = RecordingInput("other-run")
+        window._research_candidate_run_id = "run-123"
+        window._research_candidate_discovery_id = "discovery-1"
+        window._research_candidates = controller.candidates
+        window._research_candidate_selector = RecordingCandidateSelector(0)
+        window._status = status
+
+        window._preview_and_accept_research_candidate()
+
+        self.assertEqual(controller.candidate_previews, [])
+        self.assertEqual(status.values, ["Select a discovered source candidate first."])
+
 
 class RecordingKnowledgeLoadController:
     def __init__(self) -> None:
@@ -539,6 +614,8 @@ class RecordingResearchSourceLoadController:
         self.evidence_list_calls: list[str] = []
         self.status_previews: list[tuple[str, str]] = []
         self.status_updates: list[tuple[str, str]] = []
+        self.candidate_previews: list[tuple[str, str, str]] = []
+        self.candidate_accepts: list[tuple[str, str, str]] = []
         self.response = BrainResponse(
             message="Loaded.",
             request_id="research-source-load",
@@ -605,6 +682,26 @@ class RecordingResearchSourceLoadController:
             intent="research_source_discover",
             memory_count=0,
             research_runs=[discovered_run],
+        )
+        candidate_preview = ResearchSourceCandidateAcceptancePreview(
+            "run-123",
+            "discovery-1",
+            self.candidates[0],
+            True,
+            "Candidate can be loaded.",
+        )
+        self.candidate_preview_response = BrainResponse(
+            message="Candidate preview allowed.",
+            request_id="candidate-preview",
+            intent="research_source_candidate_acceptance_preview",
+            memory_count=0,
+            research_source_candidate_acceptance_preview=candidate_preview,
+        )
+        self.candidate_accept_response = BrainResponse(
+            message="Candidate accepted.",
+            request_id="candidate-accept",
+            intent="research_source_candidate_accept",
+            memory_count=0,
         )
         self.evidence_response = BrainResponse(
             message="Evidence recorded.",
@@ -702,6 +799,18 @@ class RecordingResearchSourceLoadController:
     ) -> BrainResponse:
         self.status_updates.append((run_id, target_status))
         return self.status_update_response
+
+    def preview_research_source_candidate_acceptance(
+        self, run_id: str, discovery_id: str, candidate_url: str
+    ) -> BrainResponse:
+        self.candidate_previews.append((run_id, discovery_id, candidate_url))
+        return self.candidate_preview_response
+
+    def accept_research_source_candidate(
+        self, run_id: str, discovery_id: str, candidate_url: str
+    ) -> BrainResponse:
+        self.candidate_accepts.append((run_id, discovery_id, candidate_url))
+        return self.candidate_accept_response
 
 
 class RecordingInput:

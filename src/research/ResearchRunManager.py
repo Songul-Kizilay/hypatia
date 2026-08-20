@@ -19,6 +19,9 @@ from research.ResearchRunStatusTransitionPreview import (
 from research.ResearchRunStore import ResearchRunStore
 from research.ResearchSource import ResearchSource
 from research.ResearchSourceCandidate import ResearchSourceCandidate
+from research.ResearchSourceCandidateAcceptancePreview import (
+    ResearchSourceCandidateAcceptancePreview,
+)
 from research.ResearchSourceDiscoveryRecord import ResearchSourceDiscoveryRecord
 from research.ResearchSourceRecord import ResearchSourceRecord
 
@@ -272,6 +275,52 @@ class ResearchRunManager:
             _, run = self._find_with_index(normalized_id)
             return self._status_transition_preview(run, target_status)
 
+    def preview_candidate_acceptance(
+        self,
+        run_id: str,
+        discovery_id: str,
+        candidate_url: str,
+    ) -> ResearchSourceCandidateAcceptancePreview:
+        """Revalidate one persisted candidate without network or mutation."""
+        normalized_run_id = self._normalize_run_id(run_id)
+        normalized_discovery_id = self._normalize_discovery_id(discovery_id)
+        normalized_url = self._normalize_candidate_url(candidate_url)
+        with self._lock:
+            _, run = self._find_with_index(normalized_run_id)
+            discovery = next(
+                (
+                    item
+                    for item in run.discoveries
+                    if item.discovery_id == normalized_discovery_id
+                ),
+                None,
+            )
+            if discovery is None:
+                raise ResearchError("Research source discovery was not found.")
+            candidate = next(
+                (item for item in discovery.candidates if item.url == normalized_url),
+                None,
+            )
+            if candidate is None:
+                raise ResearchError(
+                    "Research source candidate was not found in this discovery."
+                )
+            if run.status.terminal:
+                return ResearchSourceCandidateAcceptancePreview(
+                    run.run_id,
+                    discovery.discovery_id,
+                    candidate,
+                    False,
+                    "A closed research run cannot accept new sources.",
+                )
+            return ResearchSourceCandidateAcceptancePreview(
+                run.run_id,
+                discovery.discovery_id,
+                candidate,
+                True,
+                "Research source candidate can be loaded and attached to this run.",
+            )
+
     def transition_status(
         self,
         run_id: str,
@@ -460,3 +509,9 @@ class ResearchRunManager:
         if any(character in normalized for character in ("\r", "\n", "\t")):
             raise ResearchError("Research source discovery provider is invalid.")
         return normalized
+
+    @staticmethod
+    def _normalize_candidate_url(candidate_url: str) -> str:
+        if not isinstance(candidate_url, str) or not candidate_url.strip():
+            raise ResearchError("Research source candidate URL cannot be empty.")
+        return candidate_url.strip()

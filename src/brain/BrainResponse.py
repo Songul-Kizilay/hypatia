@@ -19,6 +19,9 @@ from research.ResearchRun import ResearchRun
 from research.ResearchRunStatusTransitionPreview import (
     ResearchRunStatusTransitionPreview,
 )
+from research.ResearchSourceCandidateAcceptancePreview import (
+    ResearchSourceCandidateAcceptancePreview,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,6 +46,9 @@ class BrainResponse:
     research_runs: list[ResearchRun] = field(default_factory=list)
     research_run_status_transition_preview: (
         ResearchRunStatusTransitionPreview | None
+    ) = None
+    research_source_candidate_acceptance_preview: (
+        ResearchSourceCandidateAcceptancePreview | None
     ) = None
     session_summaries: list[SessionSummary] = field(default_factory=list)
     session_delete_allowed: bool | None = None

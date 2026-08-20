@@ -88,6 +88,9 @@ To create the world's most capable personal AI research companion.
   to five ordered HTTPS metadata candidates without fetching, accepting, or
   indexing their content; the packaged runtime includes a bounded Crossref
   scholarly-metadata provider used only after an explicit action
+- A read-only discovered-candidate acceptance preview followed by separate
+  confirmation and final revalidation through the existing guarded HTTPS
+  source loader
 - An initial local desktop shell for text chat, a refreshable session overview,
   explicit session selection, session details/recent conversations/activity,
   explicit lexical/semantic conversation recall, and semantic-memory runtime
@@ -146,9 +149,11 @@ research autonomous.
 `Find sources` sends the selected collecting run's question to Crossref and
 records the query, provider, time, and at most five ordered DOI metadata
 candidates. The desktop displays their titles and URLs; `Use selected URL`
-copies one choice into the separate source-load field. Neither discovery nor
-selection downloads, accepts, trusts, indexes, cites, or writes candidate
-content to conversation memory. Set
+copies one choice into the separate source-load field. `Preview & load`
+revalidates the exact run, discovery, and candidate without network access,
+then asks for confirmation and revalidates again before using the existing
+source loader. Discovery and preview never download, accept, trust, index,
+cite, or write candidate content to conversation memory. Set
 `HYPATIA_RESEARCH_SOURCE_DISCOVERY_PROVIDER=disabled` to disable discovery.
 `Save evidence` records a user-selected indexed paragraph only when it belongs
 to a source attached to the selected run. It keeps a bounded excerpt, source

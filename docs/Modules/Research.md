@@ -6,7 +6,9 @@ Partially implemented: explicit public-HTTPS source acquisition, local
 knowledge indexing, persistent research-run audit records, and a replaceable
 source-discovery provider contract are available. User-selected evidence and
 bounded candidate metadata are persistent. The packaged process-environment
-runtime includes an explicit Crossref scholarly-metadata provider. Automatic
+runtime includes an explicit Crossref scholarly-metadata provider. An exact
+persisted candidate can be previewed, confirmed, revalidated, and loaded through
+the existing guarded HTTPS boundary. Automatic
 evidence extraction, multi-source synthesis, evidence ranking, and
 contradiction detection remain planned.
 
@@ -41,6 +43,11 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
   and timezone-aware timestamp. Closed and unknown runs stop before provider
   access. Provider failures retain only a generic safe run-failure record; a
   failed discovery snapshot leaves the prior run unchanged.
+- Candidate acceptance begins with a read-only decision bound to one exact run,
+  discovery ID, and persisted URL. It performs no fetch, indexing, LLM, graph,
+  or memory operation. A separate confirmed request repeats the validation and
+  only then delegates to the existing public-HTTPS loader and audit rollback.
+  Unknown, unlisted, stale, and closed-run selections stop before the network.
 - The standard process-environment runtime uses Crossref REST v1 for this
   explicit discovery action. Its fixed `api.crossref.org` HTTPS endpoint and
   redirects stay same-origin, system proxies are disabled, JSON responses are
@@ -76,15 +83,14 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
   indexed unlinked document is removed before a controlled failure is returned.
   Persistent failure reasons do not retain a rejected URL.
 - Acquisition, discovery, and run management do not invoke an LLM, write
-  conversation memory, crawl links, accept candidates, or create graph
-  relations automatically.
+  conversation memory, crawl links, accept candidates unattended, or create
+  graph relations automatically.
 
 ## Next increment
 
-Add an explicit preview-and-confirm candidate acceptance decision that
-revalidates the chosen DOI URL through the existing source-acquisition policy.
-Discovery and selection must remain separate from fetching, and neither may
-become unattended crawling. Multi-source comparison must operate only on
+Add an explicit accepted-source assessment preview without choosing evidence
+automatically. Discovery and selection remain separate from fetching and may
+not become unattended crawling. Multi-source comparison must operate only on
 separately accepted, indexed, and cited sources.
 
 ## Known boundary

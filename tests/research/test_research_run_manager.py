@@ -374,6 +374,60 @@ class ResearchRunManagerTests(unittest.TestCase):
 
         self.assertEqual(restarted.list(), [run])
 
+    def test_candidate_acceptance_preview_matches_persisted_discovery_only(
+        self,
+    ) -> None:
+        run = self.manager.create("Question")
+        candidate = ResearchSourceCandidate(
+            "https://example.com/paper", "Paper", "Summary"
+        )
+        updated = self.manager.add_discovery(
+            run.run_id, run.question, "provider", [candidate]
+        )
+        saves_before = len(self.store.saved)
+
+        preview = self.manager.preview_candidate_acceptance(
+            run.run_id,
+            updated.discoveries[0].discovery_id,
+            candidate.url,
+        )
+
+        self.assertTrue(preview.allowed)
+        self.assertEqual(preview.candidate, candidate)
+        self.assertEqual(len(self.store.saved), saves_before)
+        self.assertEqual(self.manager.get(run.run_id), updated)
+
+    def test_candidate_acceptance_preview_rejects_unknown_selection(self) -> None:
+        run = self.manager.create("Question")
+        candidate = ResearchSourceCandidate(
+            "https://example.com/paper", "Paper", "Summary"
+        )
+        self.manager.add_discovery(run.run_id, run.question, "provider", [candidate])
+
+        with self.assertRaisesRegex(ResearchError, "discovery was not found"):
+            self.manager.preview_candidate_acceptance(
+                run.run_id, "missing", candidate.url
+            )
+        with self.assertRaisesRegex(ResearchError, "not found in this discovery"):
+            self.manager.preview_candidate_acceptance(
+                run.run_id, "discovery-1", "https://example.com/unlisted"
+            )
+
+    def test_closed_run_returns_blocked_candidate_acceptance_preview(self) -> None:
+        run = self.manager.create("Question")
+        candidate = ResearchSourceCandidate(
+            "https://example.com/paper", "Paper", "Summary"
+        )
+        self.manager.add_discovery(run.run_id, run.question, "provider", [candidate])
+        self.manager.transition_status(run.run_id, ResearchRunStatus.CANCELLED)
+
+        preview = self.manager.preview_candidate_acceptance(
+            run.run_id, "discovery-1", candidate.url
+        )
+
+        self.assertFalse(preview.allowed)
+        self.assertIn("closed", preview.reason)
+
 
 if __name__ == "__main__":
     unittest.main()

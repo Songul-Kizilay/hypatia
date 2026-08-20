@@ -142,6 +142,7 @@ class TkinterDesktopWindow:
         self._session_summaries: list[SessionSummary] = []
         self._research_candidates: tuple[ResearchSourceCandidate, ...] = ()
         self._research_candidate_run_id = ""
+        self._research_candidate_discovery_id = ""
         self._font_size = _DEFAULT_FONT_SIZE
         self._font_size_label = tk.StringVar()
         self._high_contrast = tk.BooleanVar(value=False)
@@ -378,7 +379,6 @@ class TkinterDesktopWindow:
         self._research_candidate_selector.grid(
             row=2,
             column=1,
-            columnspan=2,
             sticky="ew",
             padx=(8, 8),
             pady=(8, 0),
@@ -387,7 +387,12 @@ class TkinterDesktopWindow:
             research_frame,
             text="Use selected URL",
             command=self._use_selected_research_candidate,
-        ).grid(row=2, column=3, sticky="ew", pady=(8, 0))
+        ).grid(row=2, column=2, sticky="ew", pady=(8, 0))
+        ttk.Button(
+            research_frame,
+            text="Preview & load",
+            command=self._preview_and_accept_research_candidate,
+        ).grid(row=2, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
         ttk.Label(research_frame, text="HTTPS URL").grid(
             row=3,
             column=0,
@@ -722,7 +727,9 @@ class TkinterDesktopWindow:
         if not selected_runs or not selected_runs[0].discoveries:
             return
         self._research_candidate_run_id = selected_run_id
-        self._research_candidates = selected_runs[0].discoveries[-1].candidates
+        discovery = selected_runs[0].discoveries[-1]
+        self._research_candidate_discovery_id = discovery.discovery_id
+        self._research_candidates = discovery.candidates
         labels = tuple(
             f"{index}. {candidate.title} — {candidate.url}"
             for index, candidate in enumerate(self._research_candidates, start=1)
@@ -734,6 +741,7 @@ class TkinterDesktopWindow:
     def _clear_research_candidates(self) -> None:
         self._research_candidates = ()
         self._research_candidate_run_id = ""
+        self._research_candidate_discovery_id = ""
         self._research_candidate.set("")
         self._research_candidate_selector.configure(values=())
 
@@ -748,6 +756,63 @@ class TkinterDesktopWindow:
             return
         self._research_url.set(self._research_candidates[selected_index].url)
         self._status.set("research candidate: URL copied; source not loaded")
+
+    def _selected_research_candidate(
+        self,
+    ) -> tuple[str, str, ResearchSourceCandidate] | None:
+        selected_index = self._research_candidate_selector.current()
+        run_id = self._research_run_id.get().strip()
+        if (
+            run_id != self._research_candidate_run_id
+            or not self._research_candidate_discovery_id
+            or not 0 <= selected_index < len(self._research_candidates)
+        ):
+            return None
+        return (
+            run_id,
+            self._research_candidate_discovery_id,
+            self._research_candidates[selected_index],
+        )
+
+    def _preview_and_accept_research_candidate(self) -> None:
+        """Preview, confirm, and separately accept one discovered candidate."""
+        selected = self._selected_research_candidate()
+        if selected is None:
+            self._status.set("Select a discovered source candidate first.")
+            return
+        run_id, discovery_id, candidate = selected
+        try:
+            preview_response = (
+                self._controller.preview_research_source_candidate_acceptance(
+                    run_id,
+                    discovery_id,
+                    candidate.url,
+                )
+            )
+        except ValueError as error:
+            self._status.set(str(error))
+            return
+        self._append_response(preview_response)
+        preview = preview_response.research_source_candidate_acceptance_preview
+        if not preview_response.success or preview is None or not preview.allowed:
+            return
+        if not messagebox.askyesno(
+            "Load research source?",
+            (
+                f"{preview_response.message}\n\n"
+                "This fetches the selected HTTPS source, indexes it locally, "
+                "and attaches it to the research run. Continue?"
+            ),
+            parent=self._root,
+        ):
+            self._status.set("research candidate: not loaded")
+            return
+        response = self._controller.accept_research_source_candidate(
+            run_id,
+            discovery_id,
+            candidate.url,
+        )
+        self._append_response(response)
 
     def _record_research_evidence(self) -> None:
         """Persist one user-selected indexed paragraph under the current run."""

@@ -192,6 +192,12 @@ class CognitiveEngine:
         if self._is_research_source_discover_request(request):
             return self._process_research_source_discover(request)
 
+        if self._is_research_source_candidate_acceptance_preview_request(request):
+            return self._process_research_source_candidate_acceptance_preview(request)
+
+        if self._is_research_source_candidate_accept_request(request):
+            return self._process_research_source_candidate_accept(request)
+
         if self._is_research_source_load_request(request):
             return self._process_research_source_load(request)
 
@@ -349,6 +355,21 @@ class CognitiveEngine:
     def _is_research_source_discover_request(request: BrainRequest) -> bool:
         """Recognize only an explicit structured source-discovery request."""
         return request.metadata.get("intent") == "research_source_discover"
+
+    @staticmethod
+    def _is_research_source_candidate_acceptance_preview_request(
+        request: BrainRequest,
+    ) -> bool:
+        """Recognize only an explicit candidate acceptance preview."""
+        return (
+            request.metadata.get("intent")
+            == "research_source_candidate_acceptance_preview"
+        )
+
+    @staticmethod
+    def _is_research_source_candidate_accept_request(request: BrainRequest) -> bool:
+        """Recognize only an explicit confirmed candidate acceptance."""
+        return request.metadata.get("intent") == "research_source_candidate_accept"
 
     @staticmethod
     def _is_research_run_create_request(request: BrainRequest) -> bool:
@@ -648,18 +669,111 @@ class CognitiveEngine:
             updated,
         )
 
-    def _process_research_source_load(self, request: BrainRequest) -> BrainResponse:
+    def _process_research_source_candidate_acceptance_preview(
+        self,
+        request: BrainRequest,
+    ) -> BrainResponse:
+        """Preview a persisted candidate without fetching or changing state."""
+        failure_response = (
+            self._response_composer.research_source_candidate_acceptance_preview_failure
+        )
+        values = self._research_source_candidate_values(request)
+        if values is None:
+            return failure_response(
+                request,
+                "A research run ID, discovery ID, and candidate URL are required.",
+            )
+        if self._research_run_manager is None:
+            return failure_response(
+                request,
+                "Research run persistence is unavailable.",
+            )
+        try:
+            preview = self._research_run_manager.preview_candidate_acceptance(*values)
+        except ResearchError as error:
+            return failure_response(request, str(error))
+        success_response = (
+            self._response_composer.research_source_candidate_acceptance_preview_success
+        )
+        return success_response(
+            request,
+            preview,
+        )
+
+    def _process_research_source_candidate_accept(
+        self,
+        request: BrainRequest,
+    ) -> BrainResponse:
+        """Revalidate a confirmed candidate before using the guarded loader."""
+        values = self._research_source_candidate_values(request)
+        if values is None:
+            return self._response_composer.research_source_load_failure(
+                request,
+                "A research run ID, discovery ID, and candidate URL are required.",
+                intent="research_source_candidate_accept",
+            )
+        if self._research_run_manager is None:
+            return self._response_composer.research_source_load_failure(
+                request,
+                "Research run persistence is unavailable.",
+                intent="research_source_candidate_accept",
+            )
+        try:
+            preview = self._research_run_manager.preview_candidate_acceptance(*values)
+        except ResearchError as error:
+            return self._response_composer.research_source_load_failure(
+                request,
+                str(error),
+                intent="research_source_candidate_accept",
+            )
+        if not preview.allowed:
+            return self._response_composer.research_source_load_failure(
+                request,
+                preview.reason,
+                intent="research_source_candidate_accept",
+            )
+        return self._process_research_source_load(
+            request,
+            response_intent="research_source_candidate_accept",
+        )
+
+    @staticmethod
+    def _research_source_candidate_values(
+        request: BrainRequest,
+    ) -> tuple[str, str, str] | None:
+        run_id = request.metadata.get("research_run_id")
+        discovery_id = request.metadata.get("research_discovery_id")
+        candidate_url = request.metadata.get("research_url")
+        if not (
+            isinstance(run_id, str)
+            and run_id.strip()
+            and isinstance(discovery_id, str)
+            and discovery_id.strip()
+            and isinstance(candidate_url, str)
+            and candidate_url.strip()
+        ):
+            return None
+        return run_id.strip(), discovery_id.strip(), candidate_url.strip()
+
+    def _process_research_source_load(
+        self,
+        request: BrainRequest,
+        *,
+        response_intent: str = "research_source_load",
+    ) -> BrainResponse:
         """Acquire and index one explicit source without LLM or memory side effects."""
         url = request.metadata.get("research_url")
         if not isinstance(url, str) or not url.strip():
             return self._response_composer.research_source_load_failure(
                 request,
                 "A research source URL is required.",
+                intent=response_intent,
             )
         if self._research_source_fetcher is None:
             return self._response_composer.research_source_load_failure(
                 request,
                 "Internet research source loading is unavailable.",
+                intent=response_intent,
             )
         run_id_value = request.metadata.get("research_run_id")
         run_id = run_id_value.strip() if isinstance(run_id_value, str) else ""
@@ -667,11 +781,13 @@ class CognitiveEngine:
             return self._response_composer.research_source_load_failure(
                 request,
                 "A valid research run ID is required.",
+                intent=response_intent,
             )
         if run_id and self._research_run_manager is None:
             return self._response_composer.research_source_load_failure(
                 request,
                 "Research run persistence is unavailable.",
+                intent=response_intent,
             )
         if run_id:
             assert self._research_run_manager is not None
@@ -681,11 +797,13 @@ class CognitiveEngine:
                 return self._response_composer.research_source_load_failure(
                     request,
                     "Research run was not found.",
+                    intent=response_intent,
                 )
             if selected_run.status.terminal:
                 return self._response_composer.research_source_load_failure(
                     request,
                     "Research run is closed and cannot accept new sources.",
+                    intent=response_intent,
                 )
         try:
             source = self._research_source_fetcher.fetch(url.strip())
@@ -710,10 +828,12 @@ class CognitiveEngine:
                             "Research source failed and its audit record "
                             "could not be saved."
                         ),
+                        intent=response_intent,
                     )
             return self._response_composer.research_source_load_failure(
                 request,
                 f"Research source could not be loaded: {error}",
+                intent=response_intent,
             )
         run = None
         if run_id and self._research_run_manager is not None:
@@ -730,6 +850,7 @@ class CognitiveEngine:
                     return self._response_composer.research_source_load_failure(
                         request,
                         "Research source audit failed and knowledge rollback failed.",
+                        intent=response_intent,
                     )
                 return self._response_composer.research_source_load_failure(
                     request,
@@ -737,6 +858,7 @@ class CognitiveEngine:
                         "Research source audit could not be saved; "
                         "knowledge was rolled back."
                     ),
+                    intent=response_intent,
                 )
         loaded_document = next(
             reference
@@ -747,6 +869,7 @@ class CognitiveEngine:
             request,
             loaded_document,
             run=run,
+            intent=response_intent,
         )
 
     def _process_knowledge_load(self, request: BrainRequest) -> BrainResponse:

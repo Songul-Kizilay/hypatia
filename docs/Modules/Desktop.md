@@ -17,9 +17,11 @@ knowledge boundary.
 For a selected collecting run, `Find sources` explicitly queries the bounded
 Crossref metadata provider and displays up to five persisted candidates.
 `Use selected URL` only copies the chosen DOI URL into the existing source
-field; the separate `Load source` action is still required before Hypatia
-validates, fetches, accepts, or indexes that source. Changing the run ID makes
-old candidate selections unusable.
+field. `Preview & load` first renders a read-only decision for the exact run,
+discovery, and candidate, then asks for confirmation before a separate request
+revalidates and uses the existing guarded loader. Changing the run ID makes old
+candidate selections unusable; stale or unlisted choices stop before network
+access.
 For an attached source, `Save evidence` records one explicitly entered chunk ID
 and note; `View evidence` displays the persisted bounded excerpt and locator.
 Neither action extracts, ranks, or interprets evidence automatically.

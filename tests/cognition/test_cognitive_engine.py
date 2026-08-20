@@ -5958,6 +5958,116 @@ class CognitiveEngineTests(unittest.TestCase):
             self.knowledge_engine.search("second")[0].document_id, document.document_id
         )
 
+    def test_candidate_preview_is_read_only_and_accept_uses_guarded_loader(
+        self,
+    ) -> None:
+        manager = ResearchRunManager(
+            id_factory=lambda: "run-123",
+            discovery_id_factory=lambda: "discovery-123",
+        )
+        run = manager.create("Question")
+        candidate = ResearchSourceCandidate(
+            "https://example.com/paper", "Paper", "Summary"
+        )
+        manager.add_discovery(run.run_id, run.question, "provider", [candidate])
+        source = ResearchSource(
+            candidate.url,
+            candidate.title,
+            "Accepted evidence.",
+            "text/plain",
+            datetime(2026, 8, 20, 12, 30, tzinfo=UTC),
+        )
+        fetcher = RecordingResearchSourceFetcher(source=source)
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            research_source_fetcher=fetcher,
+            research_run_manager=manager,
+        )
+        metadata = {
+            "research_run_id": run.run_id,
+            "research_discovery_id": "discovery-123",
+            "research_url": candidate.url,
+        }
+        documents_before = self.knowledge_engine.documents()
+
+        preview = engine.process(
+            BrainRequest(
+                "Preview candidate",
+                metadata={
+                    "intent": "research_source_candidate_acceptance_preview",
+                    **metadata,
+                },
+            )
+        )
+
+        self.assertTrue(preview.success)
+        self.assertEqual(fetcher.calls, [])
+        self.assertEqual(self.knowledge_engine.documents(), documents_before)
+        decision = preview.research_source_candidate_acceptance_preview
+        self.assertIsNotNone(decision)
+        assert decision is not None
+        self.assertTrue(decision.allowed)
+
+        accepted = engine.process(
+            BrainRequest(
+                "Accept candidate",
+                metadata={"intent": "research_source_candidate_accept", **metadata},
+            )
+        )
+
+        self.assertTrue(accepted.success)
+        self.assertEqual(accepted.intent, "research_source_candidate_accept")
+        self.assertEqual(fetcher.calls, [candidate.url])
+        self.assertEqual(len(accepted.knowledge_documents), 1)
+        self.assertEqual(len(manager.get(run.run_id).sources), 1)
+
+    def test_candidate_accept_rejects_unlisted_url_before_network_access(self) -> None:
+        manager = ResearchRunManager(
+            id_factory=lambda: "run-123",
+            discovery_id_factory=lambda: "discovery-123",
+        )
+        run = manager.create("Question")
+        candidate = ResearchSourceCandidate(
+            "https://example.com/paper", "Paper", "Summary"
+        )
+        manager.add_discovery(run.run_id, run.question, "provider", [candidate])
+        fetcher = RecordingResearchSourceFetcher()
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            research_source_fetcher=fetcher,
+            research_run_manager=manager,
+        )
+        documents_before = self.knowledge_engine.documents()
+
+        response = engine.process(
+            BrainRequest(
+                "Accept candidate",
+                metadata={
+                    "intent": "research_source_candidate_accept",
+                    "research_run_id": run.run_id,
+                    "research_discovery_id": "discovery-123",
+                    "research_url": "https://example.com/unlisted",
+                },
+            )
+        )
+
+        self.assertFalse(response.success)
+        self.assertEqual(response.intent, "research_source_candidate_accept")
+        self.assertEqual(fetcher.calls, [])
+        self.assertEqual(self.knowledge_engine.documents(), documents_before)
+
     def test_research_source_load_fails_safely_without_partial_indexing(self) -> None:
         fetcher = RecordingResearchSourceFetcher(
             error=ResearchError("Host is not public.")

@@ -308,6 +308,42 @@ class DesktopControllerTests(unittest.TestCase):
 
         self.assertEqual(self.brain.requests, [])
 
+    def test_candidate_preview_and_accept_use_explicit_structured_requests(
+        self,
+    ) -> None:
+        values = (" run-123 ", " discovery-1 ", " https://example.com/paper ")
+
+        self.controller.preview_research_source_candidate_acceptance(*values)
+        self.controller.accept_research_source_candidate(*values)
+
+        expected = {
+            "research_run_id": "run-123",
+            "research_discovery_id": "discovery-1",
+            "research_url": "https://example.com/paper",
+        }
+        first, second = self.brain.requests
+        assert isinstance(first, BrainRequest)
+        assert isinstance(second, BrainRequest)
+        self.assertEqual(
+            first.metadata,
+            {"intent": "research_source_candidate_acceptance_preview", **expected},
+        )
+        self.assertEqual(
+            second.metadata,
+            {"intent": "research_source_candidate_accept", **expected},
+        )
+
+    def test_candidate_requests_reject_empty_identifiers_locally(self) -> None:
+        for values in (
+            ("", "discovery-1", "https://example.com/paper"),
+            ("run-1", "", "https://example.com/paper"),
+            ("run-1", "discovery-1", ""),
+        ):
+            with self.subTest(values=values), self.assertRaises(ValueError):
+                self.controller.preview_research_source_candidate_acceptance(*values)
+
+        self.assertEqual(self.brain.requests, [])
+
     def test_record_research_evidence_uses_an_explicit_structured_request(self) -> None:
         response = self.controller.record_research_evidence(
             " run-123 ",

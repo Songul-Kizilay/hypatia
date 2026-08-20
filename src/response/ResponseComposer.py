@@ -25,6 +25,9 @@ from research.ResearchRun import ResearchRun
 from research.ResearchRunStatusTransitionPreview import (
     ResearchRunStatusTransitionPreview,
 )
+from research.ResearchSourceCandidateAcceptancePreview import (
+    ResearchSourceCandidateAcceptancePreview,
+)
 from session.SessionDeleteExecutionResult import SessionDeleteExecutionResult
 from session.SessionDeletePolicy import SessionDeleteStatus
 from session.SessionRecord import SessionRecord
@@ -538,6 +541,7 @@ class ResponseComposer:
         document: KnowledgeDocumentReference,
         *,
         run: ResearchRun | None = None,
+        intent: str = "research_source_load",
     ) -> BrainResponse:
         """Report one explicitly selected internet source after local indexing."""
         lines = [
@@ -553,7 +557,7 @@ class ResponseComposer:
         return BrainResponse(
             message="\n".join(lines),
             request_id=request.request_id,
-            intent="research_source_load",
+            intent=intent,
             memory_count=0,
             knowledge_documents=[document],
             research_runs=[] if run is None else [run],
@@ -563,12 +567,54 @@ class ResponseComposer:
         self,
         request: BrainRequest,
         message: str,
+        *,
+        intent: str = "research_source_load",
     ) -> BrainResponse:
         """Report rejected external acquisition without hiding its safe reason."""
         return BrainResponse(
             message=message,
             request_id=request.request_id,
-            intent="research_source_load",
+            intent=intent,
+            memory_count=0,
+            success=False,
+        )
+
+    def research_source_candidate_acceptance_preview_success(
+        self,
+        request: BrainRequest,
+        preview: ResearchSourceCandidateAcceptancePreview,
+    ) -> BrainResponse:
+        """Render the immutable candidate decision before any acquisition."""
+        return BrainResponse(
+            message="\n".join(
+                [
+                    "Research source candidate acceptance preview:",
+                    f"Title: {preview.candidate.title}",
+                    f"URL: {preview.candidate.url}",
+                    f"Run: {preview.run_id}",
+                    f"Discovery: {preview.discovery_id}",
+                    f"Allowed: {'yes' if preview.allowed else 'no'}",
+                    f"Reason: {preview.reason}",
+                    "Status: preview only; source content was not loaded",
+                ]
+            ),
+            request_id=request.request_id,
+            intent="research_source_candidate_acceptance_preview",
+            memory_count=0,
+            success=preview.allowed,
+            research_source_candidate_acceptance_preview=preview,
+        )
+
+    def research_source_candidate_acceptance_preview_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Report invalid candidate selection without network or mutation."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="research_source_candidate_acceptance_preview",
             memory_count=0,
             success=False,
         )
