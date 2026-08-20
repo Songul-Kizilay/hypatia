@@ -163,10 +163,12 @@ the source identity and indexed chunk count. It neither calls an LLM nor adds a
 conversation-memory record. Unsupported, empty, missing, or already loaded
 files return the existing safe runtime failure instead of a partial load.
 `Load source` accepts one explicitly entered public HTTPS URL. Hypatia validates
-the URL and every redirect against private-network access, accepts only bounded
-HTML/plain-text/Markdown content, extracts readable text, and indexes it through
-the same knowledge pipeline with its final URL preserved. It does not search for
-sources, run in the background, call an LLM, or write conversation memory.
+the URL and every redirect against private-network access, then connects to an
+exact validated public address while retaining hostname-based TLS certificate
+checks. It accepts only bounded HTML/plain-text/Markdown content, extracts
+readable text, and indexes it through the same knowledge pipeline with its final
+URL preserved. It does not search for sources, run in the background, call an
+LLM, or write conversation memory.
 `Start research` creates a local audit record for one question. `Research runs`
 lists those records, and entering the selected run ID before `Load source`
 attaches accepted source provenance to it. The run keeps timestamps and safe

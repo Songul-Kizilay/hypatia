@@ -33,6 +33,27 @@ class PublicHttpsUrlValidatorTests(unittest.TestCase):
         self.assertEqual(result, "https://example.com/research?q=hypatia")
         self.assertEqual(self.resolved_hosts, ["example.com"])
 
+    def test_returns_the_exact_normalized_public_addresses_for_pinning(self) -> None:
+        validator = PublicHttpsUrlValidator(
+            lambda _host: (
+                "93.184.216.34",
+                "2606:2800:220:1:248:1893:25c8:1946",
+                "93.184.216.34",
+            )
+        )
+
+        destination = validator.validate_and_resolve("https://EXAMPLE.com")
+
+        self.assertEqual(destination.url, "https://example.com/")
+        self.assertEqual(destination.hostname, "example.com")
+        self.assertEqual(
+            destination.addresses,
+            (
+                "93.184.216.34",
+                "2606:2800:220:1:248:1893:25c8:1946",
+            ),
+        )
+
     def test_rejects_non_https_credentials_and_nonstandard_ports(self) -> None:
         for url, message in (
             ("http://example.com", "must use HTTPS"),

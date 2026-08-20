@@ -144,8 +144,10 @@ runtime outcomes: the desktop does not create a second store, alter
 conversation memory, invoke an LLM, or retain a partial local source.
 `Load source` sends exactly one explicitly entered URL through the structured
 research-source request. The runtime validates public HTTPS resolution and
-redirects, bounds response type/size/time, extracts readable text, and indexes
-the source with its final URL. `Start research` persists one question and
+redirects, pins each connection to an exact validated public address while
+retaining hostname-based TLS certificate checks, bounds response
+type/size/time, extracts readable text, and indexes the source with its final
+URL. `Start research` persists one question and
 selects the returned run ID; `Research runs` lists the current audit catalog.
 When a run ID is present, a successful source load also persists provenance,
 while an audit-write failure rolls the new unlinked knowledge document back.

@@ -10,6 +10,9 @@ Hypatia currently runs as a local-first CLI. The initial security boundary is:
   `127.0.0.1`, or `::1`);
 - authenticated LLM completion requests do not follow HTTP redirects, so a
   bearer token cannot be forwarded to a redirect target;
+- explicitly loaded public research pages connect to an exact address from the
+  immediately preceding public-DNS validation while TLS still verifies the URL
+  hostname and certificate; redirects repeat the same boundary;
 - semantic embeddings are opt-in and restricted to the local Ollama endpoint
   policy enforced at bootstrap.
 
