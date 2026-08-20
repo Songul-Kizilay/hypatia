@@ -91,6 +91,9 @@ To create the world's most capable personal AI research companion.
 - A read-only discovered-candidate acceptance preview followed by separate
   confirmation and final revalidation through the existing guarded HTTPS
   source loader
+- A read-only accepted-source assessment preview that binds the exact run and
+  document ID, then shows persisted provenance and only user-selected evidence
+  without assigning a trust or quality score
 - An initial local desktop shell for text chat, a refreshable session overview,
   explicit session selection, session details/recent conversations/activity,
   explicit lexical/semantic conversation recall, and semantic-memory runtime
@@ -160,6 +163,12 @@ to a source attached to the selected run. It keeps a bounded excerpt, source
 and paragraph locator, full-paragraph fingerprint, note, and timestamp;
 `View evidence` remains available after restart. Hypatia does not yet select or
 interpret evidence automatically.
+`Preview assessment` reads one accepted source by its selected document ID and
+shows that source's persisted provenance plus only its already recorded
+evidence. A successful source attachment fills the document ID field, but the
+preview remains a separate action. It performs no network, LLM, memory, graph,
+knowledge-index, or persistence operation and does not claim that the source is
+trustworthy, relevant, or high quality.
 The `Final status` control previews `completed`, `failed`, or `cancelled` before
 asking for separate confirmation. Completion requires at least one accepted
 source and one evidence record, while failure requires a recorded failure. A

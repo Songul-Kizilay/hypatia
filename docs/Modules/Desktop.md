@@ -25,6 +25,11 @@ access.
 For an attached source, `Save evidence` records one explicitly entered chunk ID
 and note; `View evidence` displays the persisted bounded excerpt and locator.
 Neither action extracts, ranks, or interprets evidence automatically.
+`Preview assessment` uses the selected run and accepted source document ID to
+display persisted provenance and only that source's user-selected evidence. A
+successful attached-source load fills the document field, but opening the view
+is still explicit. The action performs no fetch, LLM, memory, graph, knowledge,
+or persistence mutation and assigns no automatic trust or quality score.
 The `Final status` selector offers only `completed`, `failed`, and `cancelled`.
 `Preview status` shows the runtime decision first and requests a separate
 confirmation only when allowed. A completed run requires source and evidence;

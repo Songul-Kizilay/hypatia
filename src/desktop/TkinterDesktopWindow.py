@@ -134,6 +134,7 @@ class TkinterDesktopWindow:
         self._research_run_id = tk.StringVar()
         self._research_candidate = tk.StringVar()
         self._research_url = tk.StringVar()
+        self._research_source_document_id = tk.StringVar()
         self._research_chunk_id = tk.StringVar()
         self._research_evidence_note = tk.StringVar()
         self._research_target_status = tk.StringVar(value="completed")
@@ -412,14 +413,36 @@ class TkinterDesktopWindow:
             text="Load source",
             command=self._load_research_source,
         ).grid(row=3, column=3, sticky="ew", pady=(8, 0))
-        ttk.Label(research_frame, text="Chunk ID").grid(
+        ttk.Label(research_frame, text="Source document ID").grid(
             row=4,
             column=0,
             sticky="w",
             pady=(8, 0),
         )
-        ttk.Entry(research_frame, textvariable=self._research_chunk_id).grid(
+        ttk.Entry(
+            research_frame,
+            textvariable=self._research_source_document_id,
+        ).grid(
             row=4,
+            column=1,
+            columnspan=2,
+            sticky="ew",
+            padx=(8, 8),
+            pady=(8, 0),
+        )
+        ttk.Button(
+            research_frame,
+            text="Preview assessment",
+            command=self._preview_research_source_assessment,
+        ).grid(row=4, column=3, sticky="ew", pady=(8, 0))
+        ttk.Label(research_frame, text="Chunk ID").grid(
+            row=5,
+            column=0,
+            sticky="w",
+            pady=(8, 0),
+        )
+        ttk.Entry(research_frame, textvariable=self._research_chunk_id).grid(
+            row=5,
             column=1,
             columnspan=3,
             sticky="ew",
@@ -427,13 +450,13 @@ class TkinterDesktopWindow:
             pady=(8, 0),
         )
         ttk.Label(research_frame, text="Evidence note").grid(
-            row=5,
+            row=6,
             column=0,
             sticky="w",
             pady=(8, 0),
         )
         ttk.Entry(research_frame, textvariable=self._research_evidence_note).grid(
-            row=5,
+            row=6,
             column=1,
             columnspan=2,
             sticky="ew",
@@ -444,14 +467,14 @@ class TkinterDesktopWindow:
             research_frame,
             text="Save evidence",
             command=self._record_research_evidence,
-        ).grid(row=5, column=3, sticky="ew", pady=(8, 0))
+        ).grid(row=6, column=3, sticky="ew", pady=(8, 0))
         ttk.Button(
             research_frame,
             text="View evidence",
             command=self._show_research_evidence,
-        ).grid(row=6, column=3, sticky="ew", pady=(8, 0))
+        ).grid(row=7, column=3, sticky="ew", pady=(8, 0))
         ttk.Label(research_frame, text="Final status").grid(
-            row=6,
+            row=7,
             column=0,
             sticky="w",
             pady=(8, 0),
@@ -461,12 +484,12 @@ class TkinterDesktopWindow:
             textvariable=self._research_target_status,
             values=("completed", "failed", "cancelled"),
             state="readonly",
-        ).grid(row=6, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
+        ).grid(row=7, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
         ttk.Button(
             research_frame,
             text="Preview status",
             command=self._preview_and_update_research_status,
-        ).grid(row=6, column=2, sticky="ew", pady=(8, 0))
+        ).grid(row=7, column=2, sticky="ew", pady=(8, 0))
 
         relation_frame = ttk.LabelFrame(
             container,
@@ -684,6 +707,7 @@ class TkinterDesktopWindow:
             self._status.set(str(error))
             return
         self._append_response(response)
+        self._capture_accepted_research_source(response)
 
     def _create_research_run(self) -> None:
         """Create a persistent run and select its returned identifier."""
@@ -812,6 +836,32 @@ class TkinterDesktopWindow:
             discovery_id,
             candidate.url,
         )
+        self._append_response(response)
+        self._capture_accepted_research_source(response)
+
+    def _capture_accepted_research_source(self, response: BrainResponse) -> None:
+        """Select only a source that the returned run confirms as accepted."""
+        if not response.success or not response.knowledge_documents:
+            return
+        document_id = response.knowledge_documents[0].document_id
+        if not any(
+            source.document_id == document_id
+            for run in response.research_runs
+            for source in run.sources
+        ):
+            return
+        self._research_source_document_id.set(document_id)
+
+    def _preview_research_source_assessment(self) -> None:
+        """Render persisted source context without network, LLM, or mutation."""
+        try:
+            response = self._controller.preview_research_source_assessment(
+                self._research_run_id.get(),
+                self._research_source_document_id.get(),
+            )
+        except ValueError as error:
+            self._status.set(str(error))
+            return
         self._append_response(response)
 
     def _record_research_evidence(self) -> None:

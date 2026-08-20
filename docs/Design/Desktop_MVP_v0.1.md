@@ -147,6 +147,12 @@ a user note. The runtime accepts it only from a source attached to that run and
 stores a bounded excerpt plus its exact source/chunk locator and full-chunk
 fingerprint. `View evidence` reads this audit record after restart; neither
 action chooses evidence or evaluates a claim automatically.
+`Preview assessment` requires the selected run ID and one source document ID
+already accepted by that run. A successful attachment fills this field for
+convenience, but the preview remains separately user initiated. It renders only
+persistent source provenance and evidence already selected for that source; it
+does not access the network or live index, invoke an LLM, write memory or graph
+state, persist a decision, or calculate trust and quality scores.
 The `Final status` selector exposes only completed, failed, and cancelled. The
 window first renders the runtime preview and opens confirmation only for an
 allowed decision; the separate update call revalidates before persistence.

@@ -25,6 +25,7 @@ from research.ResearchRun import ResearchRun
 from research.ResearchRunStatusTransitionPreview import (
     ResearchRunStatusTransitionPreview,
 )
+from research.ResearchSourceAssessmentPreview import ResearchSourceAssessmentPreview
 from research.ResearchSourceCandidateAcceptancePreview import (
     ResearchSourceCandidateAcceptancePreview,
 )
@@ -817,6 +818,59 @@ class ResponseComposer:
             message=message,
             request_id=request.request_id,
             intent="research_evidence_list",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_source_assessment_preview_success(
+        self,
+        request: BrainRequest,
+        preview: ResearchSourceAssessmentPreview,
+    ) -> BrainResponse:
+        """Render provenance and only explicitly stored evidence for one source."""
+        source = preview.source
+        lines = [
+            "Research source assessment preview:",
+            f"Run: {preview.run_id}",
+            f"Run status: {preview.run_status.value}",
+            f"Title: {source.title}",
+            f"URL: {source.url}",
+            f"Type: {source.content_type}",
+            f"Document ID: {source.document_id}",
+            f"Recorded evidence: {len(preview.evidence)}",
+            f"Reason: {preview.reason}",
+            "Status: manual preview only; no trust or quality score was assigned",
+        ]
+        for evidence in preview.evidence:
+            truncation = " [excerpt truncated]" if evidence.excerpt_truncated else ""
+            lines.extend(
+                [
+                    f"- {evidence.note}",
+                    (
+                        f"  paragraph: {evidence.chunk_index + 1} | "
+                        f"chunk: {evidence.chunk_id} | id: {evidence.evidence_id}"
+                    ),
+                    f"  excerpt: {evidence.excerpt}{truncation}",
+                ]
+            )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_source_assessment_preview",
+            memory_count=0,
+            research_source_assessment_preview=preview,
+        )
+
+    def research_source_assessment_preview_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Report an invalid accepted-source selection without side effects."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="research_source_assessment_preview",
             memory_count=0,
             success=False,
         )

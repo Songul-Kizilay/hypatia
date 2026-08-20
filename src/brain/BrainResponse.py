@@ -19,6 +19,7 @@ from research.ResearchRun import ResearchRun
 from research.ResearchRunStatusTransitionPreview import (
     ResearchRunStatusTransitionPreview,
 )
+from research.ResearchSourceAssessmentPreview import ResearchSourceAssessmentPreview
 from research.ResearchSourceCandidateAcceptancePreview import (
     ResearchSourceCandidateAcceptancePreview,
 )
@@ -50,5 +51,6 @@ class BrainResponse:
     research_source_candidate_acceptance_preview: (
         ResearchSourceCandidateAcceptancePreview | None
     ) = None
+    research_source_assessment_preview: ResearchSourceAssessmentPreview | None = None
     session_summaries: list[SessionSummary] = field(default_factory=list)
     session_delete_allowed: bool | None = None

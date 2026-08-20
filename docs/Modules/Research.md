@@ -8,7 +8,9 @@ source-discovery provider contract are available. User-selected evidence and
 bounded candidate metadata are persistent. The packaged process-environment
 runtime includes an explicit Crossref scholarly-metadata provider. An exact
 persisted candidate can be previewed, confirmed, revalidated, and loaded through
-the existing guarded HTTPS boundary. Automatic
+the existing guarded HTTPS boundary. An accepted source also has a read-only
+manual-assessment preview based only on persisted provenance and explicitly
+recorded evidence. Automatic
 evidence extraction, multi-source synthesis, evidence ranking, and
 contradiction detection remain planned.
 
@@ -67,6 +69,12 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
 - Stored evidence can be viewed after restart without live page content. New
   evidence still requires its source paragraph to be loaded in the current
   in-memory knowledge index.
+- One accepted source can be selected by exact run and document ID for a
+  read-only assessment preview. The manager filters the run's persisted
+  evidence to that source and reports honestly when none exists. The preview
+  reads no live source content, chooses no evidence, assigns no quality or
+  credibility score, and remains available after a run reaches a terminal
+  state.
 - Schema v3 reads v1 run snapshots as evidence- and discovery-empty and v2
   snapshots as discovery-empty, upgrading either only on a later successful
   atomic save.
@@ -88,10 +96,11 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
 
 ## Next increment
 
-Add an explicit accepted-source assessment preview without choosing evidence
-automatically. Discovery and selection remain separate from fetching and may
-not become unattended crawling. Multi-source comparison must operate only on
-separately accepted, indexed, and cited sources.
+Define a user-authored assessment record and its own preview-confirm boundary
+without choosing evidence or scoring sources automatically. Discovery and
+selection remain separate from fetching and may not become unattended crawling.
+Multi-source comparison must operate only on separately accepted, indexed, and
+cited sources.
 
 ## Known boundary
 
