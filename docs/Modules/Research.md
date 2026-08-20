@@ -56,10 +56,12 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
   Unknown, unlisted, stale, and closed-run selections stop before the network.
 - The standard process-environment runtime uses Crossref REST v1 for this
   explicit discovery action. Its fixed `api.crossref.org` HTTPS endpoint and
-  redirects stay same-origin, system proxies are disabled, JSON responses are
-  limited to 500 KB and ten seconds, and only DOI/title/venue/year metadata is
-  transformed into candidates. No authentication secret or document content
-  is sent or requested. Set
+  redirects stay same-origin, require public-only DNS answers, and connect to
+  an exact address from their own validation while TLS verifies the hostname.
+  System proxies are disabled, JSON responses are limited to 500 KB and ten
+  seconds, and only DOI/title/venue/year metadata is transformed into
+  candidates. No authentication secret or document content is sent or
+  requested. Set
   `HYPATIA_RESEARCH_SOURCE_DISCOVERY_PROVIDER=disabled` to remove this network
   capability from a process.
 - The audit snapshot does not duplicate downloaded page content. Knowledge
@@ -145,15 +147,15 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
 
 ## Next increment
 
-Extract the address-pinned HTTPS transport for the fixed Crossref metadata
-provider. Crossref must retain its exact HTTPS origin and path, same-origin
-redirect policy, response bounds, disabled proxy, and explicit-only discovery
-contract. This increment may not add general or unattended web search.
+Design bounded fallback across multiple addresses that already passed one
+public-DNS validation. It must not resolve again during connection selection,
+must retain hostname-based TLS certificate checks and the existing time bounds,
+and may not add general or unattended web search.
 
 ## Known boundary
 
-The explicit research source fetcher pins every request and redirect connection
-to an address from its immediately preceding public-DNS validation while TLS
-still verifies the URL hostname. The fixed Crossref discovery adapter does not
-yet share this pinning boundary; it remains explicit, same-origin, bounded, and
-proxy-free. Neither path authorizes autonomous or unattended crawling.
+The explicit research source fetcher and fixed Crossref discovery adapter share
+one address-pinned HTTPS boundary. Each currently selects the first address from
+its complete validated public-only answer set. A network failure does not yet
+fall back to another already validated address. Neither path authorizes
+autonomous or unattended crawling.

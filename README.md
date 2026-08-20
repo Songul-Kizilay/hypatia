@@ -87,7 +87,9 @@ To create the world's most capable personal AI research companion.
 - A replaceable, explicit research source-discovery boundary that persists up
   to five ordered HTTPS metadata candidates without fetching, accepting, or
   indexing their content; the packaged runtime includes a bounded Crossref
-  scholarly-metadata provider used only after an explicit action
+  scholarly-metadata provider used only after an explicit action. Its fixed
+  endpoint and redirects use the same public-address-pinned, hostname-verified
+  TLS transport as explicit page loading
 - A read-only discovered-candidate acceptance preview followed by separate
   confirmation and final revalidation through the existing guarded HTTPS
   source loader
@@ -175,6 +177,8 @@ attaches accepted source provenance to it. The run keeps timestamps and safe
 failure records, but does not duplicate downloaded page text or make web
 research autonomous.
 `Find sources` sends the selected collecting run's question to Crossref and
+connects its fixed endpoint and same-origin redirects only to an address from
+their own public-DNS validation while TLS verifies `api.crossref.org`. It
 records the query, provider, time, and at most five ordered DOI metadata
 candidates. The desktop displays their titles and URLs; `Use selected URL`
 copies one choice into the separate source-load field. `Preview & load`

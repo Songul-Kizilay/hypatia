@@ -2,6 +2,29 @@
 
 All notable project changes are recorded here.
 
+## [0.3.49] - 2026-08-21
+
+### Security
+
+- Address-pinned HTTPS connection and TLS handling now live in one shared
+  research transport boundary instead of inside the explicit page fetcher.
+- The fixed Crossref REST v1 discovery provider uses that boundary for its
+  initial request and every same-origin redirect. It validates that the exact
+  HTTPS origin and `/v1/works` path are retained, requires public-only DNS
+  answers, and connects to an address from the same validation.
+- Hostname-based TLS SNI, certificate verification, disabled system proxies,
+  ten-second timeout, 500 KB JSON limit, and explicit-only discovery remain
+  unchanged. No general search, crawling, or automatic acceptance is added.
+
+### Verification
+
+- Offline tests cover exact Crossref destination resolution, public-address
+  propagation, private-address rejection, and wrong-origin rejection.
+- The package-aware full local suite contains 1,209 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass across 296 source files.
+- A live one-result Crossref metadata query completed through the shared pinned
+  transport without fetching or accepting the returned paper.
+
 ## [0.3.48] - 2026-08-21
 
 ### Security
