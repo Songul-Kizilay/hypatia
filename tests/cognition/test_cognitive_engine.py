@@ -304,11 +304,13 @@ class ToggleResearchRunStore:
     def __init__(self) -> None:
         self.runs: list[ResearchRun] = []
         self.fail_saves = False
+        self.save_calls = 0
 
     def load(self) -> list[ResearchRun]:
         return list(self.runs)
 
     def save(self, runs: list[ResearchRun]) -> None:
+        self.save_calls += 1
         if self.fail_saves:
             raise ResearchError("Research run store unavailable.")
         self.runs = list(runs)
@@ -6439,6 +6441,121 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(other_chunk.document_id, other_document.document_id)
         self.assertEqual(manager.get(run.run_id), run_before)
         self.assertEqual(self.knowledge_engine.documents(), documents_before)
+
+    def test_source_assessment_preview_is_persisted_evidence_only(
+        self,
+    ) -> None:
+        store = ToggleResearchRunStore()
+        manager = ResearchRunManager(
+            store,
+            id_factory=lambda: "run-123",
+            evidence_id_factory=lambda: "evidence-123",
+        )
+        run = manager.create("Compare local models")
+        source = ResearchSource(
+            "https://example.com/research",
+            "Example research",
+            "Evidence paragraph.",
+            "text/plain",
+            datetime(2026, 8, 20, 12, 30, tzinfo=UTC),
+        )
+        document = self.knowledge_engine.add_document(source.to_document())
+        manager.add_source(run.run_id, source, document.document_id)
+        evidence = manager.add_evidence(
+            run.run_id,
+            self.knowledge_engine.search("evidence")[0],
+            "Supports manual assessment.",
+        ).evidence[-1]
+        fetcher = RecordingResearchSourceFetcher()
+        llm_provider = RecordingLLMProvider("must not run")
+        extractor = RecordingCandidateExtractor()
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+            learned_memory_candidate_extractor=extractor,
+            research_source_fetcher=fetcher,
+            research_run_manager=manager,
+        )
+        documents_before = self.knowledge_engine.documents()
+        memory_count = self.memory_manager.count()
+        saves_before = store.save_calls
+        events: list[str] = []
+        self.event_bus.subscribe("*", lambda event: events.append(event.name))
+
+        response = engine.process(
+            BrainRequest(
+                "Preview accepted research source assessment",
+                metadata={
+                    "intent": "research_source_assessment_preview",
+                    "research_run_id": run.run_id,
+                    "research_source_document_id": document.document_id,
+                },
+            )
+        )
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "research_source_assessment_preview")
+        preview = response.research_source_assessment_preview
+        self.assertIsNotNone(preview)
+        assert preview is not None
+        self.assertEqual(preview.source.document_id, document.document_id)
+        self.assertEqual(preview.evidence, (evidence,))
+        self.assertTrue(preview.has_recorded_evidence)
+        self.assertIn("manual preview only", response.message)
+        self.assertEqual(fetcher.calls, [])
+        self.assertEqual(llm_provider.calls, [])
+        self.assertEqual(extractor.calls, [])
+        self.assertEqual(events, [])
+        self.assertEqual(self.knowledge_engine.documents(), documents_before)
+        self.assertEqual(self.memory_manager.count(), memory_count)
+        self.assertEqual(store.save_calls, saves_before)
+
+    def test_source_assessment_rejects_unknown_or_cross_run_source(self) -> None:
+        manager = ResearchRunManager(id_factory=lambda: "run-123")
+        run = manager.create("Question")
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            research_run_manager=manager,
+        )
+
+        for metadata in (
+            {
+                "intent": "research_source_assessment_preview",
+                "research_source_document_id": "document-1",
+            },
+            {
+                "intent": "research_source_assessment_preview",
+                "research_run_id": run.run_id,
+            },
+            {
+                "intent": "research_source_assessment_preview",
+                "research_run_id": run.run_id,
+                "research_source_document_id": "document-1",
+            },
+        ):
+            with self.subTest(metadata=metadata):
+                response = engine.process(
+                    BrainRequest("Preview source", metadata=metadata)
+                )
+                self.assertFalse(response.success)
+                self.assertEqual(
+                    response.intent,
+                    "research_source_assessment_preview",
+                )
+
+        self.assertEqual(manager.get(run.run_id), run)
 
     def test_failed_research_evidence_save_does_not_publish_candidate(self) -> None:
         store = ToggleResearchRunStore()

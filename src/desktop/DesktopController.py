@@ -217,6 +217,30 @@ class DesktopController:
             )
         )
 
+    def preview_research_source_assessment(
+        self,
+        research_run_id: str,
+        source_document_id: str,
+    ) -> BrainResponse:
+        """Preview accepted provenance and user-selected evidence only."""
+        normalized_run_id = research_run_id.strip()
+        normalized_document_id = source_document_id.strip()
+        if not normalized_run_id:
+            raise ValueError("A research run ID cannot be empty.")
+        if not normalized_document_id:
+            raise ValueError("A research source document ID cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="Preview accepted research source assessment",
+                source="desktop",
+                metadata={
+                    "intent": "research_source_assessment_preview",
+                    "research_run_id": normalized_run_id,
+                    "research_source_document_id": normalized_document_id,
+                },
+            )
+        )
+
     def preview_research_run_status(
         self,
         research_run_id: str,

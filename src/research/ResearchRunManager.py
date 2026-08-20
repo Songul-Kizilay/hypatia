@@ -18,6 +18,7 @@ from research.ResearchRunStatusTransitionPreview import (
 )
 from research.ResearchRunStore import ResearchRunStore
 from research.ResearchSource import ResearchSource
+from research.ResearchSourceAssessmentPreview import ResearchSourceAssessmentPreview
 from research.ResearchSourceCandidate import ResearchSourceCandidate
 from research.ResearchSourceCandidateAcceptancePreview import (
     ResearchSourceCandidateAcceptancePreview,
@@ -319,6 +320,52 @@ class ResearchRunManager:
                 candidate,
                 True,
                 "Research source candidate can be loaded and attached to this run.",
+            )
+
+    def preview_source_assessment(
+        self,
+        run_id: str,
+        document_id: str,
+    ) -> ResearchSourceAssessmentPreview:
+        """Return accepted provenance and explicit evidence without mutation."""
+        normalized_run_id = self._normalize_run_id(run_id)
+        normalized_document_id = self._normalize_document_id(document_id)
+        with self._lock:
+            _, run = self._find_with_index(normalized_run_id)
+            source = next(
+                (
+                    record
+                    for record in run.sources
+                    if record.document_id == normalized_document_id
+                ),
+                None,
+            )
+            if source is None:
+                raise ResearchError(
+                    "Research source was not found among this run's accepted sources."
+                )
+            evidence = tuple(
+                record
+                for record in run.evidence
+                if record.source_document_id == source.document_id
+            )
+            evidence_count = len(evidence)
+            reason = (
+                f"Source has {evidence_count} user-selected evidence record"
+                f"{'s' if evidence_count != 1 else ''} for manual assessment."
+                if evidence
+                else (
+                    "Source has no user-selected evidence records; no quality or "
+                    "support conclusion can be drawn."
+                )
+            )
+            return ResearchSourceAssessmentPreview(
+                run_id=run.run_id,
+                run_status=run.status,
+                source=source,
+                evidence=evidence,
+                has_recorded_evidence=bool(evidence),
+                reason=reason,
             )
 
     def transition_status(

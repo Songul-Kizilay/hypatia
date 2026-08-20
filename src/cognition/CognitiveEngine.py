@@ -183,6 +183,9 @@ class CognitiveEngine:
         if self._is_research_evidence_list_request(request):
             return self._process_research_evidence_list(request)
 
+        if self._is_research_source_assessment_preview_request(request):
+            return self._process_research_source_assessment_preview(request)
+
         if self._is_research_run_status_preview_request(request):
             return self._process_research_run_status_preview(request)
 
@@ -392,6 +395,13 @@ class CognitiveEngine:
         return request.metadata.get("intent") == "research_evidence_list"
 
     @staticmethod
+    def _is_research_source_assessment_preview_request(
+        request: BrainRequest,
+    ) -> bool:
+        """Recognize one explicit read-only accepted-source assessment."""
+        return request.metadata.get("intent") == "research_source_assessment_preview"
+
+    @staticmethod
     def _is_research_run_status_preview_request(request: BrainRequest) -> bool:
         """Recognize one explicit read-only lifecycle transition preview."""
         return request.metadata.get("intent") == "research_run_status_preview"
@@ -501,6 +511,35 @@ class CognitiveEngine:
                 "Research run was not found.",
             )
         return self._response_composer.research_evidence_list_success(request, run)
+
+    def _process_research_source_assessment_preview(
+        self,
+        request: BrainRequest,
+    ) -> BrainResponse:
+        """Read accepted provenance and stored evidence without live lookups."""
+        run_id = request.metadata.get("research_run_id")
+        document_id = request.metadata.get("research_source_document_id")
+        failure = self._response_composer.research_source_assessment_preview_failure
+        if not isinstance(run_id, str) or not run_id.strip():
+            return failure(request, "A research run ID is required.")
+        if not isinstance(document_id, str) or not document_id.strip():
+            return failure(request, "A research source document ID is required.")
+        if self._research_run_manager is None:
+            return failure(request, "Research run persistence is unavailable.")
+        try:
+            preview = self._research_run_manager.preview_source_assessment(
+                run_id,
+                document_id,
+            )
+        except ResearchError:
+            return failure(
+                request,
+                "Research source was not found among this run's accepted sources.",
+            )
+        return self._response_composer.research_source_assessment_preview_success(
+            request,
+            preview,
+        )
 
     def _process_research_run_status_preview(
         self,

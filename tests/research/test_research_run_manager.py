@@ -428,6 +428,62 @@ class ResearchRunManagerTests(unittest.TestCase):
         self.assertFalse(preview.allowed)
         self.assertIn("closed", preview.reason)
 
+    def test_source_assessment_preview_filters_evidence_without_saving(self) -> None:
+        run = self.manager.create("Question")
+        first_source = ResearchSource(
+            "https://example.com/first",
+            "First",
+            "First evidence.",
+            "text/plain",
+            self.start,
+        )
+        second_source = ResearchSource(
+            "https://example.com/second",
+            "Second",
+            "Second evidence.",
+            "text/plain",
+            self.start,
+        )
+        self.manager.add_source(run.run_id, first_source, "document-1")
+        self.manager.add_source(run.run_id, second_source, "document-2")
+        first_evidence = self.manager.add_evidence(
+            run.run_id,
+            Chunk("document-1", 0, "First evidence.", chunk_id="chunk-1"),
+            "First note.",
+        ).evidence[-1]
+        saves_before = len(self.store.saved)
+
+        preview = self.manager.preview_source_assessment(run.run_id, "document-1")
+
+        self.assertEqual(preview.source.document_id, "document-1")
+        self.assertEqual(preview.evidence, (first_evidence,))
+        self.assertTrue(preview.has_recorded_evidence)
+        self.assertEqual(len(self.store.saved), saves_before)
+
+    def test_source_assessment_preview_is_read_only_for_terminal_run(self) -> None:
+        run = self.manager.create("Question")
+        source = ResearchSource(
+            "https://example.com/source",
+            "Source",
+            "Evidence.",
+            "text/plain",
+            self.start,
+        )
+        self.manager.add_source(run.run_id, source, "document-1")
+        self.manager.transition_status(run.run_id, ResearchRunStatus.CANCELLED)
+
+        preview = self.manager.preview_source_assessment(run.run_id, "document-1")
+
+        self.assertEqual(preview.run_status, ResearchRunStatus.CANCELLED)
+        self.assertFalse(preview.has_recorded_evidence)
+        self.assertIn("no user-selected evidence", preview.reason)
+
+    def test_source_assessment_rejects_source_from_another_run(self) -> None:
+        run = self.manager.create("Question")
+
+        with self.assertRaisesRegex(ResearchError, "accepted sources"):
+            self.manager.preview_source_assessment(run.run_id, "document-1")
+
 
 if __name__ == "__main__":
     unittest.main()

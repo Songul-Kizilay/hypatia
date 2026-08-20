@@ -2,6 +2,32 @@
 
 All notable project changes are recorded here.
 
+## [0.3.39] - 2026-08-20
+
+### Added
+
+- One accepted source can now be selected by exact run and document ID for a
+  read-only manual-assessment preview. The preview displays persisted
+  provenance and only evidence records explicitly selected by the user for
+  that source.
+- The desktop includes a separate source-document field and `Preview
+  assessment` action. A successful attached-source load selects its returned
+  document ID for this view without invoking the preview automatically.
+
+### Security
+
+- Assessment rejects unknown, unaccepted, or cross-run document IDs and never
+  consults the live knowledge index, source fetcher, LLM, conversation memory,
+  event bus, or graph.
+- Missing evidence is reported honestly: no trust, credibility, relevance, or
+  quality score is inferred. The read-only view remains available for terminal
+  research runs and performs no persistence write.
+
+### Verification
+
+- The package-aware full local suite contains 1,103 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass across 278 source files.
+
 ## [0.3.38] - 2026-08-20
 
 ### Added

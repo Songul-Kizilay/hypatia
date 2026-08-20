@@ -402,6 +402,34 @@ class DesktopControllerTests(unittest.TestCase):
 
         self.assertEqual(self.brain.requests, [])
 
+    def test_source_assessment_preview_uses_structured_read_only_request(self) -> None:
+        response = self.controller.preview_research_source_assessment(
+            " run-123 ",
+            " document-456 ",
+        )
+
+        self.assertIs(response, self.response)
+        request = self.brain.requests[0]
+        self.assertIsInstance(request, BrainRequest)
+        assert isinstance(request, BrainRequest)
+        self.assertEqual(request.message, "Preview accepted research source assessment")
+        self.assertEqual(request.source, "desktop")
+        self.assertEqual(
+            request.metadata,
+            {
+                "intent": "research_source_assessment_preview",
+                "research_run_id": "run-123",
+                "research_source_document_id": "document-456",
+            },
+        )
+
+    def test_source_assessment_preview_rejects_empty_fields_locally(self) -> None:
+        for values in (("", "document-1"), ("run-1", "")):
+            with self.subTest(values=values), self.assertRaises(ValueError):
+                self.controller.preview_research_source_assessment(*values)
+
+        self.assertEqual(self.brain.requests, [])
+
     def test_research_status_preview_and_update_use_structured_requests(self) -> None:
         preview = self.controller.preview_research_run_status(
             " run-123 ",
