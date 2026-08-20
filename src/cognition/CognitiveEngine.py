@@ -51,6 +51,8 @@ from memory.SemanticMemoryMatch import SemanticMemoryMatch
 from memory.SessionMemoryPolicy import SessionMemoryPolicy
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchRunStatus import ResearchRunStatus
+from research.ResearchSourceCandidate import ResearchSourceCandidate
+from research.ResearchSourceDiscoveryProvider import ResearchSourceDiscoveryProvider
 from research.ResearchSourceFetcher import ResearchSourceFetcher
 from response.ResponseComposer import ResponseComposer
 from session.SessionCreateService import SessionCreateService
@@ -91,6 +93,9 @@ class CognitiveEngine:
         semantic_memory_index_runtime: SemanticMemoryIndexRuntime | None = None,
         research_source_fetcher: ResearchSourceFetcher | None = None,
         research_run_manager: ResearchRunManager | None = None,
+        research_source_discovery_provider: (
+            ResearchSourceDiscoveryProvider | None
+        ) = None,
     ) -> None:
         if llm_history_max_turns is not None and (
             isinstance(llm_history_max_turns, bool) or llm_history_max_turns <= 0
@@ -131,6 +136,7 @@ class CognitiveEngine:
         self._semantic_memory_index_runtime = semantic_memory_index_runtime
         self._research_source_fetcher = research_source_fetcher
         self._research_run_manager = research_run_manager
+        self._research_source_discovery_provider = research_source_discovery_provider
         self._hybrid_semantic_memory_ranker = HybridSemanticMemoryRanker()
         self._router = BrainRouter()
 
@@ -182,6 +188,9 @@ class CognitiveEngine:
 
         if self._is_research_run_status_update_request(request):
             return self._process_research_run_status_update(request)
+
+        if self._is_research_source_discover_request(request):
+            return self._process_research_source_discover(request)
 
         if self._is_research_source_load_request(request):
             return self._process_research_source_load(request)
@@ -335,6 +344,11 @@ class CognitiveEngine:
     def _is_research_source_load_request(request: BrainRequest) -> bool:
         """Recognize only an explicit structured internet-source request."""
         return request.metadata.get("intent") == "research_source_load"
+
+    @staticmethod
+    def _is_research_source_discover_request(request: BrainRequest) -> bool:
+        """Recognize only an explicit structured source-discovery request."""
+        return request.metadata.get("intent") == "research_source_discover"
 
     @staticmethod
     def _is_research_run_create_request(request: BrainRequest) -> bool:
@@ -546,6 +560,93 @@ class CognitiveEngine:
         except ValueError:
             return None
         return run_id.strip(), target_status
+
+    def _process_research_source_discover(
+        self,
+        request: BrainRequest,
+    ) -> BrainResponse:
+        """Persist provider metadata results without fetching candidate content."""
+        run_id = request.metadata.get("research_run_id")
+        if not isinstance(run_id, str) or not run_id.strip():
+            return self._response_composer.research_source_discovery_failure(
+                request,
+                "A research run ID is required.",
+            )
+        if self._research_run_manager is None:
+            return self._response_composer.research_source_discovery_failure(
+                request,
+                "Research run persistence is unavailable.",
+            )
+        if self._research_source_discovery_provider is None:
+            return self._response_composer.research_source_discovery_failure(
+                request,
+                "Research source discovery is unavailable.",
+            )
+
+        normalized_run_id = run_id.strip()
+        try:
+            run = self._research_run_manager.get(normalized_run_id)
+        except ResearchError:
+            return self._response_composer.research_source_discovery_failure(
+                request,
+                "Research run was not found.",
+            )
+        if run.status.terminal:
+            return self._response_composer.research_source_discovery_failure(
+                request,
+                "Research run is closed and cannot discover new sources.",
+            )
+
+        provider = self._research_source_discovery_provider
+        try:
+            candidates = provider.discover(run.question, limit=5)
+            if (
+                not isinstance(candidates, list)
+                or len(candidates) > 5
+                or not all(
+                    isinstance(candidate, ResearchSourceCandidate)
+                    for candidate in candidates
+                )
+            ):
+                raise ResearchError(
+                    "Research source discovery provider returned invalid candidates."
+                )
+        except ResearchError:
+            try:
+                self._research_run_manager.record_failure(
+                    normalized_run_id,
+                    "source_discovery",
+                    "Research source discovery failed.",
+                )
+            except ResearchError:
+                return self._response_composer.research_source_discovery_failure(
+                    request,
+                    (
+                        "Research source discovery and its audit record "
+                        "could not be saved."
+                    ),
+                )
+            return self._response_composer.research_source_discovery_failure(
+                request,
+                "Research source discovery failed.",
+            )
+
+        try:
+            updated = self._research_run_manager.add_discovery(
+                normalized_run_id,
+                run.question,
+                provider.provider_name,
+                candidates,
+            )
+        except ResearchError:
+            return self._response_composer.research_source_discovery_failure(
+                request,
+                "Research source discovery audit could not be saved.",
+            )
+        return self._response_composer.research_source_discovery_success(
+            request,
+            updated,
+        )
 
     def _process_research_source_load(self, request: BrainRequest) -> BrainResponse:
         """Acquire and index one explicit source without LLM or memory side effects."""

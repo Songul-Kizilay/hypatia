@@ -573,6 +573,51 @@ class ResponseComposer:
             success=False,
         )
 
+    def research_source_discovery_success(
+        self,
+        request: BrainRequest,
+        run: ResearchRun,
+    ) -> BrainResponse:
+        """Render unaccepted candidate metadata from the latest audit record."""
+        discovery = run.discoveries[-1]
+        lines = [
+            "Research source candidates discovered:",
+            f"Run: {run.run_id}",
+            f"Provider: {discovery.provider}",
+            f"Query: {discovery.query}",
+            f"Candidates: {len(discovery.candidates)}",
+        ]
+        for rank, candidate in enumerate(discovery.candidates, start=1):
+            lines.extend(
+                [
+                    f"{rank}. {candidate.title}",
+                    f"   URL: {candidate.url}",
+                    f"   Snippet: {candidate.snippet or '[no snippet]'}",
+                ]
+            )
+        lines.append("Status: candidates only; no source content was loaded")
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_source_discover",
+            memory_count=0,
+            research_runs=[run],
+        )
+
+    def research_source_discovery_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Report a controlled discovery failure without accepting a source."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="research_source_discover",
+            memory_count=0,
+            success=False,
+        )
+
     def research_run_create_success(
         self,
         request: BrainRequest,
@@ -586,6 +631,7 @@ class ResponseComposer:
                     f"Question: {run.question}",
                     f"Status: {run.status.value}",
                     f"Sources: {len(run.sources)}",
+                    f"Discoveries: {len(run.discoveries)}",
                     f"Evidence: {len(run.evidence)}",
                     f"Failures: {len(run.failures)}",
                     f"ID: {run.run_id}",
@@ -611,7 +657,9 @@ class ResponseComposer:
                 lines.append(
                     "- "
                     f"{run.question} | status: {run.status.value} | "
-                    f"sources: {len(run.sources)} | evidence: {len(run.evidence)} | "
+                    f"sources: {len(run.sources)} | "
+                    f"discoveries: {len(run.discoveries)} | "
+                    f"evidence: {len(run.evidence)} | "
                     f"failures: {len(run.failures)} | "
                     f"id: {run.run_id}"
                 )

@@ -9,6 +9,7 @@ from core.Exceptions import ResearchError
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchFailureRecord import ResearchFailureRecord
 from research.ResearchRunStatus import ResearchRunStatus
+from research.ResearchSourceDiscoveryRecord import ResearchSourceDiscoveryRecord
 from research.ResearchSourceRecord import ResearchSourceRecord
 
 
@@ -24,6 +25,7 @@ class ResearchRun:
     created_at: datetime
     updated_at: datetime
     evidence: tuple[ResearchEvidenceRecord, ...] = ()
+    discoveries: tuple[ResearchSourceDiscoveryRecord, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.run_id, str) or not self.run_id.strip():
@@ -58,6 +60,16 @@ class ResearchRun:
         source_ids = {source.document_id for source in self.sources}
         if any(record.source_document_id not in source_ids for record in self.evidence):
             raise ResearchError("Research evidence must reference an accepted source.")
+        if not isinstance(self.discoveries, tuple):
+            raise ResearchError("Research run discoveries must be an immutable tuple.")
+        if not all(
+            isinstance(record, ResearchSourceDiscoveryRecord)
+            for record in self.discoveries
+        ):
+            raise ResearchError("Research run contains an invalid discovery record.")
+        discovery_ids = [record.discovery_id for record in self.discoveries]
+        if len(discovery_ids) != len(set(discovery_ids)):
+            raise ResearchError("Research run contains duplicate discovery IDs.")
         for value, field_name in (
             (self.created_at, "Research run creation time"),
             (self.updated_at, "Research run update time"),

@@ -2,6 +2,32 @@
 
 All notable project changes are recorded here.
 
+## [0.3.36] - 2026-08-20
+
+### Added
+
+- A replaceable source-discovery provider boundary can return at most five
+  ordered HTTPS metadata candidates for an explicit collecting research run.
+- Every successful discovery is atomically stored with its query, provider
+  identity, timestamp, ordered title/URL/snippet metadata, and a unique audit
+  ID. Empty result sets remain auditable.
+- Brain and the desktop controller expose a structured discovery request
+  without accepting, fetching, indexing, or trusting candidate content.
+
+### Changed
+
+- Research-run JSON schema v3 persists discovery records while continuing to
+  load v1 and v2 snapshots without eager migration.
+- Closed or unknown research runs are rejected before the discovery provider
+  is called. Controlled provider failures retain only a bounded safe failure
+  reason, and failed snapshot writes do not publish candidate state.
+
+### Verification
+
+- The package-aware full local suite contains 1,064 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass with the documented
+  project virtual environment.
+
 ## [0.3.35] - 2026-08-20
 
 ### Added

@@ -156,6 +156,22 @@ class DesktopController:
             )
         )
 
+    def discover_research_sources(self, research_run_id: str) -> BrainResponse:
+        """Discover candidate metadata for one run without loading content."""
+        normalized_run_id = research_run_id.strip()
+        if not normalized_run_id:
+            raise ValueError("A research run ID cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="Discover candidate research sources",
+                source="desktop",
+                metadata={
+                    "intent": "research_source_discover",
+                    "research_run_id": normalized_run_id,
+                },
+            )
+        )
+
     def record_research_evidence(
         self,
         research_run_id: str,

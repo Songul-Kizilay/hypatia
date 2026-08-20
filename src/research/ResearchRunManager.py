@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from threading import RLock
 from uuid import uuid4
@@ -18,6 +18,8 @@ from research.ResearchRunStatusTransitionPreview import (
 )
 from research.ResearchRunStore import ResearchRunStore
 from research.ResearchSource import ResearchSource
+from research.ResearchSourceCandidate import ResearchSourceCandidate
+from research.ResearchSourceDiscoveryRecord import ResearchSourceDiscoveryRecord
 from research.ResearchSourceRecord import ResearchSourceRecord
 
 
@@ -31,11 +33,13 @@ class ResearchRunManager:
         clock: Callable[[], datetime] | None = None,
         id_factory: Callable[[], str] | None = None,
         evidence_id_factory: Callable[[], str] | None = None,
+        discovery_id_factory: Callable[[], str] | None = None,
     ) -> None:
         self._store = store
         self._clock = clock or (lambda: datetime.now(UTC))
         self._id_factory = id_factory or (lambda: str(uuid4()))
         self._evidence_id_factory = evidence_id_factory or (lambda: str(uuid4()))
+        self._discovery_id_factory = discovery_id_factory or (lambda: str(uuid4()))
         self._runs: tuple[ResearchRun, ...] = ()
         self._lock = RLock()
 
@@ -60,6 +64,7 @@ class ResearchRunManager:
                 failures=(),
                 created_at=now,
                 updated_at=now,
+                discoveries=(),
             )
             candidate = (*self._runs, run)
             self._persist(candidate)
@@ -123,6 +128,7 @@ class ResearchRunManager:
                 created_at=run.created_at,
                 updated_at=now,
                 evidence=run.evidence,
+                discoveries=run.discoveries,
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -150,6 +156,7 @@ class ResearchRunManager:
                 created_at=run.created_at,
                 updated_at=now,
                 evidence=run.evidence,
+                discoveries=run.discoveries,
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -189,12 +196,67 @@ class ResearchRunManager:
                 created_at=run.created_at,
                 updated_at=now,
                 evidence=(*run.evidence, evidence),
+                discoveries=run.discoveries,
             )
             candidate = list(self._runs)
             candidate[index] = updated
             candidate_tuple = tuple(candidate)
             self._persist(candidate_tuple)
             self._runs = candidate_tuple
+        return updated
+
+    def add_discovery(
+        self,
+        run_id: str,
+        query: str,
+        provider: str,
+        candidates: Sequence[ResearchSourceCandidate],
+    ) -> ResearchRun:
+        """Atomically persist one ordered, unaccepted discovery result."""
+        normalized_id = self._normalize_run_id(run_id)
+        normalized_query = self._normalize_question(query)
+        normalized_provider = self._normalize_provider(provider)
+        if not isinstance(candidates, list):
+            raise ResearchError("Research source discovery candidates must be a list.")
+        candidate_tuple: tuple[ResearchSourceCandidate, ...] = tuple(candidates)
+        if len(candidate_tuple) > 10:
+            raise ResearchError(
+                "Research source discovery cannot contain more than 10 candidates."
+            )
+        if not all(
+            isinstance(candidate, ResearchSourceCandidate)
+            for candidate in candidate_tuple
+        ):
+            raise ResearchError(
+                "Research source discovery contains an invalid candidate."
+            )
+        with self._lock:
+            index, run = self._find_with_index(normalized_id)
+            self._require_collecting(run)
+            now = self._now()
+            discovery = ResearchSourceDiscoveryRecord(
+                discovery_id=self._new_discovery_id(),
+                query=normalized_query,
+                provider=normalized_provider,
+                candidates=candidate_tuple,
+                discovered_at=now,
+            )
+            updated = ResearchRun(
+                run_id=run.run_id,
+                question=run.question,
+                status=run.status,
+                sources=run.sources,
+                failures=run.failures,
+                created_at=run.created_at,
+                updated_at=now,
+                evidence=run.evidence,
+                discoveries=(*run.discoveries, discovery),
+            )
+            candidate_runs = list(self._runs)
+            candidate_runs[index] = updated
+            candidate_snapshot = tuple(candidate_runs)
+            self._persist(candidate_snapshot)
+            self._runs = candidate_snapshot
         return updated
 
     def preview_status_transition(
@@ -234,6 +296,7 @@ class ResearchRunManager:
                 created_at=run.created_at,
                 updated_at=now,
                 evidence=run.evidence,
+                discoveries=run.discoveries,
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -332,6 +395,16 @@ class ResearchRunManager:
             raise ResearchError("Research evidence ID already exists.")
         return evidence_id
 
+    def _new_discovery_id(self) -> str:
+        discovery_id = self._normalize_discovery_id(self._discovery_id_factory())
+        if any(
+            record.discovery_id == discovery_id
+            for run in self._runs
+            for record in run.discoveries
+        ):
+            raise ResearchError("Research source discovery ID already exists.")
+        return discovery_id
+
     @staticmethod
     def _normalize_question(question: str) -> str:
         if not isinstance(question, str) or not question.strip():
@@ -366,4 +439,24 @@ class ResearchRunManager:
         normalized = note.strip()
         if len(normalized) > 1_000:
             raise ResearchError("Research evidence note is too long.")
+        return normalized
+
+    @staticmethod
+    def _normalize_discovery_id(discovery_id: str) -> str:
+        if not isinstance(discovery_id, str) or not discovery_id.strip():
+            raise ResearchError("Research source discovery ID cannot be empty.")
+        normalized = discovery_id.strip()
+        if len(normalized) > 200:
+            raise ResearchError("Research source discovery ID is too long.")
+        return normalized
+
+    @staticmethod
+    def _normalize_provider(provider: str) -> str:
+        if not isinstance(provider, str) or not provider.strip():
+            raise ResearchError("Research source discovery provider cannot be empty.")
+        normalized = provider.strip()
+        if len(normalized) > 200:
+            raise ResearchError("Research source discovery provider is too long.")
+        if any(character in normalized for character in ("\r", "\n", "\t")):
+            raise ResearchError("Research source discovery provider is invalid.")
         return normalized

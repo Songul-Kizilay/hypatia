@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from core.Exceptions import ResearchError
 from research.ResearchRun import ResearchRun
 from research.ResearchRunStatus import ResearchRunStatus
+from research.ResearchSourceDiscoveryRecord import ResearchSourceDiscoveryRecord
 from research.ResearchSourceRecord import ResearchSourceRecord
 
 
@@ -66,6 +67,28 @@ class ResearchRunTests(unittest.TestCase):
                 failures=(),
                 created_at=now,
                 updated_at=now,
+            )
+
+    def test_rejects_duplicate_discovery_ids(self) -> None:
+        now = datetime(2026, 8, 20, 12, 0, tzinfo=UTC)
+        discovery = ResearchSourceDiscoveryRecord(
+            discovery_id="discovery-1",
+            query="Question",
+            provider="Provider",
+            candidates=(),
+            discovered_at=now,
+        )
+
+        with self.assertRaisesRegex(ResearchError, "duplicate discovery IDs"):
+            ResearchRun(
+                run_id="run-1",
+                question="Question",
+                status=ResearchRunStatus.COLLECTING,
+                sources=(),
+                failures=(),
+                created_at=now,
+                updated_at=now,
+                discoveries=(discovery, discovery),
             )
 
 
