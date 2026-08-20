@@ -22,6 +22,9 @@ from knowledge.KnowledgeRelationRevocationPreview import (
 from memory.MemoryRecord import MemoryRecord
 from planner.Plan import Plan
 from research.ResearchRun import ResearchRun
+from research.ResearchRunStatusTransitionPreview import (
+    ResearchRunStatusTransitionPreview,
+)
 from session.SessionDeleteExecutionResult import SessionDeleteExecutionResult
 from session.SessionDeletePolicy import SessionDeleteStatus
 from session.SessionRecord import SessionRecord
@@ -720,6 +723,66 @@ class ResponseComposer:
             message=message,
             request_id=request.request_id,
             intent="research_evidence_list",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_run_status_preview_success(
+        self,
+        request: BrainRequest,
+        preview: ResearchRunStatusTransitionPreview,
+    ) -> BrainResponse:
+        """Render the current no-side-effect terminal transition decision."""
+        decision = "allowed" if preview.allowed else "blocked"
+        return BrainResponse(
+            message="\n".join(
+                [
+                    "Research status transition preview:",
+                    f"Run: {preview.run_id}",
+                    f"Current status: {preview.current_status.value}",
+                    f"Requested status: {preview.target_status.value}",
+                    f"Decision: {decision}",
+                    f"Reason: {preview.reason}",
+                ]
+            ),
+            request_id=request.request_id,
+            intent="research_run_status_preview",
+            memory_count=0,
+            research_run_status_transition_preview=preview,
+        )
+
+    def research_run_status_update_success(
+        self,
+        request: BrainRequest,
+        run: ResearchRun,
+    ) -> BrainResponse:
+        """Report one atomically persisted terminal lifecycle transition."""
+        return BrainResponse(
+            message="\n".join(
+                [
+                    "Research run status updated:",
+                    f"Run: {run.run_id}",
+                    f"Status: {run.status.value}",
+                ]
+            ),
+            request_id=request.request_id,
+            intent="research_run_status_update",
+            memory_count=0,
+            research_runs=[run],
+        )
+
+    def research_run_status_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+        *,
+        intent: str = "research_run_status_update",
+    ) -> BrainResponse:
+        """Report a controlled transition failure without changing run state."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent=intent,
             memory_count=0,
             success=False,
         )

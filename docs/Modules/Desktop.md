@@ -17,6 +17,11 @@ knowledge boundary.
 For an attached source, `Save evidence` records one explicitly entered chunk ID
 and note; `View evidence` displays the persisted bounded excerpt and locator.
 Neither action extracts, ranks, or interprets evidence automatically.
+The `Final status` selector offers only `completed`, `failed`, and `cancelled`.
+`Preview status` shows the runtime decision first and requests a separate
+confirmation only when allowed. A completed run requires source and evidence;
+a failed run requires a failure record; every terminal outcome permanently
+closes further run mutation.
 Its first Windows onedir package and local-data boundary are defined in ADR
 0002; broader MVP views remain planned.
 

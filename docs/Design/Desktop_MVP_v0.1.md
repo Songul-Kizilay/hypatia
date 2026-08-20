@@ -32,6 +32,8 @@ The MVP may present only current Brain/CognitiveEngine capabilities:
   of that source to a selected run ID;
 - explicit recording and read-only viewing of a selected attached-source chunk
   as bounded research evidence;
+- preview-and-confirm transition of a collecting research run to one terminal
+  lifecycle status;
 - the existing explicit `ask knowledge` request; and
 - preview-and-confirm application or removal of an explicit knowledge relation.
 
@@ -132,6 +134,12 @@ a user note. The runtime accepts it only from a source attached to that run and
 stores a bounded excerpt plus its exact source/chunk locator and full-chunk
 fingerprint. `View evidence` reads this audit record after restart; neither
 action chooses evidence or evaluates a claim automatically.
+The `Final status` selector exposes only completed, failed, and cancelled. The
+window first renders the runtime preview and opens confirmation only for an
+allowed decision; the separate update call revalidates before persistence.
+Completed requires at least one accepted source and evidence record. Every
+failed outcome requires a failure record. Every terminal status is irreversible
+and closes further run mutation.
 `Ask sources` is separately user initiated: it sends the entered question only
 through the existing `ask knowledge` local-RAG path. The runtime keeps its
 bounded cited-source and safe unavailable/failure behavior; this action never

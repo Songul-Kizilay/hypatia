@@ -35,7 +35,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
         run = ResearchRun(
             run_id="run-1",
             question="Songül için kanıt nedir?",
-            status=ResearchRunStatus.COLLECTING,
+            status=ResearchRunStatus.COMPLETED,
             sources=(
                 ResearchSourceRecord(
                     document_id="document-1",
