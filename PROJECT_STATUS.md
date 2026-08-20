@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.54 (Genesis)`
+`v0.3.55 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.54`** is the current executable package and GitHub
+- **Runtime release `v0.3.55`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -366,7 +366,7 @@ so this check did not alter the project's persisted data.
 
 ## Next Milestone
 
-Define and test deterministic paragraph identities for accepted research
-content restored after restart. The increment must preserve existing document
-identity, evidence audit history, startup bounds, and fail-closed validation;
-it must not migrate or rewrite persisted records automatically.
+Add a bounded read-only audit that compares persisted evidence locators and
+fingerprints with currently restored accepted content. It may report matched,
+missing, or changed aggregate counts, but it must not rewrite legacy evidence,
+repair content, access the network, or weaken startup validation.

@@ -2,6 +2,30 @@
 
 All notable project changes are recorded here.
 
+## [0.3.55] - 2026-08-21
+
+### Changed
+
+- Paragraphs indexed for an explicitly selected persistent research run now
+  receive an opaque versioned identity derived from document ID, paragraph
+  position, and exact-content SHA-256.
+- Startup restoration opts into the same identity contract, so evidence
+  recorded after this release can resolve the same accepted paragraph after a
+  restart.
+
+### Safety
+
+- Temporary or run-free knowledge parsing retains its existing ephemeral
+  identity behavior. Research-run and content-store schemas are unchanged.
+- Existing evidence records are not rewritten, remapped, deleted, or migrated.
+  A changed paragraph receives a different identity rather than silently
+  inheriting an old evidence locator.
+
+### Verification
+
+- The package-aware full local suite contains 1,246 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass across 306 source files.
+
 ## [0.3.54] - 2026-08-21
 
 ### Added

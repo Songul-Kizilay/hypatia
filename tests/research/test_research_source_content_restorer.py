@@ -44,11 +44,19 @@ class FailingSecondKnowledgeEngine(KnowledgeEngine):
         self.add_calls = 0
         self.clear_calls = 0
 
-    def add_document(self, document: Document) -> Document:
+    def add_document(
+        self,
+        document: Document,
+        *,
+        stable_chunk_ids: bool = False,
+    ) -> Document:
         self.add_calls += 1
         if self.add_calls == 2:
             raise KnowledgeError("Injected second-document failure.")
-        return super().add_document(document)
+        return super().add_document(
+            document,
+            stable_chunk_ids=stable_chunk_ids,
+        )
 
     def clear(self) -> None:
         self.clear_calls += 1

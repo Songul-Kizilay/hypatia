@@ -97,7 +97,10 @@ To create the world's most capable personal AI research companion.
   records that exactly match accepted run provenance are restored into the
   knowledge index, without network access or persistent mutation. The explicit
   `Research content` desktop action reports only the captured startup state and
-  restored document/paragraph counts; it does not reread persistence
+  restored document/paragraph counts; it does not reread persistence. Accepted
+  paragraphs use the same opaque content-bound identity during initial indexing
+  and startup restoration so newly recorded evidence retains its locator across
+  restarts
 - A read-only discovered-candidate acceptance preview followed by separate
   confirmation and final revalidation through the existing guarded HTTPS
   source loader

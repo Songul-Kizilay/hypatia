@@ -26,6 +26,10 @@ Hypatia currently runs as a local-first CLI. The initial security boundary is:
   network or persistent write; the explicit restoration-status view reads only
   the immutable startup snapshot and exposes aggregate counts rather than
   content, paths, source metadata, hashes, IDs, or internal errors;
+- accepted-source paragraph locators are opaque versioned UUIDs bound to stable
+  document identity, paragraph position, and exact-content SHA-256; changed
+  text cannot silently inherit the prior locator, and no stored evidence is
+  automatically rewritten or migrated;
 - semantic embeddings are opt-in and restricted to the local Ollama endpoint
   policy enforced at bootstrap.
 

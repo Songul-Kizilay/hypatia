@@ -61,7 +61,10 @@ class ResearchSourceContentRestorer:
             )
         try:
             for document in documents:
-                self._knowledge_engine.add_document(document)
+                self._knowledge_engine.add_document(
+                    document,
+                    stable_chunk_ids=True,
+                )
         except KnowledgeError as error:
             self._knowledge_engine.clear()
             raise ResearchError(

@@ -446,6 +446,7 @@ class BootstrapTests(unittest.TestCase):
             session_path=self.session_path,
             knowledge_relation_path=self.knowledge_relation_path,
             research_run_path=self.research_run_path,
+            research_source_content_path=self.research_source_content_path,
             research_source_fetcher=RecordingResearchSourceFetcher(source),
         )
         first.initialize()
@@ -554,6 +555,9 @@ class BootstrapTests(unittest.TestCase):
 
         restarted = self._bootstrap()
         restarted.initialize()
+        restored_chunk = restarted.container.resolve(KnowledgeEngine).get_chunk(
+            chunk.chunk_id
+        )
         listed = restarted.container.resolve(Brain).process(
             BrainRequest(
                 message="List internet research runs",
@@ -581,6 +585,13 @@ class BootstrapTests(unittest.TestCase):
         )
 
         self.assertTrue(recorded.success)
+        self.assertEqual(restored_chunk.document_id, document_id)
+        self.assertEqual(restored_chunk.index, chunk.index)
+        self.assertEqual(restored_chunk.content, chunk.content)
+        self.assertEqual(
+            recorded.research_runs[0].evidence[0].chunk_id,
+            restored_chunk.chunk_id,
+        )
         self.assertTrue(assessment_preview.success)
         self.assertTrue(assessment_recorded.success)
         self.assertTrue(correction_preview.success)
