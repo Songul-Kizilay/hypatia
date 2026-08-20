@@ -12,8 +12,10 @@ session rename/delete flows. Users can choose a local text size between 10 and
 explicitly entered public HTTPS research source can be validated, fetched, and
 indexed through Brain without background traffic or conversation-memory writes.
 The shell can also create/list persistent research runs and attach that source
-to a selected run ID while leaving page content in the existing in-memory
-knowledge boundary.
+to a selected run ID. The `Research content` action reports the accepted-source
+content restoration state captured at startup plus aggregate restored document
+and paragraph counts. It neither reads persistence again nor exposes content,
+paths, source metadata, hashes, IDs, or internal errors.
 For a selected collecting run, `Find sources` explicitly queries the bounded
 Crossref metadata provider and displays up to five persisted candidates.
 `Use selected URL` only copies the chosen DOI URL into the existing source

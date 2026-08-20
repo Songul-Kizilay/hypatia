@@ -11,6 +11,9 @@ from knowledge.KnowledgeEngine import KnowledgeEngine
 from research.ResearchRun import ResearchRun
 from research.ResearchSource import ResearchSource
 from research.ResearchSourceContentRecord import ResearchSourceContentRecord
+from research.ResearchSourceContentRestorationStatus import (
+    ResearchSourceContentRestorationStatus,
+)
 from research.ResearchSourceContentStore import ResearchSourceContentStore
 from research.ResearchSourceRecord import ResearchSourceRecord
 
@@ -28,7 +31,10 @@ class ResearchSourceContentRestorer:
         self._store = store
         self._knowledge_engine = knowledge_engine
 
-    def restore(self, runs: list[ResearchRun]) -> int:
+    def restore(
+        self,
+        runs: list[ResearchRun],
+    ) -> ResearchSourceContentRestorationStatus:
         """Validate the complete snapshot before rebuilding the empty index."""
         if not isinstance(runs, list) or not all(
             isinstance(run, ResearchRun) for run in runs
@@ -36,7 +42,7 @@ class ResearchSourceContentRestorer:
             raise ResearchError("Research source restoration requires research runs.")
         records = self._store.load()
         if not records:
-            return 0
+            return ResearchSourceContentRestorationStatus(True, 0, 0)
         if self._knowledge_engine.documents():
             raise ResearchError(
                 "Research source restoration requires an empty knowledge index."
@@ -46,10 +52,10 @@ class ResearchSourceContentRestorer:
             self._validated_document(record, provenance_by_document_id)
             for record in records
         ]
-        if (
-            sum(self._paragraph_count(document.content) for document in documents)
-            > self._MAXIMUM_RESTORED_PARAGRAPHS
-        ):
+        restored_paragraph_count = sum(
+            self._paragraph_count(document.content) for document in documents
+        )
+        if restored_paragraph_count > self._MAXIMUM_RESTORED_PARAGRAPHS:
             raise ResearchError(
                 "Persisted research source content has too many paragraphs."
             )
@@ -61,7 +67,11 @@ class ResearchSourceContentRestorer:
             raise ResearchError(
                 "Unable to restore accepted research source content."
             ) from error
-        return len(documents)
+        return ResearchSourceContentRestorationStatus(
+            available=True,
+            restored_document_count=len(documents),
+            restored_paragraph_count=restored_paragraph_count,
+        )
 
     @classmethod
     def _provenance_by_document_id(

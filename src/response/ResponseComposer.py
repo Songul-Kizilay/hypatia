@@ -45,6 +45,9 @@ from research.ResearchSourceComparisonNoteWritePreview import (
     ResearchSourceComparisonNoteWritePreview,
 )
 from research.ResearchSourceComparisonPreview import ResearchSourceComparisonPreview
+from research.ResearchSourceContentRestorationStatus import (
+    ResearchSourceContentRestorationStatus,
+)
 from session.SessionDeleteExecutionResult import SessionDeleteExecutionResult
 from session.SessionDeletePolicy import SessionDeleteStatus
 from session.SessionRecord import SessionRecord
@@ -706,6 +709,34 @@ class ResponseComposer:
             intent="research_run_create",
             memory_count=0,
             research_runs=[run],
+        )
+
+    def research_source_content_restoration_status(
+        self,
+        request: BrainRequest,
+        status: ResearchSourceContentRestorationStatus,
+    ) -> BrainResponse:
+        """Render the captured aggregate without persistence or source details."""
+        document_count: int | str = status.restored_document_count
+        paragraph_count: int | str = status.restored_paragraph_count
+        if not status.available:
+            document_count = "unavailable"
+            paragraph_count = "unavailable"
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Research content restoration status:",
+                    f"Runtime: {status.state}",
+                    f"Restored documents: {document_count}",
+                    f"Restored paragraphs: {paragraph_count}",
+                    "Network access: not used",
+                    "Persistent writes: not used",
+                )
+            ),
+            request_id=request.request_id,
+            intent="research_source_content_restoration_status",
+            memory_count=0,
+            research_source_content_restoration_status=status,
         )
 
     def research_run_list_success(

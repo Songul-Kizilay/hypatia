@@ -697,6 +697,10 @@ class DesktopController:
         """Request the read-only semantic runtime status without a query."""
         return self._brain.process("semantic recall status")
 
+    def research_content_status(self) -> BrainResponse:
+        """Request the captured accepted-content startup restoration status."""
+        return self._brain.process("research content status")
+
     def _selected_session_command(
         self,
         command: str,

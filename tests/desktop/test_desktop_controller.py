@@ -906,6 +906,12 @@ class DesktopControllerTests(unittest.TestCase):
         self.assertIs(response, self.response)
         self.assertEqual(self.brain.requests, ["semantic recall status"])
 
+    def test_research_content_status_uses_the_read_only_runtime_command(self) -> None:
+        response = self.controller.research_content_status()
+
+        self.assertIs(response, self.response)
+        self.assertEqual(self.brain.requests, ["research content status"])
+
 
 if __name__ == "__main__":
     unittest.main()

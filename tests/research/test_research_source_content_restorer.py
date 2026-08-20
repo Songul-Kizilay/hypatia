@@ -109,7 +109,9 @@ class ResearchSourceContentRestorerTests(unittest.TestCase):
 
         restored = restorer.restore([self._run(source)])
 
-        self.assertEqual(restored, 1)
+        self.assertTrue(restored.available)
+        self.assertEqual(restored.restored_document_count, 1)
+        self.assertEqual(restored.restored_paragraph_count, 1)
         self.assertEqual(store.load_calls, 1)
         self.assertEqual(store.save_calls, 0)
         self.assertEqual(len(knowledge_engine.documents()), 1)
@@ -127,7 +129,9 @@ class ResearchSourceContentRestorerTests(unittest.TestCase):
 
         restored = ResearchSourceContentRestorer(store, knowledge_engine).restore([])
 
-        self.assertEqual(restored, 0)
+        self.assertTrue(restored.available)
+        self.assertEqual(restored.restored_document_count, 0)
+        self.assertEqual(restored.restored_paragraph_count, 0)
         self.assertEqual(knowledge_engine.documents(), [])
         self.assertEqual(store.save_calls, 0)
 

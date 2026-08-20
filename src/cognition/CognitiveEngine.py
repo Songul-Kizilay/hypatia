@@ -53,6 +53,9 @@ from research.ResearchRunManager import ResearchRunManager
 from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSourceCandidate import ResearchSourceCandidate
 from research.ResearchSourceContentRecord import ResearchSourceContentRecord
+from research.ResearchSourceContentRestorationStatus import (
+    ResearchSourceContentRestorationStatus,
+)
 from research.ResearchSourceContentStore import ResearchSourceContentStore
 from research.ResearchSourceDiscoveryProvider import ResearchSourceDiscoveryProvider
 from research.ResearchSourceFetcher import ResearchSourceFetcher
@@ -99,6 +102,9 @@ class CognitiveEngine:
             ResearchSourceDiscoveryProvider | None
         ) = None,
         research_source_content_store: ResearchSourceContentStore | None = None,
+        research_source_content_restoration_status: (
+            ResearchSourceContentRestorationStatus | None
+        ) = None,
     ) -> None:
         if llm_history_max_turns is not None and (
             isinstance(llm_history_max_turns, bool) or llm_history_max_turns <= 0
@@ -141,6 +147,9 @@ class CognitiveEngine:
         self._research_run_manager = research_run_manager
         self._research_source_discovery_provider = research_source_discovery_provider
         self._research_source_content_store = research_source_content_store
+        self._research_source_content_restoration_status = (
+            research_source_content_restoration_status
+        )
         self._hybrid_semantic_memory_ranker = HybridSemanticMemoryRanker()
         self._router = BrainRouter()
 
@@ -231,6 +240,9 @@ class CognitiveEngine:
 
         if self._is_research_source_load_request(request):
             return self._process_research_source_load(request)
+
+        if self._is_research_source_content_restoration_status_request(request):
+            return self._process_research_source_content_restoration_status(request)
 
         if self._is_knowledge_load_request(request):
             return self._process_knowledge_load(request)
@@ -495,6 +507,30 @@ class CognitiveEngine:
     def _is_research_run_status_update_request(request: BrainRequest) -> bool:
         """Recognize one explicit lifecycle transition mutation."""
         return request.metadata.get("intent") == "research_run_status_update"
+
+    @staticmethod
+    def _is_research_source_content_restoration_status_request(
+        request: BrainRequest,
+    ) -> bool:
+        """Recognize the bounded read-only accepted-content startup status."""
+        return (
+            request.metadata.get("intent")
+            == "research_source_content_restoration_status"
+            or request.message.casefold().strip() == "research content status"
+        )
+
+    def _process_research_source_content_restoration_status(
+        self,
+        request: BrainRequest,
+    ) -> BrainResponse:
+        """Return the captured startup aggregate without reading persistence."""
+        status = self._research_source_content_restoration_status
+        if status is None:
+            status = ResearchSourceContentRestorationStatus.unavailable()
+        return self._response_composer.research_source_content_restoration_status(
+            request,
+            status,
+        )
 
     def _process_research_run_create(self, request: BrainRequest) -> BrainResponse:
         question = request.metadata.get("research_question")

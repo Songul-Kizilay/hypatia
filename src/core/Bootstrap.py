@@ -306,7 +306,9 @@ class Bootstrap:
             research_source_content_store,
             knowledge_engine,
         )
-        research_source_content_restorer.restore(research_run_manager.list())
+        research_source_content_restoration_status = (
+            research_source_content_restorer.restore(research_run_manager.list())
+        )
         research_source_fetcher = (
             self._research_source_fetcher or HttpResearchSourceFetcher()
         )
@@ -342,6 +344,9 @@ class Bootstrap:
                 self._research_source_discovery_provider
             ),
             research_source_content_store=research_source_content_store,
+            research_source_content_restoration_status=(
+                research_source_content_restoration_status
+            ),
         )
         brain = Brain(cognitive_engine, memory_manager, event_bus)
 
@@ -361,6 +366,7 @@ class Bootstrap:
         container.register(research_run_manager)
         container.register(research_source_content_store)
         container.register(research_source_content_restorer)
+        container.register(research_source_content_restoration_status)
         container.register(research_source_fetcher)
         if self._research_source_discovery_provider is not None:
             container.register(self._research_source_discovery_provider)

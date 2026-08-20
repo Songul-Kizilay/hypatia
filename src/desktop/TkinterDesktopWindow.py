@@ -237,6 +237,11 @@ class TkinterDesktopWindow:
         ).grid(row=1, column=3, sticky="ew", padx=(8, 0))
         ttk.Button(
             session_frame,
+            text="Research content",
+            command=self._show_research_content_status,
+        ).grid(row=2, column=0, sticky="ew", pady=(8, 0))
+        ttk.Button(
+            session_frame,
             text="Session details",
             command=self._show_session_details,
         ).grid(row=2, column=1, sticky="ew", pady=(8, 0))
@@ -818,6 +823,9 @@ class TkinterDesktopWindow:
 
     def _show_semantic_status(self) -> None:
         self._append_response(self._controller.semantic_status())
+
+    def _show_research_content_status(self) -> None:
+        self._append_response(self._controller.research_content_status())
 
     def _show_recall(self) -> None:
         self._show_recall_response(self._controller.recall)
