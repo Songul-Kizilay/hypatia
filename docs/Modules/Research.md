@@ -5,8 +5,9 @@
 Partially implemented: explicit public-HTTPS source acquisition, local
 knowledge indexing, persistent research-run audit records, and a replaceable
 source-discovery provider contract are available. User-selected evidence and
-bounded candidate metadata are persistent. A production discovery provider,
-automatic evidence extraction, multi-source synthesis, evidence ranking, and
+bounded candidate metadata are persistent. The packaged process-environment
+runtime includes an explicit Crossref scholarly-metadata provider. Automatic
+evidence extraction, multi-source synthesis, evidence ranking, and
 contradiction detection remain planned.
 
 ## Purpose
@@ -40,6 +41,14 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
   and timezone-aware timestamp. Closed and unknown runs stop before provider
   access. Provider failures retain only a generic safe run-failure record; a
   failed discovery snapshot leaves the prior run unchanged.
+- The standard process-environment runtime uses Crossref REST v1 for this
+  explicit discovery action. Its fixed `api.crossref.org` HTTPS endpoint and
+  redirects stay same-origin, system proxies are disabled, JSON responses are
+  limited to 500 KB and ten seconds, and only DOI/title/venue/year metadata is
+  transformed into candidates. No authentication secret or document content
+  is sent or requested. Set
+  `HYPATIA_RESEARCH_SOURCE_DISCOVERY_PROVIDER=disabled` to remove this network
+  capability from a process.
 - The audit snapshot does not duplicate downloaded page content. Knowledge
   chunks remain in memory and therefore are not reconstructed from a run after
   restart.
@@ -72,10 +81,11 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
 
 ## Next increment
 
-Add one bounded production discovery adapter behind the existing interface and
-an explicit desktop candidate view. Candidate acceptance must remain a separate
-user decision that revalidates the URL through the existing source-acquisition
-policy; discovery must not become unattended crawling.
+Add an explicit preview-and-confirm candidate acceptance decision that
+revalidates the chosen DOI URL through the existing source-acquisition policy.
+Discovery and selection must remain separate from fetching, and neither may
+become unattended crawling. Multi-source comparison must operate only on
+separately accepted, indexed, and cited sources.
 
 ## Known boundary
 

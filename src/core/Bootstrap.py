@@ -41,6 +41,9 @@ from memory.UrllibOllamaEmbeddingTransport import (
     UrllibOllamaEmbeddingTransport,
 )
 from planner.Planner import Planner
+from research.CrossrefResearchSourceDiscoveryProvider import (
+    CrossrefResearchSourceDiscoveryProvider,
+)
 from research.HttpResearchSourceFetcher import HttpResearchSourceFetcher
 from research.JsonFileResearchRunStore import JsonFileResearchRunStore
 from research.ResearchRunManager import ResearchRunManager
@@ -108,6 +111,9 @@ class Bootstrap:
         semantic_memory_index_runtime = cls._load_process_semantic_memory_index_runtime(
             cls._semantic_embedding_cache_path(memory_path)
         )
+        research_source_discovery_provider = (
+            cls._load_process_research_source_discovery_provider()
+        )
         if llm_system_prompt is None:
             llm_system_prompt = HYPATIA_DEFAULT_SYSTEM_PROMPT
 
@@ -123,6 +129,24 @@ class Bootstrap:
             learned_memory_context_limit=learned_memory_context_limit,
             learned_memory_selector=learned_memory_selector,
             semantic_memory_index_runtime=semantic_memory_index_runtime,
+            research_source_discovery_provider=research_source_discovery_provider,
+        )
+
+    @staticmethod
+    def _load_process_research_source_discovery_provider() -> (
+        ResearchSourceDiscoveryProvider | None
+    ):
+        provider_name = os.environ.get(
+            "HYPATIA_RESEARCH_SOURCE_DISCOVERY_PROVIDER",
+            "crossref",
+        )
+        if provider_name == "crossref":
+            return CrossrefResearchSourceDiscoveryProvider()
+        if provider_name == "disabled":
+            return None
+        raise ValueError(
+            "HYPATIA_RESEARCH_SOURCE_DISCOVERY_PROVIDER must be "
+            "'crossref' or 'disabled'."
         )
 
     @staticmethod
