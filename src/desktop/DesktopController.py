@@ -156,6 +156,25 @@ class DesktopController:
             )
         )
 
+    def preview_research_run_markdown_export(
+        self,
+        research_run_id: str,
+    ) -> BrainResponse:
+        """Preview one terminal run as Markdown without writing a file."""
+        normalized_run_id = research_run_id.strip()
+        if not normalized_run_id:
+            raise ValueError("A research run ID cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="Preview terminal research run as Markdown",
+                source="desktop",
+                metadata={
+                    "intent": "research_run_markdown_export_preview",
+                    "research_run_id": normalized_run_id,
+                },
+            )
+        )
+
     def discover_research_sources(self, research_run_id: str) -> BrainResponse:
         """Discover candidate metadata for one run without loading content."""
         normalized_run_id = research_run_id.strip()

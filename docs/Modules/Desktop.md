@@ -55,6 +55,12 @@ record action revalidates and atomically appends the note. The comparison view
 shows up to 20 notes for the exact entered source order after restart and reports
 the complete count. The desktop never composes the note, chooses references, or
 generates a winner or score.
+`Export preview` is available for an explicitly selected terminal run. It
+renders persisted provenance, evidence, authored assessments, comparison notes,
+and failures as bounded Markdown, together with the immutable snapshot time,
+full character count, omitted count, safe suggested filename, and full-content
+SHA-256. It accepts no destination path and writes no file; saving remains a
+separate revalidating action.
 The `Final status` selector offers only `completed`, `failed`, and `cancelled`.
 `Preview status` shows the runtime decision first and requests a separate
 confirmation only when allowed. A completed run requires source and evidence;

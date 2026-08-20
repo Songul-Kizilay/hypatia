@@ -177,6 +177,9 @@ class CognitiveEngine:
         if self._is_research_run_list_request(request):
             return self._process_research_run_list(request)
 
+        if self._is_research_run_markdown_export_preview_request(request):
+            return self._process_research_run_markdown_export_preview(request)
+
         if self._is_research_evidence_record_request(request):
             return self._process_research_evidence_record(request)
 
@@ -400,6 +403,13 @@ class CognitiveEngine:
         return request.metadata.get("intent") == "research_run_list"
 
     @staticmethod
+    def _is_research_run_markdown_export_preview_request(
+        request: BrainRequest,
+    ) -> bool:
+        """Recognize one explicit no-write terminal-run export preview."""
+        return request.metadata.get("intent") == "research_run_markdown_export_preview"
+
+    @staticmethod
     def _is_research_evidence_record_request(request: BrainRequest) -> bool:
         """Recognize one explicit indexed-chunk evidence selection."""
         return request.metadata.get("intent") == "research_evidence_record"
@@ -497,6 +507,28 @@ class CognitiveEngine:
         return self._response_composer.research_run_list_success(
             request,
             self._research_run_manager.list(),
+        )
+
+    def _process_research_run_markdown_export_preview(
+        self,
+        request: BrainRequest,
+    ) -> BrainResponse:
+        run_id = request.metadata.get("research_run_id")
+        failure = self._response_composer.research_run_markdown_export_preview_failure
+        if not isinstance(run_id, str) or not run_id.strip():
+            return failure(request, "A research run ID is required.")
+        if self._research_run_manager is None:
+            return failure(request, "Research run persistence is unavailable.")
+        try:
+            preview = self._research_run_manager.preview_markdown_export(run_id)
+        except ResearchError:
+            return failure(
+                request,
+                "A terminal research run could not be previewed for export.",
+            )
+        return self._response_composer.research_run_markdown_export_preview_success(
+            request,
+            preview,
         )
 
     def _process_research_evidence_record(

@@ -22,6 +22,9 @@ from knowledge.KnowledgeRelationRevocationPreview import (
 from memory.MemoryRecord import MemoryRecord
 from planner.Plan import Plan
 from research.ResearchRun import ResearchRun
+from research.ResearchRunMarkdownExportPreview import (
+    ResearchRunMarkdownExportPreview,
+)
 from research.ResearchRunStatusTransitionPreview import (
     ResearchRunStatusTransitionPreview,
 )
@@ -742,6 +745,45 @@ class ResponseComposer:
             message=message,
             request_id=request.request_id,
             intent=intent,
+            memory_count=0,
+            success=False,
+        )
+
+    def research_run_markdown_export_preview_success(
+        self,
+        request: BrainRequest,
+        preview: ResearchRunMarkdownExportPreview,
+    ) -> BrainResponse:
+        """Render a bounded export preview without writing a document."""
+        return BrainResponse(
+            message=(
+                "Research Markdown export preview:\n"
+                f"Run: {preview.run_id}\n"
+                f"Status: {preview.run_status.value}\n"
+                f"Snapshot updated: {preview.snapshot_updated_at.isoformat()}\n"
+                f"Suggested filename: {preview.suggested_filename}\n"
+                f"Complete characters: {preview.total_character_count}\n"
+                f"Omitted from preview: {preview.omitted_character_count}\n"
+                f"Content SHA-256: {preview.content_sha256}\n"
+                "Status: read-only preview; no file was written\n\n"
+                f"{preview.markdown_preview}"
+            ),
+            request_id=request.request_id,
+            intent="research_run_markdown_export_preview",
+            memory_count=0,
+            research_run_markdown_export_preview=preview,
+        )
+
+    def research_run_markdown_export_preview_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Report an invalid export selection without exposing store details."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="research_run_markdown_export_preview",
             memory_count=0,
             success=False,
         )

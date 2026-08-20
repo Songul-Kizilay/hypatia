@@ -120,14 +120,21 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
   all references and atomically replaces the run snapshot. The comparison view
   reads up to 20 matching notes after restart and reports the complete count.
   No provider, fetcher, LLM, memory, graph, or automatic scoring path is used.
+- A completed, failed, or cancelled run can be rendered as a deterministic
+  Markdown export preview from persisted state only. It includes accepted
+  provenance, evidence, authored assessment history, comparison notes, and safe
+  failures. The desktop view is bounded to 24,000 source characters while
+  exposing the full length and full-content SHA-256. Remote and authored text is
+  escaped as literal block-quoted data; no path is accepted and no file is
+  written.
 
 ## Next increment
 
-Define a deterministic, read-only Markdown export preview for one terminal
-research run and a separately confirmed save to a new user-selected file. The
-export must use only persisted provenance, evidence, assessments, and comparison
-notes, revalidate the unchanged run before writing, and make no network or LLM
-call. Discovery and selection remain separate from fetching and may not
+Add a separately confirmed save of the previewed Markdown to a new
+user-selected file. The final request must revalidate the terminal run's exact
+update time and full-content SHA-256, replace the destination atomically only
+when it does not already exist, and make no network or LLM call. Discovery and
+selection remain separate from fetching and may not
 become unattended crawling.
 
 ## Known boundary

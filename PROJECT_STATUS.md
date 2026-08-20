@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.44 (Genesis)`
+`v0.3.45 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.44`** is the current executable package and GitHub
+- **Runtime release `v0.3.45`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -133,6 +133,15 @@ with optional OpenAI-compatible LLM conversation support.
   v1-v5 runs load with no comparison notes.
   They are rewritten only after a later successful mutation; no eager or
   partial migration occurs.
+- One terminal run can be explicitly previewed as deterministic Markdown using
+  only its immutable persisted audit snapshot. The bounded view includes source
+  provenance, evidence, authored assessment history, comparison notes, and safe
+  failures; it reports the complete character count and full-content SHA-256.
+  Authored and remote text is escaped as literal quoted material, and a safe
+  suggested basename cannot contain a path. Hidden directional controls are
+  neutralized. Collecting runs are rejected and no
+  file, network, provider, LLM, memory, graph, live-index, or event-bus action
+  occurs.
 - Research runs have a persisted terminal lifecycle. The desktop previews a
   requested `completed`, `failed`, or `cancelled` transition and requires a
   separate confirmation before the runtime revalidates and atomically saves
@@ -304,7 +313,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 1,162 automated tests pass through package-aware discovery.
+- 1,174 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -331,8 +340,9 @@ so this check did not alter the project's persisted data.
 
 ## Next Milestone
 
-Define a read-only Markdown export preview for one terminal research run,
-including persisted provenance, authored evidence, assessments, and comparison
-notes. Saving must be a separate explicit desktop action to a user-selected
-path, revalidate the same immutable run snapshot, avoid network and LLM calls,
-and never overwrite an existing file without a distinct reviewed policy.
+Add the separately confirmed Markdown save action for a user-selected new file.
+It must carry the preview's run ID, immutable snapshot time, and full-content
+SHA-256 back through Brain, re-render and revalidate before an atomic local
+write, reject collecting or changed snapshots, and never overwrite an existing
+file. Network, provider, LLM, memory, graph, and event-bus behavior must remain
+untouched.

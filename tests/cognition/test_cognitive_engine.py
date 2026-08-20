@@ -6151,6 +6151,59 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(extractor.calls, [])
         self.assertEqual(events, [])
 
+    def test_terminal_research_markdown_preview_is_read_only_and_local(self) -> None:
+        store = ToggleResearchRunStore()
+        manager = ResearchRunManager(store, id_factory=lambda: "run-123")
+        run = manager.create("Export local evidence")
+        llm_provider = RecordingLLMProvider("must not run")
+        extractor = RecordingCandidateExtractor()
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+            learned_memory_candidate_extractor=extractor,
+            research_run_manager=manager,
+        )
+        request = BrainRequest(
+            message="Preview terminal research run as Markdown",
+            metadata={
+                "intent": "research_run_markdown_export_preview",
+                "research_run_id": run.run_id,
+            },
+        )
+
+        collecting = engine.process(request)
+        terminal = manager.transition_status(
+            run.run_id,
+            ResearchRunStatus.CANCELLED,
+        )
+        persisted_save_count = store.save_calls
+        memory_count = self.memory_manager.count()
+        events: list[str] = []
+        self.event_bus.subscribe("*", lambda event: events.append(event.name))
+        previewed = engine.process(request)
+
+        self.assertFalse(collecting.success)
+        self.assertEqual(collecting.intent, "research_run_markdown_export_preview")
+        self.assertTrue(previewed.success)
+        preview = previewed.research_run_markdown_export_preview
+        self.assertIsNotNone(preview)
+        assert preview is not None
+        self.assertEqual(preview.run_id, terminal.run_id)
+        self.assertIn("# Hypatia Research Export", preview.markdown_preview)
+        self.assertIn("no file was written", previewed.message)
+        self.assertEqual(manager.get(run.run_id), terminal)
+        self.assertEqual(store.save_calls, persisted_save_count)
+        self.assertEqual(self.memory_manager.count(), memory_count)
+        self.assertEqual(llm_provider.calls, [])
+        self.assertEqual(extractor.calls, [])
+        self.assertEqual(events, [])
+
     def test_research_source_is_attached_to_the_selected_persisted_run(self) -> None:
         store = ToggleResearchRunStore()
         manager = ResearchRunManager(store, id_factory=lambda: "run-123")

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
+from hashlib import sha256
 from threading import RLock
 from uuid import uuid4
 
@@ -12,6 +14,11 @@ from knowledge.Chunk import Chunk
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchFailureRecord import ResearchFailureRecord
 from research.ResearchRun import ResearchRun
+from research.ResearchRunMarkdownExportPreview import (
+    MAX_MARKDOWN_EXPORT_PREVIEW_CHARACTERS,
+    ResearchRunMarkdownExportPreview,
+)
+from research.ResearchRunMarkdownRenderer import render_research_run_markdown
 from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchRunStatusTransitionPreview import (
     ResearchRunStatusTransitionPreview,
@@ -125,6 +132,36 @@ class ResearchRunManager:
         if run is None:
             raise ResearchError(f"Research run was not found: {normalized_id}")
         return run
+
+    def preview_markdown_export(
+        self,
+        run_id: str,
+    ) -> ResearchRunMarkdownExportPreview:
+        """Render one terminal immutable snapshot without writing or live lookups."""
+        normalized_id = self._normalize_run_id(run_id)
+        with self._lock:
+            _, run = self._find_with_index(normalized_id)
+            if not run.status.terminal:
+                raise ResearchError("A collecting research run cannot be exported yet.")
+            markdown = render_research_run_markdown(run)
+            visible_markdown = markdown[:MAX_MARKDOWN_EXPORT_PREVIEW_CHARACTERS]
+            omitted_character_count = len(markdown) - len(visible_markdown)
+            if omitted_character_count:
+                visible_markdown += (
+                    "\n\n> Preview truncated: "
+                    f"{omitted_character_count} characters omitted.\n"
+                )
+            content_sha256 = sha256(markdown.encode("utf-8")).hexdigest()
+            return ResearchRunMarkdownExportPreview(
+                run_id=run.run_id,
+                run_status=run.status,
+                snapshot_updated_at=run.updated_at,
+                suggested_filename=self._markdown_export_filename(run.run_id),
+                markdown_preview=visible_markdown,
+                total_character_count=len(markdown),
+                omitted_character_count=omitted_character_count,
+                content_sha256=content_sha256,
+            )
 
     def has_source(self, run_id: str, document_id: str) -> bool:
         """Return whether the run already records a source document."""
@@ -1006,6 +1043,13 @@ class ResearchRunManager:
         if not isinstance(run_id, str) or not run_id.strip():
             raise ResearchError("Research run ID cannot be empty.")
         return run_id.strip()
+
+    @staticmethod
+    def _markdown_export_filename(run_id: str) -> str:
+        safe_run_id = re.sub(r"[^A-Za-z0-9._-]+", "-", run_id).strip("-.")
+        if not safe_run_id:
+            safe_run_id = "research"
+        return f"hypatia-research-{safe_run_id[:80]}.md"
 
     @staticmethod
     def _normalize_document_id(document_id: str) -> str:

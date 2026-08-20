@@ -16,6 +16,9 @@ from knowledge.KnowledgeRelationRevocationPreview import (
     KnowledgeRelationRevocationPreview,
 )
 from research.ResearchRun import ResearchRun
+from research.ResearchRunMarkdownExportPreview import (
+    ResearchRunMarkdownExportPreview,
+)
 from research.ResearchRunStatusTransitionPreview import (
     ResearchRunStatusTransitionPreview,
 )
@@ -52,6 +55,7 @@ class BrainResponse:
     )
     knowledge_relation_revocation: KnowledgeRelationRevocation | None = None
     research_runs: list[ResearchRun] = field(default_factory=list)
+    research_run_markdown_export_preview: ResearchRunMarkdownExportPreview | None = None
     research_run_status_transition_preview: (
         ResearchRunStatusTransitionPreview | None
     ) = None
