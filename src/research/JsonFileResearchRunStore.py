@@ -14,14 +14,16 @@ from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchFailureRecord import ResearchFailureRecord
 from research.ResearchRun import ResearchRun
 from research.ResearchRunStatus import ResearchRunStatus
+from research.ResearchSourceCandidate import ResearchSourceCandidate
+from research.ResearchSourceDiscoveryRecord import ResearchSourceDiscoveryRecord
 from research.ResearchSourceRecord import ResearchSourceRecord
 
 
 class JsonFileResearchRunStore:
     """Load and atomically replace a strict versioned research-run document."""
 
-    _SCHEMA_VERSION = 2
-    _SUPPORTED_SCHEMA_VERSIONS = {1, 2}
+    _SCHEMA_VERSION = 3
+    _SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3}
     _DOCUMENT_FIELDS = {"schema_version", "runs"}
     _RUN_FIELDS_V1 = {
         "run_id",
@@ -33,6 +35,7 @@ class JsonFileResearchRunStore:
         "updated_at",
     }
     _RUN_FIELDS_V2 = _RUN_FIELDS_V1 | {"evidence"}
+    _RUN_FIELDS_V3 = _RUN_FIELDS_V2 | {"discoveries"}
     _SOURCE_FIELDS = {
         "document_id",
         "url",
@@ -53,6 +56,14 @@ class JsonFileResearchRunStore:
         "note",
         "recorded_at",
     }
+    _DISCOVERY_FIELDS = {
+        "discovery_id",
+        "query",
+        "provider",
+        "candidates",
+        "discovered_at",
+    }
+    _CANDIDATE_FIELDS = {"url", "title", "snippet"}
 
     def __init__(self, path: Path) -> None:
         self._path = path
@@ -125,9 +136,11 @@ class JsonFileResearchRunStore:
         return runs
 
     def _parse_run(self, value: Any, schema_version: int) -> ResearchRun:
-        expected_fields = (
-            self._RUN_FIELDS_V1 if schema_version == 1 else self._RUN_FIELDS_V2
-        )
+        expected_fields = {
+            1: self._RUN_FIELDS_V1,
+            2: self._RUN_FIELDS_V2,
+            3: self._RUN_FIELDS_V3,
+        }[schema_version]
         if not isinstance(value, dict) or set(value) != expected_fields:
             raise ResearchError("Research run store contains an invalid run record.")
         try:
@@ -139,10 +152,12 @@ class JsonFileResearchRunStore:
         sources_data = value["sources"]
         failures_data = value["failures"]
         evidence_data = [] if schema_version == 1 else value["evidence"]
+        discoveries_data = [] if schema_version < 3 else value["discoveries"]
         if (
             not isinstance(sources_data, list)
             or not isinstance(failures_data, list)
             or not isinstance(evidence_data, list)
+            or not isinstance(discoveries_data, list)
         ):
             raise ResearchError("Research run store contains invalid run collections.")
         return ResearchRun(
@@ -154,6 +169,7 @@ class JsonFileResearchRunStore:
             created_at=self._parse_datetime(value["created_at"], "created_at"),
             updated_at=self._parse_datetime(value["updated_at"], "updated_at"),
             evidence=tuple(self._parse_evidence(item) for item in evidence_data),
+            discoveries=tuple(self._parse_discovery(item) for item in discoveries_data),
         )
 
     def _parse_source(self, value: Any) -> ResearchSourceRecord:
@@ -194,6 +210,42 @@ class JsonFileResearchRunStore:
             chunk_sha256=value["chunk_sha256"],
             note=value["note"],
             recorded_at=self._parse_datetime(value["recorded_at"], "recorded_at"),
+        )
+
+    def _parse_discovery(self, value: Any) -> ResearchSourceDiscoveryRecord:
+        if not isinstance(value, dict) or set(value) != self._DISCOVERY_FIELDS:
+            raise ResearchError(
+                "Research run store contains an invalid discovery record."
+            )
+        candidates = value["candidates"]
+        if not isinstance(candidates, list):
+            raise ResearchError(
+                "Research run store discovery candidates must be a list."
+            )
+        return ResearchSourceDiscoveryRecord(
+            discovery_id=value["discovery_id"],
+            query=value["query"],
+            provider=value["provider"],
+            candidates=tuple(self._parse_candidate(item) for item in candidates),
+            discovered_at=self._parse_datetime(
+                value["discovered_at"],
+                "discovered_at",
+            ),
+        )
+
+    @staticmethod
+    def _parse_candidate(value: Any) -> ResearchSourceCandidate:
+        if (
+            not isinstance(value, dict)
+            or set(value) != JsonFileResearchRunStore._CANDIDATE_FIELDS
+        ):
+            raise ResearchError(
+                "Research run store contains an invalid source candidate."
+            )
+        return ResearchSourceCandidate(
+            url=value["url"],
+            title=value["title"],
+            snippet=value["snippet"],
         )
 
     def _parse_datetime(self, value: Any, field_name: str) -> datetime:
@@ -251,6 +303,23 @@ class JsonFileResearchRunStore:
                     "recorded_at": evidence.recorded_at.isoformat(),
                 }
                 for evidence in run.evidence
+            ],
+            "discoveries": [
+                {
+                    "discovery_id": discovery.discovery_id,
+                    "query": discovery.query,
+                    "provider": discovery.provider,
+                    "candidates": [
+                        {
+                            "url": candidate.url,
+                            "title": candidate.title,
+                            "snippet": candidate.snippet,
+                        }
+                        for candidate in discovery.candidates
+                    ],
+                    "discovered_at": discovery.discovered_at.isoformat(),
+                }
+                for discovery in run.discoveries
             ],
             "created_at": run.created_at.isoformat(),
             "updated_at": run.updated_at.isoformat(),

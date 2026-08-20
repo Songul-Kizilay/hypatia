@@ -26,6 +26,7 @@ from memory.MemoryRecord import MemoryRecord
 from research.JsonFileResearchRunStore import JsonFileResearchRunStore
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchSource import ResearchSource
+from research.ResearchSourceCandidate import ResearchSourceCandidate
 from response.ResponseComposer import ResponseComposer
 from session.JsonFileSessionStore import JsonFileSessionStore
 from session.SessionManager import SessionManager
@@ -40,6 +41,23 @@ class RecordingResearchSourceFetcher:
     def fetch(self, url: str) -> ResearchSource:
         self.calls.append(url)
         return self.source
+
+
+class RecordingResearchSourceDiscoveryProvider:
+    provider_name = "bootstrap-test-provider"
+
+    def __init__(self, candidate: ResearchSourceCandidate) -> None:
+        self.candidate = candidate
+        self.calls: list[tuple[str, int]] = []
+
+    def discover(
+        self,
+        query: str,
+        *,
+        limit: int,
+    ) -> list[ResearchSourceCandidate]:
+        self.calls.append((query, limit))
+        return [self.candidate]
 
 
 class BootstrapTests(unittest.TestCase):
@@ -103,6 +121,61 @@ class BootstrapTests(unittest.TestCase):
         self.assertTrue(response.success)
         self.assertEqual(fetcher.calls, [source.url])
         self.assertEqual(response.knowledge_documents[0].source, source.url)
+
+    def test_discovered_candidates_survive_a_bootstrap_restart(self) -> None:
+        candidate = ResearchSourceCandidate(
+            url="https://example.com/candidate",
+            title="Candidate source",
+            snippet="Potentially relevant.",
+        )
+        provider = RecordingResearchSourceDiscoveryProvider(candidate)
+        first = Bootstrap(
+            memory_path=self.memory_path,
+            session_path=self.session_path,
+            knowledge_relation_path=self.knowledge_relation_path,
+            research_run_path=self.research_run_path,
+            research_source_discovery_provider=provider,
+        )
+        first.initialize()
+        brain = first.container.resolve(Brain)
+        run = brain.process(
+            BrainRequest(
+                message="Create internet research run",
+                metadata={
+                    "intent": "research_run_create",
+                    "research_question": "What sources should Hypatia compare?",
+                },
+            )
+        ).research_runs[0]
+
+        discovered = brain.process(
+            BrainRequest(
+                message="Discover candidate research sources",
+                metadata={
+                    "intent": "research_source_discover",
+                    "research_run_id": run.run_id,
+                },
+            )
+        )
+
+        restarted = self._bootstrap()
+        restarted.initialize()
+        listed = restarted.container.resolve(Brain).process(
+            BrainRequest(
+                message="List internet research runs",
+                metadata={"intent": "research_run_list"},
+            )
+        )
+
+        self.assertTrue(discovered.success)
+        self.assertEqual(provider.calls, [(run.question, 5)])
+        self.assertEqual(discovered.research_runs[0].sources, ())
+        self.assertEqual(len(discovered.research_runs[0].discoveries), 1)
+        self.assertEqual(listed.research_runs, discovered.research_runs)
+        self.assertEqual(
+            listed.research_runs[0].discoveries[0].candidates,
+            (candidate,),
+        )
 
     def test_bootstrap_wires_cognitive_search_to_shared_memory_manager(
         self,

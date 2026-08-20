@@ -14,6 +14,9 @@ indexed through Brain without background traffic or conversation-memory writes.
 The shell can also create/list persistent research runs and attach that source
 to a selected run ID while leaving page content in the existing in-memory
 knowledge boundary.
+The desktop controller has a structured candidate-discovery request, but the
+packaged shell does not yet inject or display a production discovery provider.
+The boundary therefore cannot silently add a second network path.
 For an attached source, `Save evidence` records one explicitly entered chunk ID
 and note; `View evidence` displays the persisted bounded excerpt and locator.
 Neither action extracts, ranks, or interprets evidence automatically.

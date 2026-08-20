@@ -283,6 +283,31 @@ class DesktopControllerTests(unittest.TestCase):
         self.assertEqual(request.source, "desktop")
         self.assertEqual(request.metadata, {"intent": "research_run_list"})
 
+    def test_discover_research_sources_uses_a_structured_explicit_request(
+        self,
+    ) -> None:
+        response = self.controller.discover_research_sources("  run-123  ")
+
+        self.assertIs(response, self.response)
+        request = self.brain.requests[-1]
+        self.assertIsInstance(request, BrainRequest)
+        assert isinstance(request, BrainRequest)
+        self.assertEqual(request.message, "Discover candidate research sources")
+        self.assertEqual(request.source, "desktop")
+        self.assertEqual(
+            request.metadata,
+            {
+                "intent": "research_source_discover",
+                "research_run_id": "run-123",
+            },
+        )
+
+    def test_discover_research_sources_rejects_empty_run_id_locally(self) -> None:
+        with self.assertRaisesRegex(ValueError, "run ID cannot be empty"):
+            self.controller.discover_research_sources(" \t ")
+
+        self.assertEqual(self.brain.requests, [])
+
     def test_record_research_evidence_uses_an_explicit_structured_request(self) -> None:
         response = self.controller.record_research_evidence(
             " run-123 ",

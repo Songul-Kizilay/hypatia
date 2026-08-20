@@ -44,6 +44,7 @@ from planner.Planner import Planner
 from research.HttpResearchSourceFetcher import HttpResearchSourceFetcher
 from research.JsonFileResearchRunStore import JsonFileResearchRunStore
 from research.ResearchRunManager import ResearchRunManager
+from research.ResearchSourceDiscoveryProvider import ResearchSourceDiscoveryProvider
 from research.ResearchSourceFetcher import ResearchSourceFetcher
 from response.ResponseComposer import ResponseComposer
 from session.JsonFileSessionStore import JsonFileSessionStore
@@ -70,6 +71,9 @@ class Bootstrap:
         learned_memory_selector: LearnedMemorySelector | None = None,
         semantic_memory_index_runtime: SemanticMemoryIndexRuntime | None = None,
         research_source_fetcher: ResearchSourceFetcher | None = None,
+        research_source_discovery_provider: (
+            ResearchSourceDiscoveryProvider | None
+        ) = None,
     ) -> None:
         self._memory_path = memory_path
         self._session_path = session_path
@@ -85,6 +89,7 @@ class Bootstrap:
         self._learned_memory_selector = learned_memory_selector
         self._semantic_memory_index_runtime = semantic_memory_index_runtime
         self._research_source_fetcher = research_source_fetcher
+        self._research_source_discovery_provider = research_source_discovery_provider
 
     @classmethod
     def from_process_environment(
@@ -289,6 +294,9 @@ class Bootstrap:
             semantic_memory_index_runtime=semantic_memory_index_runtime,
             research_source_fetcher=research_source_fetcher,
             research_run_manager=research_run_manager,
+            research_source_discovery_provider=(
+                self._research_source_discovery_provider
+            ),
         )
         brain = Brain(cognitive_engine, memory_manager, event_bus)
 
@@ -307,6 +315,8 @@ class Bootstrap:
         container.register(research_run_store)
         container.register(research_run_manager)
         container.register(research_source_fetcher)
+        if self._research_source_discovery_provider is not None:
+            container.register(self._research_source_discovery_provider)
         container.register(response_composer)
         container.register(cognitive_engine)
         container.register(brain)

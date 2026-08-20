@@ -12,6 +12,7 @@ from research.ResearchRun import ResearchRun
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSource import ResearchSource
+from research.ResearchSourceCandidate import ResearchSourceCandidate
 
 
 class RecordingRunStore:
@@ -49,6 +50,7 @@ class ResearchRunManagerTests(unittest.TestCase):
             clock=SequenceClock(self.start),
             id_factory=lambda: "run-1",
             evidence_id_factory=lambda: "evidence-1",
+            discovery_id_factory=lambda: "discovery-1",
         )
 
     def test_create_persists_before_publishing_the_run(self) -> None:
@@ -87,6 +89,46 @@ class ResearchRunManagerTests(unittest.TestCase):
 
         self.assertEqual(updated.failures[0].reason, reason)
         self.assertNotIn("http://secret@example.com", repr(updated))
+
+    def test_add_discovery_persists_ordered_unaccepted_candidates(self) -> None:
+        run = self.manager.create("  Find trustworthy evidence  ")
+        candidate = ResearchSourceCandidate(
+            url="https://example.com/evidence",
+            title="Evidence",
+            snippet="Potentially relevant.",
+        )
+
+        updated = self.manager.add_discovery(
+            run.run_id,
+            run.question,
+            "test-provider",
+            [candidate],
+        )
+
+        self.assertEqual(len(updated.discoveries), 1)
+        discovery = updated.discoveries[0]
+        self.assertEqual(discovery.discovery_id, "discovery-1")
+        self.assertEqual(discovery.query, "Find trustworthy evidence")
+        self.assertEqual(discovery.provider, "test-provider")
+        self.assertEqual(discovery.candidates, (candidate,))
+        self.assertEqual(updated.sources, ())
+        self.assertEqual(updated.evidence, ())
+        self.assertEqual(self.store.runs, [updated])
+
+    def test_discovery_save_failure_does_not_publish_candidate_state(self) -> None:
+        run = self.manager.create("Question")
+        self.store.error = ResearchError("Store unavailable.")
+
+        with self.assertRaisesRegex(ResearchError, "Store unavailable"):
+            self.manager.add_discovery(
+                run.run_id,
+                run.question,
+                "test-provider",
+                [],
+            )
+
+        self.assertEqual(self.manager.get(run.run_id), run)
+        self.assertEqual(self.manager.get(run.run_id).discoveries, ())
 
     def test_add_evidence_requires_an_attached_source_and_persists_before_publish(
         self,
@@ -242,6 +284,12 @@ class ResearchRunManagerTests(unittest.TestCase):
                 "Another note.",
             ),
             lambda: self.manager.record_failure(run.run_id, "stage", "Reason."),
+            lambda: self.manager.add_discovery(
+                run.run_id,
+                run.question,
+                "test-provider",
+                [],
+            ),
         ):
             with self.assertRaisesRegex(ResearchError, "closed"):
                 mutation()

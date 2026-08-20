@@ -3,8 +3,9 @@
 ## Status
 
 Partially implemented: explicit public-HTTPS source acquisition, local
-knowledge indexing, and persistent research-run audit records are available.
-User-selected evidence records are also persistent. Source discovery,
+knowledge indexing, persistent research-run audit records, and a replaceable
+source-discovery provider contract are available. User-selected evidence and
+bounded candidate metadata are persistent. A production discovery provider,
 automatic evidence extraction, multi-source synthesis, evidence ranking, and
 contradiction detection remain planned.
 
@@ -29,6 +30,16 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
   and attach an accepted source through an explicit run ID. The versioned JSON
   snapshot keeps collecting status, accepted source provenance, safe failure
   reasons, and timezone-aware creation/update times.
+- An explicitly injected discovery provider can receive the selected
+  collecting run's question and return at most five ordered candidate records.
+  Each candidate contains a credential-free HTTPS URL, bounded title, and
+  bounded optional snippet. Discovery does not call the source fetcher, accept
+  a candidate, index page content, or mark it as evidence.
+- Each successful discovery, including an empty result, is atomically stored
+  with a unique ID, exact query, bounded provider identity, ordered candidates,
+  and timezone-aware timestamp. Closed and unknown runs stop before provider
+  access. Provider failures retain only a generic safe run-failure record; a
+  failed discovery snapshot leaves the prior run unchanged.
 - The audit snapshot does not duplicate downloaded page content. Knowledge
   chunks remain in memory and therefore are not reconstructed from a run after
   restart.
@@ -40,8 +51,9 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
 - Stored evidence can be viewed after restart without live page content. New
   evidence still requires its source paragraph to be loaded in the current
   in-memory knowledge index.
-- Schema v2 reads v1 run snapshots as evidence-empty and upgrades them only on
-  a later successful atomic save.
+- Schema v3 reads v1 run snapshots as evidence- and discovery-empty and v2
+  snapshots as discovery-empty, upgrading either only on a later successful
+  atomic save.
 - A collecting run may be previewed and then explicitly closed as `completed`,
   `failed`, or `cancelled`. Completion requires at least one accepted source
   and evidence record; failure requires at least one failure record;
@@ -54,16 +66,16 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
 - If source indexing succeeds but the run snapshot cannot be saved, the newly
   indexed unlinked document is removed before a controlled failure is returned.
   Persistent failure reasons do not retain a rejected URL.
-- Acquisition and run management do not invoke an LLM, write conversation
-  memory, crawl links, discover sources, or create graph relations
-  automatically.
+- Acquisition, discovery, and run management do not invoke an LLM, write
+  conversation memory, crawl links, accept candidates, or create graph
+  relations automatically.
 
 ## Next increment
 
-Define a replaceable read-only source-discovery provider and auditable
-candidate-source records before synthesis. Discovery queries, candidate-source
-decisions, future claim/evidence links, and later summaries must remain
-auditable; no unattended crawling should be enabled at this boundary.
+Add one bounded production discovery adapter behind the existing interface and
+an explicit desktop candidate view. Candidate acceptance must remain a separate
+user decision that revalidates the URL through the existing source-acquisition
+policy; discovery must not become unattended crawling.
 
 ## Known boundary
 

@@ -72,6 +72,7 @@ from research.ResearchRun import ResearchRun
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSource import ResearchSource
+from research.ResearchSourceCandidate import ResearchSourceCandidate
 from response.ResponseComposer import ResponseComposer
 from session.SessionDeleteExecutionResult import SessionDeleteExecutionResult
 from session.SessionDeleteService import SessionDeleteService
@@ -269,6 +270,32 @@ class RecordingResearchSourceFetcher:
             raise self.error
         assert self.source is not None
         return self.source
+
+
+class RecordingResearchSourceDiscoveryProvider:
+    """Returns bounded metadata while recording explicit discovery calls."""
+
+    provider_name = "test-provider"
+
+    def __init__(
+        self,
+        candidates: list[ResearchSourceCandidate] | None = None,
+        error: ResearchError | None = None,
+    ) -> None:
+        self.calls: list[tuple[str, int]] = []
+        self.candidates = list(candidates or [])
+        self.error = error
+
+    def discover(
+        self,
+        query: str,
+        *,
+        limit: int,
+    ) -> list[ResearchSourceCandidate]:
+        self.calls.append((query, limit))
+        if self.error is not None:
+            raise self.error
+        return list(self.candidates)
 
 
 class ToggleResearchRunStore:
@@ -5636,6 +5663,245 @@ class CognitiveEngineTests(unittest.TestCase):
 
         self.assertEqual(self.knowledge_engine.documents(), documents_before)
         self.assertEqual(self.memory_manager.count(), memory_count)
+
+    def test_research_source_discovery_persists_candidates_without_loading_them(
+        self,
+    ) -> None:
+        store = ToggleResearchRunStore()
+        manager = ResearchRunManager(
+            store,
+            id_factory=lambda: "run-123",
+            discovery_id_factory=lambda: "discovery-123",
+        )
+        run = manager.create("Compare local models")
+        candidate = ResearchSourceCandidate(
+            url="https://example.com/comparison",
+            title="Model comparison",
+            snippet="A possible comparison source.",
+        )
+        provider = RecordingResearchSourceDiscoveryProvider([candidate])
+        source_fetcher = RecordingResearchSourceFetcher(
+            source=ResearchSource(
+                url=candidate.url,
+                title=candidate.title,
+                content="Must not be fetched.",
+                content_type="text/plain",
+                fetched_at=datetime(2026, 8, 20, 12, 30, tzinfo=UTC),
+            )
+        )
+        llm_provider = RecordingLLMProvider("must not run")
+        extractor = RecordingCandidateExtractor()
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+            learned_memory_candidate_extractor=extractor,
+            research_source_fetcher=source_fetcher,
+            research_run_manager=manager,
+            research_source_discovery_provider=provider,
+        )
+        documents_before = self.knowledge_engine.documents()
+        memory_count = self.memory_manager.count()
+        events: list[str] = []
+        self.event_bus.subscribe("*", lambda event: events.append(event.name))
+
+        response = engine.process(
+            BrainRequest(
+                message="Discover candidate research sources",
+                metadata={
+                    "intent": "research_source_discover",
+                    "research_run_id": run.run_id,
+                },
+            )
+        )
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "research_source_discover")
+        self.assertEqual(provider.calls, [(run.question, 5)])
+        self.assertEqual(source_fetcher.calls, [])
+        self.assertEqual(self.knowledge_engine.documents(), documents_before)
+        self.assertEqual(self.memory_manager.count(), memory_count)
+        self.assertEqual(llm_provider.calls, [])
+        self.assertEqual(extractor.calls, [])
+        self.assertEqual(events, [])
+        updated = response.research_runs[0]
+        self.assertEqual(updated.sources, ())
+        self.assertEqual(updated.evidence, ())
+        self.assertEqual(len(updated.discoveries), 1)
+        discovery = updated.discoveries[0]
+        self.assertEqual(discovery.discovery_id, "discovery-123")
+        self.assertEqual(discovery.provider, "test-provider")
+        self.assertEqual(discovery.candidates, (candidate,))
+        self.assertIn("candidates only", response.message)
+        self.assertEqual(store.runs, [updated])
+
+    def test_discovery_failure_records_only_a_safe_reason(self) -> None:
+        store = ToggleResearchRunStore()
+        manager = ResearchRunManager(store, id_factory=lambda: "run-123")
+        run = manager.create("Question")
+        secret = "https://user:secret@example.com/private"
+        provider = RecordingResearchSourceDiscoveryProvider(
+            error=ResearchError(f"Provider rejected {secret}")
+        )
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            research_run_manager=manager,
+            research_source_discovery_provider=provider,
+        )
+
+        response = engine.process(
+            BrainRequest(
+                message="Discover candidate research sources",
+                metadata={
+                    "intent": "research_source_discover",
+                    "research_run_id": run.run_id,
+                },
+            )
+        )
+
+        self.assertFalse(response.success)
+        self.assertEqual(response.message, "Research source discovery failed.")
+        updated = manager.get(run.run_id)
+        self.assertEqual(updated.discoveries, ())
+        self.assertEqual(len(updated.failures), 1)
+        self.assertEqual(updated.failures[0].stage, "source_discovery")
+        self.assertNotIn(secret, repr(updated))
+
+    def test_discovery_rejects_provider_contract_overflow_as_audited_failure(
+        self,
+    ) -> None:
+        manager = ResearchRunManager(id_factory=lambda: "run-123")
+        run = manager.create("Question")
+        provider = RecordingResearchSourceDiscoveryProvider(
+            [
+                ResearchSourceCandidate(
+                    f"https://example.com/{index}",
+                    f"Candidate {index}",
+                    "",
+                )
+                for index in range(6)
+            ]
+        )
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            research_run_manager=manager,
+            research_source_discovery_provider=provider,
+        )
+
+        response = engine.process(
+            BrainRequest(
+                message="Discover candidate research sources",
+                metadata={
+                    "intent": "research_source_discover",
+                    "research_run_id": run.run_id,
+                },
+            )
+        )
+
+        self.assertFalse(response.success)
+        updated = manager.get(run.run_id)
+        self.assertEqual(updated.discoveries, ())
+        self.assertEqual(updated.failures[0].stage, "source_discovery")
+
+    def test_closed_or_unknown_run_rejects_discovery_before_provider_access(
+        self,
+    ) -> None:
+        manager = ResearchRunManager(id_factory=lambda: "run-123")
+        run = manager.create("Question")
+        manager.transition_status(run.run_id, ResearchRunStatus.CANCELLED)
+        provider = RecordingResearchSourceDiscoveryProvider()
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            research_run_manager=manager,
+            research_source_discovery_provider=provider,
+        )
+
+        for run_id, expected in (
+            (run.run_id, "closed"),
+            ("missing-run", "not found"),
+        ):
+            with self.subTest(run_id=run_id):
+                response = engine.process(
+                    BrainRequest(
+                        message="Discover candidate research sources",
+                        metadata={
+                            "intent": "research_source_discover",
+                            "research_run_id": run_id,
+                        },
+                    )
+                )
+                self.assertFalse(response.success)
+                self.assertIn(expected, response.message)
+
+        self.assertEqual(provider.calls, [])
+
+    def test_discovery_audit_failure_does_not_publish_candidates(self) -> None:
+        store = ToggleResearchRunStore()
+        manager = ResearchRunManager(
+            store,
+            id_factory=lambda: "run-123",
+            discovery_id_factory=lambda: "discovery-123",
+        )
+        run = manager.create("Question")
+        provider = RecordingResearchSourceDiscoveryProvider(
+            [
+                ResearchSourceCandidate(
+                    "https://example.com/source",
+                    "Source",
+                    "Summary",
+                )
+            ]
+        )
+        store.fail_saves = True
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            research_run_manager=manager,
+            research_source_discovery_provider=provider,
+        )
+
+        response = engine.process(
+            BrainRequest(
+                message="Discover candidate research sources",
+                metadata={
+                    "intent": "research_source_discover",
+                    "research_run_id": run.run_id,
+                },
+            )
+        )
+
+        self.assertFalse(response.success)
+        self.assertIn("audit could not be saved", response.message)
+        self.assertEqual(manager.get(run.run_id), run)
+        self.assertEqual(manager.get(run.run_id).discoveries, ())
 
     def test_structured_research_source_load_indexes_provenance_without_side_effects(
         self,

@@ -84,6 +84,9 @@ To create the world's most capable personal AI research companion.
 - Knowledge Foundation: `.txt` and `.md` document loading, paragraph parsing, in-memory chunk indexing, and case-insensitive search
 - KnowledgeEngine orchestration for the full document-to-search pipeline
 - A full automated test suite and shared code-quality standards
+- A replaceable, explicit research source-discovery boundary that persists up
+  to five ordered HTTPS metadata candidates without fetching, accepting, or
+  indexing their content; no production provider is enabled by default
 - An initial local desktop shell for text chat, a refreshable session overview,
   explicit session selection, session details/recent conversations/activity,
   explicit lexical/semantic conversation recall, and semantic-memory runtime
@@ -139,6 +142,12 @@ lists those records, and entering the selected run ID before `Load source`
 attaches accepted source provenance to it. The run keeps timestamps and safe
 failure records, but does not duplicate downloaded page text or make web
 research autonomous.
+The Brain and desktop controller also have a structured candidate-discovery
+request for an explicitly selected collecting run. When an application injects
+a compatible provider, Hypatia records the query, provider, time, and at most
+five ordered HTTPS title/URL/snippet candidates. The packaged desktop does not
+yet configure or show a discovery provider, and candidate metadata is never
+treated as a loaded or trusted source.
 `Save evidence` records a user-selected indexed paragraph only when it belongs
 to a source attached to the selected run. It keeps a bounded excerpt, source
 and paragraph locator, full-paragraph fingerprint, note, and timestamp;
@@ -172,9 +181,10 @@ To rename a session, select it, enter a new session ID, and use `Preview rename`
 Hypatia shows the existing runtime preview first and only sends the
 transactional rename command after confirmation; on success it refreshes the
 session list from Brain.
-It does not yet include voice, PDF import, source discovery, multi-source
-research synthesis, browser tools, automatic retrieval, or automatic knowledge
-mutations; those remain separate, test-first increments.
+It does not yet include voice, PDF import, a production source-discovery
+provider or candidate-selection UI, multi-source research synthesis, browser
+tools, automatic retrieval, or automatic knowledge mutations; those remain
+separate, test-first increments.
 
 ### Windows desktop package
 

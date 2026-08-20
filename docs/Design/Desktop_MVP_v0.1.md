@@ -34,10 +34,13 @@ The MVP may present only current Brain/CognitiveEngine capabilities:
   as bounded research evidence;
 - preview-and-confirm transition of a collecting research run to one terminal
   lifecycle status;
+- a controller-level structured source-discovery request whose provider and
+  candidate view remain unavailable in the packaged shell until separately
+  implemented and reviewed;
 - the existing explicit `ask knowledge` request; and
 - preview-and-confirm application or removal of an explicit knowledge relation.
 
-The MVP must not claim or silently add voice capture, PDF import, automatic
+The MVP must not claim or silently add voice capture, PDF import, unattended
 source discovery, multi-source web research/synthesis, automatic prompt
 augmentation, cross-document semantic extraction, agent/tool execution,
 synchronization, telemetry, or multi-user access.
