@@ -231,6 +231,81 @@ class BootstrapTests(unittest.TestCase):
         self.assertTrue(listed.success)
         self.assertEqual(listed.research_runs, created.research_runs)
 
+    def test_research_evidence_survives_a_bootstrap_restart(self) -> None:
+        source = ResearchSource(
+            url="https://example.com/research",
+            title="Example research",
+            content="First finding.\n\nSecond finding.",
+            content_type="text/plain",
+            fetched_at=datetime(2026, 8, 20, 12, 30, tzinfo=UTC),
+        )
+        first = Bootstrap(
+            memory_path=self.memory_path,
+            session_path=self.session_path,
+            knowledge_relation_path=self.knowledge_relation_path,
+            research_run_path=self.research_run_path,
+            research_source_fetcher=RecordingResearchSourceFetcher(source),
+        )
+        first.initialize()
+        brain = first.container.resolve(Brain)
+        run = brain.process(
+            BrainRequest(
+                message="Create internet research run",
+                metadata={
+                    "intent": "research_run_create",
+                    "research_question": "What should Hypatia compare?",
+                },
+            )
+        ).research_runs[0]
+        brain.process(
+            BrainRequest(
+                message="Load selected internet research source",
+                metadata={
+                    "intent": "research_source_load",
+                    "research_url": source.url,
+                    "research_run_id": run.run_id,
+                },
+            )
+        )
+        chunk = first.container.resolve(KnowledgeEngine).search("second")[0]
+
+        recorded = brain.process(
+            BrainRequest(
+                message="Record selected research evidence",
+                metadata={
+                    "intent": "research_evidence_record",
+                    "research_run_id": run.run_id,
+                    "research_chunk_id": chunk.chunk_id,
+                    "research_evidence_note": "Supports the comparison.",
+                },
+            )
+        )
+
+        restarted = self._bootstrap()
+        restarted.initialize()
+        listed = restarted.container.resolve(Brain).process(
+            BrainRequest(
+                message="List internet research runs",
+                metadata={"intent": "research_run_list"},
+            )
+        )
+        evidence_listed = restarted.container.resolve(Brain).process(
+            BrainRequest(
+                message="List selected research evidence",
+                metadata={
+                    "intent": "research_evidence_list",
+                    "research_run_id": run.run_id,
+                },
+            )
+        )
+
+        self.assertTrue(recorded.success)
+        self.assertEqual(len(recorded.research_runs[0].evidence), 1)
+        self.assertEqual(listed.research_runs, recorded.research_runs)
+        self.assertTrue(evidence_listed.success)
+        self.assertEqual(evidence_listed.research_runs, recorded.research_runs)
+        self.assertIn("Second finding.", evidence_listed.message)
+
     def test_missing_session_file_creates_and_persists_the_default_registry(
         self,
     ) -> None:

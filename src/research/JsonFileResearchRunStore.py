@@ -10,6 +10,7 @@ from tempfile import NamedTemporaryFile
 from typing import Any
 
 from core.Exceptions import ResearchError
+from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchFailureRecord import ResearchFailureRecord
 from research.ResearchRun import ResearchRun
 from research.ResearchRunStatus import ResearchRunStatus
@@ -19,9 +20,10 @@ from research.ResearchSourceRecord import ResearchSourceRecord
 class JsonFileResearchRunStore:
     """Load and atomically replace a strict versioned research-run document."""
 
-    _SCHEMA_VERSION = 1
+    _SCHEMA_VERSION = 2
+    _SUPPORTED_SCHEMA_VERSIONS = {1, 2}
     _DOCUMENT_FIELDS = {"schema_version", "runs"}
-    _RUN_FIELDS = {
+    _RUN_FIELDS_V1 = {
         "run_id",
         "question",
         "status",
@@ -30,6 +32,7 @@ class JsonFileResearchRunStore:
         "created_at",
         "updated_at",
     }
+    _RUN_FIELDS_V2 = _RUN_FIELDS_V1 | {"evidence"}
     _SOURCE_FIELDS = {
         "document_id",
         "url",
@@ -39,6 +42,17 @@ class JsonFileResearchRunStore:
         "added_at",
     }
     _FAILURE_FIELDS = {"stage", "reason", "occurred_at"}
+    _EVIDENCE_FIELDS = {
+        "evidence_id",
+        "source_document_id",
+        "chunk_id",
+        "chunk_index",
+        "excerpt",
+        "excerpt_truncated",
+        "chunk_sha256",
+        "note",
+        "recorded_at",
+    }
 
     def __init__(self, path: Path) -> None:
         self._path = path
@@ -92,7 +106,12 @@ class JsonFileResearchRunStore:
             raise ResearchError(
                 f"Research run store '{self._path}' has invalid fields."
             )
-        if document["schema_version"] != self._SCHEMA_VERSION:
+        schema_version = document["schema_version"]
+        if (
+            isinstance(schema_version, bool)
+            or not isinstance(schema_version, int)
+            or schema_version not in self._SUPPORTED_SCHEMA_VERSIONS
+        ):
             raise ResearchError(
                 f"Research run store '{self._path}' has an unsupported schema version."
             )
@@ -101,12 +120,15 @@ class JsonFileResearchRunStore:
             raise ResearchError(
                 f"Research run store '{self._path}' runs must be a list."
             )
-        runs = [self._parse_run(value) for value in runs_data]
+        runs = [self._parse_run(value, schema_version) for value in runs_data]
         self._validate_runs(runs)
         return runs
 
-    def _parse_run(self, value: Any) -> ResearchRun:
-        if not isinstance(value, dict) or set(value) != self._RUN_FIELDS:
+    def _parse_run(self, value: Any, schema_version: int) -> ResearchRun:
+        expected_fields = (
+            self._RUN_FIELDS_V1 if schema_version == 1 else self._RUN_FIELDS_V2
+        )
+        if not isinstance(value, dict) or set(value) != expected_fields:
             raise ResearchError("Research run store contains an invalid run record.")
         try:
             status = ResearchRunStatus(value["status"])
@@ -116,7 +138,12 @@ class JsonFileResearchRunStore:
             ) from error
         sources_data = value["sources"]
         failures_data = value["failures"]
-        if not isinstance(sources_data, list) or not isinstance(failures_data, list):
+        evidence_data = [] if schema_version == 1 else value["evidence"]
+        if (
+            not isinstance(sources_data, list)
+            or not isinstance(failures_data, list)
+            or not isinstance(evidence_data, list)
+        ):
             raise ResearchError("Research run store contains invalid run collections.")
         return ResearchRun(
             run_id=value["run_id"],
@@ -126,6 +153,7 @@ class JsonFileResearchRunStore:
             failures=tuple(self._parse_failure(item) for item in failures_data),
             created_at=self._parse_datetime(value["created_at"], "created_at"),
             updated_at=self._parse_datetime(value["updated_at"], "updated_at"),
+            evidence=tuple(self._parse_evidence(item) for item in evidence_data),
         )
 
     def _parse_source(self, value: Any) -> ResearchSourceRecord:
@@ -149,6 +177,23 @@ class JsonFileResearchRunStore:
             stage=value["stage"],
             reason=value["reason"],
             occurred_at=self._parse_datetime(value["occurred_at"], "occurred_at"),
+        )
+
+    def _parse_evidence(self, value: Any) -> ResearchEvidenceRecord:
+        if not isinstance(value, dict) or set(value) != self._EVIDENCE_FIELDS:
+            raise ResearchError(
+                "Research run store contains an invalid evidence record."
+            )
+        return ResearchEvidenceRecord(
+            evidence_id=value["evidence_id"],
+            source_document_id=value["source_document_id"],
+            chunk_id=value["chunk_id"],
+            chunk_index=value["chunk_index"],
+            excerpt=value["excerpt"],
+            excerpt_truncated=value["excerpt_truncated"],
+            chunk_sha256=value["chunk_sha256"],
+            note=value["note"],
+            recorded_at=self._parse_datetime(value["recorded_at"], "recorded_at"),
         )
 
     def _parse_datetime(self, value: Any, field_name: str) -> datetime:
@@ -192,6 +237,20 @@ class JsonFileResearchRunStore:
                     "occurred_at": failure.occurred_at.isoformat(),
                 }
                 for failure in run.failures
+            ],
+            "evidence": [
+                {
+                    "evidence_id": evidence.evidence_id,
+                    "source_document_id": evidence.source_document_id,
+                    "chunk_id": evidence.chunk_id,
+                    "chunk_index": evidence.chunk_index,
+                    "excerpt": evidence.excerpt,
+                    "excerpt_truncated": evidence.excerpt_truncated,
+                    "chunk_sha256": evidence.chunk_sha256,
+                    "note": evidence.note,
+                    "recorded_at": evidence.recorded_at.isoformat(),
+                }
+                for evidence in run.evidence
             ],
             "created_at": run.created_at.isoformat(),
             "updated_at": run.updated_at.isoformat(),

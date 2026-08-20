@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.33 (Genesis)`
+`v0.3.34 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.33`** is the current executable package and GitHub
+- **Runtime release `v0.3.34`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -72,6 +72,16 @@ with optional OpenAI-compatible LLM conversation support.
   cannot be saved after indexing, Hypatia removes the new unlinked knowledge
   document before returning a controlled failure. Rejected source URLs are not
   retained in persistent failure diagnostics.
+- A desktop `Save evidence` action accepts the selected run ID, an indexed
+  paragraph/chunk ID, and an explicit user note. The runtime permits the
+  selection only when the paragraph belongs to a source already attached to
+  that run, then atomically persists its source locator, paragraph position,
+  bounded excerpt, truncation marker, full-paragraph SHA-256 fingerprint, note,
+  and recording time. `View evidence` reads those records after restart without
+  requiring the page content or an LLM.
+- Research-run schema v2 remains backward compatible with v1 snapshots. Legacy
+  runs load with no evidence and are rewritten only after a later successful
+  mutation; no eager or partial migration occurs.
 - The Windows desktop entry point persists its own local runtime state beneath
   `%LOCALAPPDATA%\Hypatia` by default, avoiding writes beside an installed
   executable. A documented absolute-path override supports deliberate local
@@ -223,7 +233,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 1,017 automated tests pass through package-aware discovery.
+- 1,034 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -250,7 +260,7 @@ so this check did not alter the project's persisted data.
 
 ## Next Milestone
 
-Extend the stored research-run foundation with explicit evidence records and a
-replaceable source-discovery provider boundary before multi-source comparison.
-Automatic semantic extraction, ordinary-conversation augmentation, autonomous
-crawling, and implicit graph writes remain out of scope.
+Add explicit run completion-state transitions and a replaceable source-discovery
+provider boundary before multi-source comparison. Automatic evidence
+extraction, ordinary-conversation augmentation, autonomous crawling, and
+implicit graph writes remain out of scope.

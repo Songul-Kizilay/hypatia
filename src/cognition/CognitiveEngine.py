@@ -170,6 +170,12 @@ class CognitiveEngine:
         if self._is_research_run_list_request(request):
             return self._process_research_run_list(request)
 
+        if self._is_research_evidence_record_request(request):
+            return self._process_research_evidence_record(request)
+
+        if self._is_research_evidence_list_request(request):
+            return self._process_research_evidence_list(request)
+
         if self._is_research_source_load_request(request):
             return self._process_research_source_load(request)
 
@@ -333,6 +339,16 @@ class CognitiveEngine:
         """Recognize the explicit structured research-run catalog request."""
         return request.metadata.get("intent") == "research_run_list"
 
+    @staticmethod
+    def _is_research_evidence_record_request(request: BrainRequest) -> bool:
+        """Recognize one explicit indexed-chunk evidence selection."""
+        return request.metadata.get("intent") == "research_evidence_record"
+
+    @staticmethod
+    def _is_research_evidence_list_request(request: BrainRequest) -> bool:
+        """Recognize one explicit read-only research evidence catalog request."""
+        return request.metadata.get("intent") == "research_evidence_list"
+
     def _process_research_run_create(self, request: BrainRequest) -> BrainResponse:
         question = request.metadata.get("research_question")
         if not isinstance(question, str) or not question.strip():
@@ -365,6 +381,74 @@ class CognitiveEngine:
             request,
             self._research_run_manager.list(),
         )
+
+    def _process_research_evidence_record(
+        self,
+        request: BrainRequest,
+    ) -> BrainResponse:
+        run_id = request.metadata.get("research_run_id")
+        chunk_id = request.metadata.get("research_chunk_id")
+        note = request.metadata.get("research_evidence_note")
+        if not isinstance(run_id, str) or not run_id.strip():
+            return self._response_composer.research_evidence_record_failure(
+                request,
+                "A research run ID is required.",
+            )
+        if not isinstance(chunk_id, str) or not chunk_id.strip():
+            return self._response_composer.research_evidence_record_failure(
+                request,
+                "A research chunk ID is required.",
+            )
+        if not isinstance(note, str) or not note.strip():
+            return self._response_composer.research_evidence_record_failure(
+                request,
+                "A research evidence note is required.",
+            )
+        if self._research_run_manager is None:
+            return self._response_composer.research_evidence_record_failure(
+                request,
+                "Research run persistence is unavailable.",
+            )
+        try:
+            chunk = self._knowledge_engine.get_chunk(chunk_id.strip())
+        except KnowledgeError:
+            return self._response_composer.research_evidence_record_failure(
+                request,
+                "Research evidence chunk was not found.",
+            )
+        try:
+            run = self._research_run_manager.add_evidence(
+                run_id.strip(),
+                chunk,
+                note,
+            )
+        except ResearchError:
+            return self._response_composer.research_evidence_record_failure(
+                request,
+                "Research evidence could not be saved.",
+            )
+        return self._response_composer.research_evidence_record_success(request, run)
+
+    def _process_research_evidence_list(self, request: BrainRequest) -> BrainResponse:
+        run_id = request.metadata.get("research_run_id")
+        if not isinstance(run_id, str) or not run_id.strip():
+            return self._response_composer.research_evidence_list_failure(
+                request,
+                "A research run ID is required.",
+            )
+        if self._research_run_manager is None:
+            return self._response_composer.research_evidence_list_failure(
+                request,
+                "Research run persistence is unavailable.",
+            )
+        try:
+            run = self._research_run_manager.get(run_id)
+        except ResearchError:
+            return self._response_composer.research_evidence_list_failure(
+                request,
+                "Research run was not found.",
+            )
+        return self._response_composer.research_evidence_list_success(request, run)
 
     def _process_research_source_load(self, request: BrainRequest) -> BrainResponse:
         """Acquire and index one explicit source without LLM or memory side effects."""

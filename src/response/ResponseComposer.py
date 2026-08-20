@@ -583,6 +583,7 @@ class ResponseComposer:
                     f"Question: {run.question}",
                     f"Status: {run.status.value}",
                     f"Sources: {len(run.sources)}",
+                    f"Evidence: {len(run.evidence)}",
                     f"Failures: {len(run.failures)}",
                     f"ID: {run.run_id}",
                 ]
@@ -607,7 +608,8 @@ class ResponseComposer:
                 lines.append(
                     "- "
                     f"{run.question} | status: {run.status.value} | "
-                    f"sources: {len(run.sources)} | failures: {len(run.failures)} | "
+                    f"sources: {len(run.sources)} | evidence: {len(run.evidence)} | "
+                    f"failures: {len(run.failures)} | "
                     f"id: {run.run_id}"
                 )
             message = "\n".join(lines)
@@ -631,6 +633,93 @@ class ResponseComposer:
             message=message,
             request_id=request.request_id,
             intent=intent,
+            memory_count=0,
+            success=False,
+        )
+
+    def research_evidence_record_success(
+        self,
+        request: BrainRequest,
+        run: ResearchRun,
+    ) -> BrainResponse:
+        """Report the exact persisted evidence identity and source locator."""
+        evidence = run.evidence[-1]
+        return BrainResponse(
+            message="\n".join(
+                [
+                    "Research evidence recorded:",
+                    f"Run: {run.run_id}",
+                    f"Source document: {evidence.source_document_id}",
+                    f"Paragraph: {evidence.chunk_index + 1}",
+                    f"Chunk: {evidence.chunk_id}",
+                    f"Evidence ID: {evidence.evidence_id}",
+                ]
+            ),
+            request_id=request.request_id,
+            intent="research_evidence_record",
+            memory_count=0,
+            research_runs=[run],
+        )
+
+    def research_evidence_record_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Report a controlled evidence-selection failure without mutation."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="research_evidence_record",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_evidence_list_success(
+        self,
+        request: BrainRequest,
+        run: ResearchRun,
+    ) -> BrainResponse:
+        """Render persisted bounded evidence without consulting live knowledge."""
+        if not run.evidence:
+            message = f"No research evidence is stored for run {run.run_id}."
+        else:
+            lines = [f"Research evidence for {run.run_id}:"]
+            for evidence in run.evidence:
+                truncation = (
+                    " [excerpt truncated]" if evidence.excerpt_truncated else ""
+                )
+                lines.extend(
+                    [
+                        f"- {evidence.note}",
+                        (
+                            f"  source: {evidence.source_document_id} | "
+                            f"paragraph: {evidence.chunk_index + 1} | "
+                            f"chunk: {evidence.chunk_id} | "
+                            f"id: {evidence.evidence_id}"
+                        ),
+                        f"  excerpt: {evidence.excerpt}{truncation}",
+                    ]
+                )
+            message = "\n".join(lines)
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="research_evidence_list",
+            memory_count=0,
+            research_runs=[run],
+        )
+
+    def research_evidence_list_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Report an unavailable evidence catalog without changing state."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="research_evidence_list",
             memory_count=0,
             success=False,
         )

@@ -30,6 +30,8 @@ The MVP may present only current Brain/CognitiveEngine capabilities:
   current research acquisition boundary;
 - explicit creation/listing of persistent research runs and optional attachment
   of that source to a selected run ID;
+- explicit recording and read-only viewing of a selected attached-source chunk
+  as bounded research evidence;
 - the existing explicit `ask knowledge` request; and
 - preview-and-confirm application or removal of an explicit knowledge relation.
 
@@ -125,6 +127,11 @@ When a run ID is present, a successful source load also persists provenance,
 while an audit-write failure rolls the new unlinked knowledge document back.
 It does not discover other sources, crawl links, invoke an LLM, write
 conversation memory, or duplicate downloaded page content in the run store.
+`Save evidence` requires the selected run ID, a currently indexed chunk ID, and
+a user note. The runtime accepts it only from a source attached to that run and
+stores a bounded excerpt plus its exact source/chunk locator and full-chunk
+fingerprint. `View evidence` reads this audit record after restart; neither
+action chooses evidence or evaluates a claim automatically.
 `Ask sources` is separately user initiated: it sends the entered question only
 through the existing `ask knowledge` local-RAG path. The runtime keeps its
 bounded cited-source and safe unavailable/failure behavior; this action never

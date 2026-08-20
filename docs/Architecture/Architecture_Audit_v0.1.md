@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.33` today) are the executable package and GitHub
+- **Runtime releases** (`v0.3.34` today) are the executable package and GitHub
   release line. They are the source-backed implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
   engineering increments. Sprint 4.16.50 is complete and is already in the
@@ -78,6 +78,12 @@ It can create/list a persistent research run and pass a selected run ID with
 the source request. Bootstrap—not the UI—owns the atomic run store and records
 only question/status, source provenance, safe failures, and timestamps; page
 content remains in the existing in-memory knowledge index.
+An explicit evidence action resolves one currently indexed chunk by ID and
+accepts it only when its document is already attached to the selected run. The
+v2 snapshot retains a bounded excerpt, full-chunk SHA-256 fingerprint, source
+and paragraph locator, user note, and timestamp. A read-only action renders
+that record after restart without an LLM or live knowledge lookup; no evidence
+is selected or interpreted automatically.
 When launched as the desktop application, Bootstrap receives user-writable
 memory, session, relation, and research-run paths beneath
 `%LOCALAPPDATA%\Hypatia` on
@@ -111,6 +117,8 @@ Persistent state is stored locally as validated JSON snapshots through
 writes are atomic. The knowledge index is in memory and uses case-insensitive
 lexical matching; research-run provenance does not reconstruct page content
 after restart.
+Research-run schema v2 loads v1 snapshots with empty evidence and rewrites them
+only on a subsequent successful mutation.
 
 The optional OpenAI-compatible chat runtime supports keyless activation only
 for explicit loopback endpoints (`localhost`, `127.0.0.1`, or `::1`), including
@@ -226,12 +234,12 @@ Not implemented:
 
 The current local verification baseline is:
 
-- `python -m unittest discover -s tests -t .`: 1,017 tests passed. The top-level
+- `python -m unittest discover -s tests -t .`: 1,034 tests passed. The top-level
   package setting ensures nested test directories are included without
   shadowing source packages.
 - `python -m black --check src tests`: passed.
 - `python -m ruff check src tests`: passed.
-- `python -m mypy src tests`: passed with no issues in 263 files.
+- `python -m mypy src tests`: passed with no issues in 265 files.
 
 These checks verify the current local worktree; they do not create a release,
 tag, pull request, or GitHub deployment.

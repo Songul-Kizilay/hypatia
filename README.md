@@ -139,6 +139,11 @@ lists those records, and entering the selected run ID before `Load source`
 attaches accepted source provenance to it. The run keeps timestamps and safe
 failure records, but does not duplicate downloaded page text or make web
 research autonomous.
+`Save evidence` records a user-selected indexed paragraph only when it belongs
+to a source attached to the selected run. It keeps a bounded excerpt, source
+and paragraph locator, full-paragraph fingerprint, note, and timestamp;
+`View evidence` remains available after restart. Hypatia does not yet select or
+interpret evidence automatically.
 `Ask sources` deliberately invokes the existing `ask knowledge` local-RAG path
 only when its button is selected. It provides the configured runtime with up to
 three bounded cited local chunks and never adds retrieval to ordinary chat or

@@ -9,7 +9,7 @@ Each module document will state its purpose, user value, boundaries, permissions
 | [Core](Core.md) | Planned | Orchestration, reasoning, and task boundaries. |
 | [Brain](Brain.md) | Planned | Reasoning, planning, and reflective support. |
 | [Memory](Memory.md) | Planned | User-controlled retention and recall. |
-| [Research](Research.md) | Partial | Explicit HTTPS acquisition and persistent run audit; evidence-aware synthesis planned. |
+| [Research](Research.md) | Partial | Explicit HTTPS acquisition, persistent run audit, and user-selected evidence; synthesis planned. |
 | [Planner](Planner.md) | Planned | Transparent planning and approvals. |
 | [Teacher](Teacher.md) | Future | Adaptive, evidence-aware learning. |
 | [Voice](Voice.md) | Planned | Private, accessible voice interaction. |

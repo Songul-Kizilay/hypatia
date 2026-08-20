@@ -6,6 +6,7 @@ import unittest
 from datetime import UTC, datetime, timedelta
 
 from core.Exceptions import ResearchError
+from knowledge.Chunk import Chunk
 from research.ResearchRun import ResearchRun
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchRunStatus import ResearchRunStatus
@@ -46,6 +47,7 @@ class ResearchRunManagerTests(unittest.TestCase):
             self.store,
             clock=SequenceClock(self.start),
             id_factory=lambda: "run-1",
+            evidence_id_factory=lambda: "evidence-1",
         )
 
     def test_create_persists_before_publishing_the_run(self) -> None:
@@ -84,6 +86,70 @@ class ResearchRunManagerTests(unittest.TestCase):
 
         self.assertEqual(updated.failures[0].reason, reason)
         self.assertNotIn("http://secret@example.com", repr(updated))
+
+    def test_add_evidence_requires_an_attached_source_and_persists_before_publish(
+        self,
+    ) -> None:
+        run = self.manager.create("Question")
+        source = ResearchSource(
+            url="https://example.com/research",
+            title="Example",
+            content="Evidence paragraph.",
+            content_type="text/plain",
+            fetched_at=self.start,
+        )
+        self.manager.add_source(run.run_id, source, "document-1")
+        chunk = Chunk(
+            document_id="document-1",
+            index=3,
+            content="Evidence paragraph.",
+            chunk_id="chunk-1",
+        )
+
+        updated = self.manager.add_evidence(
+            run.run_id,
+            chunk,
+            "  Supports the selected claim.  ",
+        )
+
+        self.assertEqual(len(updated.evidence), 1)
+        self.assertEqual(updated.evidence[0].evidence_id, "evidence-1")
+        self.assertEqual(updated.evidence[0].chunk_id, "chunk-1")
+        self.assertEqual(updated.evidence[0].note, "Supports the selected claim.")
+        self.assertEqual(self.store.runs, [updated])
+
+    def test_add_evidence_rejects_unattached_source_and_failed_save(self) -> None:
+        run = self.manager.create("Question")
+        unattached = Chunk(
+            document_id="other-document",
+            index=0,
+            content="Unattached.",
+            chunk_id="chunk-other",
+        )
+        with self.assertRaisesRegex(ResearchError, "attached to this run"):
+            self.manager.add_evidence(run.run_id, unattached, "Not allowed.")
+
+        source = ResearchSource(
+            url="https://example.com/research",
+            title="Example",
+            content="Evidence.",
+            content_type="text/plain",
+            fetched_at=self.start,
+        )
+        attached_run = self.manager.add_source(run.run_id, source, "document-1")
+        attached = Chunk(
+            document_id="document-1",
+            index=0,
+            content="Evidence.",
+            chunk_id="chunk-1",
+        )
+        self.store.error = ResearchError("Store unavailable.")
+
+        with self.assertRaisesRegex(ResearchError, "Store unavailable"):
+            self.manager.add_evidence(run.run_id, attached, "Relevant.")
+
+        self.assertEqual(self.manager.get(run.run_id), attached_run)
+        self.assertEqual(self.manager.get(run.run_id).evidence, ())
 
     def test_failed_save_does_not_publish_candidate_state(self) -> None:
         run = self.manager.create("Question")

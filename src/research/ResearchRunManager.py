@@ -8,6 +8,8 @@ from threading import RLock
 from uuid import uuid4
 
 from core.Exceptions import ResearchError
+from knowledge.Chunk import Chunk
+from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchFailureRecord import ResearchFailureRecord
 from research.ResearchRun import ResearchRun
 from research.ResearchRunStatus import ResearchRunStatus
@@ -25,10 +27,12 @@ class ResearchRunManager:
         *,
         clock: Callable[[], datetime] | None = None,
         id_factory: Callable[[], str] | None = None,
+        evidence_id_factory: Callable[[], str] | None = None,
     ) -> None:
         self._store = store
         self._clock = clock or (lambda: datetime.now(UTC))
         self._id_factory = id_factory or (lambda: str(uuid4()))
+        self._evidence_id_factory = evidence_id_factory or (lambda: str(uuid4()))
         self._runs: tuple[ResearchRun, ...] = ()
         self._lock = RLock()
 
@@ -114,6 +118,7 @@ class ResearchRunManager:
                 failures=run.failures,
                 created_at=run.created_at,
                 updated_at=now,
+                evidence=run.evidence,
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -139,6 +144,45 @@ class ResearchRunManager:
                 ),
                 created_at=run.created_at,
                 updated_at=now,
+                evidence=run.evidence,
+            )
+            candidate = list(self._runs)
+            candidate[index] = updated
+            candidate_tuple = tuple(candidate)
+            self._persist(candidate_tuple)
+            self._runs = candidate_tuple
+        return updated
+
+    def add_evidence(self, run_id: str, chunk: Chunk, note: str) -> ResearchRun:
+        """Persist one explicit evidence record from an accepted source chunk."""
+        normalized_id = self._normalize_run_id(run_id)
+        if not isinstance(chunk, Chunk):
+            raise ResearchError("Research evidence expects a knowledge chunk.")
+        normalized_note = self._normalize_evidence_note(note)
+        with self._lock:
+            index, run = self._find_with_index(normalized_id)
+            if not any(
+                source.document_id == chunk.document_id for source in run.sources
+            ):
+                raise ResearchError(
+                    "Research evidence must come from a source attached to this run."
+                )
+            now = self._now()
+            evidence = ResearchEvidenceRecord.from_chunk(
+                self._new_evidence_id(),
+                chunk,
+                normalized_note,
+                now,
+            )
+            updated = ResearchRun(
+                run_id=run.run_id,
+                question=run.question,
+                status=run.status,
+                sources=run.sources,
+                failures=run.failures,
+                created_at=run.created_at,
+                updated_at=now,
+                evidence=(*run.evidence, evidence),
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -169,6 +213,16 @@ class ResearchRunManager:
             raise ResearchError("Research run ID already exists.")
         return run_id
 
+    def _new_evidence_id(self) -> str:
+        evidence_id = self._normalize_evidence_id(self._evidence_id_factory())
+        if any(
+            record.evidence_id == evidence_id
+            for run in self._runs
+            for record in run.evidence
+        ):
+            raise ResearchError("Research evidence ID already exists.")
+        return evidence_id
+
     @staticmethod
     def _normalize_question(question: str) -> str:
         if not isinstance(question, str) or not question.strip():
@@ -189,3 +243,18 @@ class ResearchRunManager:
         if not isinstance(document_id, str) or not document_id.strip():
             raise ResearchError("Research source document ID cannot be empty.")
         return document_id.strip()
+
+    @staticmethod
+    def _normalize_evidence_id(evidence_id: str) -> str:
+        if not isinstance(evidence_id, str) or not evidence_id.strip():
+            raise ResearchError("Research evidence ID cannot be empty.")
+        return evidence_id.strip()
+
+    @staticmethod
+    def _normalize_evidence_note(note: str) -> str:
+        if not isinstance(note, str) or not note.strip():
+            raise ResearchError("Research evidence note cannot be empty.")
+        normalized = note.strip()
+        if len(normalized) > 1_000:
+            raise ResearchError("Research evidence note is too long.")
+        return normalized
