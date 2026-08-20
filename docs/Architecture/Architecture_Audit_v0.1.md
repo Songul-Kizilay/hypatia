@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.41` today) are the executable package and GitHub
+- **Runtime releases** (`v0.3.42` today) are the executable package and GitHub
   release line. They are the source-backed implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
   engineering increments. Sprint 4.16.50 is complete and is already in the
@@ -256,12 +256,12 @@ Not implemented:
 
 The current local verification baseline is:
 
-- package-aware `python -m unittest`: 1,129 tests passed. Explicit `tests.*`
+- package-aware `python -m unittest`: 1,142 tests passed. Explicit `tests.*`
   module names ensure nested test directories are included without shadowing
   source packages.
 - `python -m black --check src tests`: passed.
 - `python -m ruff check src tests`: passed.
-- `python -m mypy src tests`: passed with no issues in 281 files.
+- `python -m mypy src tests`: passed with no issues in 284 files.
 - `git diff --check`: passed.
 
 These checks verify the current local worktree; they do not create a release,

@@ -102,14 +102,23 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
 - Acquisition, discovery, and run management do not invoke an LLM, write
   conversation memory, crawl links, accept candidates unattended, or create
   graph relations automatically.
+- A read-only manual comparison preview accepts two to five unique, explicitly
+  ordered source document IDs already accepted into one run. Each column shows
+  persisted provenance, that source's user-selected evidence, and only current
+  user-authored assessments. The view works for collecting and terminal runs,
+  performs no write or live provider work, and produces no verdict, trust
+  score, or automatic evidence selection. It bounds each source column to 20
+  evidence records and 10 current assessments and reports the full counts when
+  additional persisted records are omitted from the display.
 
 ## Next increment
 
-Define a read-only, manual multi-source comparison preview using only separately
-accepted sources, explicit evidence, and authored assessments. It may show
-provenance and conflicting statements but may not select evidence, score trust,
-or generate a verdict. Discovery and selection remain separate from fetching
-and may not become unattended crawling.
+Define an append-only, user-authored comparison note through a preview-confirm
+boundary. It must cite exact current assessments and evidence from explicitly
+selected accepted sources, revalidate those references before atomic storage,
+and never generate comparison text, select evidence, score trust, or produce a
+verdict. Discovery and selection remain separate from fetching and may not
+become unattended crawling.
 
 ## Known boundary
 

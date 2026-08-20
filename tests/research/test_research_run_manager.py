@@ -469,6 +469,158 @@ class ResearchRunManagerTests(unittest.TestCase):
         self.assertTrue(preview.has_recorded_evidence)
         self.assertEqual(len(self.store.saved), saves_before)
 
+    def test_source_comparison_is_ordered_current_and_read_only(self) -> None:
+        run = self.manager.create("Compare sources")
+        for number in (1, 2):
+            source = ResearchSource(
+                f"https://example.com/{number}",
+                f"Source {number}",
+                f"Evidence {number}.",
+                "text/plain",
+                self.start,
+            )
+            self.manager.add_source(run.run_id, source, f"document-{number}")
+            self.manager.add_evidence(
+                run.run_id,
+                Chunk(
+                    f"document-{number}",
+                    0,
+                    f"Evidence {number}.",
+                    chunk_id=f"chunk-{number}",
+                ),
+                f"Note {number}.",
+            )
+        current_run = self.manager.get(run.run_id)
+        first_evidence = current_run.evidence[0]
+        original = self.manager.record_source_assessment(
+            run.run_id,
+            "document-1",
+            [first_evidence.evidence_id],
+            "Original.",
+        ).assessments[-1]
+        correction = self.manager.record_source_assessment(
+            run.run_id,
+            "document-1",
+            [first_evidence.evidence_id],
+            "Correction.",
+            original.assessment_id,
+        ).assessments[-1]
+        saves_before = len(self.store.saved)
+
+        preview = self.manager.preview_source_comparison(
+            run.run_id,
+            [" document-2 ", "document-1"],
+        )
+
+        self.assertEqual(
+            tuple(item.source.document_id for item in preview.sources),
+            ("document-2", "document-1"),
+        )
+        self.assertEqual(preview.sources[0].current_assessments, ())
+        self.assertEqual(preview.sources[1].current_assessments, (correction,))
+        self.assertEqual(len(self.store.saved), saves_before)
+
+    def test_source_comparison_remains_available_after_run_closes(self) -> None:
+        run = self.manager.create("Question")
+        for number in (1, 2):
+            self.manager.add_source(
+                run.run_id,
+                ResearchSource(
+                    f"https://example.com/{number}",
+                    f"Source {number}",
+                    "Evidence.",
+                    "text/plain",
+                    self.start,
+                ),
+                f"document-{number}",
+            )
+        self.manager.transition_status(run.run_id, ResearchRunStatus.CANCELLED)
+
+        preview = self.manager.preview_source_comparison(
+            run.run_id,
+            ["document-1", "document-2"],
+        )
+
+        self.assertEqual(preview.run_status, ResearchRunStatus.CANCELLED)
+
+    def test_source_comparison_rejects_invalid_or_unaccepted_selection(self) -> None:
+        run = self.manager.create("Question")
+        self.manager.add_source(
+            run.run_id,
+            ResearchSource(
+                "https://example.com/1",
+                "Source 1",
+                "Evidence.",
+                "text/plain",
+                self.start,
+            ),
+            "document-1",
+        )
+        for document_ids, message in (
+            (["document-1"], "2 to 5"),
+            (["document-1", "document-1"], "duplicate"),
+            (["document-1", "missing"], "accepted sources"),
+        ):
+            with self.subTest(document_ids=document_ids):
+                with self.assertRaisesRegex(ResearchError, message):
+                    self.manager.preview_source_comparison(run.run_id, document_ids)
+
+    def test_source_comparison_bounds_material_and_reports_omissions(self) -> None:
+        evidence_ids = iter(f"bounded-evidence-{number}" for number in range(30))
+        assessment_ids = iter(f"bounded-assessment-{number}" for number in range(20))
+        manager = ResearchRunManager(
+            RecordingRunStore(),
+            clock=SequenceClock(self.start),
+            id_factory=lambda: "bounded-run",
+            evidence_id_factory=evidence_ids.__next__,
+            assessment_id_factory=assessment_ids.__next__,
+        )
+        run = manager.create("Question")
+        for number in (1, 2):
+            manager.add_source(
+                run.run_id,
+                ResearchSource(
+                    f"https://example.com/bounded-{number}",
+                    f"Source {number}",
+                    "Evidence.",
+                    "text/plain",
+                    self.start,
+                ),
+                f"document-{number}",
+            )
+        for number in range(21):
+            manager.add_evidence(
+                run.run_id,
+                Chunk(
+                    "document-1",
+                    number,
+                    f"Evidence {number}.",
+                    chunk_id=f"chunk-{number}",
+                ),
+                f"Note {number}.",
+            )
+        first_evidence_id = manager.get(run.run_id).evidence[0].evidence_id
+        for number in range(11):
+            manager.record_source_assessment(
+                run.run_id,
+                "document-1",
+                [first_evidence_id],
+                f"Assessment {number}.",
+            )
+
+        preview = manager.preview_source_comparison(
+            run.run_id,
+            ["document-1", "document-2"],
+        )
+
+        item = preview.sources[0]
+        self.assertEqual(len(item.evidence), 20)
+        self.assertEqual(item.total_evidence_count, 21)
+        self.assertEqual(item.omitted_evidence_count, 1)
+        self.assertEqual(len(item.current_assessments), 10)
+        self.assertEqual(item.total_current_assessment_count, 11)
+        self.assertEqual(item.omitted_current_assessment_count, 1)
+
     def test_source_assessment_preview_is_read_only_for_terminal_run(self) -> None:
         run = self.manager.create("Question")
         source = ResearchSource(

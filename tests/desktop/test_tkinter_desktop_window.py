@@ -465,6 +465,26 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         )
         self.assertEqual(responses, [controller.assessment_preview_response])
 
+    def test_source_comparison_uses_selected_run_and_explicit_source_ids(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchSourceLoadController()
+        responses: list[BrainResponse] = []
+        window._controller = controller
+        window._research_run_id = RecordingInput("run-123")
+        window._research_comparison_document_ids = RecordingInput(
+            "document-2, document-1"
+        )
+        window._status = RecordingStatus()
+        window._append_response = responses.append
+
+        window._preview_research_source_comparison()
+
+        self.assertEqual(
+            controller.comparison_previews,
+            [("run-123", "document-2, document-1")],
+        )
+        self.assertEqual(responses, [controller.comparison_preview_response])
+
     def test_accepted_load_selects_its_source_document_for_assessment(self) -> None:
         window: Any = object.__new__(TkinterDesktopWindow)
         selected = RecordingVariable("")
@@ -819,6 +839,7 @@ class RecordingResearchSourceLoadController:
         self.candidate_previews: list[tuple[str, str, str]] = []
         self.candidate_accepts: list[tuple[str, str, str]] = []
         self.assessment_previews: list[tuple[str, str]] = []
+        self.comparison_previews: list[tuple[str, str]] = []
         self.assessment_write_previews: list[tuple[str, str, str, str, str]] = []
         self.assessment_records: list[tuple[str, str, str, str, str]] = []
         self.response = BrainResponse(
@@ -955,6 +976,12 @@ class RecordingResearchSourceLoadController:
             research_runs=[accepted_run],
             research_source_assessment_preview=assessment_preview,
         )
+        self.comparison_preview_response = BrainResponse(
+            message="Comparison preview.",
+            request_id="research-source-comparison-preview",
+            intent="research_source_comparison_preview",
+            memory_count=0,
+        )
         assessment_evidence = ResearchEvidenceRecord(
             evidence_id="evidence-123",
             source_document_id="document-123",
@@ -1066,6 +1093,18 @@ class RecordingResearchSourceLoadController:
             raise ValueError("A research source document ID cannot be empty.")
         self.assessment_previews.append((run_id, document_id))
         return self.assessment_preview_response
+
+    def preview_research_source_comparison(
+        self,
+        run_id: str,
+        document_ids: str,
+    ) -> BrainResponse:
+        if not run_id.strip():
+            raise ValueError("A research run ID cannot be empty.")
+        if len([value for value in document_ids.split(",") if value.strip()]) < 2:
+            raise ValueError("Enter 2 to 5 research source document IDs.")
+        self.comparison_previews.append((run_id, document_ids))
+        return self.comparison_preview_response
 
     def preview_research_source_assessment_write(
         self,

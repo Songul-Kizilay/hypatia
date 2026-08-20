@@ -32,6 +32,7 @@ from research.ResearchSourceAssessmentWritePreview import (
 from research.ResearchSourceCandidateAcceptancePreview import (
     ResearchSourceCandidateAcceptancePreview,
 )
+from research.ResearchSourceComparisonPreview import ResearchSourceComparisonPreview
 from session.SessionDeleteExecutionResult import SessionDeleteExecutionResult
 from session.SessionDeletePolicy import SessionDeleteStatus
 from session.SessionRecord import SessionRecord
@@ -888,6 +889,89 @@ class ResponseComposer:
             intent="research_source_assessment_preview",
             memory_count=0,
             research_source_assessment_preview=preview,
+        )
+
+    def research_source_comparison_preview_success(
+        self,
+        request: BrainRequest,
+        preview: ResearchSourceComparisonPreview,
+    ) -> BrainResponse:
+        """Render selected evidence columns without an automatic conclusion."""
+        lines = [
+            "Research source comparison preview:",
+            f"Run: {preview.run_id}",
+            f"Run status: {preview.run_status.value}",
+            f"Question: {preview.question}",
+            f"Selected sources: {len(preview.sources)}",
+            f"Reason: {preview.reason}",
+        ]
+        for index, item in enumerate(preview.sources, start=1):
+            source = item.source
+            lines.extend(
+                [
+                    f"Source {index}:",
+                    f"  Title: {source.title}",
+                    f"  URL: {source.url}",
+                    f"  Type: {source.content_type}",
+                    f"  Document ID: {source.document_id}",
+                    (
+                        "  Selected evidence: showing "
+                        f"{len(item.evidence)} of {item.total_evidence_count}"
+                    ),
+                ]
+            )
+            for evidence in item.evidence:
+                truncation = (
+                    " [excerpt truncated]" if evidence.excerpt_truncated else ""
+                )
+                lines.extend(
+                    [
+                        f"  - {evidence.evidence_id}: {evidence.note}",
+                        (
+                            f"    paragraph: {evidence.chunk_index + 1} | "
+                            f"chunk: {evidence.chunk_id}"
+                        ),
+                        f"    excerpt: {evidence.excerpt}{truncation}",
+                    ]
+                )
+            lines.append(
+                "  Current assessments: showing "
+                f"{len(item.current_assessments)} of "
+                f"{item.total_current_assessment_count}"
+            )
+            for assessment in item.current_assessments:
+                lines.extend(
+                    [
+                        f"  - Assessment: {assessment.assessment_id}",
+                        f"    evidence IDs: {', '.join(assessment.evidence_ids)}",
+                        f"    text: {assessment.text}",
+                        f"    recorded: {assessment.recorded_at.isoformat()}",
+                    ]
+                )
+        lines.append(
+            "Status: manual side-by-side preview only; no verdict, trust score, "
+            "or automatic evidence selection"
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_source_comparison_preview",
+            memory_count=0,
+            research_source_comparison_preview=preview,
+        )
+
+    def research_source_comparison_preview_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Report an invalid manual comparison selection without side effects."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="research_source_comparison_preview",
+            memory_count=0,
+            success=False,
         )
 
     def research_source_assessment_preview_failure(

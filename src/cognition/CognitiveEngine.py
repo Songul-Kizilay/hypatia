@@ -183,6 +183,9 @@ class CognitiveEngine:
         if self._is_research_evidence_list_request(request):
             return self._process_research_evidence_list(request)
 
+        if self._is_research_source_comparison_preview_request(request):
+            return self._process_research_source_comparison_preview(request)
+
         if self._is_research_source_assessment_preview_request(request):
             return self._process_research_source_assessment_preview(request)
 
@@ -401,6 +404,13 @@ class CognitiveEngine:
         return request.metadata.get("intent") == "research_evidence_list"
 
     @staticmethod
+    def _is_research_source_comparison_preview_request(
+        request: BrainRequest,
+    ) -> bool:
+        """Recognize an explicit read-only multi-source comparison request."""
+        return request.metadata.get("intent") == "research_source_comparison_preview"
+
+    @staticmethod
     def _is_research_source_assessment_preview_request(
         request: BrainRequest,
     ) -> bool:
@@ -531,6 +541,47 @@ class CognitiveEngine:
                 "Research run was not found.",
             )
         return self._response_composer.research_evidence_list_success(request, run)
+
+    def _process_research_source_comparison_preview(
+        self,
+        request: BrainRequest,
+    ) -> BrainResponse:
+        """Display accepted source material without providers or persistence."""
+        run_id = request.metadata.get("research_run_id")
+        document_ids = request.metadata.get("research_source_document_ids")
+        failure = self._response_composer.research_source_comparison_preview_failure
+        if not isinstance(run_id, str) or not run_id.strip():
+            return failure(request, "A research run ID is required.")
+        if (
+            not isinstance(document_ids, list)
+            or not 2 <= len(document_ids) <= 5
+            or not all(
+                isinstance(document_id, str) and document_id.strip()
+                for document_id in document_ids
+            )
+            or len({document_id.strip() for document_id in document_ids})
+            != len(document_ids)
+        ):
+            return failure(
+                request,
+                "Two to five unique research source document IDs are required.",
+            )
+        if self._research_run_manager is None:
+            return failure(request, "Research run persistence is unavailable.")
+        try:
+            preview = self._research_run_manager.preview_source_comparison(
+                run_id,
+                document_ids,
+            )
+        except ResearchError:
+            return failure(
+                request,
+                "Every comparison source must be accepted in the selected run.",
+            )
+        return self._response_composer.research_source_comparison_preview_success(
+            request,
+            preview,
+        )
 
     def _process_research_source_assessment_preview(
         self,

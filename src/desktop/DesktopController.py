@@ -241,6 +241,34 @@ class DesktopController:
             )
         )
 
+    def preview_research_source_comparison(
+        self,
+        research_run_id: str,
+        source_document_ids: str,
+    ) -> BrainResponse:
+        """Preview 2-5 explicitly selected accepted sources side by side."""
+        normalized_run_id = research_run_id.strip()
+        normalized_document_ids = [
+            value.strip() for value in source_document_ids.split(",") if value.strip()
+        ]
+        if not normalized_run_id:
+            raise ValueError("A research run ID cannot be empty.")
+        if not 2 <= len(normalized_document_ids) <= 5:
+            raise ValueError("Enter 2 to 5 research source document IDs.")
+        if len(normalized_document_ids) != len(set(normalized_document_ids)):
+            raise ValueError("Research source document IDs must be unique.")
+        return self._brain.process(
+            BrainRequest(
+                message="Preview selected research sources side by side",
+                source="desktop",
+                metadata={
+                    "intent": "research_source_comparison_preview",
+                    "research_run_id": normalized_run_id,
+                    "research_source_document_ids": normalized_document_ids,
+                },
+            )
+        )
+
     def preview_research_source_assessment_write(
         self,
         research_run_id: str,

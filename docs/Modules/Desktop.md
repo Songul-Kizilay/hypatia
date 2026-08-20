@@ -39,6 +39,15 @@ atomic append. An optional predecessor assessment ID creates a same-source
 supersession link only after the preview and final write both verify that the
 target is still current. The original remains visible; the desktop labels
 current and superseded history without choosing evidence or generating a score.
+`Compare sources` accepts two to five comma-separated accepted-source document
+IDs for the selected run. It preserves the entered order and displays persisted
+provenance, user-selected evidence, and only current authored assessments side
+by side. It remains available for closed runs and performs no provider, network,
+LLM, memory, graph, knowledge-index, event-bus, or persistence operation. It
+does not identify a winner, select evidence, or assign trust scores.
+Each comparison column displays at most 20 evidence records and 10 current
+assessments, with complete counts visible so truncation is explicit and the
+local transcript remains bounded.
 The `Final status` selector offers only `completed`, `failed`, and `cancelled`.
 `Preview status` shows the runtime decision first and requests a separate
 confirmation only when allowed. A completed run requires source and evidence;

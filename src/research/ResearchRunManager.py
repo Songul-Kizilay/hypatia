@@ -30,6 +30,16 @@ from research.ResearchSourceCandidate import ResearchSourceCandidate
 from research.ResearchSourceCandidateAcceptancePreview import (
     ResearchSourceCandidateAcceptancePreview,
 )
+from research.ResearchSourceComparisonItem import (
+    MAX_COMPARISON_ASSESSMENTS_PER_SOURCE,
+    MAX_COMPARISON_EVIDENCE_PER_SOURCE,
+    ResearchSourceComparisonItem,
+)
+from research.ResearchSourceComparisonPreview import (
+    MAX_COMPARISON_SOURCES,
+    MIN_COMPARISON_SOURCES,
+    ResearchSourceComparisonPreview,
+)
 from research.ResearchSourceDiscoveryRecord import ResearchSourceDiscoveryRecord
 from research.ResearchSourceRecord import ResearchSourceRecord
 
@@ -387,6 +397,87 @@ class ResearchRunManager:
                 ),
             )
 
+    def preview_source_comparison(
+        self,
+        run_id: str,
+        document_ids: Sequence[str],
+    ) -> ResearchSourceComparisonPreview:
+        """Return ordered manual evidence columns without live work or mutation."""
+        normalized_run_id = self._normalize_run_id(run_id)
+        normalized_document_ids = self._normalize_comparison_document_ids(document_ids)
+        with self._lock:
+            _, run = self._find_with_index(normalized_run_id)
+            sources_by_id = {source.document_id: source for source in run.sources}
+            if any(
+                document_id not in sources_by_id
+                for document_id in normalized_document_ids
+            ):
+                raise ResearchError(
+                    "A research comparison source was not found among this run's "
+                    "accepted sources."
+                )
+            superseded_assessment_ids = {
+                record.supersedes_assessment_id
+                for record in run.assessments
+                if record.supersedes_assessment_id is not None
+            }
+            items = tuple(
+                self._comparison_item(
+                    run,
+                    sources_by_id[document_id],
+                    superseded_assessment_ids,
+                )
+                for document_id in normalized_document_ids
+            )
+            return ResearchSourceComparisonPreview(
+                run_id=run.run_id,
+                question=run.question,
+                run_status=run.status,
+                sources=items,
+                reason=(
+                    f"{len(items)} explicitly selected accepted sources are shown "
+                    "side by side for manual review."
+                ),
+            )
+
+    @staticmethod
+    def _comparison_item(
+        run: ResearchRun,
+        source: ResearchSourceRecord,
+        superseded_assessment_ids: set[str],
+    ) -> ResearchSourceComparisonItem:
+        """Collect bounded display records while retaining honest total counts."""
+        evidence: list[ResearchEvidenceRecord] = []
+        total_evidence_count = 0
+        for evidence_record in run.evidence:
+            if evidence_record.source_document_id != source.document_id:
+                continue
+            total_evidence_count += 1
+            if len(evidence) < MAX_COMPARISON_EVIDENCE_PER_SOURCE:
+                evidence.append(evidence_record)
+
+        current_assessments: list[ResearchSourceAssessmentRecord] = []
+        total_current_assessment_count = 0
+        for assessment_record in run.assessments:
+            if (
+                assessment_record.source_document_id != source.document_id
+                or assessment_record.assessment_id in superseded_assessment_ids
+            ):
+                continue
+            total_current_assessment_count += 1
+            if len(current_assessments) < MAX_COMPARISON_ASSESSMENTS_PER_SOURCE:
+                current_assessments.append(assessment_record)
+
+        return ResearchSourceComparisonItem(
+            source=source,
+            evidence=tuple(evidence),
+            current_assessments=tuple(current_assessments),
+            omitted_evidence_count=total_evidence_count - len(evidence),
+            omitted_current_assessment_count=(
+                total_current_assessment_count - len(current_assessments)
+            ),
+        )
+
     def preview_source_assessment_write(
         self,
         run_id: str,
@@ -727,6 +818,25 @@ class ResearchRunManager:
         if not isinstance(document_id, str) or not document_id.strip():
             raise ResearchError("Research source document ID cannot be empty.")
         return document_id.strip()
+
+    @staticmethod
+    def _normalize_comparison_document_ids(
+        document_ids: Sequence[str],
+    ) -> tuple[str, ...]:
+        if isinstance(document_ids, (str, bytes)) or not isinstance(
+            document_ids, Sequence
+        ):
+            raise ResearchError("Research comparison source IDs must be a list.")
+        normalized = tuple(
+            ResearchRunManager._normalize_document_id(value) for value in document_ids
+        )
+        if not MIN_COMPARISON_SOURCES <= len(normalized) <= MAX_COMPARISON_SOURCES:
+            raise ResearchError("Research source comparison requires 2 to 5 sources.")
+        if len(normalized) != len(set(normalized)):
+            raise ResearchError(
+                "Research source comparison contains duplicate sources."
+            )
+        return normalized
 
     @staticmethod
     def _normalize_evidence_id(evidence_id: str) -> str:
