@@ -58,3 +58,30 @@ class DesktopDataPathsTests(unittest.TestCase):
         )
 
         self.assertEqual(paths.root, Path("C:/Users/Songul/AppData/Local/Hypatia"))
+
+    def test_linux_uses_absolute_xdg_data_home(self) -> None:
+        paths = DesktopDataPaths.from_process_environment(
+            {"XDG_DATA_HOME": "/srv/songul-data"},
+            platform_name="posix",
+            home=Path("/home/songul"),
+        )
+
+        self.assertEqual(paths.root, Path("/srv/songul-data/hypatia"))
+
+    def test_linux_defaults_to_user_local_share_directory(self) -> None:
+        paths = DesktopDataPaths.from_process_environment(
+            {},
+            platform_name="posix",
+            home=Path("/home/songul"),
+        )
+
+        self.assertEqual(paths.root, Path("/home/songul/.local/share/hypatia"))
+
+    def test_linux_ignores_relative_xdg_data_home(self) -> None:
+        paths = DesktopDataPaths.from_process_environment(
+            {"XDG_DATA_HOME": "relative-data"},
+            platform_name="posix",
+            home=Path("/home/songul"),
+        )
+
+        self.assertEqual(paths.root, Path("/home/songul/.local/share/hypatia"))

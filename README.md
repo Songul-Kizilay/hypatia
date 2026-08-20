@@ -259,6 +259,25 @@ deliberately need a different local data root. The initial package has manual
 updates; it does not self-update or automatically migrate data from a developer
 checkout.
 
+### Linux desktop package
+
+The first verified Linux target is Ubuntu 24.04 x64. Build it from the
+repository root with Python 3.14 and Tkinter available:
+
+```bash
+python3.14 -m venv .venv
+.venv/bin/python -m pip install -r requirements-desktop-build.txt
+tools/build_desktop.sh --clean
+```
+
+The resulting application is `dist/Hypatia/Hypatia`. It stores local state
+beneath `${XDG_DATA_HOME:-$HOME/.local/share}/hypatia`; only an absolute
+`XDG_DATA_HOME` is honored. The cross-platform absolute
+`HYPATIA_DESKTOP_DATA_DIR` override still takes precedence. The published
+`Hypatia-linux-x64-v0.3.44.tar.gz` archive is built and opened under Xvfb on
+Ubuntu before release. Updates remain manual, and the package adds no telemetry,
+bundled credentials, cloud store, or automatic data migration.
+
 ---
 
 ## LLM runtime quickstart

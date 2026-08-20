@@ -2,6 +2,37 @@
 
 All notable project changes are recorded here.
 
+## [0.3.44] - 2026-08-21
+
+### Added
+
+- The installed Linux desktop now has direct tests for its XDG data-directory
+  contract: an absolute `XDG_DATA_HOME` resolves beneath `hypatia`, while an
+  absent or invalid relative value falls back to `~/.local/share/hypatia`.
+- `tools/build_desktop.sh --clean` creates a pinned PyInstaller onedir package
+  at `dist/Hypatia/Hypatia` from the same desktop entry point used on Windows.
+- `tools/smoke_desktop_linux.sh` starts the packaged Tkinter application under
+  Xvfb with a temporary explicit data root and verifies local session-state
+  initialization without leaving user data behind.
+- A least-privilege GitHub Actions workflow runs the full suite, builds and
+  smoke-tests the desktop on Ubuntu 24.04 x64, then publishes a bounded-retention
+  Linux archive artifact. Third-party actions are pinned to exact commits.
+- ADR 0003 records the Ubuntu 24.04 x64 package, XDG storage, manual-update,
+  no-telemetry, no-bundled-credential, and supported-platform boundaries.
+
+### Changed
+
+- POSIX absolute-path validation now uses POSIX path semantics even when the
+  platform behavior is exercised from a Windows test host. Windows data paths
+  and the absolute `HYPATIA_DESKTOP_DATA_DIR` override remain unchanged.
+
+### Verification
+
+- The package-aware full local suite contains 1,161 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass across 287 source files.
+- The Linux package build and packaged startup smoke check are verified by the
+  Ubuntu workflow before release rather than inferred from Windows behavior.
+
 ## [0.3.43] - 2026-08-21
 
 ### Added

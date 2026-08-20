@@ -274,16 +274,19 @@ optimistic local update is retained.
    mutation drawers are added only after their read-only and confirmation paths
    are individually tested.
 5. **Partially met:** Tkinter and the no-web-view policy are recorded in ADR
-   0001. ADR 0002 now defines and verifies a Windows onedir package, local
-   data boundary, and manual-update policy. Local text-size and high-contrast
-   controls are implemented and headlessly verified; a full assistive-
-   technology and manual accessibility audit remains open.
+   0001. ADRs 0002 and 0003 define Windows and Ubuntu 24.04 x64 onedir packages,
+   platform-owned data boundaries, manual updates, and executable startup
+   checks. Local text-size and high-contrast controls are implemented and
+   headlessly verified; a full assistive-technology and manual accessibility
+   audit remains open.
 
 ## Open decisions
 
 - The first shell uses native Python Tkinter; see
-  [ADR 0001](../Decisions/0001-tkinter-desktop-shell.md). The first Windows
-  package is defined by [ADR 0002](../Decisions/0002-windows-desktop-distribution.md).
-- Cross-platform support target for the first release.
+  [ADR 0001](../Decisions/0001-tkinter-desktop-shell.md). Windows packaging is
+  defined by [ADR 0002](../Decisions/0002-windows-desktop-distribution.md), and
+  the Ubuntu 24.04 x64 package by
+  [ADR 0003](../Decisions/0003-linux-desktop-distribution.md).
+- macOS and additional Linux distribution/architecture targets.
 - The visual identity, color system, and typography, which belong in separate
   design documents rather than runtime code.

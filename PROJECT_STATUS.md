@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.43 (Genesis)`
+`v0.3.44 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.43`** is the current executable package and GitHub
+- **Runtime release `v0.3.44`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -148,6 +148,16 @@ with optional OpenAI-compatible LLM conversation support.
 - A reproducible Windows onedir package can be built with the pinned local
   PyInstaller tool and `tools/build_desktop.ps1`. The initial update policy is
   manual, with no self-update, bundled credentials, or telemetry channel.
+- On Linux, installed desktop state follows the XDG data-directory contract:
+  an absolute `XDG_DATA_HOME` maps to its `hypatia` child and otherwise falls
+  back to `~/.local/share/hypatia`. The absolute cross-platform override still
+  takes precedence, and Windows path behavior is unchanged.
+- A reproducible Ubuntu 24.04 x64 onedir package can be built with the same
+  pinned PyInstaller version and `tools/build_desktop.sh`. GitHub Actions runs
+  the full suite, builds the package, opens it under Xvfb, verifies temporary
+  local-state initialization, and publishes a short-retention Linux artifact.
+  Linux and Windows updates remain manual with no telemetry, bundled
+  credentials, or automatic data migration.
 - An explicit desktop `Ask sources` action submits a user-entered question to
   the existing local-RAG command. When the configured runtime is enabled, it
   receives only up to three bounded cited local chunks; it does not augment
@@ -294,7 +304,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 1,158 automated tests pass through package-aware discovery.
+- 1,161 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -321,8 +331,8 @@ so this check did not alter the project's persisted data.
 
 ## Next Milestone
 
-Add Linux desktop distribution support with a platform-appropriate local data
-directory, reproducible package command, and real Linux build/startup
-verification. Windows behavior, explicit storage override semantics, manual
-updates, and the no-telemetry/no-bundled-credentials boundary must remain
-unchanged.
+Define a read-only Markdown export preview for one terminal research run,
+including persisted provenance, authored evidence, assessments, and comparison
+notes. Saving must be a separate explicit desktop action to a user-selected
+path, revalidate the same immutable run snapshot, avoid network and LLM calls,
+and never overwrite an existing file without a distinct reviewed policy.

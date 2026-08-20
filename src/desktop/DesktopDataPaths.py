@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 _DATA_DIRECTORY_OVERRIDE = "HYPATIA_DESKTOP_DATA_DIR"
 
@@ -64,7 +64,7 @@ class DesktopDataPaths:
 
         xdg_data_home = values.get("XDG_DATA_HOME", "").strip()
         if xdg_data_home:
-            candidate = Path(xdg_data_home).expanduser()
+            candidate = PurePosixPath(xdg_data_home)
             if candidate.is_absolute():
-                return cls(candidate / "hypatia")
+                return cls(Path(candidate.as_posix()) / "hypatia")
         return cls(resolved_home / ".local" / "share" / "hypatia")

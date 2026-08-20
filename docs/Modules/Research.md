@@ -123,10 +123,11 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
 
 ## Next increment
 
-Add Linux desktop distribution support with a platform-appropriate local data
-directory, a reproducible package command, and real Linux build/startup
-verification. Windows defaults and explicit storage overrides must remain
-stable. Discovery and selection remain separate from fetching and may not
+Define a deterministic, read-only Markdown export preview for one terminal
+research run and a separately confirmed save to a new user-selected file. The
+export must use only persisted provenance, evidence, assessments, and comparison
+notes, revalidate the unchanged run before writing, and make no network or LLM
+call. Discovery and selection remain separate from fetching and may not
 become unattended crawling.
 
 ## Known boundary
