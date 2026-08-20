@@ -133,14 +133,21 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
   rejects stale identities and collecting runs, writes complete UTF-8 bytes in
   the selected directory, and atomically publishes only when the destination
   does not already exist. No research record is changed.
+- One explicitly selected existing `.md` file can be verified against the
+  current deterministic rendering of a terminal run. The manager streams the
+  complete regular file, checks that descriptor and path identity plus size and
+  timestamps remain stable, and returns observed/expected byte counts and
+  SHA-256 values with an exact match flag. A mismatch does not import or repair
+  the file. Unexpected input is bounded to 64 MiB, while an authentic larger
+  run export remains eligible up to its exact expected length.
 
 ## Next increment
 
-Audit the completed preview-and-save workflow for a separately scoped,
-read-only verification action that can compare a selected exported document
-with a terminal run's current deterministic fingerprint without importing or
-changing either record. Discovery and selection remain separate from fetching
-and may not become unattended crawling.
+Design and test connection-level address pinning for the explicit research
+source fetcher so DNS validation and the TLS connection cannot resolve to
+different addresses. Redirects must be revalidated independently, HTTPS and
+certificate validation must remain intact, and discovery/selection may not
+become unattended crawling.
 
 ## Known boundary
 

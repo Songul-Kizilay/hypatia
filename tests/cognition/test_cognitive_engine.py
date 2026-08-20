@@ -6352,6 +6352,119 @@ class CognitiveEngineTests(unittest.TestCase):
                 )
         self.assertFalse(destination.exists())
 
+    def test_research_markdown_verification_reports_exact_match_and_tampering(
+        self,
+    ) -> None:
+        store = ToggleResearchRunStore()
+        manager = ResearchRunManager(store, id_factory=lambda: "run-123")
+        run = manager.create("Verify local export")
+        terminal = manager.transition_status(run.run_id, ResearchRunStatus.CANCELLED)
+        source = Path(self.temporary_directory.name) / "research-export.md"
+        expected_markdown = render_research_run_markdown(terminal)
+        source.write_text(expected_markdown, encoding="utf-8", newline="\n")
+        llm_provider = RecordingLLMProvider("must not run")
+        extractor = RecordingCandidateExtractor()
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+            learned_memory_candidate_extractor=extractor,
+            research_run_manager=manager,
+        )
+        request = BrainRequest(
+            message="Verify existing research Markdown export",
+            metadata={
+                "intent": "research_run_markdown_export_verify",
+                "research_run_id": run.run_id,
+                "research_export_source_path": str(source),
+            },
+        )
+        persisted_save_count = store.save_calls
+        memory_count = self.memory_manager.count()
+        events: list[str] = []
+        self.event_bus.subscribe("*", lambda event: events.append(event.name))
+
+        matching = engine.process(request)
+        source.write_text("# tampered\n", encoding="utf-8", newline="\n")
+        mismatching = engine.process(request)
+
+        self.assertTrue(matching.success)
+        self.assertTrue(mismatching.success)
+        self.assertEqual(matching.intent, "research_run_markdown_export_verify")
+        exact = matching.research_run_markdown_export_verification
+        changed = mismatching.research_run_markdown_export_verification
+        self.assertIsNotNone(exact)
+        self.assertIsNotNone(changed)
+        assert exact is not None
+        assert changed is not None
+        self.assertTrue(exact.matches)
+        self.assertFalse(changed.matches)
+        self.assertIn("Result: MATCH", matching.message)
+        self.assertIn("Result: DOES NOT MATCH", mismatching.message)
+        self.assertIn("no data was imported or changed", matching.message)
+        self.assertEqual(source.read_text(encoding="utf-8"), "# tampered\n")
+        self.assertEqual(manager.get(run.run_id), terminal)
+        self.assertEqual(store.save_calls, persisted_save_count)
+        self.assertEqual(self.memory_manager.count(), memory_count)
+        self.assertEqual(llm_provider.calls, [])
+        self.assertEqual(extractor.calls, [])
+        self.assertEqual(events, [])
+
+    def test_research_markdown_verification_rejects_invalid_request_safely(
+        self,
+    ) -> None:
+        manager = ResearchRunManager(id_factory=lambda: "run-123")
+        run = manager.create("Reject unsafe verification")
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            research_run_manager=manager,
+        )
+        missing_source = Path(self.temporary_directory.name) / "secret-export.md"
+        base = {
+            "intent": "research_run_markdown_export_verify",
+            "research_run_id": run.run_id,
+            "research_export_source_path": str(missing_source),
+        }
+
+        collecting = engine.process(BrainRequest(message="Verify", metadata=base))
+        manager.transition_status(run.run_id, ResearchRunStatus.CANCELLED)
+        missing = engine.process(BrainRequest(message="Verify", metadata=base))
+        empty_run = engine.process(
+            BrainRequest(
+                message="Verify",
+                metadata={**base, "research_run_id": ""},
+            )
+        )
+        empty_path = engine.process(
+            BrainRequest(
+                message="Verify",
+                metadata={**base, "research_export_source_path": ""},
+            )
+        )
+
+        for verification_response in (collecting, missing, empty_run, empty_path):
+            self.assertFalse(verification_response.success)
+            self.assertEqual(
+                verification_response.intent,
+                "research_run_markdown_export_verify",
+            )
+            self.assertIsNone(
+                verification_response.research_run_markdown_export_verification
+            )
+        self.assertNotIn(str(missing_source), missing.message)
+        self.assertFalse(missing_source.exists())
+
     def test_research_source_is_attached_to_the_selected_persisted_run(self) -> None:
         store = ToggleResearchRunStore()
         manager = ResearchRunManager(store, id_factory=lambda: "run-123")

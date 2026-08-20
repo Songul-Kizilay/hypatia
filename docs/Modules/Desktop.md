@@ -64,6 +64,11 @@ requires that exact displayed preview, opens a new-file chooser, and separately
 confirms the selected path and fingerprint. Brain revalidates the snapshot time
 and complete content before atomically publishing UTF-8 Markdown; an existing
 destination is never replaced.
+`Verify export` independently selects one existing `.md` file for the current
+terminal run. The runtime hashes its complete bytes from one stable regular-file
+descriptor and compares the byte count and SHA-256 with a fresh deterministic
+render. `MATCH` and `DOES NOT MATCH` are both read-only results; the desktop does
+not decode, import, repair, or modify the document.
 The `Final status` selector offers only `completed`, `failed`, and `cancelled`.
 `Preview status` shows the runtime decision first and requests a separate
 confirmation only when allowed. A completed run requires source and evidence;

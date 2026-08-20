@@ -2,6 +2,37 @@
 
 All notable project changes are recorded here.
 
+## [0.3.47] - 2026-08-21
+
+### Added
+
+- The desktop adds a separate `Verify export` action for one explicitly
+  selected terminal research run and existing local `.md` file.
+- Brain asks the research manager to re-render the current immutable run and
+  compare its complete UTF-8 byte count and SHA-256 with the selected file.
+  Both exact values and an honest `MATCH` or `DOES NOT MATCH` result are returned
+  in a structured verification response.
+- Verification hashes the selected file as a stream from one open descriptor
+  and confirms that its identity, size, modification time, and change time stay
+  stable through the read.
+
+### Safety
+
+- Verification accepts only an absolute `.md` path resolving to a regular file.
+  Relative paths, wrong extensions, directories, missing files, collecting
+  runs, mid-read changes, and unexpectedly large inputs are rejected.
+- Unexpected local input is bounded to 64 MiB; a legitimate deterministic
+  export larger than that remains verifiable up to its exact expected byte
+  length. The complete accepted file is hashed rather than decoded or parsed.
+- A mismatch is a successful read-only result, not an import or repair action.
+  No file, research record, memory, graph, live index, or event is changed, and
+  no provider, network, or LLM call occurs.
+
+### Verification
+
+- The package-aware full local suite contains 1,201 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass across 295 source files.
+
 ## [0.3.46] - 2026-08-21
 
 ### Added

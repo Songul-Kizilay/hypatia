@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+import stat
 import tempfile
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
@@ -23,6 +24,10 @@ from research.ResearchRunMarkdownExportPreview import (
 )
 from research.ResearchRunMarkdownExportResult import (
     ResearchRunMarkdownExportResult,
+)
+from research.ResearchRunMarkdownExportVerification import (
+    MAX_MARKDOWN_EXPORT_VERIFICATION_BYTES,
+    ResearchRunMarkdownExportVerification,
 )
 from research.ResearchRunMarkdownRenderer import render_research_run_markdown
 from research.ResearchRunStatus import ResearchRunStatus
@@ -202,6 +207,45 @@ class ResearchRunManager:
                 destination_path=str(destination),
                 content_sha256=content_sha256,
                 byte_count=len(encoded),
+            )
+
+    def verify_markdown_export(
+        self,
+        run_id: str,
+        source_path: str | Path,
+    ) -> ResearchRunMarkdownExportVerification:
+        """Hash one stable existing file and compare it with a terminal run."""
+        normalized_id = self._normalize_run_id(run_id)
+        source = self._normalize_markdown_export_source(source_path)
+        with self._lock:
+            _, run = self._find_with_index(normalized_id)
+            if not run.status.terminal:
+                raise ResearchError(
+                    "A collecting research run cannot verify an export yet."
+                )
+            expected_content = render_research_run_markdown(run).encode("utf-8")
+            expected_hash = sha256(expected_content).hexdigest()
+            allowed_bytes = max(
+                len(expected_content),
+                MAX_MARKDOWN_EXPORT_VERIFICATION_BYTES,
+            )
+            observed_hash, observed_bytes = self._hash_stable_export_file(
+                source,
+                max_bytes=allowed_bytes,
+            )
+            expected_bytes = len(expected_content)
+            matches = (
+                expected_hash == observed_hash and expected_bytes == observed_bytes
+            )
+            return ResearchRunMarkdownExportVerification(
+                run_id=run.run_id,
+                snapshot_updated_at=run.updated_at,
+                source_path=str(source),
+                expected_content_sha256=expected_hash,
+                observed_content_sha256=observed_hash,
+                expected_byte_count=expected_bytes,
+                observed_byte_count=observed_bytes,
+                matches=matches,
             )
 
     def has_source(self, run_id: str, document_id: str) -> bool:
@@ -1116,6 +1160,80 @@ class ResearchRunManager:
         if not parent_exists:
             raise ResearchError("Research export destination directory was not found.")
         return destination
+
+    @staticmethod
+    def _normalize_markdown_export_source(source_path: str | Path) -> Path:
+        if not isinstance(source_path, (str, Path)):
+            raise ResearchError("Research export verification source is invalid.")
+        raw_source = str(source_path).strip()
+        if not raw_source or len(raw_source) > 4_096 or "\x00" in raw_source:
+            raise ResearchError("Research export verification source is invalid.")
+        source = Path(raw_source)
+        if not source.is_absolute():
+            raise ResearchError("Research export verification source must be absolute.")
+        if source.suffix.casefold() != ".md":
+            raise ResearchError(
+                "Research export verification source must end with .md."
+            )
+        return source
+
+    @staticmethod
+    def _hash_stable_export_file(
+        source: Path,
+        *,
+        max_bytes: int,
+    ) -> tuple[str, int]:
+        """Hash one regular descriptor and reject replacement or mid-read changes."""
+        try:
+            with source.open("rb") as stream:
+                before = os.fstat(stream.fileno())
+                if not stat.S_ISREG(before.st_mode):
+                    raise ResearchError(
+                        "Research export verification source must be a regular file."
+                    )
+                if before.st_size > max_bytes:
+                    raise ResearchError(
+                        "Research export verification source is too large."
+                    )
+                digest = sha256()
+                byte_count = 0
+                while chunk := stream.read(64 * 1024):
+                    byte_count += len(chunk)
+                    if byte_count > max_bytes:
+                        raise ResearchError(
+                            "Research export verification source is too large."
+                        )
+                    digest.update(chunk)
+                after = os.fstat(stream.fileno())
+                current = source.stat()
+        except ResearchError:
+            raise
+        except OSError as error:
+            raise ResearchError(
+                "Research export verification source could not be read."
+            ) from error
+        stable_metadata = (
+            before.st_dev,
+            before.st_ino,
+            before.st_size,
+            before.st_mtime_ns,
+            before.st_ctime_ns,
+        )
+        if stable_metadata != (
+            after.st_dev,
+            after.st_ino,
+            after.st_size,
+            after.st_mtime_ns,
+            after.st_ctime_ns,
+        ) or (after.st_dev, after.st_ino) != (current.st_dev, current.st_ino):
+            raise ResearchError(
+                "Research export verification source changed while it was read."
+            )
+        if byte_count != before.st_size:
+            raise ResearchError(
+                "Research export verification source changed while it was read."
+            )
+        return digest.hexdigest(), byte_count
 
     @staticmethod
     def _normalize_export_snapshot_time(value: datetime) -> datetime:

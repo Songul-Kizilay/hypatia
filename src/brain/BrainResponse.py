@@ -22,6 +22,9 @@ from research.ResearchRunMarkdownExportPreview import (
 from research.ResearchRunMarkdownExportResult import (
     ResearchRunMarkdownExportResult,
 )
+from research.ResearchRunMarkdownExportVerification import (
+    ResearchRunMarkdownExportVerification,
+)
 from research.ResearchRunStatusTransitionPreview import (
     ResearchRunStatusTransitionPreview,
 )
@@ -60,6 +63,9 @@ class BrainResponse:
     research_runs: list[ResearchRun] = field(default_factory=list)
     research_run_markdown_export_preview: ResearchRunMarkdownExportPreview | None = None
     research_run_markdown_export_result: ResearchRunMarkdownExportResult | None = None
+    research_run_markdown_export_verification: (
+        ResearchRunMarkdownExportVerification | None
+    ) = None
     research_run_status_transition_preview: (
         ResearchRunStatusTransitionPreview | None
     ) = None

@@ -644,6 +644,11 @@ class TkinterDesktopWindow:
         ).grid(row=14, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
         ttk.Button(
             research_frame,
+            text="Verify export",
+            command=self._verify_research_run_markdown_export,
+        ).grid(row=15, column=2, sticky="ew", pady=(8, 0))
+        ttk.Button(
+            research_frame,
             text="Save export",
             command=self._save_research_run_markdown_export,
         ).grid(row=15, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
@@ -933,6 +938,30 @@ class TkinterDesktopWindow:
         try:
             response = self._controller.save_research_run_markdown_export(
                 preview,
+                path,
+            )
+        except ValueError as error:
+            self._status.set(str(error))
+            return
+        self._append_response(response)
+
+    def _verify_research_run_markdown_export(self) -> None:
+        """Select one existing Markdown file for read-only integrity comparison."""
+        run_id = self._research_run_id.get().strip()
+        if not run_id:
+            self._status.set("A research run ID cannot be empty.")
+            return
+        path = filedialog.askopenfilename(
+            parent=self._root,
+            title="Verify existing research Markdown export",
+            filetypes=[("Markdown files", "*.md")],
+        )
+        if not path:
+            self._status.set("research export verification: cancelled")
+            return
+        try:
+            response = self._controller.verify_research_run_markdown_export(
+                run_id,
                 path,
             )
         except ValueError as error:
