@@ -2,6 +2,26 @@
 
 All notable project changes are recorded here.
 
+## [0.3.31] - 2026-08-20
+
+### Added
+
+- The local desktop shell now offers user-controlled text size from 10 through
+  20 points and a high-contrast toggle. These are presentation-only settings:
+  they do not persist data, call an LLM, or alter session, memory, or knowledge
+  state.
+
+### Changed
+
+- The default LLM system prompt now asks Hypatia for calm, warm, natural
+  English responses, including when a user writes in Turkish.
+
+### Verification
+
+- The package-aware full local suite contains 966 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass with the documented
+  project virtual environment.
+
 ## [0.3.30] - 2026-08-15
 
 ### Added

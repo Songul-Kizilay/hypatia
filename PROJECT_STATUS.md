@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.30 (Genesis)`
+`v0.3.31 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.30`** is the current executable package and GitHub
+- **Runtime release `v0.3.31`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -38,6 +38,10 @@ with optional OpenAI-compatible LLM conversation support.
   conversations, and activity through explicit read-only actions. It is a thin
   adapter over the existing Brain and does not create a second store, provider,
   or network channel.
+- Local desktop text-size controls bounded from 10 through 20 points and an
+  explicit high-contrast palette. They alter only presentation and do not
+  persist a preference, invoke a provider, or change session, memory, or
+  knowledge state. A full assistive-technology audit remains planned.
 - Explicit desktop actions for normal lexical recall and opt-in semantic recall.
   Neither action augments ordinary chat, persists a recall result, or issues a
   provider request unless the user deliberately selects it.
@@ -201,7 +205,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 963 automated tests pass through package-aware discovery.
+- 966 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
