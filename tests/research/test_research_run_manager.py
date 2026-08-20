@@ -5,12 +5,17 @@ from __future__ import annotations
 import unittest
 from datetime import UTC, datetime, timedelta
 from functools import partial
+from hashlib import sha256
 
 from core.Exceptions import ResearchError
 from knowledge.Chunk import Chunk
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchRun import ResearchRun
 from research.ResearchRunManager import ResearchRunManager
+from research.ResearchRunMarkdownExportPreview import (
+    MAX_MARKDOWN_EXPORT_PREVIEW_CHARACTERS,
+)
+from research.ResearchRunMarkdownRenderer import render_research_run_markdown
 from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSource import ResearchSource
 from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
@@ -108,6 +113,80 @@ class ResearchRunManagerTests(unittest.TestCase):
         self.assertEqual(run.status, ResearchRunStatus.COLLECTING)
         self.assertEqual(self.manager.list(), [run])
         self.assertEqual(self.store.runs, [run])
+
+    def test_markdown_export_preview_requires_terminal_run_and_is_read_only(
+        self,
+    ) -> None:
+        run = self.manager.create("Export this run")
+        with self.assertRaisesRegex(ResearchError, "collecting"):
+            self.manager.preview_markdown_export(run.run_id)
+        terminal = self.manager.transition_status(
+            run.run_id,
+            ResearchRunStatus.CANCELLED,
+        )
+        saved_snapshot_count = len(self.store.saved)
+
+        preview = self.manager.preview_markdown_export(run.run_id)
+
+        expected_markdown = render_research_run_markdown(terminal)
+        self.assertEqual(preview.run_id, terminal.run_id)
+        self.assertEqual(preview.run_status, ResearchRunStatus.CANCELLED)
+        self.assertEqual(preview.snapshot_updated_at, terminal.updated_at)
+        self.assertEqual(preview.suggested_filename, "hypatia-research-run-1.md")
+        self.assertEqual(preview.markdown_preview, expected_markdown)
+        self.assertEqual(preview.total_character_count, len(expected_markdown))
+        self.assertEqual(preview.omitted_character_count, 0)
+        self.assertEqual(
+            preview.content_sha256,
+            sha256(expected_markdown.encode("utf-8")).hexdigest(),
+        )
+        self.assertEqual(self.manager.get(run.run_id), terminal)
+        self.assertEqual(len(self.store.saved), saved_snapshot_count)
+
+    def test_markdown_export_preview_bounds_large_terminal_run_honestly(self) -> None:
+        run = self.manager.create("Large failed run")
+        for number in range(60):
+            self.manager.record_failure(
+                run.run_id,
+                f"stage-{number}",
+                f"Failure {number}: " + "x" * 450,
+            )
+        terminal = self.manager.transition_status(
+            run.run_id,
+            ResearchRunStatus.FAILED,
+        )
+
+        preview = self.manager.preview_markdown_export(run.run_id)
+
+        self.assertGreater(preview.omitted_character_count, 0)
+        self.assertGreater(
+            preview.total_character_count,
+            MAX_MARKDOWN_EXPORT_PREVIEW_CHARACTERS,
+        )
+        self.assertIn("Preview truncated:", preview.markdown_preview)
+        self.assertLess(
+            len(preview.markdown_preview),
+            MAX_MARKDOWN_EXPORT_PREVIEW_CHARACTERS + 100,
+        )
+        full_markdown = render_research_run_markdown(terminal)
+        self.assertEqual(
+            preview.content_sha256,
+            sha256(full_markdown.encode("utf-8")).hexdigest(),
+        )
+
+    def test_markdown_export_filename_cannot_escape_to_a_path(self) -> None:
+        manager = ResearchRunManager(id_factory=lambda: "../ unsafe / run")
+        run = manager.create("Safe export filename")
+        manager.transition_status(run.run_id, ResearchRunStatus.CANCELLED)
+
+        preview = manager.preview_markdown_export(run.run_id)
+
+        self.assertEqual(
+            preview.suggested_filename,
+            "hypatia-research-unsafe-run.md",
+        )
+        self.assertNotIn("/", preview.suggested_filename)
+        self.assertNotIn("\\", preview.suggested_filename)
 
     def test_add_source_persists_provenance_without_page_content(self) -> None:
         run = self.manager.create("Question")

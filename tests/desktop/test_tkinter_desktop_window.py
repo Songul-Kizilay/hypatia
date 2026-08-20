@@ -284,6 +284,39 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         self.assertEqual(controller.sources, [])
         self.assertEqual(responses, [controller.list_response])
 
+    def test_research_markdown_export_preview_uses_selected_run_only(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchSourceLoadController()
+        responses: list[BrainResponse] = []
+        window._controller = controller
+        window._research_run_id = RecordingInput("run-123")
+        window._status = RecordingStatus()
+        window._append_response = responses.append
+
+        window._preview_research_run_markdown_export()
+
+        self.assertEqual(controller.export_previews, ["run-123"])
+        self.assertEqual(controller.sources, [])
+        self.assertEqual(responses, [controller.export_preview_response])
+
+    def test_research_markdown_export_preview_reports_empty_selection_locally(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchSourceLoadController()
+        responses: list[BrainResponse] = []
+        status = RecordingStatus()
+        window._controller = controller
+        window._research_run_id = RecordingInput("  ")
+        window._status = status
+        window._append_response = responses.append
+
+        window._preview_research_run_markdown_export()
+
+        self.assertEqual(controller.export_previews, [])
+        self.assertIn("run ID cannot be empty", status.values[-1])
+        self.assertEqual(responses, [])
+
     def test_discovery_renders_unaccepted_candidates_without_loading_them(
         self,
     ) -> None:
@@ -904,6 +937,7 @@ class RecordingResearchSourceLoadController:
         self.sources: list[tuple[str, str]] = []
         self.questions: list[str] = []
         self.list_calls = 0
+        self.export_previews: list[str] = []
         self.discovery_calls: list[str] = []
         self.evidence_calls: list[tuple[str, str, str]] = []
         self.evidence_list_calls: list[str] = []
@@ -993,6 +1027,12 @@ class RecordingResearchSourceLoadController:
             intent="research_run_list",
             memory_count=0,
             research_runs=[run],
+        )
+        self.export_preview_response = BrainResponse(
+            message="Markdown export preview.",
+            request_id="research-export-preview",
+            intent="research_run_markdown_export_preview",
+            memory_count=0,
         )
         self.discovery_response = BrainResponse(
             message="Candidates discovered.",
@@ -1203,6 +1243,12 @@ class RecordingResearchSourceLoadController:
     def list_research_runs(self) -> BrainResponse:
         self.list_calls += 1
         return self.list_response
+
+    def preview_research_run_markdown_export(self, run_id: str) -> BrainResponse:
+        if not run_id.strip():
+            raise ValueError("A research run ID cannot be empty.")
+        self.export_previews.append(run_id)
+        return self.export_preview_response
 
     def discover_research_sources(self, run_id: str) -> BrainResponse:
         if not run_id.strip():

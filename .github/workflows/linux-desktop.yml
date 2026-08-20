@@ -45,13 +45,20 @@ jobs:
           tools/build_desktop.sh --clean
           tools/smoke_desktop_linux.sh
 
+      - name: Read package version
+        id: package
+        run: |
+          version="$(.venv/bin/python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "archive=Hypatia-linux-x64-v$version.tar.gz" >> "$GITHUB_OUTPUT"
+
       - name: Create Linux archive
-        run: tar -C dist -czf Hypatia-linux-x64-v0.3.44.tar.gz Hypatia
+        run: tar -C dist -czf "${{ steps.package.outputs.archive }}" Hypatia
 
       - name: Upload Linux desktop artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: Hypatia-linux-x64-v0.3.44
-          path: Hypatia-linux-x64-v0.3.44.tar.gz
+          name: Hypatia-linux-x64-v${{ steps.package.outputs.version }}
+          path: ${{ steps.package.outputs.archive }}
           if-no-files-found: error
           retention-days: 14

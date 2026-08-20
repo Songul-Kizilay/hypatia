@@ -631,6 +631,11 @@ class TkinterDesktopWindow:
             text="Preview status",
             command=self._preview_and_update_research_status,
         ).grid(row=14, column=2, sticky="ew", pady=(8, 0))
+        ttk.Button(
+            research_frame,
+            text="Export preview",
+            command=self._preview_research_run_markdown_export,
+        ).grid(row=14, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
 
         relation_frame = ttk.LabelFrame(
             container,
@@ -867,6 +872,17 @@ class TkinterDesktopWindow:
     def _show_research_runs(self) -> None:
         """Render the current persisted run catalog without network access."""
         self._append_response(self._controller.list_research_runs())
+
+    def _preview_research_run_markdown_export(self) -> None:
+        """Render one terminal run as bounded Markdown without writing a file."""
+        try:
+            response = self._controller.preview_research_run_markdown_export(
+                self._research_run_id.get()
+            )
+        except ValueError as error:
+            self._status.set(str(error))
+            return
+        self._append_response(response)
 
     def _discover_research_sources(self) -> None:
         """Discover and display metadata candidates for the selected run."""

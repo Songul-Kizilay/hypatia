@@ -40,6 +40,9 @@ The MVP may present only current Brain/CognitiveEngine capabilities:
 - preview-and-confirm recording of a user-authored comparison note that cites
   explicit evidence and current assessment IDs covering the exact selected
   sources, without generated text, reference selection, verdicts, or scores;
+- read-only Markdown export preview for one terminal research run, generated
+  only from persisted audit records with bounded display, escaped remote and
+  authored text, a safe suggested basename, and a full-content fingerprint;
 - preview-and-confirm transition of a collecting research run to one terminal
   lifecycle status;
 - an explicit Crossref scholarly-metadata discovery request for a selected
@@ -171,6 +174,11 @@ assessment IDs. The preview performs no write; the confirmed action revalidates
 the open run, accepted sources, ownership and coverage of every reference, and
 then atomically appends. Later comparison previews show only notes for that exact
 source order, bounded to 20 displayed notes with the complete count reported.
+`Export preview` takes only the selected terminal run ID. The runtime renders
+the immutable snapshot deterministically, escapes untrusted Markdown structure,
+bounds the transcript display, and returns the snapshot time plus complete
+content fingerprint needed by a later save action. It does not open a file
+dialog, accept a destination, or write a document in this increment.
 The `Final status` selector exposes only completed, failed, and cancelled. The
 window first renders the runtime preview and opens confirmation only for an
 allowed decision; the separate update call revalidates before persistence.

@@ -2,6 +2,46 @@
 
 All notable project changes are recorded here.
 
+## [0.3.45] - 2026-08-21
+
+### Added
+
+- One explicitly selected terminal research run can be rendered as a
+  deterministic, read-only Markdown export preview from its immutable persisted
+  snapshot.
+- The export includes run identity and lifecycle, accepted-source provenance,
+  bounded evidence excerpts and user notes, complete assessment history with
+  current/superseded labels, comparison notes, and safe failure records in
+  persisted order.
+- The desktop adds `Export preview` beside the existing terminal-status action.
+  It requires only the selected run ID and passes no destination path.
+- The Linux verification workflow now derives its archive name from package
+  metadata so each release receives a correctly versioned build artifact.
+- The preview carries the exact snapshot update time, a sanitized suggested
+  filename, complete character count, omitted character count, and SHA-256 of
+  the full deterministic Markdown content for a later revalidating save flow.
+
+### Safety
+
+- Collecting runs cannot be exported. The preview performs no file write,
+  provider or network request, LLM call, live knowledge lookup, event
+  publication, graph change, or conversation-memory mutation.
+- Display is bounded to 24,000 source characters with an explicit omitted
+  count. The SHA-256 still describes the complete content rather than the
+  bounded display.
+- Persisted remote excerpts and user-authored text are rendered as escaped
+  block quotes so headings, raw HTML, image references, and Markdown control
+  characters remain literal report data instead of active document structure.
+  ASCII controls and directional-override characters are made visible rather
+  than retained as hidden display instructions.
+- Suggested filenames are reduced to a bounded basename and cannot carry a
+  directory separator. No document is saved in this release.
+
+### Verification
+
+- The package-aware full local suite contains 1,174 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass across 291 source files.
+
 ## [0.3.44] - 2026-08-21
 
 ### Added

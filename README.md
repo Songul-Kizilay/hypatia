@@ -110,6 +110,10 @@ To create the world's most capable personal AI research companion.
   order. It requires explicit evidence and current assessment IDs covering
   every source, uses a separate preview and confirmation, revalidates every
   reference before atomic persistence, and remains readable after restart
+- A deterministic Markdown export preview for one terminal research run. It
+  uses only the immutable persisted audit snapshot, includes provenance,
+  evidence, assessment history, comparison notes, and failures, and exposes a
+  full-content SHA-256 while bounding the desktop display. It writes no file
 - An initial local desktop shell for text chat, a refreshable session overview,
   explicit session selection, session details/recent conversations/activity,
   explicit lexical/semantic conversation recall, and semantic-memory runtime
@@ -208,6 +212,13 @@ asks for confirmation, and revalidates before an atomic append. A later
 `Compare sources` view shows up to 20 notes recorded for that exact source order
 and reports the complete count; Hypatia does not write the note, choose its
 references, or generate a verdict.
+`Export preview` accepts the selected run ID only after that run is completed,
+failed, or cancelled. It deterministically renders the persisted audit record
+as Markdown and reports the exact snapshot time, safe suggested filename, full
+character count, omitted preview count, and SHA-256 of the complete content.
+Remote excerpts and authored text are escaped as literal quoted material. The
+desktop shows at most 24,000 source characters and performs no file write,
+network, provider, LLM, memory, graph, live-index, or event-bus operation.
 The `Final status` control previews `completed`, `failed`, or `cancelled` before
 asking for separate confirmation. Completion requires at least one accepted
 source and one evidence record, while failure requires a recorded failure. A
@@ -274,7 +285,7 @@ The resulting application is `dist/Hypatia/Hypatia`. It stores local state
 beneath `${XDG_DATA_HOME:-$HOME/.local/share}/hypatia`; only an absolute
 `XDG_DATA_HOME` is honored. The cross-platform absolute
 `HYPATIA_DESKTOP_DATA_DIR` override still takes precedence. The published
-`Hypatia-linux-x64-v0.3.44.tar.gz` archive is built and opened under Xvfb on
+`Hypatia-linux-x64-v<version>.tar.gz` archive is built and opened under Xvfb on
 Ubuntu before release. Updates remain manual, and the package adds no telemetry,
 bundled credentials, cloud store, or automatic data migration.
 
