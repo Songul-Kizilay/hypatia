@@ -186,6 +186,12 @@ class CognitiveEngine:
         if self._is_research_source_assessment_preview_request(request):
             return self._process_research_source_assessment_preview(request)
 
+        if self._is_research_source_assessment_write_preview_request(request):
+            return self._process_research_source_assessment_write_preview(request)
+
+        if self._is_research_source_assessment_record_request(request):
+            return self._process_research_source_assessment_record(request)
+
         if self._is_research_run_status_preview_request(request):
             return self._process_research_run_status_preview(request)
 
@@ -402,6 +408,20 @@ class CognitiveEngine:
         return request.metadata.get("intent") == "research_source_assessment_preview"
 
     @staticmethod
+    def _is_research_source_assessment_write_preview_request(
+        request: BrainRequest,
+    ) -> bool:
+        """Recognize one explicit no-write assessment confirmation preview."""
+        return (
+            request.metadata.get("intent") == "research_source_assessment_write_preview"
+        )
+
+    @staticmethod
+    def _is_research_source_assessment_record_request(request: BrainRequest) -> bool:
+        """Recognize one separately confirmed authored assessment write."""
+        return request.metadata.get("intent") == "research_source_assessment_record"
+
+    @staticmethod
     def _is_research_run_status_preview_request(request: BrainRequest) -> bool:
         """Recognize one explicit read-only lifecycle transition preview."""
         return request.metadata.get("intent") == "research_run_status_preview"
@@ -539,6 +559,106 @@ class CognitiveEngine:
         return self._response_composer.research_source_assessment_preview_success(
             request,
             preview,
+        )
+
+    def _process_research_source_assessment_write_preview(
+        self,
+        request: BrainRequest,
+    ) -> BrainResponse:
+        """Preview explicit evidence and authored text without side effects."""
+        return self._process_research_source_assessment_write(
+            request,
+            preview_only=True,
+        )
+
+    def _process_research_source_assessment_record(
+        self,
+        request: BrainRequest,
+    ) -> BrainResponse:
+        """Revalidate and commit one separately confirmed assessment."""
+        return self._process_research_source_assessment_write(
+            request,
+            preview_only=False,
+        )
+
+    def _process_research_source_assessment_write(
+        self,
+        request: BrainRequest,
+        *,
+        preview_only: bool,
+    ) -> BrainResponse:
+        intent = (
+            "research_source_assessment_write_preview"
+            if preview_only
+            else "research_source_assessment_record"
+        )
+        failure = self._response_composer.research_source_assessment_write_failure
+        values = self._research_source_assessment_write_values(request)
+        if values is None:
+            return failure(
+                request,
+                "A run ID, accepted source document ID, explicit evidence IDs, and "
+                "assessment text are required.",
+                intent=intent,
+            )
+        if self._research_run_manager is None:
+            return failure(
+                request,
+                "Research run persistence is unavailable.",
+                intent=intent,
+            )
+        try:
+            if preview_only:
+                preview = self._research_run_manager.preview_source_assessment_write(
+                    *values
+                )
+                compose_preview = (
+                    self._response_composer.research_source_assessment_write_preview_success
+                )
+                return compose_preview(
+                    request,
+                    preview,
+                )
+            run = self._research_run_manager.record_source_assessment(*values)
+        except ResearchError:
+            return failure(
+                request,
+                "Research source assessment could not be validated or saved.",
+                intent=intent,
+            )
+        return self._response_composer.research_source_assessment_record_success(
+            request,
+            run,
+        )
+
+    @staticmethod
+    def _research_source_assessment_write_values(
+        request: BrainRequest,
+    ) -> tuple[str, str, list[str], str] | None:
+        run_id = request.metadata.get("research_run_id")
+        document_id = request.metadata.get("research_source_document_id")
+        evidence_ids = request.metadata.get("research_assessment_evidence_ids")
+        text = request.metadata.get("research_assessment_text")
+        if (
+            not isinstance(run_id, str)
+            or not run_id.strip()
+            or not isinstance(document_id, str)
+            or not document_id.strip()
+            or not isinstance(evidence_ids, list)
+            or not evidence_ids
+            or not all(
+                isinstance(evidence_id, str) and evidence_id.strip()
+                for evidence_id in evidence_ids
+            )
+            or not isinstance(text, str)
+            or not text.strip()
+        ):
+            return None
+        return (
+            run_id,
+            document_id,
+            evidence_ids,
+            text,
         )
 
     def _process_research_run_status_preview(

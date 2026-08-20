@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from core.Exceptions import ResearchError
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchRunStatus import ResearchRunStatus
+from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
 from research.ResearchSourceRecord import ResearchSourceRecord
 
 
@@ -20,6 +21,7 @@ class ResearchSourceAssessmentPreview:
     evidence: tuple[ResearchEvidenceRecord, ...]
     has_recorded_evidence: bool
     reason: str
+    assessments: tuple[ResearchSourceAssessmentRecord, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.run_id, str) or not self.run_id.strip():
@@ -53,5 +55,30 @@ class ResearchSourceAssessmentPreview:
             )
         if not isinstance(self.reason, str) or not self.reason.strip():
             raise ResearchError("Research source assessment reason cannot be empty.")
+        if not isinstance(self.assessments, tuple):
+            raise ResearchError(
+                "Research source assessment records must be an immutable tuple."
+            )
+        if not all(
+            isinstance(record, ResearchSourceAssessmentRecord)
+            for record in self.assessments
+        ):
+            raise ResearchError("Research source assessment records are invalid.")
+        if any(
+            record.source_document_id != self.source.document_id
+            for record in self.assessments
+        ):
+            raise ResearchError(
+                "Research source assessment records must belong to their source."
+            )
+        evidence_ids = {record.evidence_id for record in self.evidence}
+        if any(
+            evidence_id not in evidence_ids
+            for record in self.assessments
+            for evidence_id in record.evidence_ids
+        ):
+            raise ResearchError(
+                "Research source assessment records must cite displayed evidence."
+            )
         object.__setattr__(self, "run_id", self.run_id.strip())
         object.__setattr__(self, "reason", self.reason.strip())

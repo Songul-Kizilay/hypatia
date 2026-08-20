@@ -26,12 +26,16 @@ from desktop.TkinterDesktopWindow import (
 from knowledge.Document import DocumentType
 from knowledge.KnowledgeCitation import KnowledgeCitation
 from knowledge.KnowledgeDocumentReference import KnowledgeDocumentReference
+from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchRun import ResearchRun
 from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchRunStatusTransitionPreview import (
     ResearchRunStatusTransitionPreview,
 )
 from research.ResearchSourceAssessmentPreview import ResearchSourceAssessmentPreview
+from research.ResearchSourceAssessmentWritePreview import (
+    ResearchSourceAssessmentWritePreview,
+)
 from research.ResearchSourceCandidate import ResearchSourceCandidate
 from research.ResearchSourceCandidateAcceptancePreview import (
     ResearchSourceCandidateAcceptancePreview,
@@ -522,6 +526,112 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             ["A research source document ID cannot be empty."],
         )
 
+    def test_allowed_authored_assessment_requires_confirmation_before_record(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchSourceLoadController()
+        responses: list[BrainResponse] = []
+        values = ("run-123", "document-123", "evidence-123", "Assessment.")
+        window._root = object()
+        window._controller = controller
+        window._research_run_id = RecordingInput(values[0])
+        window._research_source_document_id = RecordingInput(values[1])
+        window._research_assessment_evidence_ids = RecordingInput(values[2])
+        window._research_assessment_text = RecordingInput(values[3])
+        window._status = RecordingStatus()
+        window._append_response = responses.append
+
+        with patch(
+            "desktop.TkinterDesktopWindow.messagebox.askyesno",
+            return_value=True,
+        ) as confirm:
+            window._preview_and_record_research_source_assessment()
+
+        self.assertEqual(controller.assessment_write_previews, [values])
+        self.assertEqual(controller.assessment_records, [values])
+        self.assertEqual(
+            responses,
+            [
+                controller.assessment_write_preview_response,
+                controller.assessment_record_response,
+            ],
+        )
+        confirm.assert_called_once()
+
+    def test_declined_or_blocked_assessment_preview_never_records(self) -> None:
+        for blocked in (False, True):
+            with self.subTest(blocked=blocked):
+                window: Any = object.__new__(TkinterDesktopWindow)
+                controller = RecordingResearchSourceLoadController()
+                if blocked:
+                    preview = controller.assessment_write_preview_response
+                    assert preview.research_source_assessment_write_preview is not None
+                    blocked_preview = ResearchSourceAssessmentWritePreview(
+                        run_id="run-123",
+                        run_status=ResearchRunStatus.CANCELLED,
+                        source=(
+                            preview.research_source_assessment_write_preview.source
+                        ),
+                        evidence=(
+                            preview.research_source_assessment_write_preview.evidence
+                        ),
+                        text="Assessment.",
+                        allowed=False,
+                        reason="A closed research run cannot accept new assessments.",
+                    )
+                    controller.assessment_write_preview_response = BrainResponse(
+                        message="Assessment preview blocked.",
+                        request_id="assessment-preview-blocked",
+                        intent="research_source_assessment_write_preview",
+                        memory_count=0,
+                        success=False,
+                        research_source_assessment_write_preview=blocked_preview,
+                    )
+                window._root = object()
+                window._controller = controller
+                window._research_run_id = RecordingInput("run-123")
+                window._research_source_document_id = RecordingInput("document-123")
+                window._research_assessment_evidence_ids = RecordingInput(
+                    "evidence-123"
+                )
+                window._research_assessment_text = RecordingInput("Assessment.")
+                window._status = RecordingStatus()
+                window._append_response = lambda _response: None
+
+                with patch(
+                    "desktop.TkinterDesktopWindow.messagebox.askyesno",
+                    return_value=False,
+                ) as confirm:
+                    window._preview_and_record_research_source_assessment()
+
+                self.assertEqual(controller.assessment_records, [])
+                if blocked:
+                    confirm.assert_not_called()
+                else:
+                    confirm.assert_called_once()
+
+    def test_empty_authored_assessment_stays_local(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchSourceLoadController()
+        status = RecordingStatus()
+        window._controller = controller
+        window._research_run_id = RecordingInput("run-123")
+        window._research_source_document_id = RecordingInput("document-123")
+        window._research_assessment_evidence_ids = RecordingInput("")
+        window._research_assessment_text = RecordingInput("Assessment.")
+        window._status = status
+        window._append_response = lambda _response: self.fail("must not append")
+
+        window._preview_and_record_research_source_assessment()
+
+        self.assertEqual(controller.assessment_write_previews, [])
+        self.assertEqual(controller.assessment_records, [])
+        self.assertEqual(
+            status.values,
+            ["Research assessment evidence IDs cannot be empty."],
+        )
+
     def test_allowed_research_status_preview_requires_confirmation_before_update(
         self,
     ) -> None:
@@ -700,6 +810,8 @@ class RecordingResearchSourceLoadController:
         self.candidate_previews: list[tuple[str, str, str]] = []
         self.candidate_accepts: list[tuple[str, str, str]] = []
         self.assessment_previews: list[tuple[str, str]] = []
+        self.assessment_write_previews: list[tuple[str, str, str, str]] = []
+        self.assessment_records: list[tuple[str, str, str, str]] = []
         self.response = BrainResponse(
             message="Loaded.",
             request_id="research-source-load",
@@ -834,6 +946,39 @@ class RecordingResearchSourceLoadController:
             research_runs=[accepted_run],
             research_source_assessment_preview=assessment_preview,
         )
+        assessment_evidence = ResearchEvidenceRecord(
+            evidence_id="evidence-123",
+            source_document_id="document-123",
+            chunk_id="chunk-123",
+            chunk_index=0,
+            excerpt="Evidence.",
+            excerpt_truncated=False,
+            chunk_sha256="a" * 64,
+            note="Supports the assessment.",
+            recorded_at=now,
+        )
+        assessment_write_preview = ResearchSourceAssessmentWritePreview(
+            run_id=run.run_id,
+            run_status=run.status,
+            source=accepted_source,
+            evidence=(assessment_evidence,),
+            text="Assessment.",
+            allowed=True,
+            reason="Research source assessment can be recorded after confirmation.",
+        )
+        self.assessment_write_preview_response = BrainResponse(
+            message="Assessment write preview allowed.",
+            request_id="research-source-assessment-write-preview",
+            intent="research_source_assessment_write_preview",
+            memory_count=0,
+            research_source_assessment_write_preview=assessment_write_preview,
+        )
+        self.assessment_record_response = BrainResponse(
+            message="Assessment recorded.",
+            request_id="research-source-assessment-record",
+            intent="research_source_assessment_record",
+            memory_count=0,
+        )
         status_preview = ResearchRunStatusTransitionPreview(
             run_id="run-123",
             current_status=ResearchRunStatus.COLLECTING,
@@ -912,6 +1057,30 @@ class RecordingResearchSourceLoadController:
             raise ValueError("A research source document ID cannot be empty.")
         self.assessment_previews.append((run_id, document_id))
         return self.assessment_preview_response
+
+    def preview_research_source_assessment_write(
+        self,
+        run_id: str,
+        document_id: str,
+        evidence_ids: str,
+        text: str,
+    ) -> BrainResponse:
+        if not evidence_ids.strip():
+            raise ValueError("Research assessment evidence IDs cannot be empty.")
+        values = (run_id, document_id, evidence_ids, text)
+        self.assessment_write_previews.append(values)
+        return self.assessment_write_preview_response
+
+    def record_research_source_assessment(
+        self,
+        run_id: str,
+        document_id: str,
+        evidence_ids: str,
+        text: str,
+    ) -> BrainResponse:
+        values = (run_id, document_id, evidence_ids, text)
+        self.assessment_records.append(values)
+        return self.assessment_record_response
 
     def preview_research_run_status(
         self,

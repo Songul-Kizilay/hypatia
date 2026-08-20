@@ -241,6 +241,86 @@ class DesktopController:
             )
         )
 
+    def preview_research_source_assessment_write(
+        self,
+        research_run_id: str,
+        source_document_id: str,
+        evidence_ids: str,
+        assessment_text: str,
+    ) -> BrainResponse:
+        """Preview an authored assessment with explicit evidence references."""
+        metadata = self._research_source_assessment_write_metadata(
+            research_run_id,
+            source_document_id,
+            evidence_ids,
+            assessment_text,
+        )
+        return self._brain.process(
+            BrainRequest(
+                message="Preview user-authored research source assessment",
+                source="desktop",
+                metadata={
+                    "intent": "research_source_assessment_write_preview",
+                    **metadata,
+                },
+            )
+        )
+
+    def record_research_source_assessment(
+        self,
+        research_run_id: str,
+        source_document_id: str,
+        evidence_ids: str,
+        assessment_text: str,
+    ) -> BrainResponse:
+        """Submit one assessment only after the desktop confirmation step."""
+        metadata = self._research_source_assessment_write_metadata(
+            research_run_id,
+            source_document_id,
+            evidence_ids,
+            assessment_text,
+        )
+        return self._brain.process(
+            BrainRequest(
+                message="Record user-authored research source assessment",
+                source="desktop",
+                metadata={
+                    "intent": "research_source_assessment_record",
+                    **metadata,
+                },
+            )
+        )
+
+    @staticmethod
+    def _research_source_assessment_write_metadata(
+        research_run_id: str,
+        source_document_id: str,
+        evidence_ids: str,
+        assessment_text: str,
+    ) -> dict[str, object]:
+        normalized_run_id = research_run_id.strip()
+        normalized_document_id = source_document_id.strip()
+        normalized_text = assessment_text.strip()
+        normalized_evidence_ids = [
+            value.strip() for value in evidence_ids.split(",") if value.strip()
+        ]
+        if not normalized_run_id:
+            raise ValueError("A research run ID cannot be empty.")
+        if not normalized_document_id:
+            raise ValueError("A research source document ID cannot be empty.")
+        if not normalized_evidence_ids:
+            raise ValueError("Research assessment evidence IDs cannot be empty.")
+        if len(normalized_evidence_ids) != len(set(normalized_evidence_ids)):
+            raise ValueError("Research assessment evidence IDs cannot be duplicated.")
+        if not normalized_text:
+            raise ValueError("Research source assessment text cannot be empty.")
+        return {
+            "research_run_id": normalized_run_id,
+            "research_source_document_id": normalized_document_id,
+            "research_assessment_evidence_ids": normalized_evidence_ids,
+            "research_assessment_text": normalized_text,
+        }
+
     def preview_research_run_status(
         self,
         research_run_id: str,

@@ -330,7 +330,7 @@ class BootstrapTests(unittest.TestCase):
                 },
             )
         ).research_runs[0]
-        brain.process(
+        loaded = brain.process(
             BrainRequest(
                 message="Load selected internet research source",
                 metadata={
@@ -350,6 +350,32 @@ class BootstrapTests(unittest.TestCase):
                     "research_run_id": run.run_id,
                     "research_chunk_id": chunk.chunk_id,
                     "research_evidence_note": "Supports the comparison.",
+                },
+            )
+        )
+        document_id = loaded.knowledge_documents[0].document_id
+        evidence_id = recorded.research_runs[0].evidence[0].evidence_id
+        assessment_preview = brain.process(
+            BrainRequest(
+                message="Preview user-authored assessment",
+                metadata={
+                    "intent": "research_source_assessment_write_preview",
+                    "research_run_id": run.run_id,
+                    "research_source_document_id": document_id,
+                    "research_assessment_evidence_ids": [evidence_id],
+                    "research_assessment_text": "The source supports the comparison.",
+                },
+            )
+        )
+        assessment_recorded = brain.process(
+            BrainRequest(
+                message="Record user-authored assessment",
+                metadata={
+                    "intent": "research_source_assessment_record",
+                    "research_run_id": run.run_id,
+                    "research_source_document_id": document_id,
+                    "research_assessment_evidence_ids": [evidence_id],
+                    "research_assessment_text": "The source supports the comparison.",
                 },
             )
         )
@@ -381,8 +407,20 @@ class BootstrapTests(unittest.TestCase):
                 },
             )
         )
+        assessment_listed = restarted.container.resolve(Brain).process(
+            BrainRequest(
+                message="Preview accepted research source assessment",
+                metadata={
+                    "intent": "research_source_assessment_preview",
+                    "research_run_id": run.run_id,
+                    "research_source_document_id": document_id,
+                },
+            )
+        )
 
         self.assertTrue(recorded.success)
+        self.assertTrue(assessment_preview.success)
+        self.assertTrue(assessment_recorded.success)
         self.assertTrue(closed.success)
         self.assertEqual(closed.research_runs[0].status.value, "completed")
         self.assertEqual(len(recorded.research_runs[0].evidence), 1)
@@ -390,6 +428,15 @@ class BootstrapTests(unittest.TestCase):
         self.assertTrue(evidence_listed.success)
         self.assertEqual(evidence_listed.research_runs, closed.research_runs)
         self.assertIn("Second finding.", evidence_listed.message)
+        self.assertEqual(len(assessment_recorded.research_runs[0].assessments), 1)
+        self.assertTrue(assessment_listed.success)
+        self.assertIsNotNone(assessment_listed.research_source_assessment_preview)
+        assert assessment_listed.research_source_assessment_preview is not None
+        self.assertEqual(
+            len(assessment_listed.research_source_assessment_preview.assessments),
+            1,
+        )
+        self.assertIn("supports the comparison", assessment_listed.message)
 
     def test_missing_session_file_creates_and_persists_the_default_registry(
         self,

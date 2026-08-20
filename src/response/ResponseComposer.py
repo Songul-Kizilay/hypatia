@@ -26,6 +26,9 @@ from research.ResearchRunStatusTransitionPreview import (
     ResearchRunStatusTransitionPreview,
 )
 from research.ResearchSourceAssessmentPreview import ResearchSourceAssessmentPreview
+from research.ResearchSourceAssessmentWritePreview import (
+    ResearchSourceAssessmentWritePreview,
+)
 from research.ResearchSourceCandidateAcceptancePreview import (
     ResearchSourceCandidateAcceptancePreview,
 )
@@ -680,6 +683,7 @@ class ResponseComposer:
                     f"Sources: {len(run.sources)}",
                     f"Discoveries: {len(run.discoveries)}",
                     f"Evidence: {len(run.evidence)}",
+                    f"Assessments: {len(run.assessments)}",
                     f"Failures: {len(run.failures)}",
                     f"ID: {run.run_id}",
                 ]
@@ -707,6 +711,7 @@ class ResponseComposer:
                     f"sources: {len(run.sources)} | "
                     f"discoveries: {len(run.discoveries)} | "
                     f"evidence: {len(run.evidence)} | "
+                    f"assessments: {len(run.assessments)} | "
                     f"failures: {len(run.failures)} | "
                     f"id: {run.run_id}"
                 )
@@ -853,6 +858,16 @@ class ResponseComposer:
                     f"  excerpt: {evidence.excerpt}{truncation}",
                 ]
             )
+        lines.append(f"Recorded assessments: {len(preview.assessments)}")
+        for assessment in preview.assessments:
+            lines.extend(
+                [
+                    f"- Assessment: {assessment.assessment_id}",
+                    f"  evidence IDs: {', '.join(assessment.evidence_ids)}",
+                    f"  text: {assessment.text}",
+                    f"  recorded: {assessment.recorded_at.isoformat()}",
+                ]
+            )
         return BrainResponse(
             message="\n".join(lines),
             request_id=request.request_id,
@@ -871,6 +886,78 @@ class ResponseComposer:
             message=message,
             request_id=request.request_id,
             intent="research_source_assessment_preview",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_source_assessment_write_preview_success(
+        self,
+        request: BrainRequest,
+        preview: ResearchSourceAssessmentWritePreview,
+    ) -> BrainResponse:
+        """Render one exact user-authored assessment before confirmation."""
+        lines = [
+            "Research source assessment write preview:",
+            f"Run: {preview.run_id}",
+            f"Run status: {preview.run_status.value}",
+            f"Source: {preview.source.title}",
+            f"Document ID: {preview.source.document_id}",
+            f"Assessment: {preview.text}",
+            "Explicit evidence:",
+        ]
+        lines.extend(
+            f"- {record.evidence_id}: {record.note}" for record in preview.evidence
+        )
+        lines.extend(
+            [
+                f"Allowed: {'yes' if preview.allowed else 'no'}",
+                f"Reason: {preview.reason}",
+                "Status: user-authored text only; no automatic score was assigned",
+            ]
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_source_assessment_write_preview",
+            memory_count=0,
+            success=preview.allowed,
+            research_source_assessment_write_preview=preview,
+        )
+
+    def research_source_assessment_record_success(
+        self,
+        request: BrainRequest,
+        run: ResearchRun,
+    ) -> BrainResponse:
+        """Render an assessment only after its audit snapshot commits."""
+        assessment = run.assessments[-1]
+        return BrainResponse(
+            message=(
+                "Research source assessment recorded:\n"
+                f"ID: {assessment.assessment_id}\n"
+                f"Document ID: {assessment.source_document_id}\n"
+                f"Evidence IDs: {', '.join(assessment.evidence_ids)}\n"
+                f"Assessment: {assessment.text}\n"
+                "Status: committed user-authored assessment; no automatic score"
+            ),
+            request_id=request.request_id,
+            intent="research_source_assessment_record",
+            memory_count=0,
+            research_runs=[run],
+        )
+
+    def research_source_assessment_write_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+        *,
+        intent: str,
+    ) -> BrainResponse:
+        """Report invalid assessment preview or record input safely."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent=intent,
             memory_count=0,
             success=False,
         )

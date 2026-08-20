@@ -51,6 +51,7 @@ class ResearchRunManagerTests(unittest.TestCase):
             id_factory=lambda: "run-1",
             evidence_id_factory=lambda: "evidence-1",
             discovery_id_factory=lambda: "discovery-1",
+            assessment_id_factory=lambda: "assessment-1",
         )
 
     def test_create_persists_before_publishing_the_run(self) -> None:
@@ -290,6 +291,12 @@ class ResearchRunManagerTests(unittest.TestCase):
                 "test-provider",
                 [],
             ),
+            lambda: self.manager.record_source_assessment(
+                run.run_id,
+                "document-1",
+                ["evidence-1"],
+                "Assessment.",
+            ),
         ):
             with self.assertRaisesRegex(ResearchError, "closed"):
                 mutation()
@@ -483,6 +490,159 @@ class ResearchRunManagerTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ResearchError, "accepted sources"):
             self.manager.preview_source_assessment(run.run_id, "document-1")
+
+    def test_authored_assessment_preview_is_read_only_and_record_is_atomic(
+        self,
+    ) -> None:
+        run = self.manager.create("Question")
+        source = ResearchSource(
+            "https://example.com/source",
+            "Source",
+            "Evidence.",
+            "text/plain",
+            self.start,
+        )
+        self.manager.add_source(run.run_id, source, "document-1")
+        evidence = self.manager.add_evidence(
+            run.run_id,
+            Chunk("document-1", 0, "Evidence.", chunk_id="chunk-1"),
+            "Supports the assessment.",
+        ).evidence[-1]
+        saves_before = len(self.store.saved)
+
+        preview = self.manager.preview_source_assessment_write(
+            run.run_id,
+            "document-1",
+            [evidence.evidence_id],
+            "  The source supports the claim.  ",
+        )
+
+        self.assertTrue(preview.allowed)
+        self.assertEqual(preview.evidence, (evidence,))
+        self.assertEqual(preview.text, "The source supports the claim.")
+        self.assertEqual(len(self.store.saved), saves_before)
+
+        updated = self.manager.record_source_assessment(
+            run.run_id,
+            "document-1",
+            [evidence.evidence_id],
+            "The source supports the claim.",
+        )
+
+        self.assertEqual(len(updated.assessments), 1)
+        assessment = updated.assessments[0]
+        self.assertEqual(assessment.assessment_id, "assessment-1")
+        self.assertEqual(assessment.source_document_id, "document-1")
+        self.assertEqual(assessment.evidence_ids, (evidence.evidence_id,))
+        self.assertEqual(self.store.runs, [updated])
+        history = self.manager.preview_source_assessment(run.run_id, "document-1")
+        self.assertEqual(history.assessments, (assessment,))
+
+    def test_authored_assessment_rejects_cross_source_or_missing_evidence(self) -> None:
+        run = self.manager.create("Question")
+        for number in (1, 2):
+            self.manager.add_source(
+                run.run_id,
+                ResearchSource(
+                    f"https://example.com/{number}",
+                    f"Source {number}",
+                    f"Evidence {number}.",
+                    "text/plain",
+                    self.start,
+                ),
+                f"document-{number}",
+            )
+        evidence = self.manager.add_evidence(
+            run.run_id,
+            Chunk("document-2", 0, "Evidence 2.", chunk_id="chunk-2"),
+            "Second source evidence.",
+        ).evidence[-1]
+
+        with self.assertRaisesRegex(ResearchError, "selected source"):
+            self.manager.preview_source_assessment_write(
+                run.run_id,
+                "document-1",
+                [evidence.evidence_id],
+                "Invalid cross-source assessment.",
+            )
+        with self.assertRaisesRegex(ResearchError, "not found in this run"):
+            self.manager.preview_source_assessment_write(
+                run.run_id,
+                "document-1",
+                ["missing-evidence"],
+                "Missing evidence assessment.",
+            )
+
+    def test_closed_run_blocks_preview_and_record_without_saving(self) -> None:
+        run = self.manager.create("Question")
+        self.manager.add_source(
+            run.run_id,
+            ResearchSource(
+                "https://example.com/source",
+                "Source",
+                "Evidence.",
+                "text/plain",
+                self.start,
+            ),
+            "document-1",
+        )
+        evidence = self.manager.add_evidence(
+            run.run_id,
+            Chunk("document-1", 0, "Evidence.", chunk_id="chunk-1"),
+            "Relevant.",
+        ).evidence[-1]
+        self.manager.transition_status(run.run_id, ResearchRunStatus.COMPLETED)
+        saves_before = len(self.store.saved)
+
+        preview = self.manager.preview_source_assessment_write(
+            run.run_id,
+            "document-1",
+            [evidence.evidence_id],
+            "Too late.",
+        )
+
+        self.assertFalse(preview.allowed)
+        self.assertIn("closed", preview.reason)
+        self.assertEqual(len(self.store.saved), saves_before)
+        with self.assertRaisesRegex(ResearchError, "closed"):
+            self.manager.record_source_assessment(
+                run.run_id,
+                "document-1",
+                [evidence.evidence_id],
+                "Too late.",
+            )
+        self.assertEqual(len(self.store.saved), saves_before)
+
+    def test_failed_assessment_save_does_not_publish_record(self) -> None:
+        run = self.manager.create("Question")
+        self.manager.add_source(
+            run.run_id,
+            ResearchSource(
+                "https://example.com/source",
+                "Source",
+                "Evidence.",
+                "text/plain",
+                self.start,
+            ),
+            "document-1",
+        )
+        evidence = self.manager.add_evidence(
+            run.run_id,
+            Chunk("document-1", 0, "Evidence.", chunk_id="chunk-1"),
+            "Relevant.",
+        ).evidence[-1]
+        before = self.manager.get(run.run_id)
+        self.store.error = ResearchError("Store unavailable.")
+
+        with self.assertRaisesRegex(ResearchError, "Store unavailable"):
+            self.manager.record_source_assessment(
+                run.run_id,
+                "document-1",
+                [evidence.evidence_id],
+                "Assessment.",
+            )
+
+        self.assertEqual(self.manager.get(run.run_id), before)
 
 
 if __name__ == "__main__":

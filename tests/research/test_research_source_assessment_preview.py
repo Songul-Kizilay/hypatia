@@ -11,6 +11,7 @@ from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSource import ResearchSource
 from research.ResearchSourceAssessmentPreview import ResearchSourceAssessmentPreview
+from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
 from research.ResearchSourceRecord import ResearchSourceRecord
 
 
@@ -71,6 +72,26 @@ class ResearchSourceAssessmentPreviewTests(unittest.TestCase):
                 (self.evidence,),
                 False,
                 "Invalid.",
+            )
+
+    def test_preview_rejects_assessment_that_cites_undisplayed_evidence(self) -> None:
+        assessment = ResearchSourceAssessmentRecord(
+            "assessment-1",
+            self.source.document_id,
+            ("evidence-missing",),
+            "Assessment.",
+            self.now,
+        )
+
+        with self.assertRaisesRegex(ResearchError, "displayed evidence"):
+            ResearchSourceAssessmentPreview(
+                run_id="run-1",
+                run_status=ResearchRunStatus.COLLECTING,
+                source=self.source,
+                evidence=(),
+                has_recorded_evidence=False,
+                reason="No evidence is available.",
+                assessments=(assessment,),
             )
 
 

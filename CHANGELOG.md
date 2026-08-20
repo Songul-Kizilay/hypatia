@@ -2,6 +2,37 @@
 
 All notable project changes are recorded here.
 
+## [0.3.40] - 2026-08-20
+
+### Added
+
+- A collecting research run can now persist an append-only, user-authored
+  assessment for one accepted source. The record stores the source document
+  ID, the exact evidence IDs explicitly entered by the user, bounded assessment
+  text, a unique assessment ID, and its timezone-aware recording time.
+- The desktop adds separate assessment-evidence and assessment-text fields plus
+  `Preview & save assessment`. It displays the runtime preview and requests
+  confirmation before sending a distinct record request.
+- The accepted-source assessment view now includes the source's persisted
+  authored-assessment history after restart.
+
+### Security
+
+- Preview performs no write. Final recording revalidates the exact run, accepted
+  source, and every evidence ID; missing, cross-source, duplicate, or closed-run
+  selections are rejected before persistence.
+- The assessment is user-authored and evidence selection is explicit. Hypatia
+  assigns no automatic trust, credibility, relevance, support, or quality score
+  and invokes no source fetcher, discovery provider, LLM, memory, graph, or
+  event-bus side effect.
+- Research-run schema v4 reads v1-v3 snapshots with missing collections treated
+  as empty and upgrades only on a later successful atomic save.
+
+### Verification
+
+- The package-aware full local suite contains 1,121 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass across 281 source files.
+
 ## [0.3.39] - 2026-08-20
 
 ### Added

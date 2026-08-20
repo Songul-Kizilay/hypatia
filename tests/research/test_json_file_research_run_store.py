@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import patch
@@ -15,6 +16,7 @@ from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchFailureRecord import ResearchFailureRecord
 from research.ResearchRun import ResearchRun
 from research.ResearchRunStatus import ResearchRunStatus
+from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
 from research.ResearchSourceCandidate import ResearchSourceCandidate
 from research.ResearchSourceDiscoveryRecord import ResearchSourceDiscoveryRecord
 from research.ResearchSourceRecord import ResearchSourceRecord
@@ -85,16 +87,27 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
                     discovered_at=self.now,
                 ),
             ),
+            assessments=(
+                ResearchSourceAssessmentRecord(
+                    assessment_id="assessment-1",
+                    source_document_id="document-1",
+                    evidence_ids=("evidence-1",),
+                    text="The source supports the claim.",
+                    recorded_at=self.now,
+                ),
+            ),
         )
 
         self.store.save([run])
 
         self.assertEqual(self.store.load(), [run])
         self.assertTrue(self.path.read_text(encoding="utf-8").endswith("\n"))
+        with self.assertRaisesRegex(ResearchError, "duplicate assessment IDs"):
+            self.store.save([run, replace(run, run_id="run-2")])
 
     def test_rejects_unknown_fields_schema_and_duplicate_ids(self) -> None:
         for document in (
-            {"schema_version": 4, "runs": []},
+            {"schema_version": 5, "runs": []},
             {"schema_version": True, "runs": []},
             {"schema_version": 1, "runs": [], "unexpected": True},
         ):
@@ -115,7 +128,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
         with self.assertRaisesRegex(ResearchError, "duplicate run IDs"):
             self.store.save([run, run])
 
-    def test_loads_v1_without_new_collections_and_rewrites_as_v3(self) -> None:
+    def test_loads_v1_without_new_collections_and_rewrites_as_v4(self) -> None:
         legacy_document = {
             "schema_version": 1,
             "runs": [
@@ -137,12 +150,14 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
 
         self.assertEqual(runs[0].evidence, ())
         self.assertEqual(runs[0].discoveries, ())
+        self.assertEqual(runs[0].assessments, ())
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 3)
+        self.assertEqual(rewritten["schema_version"], 4)
         self.assertEqual(rewritten["runs"][0]["evidence"], [])
         self.assertEqual(rewritten["runs"][0]["discoveries"], [])
+        self.assertEqual(rewritten["runs"][0]["assessments"], [])
 
-    def test_loads_v2_without_discoveries_and_rewrites_as_v3(self) -> None:
+    def test_loads_v2_without_discoveries_and_rewrites_as_v4(self) -> None:
         legacy_document = {
             "schema_version": 2,
             "runs": [
@@ -165,8 +180,36 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
 
         self.assertEqual(runs[0].discoveries, ())
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 3)
+        self.assertEqual(rewritten["schema_version"], 4)
         self.assertEqual(rewritten["runs"][0]["discoveries"], [])
+        self.assertEqual(rewritten["runs"][0]["assessments"], [])
+
+    def test_loads_v3_without_assessments_and_rewrites_as_v4(self) -> None:
+        legacy_document = {
+            "schema_version": 3,
+            "runs": [
+                {
+                    "run_id": "legacy-run",
+                    "question": "Legacy question",
+                    "status": "collecting",
+                    "sources": [],
+                    "failures": [],
+                    "evidence": [],
+                    "discoveries": [],
+                    "created_at": self.now.isoformat(),
+                    "updated_at": self.now.isoformat(),
+                }
+            ],
+        }
+        self.path.write_text(json.dumps(legacy_document), encoding="utf-8")
+
+        runs = self.store.load()
+        self.store.save(runs)
+
+        self.assertEqual(runs[0].assessments, ())
+        rewritten = json.loads(self.path.read_text(encoding="utf-8"))
+        self.assertEqual(rewritten["schema_version"], 4)
+        self.assertEqual(rewritten["runs"][0]["assessments"], [])
 
     def test_invalid_json_is_reported_without_exposing_raw_content(self) -> None:
         self.path.write_text("{secret", encoding="utf-8")

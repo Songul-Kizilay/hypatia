@@ -9,6 +9,7 @@ from core.Exceptions import ResearchError
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchFailureRecord import ResearchFailureRecord
 from research.ResearchRunStatus import ResearchRunStatus
+from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
 from research.ResearchSourceDiscoveryRecord import ResearchSourceDiscoveryRecord
 from research.ResearchSourceRecord import ResearchSourceRecord
 
@@ -26,6 +27,7 @@ class ResearchRun:
     updated_at: datetime
     evidence: tuple[ResearchEvidenceRecord, ...] = ()
     discoveries: tuple[ResearchSourceDiscoveryRecord, ...] = ()
+    assessments: tuple[ResearchSourceAssessmentRecord, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.run_id, str) or not self.run_id.strip():
@@ -70,6 +72,42 @@ class ResearchRun:
         discovery_ids = [record.discovery_id for record in self.discoveries]
         if len(discovery_ids) != len(set(discovery_ids)):
             raise ResearchError("Research run contains duplicate discovery IDs.")
+        if not isinstance(self.assessments, tuple):
+            raise ResearchError("Research run assessments must be an immutable tuple.")
+        if not all(
+            isinstance(record, ResearchSourceAssessmentRecord)
+            for record in self.assessments
+        ):
+            raise ResearchError("Research run contains an invalid assessment record.")
+        assessment_ids = [record.assessment_id for record in self.assessments]
+        if len(assessment_ids) != len(set(assessment_ids)):
+            raise ResearchError("Research run contains duplicate assessment IDs.")
+        evidence_id_set = set(evidence_ids)
+        if any(
+            record.source_document_id not in source_ids for record in self.assessments
+        ):
+            raise ResearchError(
+                "Research assessments must reference an accepted source."
+            )
+        if any(
+            evidence_id not in evidence_id_set
+            for record in self.assessments
+            for evidence_id in record.evidence_ids
+        ):
+            raise ResearchError(
+                "Research assessments must reference recorded evidence."
+            )
+        evidence_source_by_id = {
+            record.evidence_id: record.source_document_id for record in self.evidence
+        }
+        if any(
+            evidence_source_by_id[evidence_id] != record.source_document_id
+            for record in self.assessments
+            for evidence_id in record.evidence_ids
+        ):
+            raise ResearchError(
+                "Research assessment evidence must belong to its source."
+            )
         for value, field_name in (
             (self.created_at, "Research run creation time"),
             (self.updated_at, "Research run update time"),

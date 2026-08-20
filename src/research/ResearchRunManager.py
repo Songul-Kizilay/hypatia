@@ -19,6 +19,13 @@ from research.ResearchRunStatusTransitionPreview import (
 from research.ResearchRunStore import ResearchRunStore
 from research.ResearchSource import ResearchSource
 from research.ResearchSourceAssessmentPreview import ResearchSourceAssessmentPreview
+from research.ResearchSourceAssessmentRecord import (
+    MAX_SOURCE_ASSESSMENT_CHARACTERS,
+    ResearchSourceAssessmentRecord,
+)
+from research.ResearchSourceAssessmentWritePreview import (
+    ResearchSourceAssessmentWritePreview,
+)
 from research.ResearchSourceCandidate import ResearchSourceCandidate
 from research.ResearchSourceCandidateAcceptancePreview import (
     ResearchSourceCandidateAcceptancePreview,
@@ -38,12 +45,14 @@ class ResearchRunManager:
         id_factory: Callable[[], str] | None = None,
         evidence_id_factory: Callable[[], str] | None = None,
         discovery_id_factory: Callable[[], str] | None = None,
+        assessment_id_factory: Callable[[], str] | None = None,
     ) -> None:
         self._store = store
         self._clock = clock or (lambda: datetime.now(UTC))
         self._id_factory = id_factory or (lambda: str(uuid4()))
         self._evidence_id_factory = evidence_id_factory or (lambda: str(uuid4()))
         self._discovery_id_factory = discovery_id_factory or (lambda: str(uuid4()))
+        self._assessment_id_factory = assessment_id_factory or (lambda: str(uuid4()))
         self._runs: tuple[ResearchRun, ...] = ()
         self._lock = RLock()
 
@@ -69,6 +78,7 @@ class ResearchRunManager:
                 created_at=now,
                 updated_at=now,
                 discoveries=(),
+                assessments=(),
             )
             candidate = (*self._runs, run)
             self._persist(candidate)
@@ -133,6 +143,7 @@ class ResearchRunManager:
                 updated_at=now,
                 evidence=run.evidence,
                 discoveries=run.discoveries,
+                assessments=run.assessments,
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -161,6 +172,7 @@ class ResearchRunManager:
                 updated_at=now,
                 evidence=run.evidence,
                 discoveries=run.discoveries,
+                assessments=run.assessments,
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -201,6 +213,7 @@ class ResearchRunManager:
                 updated_at=now,
                 evidence=(*run.evidence, evidence),
                 discoveries=run.discoveries,
+                assessments=run.assessments,
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -255,6 +268,7 @@ class ResearchRunManager:
                 updated_at=now,
                 evidence=run.evidence,
                 discoveries=(*run.discoveries, discovery),
+                assessments=run.assessments,
             )
             candidate_runs = list(self._runs)
             candidate_runs[index] = updated
@@ -366,7 +380,94 @@ class ResearchRunManager:
                 evidence=evidence,
                 has_recorded_evidence=bool(evidence),
                 reason=reason,
+                assessments=tuple(
+                    record
+                    for record in run.assessments
+                    if record.source_document_id == source.document_id
+                ),
             )
+
+    def preview_source_assessment_write(
+        self,
+        run_id: str,
+        document_id: str,
+        evidence_ids: Sequence[str],
+        text: str,
+    ) -> ResearchSourceAssessmentWritePreview:
+        """Validate one authored assessment without mutating persisted state."""
+        normalized_run_id = self._normalize_run_id(run_id)
+        normalized_document_id = self._normalize_document_id(document_id)
+        normalized_evidence_ids = self._normalize_assessment_evidence_ids(evidence_ids)
+        normalized_text = self._normalize_assessment_text(text)
+        with self._lock:
+            _, run = self._find_with_index(normalized_run_id)
+            source, evidence = self._source_and_evidence_for_assessment(
+                run,
+                normalized_document_id,
+                normalized_evidence_ids,
+            )
+            allowed = not run.status.terminal
+            reason = (
+                "Research source assessment can be recorded after confirmation."
+                if allowed
+                else "A closed research run cannot accept new assessments."
+            )
+            return ResearchSourceAssessmentWritePreview(
+                run_id=run.run_id,
+                run_status=run.status,
+                source=source,
+                evidence=evidence,
+                text=normalized_text,
+                allowed=allowed,
+                reason=reason,
+            )
+
+    def record_source_assessment(
+        self,
+        run_id: str,
+        document_id: str,
+        evidence_ids: Sequence[str],
+        text: str,
+    ) -> ResearchRun:
+        """Revalidate and atomically append one user-authored assessment."""
+        normalized_run_id = self._normalize_run_id(run_id)
+        normalized_document_id = self._normalize_document_id(document_id)
+        normalized_evidence_ids = self._normalize_assessment_evidence_ids(evidence_ids)
+        normalized_text = self._normalize_assessment_text(text)
+        with self._lock:
+            index, run = self._find_with_index(normalized_run_id)
+            source, evidence = self._source_and_evidence_for_assessment(
+                run,
+                normalized_document_id,
+                normalized_evidence_ids,
+            )
+            self._require_collecting(run)
+            now = self._now()
+            assessment = ResearchSourceAssessmentRecord(
+                assessment_id=self._new_assessment_id(),
+                source_document_id=source.document_id,
+                evidence_ids=tuple(record.evidence_id for record in evidence),
+                text=normalized_text,
+                recorded_at=now,
+            )
+            updated = ResearchRun(
+                run_id=run.run_id,
+                question=run.question,
+                status=run.status,
+                sources=run.sources,
+                failures=run.failures,
+                created_at=run.created_at,
+                updated_at=now,
+                evidence=run.evidence,
+                discoveries=run.discoveries,
+                assessments=(*run.assessments, assessment),
+            )
+            candidate = list(self._runs)
+            candidate[index] = updated
+            candidate_tuple = tuple(candidate)
+            self._persist(candidate_tuple)
+            self._runs = candidate_tuple
+        return updated
 
     def transition_status(
         self,
@@ -393,6 +494,7 @@ class ResearchRunManager:
                 updated_at=now,
                 evidence=run.evidence,
                 discoveries=run.discoveries,
+                assessments=run.assessments,
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -501,6 +603,45 @@ class ResearchRunManager:
             raise ResearchError("Research source discovery ID already exists.")
         return discovery_id
 
+    def _new_assessment_id(self) -> str:
+        assessment_id = self._normalize_assessment_id(self._assessment_id_factory())
+        if any(
+            record.assessment_id == assessment_id
+            for run in self._runs
+            for record in run.assessments
+        ):
+            raise ResearchError("Research source assessment ID already exists.")
+        return assessment_id
+
+    @staticmethod
+    def _source_and_evidence_for_assessment(
+        run: ResearchRun,
+        document_id: str,
+        evidence_ids: tuple[str, ...],
+    ) -> tuple[ResearchSourceRecord, tuple[ResearchEvidenceRecord, ...]]:
+        source = next(
+            (record for record in run.sources if record.document_id == document_id),
+            None,
+        )
+        if source is None:
+            raise ResearchError(
+                "Research source was not found among this run's accepted sources."
+            )
+        evidence_by_id = {record.evidence_id: record for record in run.evidence}
+        try:
+            evidence = tuple(
+                evidence_by_id[evidence_id] for evidence_id in evidence_ids
+            )
+        except KeyError as error:
+            raise ResearchError(
+                "Research assessment evidence was not found in this run."
+            ) from error
+        if any(record.source_document_id != source.document_id for record in evidence):
+            raise ResearchError(
+                "Research assessment evidence must belong to the selected source."
+            )
+        return source, evidence
+
     @staticmethod
     def _normalize_question(question: str) -> str:
         if not isinstance(question, str) or not question.strip():
@@ -535,6 +676,49 @@ class ResearchRunManager:
         normalized = note.strip()
         if len(normalized) > 1_000:
             raise ResearchError("Research evidence note is too long.")
+        return normalized
+
+    @staticmethod
+    def _normalize_assessment_id(assessment_id: str) -> str:
+        if not isinstance(assessment_id, str) or not assessment_id.strip():
+            raise ResearchError("Research source assessment ID cannot be empty.")
+        normalized = assessment_id.strip()
+        if len(normalized) > 200:
+            raise ResearchError("Research source assessment ID is too long.")
+        return normalized
+
+    @staticmethod
+    def _normalize_assessment_evidence_ids(
+        evidence_ids: Sequence[str],
+    ) -> tuple[str, ...]:
+        if isinstance(evidence_ids, (str, bytes)) or not isinstance(
+            evidence_ids, Sequence
+        ):
+            raise ResearchError("Research assessment evidence IDs must be a list.")
+        normalized = tuple(
+            ResearchRunManager._normalize_evidence_id(value) for value in evidence_ids
+        )
+        if not normalized:
+            raise ResearchError(
+                "Research source assessment requires explicit evidence IDs."
+            )
+        if len(normalized) != len(set(normalized)):
+            raise ResearchError(
+                "Research source assessment contains duplicate evidence IDs."
+            )
+        if len(normalized) > 20:
+            raise ResearchError(
+                "Research source assessment cannot cite more than 20 evidence records."
+            )
+        return normalized
+
+    @staticmethod
+    def _normalize_assessment_text(text: str) -> str:
+        if not isinstance(text, str) or not text.strip():
+            raise ResearchError("Research source assessment text cannot be empty.")
+        normalized = text.strip()
+        if len(normalized) > MAX_SOURCE_ASSESSMENT_CHARACTERS:
+            raise ResearchError("Research source assessment text is too long.")
         return normalized
 
     @staticmethod
