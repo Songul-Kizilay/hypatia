@@ -2,6 +2,39 @@
 
 All notable project changes are recorded here.
 
+## [0.3.50] - 2026-08-21
+
+### Changed
+
+- The shared pinned HTTPS transport now carries the complete ordered set of
+  public addresses from one DNS validation into the connection boundary.
+- If an address fails during TCP or TLS setup, the transport closes that socket
+  and tries the next already validated address exactly once. It never performs
+  a new resolution while selecting a connection target.
+- All address attempts and TLS handshakes share one decreasing connection-time
+  budget. Exhausting that budget stops further attempts, and a successful TLS
+  socket receives only the remaining timeout.
+
+### Safety
+
+- Every attempt retains hostname-based TLS SNI and certificate verification.
+  Proxy tunnels remain rejected, address order remains deterministic, and
+  complete failure returns one controlled message without address-specific
+  transport details.
+- The fallback applies to the existing explicit page loader and fixed Crossref
+  metadata provider only; it adds no crawling, automatic acceptance, provider
+  expansion, LLM call, or persistence.
+
+### Verification
+
+- Tests cover first-address TLS failure with second-address success, failed
+  socket cleanup, ordered attempts, a decreasing shared deadline, deadline
+  exhaustion before an untried address, and safe all-address failure.
+- The package-aware full local suite contains 1,212 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass across 296 source files.
+- Live bounded page acquisition and one-result Crossref metadata discovery both
+  completed through the multi-address transport.
+
 ## [0.3.49] - 2026-08-21
 
 ### Security

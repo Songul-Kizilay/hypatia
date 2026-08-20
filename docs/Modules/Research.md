@@ -26,8 +26,10 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
   automatically.
 - The URL cannot contain credentials or use a nonstandard port. Every DNS
   answer and redirect destination must remain on public internet addresses.
-  Each TCP connection uses one exact address from that validation while TLS
-  continues to authenticate the normalized URL hostname and certificate.
+  Each TCP connection uses addresses only from that validation, in order and
+  at most once, while TLS continues to authenticate the normalized URL
+  hostname and certificate. All attempts share one decreasing connection-time
+  budget.
 - Only HTML, XHTML, plain text, and Markdown are accepted, with a 1 MiB response
   limit and a ten-second timeout. The default fetch path does not inherit system
   proxy settings, so proxy-side DNS resolution cannot bypass the local address
@@ -147,15 +149,16 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
 
 ## Next increment
 
-Design bounded fallback across multiple addresses that already passed one
-public-DNS validation. It must not resolve again during connection selection,
-must retain hostname-based TLS certificate checks and the existing time bounds,
-and may not add general or unattended web search.
+Design bounded local persistence for explicitly accepted source text so an
+audited run can resume after restart without silently refetching the page. The
+design must bind content to persisted provenance and integrity metadata, enforce
+storage bounds, and keep acquisition and restoration explicitly user-controlled.
 
 ## Known boundary
 
 The explicit research source fetcher and fixed Crossref discovery adapter share
-one address-pinned HTTPS boundary. Each currently selects the first address from
-its complete validated public-only answer set. A network failure does not yet
-fall back to another already validated address. Neither path authorizes
-autonomous or unattended crawling.
+one multi-address pinned HTTPS boundary. Failed TCP or TLS setup advances only
+through the remaining addresses from that same validation within one deadline.
+Accepted page content still lives only in the in-memory knowledge index and is
+not restored after restart. Neither path authorizes autonomous or unattended
+crawling.

@@ -167,7 +167,9 @@ files return the existing safe runtime failure instead of a partial load.
 `Load source` accepts one explicitly entered public HTTPS URL. Hypatia validates
 the URL and every redirect against private-network access, then connects to an
 exact validated public address while retaining hostname-based TLS certificate
-checks. It accepts only bounded HTML/plain-text/Markdown content, extracts
+checks. If that address fails, only the remaining addresses from the same
+public-only DNS answer are tried within one decreasing connection-time budget.
+It accepts only bounded HTML/plain-text/Markdown content, extracts
 readable text, and indexes it through the same knowledge pipeline with its final
 URL preserved. It does not search for sources, run in the background, call an
 LLM, or write conversation memory.
