@@ -2,6 +2,32 @@
 
 All notable project changes are recorded here.
 
+## [0.3.37] - 2026-08-20
+
+### Added
+
+- The packaged process-environment runtime now enables an explicit Crossref
+  REST v1 scholarly-metadata discovery provider by default. It can be disabled
+  with `HYPATIA_RESEARCH_SOURCE_DISCOVERY_PROVIDER=disabled`.
+- The desktop can discover up to five candidates for the selected collecting
+  run, display their title and DOI URL, and copy one explicitly selected URL
+  into the separate source-load field.
+
+### Security
+
+- Crossref discovery is restricted to the fixed `api.crossref.org` HTTPS
+  endpoint and same-origin redirects, does not inherit proxy settings, accepts
+  only JSON, reads at most 500 KB, and uses a ten-second timeout.
+- Discovery retrieves bibliographic metadata only. Selecting a candidate does
+  not fetch, trust, accept, index, cite, or write it to conversation memory.
+  A candidate from a different run cannot be copied through the desktop view.
+
+### Verification
+
+- The package-aware full local suite contains 1,079 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass with the documented
+  project virtual environment.
+
 ## [0.3.36] - 2026-08-20
 
 ### Added

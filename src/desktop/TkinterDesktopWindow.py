@@ -12,6 +12,7 @@ from brain.BrainResponse import BrainResponse
 from brain.SessionSummary import SessionSummary
 from desktop.DesktopController import DesktopController
 from knowledge.KnowledgeCitation import KnowledgeCitation
+from research.ResearchSourceCandidate import ResearchSourceCandidate
 
 _DEFAULT_FONT_SIZE = 12
 _MINIMUM_FONT_SIZE = 10
@@ -131,6 +132,7 @@ class TkinterDesktopWindow:
         self._knowledge_query = tk.StringVar()
         self._research_question = tk.StringVar()
         self._research_run_id = tk.StringVar()
+        self._research_candidate = tk.StringVar()
         self._research_url = tk.StringVar()
         self._research_chunk_id = tk.StringVar()
         self._research_evidence_note = tk.StringVar()
@@ -138,6 +140,8 @@ class TkinterDesktopWindow:
         self._relation_source_id = tk.StringVar()
         self._relation_target_id = tk.StringVar()
         self._session_summaries: list[SessionSummary] = []
+        self._research_candidates: tuple[ResearchSourceCandidate, ...] = ()
+        self._research_candidate_run_id = ""
         self._font_size = _DEFAULT_FONT_SIZE
         self._font_size_label = tk.StringVar()
         self._high_contrast = tk.BooleanVar(value=False)
@@ -349,19 +353,49 @@ class TkinterDesktopWindow:
         ttk.Entry(research_frame, textvariable=self._research_run_id).grid(
             row=1,
             column=1,
-            columnspan=3,
+            columnspan=2,
             sticky="ew",
-            padx=(8, 0),
+            padx=(8, 8),
             pady=(8, 0),
         )
-        ttk.Label(research_frame, text="HTTPS URL").grid(
+        ttk.Button(
+            research_frame,
+            text="Find sources",
+            command=self._discover_research_sources,
+        ).grid(row=1, column=3, sticky="ew", pady=(8, 0))
+        ttk.Label(research_frame, text="Candidates").grid(
             row=2,
             column=0,
             sticky="w",
             pady=(8, 0),
         )
-        ttk.Entry(research_frame, textvariable=self._research_url).grid(
+        self._research_candidate_selector = ttk.Combobox(
+            research_frame,
+            textvariable=self._research_candidate,
+            values=(),
+            state="readonly",
+        )
+        self._research_candidate_selector.grid(
             row=2,
+            column=1,
+            columnspan=2,
+            sticky="ew",
+            padx=(8, 8),
+            pady=(8, 0),
+        )
+        ttk.Button(
+            research_frame,
+            text="Use selected URL",
+            command=self._use_selected_research_candidate,
+        ).grid(row=2, column=3, sticky="ew", pady=(8, 0))
+        ttk.Label(research_frame, text="HTTPS URL").grid(
+            row=3,
+            column=0,
+            sticky="w",
+            pady=(8, 0),
+        )
+        ttk.Entry(research_frame, textvariable=self._research_url).grid(
+            row=3,
             column=1,
             columnspan=2,
             sticky="ew",
@@ -372,15 +406,15 @@ class TkinterDesktopWindow:
             research_frame,
             text="Load source",
             command=self._load_research_source,
-        ).grid(row=2, column=3, sticky="ew", pady=(8, 0))
+        ).grid(row=3, column=3, sticky="ew", pady=(8, 0))
         ttk.Label(research_frame, text="Chunk ID").grid(
-            row=3,
+            row=4,
             column=0,
             sticky="w",
             pady=(8, 0),
         )
         ttk.Entry(research_frame, textvariable=self._research_chunk_id).grid(
-            row=3,
+            row=4,
             column=1,
             columnspan=3,
             sticky="ew",
@@ -388,13 +422,13 @@ class TkinterDesktopWindow:
             pady=(8, 0),
         )
         ttk.Label(research_frame, text="Evidence note").grid(
-            row=4,
+            row=5,
             column=0,
             sticky="w",
             pady=(8, 0),
         )
         ttk.Entry(research_frame, textvariable=self._research_evidence_note).grid(
-            row=4,
+            row=5,
             column=1,
             columnspan=2,
             sticky="ew",
@@ -405,14 +439,14 @@ class TkinterDesktopWindow:
             research_frame,
             text="Save evidence",
             command=self._record_research_evidence,
-        ).grid(row=4, column=3, sticky="ew", pady=(8, 0))
+        ).grid(row=5, column=3, sticky="ew", pady=(8, 0))
         ttk.Button(
             research_frame,
             text="View evidence",
             command=self._show_research_evidence,
-        ).grid(row=5, column=3, sticky="ew", pady=(8, 0))
+        ).grid(row=6, column=3, sticky="ew", pady=(8, 0))
         ttk.Label(research_frame, text="Final status").grid(
-            row=5,
+            row=6,
             column=0,
             sticky="w",
             pady=(8, 0),
@@ -422,12 +456,12 @@ class TkinterDesktopWindow:
             textvariable=self._research_target_status,
             values=("completed", "failed", "cancelled"),
             state="readonly",
-        ).grid(row=5, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
+        ).grid(row=6, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
         ttk.Button(
             research_frame,
             text="Preview status",
             command=self._preview_and_update_research_status,
-        ).grid(row=5, column=2, sticky="ew", pady=(8, 0))
+        ).grid(row=6, column=2, sticky="ew", pady=(8, 0))
 
         relation_frame = ttk.LabelFrame(
             container,
@@ -657,11 +691,63 @@ class TkinterDesktopWindow:
             return
         self._append_response(response)
         if response.success and response.research_runs:
+            self._clear_research_candidates()
             self._research_run_id.set(response.research_runs[0].run_id)
 
     def _show_research_runs(self) -> None:
         """Render the current persisted run catalog without network access."""
         self._append_response(self._controller.list_research_runs())
+
+    def _discover_research_sources(self) -> None:
+        """Discover and display metadata candidates for the selected run."""
+        try:
+            response = self._controller.discover_research_sources(
+                self._research_run_id.get()
+            )
+        except ValueError as error:
+            self._status.set(str(error))
+            return
+        self._append_response(response)
+        self._render_research_candidates(response)
+
+    def _render_research_candidates(self, response: BrainResponse) -> None:
+        """Replace stale candidate choices with the latest successful discovery."""
+        self._clear_research_candidates()
+        if not response.success:
+            return
+        selected_run_id = self._research_run_id.get().strip()
+        selected_runs = [
+            run for run in response.research_runs if run.run_id == selected_run_id
+        ]
+        if not selected_runs or not selected_runs[0].discoveries:
+            return
+        self._research_candidate_run_id = selected_run_id
+        self._research_candidates = selected_runs[0].discoveries[-1].candidates
+        labels = tuple(
+            f"{index}. {candidate.title} — {candidate.url}"
+            for index, candidate in enumerate(self._research_candidates, start=1)
+        )
+        self._research_candidate_selector.configure(values=labels)
+        if labels:
+            self._research_candidate_selector.current(0)
+
+    def _clear_research_candidates(self) -> None:
+        self._research_candidates = ()
+        self._research_candidate_run_id = ""
+        self._research_candidate.set("")
+        self._research_candidate_selector.configure(values=())
+
+    def _use_selected_research_candidate(self) -> None:
+        """Copy one explicitly selected candidate URL without fetching it."""
+        selected_index = self._research_candidate_selector.current()
+        if (
+            self._research_run_id.get().strip() != self._research_candidate_run_id
+            or not 0 <= selected_index < len(self._research_candidates)
+        ):
+            self._status.set("Select a discovered source candidate first.")
+            return
+        self._research_url.set(self._research_candidates[selected_index].url)
+        self._status.set("research candidate: URL copied; source not loaded")
 
     def _record_research_evidence(self) -> None:
         """Persist one user-selected indexed paragraph under the current run."""

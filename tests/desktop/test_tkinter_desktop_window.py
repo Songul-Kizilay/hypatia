@@ -29,6 +29,8 @@ from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchRunStatusTransitionPreview import (
     ResearchRunStatusTransitionPreview,
 )
+from research.ResearchSourceCandidate import ResearchSourceCandidate
+from research.ResearchSourceDiscoveryRecord import ResearchSourceDiscoveryRecord
 
 
 class AccessibilityPreferenceTests(unittest.TestCase):
@@ -229,6 +231,18 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._controller = controller
         window._research_question = RecordingInput("Compare local models")
         window._research_run_id = run_id
+        window._research_candidate = RecordingVariable("old candidate")
+        window._research_candidate_selector = RecordingCandidateSelector(
+            selected_index=0
+        )
+        window._research_candidates = (
+            ResearchSourceCandidate(
+                url="https://doi.org/10.1000/old",
+                title="Old paper",
+                snippet="",
+            ),
+        )
+        window._research_candidate_run_id = "old-run"
         window._status = RecordingStatus()
         window._append_response = responses.append
 
@@ -236,6 +250,8 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
 
         self.assertEqual(controller.questions, ["Compare local models"])
         self.assertEqual(run_id.value, "run-123")
+        self.assertEqual(window._research_candidates, ())
+        self.assertEqual(window._research_candidate_run_id, "")
         self.assertEqual(responses, [controller.create_response])
 
     def test_research_run_catalog_is_requested_without_network_fetch(self) -> None:
@@ -250,6 +266,123 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         self.assertEqual(controller.list_calls, 1)
         self.assertEqual(controller.sources, [])
         self.assertEqual(responses, [controller.list_response])
+
+    def test_discovery_renders_unaccepted_candidates_without_loading_them(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchSourceLoadController()
+        responses: list[BrainResponse] = []
+        selector = RecordingCandidateSelector()
+        window._controller = controller
+        window._research_run_id = RecordingInput("run-123")
+        window._research_candidate = RecordingVariable("stale")
+        window._research_candidate_selector = selector
+        window._research_candidates = ()
+        window._research_candidate_run_id = ""
+        window._status = RecordingStatus()
+        window._append_response = responses.append
+
+        window._discover_research_sources()
+
+        self.assertEqual(controller.discovery_calls, ["run-123"])
+        self.assertEqual(controller.sources, [])
+        self.assertEqual(responses, [controller.discovery_response])
+        self.assertEqual(window._research_candidates, controller.candidates)
+        self.assertEqual(window._research_candidate_run_id, "run-123")
+        self.assertEqual(
+            selector.values,
+            (
+                "1. First paper — https://doi.org/10.1000/first",
+                "2. Second paper — https://doi.org/10.1000/second",
+            ),
+        )
+        self.assertEqual(selector.selected_index, 0)
+
+    def test_selected_candidate_only_copies_its_url_until_load_is_separate(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchSourceLoadController()
+        selector = RecordingCandidateSelector(selected_index=1)
+        url = RecordingVariable("")
+        status = RecordingStatus()
+        window._controller = controller
+        window._research_candidate_selector = selector
+        window._research_candidates = controller.candidates
+        window._research_candidate_run_id = "run-123"
+        window._research_run_id = RecordingInput("run-123")
+        window._research_url = url
+        window._status = status
+
+        window._use_selected_research_candidate()
+
+        self.assertEqual(url.value, "https://doi.org/10.1000/second")
+        self.assertEqual(controller.sources, [])
+        self.assertEqual(
+            status.values,
+            ["research candidate: URL copied; source not loaded"],
+        )
+
+    def test_missing_candidate_selection_does_not_copy_or_load_a_url(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchSourceLoadController()
+        url = RecordingVariable("https://example.com/existing")
+        status = RecordingStatus()
+        window._controller = controller
+        window._research_candidate_selector = RecordingCandidateSelector()
+        window._research_candidates = ()
+        window._research_candidate_run_id = "run-123"
+        window._research_run_id = RecordingInput("run-123")
+        window._research_url = url
+        window._status = status
+
+        window._use_selected_research_candidate()
+
+        self.assertEqual(url.value, "https://example.com/existing")
+        self.assertEqual(controller.sources, [])
+        self.assertEqual(
+            status.values,
+            ["Select a discovered source candidate first."],
+        )
+
+    def test_candidate_from_another_run_cannot_be_copied(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchSourceLoadController()
+        url = RecordingVariable("")
+        status = RecordingStatus()
+        window._controller = controller
+        window._research_candidate_selector = RecordingCandidateSelector(
+            selected_index=0
+        )
+        window._research_candidates = controller.candidates
+        window._research_candidate_run_id = "run-123"
+        window._research_run_id = RecordingInput("run-456")
+        window._research_url = url
+        window._status = status
+
+        window._use_selected_research_candidate()
+
+        self.assertEqual(url.value, "")
+        self.assertEqual(controller.sources, [])
+        self.assertEqual(
+            status.values,
+            ["Select a discovered source candidate first."],
+        )
+
+    def test_empty_run_id_stays_local_before_candidate_discovery(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchSourceLoadController()
+        status = RecordingStatus()
+        window._controller = controller
+        window._research_run_id = RecordingInput("  ")
+        window._status = status
+        window._append_response = lambda _response: self.fail("must not append")
+
+        window._discover_research_sources()
+
+        self.assertEqual(controller.discovery_calls, [])
+        self.assertEqual(status.values, ["A research run ID cannot be empty."])
 
     def test_selected_chunk_and_note_are_passed_to_evidence_boundary(self) -> None:
         window: Any = object.__new__(TkinterDesktopWindow)
@@ -401,6 +534,7 @@ class RecordingResearchSourceLoadController:
         self.sources: list[tuple[str, str]] = []
         self.questions: list[str] = []
         self.list_calls = 0
+        self.discovery_calls: list[str] = []
         self.evidence_calls: list[tuple[str, str, str]] = []
         self.evidence_list_calls: list[str] = []
         self.status_previews: list[tuple[str, str]] = []
@@ -421,6 +555,36 @@ class RecordingResearchSourceLoadController:
             created_at=now,
             updated_at=now,
         )
+        self.candidates = (
+            ResearchSourceCandidate(
+                url="https://doi.org/10.1000/first",
+                title="First paper",
+                snippet="Journal · 2025",
+            ),
+            ResearchSourceCandidate(
+                url="https://doi.org/10.1000/second",
+                title="Second paper",
+                snippet="Journal · 2024",
+            ),
+        )
+        discovered_run = ResearchRun(
+            run_id=run.run_id,
+            question=run.question,
+            status=run.status,
+            sources=run.sources,
+            failures=run.failures,
+            created_at=run.created_at,
+            updated_at=run.updated_at,
+            discoveries=(
+                ResearchSourceDiscoveryRecord(
+                    discovery_id="discovery-1",
+                    query=run.question,
+                    provider="crossref-rest-v1",
+                    candidates=self.candidates,
+                    discovered_at=now,
+                ),
+            ),
+        )
         self.create_response = BrainResponse(
             message="Created.",
             request_id="research-run-create",
@@ -434,6 +598,13 @@ class RecordingResearchSourceLoadController:
             intent="research_run_list",
             memory_count=0,
             research_runs=[run],
+        )
+        self.discovery_response = BrainResponse(
+            message="Candidates discovered.",
+            request_id="research-source-discover",
+            intent="research_source_discover",
+            memory_count=0,
+            research_runs=[discovered_run],
         )
         self.evidence_response = BrainResponse(
             message="Evidence recorded.",
@@ -489,6 +660,12 @@ class RecordingResearchSourceLoadController:
         self.list_calls += 1
         return self.list_response
 
+    def discover_research_sources(self, run_id: str) -> BrainResponse:
+        if not run_id.strip():
+            raise ValueError("A research run ID cannot be empty.")
+        self.discovery_calls.append(run_id)
+        return self.discovery_response
+
     def record_research_evidence(
         self,
         run_id: str,
@@ -542,6 +719,20 @@ class RecordingVariable(RecordingInput):
 
     def set(self, value: str) -> None:
         self._value = value
+
+
+class RecordingCandidateSelector:
+    def __init__(self, selected_index: int = -1) -> None:
+        self.selected_index = selected_index
+        self.values: tuple[str, ...] = ()
+
+    def configure(self, *, values: tuple[str, ...]) -> None:
+        self.values = values
+
+    def current(self, selected_index: int | None = None) -> int:
+        if selected_index is not None:
+            self.selected_index = selected_index
+        return self.selected_index
 
 
 class RecordingStatus:

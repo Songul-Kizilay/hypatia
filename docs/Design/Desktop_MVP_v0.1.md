@@ -34,9 +34,9 @@ The MVP may present only current Brain/CognitiveEngine capabilities:
   as bounded research evidence;
 - preview-and-confirm transition of a collecting research run to one terminal
   lifecycle status;
-- a controller-level structured source-discovery request whose provider and
-  candidate view remain unavailable in the packaged shell until separately
-  implemented and reviewed;
+- an explicit Crossref scholarly-metadata discovery request for a selected
+  collecting run, a read-only candidate view, and a separate action that copies
+  one selected DOI URL into the existing source-load field without fetching it;
 - the existing explicit `ask knowledge` request; and
 - preview-and-confirm application or removal of an explicit knowledge relation.
 
@@ -49,7 +49,9 @@ synchronization, telemetry, or multi-user access.
 
 - **Local by default:** local state and current runtime status are visible; data
   leaves the device only through an already enabled user-configured LLM/Ollama
-  runtime or an explicit user-entered HTTPS source request.
+  runtime, an explicit user-entered HTTPS source request, or the explicit
+  `Find sources` request that sends the persisted research question to
+  Crossref.
 - **Explicit before mutation:** session rename/delete and knowledge-relation
   application/removal always show the existing preview first and require an
   explicit final user action.
@@ -130,8 +132,13 @@ the source with its final URL. `Start research` persists one question and
 selects the returned run ID; `Research runs` lists the current audit catalog.
 When a run ID is present, a successful source load also persists provenance,
 while an audit-write failure rolls the new unlinked knowledge document back.
-It does not discover other sources, crawl links, invoke an LLM, write
-conversation memory, or duplicate downloaded page content in the run store.
+`Find sources` separately sends the selected collecting run's persisted
+question to the fixed Crossref REST v1 metadata endpoint and displays at most
+five ordered DOI candidates. `Use selected URL` copies only the chosen DOI URL
+into the HTTPS field; it does not invoke `Load source`, and a candidate rendered
+for another run cannot be reused after the run ID changes. The Crossref action
+does not retrieve a paper, crawl links, invoke an LLM, write conversation
+memory, or duplicate document content in the run store.
 `Save evidence` requires the selected run ID, a currently indexed chunk ID, and
 a user note. The runtime accepts it only from a source attached to that run and
 stores a bounded excerpt plus its exact source/chunk locator and full-chunk
