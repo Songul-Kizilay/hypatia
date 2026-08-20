@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 import unittest
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
 
@@ -14,6 +15,10 @@ if str(SRC_DIR) not in sys.path:
 from brain.BrainRequest import BrainRequest
 from brain.BrainResponse import BrainResponse
 from desktop.DesktopController import DesktopController
+from research.ResearchRunMarkdownExportPreview import (
+    ResearchRunMarkdownExportPreview,
+)
+from research.ResearchRunStatus import ResearchRunStatus
 
 
 class RecordingBrain:
@@ -304,6 +309,67 @@ class DesktopControllerTests(unittest.TestCase):
     def test_markdown_export_preview_rejects_empty_run_id_locally(self) -> None:
         with self.assertRaisesRegex(ValueError, "run ID cannot be empty"):
             self.controller.preview_research_run_markdown_export(" \t ")
+
+        self.assertEqual(self.brain.requests, [])
+
+    def test_markdown_export_save_binds_destination_to_exact_preview(self) -> None:
+        markdown = "# Export\n"
+        preview = ResearchRunMarkdownExportPreview(
+            run_id="run-123",
+            run_status=ResearchRunStatus.CANCELLED,
+            snapshot_updated_at=datetime(2026, 8, 21, tzinfo=UTC),
+            suggested_filename="hypatia-research-run-123.md",
+            markdown_preview=markdown,
+            total_character_count=len(markdown),
+            omitted_character_count=0,
+            content_sha256="a" * 64,
+        )
+        destination = str(Path.cwd() / "research export.md")
+
+        response = self.controller.save_research_run_markdown_export(
+            preview,
+            f"  {destination}  ",
+        )
+
+        self.assertIs(response, self.response)
+        request = self.brain.requests[0]
+        self.assertIsInstance(request, BrainRequest)
+        assert isinstance(request, BrainRequest)
+        self.assertEqual(request.message, "Save previewed research run as Markdown")
+        self.assertEqual(request.source, "desktop")
+        self.assertEqual(
+            request.metadata,
+            {
+                "intent": "research_run_markdown_export_save",
+                "research_run_id": "run-123",
+                "research_export_snapshot_updated_at": "2026-08-21T00:00:00+00:00",
+                "research_export_content_sha256": "a" * 64,
+                "research_export_destination_path": destination,
+            },
+        )
+
+    def test_markdown_export_save_requires_preview_and_destination_locally(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(ValueError, "preview is required"):
+            self.controller.save_research_run_markdown_export(
+                cast(ResearchRunMarkdownExportPreview, None),
+                str(Path.cwd() / "export.md"),
+            )
+
+        markdown = "# Export\n"
+        preview = ResearchRunMarkdownExportPreview(
+            run_id="run-123",
+            run_status=ResearchRunStatus.CANCELLED,
+            snapshot_updated_at=datetime(2026, 8, 21, tzinfo=UTC),
+            suggested_filename="hypatia-research-run-123.md",
+            markdown_preview=markdown,
+            total_character_count=len(markdown),
+            omitted_character_count=0,
+            content_sha256="a" * 64,
+        )
+        with self.assertRaisesRegex(ValueError, "destination cannot be empty"):
+            self.controller.save_research_run_markdown_export(preview, " \t ")
 
         self.assertEqual(self.brain.requests, [])
 

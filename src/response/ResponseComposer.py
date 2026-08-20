@@ -25,6 +25,9 @@ from research.ResearchRun import ResearchRun
 from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
 )
+from research.ResearchRunMarkdownExportResult import (
+    ResearchRunMarkdownExportResult,
+)
 from research.ResearchRunStatusTransitionPreview import (
     ResearchRunStatusTransitionPreview,
 )
@@ -784,6 +787,42 @@ class ResponseComposer:
             message=message,
             request_id=request.request_id,
             intent="research_run_markdown_export_preview",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_run_markdown_export_save_success(
+        self,
+        request: BrainRequest,
+        result: ResearchRunMarkdownExportResult,
+    ) -> BrainResponse:
+        """Report the exact verified new Markdown file created for the user."""
+        return BrainResponse(
+            message=(
+                "Research Markdown export saved:\n"
+                f"Run: {result.run_id}\n"
+                f"Snapshot updated: {result.snapshot_updated_at.isoformat()}\n"
+                f"File: {result.destination_path}\n"
+                f"Bytes: {result.byte_count}\n"
+                f"Content SHA-256: {result.content_sha256}\n"
+                "Status: new file created; no existing file was replaced"
+            ),
+            request_id=request.request_id,
+            intent="research_run_markdown_export_save",
+            memory_count=0,
+            research_run_markdown_export_result=result,
+        )
+
+    def research_run_markdown_export_save_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Report a safe no-write export failure without exposing internals."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="research_run_markdown_export_save",
             memory_count=0,
             success=False,
         )

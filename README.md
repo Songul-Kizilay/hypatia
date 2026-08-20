@@ -113,7 +113,9 @@ To create the world's most capable personal AI research companion.
 - A deterministic Markdown export preview for one terminal research run. It
   uses only the immutable persisted audit snapshot, includes provenance,
   evidence, assessment history, comparison notes, and failures, and exposes a
-  full-content SHA-256 while bounding the desktop display. It writes no file
+  full-content SHA-256 while bounding the desktop display. A separate confirmed
+  save revalidates the exact preview and atomically creates a new `.md` file
+  without replacing an existing destination
 - An initial local desktop shell for text chat, a refreshable session overview,
   explicit session selection, session details/recent conversations/activity,
   explicit lexical/semantic conversation recall, and semantic-memory runtime
@@ -219,6 +221,13 @@ character count, omitted preview count, and SHA-256 of the complete content.
 Remote excerpts and authored text are escaped as literal quoted material. The
 desktop shows at most 24,000 source characters and performs no file write,
 network, provider, LLM, memory, graph, live-index, or event-bus operation.
+`Save export` is enabled by the displayed preview rather than a fresh hidden
+render. It asks the user for a new `.md` destination, shows the exact path and
+fingerprint for confirmation, sends the preview's run ID, update time, and hash
+back through Brain, and re-renders the immutable persisted run before atomically
+publishing complete UTF-8 bytes. A changed preview, invalid path, or existing
+destination is rejected without replacement. The save performs no network,
+provider, LLM, memory, graph, live-index, event-bus, or research-audit mutation.
 The `Final status` control previews `completed`, `failed`, or `cancelled` before
 asking for separate confirmation. Completion requires at least one accepted
 source and one evidence record, while failure requires a recorded failure. A

@@ -6,6 +6,9 @@ from typing import Protocol
 
 from brain.BrainRequest import BrainRequest
 from brain.BrainResponse import BrainResponse
+from research.ResearchRunMarkdownExportPreview import (
+    ResearchRunMarkdownExportPreview,
+)
 
 
 class BrainProcessor(Protocol):
@@ -171,6 +174,33 @@ class DesktopController:
                 metadata={
                     "intent": "research_run_markdown_export_preview",
                     "research_run_id": normalized_run_id,
+                },
+            )
+        )
+
+    def save_research_run_markdown_export(
+        self,
+        preview: ResearchRunMarkdownExportPreview,
+        destination_path: str,
+    ) -> BrainResponse:
+        """Request one exact preview be saved to an explicitly selected new file."""
+        if not isinstance(preview, ResearchRunMarkdownExportPreview):
+            raise ValueError("A research Markdown export preview is required.")
+        normalized_destination = destination_path.strip()
+        if not normalized_destination:
+            raise ValueError("A research export destination cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="Save previewed research run as Markdown",
+                source="desktop",
+                metadata={
+                    "intent": "research_run_markdown_export_save",
+                    "research_run_id": preview.run_id,
+                    "research_export_snapshot_updated_at": (
+                        preview.snapshot_updated_at.isoformat()
+                    ),
+                    "research_export_content_sha256": preview.content_sha256,
+                    "research_export_destination_path": normalized_destination,
                 },
             )
         )

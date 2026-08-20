@@ -2,6 +2,40 @@
 
 All notable project changes are recorded here.
 
+## [0.3.46] - 2026-08-21
+
+### Added
+
+- The desktop now offers a separate `Save export` action after a successful
+  terminal-run Markdown preview. The user chooses the destination and confirms
+  the exact path and full-content SHA-256 before the final request.
+- The final Brain request carries the preview's run ID, timezone-aware snapshot
+  update time, full-content fingerprint, and explicit destination path. The
+  research manager re-renders persisted state under its lock and revalidates
+  both snapshot identity values before any filesystem operation.
+- Successful saves return a structured result containing the run ID, immutable
+  snapshot time, absolute destination, byte count, and verified SHA-256.
+
+### Safety
+
+- Exports require an absolute `.md` destination inside an existing directory.
+  Relative paths, other extensions, missing directories, collecting runs,
+  malformed metadata, and stale preview identities are rejected before a
+  destination is published.
+- Complete UTF-8 bytes are written to a temporary file in the selected
+  directory, flushed, and atomically linked to the final name. An existing
+  destination is never replaced, including when it appears between selection
+  and publication; temporary-file cleanup is attempted after success or
+  failure.
+- Saving performs no provider, network, LLM, memory, graph, live-index, event,
+  or research-audit mutation. Controlled failures do not expose internal
+  filesystem errors.
+
+### Verification
+
+- The package-aware full local suite contains 1,187 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass across 293 source files.
+
 ## [0.3.45] - 2026-08-21
 
 ### Added

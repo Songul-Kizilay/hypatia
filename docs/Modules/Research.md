@@ -126,16 +126,21 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
   failures. The desktop view is bounded to 24,000 source characters while
   exposing the full length and full-content SHA-256. Remote and authored text is
   escaped as literal block-quoted data; no path is accepted and no file is
-  written.
+  written during preview.
+- A separately confirmed save carries the preview's exact run ID, snapshot
+  update time, full-content SHA-256, and explicit absolute `.md` destination
+  back through Brain. The manager re-renders persisted state under its lock,
+  rejects stale identities and collecting runs, writes complete UTF-8 bytes in
+  the selected directory, and atomically publishes only when the destination
+  does not already exist. No research record is changed.
 
 ## Next increment
 
-Add a separately confirmed save of the previewed Markdown to a new
-user-selected file. The final request must revalidate the terminal run's exact
-update time and full-content SHA-256, replace the destination atomically only
-when it does not already exist, and make no network or LLM call. Discovery and
-selection remain separate from fetching and may not
-become unattended crawling.
+Audit the completed preview-and-save workflow for a separately scoped,
+read-only verification action that can compare a selected exported document
+with a terminal run's current deterministic fingerprint without importing or
+changing either record. Discovery and selection remain separate from fetching
+and may not become unattended crawling.
 
 ## Known boundary
 
