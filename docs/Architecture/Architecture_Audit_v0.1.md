@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.43` in the current release candidate) are the executable package and GitHub
+- **Runtime releases** (`v0.3.44` in the current release candidate) are the executable package and GitHub
   release line. They are the source-backed implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
   engineering increments. Sprint 4.16.50 is complete and is already in the
@@ -92,9 +92,10 @@ failure. Every terminal run is immutable, and a closed-run source request is
 rejected before the fetcher is called.
 When launched as the desktop application, Bootstrap receives user-writable
 memory, session, relation, and research-run paths beneath
-`%LOCALAPPDATA%\Hypatia` on
-Windows (or an explicit absolute override), rather than writing beside an
-installed executable. The terminal developer entry point remains unchanged.
+`%LOCALAPPDATA%\Hypatia` on Windows or
+`${XDG_DATA_HOME:-$HOME/.local/share}/hypatia` on Linux. Only absolute XDG and
+explicit override paths are honored, and the application never writes beside
+an installed executable. The terminal developer entry point remains unchanged.
 
 The desktop also exposes the existing source-relation preview-and-apply contract
 without weakening it: a user enters two source IDs, receives the current
@@ -263,7 +264,7 @@ Not implemented:
 
 The current local verification baseline is:
 
-- package-aware `python -m unittest`: 1,158 tests passed. Explicit `tests.*`
+- package-aware `python -m unittest`: 1,162 tests passed. Explicit `tests.*`
   module names ensure nested test directories are included without shadowing
   source packages.
 - `python -m black --check src tests`: passed.
@@ -273,6 +274,12 @@ The current local verification baseline is:
 
 These checks verify the current local worktree; they do not create a release,
 tag, pull request, or GitHub deployment.
+
+The Ubuntu 24.04 x64 workflow separately creates the pinned PyInstaller Linux
+onedir package, launches it under Xvfb with a temporary absolute data root, and
+verifies local session-state initialization. This is the Linux executable
+boundary; other distributions, CPU architectures, installers, and signing are
+not implied by that result.
 
 The opt-in semantic runtime was also verified on 15 August 2026 against the
 local Ollama service using `embeddinggemma`: Hypatia's adapter received a

@@ -60,8 +60,10 @@ The `Final status` selector offers only `completed`, `failed`, and `cancelled`.
 confirmation only when allowed. A completed run requires source and evidence;
 a failed run requires a failure record; every terminal outcome permanently
 closes further run mutation.
-Its first Windows onedir package and local-data boundary are defined in ADR
-0002; broader MVP views remain planned.
+Its Windows onedir package and local-data boundary are defined in ADR 0002. ADR
+0003 adds an Ubuntu 24.04 x64 onedir package, XDG data paths, and a real
+headless startup check; broader distribution targets and MVP views remain
+planned.
 
 ## Purpose
 

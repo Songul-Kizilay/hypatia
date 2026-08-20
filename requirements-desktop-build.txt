@@ -1,2 +1,2 @@
-# Windows desktop packaging tool; install only for a local release build.
+# Desktop packaging tool; install only for a local Windows or Linux release build.
 pyinstaller==6.21.0

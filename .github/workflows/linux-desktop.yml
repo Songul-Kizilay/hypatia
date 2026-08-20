@@ -1,0 +1,57 @@
+name: Linux desktop
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-build-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: requirements-desktop-build.txt
+
+      - name: Install Linux desktop runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes python3-tk xvfb
+
+      - name: Create build environment
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install --upgrade pip
+          .venv/bin/python -m pip install -r requirements-desktop-build.txt
+
+      - name: Run automated tests
+        run: .venv/bin/python -m unittest discover -s tests -t .
+
+      - name: Build and smoke-test Linux desktop
+        run: |
+          tools/build_desktop.sh --clean
+          tools/smoke_desktop_linux.sh
+
+      - name: Create Linux archive
+        run: tar -C dist -czf Hypatia-linux-x64-v0.3.44.tar.gz Hypatia
+
+      - name: Upload Linux desktop artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Hypatia-linux-x64-v0.3.44
+          path: Hypatia-linux-x64-v0.3.44.tar.gz
+          if-no-files-found: error
+          retention-days: 14
