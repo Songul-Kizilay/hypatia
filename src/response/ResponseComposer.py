@@ -28,6 +28,9 @@ from research.ResearchRunMarkdownExportPreview import (
 from research.ResearchRunMarkdownExportResult import (
     ResearchRunMarkdownExportResult,
 )
+from research.ResearchRunMarkdownExportVerification import (
+    ResearchRunMarkdownExportVerification,
+)
 from research.ResearchRunStatusTransitionPreview import (
     ResearchRunStatusTransitionPreview,
 )
@@ -823,6 +826,48 @@ class ResponseComposer:
             message=message,
             request_id=request.request_id,
             intent="research_run_markdown_export_save",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_run_markdown_export_verify_success(
+        self,
+        request: BrainRequest,
+        verification: ResearchRunMarkdownExportVerification,
+    ) -> BrainResponse:
+        """Report an exact read-only local export integrity comparison."""
+        status = "MATCH" if verification.matches else "DOES NOT MATCH"
+        return BrainResponse(
+            message=(
+                "Research Markdown export verification:\n"
+                f"Run: {verification.run_id}\n"
+                f"Snapshot updated: {verification.snapshot_updated_at.isoformat()}\n"
+                f"File: {verification.source_path}\n"
+                f"Result: {status}\n"
+                f"Expected bytes: {verification.expected_byte_count}\n"
+                f"Observed bytes: {verification.observed_byte_count}\n"
+                "Expected SHA-256: "
+                f"{verification.expected_content_sha256}\n"
+                "Observed SHA-256: "
+                f"{verification.observed_content_sha256}\n"
+                "Status: read-only verification; no data was imported or changed"
+            ),
+            request_id=request.request_id,
+            intent="research_run_markdown_export_verify",
+            memory_count=0,
+            research_run_markdown_export_verification=verification,
+        )
+
+    def research_run_markdown_export_verify_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Report a controlled local verification failure without path details."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="research_run_markdown_export_verify",
             memory_count=0,
             success=False,
         )

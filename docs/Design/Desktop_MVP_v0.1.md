@@ -46,6 +46,9 @@ The MVP may present only current Brain/CognitiveEngine capabilities:
 - separately confirmed Markdown save for that exact preview, with a
   user-selected new-file destination, final snapshot/hash revalidation, and
   atomic no-overwrite publication;
+- read-only verification of one selected existing Markdown export against the
+  current terminal-run byte count and SHA-256, without decoding, importing,
+  repairing, or changing either side;
 - preview-and-confirm transition of a collecting research run to one terminal
   lifecycle status;
 - an explicit Crossref scholarly-metadata discovery request for a selected
@@ -185,6 +188,12 @@ write a document. `Save export` is a separate action bound to that displayed
 preview: the desktop chooses and confirms a destination, then Brain re-renders
 and revalidates the run before atomically creating a complete UTF-8 `.md` file.
 Existing destinations are never replaced, and no research audit state changes.
+`Verify export` is independent of the preview state. It requires the selected
+terminal run and one existing `.md` file, streams the complete stable regular
+file, and reports its observed byte count and SHA-256 beside the deterministic
+expected values. Exact match and mismatch are both successful read-only
+outcomes; unsafe file types, unstable reads, and oversized unexpected input are
+controlled failures.
 The `Final status` selector exposes only completed, failed, and cancelled. The
 window first renders the runtime preview and opens confirmation only for an
 allowed decision; the separate update call revalidates before persistence.

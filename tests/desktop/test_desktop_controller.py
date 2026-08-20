@@ -373,6 +373,44 @@ class DesktopControllerTests(unittest.TestCase):
 
         self.assertEqual(self.brain.requests, [])
 
+    def test_markdown_export_verify_uses_selected_run_and_existing_file(self) -> None:
+        source = str(Path.cwd() / "existing research.md")
+
+        response = self.controller.verify_research_run_markdown_export(
+            "  run-123  ",
+            f"  {source}  ",
+        )
+
+        self.assertIs(response, self.response)
+        request = self.brain.requests[0]
+        self.assertIsInstance(request, BrainRequest)
+        assert isinstance(request, BrainRequest)
+        self.assertEqual(request.message, "Verify existing research Markdown export")
+        self.assertEqual(request.source, "desktop")
+        self.assertEqual(
+            request.metadata,
+            {
+                "intent": "research_run_markdown_export_verify",
+                "research_run_id": "run-123",
+                "research_export_source_path": source,
+            },
+        )
+
+    def test_markdown_export_verify_rejects_empty_selection_locally(self) -> None:
+        source = str(Path.cwd() / "existing.md")
+        for run_id, source_path, message in (
+            ("", source, "run ID cannot be empty"),
+            ("run-123", "", "verification file cannot be empty"),
+        ):
+            with self.subTest(run_id=run_id, source_path=source_path):
+                with self.assertRaisesRegex(ValueError, message):
+                    self.controller.verify_research_run_markdown_export(
+                        run_id,
+                        source_path,
+                    )
+
+        self.assertEqual(self.brain.requests, [])
+
     def test_discover_research_sources_uses_a_structured_explicit_request(
         self,
     ) -> None:

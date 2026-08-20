@@ -115,7 +115,8 @@ To create the world's most capable personal AI research companion.
   evidence, assessment history, comparison notes, and failures, and exposes a
   full-content SHA-256 while bounding the desktop display. A separate confirmed
   save revalidates the exact preview and atomically creates a new `.md` file
-  without replacing an existing destination
+  without replacing an existing destination. A read-only verification action
+  compares an existing export's complete bytes with the current terminal run
 - An initial local desktop shell for text chat, a refreshable session overview,
   explicit session selection, session details/recent conversations/activity,
   explicit lexical/semantic conversation recall, and semantic-memory runtime
@@ -228,6 +229,13 @@ back through Brain, and re-renders the immutable persisted run before atomically
 publishing complete UTF-8 bytes. A changed preview, invalid path, or existing
 destination is rejected without replacement. The save performs no network,
 provider, LLM, memory, graph, live-index, event-bus, or research-audit mutation.
+`Verify export` asks for an existing `.md` file and compares its complete byte
+count and SHA-256 with a fresh deterministic rendering of the selected terminal
+run. It reads one stable regular-file descriptor in bounded chunks, rejects a
+file that changes during the read, and reports either `MATCH` or
+`DOES NOT MATCH`. The file is never decoded, imported, repaired, or written;
+research, memory, graph, live-index, event-bus, network, provider, and LLM state
+remain untouched.
 The `Final status` control previews `completed`, `failed`, or `cancelled` before
 asking for separate confirmation. Completion requires at least one accepted
 source and one evidence record, while failure requires a recorded failure. A

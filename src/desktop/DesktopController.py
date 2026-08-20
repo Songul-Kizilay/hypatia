@@ -205,6 +205,30 @@ class DesktopController:
             )
         )
 
+    def verify_research_run_markdown_export(
+        self,
+        research_run_id: str,
+        source_path: str,
+    ) -> BrainResponse:
+        """Compare one selected Markdown file with the current terminal run."""
+        normalized_run_id = research_run_id.strip()
+        normalized_source = source_path.strip()
+        if not normalized_run_id:
+            raise ValueError("A research run ID cannot be empty.")
+        if not normalized_source:
+            raise ValueError("A research export verification file cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="Verify existing research Markdown export",
+                source="desktop",
+                metadata={
+                    "intent": "research_run_markdown_export_verify",
+                    "research_run_id": normalized_run_id,
+                    "research_export_source_path": normalized_source,
+                },
+            )
+        )
+
     def discover_research_sources(self, research_run_id: str) -> BrainResponse:
         """Discover candidate metadata for one run without loading content."""
         normalized_run_id = research_run_id.strip()

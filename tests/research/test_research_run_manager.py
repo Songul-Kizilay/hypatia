@@ -8,6 +8,8 @@ from functools import partial
 from hashlib import sha256
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from core.Exceptions import ResearchError
 from knowledge.Chunk import Chunk
@@ -16,6 +18,9 @@ from research.ResearchRun import ResearchRun
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchRunMarkdownExportPreview import (
     MAX_MARKDOWN_EXPORT_PREVIEW_CHARACTERS,
+)
+from research.ResearchRunMarkdownExportVerification import (
+    MAX_MARKDOWN_EXPORT_VERIFICATION_BYTES,
 )
 from research.ResearchRunMarkdownRenderer import render_research_run_markdown
 from research.ResearchRunStatus import ResearchRunStatus
@@ -311,6 +316,142 @@ class ResearchRunManagerTests(unittest.TestCase):
                     expected_content_sha256="0" * 64,
                 )
             self.assertFalse(destination.exists())
+
+    def test_markdown_export_verification_matches_exact_saved_document(self) -> None:
+        run = self.manager.create("Verify this run")
+        terminal = self.manager.transition_status(
+            run.run_id,
+            ResearchRunStatus.CANCELLED,
+        )
+        preview = self.manager.preview_markdown_export(run.run_id)
+        persisted_save_count = len(self.store.saved)
+
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / preview.suggested_filename
+            self.manager.save_markdown_export(
+                run.run_id,
+                source,
+                expected_snapshot_updated_at=preview.snapshot_updated_at,
+                expected_content_sha256=preview.content_sha256,
+            )
+
+            verification = self.manager.verify_markdown_export(run.run_id, source)
+
+            expected_bytes = render_research_run_markdown(terminal).encode("utf-8")
+            self.assertTrue(verification.matches)
+            self.assertEqual(verification.run_id, run.run_id)
+            self.assertEqual(verification.snapshot_updated_at, terminal.updated_at)
+            self.assertEqual(verification.source_path, str(source))
+            self.assertEqual(
+                verification.expected_content_sha256,
+                sha256(expected_bytes).hexdigest(),
+            )
+            self.assertEqual(
+                verification.observed_content_sha256,
+                verification.expected_content_sha256,
+            )
+            self.assertEqual(verification.expected_byte_count, len(expected_bytes))
+            self.assertEqual(verification.observed_byte_count, len(expected_bytes))
+
+        self.assertEqual(self.manager.get(run.run_id), terminal)
+        self.assertEqual(len(self.store.saved), persisted_save_count)
+
+    def test_markdown_export_verification_reports_tampered_or_empty_file(
+        self,
+    ) -> None:
+        run = self.manager.create("Detect changes")
+        terminal = self.manager.transition_status(
+            run.run_id,
+            ResearchRunStatus.CANCELLED,
+        )
+
+        with TemporaryDirectory() as directory:
+            for name, content in (
+                ("tampered.md", b"# changed\n"),
+                ("empty.md", b""),
+            ):
+                source = Path(directory) / name
+                source.write_bytes(content)
+
+                with self.subTest(name=name):
+                    verification = self.manager.verify_markdown_export(
+                        run.run_id,
+                        source,
+                    )
+                    self.assertFalse(verification.matches)
+                    self.assertEqual(verification.observed_byte_count, len(content))
+                    self.assertEqual(
+                        verification.observed_content_sha256,
+                        sha256(content).hexdigest(),
+                    )
+
+        self.assertEqual(self.manager.get(run.run_id), terminal)
+
+    def test_markdown_export_verification_rejects_collecting_and_unsafe_sources(
+        self,
+    ) -> None:
+        run = self.manager.create("Validate verification source")
+        missing_source = Path.cwd() / "missing-export.md"
+
+        with self.assertRaisesRegex(ResearchError, "collecting"):
+            self.manager.verify_markdown_export(run.run_id, missing_source)
+
+        self.manager.transition_status(run.run_id, ResearchRunStatus.CANCELLED)
+        for source, expected_message in (
+            ("relative.md", "absolute"),
+            (str(Path.cwd() / "export.txt"), "end with .md"),
+            (str(Path.cwd() / "invalid\x00.md"), "invalid"),
+            (str(missing_source), "could not be read"),
+        ):
+            with self.subTest(source=source):
+                with self.assertRaisesRegex(ResearchError, expected_message):
+                    self.manager.verify_markdown_export(run.run_id, source)
+
+    def test_markdown_export_verification_rejects_non_regular_or_oversized_file(
+        self,
+    ) -> None:
+        run = self.manager.create("Bound verification input")
+        self.manager.transition_status(run.run_id, ResearchRunStatus.CANCELLED)
+
+        with TemporaryDirectory() as directory:
+            directory_source = Path(directory) / "directory.md"
+            directory_source.mkdir()
+            with self.assertRaises(ResearchError):
+                self.manager.verify_markdown_export(run.run_id, directory_source)
+
+            oversized_source = Path(directory) / "oversized.md"
+            with oversized_source.open("wb") as stream:
+                stream.truncate(MAX_MARKDOWN_EXPORT_VERIFICATION_BYTES + 1)
+            with self.assertRaisesRegex(ResearchError, "too large"):
+                self.manager.verify_markdown_export(run.run_id, oversized_source)
+
+    def test_markdown_export_verification_rejects_path_replacement_during_read(
+        self,
+    ) -> None:
+        run = self.manager.create("Detect path replacement")
+        terminal = self.manager.transition_status(
+            run.run_id,
+            ResearchRunStatus.CANCELLED,
+        )
+
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "stable.md"
+            source.write_text(
+                render_research_run_markdown(terminal),
+                encoding="utf-8",
+                newline="\n",
+            )
+            current = source.stat()
+            replaced_path_state = SimpleNamespace(
+                st_dev=current.st_dev,
+                st_ino=current.st_ino + 1,
+            )
+
+            with (
+                patch.object(Path, "stat", return_value=replaced_path_state),
+                self.assertRaisesRegex(ResearchError, "changed while it was read"),
+            ):
+                self.manager.verify_markdown_export(run.run_id, source)
 
     def test_add_source_persists_provenance_without_page_content(self) -> None:
         run = self.manager.create("Question")

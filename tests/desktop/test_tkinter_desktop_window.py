@@ -385,6 +385,64 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         self.assertEqual(controller.export_saves, [])
         self.assertIn("Preview the selected", status.values[-1])
 
+    def test_research_markdown_export_verification_uses_selected_file_read_only(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchSourceLoadController()
+        responses: list[BrainResponse] = []
+        source = str(Path.cwd() / "existing-research.md")
+        window._root = object()
+        window._controller = controller
+        window._research_run_id = RecordingInput("run-123")
+        window._status = RecordingStatus()
+        window._append_response = responses.append
+
+        with patch(
+            "desktop.TkinterDesktopWindow.filedialog.askopenfilename",
+            return_value=source,
+        ) as choose_file:
+            window._verify_research_run_markdown_export()
+
+        self.assertEqual(controller.export_verifications, [("run-123", source)])
+        self.assertEqual(responses, [controller.export_verification_response])
+        self.assertEqual(
+            choose_file.call_args.kwargs["title"],
+            "Verify existing research Markdown export",
+        )
+        self.assertEqual(
+            choose_file.call_args.kwargs["filetypes"],
+            [("Markdown files", "*.md")],
+        )
+
+    def test_research_markdown_export_verification_handles_empty_or_cancelled_choice(
+        self,
+    ) -> None:
+        controller = RecordingResearchSourceLoadController()
+        for run_id, selected_path, expected_status in (
+            ("", "unused.md", "run ID cannot be empty"),
+            ("run-123", "", "verification: cancelled"),
+        ):
+            window: Any = object.__new__(TkinterDesktopWindow)
+            status = RecordingStatus()
+            window._root = object()
+            window._controller = controller
+            window._research_run_id = RecordingInput(run_id)
+            window._status = status
+            window._append_response = lambda _response: self.fail("must not append")
+
+            with patch(
+                "desktop.TkinterDesktopWindow.filedialog.askopenfilename",
+                return_value=selected_path,
+            ) as choose_file:
+                window._verify_research_run_markdown_export()
+
+            if not run_id:
+                choose_file.assert_not_called()
+            self.assertIn(expected_status, status.values[-1])
+
+        self.assertEqual(controller.export_verifications, [])
+
     def test_discovery_renders_unaccepted_candidates_without_loading_them(
         self,
     ) -> None:
@@ -1008,6 +1066,7 @@ class RecordingResearchSourceLoadController:
         self.export_previews: list[str] = []
         self.discovery_calls: list[str] = []
         self.export_saves: list[tuple[ResearchRunMarkdownExportPreview, str]] = []
+        self.export_verifications: list[tuple[str, str]] = []
         self.evidence_calls: list[tuple[str, str, str]] = []
         self.evidence_list_calls: list[str] = []
         self.status_previews: list[tuple[str, str]] = []
@@ -1119,6 +1178,12 @@ class RecordingResearchSourceLoadController:
             message="Markdown export saved.",
             request_id="research-export-save",
             intent="research_run_markdown_export_save",
+            memory_count=0,
+        )
+        self.export_verification_response = BrainResponse(
+            message="Markdown export verified.",
+            request_id="research-export-verify",
+            intent="research_run_markdown_export_verify",
             memory_count=0,
         )
         self.discovery_response = BrainResponse(
@@ -1346,6 +1411,18 @@ class RecordingResearchSourceLoadController:
             raise ValueError("A research export destination cannot be empty.")
         self.export_saves.append((preview, destination_path))
         return self.export_save_response
+
+    def verify_research_run_markdown_export(
+        self,
+        run_id: str,
+        source_path: str,
+    ) -> BrainResponse:
+        if not run_id.strip():
+            raise ValueError("A research run ID cannot be empty.")
+        if not source_path.strip():
+            raise ValueError("A research export verification file cannot be empty.")
+        self.export_verifications.append((run_id, source_path))
+        return self.export_verification_response
 
     def discover_research_sources(self, run_id: str) -> BrainResponse:
         if not run_id.strip():

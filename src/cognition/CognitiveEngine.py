@@ -177,6 +177,9 @@ class CognitiveEngine:
         if self._is_research_run_list_request(request):
             return self._process_research_run_list(request)
 
+        if self._is_research_run_markdown_export_verify_request(request):
+            return self._process_research_run_markdown_export_verify(request)
+
         if self._is_research_run_markdown_export_save_request(request):
             return self._process_research_run_markdown_export_save(request)
 
@@ -418,6 +421,11 @@ class CognitiveEngine:
         return request.metadata.get("intent") == "research_run_markdown_export_save"
 
     @staticmethod
+    def _is_research_run_markdown_export_verify_request(request: BrainRequest) -> bool:
+        """Recognize one explicit read-only local export integrity request."""
+        return request.metadata.get("intent") == "research_run_markdown_export_verify"
+
+    @staticmethod
     def _is_research_evidence_record_request(request: BrainRequest) -> bool:
         """Recognize one explicit indexed-chunk evidence selection."""
         return request.metadata.get("intent") == "research_evidence_record"
@@ -579,6 +587,34 @@ class CognitiveEngine:
         return self._response_composer.research_run_markdown_export_save_success(
             request,
             result,
+        )
+
+    def _process_research_run_markdown_export_verify(
+        self,
+        request: BrainRequest,
+    ) -> BrainResponse:
+        run_id = request.metadata.get("research_run_id")
+        source_path = request.metadata.get("research_export_source_path")
+        failure = self._response_composer.research_run_markdown_export_verify_failure
+        if not isinstance(run_id, str) or not run_id.strip():
+            return failure(request, "A research run ID is required.")
+        if not isinstance(source_path, str) or not source_path.strip():
+            return failure(request, "A research export verification file is required.")
+        if self._research_run_manager is None:
+            return failure(request, "Research run persistence is unavailable.")
+        try:
+            verification = self._research_run_manager.verify_markdown_export(
+                run_id,
+                source_path,
+            )
+        except ResearchError:
+            return failure(
+                request,
+                "Research Markdown export could not be verified; no data was changed.",
+            )
+        return self._response_composer.research_run_markdown_export_verify_success(
+            request,
+            verification,
         )
 
     def _process_research_evidence_record(
