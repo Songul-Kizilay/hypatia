@@ -2,6 +2,39 @@
 
 All notable project changes are recorded here.
 
+## [0.3.51] - 2026-08-21
+
+### Added
+
+- A separate `ResearchSourceContentRecord` contract binds one explicitly
+  accepted source's exact extracted text to document ID, URL, title, content
+  type, fetch/storage times, complete UTF-8 byte count, and SHA-256.
+- A replaceable `ResearchSourceContentStore` boundary and strict schema-v1 JSON
+  implementation can load or atomically replace the complete ordered content
+  snapshot. Missing storage reads as an empty collection.
+
+### Safety
+
+- One record is limited to 4 MB of UTF-8 content. A snapshot is limited to 64
+  unique document IDs/URLs, 32 MB of total content, and a 40 MB serialized file.
+  Oversized files are rejected before JSON parsing.
+- Loading revalidates exact fields, schema type/version, timezone-aware and
+  ordered timestamps, byte count, and content fingerprint. Unknown fields,
+  duplicate IDs/URLs, tampering, malformed Unicode, and stale fingerprints fail
+  before a record is returned.
+- Writes serialize and validate the complete snapshot before creating a
+  same-directory temporary file, flush and fsync it, then atomically replace the
+  destination. A failed replace preserves the prior snapshot and removes the
+  temporary file.
+- This release does not wire the store into Bootstrap, source acceptance, Brain,
+  or desktop startup. It performs no automatic restore, refetch, indexing, or
+  migration and does not change the research-run schema.
+
+### Verification
+
+- The package-aware full local suite contains 1,221 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass across 301 source files.
+
 ## [0.3.50] - 2026-08-21
 
 ### Changed

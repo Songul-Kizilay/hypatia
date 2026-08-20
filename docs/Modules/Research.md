@@ -69,6 +69,12 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
 - The audit snapshot does not duplicate downloaded page content. Knowledge
   chunks remain in memory and therefore are not reconstructed from a run after
   restart.
+- A separate schema-v1 source-content record/store foundation now validates
+  exact extracted text against its UTF-8 byte count and SHA-256 plus persisted
+  provenance. The JSON store atomically replaces a bounded snapshot of at most
+  64 unique records, 32 MB total content, and a 40 MB physical file. It is not
+  yet connected to acceptance or startup and therefore does not change current
+  restart behavior.
 - The user can select one currently indexed paragraph from a source attached
   to the run and add a required note. The evidence record stores the source and
   chunk IDs, paragraph position, at most 1,000 excerpt characters, whether the
@@ -149,10 +155,11 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
 
 ## Next increment
 
-Design bounded local persistence for explicitly accepted source text so an
-audited run can resume after restart without silently refetching the page. The
-design must bind content to persisted provenance and integrity metadata, enforce
-storage bounds, and keep acquisition and restoration explicitly user-controlled.
+Transactionally save one accepted source to the separate content store while
+preserving the existing knowledge-index and research-audit rollback guarantees.
+A content-store or run-store failure must restore the exact prior content
+snapshot and remove the newly indexed document. Startup restoration is not part
+of that write-path increment.
 
 ## Known boundary
 
@@ -160,5 +167,5 @@ The explicit research source fetcher and fixed Crossref discovery adapter share
 one multi-address pinned HTTPS boundary. Failed TCP or TLS setup advances only
 through the remaining addresses from that same validation within one deadline.
 Accepted page content still lives only in the in-memory knowledge index and is
-not restored after restart. Neither path authorizes autonomous or unattended
-crawling.
+not restored after restart. The validated content store exists as an unwired
+foundation only. Neither path authorizes autonomous or unattended crawling.
