@@ -222,6 +222,18 @@ class ResearchContentStatusTests(unittest.TestCase):
         self.assertEqual(controller.calls, 1)
         self.assertEqual(responses, [controller.response])
 
+    def test_evidence_integrity_button_appends_the_controller_response(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchContentStatusController()
+        responses: list[BrainResponse] = []
+        window._controller = controller
+        window._append_response = responses.append
+
+        window._show_research_evidence_integrity()
+
+        self.assertEqual(controller.evidence_calls, 1)
+        self.assertEqual(responses, [controller.evidence_response])
+
 
 class InternetResearchSourceSelectionTests(unittest.TestCase):
     def test_entered_url_is_passed_to_the_existing_controller_boundary(self) -> None:
@@ -1075,16 +1087,27 @@ class RecordingKnowledgeLoadController:
 class RecordingResearchContentStatusController:
     def __init__(self) -> None:
         self.calls = 0
+        self.evidence_calls = 0
         self.response = BrainResponse(
             message="Research content restoration status.",
             request_id="research-content-status",
             intent="research_source_content_restoration_status",
             memory_count=0,
         )
+        self.evidence_response = BrainResponse(
+            message="Research evidence integrity status.",
+            request_id="research-evidence-status",
+            intent="research_evidence_integrity_status",
+            memory_count=0,
+        )
 
     def research_content_status(self) -> BrainResponse:
         self.calls += 1
         return self.response
+
+    def research_evidence_status(self) -> BrainResponse:
+        self.evidence_calls += 1
+        return self.evidence_response
 
 
 class RecordingResearchSourceLoadController:

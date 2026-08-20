@@ -16,6 +16,9 @@ to a selected run ID. The `Research content` action reports the accepted-source
 content restoration state captured at startup plus aggregate restored document
 and paragraph counts. It neither reads persistence again nor exposes content,
 paths, source metadata, hashes, IDs, or internal errors.
+The research panel's `Evidence integrity` action performs a separate bounded
+in-memory comparison of recorded evidence and current accepted paragraphs. It
+reports only matched, missing, and changed totals and never repairs records.
 For a selected collecting run, `Find sources` explicitly queries the bounded
 Crossref metadata provider and displays up to five persisted candidates.
 `Use selected URL` only copies the chosen DOI URL into the existing source

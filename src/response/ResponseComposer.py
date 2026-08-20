@@ -21,6 +21,7 @@ from knowledge.KnowledgeRelationRevocationPreview import (
 )
 from memory.MemoryRecord import MemoryRecord
 from planner.Plan import Plan
+from research.ResearchEvidenceIntegrityStatus import ResearchEvidenceIntegrityStatus
 from research.ResearchRun import ResearchRun
 from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
@@ -737,6 +738,37 @@ class ResponseComposer:
             intent="research_source_content_restoration_status",
             memory_count=0,
             research_source_content_restoration_status=status,
+        )
+
+    def research_evidence_integrity_status(
+        self,
+        request: BrainRequest,
+        status: ResearchEvidenceIntegrityStatus,
+    ) -> BrainResponse:
+        """Render aggregate evidence integrity without record or content details."""
+        recorded: int | str = status.recorded_evidence_count
+        matched: int | str = status.matched_evidence_count
+        missing: int | str = status.missing_evidence_count
+        changed: int | str = status.changed_evidence_count
+        if not status.available:
+            recorded = matched = missing = changed = "unavailable"
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Research evidence integrity status:",
+                    f"Runtime: {status.state}",
+                    f"Recorded evidence: {recorded}",
+                    f"Matched restored paragraphs: {matched}",
+                    f"Missing restored paragraphs: {missing}",
+                    f"Changed restored paragraphs: {changed}",
+                    "Network access: not used",
+                    "Persistent writes: not used",
+                )
+            ),
+            request_id=request.request_id,
+            intent="research_evidence_integrity_status",
+            memory_count=0,
+            research_evidence_integrity_status=status,
         )
 
     def research_run_list_success(

@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.55` in the current release candidate) are the
+- **Runtime releases** (`v0.3.56` in the current release candidate) are the
   executable package and GitHub release line. They are the source-backed
   implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
@@ -86,6 +86,10 @@ restores only records whose stable identity and source metadata exactly match
 accepted run provenance. Initial accepted-source indexing and restoration use
 the same content-bound paragraph identities, and Bootstrap captures only a
 bounded aggregate restoration status for the explicit desktop view.
+The separately requested evidence integrity audit compares persisted evidence
+from the already loaded run snapshot with current in-memory paragraphs and
+returns aggregate matched, missing, and changed counts. It performs no store,
+network, LLM, memory, knowledge, or repair operation.
 An explicit evidence action resolves one currently indexed chunk by ID and
 accepts it only when its document is already attached to the selected run. The
 v2 snapshot retains a bounded excerpt, full-chunk SHA-256 fingerprint, source
@@ -295,12 +299,12 @@ Not implemented:
 
 The current local verification baseline is:
 
-- package-aware `python -m unittest`: 1,246 tests passed. Explicit `tests.*`
+- package-aware `python -m unittest`: 1,258 tests passed. Explicit `tests.*`
   module names ensure nested test directories are included without shadowing
   source packages.
 - `python -m black --check src tests`: passed.
 - `python -m ruff check src tests`: passed.
-- `python -m mypy src tests`: passed with no issues in 306 files.
+- `python -m mypy src tests`: passed with no issues in 311 files.
 - `git diff --check`: passed.
 
 These checks verify the current local worktree; they do not create a release,
@@ -338,6 +342,9 @@ memory/session files and leaving project data unchanged.
 4. Existing deterministic keyword selection must remain an available fallback
    until semantic retrieval has independently verified relevance, ties, bounds,
    and failure behavior.
+5. The research-run JSON store does not yet impose an explicit physical-file or
+   aggregate collection bound. A bounded read/write contract is required before
+   research history is allowed to grow substantially.
 
 ## Completed Increment: Semantic Retrieval Core
 

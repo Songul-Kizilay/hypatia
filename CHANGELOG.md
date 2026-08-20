@@ -2,6 +2,29 @@
 
 All notable project changes are recorded here.
 
+## [0.3.56] - 2026-08-21
+
+### Added
+
+- A bounded read-only evidence integrity auditor compares persisted research
+  evidence with the current accepted-content paragraphs by document, paragraph
+  position, opaque identity, and exact-content SHA-256.
+- Brain and the desktop expose an explicit `Evidence integrity` action that
+  reports only recorded, matched, missing, and changed aggregate counts.
+
+### Safety
+
+- The audit is limited to 20,000 runs, evidence records, and indexed chunks.
+  Ambiguous or oversized state returns a safe unavailable result.
+- Audit requests use only already validated in-memory runs and chunks. They do
+  not read or write persistence, access the network, invoke an LLM, mutate
+  memory or knowledge, reveal content, paths, IDs, hashes, or repair records.
+
+### Verification
+
+- The package-aware full local suite contains 1,258 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass across 311 source files.
+
 ## [0.3.55] - 2026-08-21
 
 ### Changed

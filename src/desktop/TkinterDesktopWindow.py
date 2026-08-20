@@ -657,6 +657,11 @@ class TkinterDesktopWindow:
             text="Save export",
             command=self._save_research_run_markdown_export,
         ).grid(row=15, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ttk.Button(
+            research_frame,
+            text="Evidence integrity",
+            command=self._show_research_evidence_integrity,
+        ).grid(row=15, column=0, columnspan=2, sticky="ew", pady=(8, 0))
 
         relation_frame = ttk.LabelFrame(
             container,
@@ -826,6 +831,9 @@ class TkinterDesktopWindow:
 
     def _show_research_content_status(self) -> None:
         self._append_response(self._controller.research_content_status())
+
+    def _show_research_evidence_integrity(self) -> None:
+        self._append_response(self._controller.research_evidence_status())
 
     def _show_recall(self) -> None:
         self._show_recall_response(self._controller.recall)

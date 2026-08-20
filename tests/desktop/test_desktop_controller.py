@@ -912,6 +912,12 @@ class DesktopControllerTests(unittest.TestCase):
         self.assertIs(response, self.response)
         self.assertEqual(self.brain.requests, ["research content status"])
 
+    def test_research_evidence_status_uses_the_read_only_runtime_command(self) -> None:
+        response = self.controller.research_evidence_status()
+
+        self.assertIs(response, self.response)
+        self.assertEqual(self.brain.requests, ["research evidence status"])
+
 
 if __name__ == "__main__":
     unittest.main()

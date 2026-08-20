@@ -30,6 +30,10 @@ Hypatia currently runs as a local-first CLI. The initial security boundary is:
   document identity, paragraph position, and exact-content SHA-256; changed
   text cannot silently inherit the prior locator, and no stored evidence is
   automatically rewritten or migrated;
+- evidence integrity audit requests are capped at 20,000 runs, records, and
+  indexed chunks and use only loaded in-memory snapshots; output contains aggregate
+  matched, missing, and changed counts, with no persistence, network, content,
+  path, identifier, hash, mutation, migration, or repair access;
 - semantic embeddings are opt-in and restricted to the local Ollama endpoint
   policy enforced at bootstrap.
 

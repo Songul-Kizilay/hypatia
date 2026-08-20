@@ -118,6 +118,10 @@ class KnowledgeEngine:
             raise KnowledgeError("Knowledge chunk ID cannot be empty.")
         return self._indexer.get(chunk_id.strip())
 
+    def chunks(self) -> list[Chunk]:
+        """Return the current indexed chunks in deterministic insertion order."""
+        return list(self._indexer.all().values())
+
     def documents(self) -> list[KnowledgeDocumentReference]:
         """List loaded source documents in deterministic load order."""
         indexed_chunks = tuple(self._indexer.all().values())
