@@ -152,9 +152,11 @@ and indexes the source with its final URL. `Start research` persists one
 question and selects the returned run ID; `Research runs` lists the current
 audit catalog.
 When a run ID is present, a successful source load also persists provenance,
-while an audit-write failure rolls the new unlinked knowledge document back.
-The schema-v1 accepted-content store added in v0.3.51 is an unwired persistence
-foundation: this desktop action does not yet save to or restore from it.
+and saves exact extracted text to the separate schema-v1 accepted-content store
+before publishing that provenance. Content-store failure removes the new
+knowledge document; a later audit-write failure restores the prior content
+collection and independently rolls the document back. Startup does not yet
+restore saved content into the in-memory knowledge index.
 `Find sources` separately sends the selected collecting run's persisted
 question to the fixed Crossref REST v1 metadata endpoint and displays at most
 five ordered DOI candidates. The endpoint and its same-origin redirects use

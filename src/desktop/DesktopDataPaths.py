@@ -36,6 +36,11 @@ class DesktopDataPaths:
         """Return the persistent research-run audit snapshot path."""
         return self.root / "research" / "runs.json"
 
+    @property
+    def research_source_content_path(self) -> Path:
+        """Return the accepted research-source content snapshot path."""
+        return self.root / "research" / "content.json"
+
     @classmethod
     def from_process_environment(
         cls,

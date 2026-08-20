@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.51` in the current release candidate) are the
+- **Runtime releases** (`v0.3.52` in the current release candidate) are the
   executable package and GitHub release line. They are the source-backed
   implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
@@ -79,9 +79,10 @@ tries only the ordered public addresses from its own validation, once each and
 within one decreasing connection-time budget, while retaining hostname-based
 TLS certificate checks; redirects repeat that boundary.
 It can create/list a persistent research run and pass a selected run ID with
-the source request. Bootstrap—not the UI—owns the atomic run store and records
-only question/status, source provenance, safe failures, and timestamps; page
-content remains in the existing in-memory knowledge index.
+the source request. Bootstrap—not the UI—owns the atomic run and content stores.
+The run snapshot records only question/status, source provenance, safe failures,
+and timestamps; exact accepted page text is stored separately and remains in the
+existing in-memory knowledge index only until startup restoration is added.
 An explicit evidence action resolves one currently indexed chunk by ID and
 accepts it only when its document is already attached to the selected run. The
 v2 snapshot retains a bounded excerpt, full-chunk SHA-256 fingerprint, source
@@ -95,7 +96,7 @@ Completion requires source plus evidence, while failure requires a recorded
 failure. Every terminal run is immutable, and a closed-run source request is
 rejected before the fetcher is called.
 When launched as the desktop application, Bootstrap receives user-writable
-memory, session, relation, and research-run paths beneath
+memory, session, relation, research-run, and accepted-content paths beneath
 `%LOCALAPPDATA%\Hypatia` on Windows or
 `${XDG_DATA_HOME:-$HOME/.local/share}/hypatia` on Linux. Only absolute XDG and
 explicit override paths are honored, and the application never writes beside
@@ -124,11 +125,13 @@ successful result.
 
 Persistent state is stored locally as validated JSON snapshots through
 `JsonFileMemoryStore`, `JsonFileSessionStore`,
-`JsonFileKnowledgeRelationStore`, `JsonFileResearchRunStore`, and the currently
-unwired `JsonFileResearchSourceContentStore` foundation. Snapshot
-writes are atomic. The knowledge index is in memory and uses case-insensitive
-lexical matching; research-run provenance does not reconstruct page content
-after restart.
+`JsonFileKnowledgeRelationStore`, `JsonFileResearchRunStore`, and
+`JsonFileResearchSourceContentStore`. Snapshot writes are atomic. Accepted
+research content is saved after knowledge indexing and before run provenance;
+failure restores the prior content collection and removes the new unlinked
+knowledge document where possible. The knowledge index is in memory and uses
+case-insensitive lexical matching; startup does not yet reconstruct page content
+from the separate store.
 Research-run schema v6 loads v1-v5 snapshots with absent evidence, discovery,
 assessment, or comparison-note collections represented as empty and v4
 assessments represented with no supersession link, rewriting a legacy snapshot

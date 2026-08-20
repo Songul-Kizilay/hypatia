@@ -52,6 +52,8 @@ from memory.SessionMemoryPolicy import SessionMemoryPolicy
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSourceCandidate import ResearchSourceCandidate
+from research.ResearchSourceContentRecord import ResearchSourceContentRecord
+from research.ResearchSourceContentStore import ResearchSourceContentStore
 from research.ResearchSourceDiscoveryProvider import ResearchSourceDiscoveryProvider
 from research.ResearchSourceFetcher import ResearchSourceFetcher
 from response.ResponseComposer import ResponseComposer
@@ -96,6 +98,7 @@ class CognitiveEngine:
         research_source_discovery_provider: (
             ResearchSourceDiscoveryProvider | None
         ) = None,
+        research_source_content_store: ResearchSourceContentStore | None = None,
     ) -> None:
         if llm_history_max_turns is not None and (
             isinstance(llm_history_max_turns, bool) or llm_history_max_turns <= 0
@@ -137,6 +140,7 @@ class CognitiveEngine:
         self._research_source_fetcher = research_source_fetcher
         self._research_run_manager = research_run_manager
         self._research_source_discovery_provider = research_source_discovery_provider
+        self._research_source_content_store = research_source_content_store
         self._hybrid_semantic_memory_ranker = HybridSemanticMemoryRanker()
         self._router = BrainRouter()
 
@@ -1304,6 +1308,38 @@ class CognitiveEngine:
             )
         run = None
         if run_id and self._research_run_manager is not None:
+            content_snapshot: list[ResearchSourceContentRecord] | None = None
+            if self._research_source_content_store is not None:
+                try:
+                    content_snapshot = self._research_source_content_store.load()
+                    content_record = ResearchSourceContentRecord.from_source(
+                        source,
+                        document.document_id,
+                        datetime.now(UTC),
+                    )
+                    self._research_source_content_store.save(
+                        [*content_snapshot, content_record]
+                    )
+                except ResearchError:
+                    try:
+                        self._knowledge_engine.remove_document(document.document_id)
+                    except KnowledgeError:
+                        return self._response_composer.research_source_load_failure(
+                            request,
+                            (
+                                "Research source content failed and knowledge "
+                                "rollback failed."
+                            ),
+                            intent=response_intent,
+                        )
+                    return self._response_composer.research_source_load_failure(
+                        request,
+                        (
+                            "Research source content could not be saved; "
+                            "knowledge was rolled back."
+                        ),
+                        intent=response_intent,
+                    )
             try:
                 run = self._research_run_manager.add_source(
                     run_id,
@@ -1311,20 +1347,48 @@ class CognitiveEngine:
                     document.document_id,
                 )
             except ResearchError:
+                content_rollback_failed = False
+                if (
+                    content_snapshot is not None
+                    and self._research_source_content_store is not None
+                ):
+                    try:
+                        self._research_source_content_store.save(content_snapshot)
+                    except ResearchError:
+                        content_rollback_failed = True
+                knowledge_rollback_failed = False
                 try:
                     self._knowledge_engine.remove_document(document.document_id)
                 except KnowledgeError:
-                    return self._response_composer.research_source_load_failure(
-                        request,
-                        "Research source audit failed and knowledge rollback failed.",
-                        intent=response_intent,
+                    knowledge_rollback_failed = True
+                if content_rollback_failed and knowledge_rollback_failed:
+                    message = (
+                        "Research source audit, content rollback, and knowledge "
+                        "rollback failed."
+                    )
+                elif content_rollback_failed:
+                    message = (
+                        "Research source audit failed and content rollback failed; "
+                        "knowledge was rolled back."
+                    )
+                elif knowledge_rollback_failed:
+                    message = (
+                        "Research source audit failed and knowledge rollback failed; "
+                        "content was rolled back."
+                    )
+                elif content_snapshot is not None:
+                    message = (
+                        "Research source audit could not be saved; content and "
+                        "knowledge were rolled back."
+                    )
+                else:
+                    message = (
+                        "Research source audit could not be saved; "
+                        "knowledge was rolled back."
                     )
                 return self._response_composer.research_source_load_failure(
                     request,
-                    (
-                        "Research source audit could not be saved; "
-                        "knowledge was rolled back."
-                    ),
+                    message,
                     intent=response_intent,
                 )
         loaded_document = next(

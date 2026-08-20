@@ -74,6 +74,7 @@ from research.ResearchRunMarkdownRenderer import render_research_run_markdown
 from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSource import ResearchSource
 from research.ResearchSourceCandidate import ResearchSourceCandidate
+from research.ResearchSourceContentRecord import ResearchSourceContentRecord
 from response.ResponseComposer import ResponseComposer
 from session.SessionDeleteExecutionResult import SessionDeleteExecutionResult
 from session.SessionDeleteService import SessionDeleteService
@@ -302,19 +303,52 @@ class RecordingResearchSourceDiscoveryProvider:
 class ToggleResearchRunStore:
     """Keep snapshots and optionally fail the next persistence operation."""
 
-    def __init__(self) -> None:
+    def __init__(self, operations: list[str] | None = None) -> None:
         self.runs: list[ResearchRun] = []
         self.fail_saves = False
         self.save_calls = 0
+        self.operations = operations
 
     def load(self) -> list[ResearchRun]:
         return list(self.runs)
 
     def save(self, runs: list[ResearchRun]) -> None:
         self.save_calls += 1
+        if self.operations is not None:
+            self.operations.append("run_save")
         if self.fail_saves:
             raise ResearchError("Research run store unavailable.")
         self.runs = list(runs)
+
+
+class ToggleResearchSourceContentStore:
+    """Keep accepted content snapshots and support deterministic save failures."""
+
+    def __init__(
+        self,
+        records: list[ResearchSourceContentRecord] | None = None,
+        operations: list[str] | None = None,
+    ) -> None:
+        self.records = list(records or [])
+        self.fail_loads = False
+        self.fail_save_calls: set[int] = set()
+        self.save_calls = 0
+        self.operations = operations
+
+    def load(self) -> list[ResearchSourceContentRecord]:
+        if self.operations is not None:
+            self.operations.append("content_load")
+        if self.fail_loads:
+            raise ResearchError("Research source content store unavailable.")
+        return list(self.records)
+
+    def save(self, records: list[ResearchSourceContentRecord]) -> None:
+        self.save_calls += 1
+        if self.operations is not None:
+            self.operations.append("content_save")
+        if self.save_calls in self.fail_save_calls:
+            raise ResearchError("Research source content store unavailable.")
+        self.records = list(records)
 
 
 class RecordingCandidateExtractor:
@@ -6507,6 +6541,216 @@ class CognitiveEngineTests(unittest.TestCase):
             response.knowledge_documents[0].document_id,
         )
         self.assertNotIn(source.content, repr(store.runs))
+
+    def test_research_source_acceptance_persists_content_before_provenance(
+        self,
+    ) -> None:
+        operations: list[str] = []
+        run_store = ToggleResearchRunStore(operations)
+        manager = ResearchRunManager(run_store, id_factory=lambda: "run-123")
+        manager.create("Compare local models")
+        operations.clear()
+        content_store = ToggleResearchSourceContentStore(operations=operations)
+        source = ResearchSource(
+            url="https://example.com/research",
+            title="Example research",
+            content="Exact accepted finding.\n\nSecond paragraph.",
+            content_type="text/plain",
+            fetched_at=datetime(2026, 8, 20, 12, 30, tzinfo=UTC),
+        )
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            research_source_fetcher=RecordingResearchSourceFetcher(source=source),
+            research_run_manager=manager,
+            research_source_content_store=content_store,
+        )
+
+        response = engine.process(
+            BrainRequest(
+                message="Load selected internet research source",
+                metadata={
+                    "intent": "research_source_load",
+                    "research_url": source.url,
+                    "research_run_id": "run-123",
+                },
+            )
+        )
+
+        self.assertTrue(response.success)
+        self.assertEqual(
+            operations,
+            ["content_load", "content_save", "run_save"],
+        )
+        self.assertEqual(content_store.save_calls, 1)
+        self.assertEqual(len(content_store.records), 1)
+        content_record = content_store.records[0]
+        self.assertEqual(content_record.content, source.content)
+        self.assertEqual(
+            content_record.document_id,
+            response.knowledge_documents[0].document_id,
+        )
+        self.assertEqual(
+            manager.get("run-123").sources[0].document_id,
+            content_record.document_id,
+        )
+        self.assertNotIn(source.content, repr(run_store.runs))
+
+    def test_failed_content_save_rolls_back_new_knowledge_without_provenance(
+        self,
+    ) -> None:
+        manager = ResearchRunManager(id_factory=lambda: "run-123")
+        manager.create("Compare local models")
+        content_store = ToggleResearchSourceContentStore()
+        content_store.fail_save_calls.add(1)
+        source = ResearchSource(
+            url="https://example.com/research",
+            title="Example research",
+            content="Temporary accepted finding.",
+            content_type="text/plain",
+            fetched_at=datetime(2026, 8, 20, 12, 30, tzinfo=UTC),
+        )
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            research_source_fetcher=RecordingResearchSourceFetcher(source=source),
+            research_run_manager=manager,
+            research_source_content_store=content_store,
+        )
+        documents_before = self.knowledge_engine.documents()
+
+        response = engine.process(
+            BrainRequest(
+                message="Load selected internet research source",
+                metadata={
+                    "intent": "research_source_load",
+                    "research_url": source.url,
+                    "research_run_id": "run-123",
+                },
+            )
+        )
+
+        self.assertFalse(response.success)
+        self.assertIn("knowledge was rolled back", response.message)
+        self.assertEqual(self.knowledge_engine.documents(), documents_before)
+        self.assertEqual(content_store.records, [])
+        self.assertEqual(manager.get("run-123").sources, ())
+
+    def test_failed_source_audit_restores_content_and_knowledge_snapshots(
+        self,
+    ) -> None:
+        run_store = ToggleResearchRunStore()
+        manager = ResearchRunManager(run_store, id_factory=lambda: "run-123")
+        manager.create("Compare local models")
+        run_store.fail_saves = True
+        prior_source = ResearchSource(
+            url="https://example.com/prior",
+            title="Prior source",
+            content="Prior accepted finding.",
+            content_type="text/plain",
+            fetched_at=datetime(2026, 8, 20, 10, 0, tzinfo=UTC),
+        )
+        prior_record = ResearchSourceContentRecord.from_source(
+            prior_source,
+            "prior-document",
+            datetime(2026, 8, 20, 10, 1, tzinfo=UTC),
+        )
+        content_store = ToggleResearchSourceContentStore([prior_record])
+        source = ResearchSource(
+            url="https://example.com/research",
+            title="Example research",
+            content="Temporary accepted finding.",
+            content_type="text/plain",
+            fetched_at=datetime(2026, 8, 20, 12, 30, tzinfo=UTC),
+        )
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            research_source_fetcher=RecordingResearchSourceFetcher(source=source),
+            research_run_manager=manager,
+            research_source_content_store=content_store,
+        )
+        documents_before = self.knowledge_engine.documents()
+
+        response = engine.process(
+            BrainRequest(
+                message="Load selected internet research source",
+                metadata={
+                    "intent": "research_source_load",
+                    "research_url": source.url,
+                    "research_run_id": "run-123",
+                },
+            )
+        )
+
+        self.assertFalse(response.success)
+        self.assertIn("content and knowledge were rolled back", response.message)
+        self.assertEqual(content_store.save_calls, 2)
+        self.assertEqual(content_store.records, [prior_record])
+        self.assertEqual(self.knowledge_engine.documents(), documents_before)
+        self.assertEqual(manager.get("run-123").sources, ())
+
+    def test_content_rollback_failure_still_removes_new_knowledge_document(
+        self,
+    ) -> None:
+        run_store = ToggleResearchRunStore()
+        manager = ResearchRunManager(run_store, id_factory=lambda: "run-123")
+        manager.create("Compare local models")
+        run_store.fail_saves = True
+        content_store = ToggleResearchSourceContentStore()
+        content_store.fail_save_calls.add(2)
+        source = ResearchSource(
+            url="https://example.com/research",
+            title="Example research",
+            content="Temporary accepted finding.",
+            content_type="text/plain",
+            fetched_at=datetime(2026, 8, 20, 12, 30, tzinfo=UTC),
+        )
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            research_source_fetcher=RecordingResearchSourceFetcher(source=source),
+            research_run_manager=manager,
+            research_source_content_store=content_store,
+        )
+        documents_before = self.knowledge_engine.documents()
+
+        response = engine.process(
+            BrainRequest(
+                message="Load selected internet research source",
+                metadata={
+                    "intent": "research_source_load",
+                    "research_url": source.url,
+                    "research_run_id": "run-123",
+                },
+            )
+        )
+
+        self.assertFalse(response.success)
+        self.assertIn("content rollback failed", response.message)
+        self.assertEqual(self.knowledge_engine.documents(), documents_before)
+        self.assertEqual(len(content_store.records), 1)
+        self.assertEqual(manager.get("run-123").sources, ())
 
     def test_research_source_failure_records_only_a_safe_audit_reason(self) -> None:
         store = ToggleResearchRunStore()

@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.51 (Genesis)`
+`v0.3.52 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.51`** is the current executable package and GitHub
+- **Runtime release `v0.3.52`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -71,15 +71,18 @@ with optional OpenAI-compatible LLM conversation support.
   stores its question, collecting status, source provenance, safe failures,
   and timestamps in a versioned atomic JSON snapshot. Downloaded page content
   and the in-memory knowledge index are not duplicated in that snapshot.
-- A separate schema-v1 accepted-source content-store foundation validates exact
+- A separate schema-v1 accepted-source content store validates exact
   document provenance, UTF-8 byte count, SHA-256, timestamps, duplicate IDs and
   URLs, and bounded per-record/total/file sizes before atomically replacing its
-  complete JSON snapshot. It is not yet wired into source acceptance or
-  startup, so current runtime behavior still does not restore page content.
-- Research-source attachment is transactionally guarded: if the run snapshot
-  cannot be saved after indexing, Hypatia removes the new unlinked knowledge
-  document before returning a controlled failure. Rejected source URLs are not
-  retained in persistent failure diagnostics.
+  complete JSON snapshot. A source accepted into a selected run saves its exact
+  content after knowledge indexing and before provenance publication. Startup
+  still does not restore that content into the in-memory knowledge index.
+- Research-source attachment is transactionally guarded: a content-store
+  failure removes the new unlinked knowledge document and publishes no source
+  provenance. If the run snapshot then fails, Hypatia restores the prior
+  content collection and independently removes the knowledge document before
+  returning a controlled result. Rejected source URLs are not retained in
+  persistent failure diagnostics.
 - A replaceable research source-discovery provider boundary accepts one
   explicit collecting run and returns at most five ordered, credential-free
   HTTPS metadata candidates. The runtime atomically records the exact query,
@@ -362,7 +365,8 @@ so this check did not alter the project's persisted data.
 
 ## Next Milestone
 
-Transactionally save accepted source text to the separate content store only
-after knowledge indexing and before research provenance publication. Any store
-or run-audit failure must restore the prior content snapshot and roll back the
-new knowledge document; startup restoration remains a later explicit increment.
+Restore only fully validated accepted-source content into the in-memory
+knowledge index during startup. Restoration must reconcile document IDs and URLs
+against persisted run provenance, reject inconsistent or orphaned records
+without partial indexing, perform no network access, and preserve the existing
+content/run snapshots unchanged.
