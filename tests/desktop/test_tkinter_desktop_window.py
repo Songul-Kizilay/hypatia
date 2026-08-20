@@ -15,12 +15,80 @@ if str(SRC_DIR) not in sys.path:
 from brain.BrainResponse import BrainResponse
 from desktop.TkinterDesktopWindow import (
     TkinterDesktopWindow,
+    _accessibility_palette,
     _format_citations,
+    _next_font_size,
     _preview_and_confirm_knowledge_relation,
     _preview_and_confirm_knowledge_relation_removal,
     _preview_and_confirm_session_rename,
 )
 from knowledge.KnowledgeCitation import KnowledgeCitation
+
+
+class AccessibilityPreferenceTests(unittest.TestCase):
+    def test_text_size_adjustments_remain_within_a_readable_range(self) -> None:
+        self.assertEqual(_next_font_size(12, 1), 13)
+        self.assertEqual(_next_font_size(10, -1), 10)
+        self.assertEqual(_next_font_size(20, 1), 20)
+
+    def test_high_contrast_palette_uses_explicit_readable_colors(self) -> None:
+        palette = _accessibility_palette(high_contrast=True)
+
+        self.assertEqual(palette.background, "#000000")
+        self.assertEqual(palette.foreground, "#FFFFFF")
+        self.assertEqual(palette.field_background, "#000000")
+        self.assertNotEqual(palette.selection_background, palette.background)
+        self.assertNotEqual(palette.focus_color, palette.background)
+
+    def test_window_applies_text_size_and_high_contrast_to_text_controls(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        window._font_size = 18
+        window._high_contrast = RecordingBoolean(True)
+        window._font_size_label = RecordingStatus()
+        window._root = RecordingWidget()
+        window._style = RecordingStyle()
+        window._session_list = RecordingWidget()
+        window._transcript = RecordingWidget()
+        window._composer = RecordingWidget()
+
+        window._apply_accessibility_preferences()
+
+        self.assertEqual(window._font_size_label.values, ["Text size: 18 pt"])
+        self.assertEqual(window._root.configurations["background"], "#000000")
+        self.assertEqual(
+            window._session_list.configurations["font"], ("TkDefaultFont", 18)
+        )
+        self.assertEqual(window._composer.configurations["foreground"], "#FFFFFF")
+        self.assertIn("TButton", window._style.configurations)
+        self.assertIn("TEntry", window._style.mappings)
+
+
+class RecordingBoolean:
+    def __init__(self, value: bool) -> None:
+        self._value = value
+
+    def get(self) -> bool:
+        return self._value
+
+
+class RecordingWidget:
+    def __init__(self) -> None:
+        self.configurations: dict[str, object] = {}
+
+    def configure(self, **kwargs: object) -> None:
+        self.configurations.update(kwargs)
+
+
+class RecordingStyle:
+    def __init__(self) -> None:
+        self.configurations: dict[str, dict[str, object]] = {}
+        self.mappings: dict[str, dict[str, object]] = {}
+
+    def configure(self, style_name: str, **kwargs: object) -> None:
+        self.configurations[style_name] = kwargs
+
+    def map(self, style_name: str, **kwargs: object) -> None:
+        self.mappings[style_name] = kwargs
 
 
 class CitationFormattingTests(unittest.TestCase):

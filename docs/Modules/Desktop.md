@@ -7,8 +7,10 @@ overview and explicit selection, selected-session details/recent/activity, and
 explicit lexical/semantic recall, bounded cited knowledge context, and
 semantic-runtime status. It also provides explicit local Markdown/text source
 loading, source-catalog/graph views, source-relation controls, and guarded
-session rename/delete flows. Its first Windows onedir package and local-data
-boundary are defined in ADR 0002; broader MVP views remain planned.
+session rename/delete flows. Users can choose a local text size between 10 and
+20 points and toggle high contrast without affecting runtime state. Its first
+Windows onedir package and local-data boundary are defined in ADR 0002;
+broader MVP views remain planned.
 
 ## Purpose
 

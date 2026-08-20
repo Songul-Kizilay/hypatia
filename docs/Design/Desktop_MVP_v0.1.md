@@ -177,7 +177,10 @@ optimistic local update is retained.
 - Controls have text labels; icons never carry the only meaning.
 - Status, error, and confirmation messages are readable by assistive
   technology and do not rely on color alone.
-- Transcript text supports user-controlled sizing and a high-contrast theme.
+- **Met for local controls:** the user can change the interface text size from
+  10 through 20 points and toggle an explicit high-contrast palette. These
+  presentation preferences do not persist data, invoke a provider, or change
+  conversation, session, or knowledge state.
 - Destructive confirmation defaults to the non-destructive choice and has no
   time pressure.
 
@@ -205,8 +208,9 @@ optimistic local update is retained.
    are individually tested.
 5. **Partially met:** Tkinter and the no-web-view policy are recorded in ADR
    0001. ADR 0002 now defines and verifies a Windows onedir package, local
-   data boundary, and manual-update policy. Accessibility verification remains
-   open before claiming a fully accessible desktop release.
+   data boundary, and manual-update policy. Local text-size and high-contrast
+   controls are implemented and headlessly verified; a full assistive-
+   technology and manual accessibility audit remains open.
 
 ## Open decisions
 
