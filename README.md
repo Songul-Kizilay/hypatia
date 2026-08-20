@@ -90,6 +90,10 @@ To create the world's most capable personal AI research companion.
   scholarly-metadata provider used only after an explicit action. Its fixed
   endpoint and redirects use the same public-address-pinned, hostname-verified
   TLS transport as explicit page loading
+- A separate, versioned and atomically replaced accepted-source content-store
+  foundation with exact UTF-8 byte count/SHA-256 validation, duplicate and
+  storage bounds; runtime save and startup restore wiring remain deliberately
+  separate later increments
 - A read-only discovered-candidate acceptance preview followed by separate
   confirmation and final revalidation through the existing guarded HTTPS
   source loader

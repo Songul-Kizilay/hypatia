@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.50` in the current release candidate) are the
+- **Runtime releases** (`v0.3.51` in the current release candidate) are the
   executable package and GitHub release line. They are the source-backed
   implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
@@ -124,7 +124,8 @@ successful result.
 
 Persistent state is stored locally as validated JSON snapshots through
 `JsonFileMemoryStore`, `JsonFileSessionStore`,
-`JsonFileKnowledgeRelationStore`, and `JsonFileResearchRunStore`. Snapshot
+`JsonFileKnowledgeRelationStore`, `JsonFileResearchRunStore`, and the currently
+unwired `JsonFileResearchSourceContentStore` foundation. Snapshot
 writes are atomic. The knowledge index is in memory and uses case-insensitive
 lexical matching; research-run provenance does not reconstruct page content
 after restart.
@@ -286,12 +287,12 @@ Not implemented:
 
 The current local verification baseline is:
 
-- package-aware `python -m unittest`: 1,212 tests passed. Explicit `tests.*`
+- package-aware `python -m unittest`: 1,221 tests passed. Explicit `tests.*`
   module names ensure nested test directories are included without shadowing
   source packages.
 - `python -m black --check src tests`: passed.
 - `python -m ruff check src tests`: passed.
-- `python -m mypy src tests`: passed with no issues in 296 files.
+- `python -m mypy src tests`: passed with no issues in 301 files.
 - `git diff --check`: passed.
 
 These checks verify the current local worktree; they do not create a release,
