@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 import unittest
 from pathlib import Path
+from typing import cast
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
@@ -456,6 +457,88 @@ class DesktopControllerTests(unittest.TestCase):
                     "run-123",
                     source_ids,
                 )
+
+        self.assertEqual(self.brain.requests, [])
+
+    def test_comparison_note_preview_and_record_use_exact_references(self) -> None:
+        values = (
+            " run-123 ",
+            " document-2, document-1 ",
+            " evidence-2, evidence-1 ",
+            " assessment-2, assessment-1 ",
+            "  My comparison note.  ",
+        )
+
+        preview = self.controller.preview_research_source_comparison_note_write(*values)
+        recorded = self.controller.record_research_source_comparison_note(*values)
+
+        self.assertIs(preview, self.response)
+        self.assertIs(recorded, self.response)
+        expected = {
+            "research_run_id": "run-123",
+            "research_source_document_ids": ["document-2", "document-1"],
+            "research_comparison_evidence_ids": ["evidence-2", "evidence-1"],
+            "research_comparison_assessment_ids": [
+                "assessment-2",
+                "assessment-1",
+            ],
+            "research_comparison_note_text": "My comparison note.",
+        }
+        preview_request = cast(BrainRequest, self.brain.requests[0])
+        record_request = cast(BrainRequest, self.brain.requests[1])
+        self.assertEqual(
+            preview_request.metadata,
+            {
+                "intent": "research_source_comparison_note_write_preview",
+                **expected,
+            },
+        )
+        self.assertEqual(
+            record_request.metadata,
+            {"intent": "research_source_comparison_note_record", **expected},
+        )
+
+    def test_comparison_note_rejects_incomplete_or_duplicate_values(self) -> None:
+        invalid_values = (
+            ("", "document-1,document-2", "evidence-1", "assessment-1", "Note"),
+            ("run-1", "document-1", "evidence-1", "assessment-1", "Note"),
+            (
+                "run-1",
+                "document-1,document-1",
+                "evidence-1",
+                "assessment-1",
+                "Note",
+            ),
+            (
+                "run-1",
+                "document-1,document-2",
+                "",
+                "assessment-1",
+                "Note",
+            ),
+            (
+                "run-1",
+                "document-1,document-2",
+                "evidence-1",
+                "assessment-1,assessment-1",
+                "Note",
+            ),
+            (
+                "run-1",
+                "document-1,document-2",
+                "evidence-1",
+                "assessment-1",
+                "",
+            ),
+        )
+        for action in (
+            self.controller.preview_research_source_comparison_note_write,
+            self.controller.record_research_source_comparison_note,
+        ):
+            for values in invalid_values:
+                with self.subTest(action=action.__name__, values=values):
+                    with self.assertRaises(ValueError):
+                        action(*values)
 
         self.assertEqual(self.brain.requests, [])
 

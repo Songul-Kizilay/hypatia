@@ -10,6 +10,9 @@ from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchFailureRecord import ResearchFailureRecord
 from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
+from research.ResearchSourceComparisonNoteRecord import (
+    ResearchSourceComparisonNoteRecord,
+)
 from research.ResearchSourceDiscoveryRecord import ResearchSourceDiscoveryRecord
 from research.ResearchSourceRecord import ResearchSourceRecord
 
@@ -28,6 +31,7 @@ class ResearchRun:
     evidence: tuple[ResearchEvidenceRecord, ...] = ()
     discoveries: tuple[ResearchSourceDiscoveryRecord, ...] = ()
     assessments: tuple[ResearchSourceAssessmentRecord, ...] = ()
+    comparison_notes: tuple[ResearchSourceComparisonNoteRecord, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.run_id, str) or not self.run_id.strip():
@@ -134,6 +138,57 @@ class ResearchRun:
                     )
                 superseded_assessment_ids.add(superseded_id)
             assessments_by_id[record.assessment_id] = record
+        if not isinstance(self.comparison_notes, tuple):
+            raise ResearchError(
+                "Research run comparison notes must be an immutable tuple."
+            )
+        if not all(
+            isinstance(record, ResearchSourceComparisonNoteRecord)
+            for record in self.comparison_notes
+        ):
+            raise ResearchError("Research run contains an invalid comparison note.")
+        note_ids = [record.note_id for record in self.comparison_notes]
+        if len(note_ids) != len(set(note_ids)):
+            raise ResearchError("Research run contains duplicate comparison note IDs.")
+        evidence_by_id = {record.evidence_id: record for record in self.evidence}
+        for note in self.comparison_notes:
+            selected_source_ids = set(note.source_document_ids)
+            if not selected_source_ids.issubset(source_ids):
+                raise ResearchError(
+                    "Research comparison notes must reference accepted sources."
+                )
+            try:
+                note_evidence = tuple(
+                    evidence_by_id[evidence_id] for evidence_id in note.evidence_ids
+                )
+                note_assessments = tuple(
+                    assessments_by_id[assessment_id]
+                    for assessment_id in note.assessment_ids
+                )
+            except KeyError as error:
+                raise ResearchError(
+                    "Research comparison notes must reference persisted records."
+                ) from error
+            if {
+                record.source_document_id for record in note_evidence
+            } != selected_source_ids:
+                raise ResearchError(
+                    "Research comparison note evidence must cover its sources."
+                )
+            if {
+                record.source_document_id for record in note_assessments
+            } != selected_source_ids:
+                raise ResearchError(
+                    "Research comparison note assessments must cover its sources."
+                )
+            note_evidence_ids = set(note.evidence_ids)
+            if any(
+                not set(assessment.evidence_ids).issubset(note_evidence_ids)
+                for assessment in note_assessments
+            ):
+                raise ResearchError(
+                    "Research comparison notes must cite each assessment's evidence."
+                )
         for value, field_name in (
             (self.created_at, "Research run creation time"),
             (self.updated_at, "Research run update time"),
@@ -142,5 +197,12 @@ class ResearchRun:
                 raise ResearchError(f"{field_name} must be timezone-aware.")
         if self.updated_at < self.created_at:
             raise ResearchError("Research run update time cannot precede creation.")
+        if any(
+            note.recorded_at < self.created_at or note.recorded_at > self.updated_at
+            for note in self.comparison_notes
+        ):
+            raise ResearchError(
+                "Research comparison note time must stay within its run lifecycle."
+            )
         object.__setattr__(self, "run_id", self.run_id.strip())
         object.__setattr__(self, "question", self.question.strip())

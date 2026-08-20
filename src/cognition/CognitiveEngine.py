@@ -186,6 +186,12 @@ class CognitiveEngine:
         if self._is_research_source_comparison_preview_request(request):
             return self._process_research_source_comparison_preview(request)
 
+        if self._is_research_source_comparison_note_write_preview_request(request):
+            return self._process_research_source_comparison_note_write_preview(request)
+
+        if self._is_research_source_comparison_note_record_request(request):
+            return self._process_research_source_comparison_note_record(request)
+
         if self._is_research_source_assessment_preview_request(request):
             return self._process_research_source_assessment_preview(request)
 
@@ -411,6 +417,25 @@ class CognitiveEngine:
         return request.metadata.get("intent") == "research_source_comparison_preview"
 
     @staticmethod
+    def _is_research_source_comparison_note_write_preview_request(
+        request: BrainRequest,
+    ) -> bool:
+        """Recognize a no-write authored comparison-note confirmation preview."""
+        return (
+            request.metadata.get("intent")
+            == "research_source_comparison_note_write_preview"
+        )
+
+    @staticmethod
+    def _is_research_source_comparison_note_record_request(
+        request: BrainRequest,
+    ) -> bool:
+        """Recognize one separately confirmed comparison-note write."""
+        return (
+            request.metadata.get("intent") == "research_source_comparison_note_record"
+        )
+
+    @staticmethod
     def _is_research_source_assessment_preview_request(
         request: BrainRequest,
     ) -> bool:
@@ -582,6 +607,109 @@ class CognitiveEngine:
             request,
             preview,
         )
+
+    def _process_research_source_comparison_note_write_preview(
+        self,
+        request: BrainRequest,
+    ) -> BrainResponse:
+        """Preview exact persisted references without writing a note."""
+        return self._process_research_source_comparison_note_write(
+            request,
+            preview_only=True,
+        )
+
+    def _process_research_source_comparison_note_record(
+        self,
+        request: BrainRequest,
+    ) -> BrainResponse:
+        """Revalidate and commit one separately confirmed authored note."""
+        return self._process_research_source_comparison_note_write(
+            request,
+            preview_only=False,
+        )
+
+    def _process_research_source_comparison_note_write(
+        self,
+        request: BrainRequest,
+        *,
+        preview_only: bool,
+    ) -> BrainResponse:
+        intent = (
+            "research_source_comparison_note_write_preview"
+            if preview_only
+            else "research_source_comparison_note_record"
+        )
+        failure = self._response_composer.research_source_comparison_note_failure
+        values = self._research_source_comparison_note_values(request)
+        if values is None:
+            return failure(
+                request,
+                "A run ID, 2 to 5 source IDs, explicit evidence IDs, current "
+                "assessment IDs, and authored comparison text are required.",
+                intent=intent,
+            )
+        if self._research_run_manager is None:
+            return failure(
+                request,
+                "Research run persistence is unavailable.",
+                intent=intent,
+            )
+        try:
+            if preview_only:
+                preview = (
+                    self._research_run_manager.preview_source_comparison_note_write(
+                        *values
+                    )
+                )
+                compose_preview = (
+                    self._response_composer.research_source_comparison_note_write_preview_success
+                )
+                return compose_preview(
+                    request,
+                    preview,
+                )
+            run = self._research_run_manager.record_source_comparison_note(*values)
+        except ResearchError:
+            return failure(
+                request,
+                "Research comparison note could not be validated or saved.",
+                intent=intent,
+            )
+        return self._response_composer.research_source_comparison_note_record_success(
+            request,
+            run,
+        )
+
+    @staticmethod
+    def _research_source_comparison_note_values(
+        request: BrainRequest,
+    ) -> tuple[str, list[str], list[str], list[str], str] | None:
+        run_id = request.metadata.get("research_run_id")
+        document_ids = request.metadata.get("research_source_document_ids")
+        evidence_ids = request.metadata.get("research_comparison_evidence_ids")
+        assessment_ids = request.metadata.get("research_comparison_assessment_ids")
+        text = request.metadata.get("research_comparison_note_text")
+        if (
+            not isinstance(run_id, str)
+            or not run_id.strip()
+            or not isinstance(document_ids, list)
+            or not 2 <= len(document_ids) <= 5
+            or not isinstance(evidence_ids, list)
+            or not evidence_ids
+            or not isinstance(assessment_ids, list)
+            or not assessment_ids
+            or not isinstance(text, str)
+            or not text.strip()
+        ):
+            return None
+        values = (document_ids, evidence_ids, assessment_ids)
+        if any(
+            not all(isinstance(value, str) and value.strip() for value in items)
+            or len(items) != len({value.strip() for value in items})
+            for items in values
+        ):
+            return None
+        return run_id, document_ids, evidence_ids, assessment_ids, text
 
     def _process_research_source_assessment_preview(
         self,

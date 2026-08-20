@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.42 (Genesis)`
+`v0.3.43 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.42`** is the current executable package and GitHub
+- **Runtime release `v0.3.43`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -121,9 +121,16 @@ with optional OpenAI-compatible LLM conversation support.
   trust score, or automatic evidence selection. Each source column carries at
   most 20 evidence records and 10 current assessments while exposing complete
   counts, preventing unbounded response rendering without hiding truncation.
-- Research-run schema v5 remains backward compatible with v1-v4 snapshots.
+- A collecting run can preview and separately append a user-authored comparison
+  note that cites exact evidence and current assessment IDs covering every
+  selected source. The existing comparison preview reads matching notes for the
+  exact selected source order after restart. It displays at most 20 notes and
+  reports the complete count. Hypatia generates no note text, verdict, score,
+  or reference selection.
+- Research-run schema v6 remains backward compatible with v1-v5 snapshots.
   Legacy runs load with absent evidence, discovery, or assessment collections
-  represented as empty, while v4 assessments load with no supersession link.
+  represented as empty, v4 assessments load with no supersession link, and
+  v1-v5 runs load with no comparison notes.
   They are rewritten only after a later successful mutation; no eager or
   partial migration occurs.
 - Research runs have a persisted terminal lifecycle. The desktop previews a
@@ -287,7 +294,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 1,142 automated tests pass through package-aware discovery.
+- 1,158 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -314,10 +321,8 @@ so this check did not alter the project's persisted data.
 
 ## Next Milestone
 
-Define a preview-confirm, append-only user-authored comparison note that cites
-exact current assessment and evidence IDs from explicitly selected accepted
-sources. It must preserve the manual comparison preview as its read boundary,
-revalidate every reference before atomic persistence, and generate no text,
-verdict, trust score, or automatic evidence selection. Ordinary-conversation
-augmentation, autonomous crawling, unattended acceptance, and implicit graph
-writes remain out of scope.
+Add Linux desktop distribution support with a platform-appropriate local data
+directory, reproducible package command, and real Linux build/startup
+verification. Windows behavior, explicit storage override semantics, manual
+updates, and the no-telemetry/no-bundled-credentials boundary must remain
+unchanged.

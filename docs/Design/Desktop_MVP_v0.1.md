@@ -37,6 +37,9 @@ The MVP may present only current Brain/CognitiveEngine capabilities:
 - read-only side-by-side comparison of two to five explicitly selected accepted
   sources, using persisted provenance, user-selected evidence, and only current
   user-authored assessments without an automatic verdict or score;
+- preview-and-confirm recording of a user-authored comparison note that cites
+  explicit evidence and current assessment IDs covering the exact selected
+  sources, without generated text, reference selection, verdicts, or scores;
 - preview-and-confirm transition of a collecting research run to one terminal
   lifecycle status;
 - an explicit Crossref scholarly-metadata discovery request for a selected
@@ -162,6 +165,12 @@ state, persist a decision, or calculate trust and quality scores.
 The preview shows the exact link; confirmation sends the captured value, and
 the runtime revalidates that it is an unsuperseded assessment from the same run
 and source before appending. Both records remain visible in audit history.
+`Preview & save comparison note` reuses the ordered `Compare sources` selection
+and additionally requires authored text plus explicit evidence and current
+assessment IDs. The preview performs no write; the confirmed action revalidates
+the open run, accepted sources, ownership and coverage of every reference, and
+then atomically appends. Later comparison previews show only notes for that exact
+source order, bounded to 20 displayed notes with the complete count reported.
 The `Final status` selector exposes only completed, failed, and cancelled. The
 window first renders the runtime preview and opens confirmation only for an
 allowed decision; the separate update call revalidates before persistence.

@@ -136,6 +136,9 @@ class TkinterDesktopWindow:
         self._research_url = tk.StringVar()
         self._research_source_document_id = tk.StringVar()
         self._research_comparison_document_ids = tk.StringVar()
+        self._research_comparison_evidence_ids = tk.StringVar()
+        self._research_comparison_assessment_ids = tk.StringVar()
+        self._research_comparison_note_text = tk.StringVar()
         self._research_chunk_id = tk.StringVar()
         self._research_evidence_note = tk.StringVar()
         self._research_assessment_evidence_ids = tk.StringVar()
@@ -461,14 +464,70 @@ class TkinterDesktopWindow:
             text="Compare sources",
             command=self._preview_research_source_comparison,
         ).grid(row=5, column=3, sticky="ew", pady=(8, 0))
-        ttk.Label(research_frame, text="Chunk ID").grid(
+        ttk.Label(research_frame, text="Comparison evidence IDs").grid(
             row=6,
             column=0,
             sticky="w",
             pady=(8, 0),
         )
-        ttk.Entry(research_frame, textvariable=self._research_chunk_id).grid(
+        ttk.Entry(
+            research_frame,
+            textvariable=self._research_comparison_evidence_ids,
+        ).grid(
             row=6,
+            column=1,
+            columnspan=3,
+            sticky="ew",
+            padx=(8, 0),
+            pady=(8, 0),
+        )
+        ttk.Label(research_frame, text="Comparison assessment IDs").grid(
+            row=7,
+            column=0,
+            sticky="w",
+            pady=(8, 0),
+        )
+        ttk.Entry(
+            research_frame,
+            textvariable=self._research_comparison_assessment_ids,
+        ).grid(
+            row=7,
+            column=1,
+            columnspan=3,
+            sticky="ew",
+            padx=(8, 0),
+            pady=(8, 0),
+        )
+        ttk.Label(research_frame, text="Comparison note").grid(
+            row=8,
+            column=0,
+            sticky="w",
+            pady=(8, 0),
+        )
+        ttk.Entry(
+            research_frame,
+            textvariable=self._research_comparison_note_text,
+        ).grid(
+            row=8,
+            column=1,
+            columnspan=2,
+            sticky="ew",
+            padx=(8, 8),
+            pady=(8, 0),
+        )
+        ttk.Button(
+            research_frame,
+            text="Preview & save note",
+            command=self._preview_and_record_research_source_comparison_note,
+        ).grid(row=8, column=3, sticky="ew", pady=(8, 0))
+        ttk.Label(research_frame, text="Chunk ID").grid(
+            row=9,
+            column=0,
+            sticky="w",
+            pady=(8, 0),
+        )
+        ttk.Entry(research_frame, textvariable=self._research_chunk_id).grid(
+            row=9,
             column=1,
             columnspan=2,
             sticky="ew",
@@ -479,15 +538,15 @@ class TkinterDesktopWindow:
             research_frame,
             text="View evidence",
             command=self._show_research_evidence,
-        ).grid(row=6, column=3, sticky="ew", pady=(8, 0))
+        ).grid(row=9, column=3, sticky="ew", pady=(8, 0))
         ttk.Label(research_frame, text="Evidence note").grid(
-            row=7,
+            row=10,
             column=0,
             sticky="w",
             pady=(8, 0),
         )
         ttk.Entry(research_frame, textvariable=self._research_evidence_note).grid(
-            row=7,
+            row=10,
             column=1,
             columnspan=2,
             sticky="ew",
@@ -498,9 +557,9 @@ class TkinterDesktopWindow:
             research_frame,
             text="Save evidence",
             command=self._record_research_evidence,
-        ).grid(row=7, column=3, sticky="ew", pady=(8, 0))
+        ).grid(row=10, column=3, sticky="ew", pady=(8, 0))
         ttk.Label(research_frame, text="Assessment evidence IDs").grid(
-            row=8,
+            row=11,
             column=0,
             sticky="w",
             pady=(8, 0),
@@ -509,7 +568,7 @@ class TkinterDesktopWindow:
             research_frame,
             textvariable=self._research_assessment_evidence_ids,
         ).grid(
-            row=8,
+            row=11,
             column=1,
             columnspan=3,
             sticky="ew",
@@ -517,7 +576,7 @@ class TkinterDesktopWindow:
             pady=(8, 0),
         )
         ttk.Label(research_frame, text="Assessment text").grid(
-            row=9,
+            row=12,
             column=0,
             sticky="w",
             pady=(8, 0),
@@ -526,7 +585,7 @@ class TkinterDesktopWindow:
             research_frame,
             textvariable=self._research_assessment_text,
         ).grid(
-            row=9,
+            row=12,
             column=1,
             columnspan=2,
             sticky="ew",
@@ -537,9 +596,9 @@ class TkinterDesktopWindow:
             research_frame,
             text="Preview & save assessment",
             command=self._preview_and_record_research_source_assessment,
-        ).grid(row=9, column=3, sticky="ew", pady=(8, 0))
+        ).grid(row=12, column=3, sticky="ew", pady=(8, 0))
         ttk.Label(research_frame, text="Supersedes assessment ID (optional)").grid(
-            row=10,
+            row=13,
             column=0,
             sticky="w",
             pady=(8, 0),
@@ -548,7 +607,7 @@ class TkinterDesktopWindow:
             research_frame,
             textvariable=self._research_assessment_supersedes_id,
         ).grid(
-            row=10,
+            row=13,
             column=1,
             columnspan=3,
             sticky="ew",
@@ -556,7 +615,7 @@ class TkinterDesktopWindow:
             pady=(8, 0),
         )
         ttk.Label(research_frame, text="Final status").grid(
-            row=11,
+            row=14,
             column=0,
             sticky="w",
             pady=(8, 0),
@@ -566,12 +625,12 @@ class TkinterDesktopWindow:
             textvariable=self._research_target_status,
             values=("completed", "failed", "cancelled"),
             state="readonly",
-        ).grid(row=11, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
+        ).grid(row=14, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
         ttk.Button(
             research_frame,
             text="Preview status",
             command=self._preview_and_update_research_status,
-        ).grid(row=11, column=2, sticky="ew", pady=(8, 0))
+        ).grid(row=14, column=2, sticky="ew", pady=(8, 0))
 
         relation_frame = ttk.LabelFrame(
             container,
@@ -956,6 +1015,40 @@ class TkinterDesktopWindow:
         except ValueError as error:
             self._status.set(str(error))
             return
+        self._append_response(response)
+
+    def _preview_and_record_research_source_comparison_note(self) -> None:
+        """Preview, confirm, and revalidate one authored comparison note."""
+        values = (
+            self._research_run_id.get(),
+            self._research_comparison_document_ids.get(),
+            self._research_comparison_evidence_ids.get(),
+            self._research_comparison_assessment_ids.get(),
+            self._research_comparison_note_text.get(),
+        )
+        try:
+            preview_response = (
+                self._controller.preview_research_source_comparison_note_write(*values)
+            )
+        except ValueError as error:
+            self._status.set(str(error))
+            return
+        self._append_response(preview_response)
+        preview = preview_response.research_source_comparison_note_write_preview
+        if not preview_response.success or preview is None or not preview.allowed:
+            return
+        if not messagebox.askyesno(
+            "Save research comparison note?",
+            (
+                f"{preview_response.message}\n\n"
+                "This appends your text and the exact listed source, evidence, "
+                "and current assessment IDs to the research audit record. Continue?"
+            ),
+            parent=self._root,
+        ):
+            self._status.set("research comparison note: not saved")
+            return
+        response = self._controller.record_research_source_comparison_note(*values)
         self._append_response(response)
 
     def _preview_and_record_research_source_assessment(self) -> None:

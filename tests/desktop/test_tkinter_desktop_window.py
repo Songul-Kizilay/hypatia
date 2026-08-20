@@ -33,6 +33,7 @@ from research.ResearchRunStatusTransitionPreview import (
     ResearchRunStatusTransitionPreview,
 )
 from research.ResearchSourceAssessmentPreview import ResearchSourceAssessmentPreview
+from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
 from research.ResearchSourceAssessmentWritePreview import (
     ResearchSourceAssessmentWritePreview,
 )
@@ -40,6 +41,11 @@ from research.ResearchSourceCandidate import ResearchSourceCandidate
 from research.ResearchSourceCandidateAcceptancePreview import (
     ResearchSourceCandidateAcceptancePreview,
 )
+from research.ResearchSourceComparisonItem import ResearchSourceComparisonItem
+from research.ResearchSourceComparisonNoteWritePreview import (
+    ResearchSourceComparisonNoteWritePreview,
+)
+from research.ResearchSourceComparisonPreview import ResearchSourceComparisonPreview
 from research.ResearchSourceDiscoveryRecord import ResearchSourceDiscoveryRecord
 from research.ResearchSourceRecord import ResearchSourceRecord
 
@@ -485,6 +491,73 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         )
         self.assertEqual(responses, [controller.comparison_preview_response])
 
+    def test_allowed_comparison_note_requires_confirmation_before_record(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchSourceLoadController()
+        responses: list[BrainResponse] = []
+        values = (
+            "run-123",
+            "document-2, document-1",
+            "evidence-2, evidence-1",
+            "assessment-2, assessment-1",
+            "My comparison note.",
+        )
+        window._root = object()
+        window._controller = controller
+        window._research_run_id = RecordingInput(values[0])
+        window._research_comparison_document_ids = RecordingInput(values[1])
+        window._research_comparison_evidence_ids = RecordingInput(values[2])
+        window._research_comparison_assessment_ids = RecordingInput(values[3])
+        window._research_comparison_note_text = RecordingInput(values[4])
+        window._status = RecordingStatus()
+        window._append_response = responses.append
+
+        with patch(
+            "desktop.TkinterDesktopWindow.messagebox.askyesno",
+            return_value=True,
+        ) as confirm:
+            window._preview_and_record_research_source_comparison_note()
+
+        self.assertEqual(controller.comparison_note_previews, [values])
+        self.assertEqual(controller.comparison_note_records, [values])
+        self.assertEqual(
+            responses,
+            [
+                controller.comparison_note_preview_response,
+                controller.comparison_note_record_response,
+            ],
+        )
+        confirm.assert_called_once()
+
+    def test_declined_comparison_note_preview_never_records(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchSourceLoadController()
+        window._root = object()
+        window._controller = controller
+        window._research_run_id = RecordingInput("run-123")
+        window._research_comparison_document_ids = RecordingInput(
+            "document-1,document-2"
+        )
+        window._research_comparison_evidence_ids = RecordingInput(
+            "evidence-1,evidence-2"
+        )
+        window._research_comparison_assessment_ids = RecordingInput(
+            "assessment-1,assessment-2"
+        )
+        window._research_comparison_note_text = RecordingInput("Note.")
+        window._status = RecordingStatus()
+        window._append_response = lambda _response: None
+
+        with patch(
+            "desktop.TkinterDesktopWindow.messagebox.askyesno",
+            return_value=False,
+        ):
+            window._preview_and_record_research_source_comparison_note()
+
+        self.assertEqual(controller.comparison_note_records, [])
+
     def test_accepted_load_selects_its_source_document_for_assessment(self) -> None:
         window: Any = object.__new__(TkinterDesktopWindow)
         selected = RecordingVariable("")
@@ -840,6 +913,8 @@ class RecordingResearchSourceLoadController:
         self.candidate_accepts: list[tuple[str, str, str]] = []
         self.assessment_previews: list[tuple[str, str]] = []
         self.comparison_previews: list[tuple[str, str]] = []
+        self.comparison_note_previews: list[tuple[str, str, str, str, str]] = []
+        self.comparison_note_records: list[tuple[str, str, str, str, str]] = []
         self.assessment_write_previews: list[tuple[str, str, str, str, str]] = []
         self.assessment_records: list[tuple[str, str, str, str, str]] = []
         self.response = BrainResponse(
@@ -993,6 +1068,80 @@ class RecordingResearchSourceLoadController:
             note="Supports the assessment.",
             recorded_at=now,
         )
+        second_source = ResearchSourceRecord(
+            document_id="document-2",
+            url="https://example.com/second",
+            title="Second source",
+            content_type="text/plain",
+            fetched_at=now,
+            added_at=now,
+        )
+        second_evidence = ResearchEvidenceRecord(
+            evidence_id="evidence-2",
+            source_document_id="document-2",
+            chunk_id="chunk-2",
+            chunk_index=0,
+            excerpt="Second evidence.",
+            excerpt_truncated=False,
+            chunk_sha256="b" * 64,
+            note="Supports the second assessment.",
+            recorded_at=now,
+        )
+        comparison_assessments = (
+            ResearchSourceAssessmentRecord(
+                "assessment-1",
+                accepted_source.document_id,
+                (assessment_evidence.evidence_id,),
+                "First assessment.",
+                now,
+            ),
+            ResearchSourceAssessmentRecord(
+                "assessment-2",
+                second_source.document_id,
+                (second_evidence.evidence_id,),
+                "Second assessment.",
+                now,
+            ),
+        )
+        comparison = ResearchSourceComparisonPreview(
+            run_id=run.run_id,
+            question=run.question,
+            run_status=run.status,
+            sources=(
+                ResearchSourceComparisonItem(
+                    accepted_source,
+                    (assessment_evidence,),
+                    (comparison_assessments[0],),
+                ),
+                ResearchSourceComparisonItem(
+                    second_source,
+                    (second_evidence,),
+                    (comparison_assessments[1],),
+                ),
+            ),
+            reason="Two sources selected.",
+        )
+        comparison_note_preview = ResearchSourceComparisonNoteWritePreview(
+            comparison=comparison,
+            evidence=(assessment_evidence, second_evidence),
+            assessments=comparison_assessments,
+            text="My comparison note.",
+            allowed=True,
+            reason="Research comparison note can be recorded after confirmation.",
+        )
+        self.comparison_note_preview_response = BrainResponse(
+            message="Comparison note preview allowed.",
+            request_id="comparison-note-preview",
+            intent="research_source_comparison_note_write_preview",
+            memory_count=0,
+            research_source_comparison_note_write_preview=comparison_note_preview,
+        )
+        self.comparison_note_record_response = BrainResponse(
+            message="Comparison note recorded.",
+            request_id="comparison-note-record",
+            intent="research_source_comparison_note_record",
+            memory_count=0,
+        )
         assessment_write_preview = ResearchSourceAssessmentWritePreview(
             run_id=run.run_id,
             run_status=run.status,
@@ -1125,6 +1274,30 @@ class RecordingResearchSourceLoadController:
         )
         self.assessment_write_previews.append(values)
         return self.assessment_write_preview_response
+
+    def preview_research_source_comparison_note_write(
+        self,
+        run_id: str,
+        document_ids: str,
+        evidence_ids: str,
+        assessment_ids: str,
+        text: str,
+    ) -> BrainResponse:
+        values = (run_id, document_ids, evidence_ids, assessment_ids, text)
+        self.comparison_note_previews.append(values)
+        return self.comparison_note_preview_response
+
+    def record_research_source_comparison_note(
+        self,
+        run_id: str,
+        document_ids: str,
+        evidence_ids: str,
+        assessment_ids: str,
+        text: str,
+    ) -> BrainResponse:
+        values = (run_id, document_ids, evidence_ids, assessment_ids, text)
+        self.comparison_note_records.append(values)
+        return self.comparison_note_record_response
 
     def record_research_source_assessment(
         self,

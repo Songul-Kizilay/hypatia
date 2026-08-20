@@ -16,6 +16,9 @@ from research.ResearchSourceComparisonItem import (
     MAX_COMPARISON_EVIDENCE_PER_SOURCE,
     ResearchSourceComparisonItem,
 )
+from research.ResearchSourceComparisonNoteRecord import (
+    ResearchSourceComparisonNoteRecord,
+)
 from research.ResearchSourceComparisonPreview import ResearchSourceComparisonPreview
 from research.ResearchSourceRecord import ResearchSourceRecord
 
@@ -83,6 +86,40 @@ class ResearchSourceComparisonPreviewTests(unittest.TestCase):
                 ResearchRunStatus.COLLECTING,
                 (first,),
                 "Invalid.",
+            )
+
+    def test_preview_carries_only_notes_for_the_exact_selected_order(self) -> None:
+        first = self._item(1)
+        second = self._item(2)
+        note = ResearchSourceComparisonNoteRecord(
+            "note-1",
+            ("document-1", "document-2"),
+            ("evidence-1", "evidence-2"),
+            ("assessment-1", "assessment-2"),
+            "My note.",
+            self.now,
+        )
+
+        preview = ResearchSourceComparisonPreview(
+            "run-1",
+            "Question",
+            ResearchRunStatus.COLLECTING,
+            (first, second),
+            "Manual.",
+            comparison_notes=(note,),
+            omitted_comparison_note_count=2,
+        )
+
+        self.assertEqual(preview.comparison_notes, (note,))
+        self.assertEqual(preview.total_comparison_note_count, 3)
+        with self.assertRaisesRegex(ResearchError, "selected source order"):
+            ResearchSourceComparisonPreview(
+                "run-1",
+                "Question",
+                ResearchRunStatus.COLLECTING,
+                (second, first),
+                "Manual.",
+                comparison_notes=(note,),
             )
         with self.assertRaisesRegex(ResearchError, "duplicate"):
             ResearchSourceComparisonPreview(

@@ -48,6 +48,13 @@ does not identify a winner, select evidence, or assign trust scores.
 Each comparison column displays at most 20 evidence records and 10 current
 assessments, with complete counts visible so truncation is explicit and the
 local transcript remains bounded.
+`Preview & save comparison note` is available only for collecting runs. It
+requires the user's note plus explicit evidence and current assessment IDs,
+shows an exact no-write preview, and requests confirmation before a separate
+record action revalidates and atomically appends the note. The comparison view
+shows up to 20 notes for the exact entered source order after restart and reports
+the complete count. The desktop never composes the note, chooses references, or
+generates a winner or score.
 The `Final status` selector offers only `completed`, `failed`, and `cancelled`.
 `Preview status` shows the runtime decision first and requests a separate
 confirmation only when allowed. A completed run requires source and evidence;

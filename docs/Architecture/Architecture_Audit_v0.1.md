@@ -1,7 +1,7 @@
 # Hypatia Architecture Audit v0.1
 
 **Audit date:** 2026-08-15
-**Last verified:** 2026-08-20
+**Last verified:** 2026-08-21
 **Authority:** Current repository source, tests, and runtime configuration take
 precedence over vision and roadmap documents.
 
@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.42` today) are the executable package and GitHub
+- **Runtime releases** (`v0.3.43` in the current release candidate) are the executable package and GitHub
   release line. They are the source-backed implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
   engineering increments. Sprint 4.16.50 is complete and is already in the
@@ -123,10 +123,10 @@ Persistent state is stored locally as validated JSON snapshots through
 writes are atomic. The knowledge index is in memory and uses case-insensitive
 lexical matching; research-run provenance does not reconstruct page content
 after restart.
-Research-run schema v5 loads v1-v4 snapshots with absent evidence, discovery,
-or assessment collections represented as empty and v4 assessments represented
-with no supersession link, rewriting a legacy snapshot only on a subsequent
-successful mutation. The source-discovery boundary keeps ordered
+Research-run schema v6 loads v1-v5 snapshots with absent evidence, discovery,
+assessment, or comparison-note collections represented as empty and v4
+assessments represented with no supersession link, rewriting a legacy snapshot
+only on a subsequent successful mutation. The source-discovery boundary keeps ordered
 candidate metadata auditable without accepting or fetching content. The
 process-environment runtime provides a bounded Crossref REST v1 adapter, while
 the desktop keeps candidate selection separate from source loading. Candidate
@@ -141,6 +141,13 @@ open run, accepted source, and same-source evidence before an atomic append.
 An optional predecessor ID creates a backward-only, same-source supersession
 link. The original stays immutable; missing targets, cross-source targets,
 forked successors, cycles, and stale-preview writes are rejected.
+The ordered manual comparison is also the read boundary for append-only authored
+comparison notes. A collecting run accepts a note only after an exact no-write
+preview and separate confirmation. Evidence and current assessment IDs must
+cover every selected source, every assessment's evidence must be cited, and all
+references are revalidated before atomic persistence. Matching notes remain
+readable after restart and are bounded to 20 displayed records with a complete
+count; no text, reference, score, verdict, or provider result is generated.
 
 The optional OpenAI-compatible chat runtime supports keyless activation only
 for explicit loopback endpoints (`localhost`, `127.0.0.1`, or `::1`), including
@@ -256,12 +263,12 @@ Not implemented:
 
 The current local verification baseline is:
 
-- package-aware `python -m unittest`: 1,142 tests passed. Explicit `tests.*`
+- package-aware `python -m unittest`: 1,158 tests passed. Explicit `tests.*`
   module names ensure nested test directories are included without shadowing
   source packages.
 - `python -m black --check src tests`: passed.
 - `python -m ruff check src tests`: passed.
-- `python -m mypy src tests`: passed with no issues in 284 files.
+- `python -m mypy src tests`: passed with no issues in 287 files.
 - `git diff --check`: passed.
 
 These checks verify the current local worktree; they do not create a release,

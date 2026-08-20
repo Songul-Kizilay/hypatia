@@ -10,6 +10,9 @@ from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchRun import ResearchRun
 from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
+from research.ResearchSourceComparisonNoteRecord import (
+    ResearchSourceComparisonNoteRecord,
+)
 from research.ResearchSourceDiscoveryRecord import ResearchSourceDiscoveryRecord
 from research.ResearchSourceRecord import ResearchSourceRecord
 
@@ -284,6 +287,89 @@ class ResearchRunTests(unittest.TestCase):
                         evidence=evidence,
                         assessments=(original, correction),
                     )
+
+    def test_comparison_note_references_cover_every_selected_source(self) -> None:
+        now = datetime(2026, 8, 20, 12, 0, tzinfo=UTC)
+        sources = tuple(
+            ResearchSourceRecord(
+                f"document-{number}",
+                f"https://example.com/{number}",
+                f"Source {number}",
+                "text/plain",
+                now,
+                now,
+            )
+            for number in (1, 2)
+        )
+        evidence = tuple(
+            ResearchEvidenceRecord(
+                f"evidence-{number}",
+                f"document-{number}",
+                f"chunk-{number}",
+                0,
+                f"Evidence {number}.",
+                False,
+                str(number) * 64,
+                f"Note {number}.",
+                now,
+            )
+            for number in (1, 2)
+        )
+        assessments = tuple(
+            ResearchSourceAssessmentRecord(
+                f"assessment-{number}",
+                f"document-{number}",
+                (f"evidence-{number}",),
+                f"Assessment {number}.",
+                now,
+            )
+            for number in (1, 2)
+        )
+        note = ResearchSourceComparisonNoteRecord(
+            "note-1",
+            ("document-1", "document-2"),
+            ("evidence-1", "evidence-2"),
+            ("assessment-1", "assessment-2"),
+            "Comparison.",
+            now,
+        )
+
+        run = ResearchRun(
+            "run-1",
+            "Question",
+            ResearchRunStatus.COLLECTING,
+            sources,
+            (),
+            now,
+            now,
+            evidence=evidence,
+            assessments=assessments,
+            comparison_notes=(note,),
+        )
+
+        self.assertEqual(run.comparison_notes, (note,))
+
+        incomplete = ResearchSourceComparisonNoteRecord(
+            "note-2",
+            ("document-1", "document-2"),
+            ("evidence-1",),
+            ("assessment-1", "assessment-2"),
+            "Incomplete comparison.",
+            now,
+        )
+        with self.assertRaisesRegex(ResearchError, "evidence must cover"):
+            ResearchRun(
+                "run-1",
+                "Question",
+                ResearchRunStatus.COLLECTING,
+                sources,
+                (),
+                now,
+                now,
+                evidence=evidence,
+                assessments=assessments,
+                comparison_notes=(incomplete,),
+            )
 
 
 if __name__ == "__main__":
