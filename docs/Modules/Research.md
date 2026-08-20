@@ -155,17 +155,16 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
 
 ## Next increment
 
-Transactionally save one accepted source to the separate content store while
-preserving the existing knowledge-index and research-audit rollback guarantees.
-A content-store or run-store failure must restore the exact prior content
-snapshot and remove the newly indexed document. Startup restoration is not part
-of that write-path increment.
+Restore validated accepted-source content into the in-memory knowledge index at
+startup without network access. Restoration must reconcile every record with
+persisted accepted-source provenance, reject mismatches and orphans before
+partial indexing, and leave both persistent snapshots unchanged.
 
 ## Known boundary
 
 The explicit research source fetcher and fixed Crossref discovery adapter share
 one multi-address pinned HTTPS boundary. Failed TCP or TLS setup advances only
 through the remaining addresses from that same validation within one deadline.
-Accepted page content still lives only in the in-memory knowledge index and is
-not restored after restart. The validated content store exists as an unwired
-foundation only. Neither path authorizes autonomous or unattended crawling.
+Accepted page content is saved in the separate validated content store when a
+source is attached to a run, but it is not restored into the knowledge index
+after restart. Neither path authorizes autonomous or unattended crawling.

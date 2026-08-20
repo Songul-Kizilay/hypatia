@@ -32,6 +32,10 @@ class DesktopDataPathsTests(unittest.TestCase):
             paths.research_run_path,
             paths.root / "research" / "runs.json",
         )
+        self.assertEqual(
+            paths.research_source_content_path,
+            paths.root / "research" / "content.json",
+        )
 
     def test_explicit_absolute_override_wins_over_platform_defaults(self) -> None:
         paths = DesktopDataPaths.from_process_environment(

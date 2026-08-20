@@ -18,9 +18,10 @@ Hypatia currently runs as a local-first CLI. The initial security boundary is:
   search or page acquisition;
 - connection fallback uses only the ordered public addresses from the same DNS
   validation and shares one decreasing timeout across TCP and TLS attempts;
-- the accepted-source content-store foundation verifies complete UTF-8 byte
+- the accepted-source content store verifies complete UTF-8 byte
   counts and SHA-256 values, enforces bounded snapshots, and atomically replaces
-  local data; it is not yet invoked by runtime source loading or startup;
+  local data; selected-run acceptance writes it transactionally before
+  provenance publication, while startup restoration is not yet enabled;
 - semantic embeddings are opt-in and restricted to the local Ollama endpoint
   policy enforced at bootstrap.
 

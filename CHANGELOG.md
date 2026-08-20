@@ -2,6 +2,35 @@
 
 All notable project changes are recorded here.
 
+## [0.3.52] - 2026-08-21
+
+### Changed
+
+- A research source accepted into a selected collecting run now saves its exact
+  extracted text to the separate schema-v1 content store after knowledge
+  indexing and before research provenance is published.
+- Bootstrap owns and registers the content store. Installed Windows and Linux
+  desktop runtimes place it at `research/content.json` beneath the existing
+  user-writable data root.
+
+### Safety
+
+- Content loading, validation, record construction, and atomic snapshot writing
+  are part of the source-acceptance transaction. Failure removes the new
+  unlinked knowledge document and publishes no accepted-source provenance.
+- If provenance persistence fails after content is saved, Hypatia first
+  restores the exact prior content collection and independently attempts to
+  remove the new knowledge document. Controlled responses distinguish partial
+  rollback failures without exposing source content or storage details.
+- Direct source loads without a research run retain their existing in-memory
+  behavior. Startup content restoration, refetch, crawling, LLM calls, and
+  research-run schema changes remain outside this increment.
+
+### Verification
+
+- The package-aware full local suite contains 1,227 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass across 301 source files.
+
 ## [0.3.51] - 2026-08-21
 
 ### Added

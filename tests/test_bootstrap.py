@@ -24,6 +24,9 @@ from memory.JsonFileMemoryStore import JsonFileMemoryStore
 from memory.MemoryManager import MemoryManager
 from memory.MemoryRecord import MemoryRecord
 from research.JsonFileResearchRunStore import JsonFileResearchRunStore
+from research.JsonFileResearchSourceContentStore import (
+    JsonFileResearchSourceContentStore,
+)
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchSource import ResearchSource
 from research.ResearchSourceCandidate import ResearchSourceCandidate
@@ -71,6 +74,9 @@ class BootstrapTests(unittest.TestCase):
         self.research_run_path = (
             Path(self.temporary_directory.name) / "research_runs.json"
         )
+        self.research_source_content_path = (
+            Path(self.temporary_directory.name) / "research_content.json"
+        )
 
     def tearDown(self) -> None:
         self.temporary_directory.cleanup()
@@ -81,6 +87,7 @@ class BootstrapTests(unittest.TestCase):
             session_path=self.session_path,
             knowledge_relation_path=self.knowledge_relation_path,
             research_run_path=self.research_run_path,
+            research_source_content_path=self.research_source_content_path,
         )
 
     def test_bootstrap_registers_response_composer(self) -> None:
@@ -241,6 +248,9 @@ class BootstrapTests(unittest.TestCase):
         session_store = bootstrap.container.resolve(JsonFileSessionStore)
         relation_store = bootstrap.container.resolve(JsonFileKnowledgeRelationStore)
         research_run_store = bootstrap.container.resolve(JsonFileResearchRunStore)
+        research_source_content_store = bootstrap.container.resolve(
+            JsonFileResearchSourceContentStore
+        )
         project_root = Path(__file__).resolve().parents[1]
 
         self.assertEqual(
@@ -258,6 +268,10 @@ class BootstrapTests(unittest.TestCase):
         self.assertEqual(
             research_run_store._path,
             project_root / "data" / "research" / "runs.json",
+        )
+        self.assertEqual(
+            research_source_content_store._path,
+            project_root / "data" / "research" / "content.json",
         )
 
     def test_bootstrap_registers_the_selected_knowledge_relation_store(self) -> None:
@@ -277,6 +291,17 @@ class BootstrapTests(unittest.TestCase):
 
         self.assertEqual(store._path, self.research_run_path)
         self.assertEqual(manager.list(), [])
+
+    def test_bootstrap_registers_the_selected_research_source_content_store(
+        self,
+    ) -> None:
+        bootstrap = self._bootstrap()
+        bootstrap.initialize()
+
+        store = bootstrap.container.resolve(JsonFileResearchSourceContentStore)
+
+        self.assertEqual(store._path, self.research_source_content_path)
+        self.assertEqual(store.load(), [])
 
     def test_research_runs_survive_a_bootstrap_restart(self) -> None:
         first = self._bootstrap()
@@ -303,6 +328,67 @@ class BootstrapTests(unittest.TestCase):
         self.assertTrue(created.success)
         self.assertTrue(listed.success)
         self.assertEqual(listed.research_runs, created.research_runs)
+
+    def test_accepted_research_content_is_saved_without_startup_restoration(
+        self,
+    ) -> None:
+        source = ResearchSource(
+            url="https://example.com/research",
+            title="Example research",
+            content="Exact accepted finding.",
+            content_type="text/plain",
+            fetched_at=datetime(2026, 8, 20, 12, 30, tzinfo=UTC),
+        )
+        first = Bootstrap(
+            memory_path=self.memory_path,
+            session_path=self.session_path,
+            knowledge_relation_path=self.knowledge_relation_path,
+            research_run_path=self.research_run_path,
+            research_source_content_path=self.research_source_content_path,
+            research_source_fetcher=RecordingResearchSourceFetcher(source),
+        )
+        first.initialize()
+        brain = first.container.resolve(Brain)
+        run = brain.process(
+            BrainRequest(
+                message="Create internet research run",
+                metadata={
+                    "intent": "research_run_create",
+                    "research_question": "What should Hypatia compare?",
+                },
+            )
+        ).research_runs[0]
+
+        accepted = brain.process(
+            BrainRequest(
+                message="Load selected internet research source",
+                metadata={
+                    "intent": "research_source_load",
+                    "research_url": source.url,
+                    "research_run_id": run.run_id,
+                },
+            )
+        )
+        records = first.container.resolve(JsonFileResearchSourceContentStore).load()
+
+        restarted = self._bootstrap()
+        restarted.initialize()
+
+        self.assertTrue(accepted.success)
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0].content, source.content)
+        self.assertEqual(
+            records[0].document_id,
+            accepted.knowledge_documents[0].document_id,
+        )
+        self.assertEqual(
+            restarted.container.resolve(JsonFileResearchSourceContentStore).load(),
+            records,
+        )
+        self.assertEqual(
+            restarted.container.resolve(KnowledgeEngine).documents(),
+            [],
+        )
 
     def test_research_evidence_survives_a_bootstrap_restart(self) -> None:
         source = ResearchSource(
