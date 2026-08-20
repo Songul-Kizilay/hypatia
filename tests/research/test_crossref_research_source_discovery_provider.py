@@ -6,6 +6,7 @@ import json
 import unittest
 from http.client import HTTPMessage
 from io import BytesIO
+from unittest.mock import patch
 from urllib.error import URLError
 from urllib.parse import parse_qs, urlparse
 from urllib.request import Request
@@ -16,6 +17,8 @@ from research.CrossrefResearchSourceDiscoveryProvider import (
     CrossrefResearchSourceDiscoveryProvider,
     _CrossrefRedirectHandler,
 )
+from research.PinnedHttpsTransport import PinnedHttpsHandler
+from research.PublicHttpsUrlValidator import PublicHttpsUrlValidator
 
 
 class FakeCrossrefResponse:
@@ -252,6 +255,64 @@ class CrossrefResearchSourceDiscoveryProviderTests(unittest.TestCase):
                     CrossrefResearchSourceDiscoveryProvider(
                         maximum_bytes=maximum_bytes  # type: ignore[arg-type]
                     )
+
+    def test_crossref_destination_is_public_validated_for_connection_pinning(
+        self,
+    ) -> None:
+        resolved_hosts: list[str] = []
+
+        def resolve(hostname: str) -> tuple[str, ...]:
+            resolved_hosts.append(hostname)
+            return ("93.184.216.34",)
+
+        provider = CrossrefResearchSourceDiscoveryProvider(
+            validator=PublicHttpsUrlValidator(resolve)
+        )
+
+        destination = provider._validate_and_resolve_destination(
+            "https://api.crossref.org/v1/works?rows=1"
+        )
+
+        self.assertEqual(resolved_hosts, ["api.crossref.org"])
+        self.assertEqual(destination.hostname, "api.crossref.org")
+        self.assertEqual(destination.addresses, ("93.184.216.34",))
+
+    def test_crossref_pinning_rejects_private_dns_and_wrong_origin(self) -> None:
+        provider = CrossrefResearchSourceDiscoveryProvider(
+            validator=PublicHttpsUrlValidator(lambda _host: ("127.0.0.1",))
+        )
+
+        with self.assertRaisesRegex(ResearchError, "public internet addresses"):
+            provider._validate_and_resolve_destination(
+                "https://api.crossref.org/v1/works?rows=1"
+            )
+        with self.assertRaisesRegex(ResearchError, "response URL is invalid"):
+            provider._validate_and_resolve_destination(
+                "https://example.com/v1/works?rows=1"
+            )
+
+    def test_default_crossref_opener_installs_the_pinned_https_handler(self) -> None:
+        validator = PublicHttpsUrlValidator(lambda _host: ("93.184.216.34",))
+        fake_opener = FakeCrossrefOpener(URLError("offline"))
+
+        with patch(
+            "research.CrossrefResearchSourceDiscoveryProvider.build_opener",
+            return_value=fake_opener,
+        ) as build_opener:
+            CrossrefResearchSourceDiscoveryProvider(validator=validator)
+
+        handlers = build_opener.call_args.args
+        pinned_handler = next(
+            handler for handler in handlers if isinstance(handler, PinnedHttpsHandler)
+        )
+        with patch.object(pinned_handler, "do_open") as do_open:
+            pinned_handler.https_open(
+                Request("https://api.crossref.org/v1/works?rows=1")
+            )
+
+        connection_factory, request = do_open.call_args.args
+        connection = connection_factory(request.host, timeout=3.0)
+        self.assertEqual(connection.pinned_address, "93.184.216.34")
 
 
 if __name__ == "__main__":

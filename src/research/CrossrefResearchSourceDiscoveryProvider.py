@@ -13,6 +13,11 @@ from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_ope
 
 from core.Exceptions import ResearchError
 from core.Version import VERSION
+from research.PinnedHttpsTransport import PinnedHttpsHandler
+from research.PublicHttpsUrlValidator import (
+    PublicHttpsUrlValidator,
+    ValidatedPublicHttpsDestination,
+)
 from research.ResearchSourceCandidate import ResearchSourceCandidate
 
 CROSSREF_API_ORIGIN = "https://api.crossref.org"
@@ -82,6 +87,7 @@ class CrossrefResearchSourceDiscoveryProvider:
         timeout_seconds: float = _DEFAULT_TIMEOUT_SECONDS,
         maximum_bytes: int = _DEFAULT_MAXIMUM_BYTES,
         opener: CrossrefHttpOpener | None = None,
+        validator: PublicHttpsUrlValidator | None = None,
     ) -> None:
         if (
             isinstance(timeout_seconds, bool)
@@ -97,10 +103,24 @@ class CrossrefResearchSourceDiscoveryProvider:
             raise ValueError("Crossref discovery maximum bytes must be positive.")
         self._timeout_seconds = timeout_seconds
         self._maximum_bytes = maximum_bytes
+        self._validator = validator or PublicHttpsUrlValidator()
         self._opener = opener or cast(
             CrossrefHttpOpener,
-            build_opener(ProxyHandler({}), _CrossrefRedirectHandler()),
+            build_opener(
+                ProxyHandler({}),
+                _CrossrefRedirectHandler(),
+                PinnedHttpsHandler(self._validate_and_resolve_destination),
+            ),
         )
+
+    def _validate_and_resolve_destination(
+        self,
+        url: str,
+    ) -> ValidatedPublicHttpsDestination:
+        _validate_crossref_response_url(url)
+        destination = self._validator.validate_and_resolve(url)
+        _validate_crossref_response_url(destination.url)
+        return destination
 
     def discover(
         self,

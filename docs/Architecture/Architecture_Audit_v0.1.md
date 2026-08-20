@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.48` in the current release candidate) are the
+- **Runtime releases** (`v0.3.49` in the current release candidate) are the
   executable package and GitHub release line. They are the source-backed
   implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
@@ -130,10 +130,12 @@ after restart.
 Research-run schema v6 loads v1-v5 snapshots with absent evidence, discovery,
 assessment, or comparison-note collections represented as empty and v4
 assessments represented with no supersession link, rewriting a legacy snapshot
-only on a subsequent successful mutation. The source-discovery boundary keeps ordered
-candidate metadata auditable without accepting or fetching content. The
-process-environment runtime provides a bounded Crossref REST v1 adapter, while
-the desktop keeps candidate selection separate from source loading. Candidate
+only on a subsequent successful mutation. The source-discovery boundary keeps
+ordered candidate metadata auditable without accepting or fetching content.
+The process-environment runtime provides a bounded Crossref REST v1 adapter
+whose fixed endpoint and redirects share the public-address-pinned,
+hostname-verified TLS transport used by explicit page acquisition, while the
+desktop keeps candidate selection separate from source loading. Candidate
 acceptance now uses a read-only run/discovery/URL-bound preview and a separately
 confirmed request that revalidates before entering the existing guarded loader.
 Accepted-source assessment is also read-only: an exact run/document binding
@@ -283,12 +285,12 @@ Not implemented:
 
 The current local verification baseline is:
 
-- package-aware `python -m unittest`: 1,206 tests passed. Explicit `tests.*`
+- package-aware `python -m unittest`: 1,209 tests passed. Explicit `tests.*`
   module names ensure nested test directories are included without shadowing
   source packages.
 - `python -m black --check src tests`: passed.
 - `python -m ruff check src tests`: passed.
-- `python -m mypy src tests`: passed with no issues in 295 files.
+- `python -m mypy src tests`: passed with no issues in 296 files.
 - `git diff --check`: passed.
 
 These checks verify the current local worktree; they do not create a release,

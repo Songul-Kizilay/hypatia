@@ -14,10 +14,9 @@ from core.Exceptions import ResearchError
 from research.HttpResearchSourceFetcher import (
     RESEARCH_USER_AGENT,
     HttpResearchSourceFetcher,
-    _PinnedHttpsConnection,
-    _PinnedHttpsHandler,
     _ValidatedRedirectHandler,
 )
+from research.PinnedHttpsTransport import PinnedHttpsConnection, PinnedHttpsHandler
 from research.PublicHttpsUrlValidator import PublicHttpsUrlValidator
 
 
@@ -167,7 +166,7 @@ class HttpResearchSourceFetcherTests(unittest.TestCase):
         raw_socket = Mock()
         tls_socket = Mock()
         context.wrap_socket.return_value = tls_socket
-        connection = _PinnedHttpsConnection(
+        connection = PinnedHttpsConnection(
             "example.com",
             pinned_address="93.184.216.34",
             timeout=3.0,
@@ -175,7 +174,7 @@ class HttpResearchSourceFetcherTests(unittest.TestCase):
         )
 
         with patch(
-            "research.HttpResearchSourceFetcher.socket.create_connection",
+            "research.PinnedHttpsTransport.socket.create_connection",
             return_value=raw_socket,
         ) as create_connection:
             connection.connect()
@@ -192,7 +191,7 @@ class HttpResearchSourceFetcherTests(unittest.TestCase):
         self.assertIs(connection.sock, tls_socket)
 
     def test_pinned_connection_rejects_a_proxy_tunnel_before_connecting(self) -> None:
-        connection = _PinnedHttpsConnection(
+        connection = PinnedHttpsConnection(
             "example.com",
             pinned_address="93.184.216.34",
             context=Mock(),
@@ -201,7 +200,7 @@ class HttpResearchSourceFetcherTests(unittest.TestCase):
 
         with (
             patch(
-                "research.HttpResearchSourceFetcher.socket.create_connection"
+                "research.PinnedHttpsTransport.socket.create_connection"
             ) as create_connection,
             self.assertRaisesRegex(OSError, "do not support tunnels"),
         ):
@@ -210,8 +209,9 @@ class HttpResearchSourceFetcherTests(unittest.TestCase):
         create_connection.assert_not_called()
 
     def test_pinned_handler_uses_the_address_from_its_own_validation(self) -> None:
-        handler = _PinnedHttpsHandler(
-            PublicHttpsUrlValidator(lambda _host: ("93.184.216.34",))
+        validator = PublicHttpsUrlValidator(lambda _host: ("93.184.216.34",))
+        handler = PinnedHttpsHandler(
+            validator.validate_and_resolve,
         )
         sentinel = object()
 
@@ -221,10 +221,10 @@ class HttpResearchSourceFetcherTests(unittest.TestCase):
         connection_factory, request = do_open.call_args.args
         connection = connection_factory(request.host, timeout=3.0)
         self.assertIs(result, sentinel)
-        self.assertIsInstance(connection, _PinnedHttpsConnection)
-        self.assertEqual(connection._pinned_address, "93.184.216.34")
-        self.assertTrue(handler._pinned_tls_context.check_hostname)
-        self.assertEqual(handler._pinned_tls_context.verify_mode, ssl.CERT_REQUIRED)
+        self.assertIsInstance(connection, PinnedHttpsConnection)
+        self.assertEqual(connection.pinned_address, "93.184.216.34")
+        self.assertTrue(handler.tls_context.check_hostname)
+        self.assertEqual(handler.tls_context.verify_mode, ssl.CERT_REQUIRED)
 
     def test_redirect_is_resolved_again_when_its_connection_is_opened(self) -> None:
         answers = iter(("93.184.216.34", "93.184.216.35"))
@@ -240,14 +240,14 @@ class HttpResearchSourceFetcherTests(unittest.TestCase):
         )
         self.assertIsNotNone(redirected)
         assert redirected is not None
-        pinned_handler = _PinnedHttpsHandler(validator)
+        pinned_handler = PinnedHttpsHandler(validator.validate_and_resolve)
 
         with patch.object(pinned_handler, "do_open") as do_open:
             pinned_handler.https_open(redirected)
 
         connection_factory, request = do_open.call_args.args
         connection = connection_factory(request.host, timeout=3.0)
-        self.assertEqual(connection._pinned_address, "93.184.216.35")
+        self.assertEqual(connection.pinned_address, "93.184.216.35")
 
 
 if __name__ == "__main__":

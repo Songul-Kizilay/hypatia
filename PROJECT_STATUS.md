@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.48 (Genesis)`
+`v0.3.49 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.48`** is the current executable package and GitHub
+- **Runtime release `v0.3.49`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -80,11 +80,13 @@ with optional OpenAI-compatible LLM conversation support.
   fetching or indexing candidate content. Closed or unknown runs stop before
   provider access, and candidates are not accepted sources or evidence.
 - The packaged process-environment runtime supplies a bounded Crossref REST v1
-  provider for explicit discovery. It uses only the fixed Crossref HTTPS API,
-  same-origin redirects, no inherited proxy, a ten-second timeout, a 500 KB
-  JSON limit, and DOI/title/venue/year metadata. The desktop shows persisted
-  candidates and can copy one selected DOI URL into the existing load field,
-  but selection never invokes source acquisition.
+  provider for explicit discovery. Its fixed Crossref HTTPS API and same-origin
+  redirects require public-only DNS answers and connect to one exact validated
+  address while TLS verifies `api.crossref.org`. It inherits no proxy, retains
+  a ten-second timeout and 500 KB JSON limit, and uses only
+  DOI/title/venue/year metadata. The desktop shows persisted candidates and can
+  copy one selected DOI URL into the existing load field, but selection never
+  invokes source acquisition.
 - The desktop can preview one exact persisted candidate before acceptance. The
   preview is read-only and performs no network or indexing work. After explicit
   confirmation, the runtime revalidates the run, discovery ID, and candidate
@@ -326,7 +328,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 1,206 automated tests pass through package-aware discovery.
+- 1,209 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -353,7 +355,7 @@ so this check did not alter the project's persisted data.
 
 ## Next Milestone
 
-Extract the address-pinned HTTPS boundary for reuse by the fixed Crossref
-metadata provider. The provider must retain its exact origin/path, independent
-redirect validation, bounded JSON response, disabled proxy, and explicit-only
-discovery contract; this must not add general or unattended web search.
+Design bounded connection fallback across multiple already validated public
+addresses. Fallback must never perform a new unvalidated resolution, must keep
+hostname-based TLS and certificate verification, and must remain within the
+existing timeout and explicit-only research boundaries.
