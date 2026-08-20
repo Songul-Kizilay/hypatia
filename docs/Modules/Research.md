@@ -26,6 +26,8 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
   automatically.
 - The URL cannot contain credentials or use a nonstandard port. Every DNS
   answer and redirect destination must remain on public internet addresses.
+  Each TCP connection uses one exact address from that validation while TLS
+  continues to authenticate the normalized URL hostname and certificate.
 - Only HTML, XHTML, plain text, and Markdown are accepted, with a 1 MiB response
   limit and a ten-second timeout. The default fetch path does not inherit system
   proxy settings, so proxy-side DNS resolution cannot bypass the local address
@@ -143,16 +145,15 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
 
 ## Next increment
 
-Design and test connection-level address pinning for the explicit research
-source fetcher so DNS validation and the TLS connection cannot resolve to
-different addresses. Redirects must be revalidated independently, HTTPS and
-certificate validation must remain intact, and discovery/selection may not
-become unattended crawling.
+Extract the address-pinned HTTPS transport for the fixed Crossref metadata
+provider. Crossref must retain its exact HTTPS origin and path, same-origin
+redirect policy, response bounds, disabled proxy, and explicit-only discovery
+contract. This increment may not add general or unattended web search.
 
 ## Known boundary
 
-The current standard-library fetcher validates DNS immediately before each
-request and redirect but does not yet pin the validated address to the TLS
-connection. A hostile domain capable of DNS rebinding remains a residual risk;
-address pinning is required before this boundary is exposed to autonomous or
-unattended crawling.
+The explicit research source fetcher pins every request and redirect connection
+to an address from its immediately preceding public-DNS validation while TLS
+still verifies the URL hostname. The fixed Crossref discovery adapter does not
+yet share this pinning boundary; it remains explicit, same-origin, bounded, and
+proxy-free. Neither path authorizes autonomous or unattended crawling.

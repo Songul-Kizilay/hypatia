@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.47 (Genesis)`
+`v0.3.48 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.47`** is the current executable package and GitHub
+- **Runtime release `v0.3.48`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -57,11 +57,12 @@ with optional OpenAI-compatible LLM conversation support.
   conversation-memory write, or desktop-side source store.
 - A desktop `Load source` action accepts one explicitly entered public HTTPS
   URL. The runtime validates the scheme, credentials, port, every resolved IP,
-  redirects, content type, response size, and text encoding before extracting
-  readable HTML/plain text and indexing it through the existing knowledge
-  pipeline. It preserves the final URL as provenance and does not invoke an
-  LLM, write conversation memory, run in the background, or discover sources
-  automatically.
+  and redirects, then connects to one exact validated address while retaining
+  hostname-based TLS and certificate checks. It bounds content type, response
+  size, and text encoding before extracting readable HTML/plain text and
+  indexing it through the existing knowledge pipeline. It preserves the final
+  URL as provenance and does not invoke an LLM, write conversation memory, run
+  in the background, or discover sources automatically.
 - A desktop `Start research` action creates a persistent, auditable research
   run for one explicit question; `Research runs` lists the stored catalog, and
   `Load source` can attach an accepted source to the selected run ID. Each run
@@ -325,7 +326,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 1,201 automated tests pass through package-aware discovery.
+- 1,206 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -352,7 +353,7 @@ so this check did not alter the project's persisted data.
 
 ## Next Milestone
 
-Design and test connection-level address pinning for the explicit HTTPS
-research source fetcher. Each request and redirect must connect to the exact
-public address that passed validation while retaining hostname-based TLS and
-certificate checks. This must not widen discovery into unattended crawling.
+Extract the address-pinned HTTPS boundary for reuse by the fixed Crossref
+metadata provider. The provider must retain its exact origin/path, independent
+redirect validation, bounded JSON response, disabled proxy, and explicit-only
+discovery contract; this must not add general or unattended web search.

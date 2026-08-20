@@ -2,6 +2,32 @@
 
 All notable project changes are recorded here.
 
+## [0.3.48] - 2026-08-21
+
+### Security
+
+- The standard public-HTTPS research source fetcher now carries the exact
+  validated public DNS address into its TCP connection instead of resolving
+  the hostname again inside the transport. This closes the previously
+  documented DNS-rebinding gap for explicit source acquisition.
+- TLS still authenticates the normalized URL hostname with certificate and
+  hostname verification enabled; the pinned IP address never replaces the
+  HTTP host or TLS server name.
+- Every redirect destination is normalized, resolved, and checked for public
+  addresses again before its separate connection is pinned. Proxy tunnels
+  remain rejected and the default source-fetch path still ignores system
+  proxy configuration.
+
+### Verification
+
+- Tests prove exact address-to-socket propagation, hostname-based TLS,
+  certificate-verification settings, proxy-tunnel rejection, and independent
+  redirect resolution.
+- The package-aware full local suite contains 1,206 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass across 295 source files.
+- A live bounded acquisition of `https://example.com/` completed through the
+  pinned default transport without changing the explicit-only research scope.
+
 ## [0.3.47] - 2026-08-21
 
 ### Added

@@ -5,12 +5,22 @@ from __future__ import annotations
 import ipaddress
 import socket
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import cast
 from urllib.parse import SplitResult, urlsplit, urlunsplit
 
 from core.Exceptions import ResearchError
 
 HostResolver = Callable[[str], tuple[str, ...]]
+
+
+@dataclass(frozen=True, slots=True)
+class ValidatedPublicHttpsDestination:
+    """Normalized HTTPS destination and the public addresses it resolved to."""
+
+    url: str
+    hostname: str
+    addresses: tuple[str, ...]
 
 
 def _resolve_host(hostname: str) -> tuple[str, ...]:
@@ -33,6 +43,10 @@ class PublicHttpsUrlValidator:
 
     def validate(self, url: str) -> str:
         """Return a normalized URL after scheme, host, and address validation."""
+        return self.validate_and_resolve(url).url
+
+    def validate_and_resolve(self, url: str) -> ValidatedPublicHttpsDestination:
+        """Return the normalized URL and exact public addresses validated for it."""
         if not isinstance(url, str) or not url.strip():
             raise ResearchError("A research source URL is required.")
         try:
@@ -50,13 +64,14 @@ class PublicHttpsUrlValidator:
             raise ResearchError("Research source host name is invalid.") from error
         if not hostname:
             raise ResearchError("Research source URL must include a valid host.")
-        addresses = self._resolver(hostname)
+        addresses = tuple(dict.fromkeys(self._resolver(hostname)))
         if not addresses:
             raise ResearchError("Research source host did not resolve to an address.")
         try:
-            if any(
-                not ipaddress.ip_address(address).is_global for address in addresses
-            ):
+            parsed_addresses = tuple(
+                ipaddress.ip_address(address) for address in addresses
+            )
+            if any(not address.is_global for address in parsed_addresses):
                 raise ResearchError(
                     "Research sources must resolve only to public internet addresses."
                 )
@@ -75,7 +90,11 @@ class PublicHttpsUrlValidator:
         )
         netloc = formatted_host if port is None else f"{formatted_host}:{port}"
         path = parsed.path or "/"
-        return urlunsplit(("https", netloc, path, parsed.query, ""))
+        return ValidatedPublicHttpsDestination(
+            url=urlunsplit(("https", netloc, path, parsed.query, "")),
+            hostname=hostname,
+            addresses=tuple(address.compressed for address in parsed_addresses),
+        )
 
     @staticmethod
     def _validate_parts(parsed: SplitResult, port: int | None) -> None:
