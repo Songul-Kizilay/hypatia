@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.52 (Genesis)`
+`v0.3.53 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.52`** is the current executable package and GitHub
+- **Runtime release `v0.3.53`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -76,7 +76,8 @@ with optional OpenAI-compatible LLM conversation support.
   URLs, and bounded per-record/total/file sizes before atomically replacing its
   complete JSON snapshot. A source accepted into a selected run saves its exact
   content after knowledge indexing and before provenance publication. Startup
-  still does not restore that content into the in-memory knowledge index.
+  restores it only after stable document identity and all persisted source
+  provenance match exactly, with no network or persistent write.
 - Research-source attachment is transactionally guarded: a content-store
   failure removes the new unlinked knowledge document and publishes no source
   provenance. If the run snapshot then fails, Hypatia restores the prior
@@ -365,8 +366,8 @@ so this check did not alter the project's persisted data.
 
 ## Next Milestone
 
-Restore only fully validated accepted-source content into the in-memory
-knowledge index during startup. Restoration must reconcile document IDs and URLs
-against persisted run provenance, reject inconsistent or orphaned records
-without partial indexing, perform no network access, and preserve the existing
-content/run snapshots unchanged.
+Expose a bounded read-only accepted-content restoration status through the
+runtime and desktop so the user can see restored document count and a safe
+unavailable state without reading persistence directly. This must not weaken
+fail-closed startup validation, refetch content, or create an automatic repair
+path.

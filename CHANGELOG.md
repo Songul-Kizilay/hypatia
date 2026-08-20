@@ -2,6 +2,35 @@
 
 All notable project changes are recorded here.
 
+## [0.3.53] - 2026-08-21
+
+### Added
+
+- Bootstrap now restores accepted research source content into the existing
+  in-memory knowledge index after both the research-run and content snapshots
+  have been fully validated.
+- A dedicated `ResearchSourceContentRestorer` reconciles stable document ID,
+  final URL, title, content type, and fetch time against accepted run
+  provenance before constructing any knowledge document.
+
+### Safety
+
+- Orphaned content, conflicting run provenance, mismatched metadata,
+  noncanonical text, or a document ID that does not match the stable URL-derived
+  identity fails closed before indexing. Historical run provenance without a
+  content record remains valid but cannot be restored.
+- Restoration requires an empty startup index, performs no persistent writes or
+  network requests, and is bounded to 20,000 paragraphs across the validated
+  snapshot. An unexpected indexing failure clears every document added during
+  that attempt before startup reports a controlled research error.
+- Startup does not refetch, repair, delete, migrate, or quarantine either
+  snapshot and does not invoke an LLM or change the research-run schema.
+
+### Verification
+
+- The package-aware full local suite contains 1,236 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass across 303 source files.
+
 ## [0.3.52] - 2026-08-21
 
 ### Changed

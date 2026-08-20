@@ -155,10 +155,10 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
 
 ## Next increment
 
-Restore validated accepted-source content into the in-memory knowledge index at
-startup without network access. Restoration must reconcile every record with
-persisted accepted-source provenance, reject mismatches and orphans before
-partial indexing, and leave both persistent snapshots unchanged.
+Expose a bounded read-only restoration status through the existing Brain and
+desktop boundaries. It may report restored document count or a safe unavailable
+state, but it must not read persistence in the UI, refetch content, weaken
+fail-closed validation, or repair either snapshot automatically.
 
 ## Known boundary
 
@@ -166,5 +166,8 @@ The explicit research source fetcher and fixed Crossref discovery adapter share
 one multi-address pinned HTTPS boundary. Failed TCP or TLS setup advances only
 through the remaining addresses from that same validation within one deadline.
 Accepted page content is saved in the separate validated content store when a
-source is attached to a run, but it is not restored into the knowledge index
-after restart. Neither path authorizes autonomous or unattended crawling.
+source is attached to a run. Startup restores only records that exactly match
+accepted run provenance, with a 20,000-paragraph bound and no persistent write
+or network call. Invalid content prevents partial restoration; no automatic
+repair or quarantine path exists yet. Neither path authorizes autonomous or
+unattended crawling.

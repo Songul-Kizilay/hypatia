@@ -155,8 +155,11 @@ When a run ID is present, a successful source load also persists provenance,
 and saves exact extracted text to the separate schema-v1 accepted-content store
 before publishing that provenance. Content-store failure removes the new
 knowledge document; a later audit-write failure restores the prior content
-collection and independently rolls the document back. Startup does not yet
-restore saved content into the in-memory knowledge index.
+collection and independently rolls the document back. On startup, Bootstrap
+restores only saved records whose stable document identity and source metadata
+exactly match accepted run provenance. It performs no network request or
+persistent write, bounds the rebuilt index to 20,000 paragraphs, and fails
+before partial use of orphaned, conflicting, or modified records.
 `Find sources` separately sends the selected collecting run's persisted
 question to the fixed Crossref REST v1 metadata endpoint and displays at most
 five ordered DOI candidates. The endpoint and its same-origin redirects use

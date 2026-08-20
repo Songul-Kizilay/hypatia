@@ -50,6 +50,7 @@ from research.JsonFileResearchSourceContentStore import (
     JsonFileResearchSourceContentStore,
 )
 from research.ResearchRunManager import ResearchRunManager
+from research.ResearchSourceContentRestorer import ResearchSourceContentRestorer
 from research.ResearchSourceDiscoveryProvider import ResearchSourceDiscoveryProvider
 from research.ResearchSourceFetcher import ResearchSourceFetcher
 from response.ResponseComposer import ResponseComposer
@@ -301,6 +302,11 @@ class Bootstrap:
                 self._research_run_path,
             )
         )
+        research_source_content_restorer = ResearchSourceContentRestorer(
+            research_source_content_store,
+            knowledge_engine,
+        )
+        research_source_content_restorer.restore(research_run_manager.list())
         research_source_fetcher = (
             self._research_source_fetcher or HttpResearchSourceFetcher()
         )
@@ -354,6 +360,7 @@ class Bootstrap:
         container.register(research_run_store)
         container.register(research_run_manager)
         container.register(research_source_content_store)
+        container.register(research_source_content_restorer)
         container.register(research_source_fetcher)
         if self._research_source_discovery_provider is not None:
             container.register(self._research_source_discovery_provider)
@@ -372,6 +379,7 @@ class Bootstrap:
         logger.info("Memory Manager Ready")
         logger.info("Session Rename Service Ready")
         logger.info("Knowledge Engine Ready")
+        logger.info("Research Source Content Ready")
         logger.info("Response Composer Ready")
         logger.info("Cognitive Engine Ready")
         logger.info("Brain Ready")
