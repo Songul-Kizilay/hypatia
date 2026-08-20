@@ -859,12 +859,26 @@ class ResponseComposer:
                 ]
             )
         lines.append(f"Recorded assessments: {len(preview.assessments)}")
+        superseded_ids = {
+            assessment.supersedes_assessment_id
+            for assessment in preview.assessments
+            if assessment.supersedes_assessment_id is not None
+        }
         for assessment in preview.assessments:
             lines.extend(
                 [
                     f"- Assessment: {assessment.assessment_id}",
                     f"  evidence IDs: {', '.join(assessment.evidence_ids)}",
                     f"  text: {assessment.text}",
+                    (
+                        "  supersedes: "
+                        f"{assessment.supersedes_assessment_id or 'none'}"
+                    ),
+                    (
+                        "  state: superseded"
+                        if assessment.assessment_id in superseded_ids
+                        else "  state: current"
+                    ),
                     f"  recorded: {assessment.recorded_at.isoformat()}",
                 ]
             )
@@ -903,6 +917,14 @@ class ResponseComposer:
             f"Source: {preview.source.title}",
             f"Document ID: {preview.source.document_id}",
             f"Assessment: {preview.text}",
+            (
+                "Supersedes assessment: "
+                + (
+                    preview.supersedes_assessment.assessment_id
+                    if preview.supersedes_assessment is not None
+                    else "none"
+                )
+            ),
             "Explicit evidence:",
         ]
         lines.extend(
@@ -938,6 +960,8 @@ class ResponseComposer:
                 f"Document ID: {assessment.source_document_id}\n"
                 f"Evidence IDs: {', '.join(assessment.evidence_ids)}\n"
                 f"Assessment: {assessment.text}\n"
+                "Supersedes assessment: "
+                f"{assessment.supersedes_assessment_id or 'none'}\n"
                 "Status: committed user-authored assessment; no automatic score"
             ),
             request_id=request.request_id,

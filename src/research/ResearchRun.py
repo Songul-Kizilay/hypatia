@@ -108,6 +108,32 @@ class ResearchRun:
             raise ResearchError(
                 "Research assessment evidence must belong to its source."
             )
+        assessments_by_id: dict[str, ResearchSourceAssessmentRecord] = {}
+        superseded_assessment_ids: set[str] = set()
+        for record in self.assessments:
+            superseded_id = record.supersedes_assessment_id
+            if superseded_id is not None:
+                superseded = assessments_by_id.get(superseded_id)
+                if superseded is None:
+                    raise ResearchError(
+                        "Research assessment supersession must reference an earlier "
+                        "assessment in the same run."
+                    )
+                if superseded.source_document_id != record.source_document_id:
+                    raise ResearchError(
+                        "Research assessment supersession must stay within one source."
+                    )
+                if superseded_id in superseded_assessment_ids:
+                    raise ResearchError(
+                        "A research source assessment cannot have multiple "
+                        "superseding records."
+                    )
+                if record.recorded_at < superseded.recorded_at:
+                    raise ResearchError(
+                        "A superseding research assessment cannot precede its target."
+                    )
+                superseded_assessment_ids.add(superseded_id)
+            assessments_by_id[record.assessment_id] = record
         for value, field_name in (
             (self.created_at, "Research run creation time"),
             (self.updated_at, "Research run update time"),

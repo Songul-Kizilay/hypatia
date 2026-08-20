@@ -393,12 +393,16 @@ class ResearchRunManager:
         document_id: str,
         evidence_ids: Sequence[str],
         text: str,
+        supersedes_assessment_id: str | None = None,
     ) -> ResearchSourceAssessmentWritePreview:
         """Validate one authored assessment without mutating persisted state."""
         normalized_run_id = self._normalize_run_id(run_id)
         normalized_document_id = self._normalize_document_id(document_id)
         normalized_evidence_ids = self._normalize_assessment_evidence_ids(evidence_ids)
         normalized_text = self._normalize_assessment_text(text)
+        normalized_superseded_id = self._normalize_optional_assessment_id(
+            supersedes_assessment_id
+        )
         with self._lock:
             _, run = self._find_with_index(normalized_run_id)
             source, evidence = self._source_and_evidence_for_assessment(
@@ -406,9 +410,22 @@ class ResearchRunManager:
                 normalized_document_id,
                 normalized_evidence_ids,
             )
+            superseded_assessment = self._superseded_assessment_for_write(
+                run,
+                source.document_id,
+                normalized_superseded_id,
+            )
             allowed = not run.status.terminal
             reason = (
-                "Research source assessment can be recorded after confirmation."
+                (
+                    "Research source assessment correction can be recorded after "
+                    "confirmation."
+                    if superseded_assessment is not None
+                    else (
+                        "Research source assessment can be recorded after "
+                        "confirmation."
+                    )
+                )
                 if allowed
                 else "A closed research run cannot accept new assessments."
             )
@@ -420,6 +437,7 @@ class ResearchRunManager:
                 text=normalized_text,
                 allowed=allowed,
                 reason=reason,
+                supersedes_assessment=superseded_assessment,
             )
 
     def record_source_assessment(
@@ -428,18 +446,27 @@ class ResearchRunManager:
         document_id: str,
         evidence_ids: Sequence[str],
         text: str,
+        supersedes_assessment_id: str | None = None,
     ) -> ResearchRun:
         """Revalidate and atomically append one user-authored assessment."""
         normalized_run_id = self._normalize_run_id(run_id)
         normalized_document_id = self._normalize_document_id(document_id)
         normalized_evidence_ids = self._normalize_assessment_evidence_ids(evidence_ids)
         normalized_text = self._normalize_assessment_text(text)
+        normalized_superseded_id = self._normalize_optional_assessment_id(
+            supersedes_assessment_id
+        )
         with self._lock:
             index, run = self._find_with_index(normalized_run_id)
             source, evidence = self._source_and_evidence_for_assessment(
                 run,
                 normalized_document_id,
                 normalized_evidence_ids,
+            )
+            superseded_assessment = self._superseded_assessment_for_write(
+                run,
+                source.document_id,
+                normalized_superseded_id,
             )
             self._require_collecting(run)
             now = self._now()
@@ -449,6 +476,11 @@ class ResearchRunManager:
                 evidence_ids=tuple(record.evidence_id for record in evidence),
                 text=normalized_text,
                 recorded_at=now,
+                supersedes_assessment_id=(
+                    None
+                    if superseded_assessment is None
+                    else superseded_assessment.assessment_id
+                ),
             )
             updated = ResearchRun(
                 run_id=run.run_id,
@@ -643,6 +675,39 @@ class ResearchRunManager:
         return source, evidence
 
     @staticmethod
+    def _superseded_assessment_for_write(
+        run: ResearchRun,
+        document_id: str,
+        supersedes_assessment_id: str | None,
+    ) -> ResearchSourceAssessmentRecord | None:
+        if supersedes_assessment_id is None:
+            return None
+        assessment = next(
+            (
+                record
+                for record in run.assessments
+                if record.assessment_id == supersedes_assessment_id
+            ),
+            None,
+        )
+        if assessment is None:
+            raise ResearchError(
+                "Superseded research assessment was not found in this run."
+            )
+        if assessment.source_document_id != document_id:
+            raise ResearchError(
+                "Superseded research assessment must belong to the selected source."
+            )
+        if any(
+            record.supersedes_assessment_id == assessment.assessment_id
+            for record in run.assessments
+        ):
+            raise ResearchError(
+                "Research source assessment has already been superseded."
+            )
+        return assessment
+
+    @staticmethod
     def _normalize_question(question: str) -> str:
         if not isinstance(question, str) or not question.strip():
             raise ResearchError("Research question cannot be empty.")
@@ -686,6 +751,14 @@ class ResearchRunManager:
         if len(normalized) > 200:
             raise ResearchError("Research source assessment ID is too long.")
         return normalized
+
+    @staticmethod
+    def _normalize_optional_assessment_id(
+        assessment_id: str | None,
+    ) -> str | None:
+        if assessment_id is None:
+            return None
+        return ResearchRunManager._normalize_assessment_id(assessment_id)
 
     @staticmethod
     def _normalize_assessment_evidence_ids(

@@ -139,6 +139,7 @@ class TkinterDesktopWindow:
         self._research_evidence_note = tk.StringVar()
         self._research_assessment_evidence_ids = tk.StringVar()
         self._research_assessment_text = tk.StringVar()
+        self._research_assessment_supersedes_id = tk.StringVar()
         self._research_target_status = tk.StringVar(value="completed")
         self._relation_source_id = tk.StringVar()
         self._relation_target_id = tk.StringVar()
@@ -514,8 +515,25 @@ class TkinterDesktopWindow:
             text="Preview & save assessment",
             command=self._preview_and_record_research_source_assessment,
         ).grid(row=8, column=3, sticky="ew", pady=(8, 0))
-        ttk.Label(research_frame, text="Final status").grid(
+        ttk.Label(research_frame, text="Supersedes assessment ID (optional)").grid(
             row=9,
+            column=0,
+            sticky="w",
+            pady=(8, 0),
+        )
+        ttk.Entry(
+            research_frame,
+            textvariable=self._research_assessment_supersedes_id,
+        ).grid(
+            row=9,
+            column=1,
+            columnspan=3,
+            sticky="ew",
+            padx=(8, 0),
+            pady=(8, 0),
+        )
+        ttk.Label(research_frame, text="Final status").grid(
+            row=10,
             column=0,
             sticky="w",
             pady=(8, 0),
@@ -525,12 +543,12 @@ class TkinterDesktopWindow:
             textvariable=self._research_target_status,
             values=("completed", "failed", "cancelled"),
             state="readonly",
-        ).grid(row=9, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
+        ).grid(row=10, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
         ttk.Button(
             research_frame,
             text="Preview status",
             command=self._preview_and_update_research_status,
-        ).grid(row=9, column=2, sticky="ew", pady=(8, 0))
+        ).grid(row=10, column=2, sticky="ew", pady=(8, 0))
 
         relation_frame = ttk.LabelFrame(
             container,
@@ -912,6 +930,7 @@ class TkinterDesktopWindow:
             self._research_source_document_id.get(),
             self._research_assessment_evidence_ids.get(),
             self._research_assessment_text.get(),
+            self._research_assessment_supersedes_id.get(),
         )
         try:
             preview_response = (
@@ -928,8 +947,8 @@ class TkinterDesktopWindow:
             "Save research source assessment?",
             (
                 f"{preview_response.message}\n\n"
-                "This appends your text and the listed evidence IDs to the "
-                "research audit record. Continue?"
+                "This appends your text, the listed evidence IDs, and any exact "
+                "supersession link to the research audit record. Continue?"
             ),
             parent=self._root,
         ):

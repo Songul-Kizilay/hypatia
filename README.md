@@ -97,6 +97,9 @@ To create the world's most capable personal AI research companion.
 - An append-only user-authored source-assessment record with explicit evidence
   IDs, a read-only confirmation preview, final revalidation, and atomic local
   persistence; no evidence or score is selected automatically
+- An optional append-only assessment supersession link that preserves the old
+  record, accepts only one active same-source predecessor, and shows current
+  versus superseded history without rewriting an assessment
 - An initial local desktop shell for text chat, a refreshable session overview,
   explicit session selection, session details/recent conversations/activity,
   explicit lexical/semantic conversation recall, and semantic-memory runtime
@@ -176,7 +179,10 @@ quality. `Preview & save assessment` requires comma-separated evidence IDs and
 the user's own assessment text. Hypatia verifies that every cited record belongs
 to the selected accepted source, shows an exact no-write preview, asks for
 confirmation, and revalidates before appending the assessment to the atomic run
-snapshot. It never chooses evidence or assigns a score automatically.
+snapshot. Entering an optional previous assessment ID records a correction link
+only when that target is from the same run and source and has not already been
+superseded. Both records remain visible; Hypatia labels their audit state but
+never chooses evidence or assigns a score automatically.
 The `Final status` control previews `completed`, `failed`, or `cancelled` before
 asking for separate confirmation. Completion requires at least one accepted
 source and one evidence record, while failure requires a recorded failure. A

@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.40` today) are the executable package and GitHub
+- **Runtime releases** (`v0.3.41` today) are the executable package and GitHub
   release line. They are the source-backed implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
   engineering increments. Sprint 4.16.50 is complete and is already in the
@@ -123,9 +123,10 @@ Persistent state is stored locally as validated JSON snapshots through
 writes are atomic. The knowledge index is in memory and uses case-insensitive
 lexical matching; research-run provenance does not reconstruct page content
 after restart.
-Research-run schema v4 loads v1-v3 snapshots with absent evidence, discovery,
-or assessment collections represented as empty, rewriting a legacy snapshot
-only on a subsequent successful mutation. The source-discovery boundary keeps ordered
+Research-run schema v5 loads v1-v4 snapshots with absent evidence, discovery,
+or assessment collections represented as empty and v4 assessments represented
+with no supersession link, rewriting a legacy snapshot only on a subsequent
+successful mutation. The source-discovery boundary keeps ordered
 candidate metadata auditable without accepting or fetching content. The
 process-environment runtime provides a bounded Crossref REST v1 adapter, while
 the desktop keeps candidate selection separate from source loading. Candidate
@@ -137,6 +138,9 @@ assessment history without a network, live-index, LLM, memory, graph, or
 persistence side effect. A separate preview-confirm write boundary requires the
 user to provide assessment text and exact evidence IDs, then revalidates the
 open run, accepted source, and same-source evidence before an atomic append.
+An optional predecessor ID creates a backward-only, same-source supersession
+link. The original stays immutable; missing targets, cross-source targets,
+forked successors, cycles, and stale-preview writes are rejected.
 
 The optional OpenAI-compatible chat runtime supports keyless activation only
 for explicit loopback endpoints (`localhost`, `127.0.0.1`, or `::1`), including
@@ -252,7 +256,7 @@ Not implemented:
 
 The current local verification baseline is:
 
-- package-aware `python -m unittest`: 1,121 tests passed. Explicit `tests.*`
+- package-aware `python -m unittest`: 1,129 tests passed. Explicit `tests.*`
   module names ensure nested test directories are included without shadowing
   source packages.
 - `python -m black --check src tests`: passed.

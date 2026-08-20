@@ -94,6 +94,46 @@ class ResearchSourceAssessmentPreviewTests(unittest.TestCase):
                 assessments=(assessment,),
             )
 
+    def test_preview_preserves_ordered_supersession_history(self) -> None:
+        original = ResearchSourceAssessmentRecord(
+            "assessment-1",
+            self.source.document_id,
+            (self.evidence.evidence_id,),
+            "Original.",
+            self.now,
+        )
+        correction = ResearchSourceAssessmentRecord(
+            "assessment-2",
+            self.source.document_id,
+            (self.evidence.evidence_id,),
+            "Correction.",
+            self.now,
+            original.assessment_id,
+        )
+
+        preview = ResearchSourceAssessmentPreview(
+            run_id="run-1",
+            run_status=ResearchRunStatus.COLLECTING,
+            source=self.source,
+            evidence=(self.evidence,),
+            has_recorded_evidence=True,
+            reason="Evidence is available.",
+            assessments=(original, correction),
+        )
+
+        self.assertEqual(preview.assessments, (original, correction))
+
+        with self.assertRaisesRegex(ResearchError, "earlier displayed"):
+            ResearchSourceAssessmentPreview(
+                run_id="run-1",
+                run_status=ResearchRunStatus.COLLECTING,
+                source=self.source,
+                evidence=(self.evidence,),
+                has_recorded_evidence=True,
+                reason="Invalid history.",
+                assessments=(correction,),
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

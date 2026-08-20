@@ -155,6 +155,10 @@ convenience, but the preview remains separately user initiated. It renders only
 persistent source provenance and evidence already selected for that source; it
 does not access the network or live index, invoke an LLM, write memory or graph
 state, persist a decision, or calculate trust and quality scores.
+`Preview & save assessment` also accepts an optional predecessor assessment ID.
+The preview shows the exact link; confirmation sends the captured value, and
+the runtime revalidates that it is an unsuperseded assessment from the same run
+and source before appending. Both records remain visible in audit history.
 The `Final status` selector exposes only completed, failed, and cancelled. The
 window first renders the runtime preview and opens confirmation only for an
 allowed decision; the separate update call revalidates before persistence.

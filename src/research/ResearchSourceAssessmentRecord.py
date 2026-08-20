@@ -19,6 +19,7 @@ class ResearchSourceAssessmentRecord:
     evidence_ids: tuple[str, ...]
     text: str
     recorded_at: datetime
+    supersedes_assessment_id: str | None = None
 
     def __post_init__(self) -> None:
         for value, field_name in (
@@ -53,6 +54,20 @@ class ResearchSourceAssessmentRecord:
             raise ResearchError(
                 "Research source assessment time must be timezone-aware."
             )
+        supersedes_assessment_id = self.supersedes_assessment_id
+        if supersedes_assessment_id is not None:
+            if (
+                not isinstance(supersedes_assessment_id, str)
+                or not supersedes_assessment_id.strip()
+            ):
+                raise ResearchError(
+                    "Superseded research source assessment ID cannot be empty."
+                )
+            supersedes_assessment_id = supersedes_assessment_id.strip()
+            if supersedes_assessment_id == self.assessment_id.strip():
+                raise ResearchError(
+                    "A research source assessment cannot supersede itself."
+                )
         object.__setattr__(self, "assessment_id", self.assessment_id.strip())
         object.__setattr__(
             self,
@@ -61,3 +76,8 @@ class ResearchSourceAssessmentRecord:
         )
         object.__setattr__(self, "evidence_ids", normalized_evidence_ids)
         object.__setattr__(self, "text", self.text.strip())
+        object.__setattr__(
+            self,
+            "supersedes_assessment_id",
+            supersedes_assessment_id,
+        )

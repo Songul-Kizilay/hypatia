@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.40 (Genesis)`
+`v0.3.41 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.40`** is the current executable package and GitHub
+- **Runtime release `v0.3.41`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -107,10 +107,16 @@ with optional OpenAI-compatible LLM conversation support.
   evidence IDs; final recording revalidates that the run is open, the source is
   accepted, and every evidence record belongs to that source before atomically
   appending the audit record.
-- Research-run schema v4 remains backward compatible with v1-v3 snapshots.
+- An authored assessment may explicitly supersede one earlier assessment from
+  the same run and accepted source. The new record points backward while the
+  original remains immutable; read-only history labels current and superseded
+  records. Missing, cross-source, already-superseded, and closed-run targets are
+  rejected again at final recording time.
+- Research-run schema v5 remains backward compatible with v1-v4 snapshots.
   Legacy runs load with absent evidence, discovery, or assessment collections
-  represented as empty and are rewritten only after a later successful
-  mutation; no eager or partial migration occurs.
+  represented as empty, while v4 assessments load with no supersession link.
+  They are rewritten only after a later successful mutation; no eager or
+  partial migration occurs.
 - Research runs have a persisted terminal lifecycle. The desktop previews a
   requested `completed`, `failed`, or `cancelled` transition and requires a
   separate confirmation before the runtime revalidates and atomically saves
@@ -272,7 +278,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 1,121 automated tests pass through package-aware discovery.
+- 1,129 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -299,7 +305,8 @@ so this check did not alter the project's persisted data.
 
 ## Next Milestone
 
-Define an explicit append-only correction/supersession relationship for
-user-authored assessments without deleting audit history. Ordinary-conversation
-augmentation, autonomous crawling, multi-source synthesis, unattended
-acceptance, automatic scoring, and implicit graph writes remain out of scope.
+Define a read-only manual comparison preview across separately accepted sources
+using only user-selected evidence and authored assessments. It may expose
+provenance and disagreements but must not generate a verdict, trust score, or
+automatic evidence selection. Ordinary-conversation augmentation, autonomous
+crawling, unattended acceptance, and implicit graph writes remain out of scope.
