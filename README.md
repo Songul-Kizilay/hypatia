@@ -95,7 +95,9 @@ To create the world's most capable personal AI research companion.
   Sources accepted into a selected research run save content before provenance
   publication with compensating content/knowledge rollback. On startup, only
   records that exactly match accepted run provenance are restored into the
-  knowledge index, without network access or persistent mutation
+  knowledge index, without network access or persistent mutation. The explicit
+  `Research content` desktop action reports only the captured startup state and
+  restored document/paragraph counts; it does not reread persistence
 - A read-only discovered-candidate acceptance preview followed by separate
   confirmation and final revalidation through the existing guarded HTTPS
   source loader

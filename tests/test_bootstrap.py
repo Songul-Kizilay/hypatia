@@ -31,6 +31,9 @@ from research.ResearchRunManager import ResearchRunManager
 from research.ResearchSource import ResearchSource
 from research.ResearchSourceCandidate import ResearchSourceCandidate
 from research.ResearchSourceContentRecord import ResearchSourceContentRecord
+from research.ResearchSourceContentRestorationStatus import (
+    ResearchSourceContentRestorationStatus,
+)
 from research.ResearchSourceContentRestorer import ResearchSourceContentRestorer
 from response.ResponseComposer import ResponseComposer
 from session.JsonFileSessionStore import JsonFileSessionStore
@@ -302,10 +305,14 @@ class BootstrapTests(unittest.TestCase):
 
         store = bootstrap.container.resolve(JsonFileResearchSourceContentStore)
         restorer = bootstrap.container.resolve(ResearchSourceContentRestorer)
+        status = bootstrap.container.resolve(ResearchSourceContentRestorationStatus)
 
         self.assertEqual(store._path, self.research_source_content_path)
         self.assertEqual(store.load(), [])
         self.assertIsInstance(restorer, ResearchSourceContentRestorer)
+        self.assertTrue(status.available)
+        self.assertEqual(status.restored_document_count, 0)
+        self.assertEqual(status.restored_paragraph_count, 0)
 
     def test_bootstrap_rejects_orphaned_research_content(self) -> None:
         source = ResearchSource(
@@ -411,6 +418,9 @@ class BootstrapTests(unittest.TestCase):
             records,
         )
         restored_knowledge = restarted.container.resolve(KnowledgeEngine)
+        restoration_status = restarted.container.resolve(
+            ResearchSourceContentRestorationStatus
+        )
         self.assertEqual(
             [document.document_id for document in restored_knowledge.documents()],
             [records[0].document_id],
@@ -419,6 +429,9 @@ class BootstrapTests(unittest.TestCase):
             restored_knowledge.search("accepted")[0].document_id,
             records[0].document_id,
         )
+        self.assertTrue(restoration_status.available)
+        self.assertEqual(restoration_status.restored_document_count, 1)
+        self.assertEqual(restoration_status.restored_paragraph_count, 1)
 
     def test_research_evidence_survives_a_bootstrap_restart(self) -> None:
         source = ResearchSource(

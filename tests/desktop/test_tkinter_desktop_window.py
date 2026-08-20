@@ -209,6 +209,20 @@ class LocalKnowledgeFileSelectionTests(unittest.TestCase):
         self.assertEqual(status.values, ["knowledge load: cancelled"])
 
 
+class ResearchContentStatusTests(unittest.TestCase):
+    def test_status_button_appends_the_controller_response(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchContentStatusController()
+        responses: list[BrainResponse] = []
+        window._controller = controller
+        window._append_response = responses.append
+
+        window._show_research_content_status()
+
+        self.assertEqual(controller.calls, 1)
+        self.assertEqual(responses, [controller.response])
+
+
 class InternetResearchSourceSelectionTests(unittest.TestCase):
     def test_entered_url_is_passed_to_the_existing_controller_boundary(self) -> None:
         window: Any = object.__new__(TkinterDesktopWindow)
@@ -1055,6 +1069,21 @@ class RecordingKnowledgeLoadController:
 
     def load_knowledge(self, path: str) -> BrainResponse:
         self.paths.append(path)
+        return self.response
+
+
+class RecordingResearchContentStatusController:
+    def __init__(self) -> None:
+        self.calls = 0
+        self.response = BrainResponse(
+            message="Research content restoration status.",
+            request_id="research-content-status",
+            intent="research_source_content_restoration_status",
+            memory_count=0,
+        )
+
+    def research_content_status(self) -> BrainResponse:
+        self.calls += 1
         return self.response
 
 

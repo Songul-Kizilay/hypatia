@@ -30,6 +30,8 @@ The MVP may present only current Brain/CognitiveEngine capabilities:
   current research acquisition boundary;
 - explicit creation/listing of persistent research runs and optional attachment
   of that source to a selected run ID;
+- read-only accepted-content restoration status captured during startup, with
+  only availability and aggregate restored document/paragraph counts;
 - explicit recording and read-only viewing of a selected attached-source chunk
   as bounded research evidence;
 - preview-and-confirm recording of user-authored source assessments that cite
@@ -160,6 +162,9 @@ restores only saved records whose stable document identity and source metadata
 exactly match accepted run provenance. It performs no network request or
 persistent write, bounds the rebuilt index to 20,000 paragraphs, and fails
 before partial use of orphaned, conflicting, or modified records.
+`Research content` displays the immutable status captured by that startup
+operation. It does not reopen the content store and never displays content,
+paths, hashes, source metadata, record IDs, or internal validation errors.
 `Find sources` separately sends the selected collecting run's persisted
 question to the fixed Crossref REST v1 metadata endpoint and displays at most
 five ordered DOI candidates. The endpoint and its same-origin redirects use

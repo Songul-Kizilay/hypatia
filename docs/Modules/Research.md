@@ -66,15 +66,18 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
   requested. Set
   `HYPATIA_RESEARCH_SOURCE_DISCOVERY_PROVIDER=disabled` to remove this network
   capability from a process.
-- The audit snapshot does not duplicate downloaded page content. Knowledge
-  chunks remain in memory and therefore are not reconstructed from a run after
-  restart.
-- A separate schema-v1 source-content record/store foundation now validates
+- The audit snapshot does not duplicate downloaded page content. A separate
+  schema-v1 source-content record/store validates
   exact extracted text against its UTF-8 byte count and SHA-256 plus persisted
   provenance. The JSON store atomically replaces a bounded snapshot of at most
-  64 unique records, 32 MB total content, and a 40 MB physical file. It is not
-  yet connected to acceptance or startup and therefore does not change current
-  restart behavior.
+  64 unique records, 32 MB total content, and a 40 MB physical file. Accepted
+  content is saved transactionally before run provenance is published. Startup
+  reconstructs only records that exactly match accepted run provenance and
+  stable document identity, with a 20,000-paragraph aggregate bound.
+- Bootstrap captures an immutable restoration status after validation. The
+  explicit Brain/desktop request reports only ready or unavailable state plus
+  restored document and paragraph counts. It does not reread persistence,
+  fetch content, invoke an LLM, mutate runtime state, or expose record details.
 - The user can select one currently indexed paragraph from a source attached
   to the run and add a required note. The evidence record stores the source and
   chunk IDs, paragraph position, at most 1,000 excerpt characters, whether the
@@ -155,10 +158,9 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
 
 ## Next increment
 
-Expose a bounded read-only restoration status through the existing Brain and
-desktop boundaries. It may report restored document count or a safe unavailable
-state, but it must not read persistence in the UI, refetch content, weaken
-fail-closed validation, or repair either snapshot automatically.
+Define and test deterministic paragraph identities for accepted content
+restored after restart. Preserve evidence audit history and all current startup
+bounds without automatically migrating or rewriting existing snapshots.
 
 ## Known boundary
 

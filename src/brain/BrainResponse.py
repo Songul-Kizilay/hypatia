@@ -39,6 +39,9 @@ from research.ResearchSourceComparisonNoteWritePreview import (
     ResearchSourceComparisonNoteWritePreview,
 )
 from research.ResearchSourceComparisonPreview import ResearchSourceComparisonPreview
+from research.ResearchSourceContentRestorationStatus import (
+    ResearchSourceContentRestorationStatus,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,6 +82,9 @@ class BrainResponse:
     ) = None
     research_source_assessment_write_preview: (
         ResearchSourceAssessmentWritePreview | None
+    ) = None
+    research_source_content_restoration_status: (
+        ResearchSourceContentRestorationStatus | None
     ) = None
     session_summaries: list[SessionSummary] = field(default_factory=list)
     session_delete_allowed: bool | None = None

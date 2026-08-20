@@ -2,6 +2,30 @@
 
 All notable project changes are recorded here.
 
+## [0.3.54] - 2026-08-21
+
+### Added
+
+- Bootstrap now captures an immutable accepted-content restoration status after
+  startup validation, including only availability plus restored document and
+  paragraph counts.
+- Brain and the desktop expose that captured snapshot through an explicit
+  read-only `Research content` action.
+
+### Safety
+
+- Status requests never read or write the content store, refetch a source,
+  invoke an LLM, mutate memory, or change the knowledge index. An engine without
+  a captured startup status reports a bounded unavailable state.
+- The response excludes content, source metadata, paths, hashes, record IDs,
+  and internal error details. Existing fail-closed startup validation remains
+  unchanged.
+
+### Verification
+
+- The package-aware full local suite contains 1,243 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass across 306 source files.
+
 ## [0.3.53] - 2026-08-21
 
 ### Added

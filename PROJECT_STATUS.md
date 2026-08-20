@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.53 (Genesis)`
+`v0.3.54 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.53`** is the current executable package and GitHub
+- **Runtime release `v0.3.54`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -366,8 +366,7 @@ so this check did not alter the project's persisted data.
 
 ## Next Milestone
 
-Expose a bounded read-only accepted-content restoration status through the
-runtime and desktop so the user can see restored document count and a safe
-unavailable state without reading persistence directly. This must not weaken
-fail-closed startup validation, refetch content, or create an automatic repair
-path.
+Define and test deterministic paragraph identities for accepted research
+content restored after restart. The increment must preserve existing document
+identity, evidence audit history, startup bounds, and fail-closed validation;
+it must not migrate or rewrite persisted records automatically.
