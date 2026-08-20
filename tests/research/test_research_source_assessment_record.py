@@ -68,6 +68,30 @@ class ResearchSourceAssessmentRecordTests(unittest.TestCase):
                         self.now,
                     )
 
+    def test_record_normalizes_optional_supersession_and_rejects_self_link(
+        self,
+    ) -> None:
+        record = ResearchSourceAssessmentRecord(
+            "assessment-2",
+            "document-1",
+            ("evidence-1",),
+            "Corrected assessment.",
+            self.now,
+            " assessment-1 ",
+        )
+
+        self.assertEqual(record.supersedes_assessment_id, "assessment-1")
+
+        with self.assertRaisesRegex(ResearchError, "cannot supersede itself"):
+            ResearchSourceAssessmentRecord(
+                "assessment-1",
+                "document-1",
+                ("evidence-1",),
+                "Invalid self correction.",
+                self.now,
+                "assessment-1",
+            )
+
     def test_write_preview_rejects_cross_source_evidence(self) -> None:
         other = ResearchEvidenceRecord(
             "evidence-2",
@@ -90,6 +114,29 @@ class ResearchSourceAssessmentRecordTests(unittest.TestCase):
                 "Assessment.",
                 True,
                 "Allowed.",
+            )
+
+    def test_write_preview_requires_superseded_assessment_from_same_source(
+        self,
+    ) -> None:
+        other_assessment = ResearchSourceAssessmentRecord(
+            "assessment-1",
+            "document-2",
+            ("evidence-2",),
+            "Other assessment.",
+            self.now,
+        )
+
+        with self.assertRaisesRegex(ResearchError, "belong to its source"):
+            ResearchSourceAssessmentWritePreview(
+                run_id="run-1",
+                run_status=ResearchRunStatus.COLLECTING,
+                source=self.source,
+                evidence=(self.evidence,),
+                text="Corrected assessment.",
+                allowed=True,
+                reason="Allowed.",
+                supersedes_assessment=other_assessment,
             )
 
 

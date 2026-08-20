@@ -532,13 +532,20 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window: Any = object.__new__(TkinterDesktopWindow)
         controller = RecordingResearchSourceLoadController()
         responses: list[BrainResponse] = []
-        values = ("run-123", "document-123", "evidence-123", "Assessment.")
+        values = (
+            "run-123",
+            "document-123",
+            "evidence-123",
+            "Corrected assessment.",
+            "assessment-original",
+        )
         window._root = object()
         window._controller = controller
         window._research_run_id = RecordingInput(values[0])
         window._research_source_document_id = RecordingInput(values[1])
         window._research_assessment_evidence_ids = RecordingInput(values[2])
         window._research_assessment_text = RecordingInput(values[3])
+        window._research_assessment_supersedes_id = RecordingInput(values[4])
         window._status = RecordingStatus()
         window._append_response = responses.append
 
@@ -596,6 +603,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
                     "evidence-123"
                 )
                 window._research_assessment_text = RecordingInput("Assessment.")
+                window._research_assessment_supersedes_id = RecordingInput("")
                 window._status = RecordingStatus()
                 window._append_response = lambda _response: None
 
@@ -620,6 +628,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_source_document_id = RecordingInput("document-123")
         window._research_assessment_evidence_ids = RecordingInput("")
         window._research_assessment_text = RecordingInput("Assessment.")
+        window._research_assessment_supersedes_id = RecordingInput("")
         window._status = status
         window._append_response = lambda _response: self.fail("must not append")
 
@@ -810,8 +819,8 @@ class RecordingResearchSourceLoadController:
         self.candidate_previews: list[tuple[str, str, str]] = []
         self.candidate_accepts: list[tuple[str, str, str]] = []
         self.assessment_previews: list[tuple[str, str]] = []
-        self.assessment_write_previews: list[tuple[str, str, str, str]] = []
-        self.assessment_records: list[tuple[str, str, str, str]] = []
+        self.assessment_write_previews: list[tuple[str, str, str, str, str]] = []
+        self.assessment_records: list[tuple[str, str, str, str, str]] = []
         self.response = BrainResponse(
             message="Loaded.",
             request_id="research-source-load",
@@ -1064,10 +1073,17 @@ class RecordingResearchSourceLoadController:
         document_id: str,
         evidence_ids: str,
         text: str,
+        supersedes_assessment_id: str = "",
     ) -> BrainResponse:
         if not evidence_ids.strip():
             raise ValueError("Research assessment evidence IDs cannot be empty.")
-        values = (run_id, document_id, evidence_ids, text)
+        values = (
+            run_id,
+            document_id,
+            evidence_ids,
+            text,
+            supersedes_assessment_id,
+        )
         self.assessment_write_previews.append(values)
         return self.assessment_write_preview_response
 
@@ -1077,8 +1093,15 @@ class RecordingResearchSourceLoadController:
         document_id: str,
         evidence_ids: str,
         text: str,
+        supersedes_assessment_id: str = "",
     ) -> BrainResponse:
-        values = (run_id, document_id, evidence_ids, text)
+        values = (
+            run_id,
+            document_id,
+            evidence_ids,
+            text,
+            supersedes_assessment_id,
+        )
         self.assessment_records.append(values)
         return self.assessment_record_response
 

@@ -6561,11 +6561,12 @@ class CognitiveEngineTests(unittest.TestCase):
         self,
     ) -> None:
         store = ToggleResearchRunStore()
+        assessment_ids = iter(("assessment-123", "assessment-124"))
         manager = ResearchRunManager(
             store,
             id_factory=lambda: "run-123",
             evidence_id_factory=lambda: "evidence-123",
-            assessment_id_factory=lambda: "assessment-123",
+            assessment_id_factory=assessment_ids.__next__,
         )
         run = manager.create("Compare local models")
         source = ResearchSource(
@@ -6644,6 +6645,46 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(assessment.assessment_id, "assessment-123")
         self.assertEqual(assessment.evidence_ids, (evidence.evidence_id,))
         self.assertEqual(store.save_calls, saves_before + 1)
+
+        correction_metadata = {
+            **metadata,
+            "research_assessment_text": "The source supports a narrower claim.",
+            "research_assessment_supersedes_id": assessment.assessment_id,
+        }
+        correction_preview_response = engine.process(
+            BrainRequest(
+                "Preview assessment correction",
+                metadata={
+                    "intent": "research_source_assessment_write_preview",
+                    **correction_metadata,
+                },
+            )
+        )
+        self.assertTrue(correction_preview_response.success)
+        correction_preview = (
+            correction_preview_response.research_source_assessment_write_preview
+        )
+        self.assertIsNotNone(correction_preview)
+        assert correction_preview is not None
+        self.assertEqual(correction_preview.supersedes_assessment, assessment)
+
+        corrected = engine.process(
+            BrainRequest(
+                "Record assessment correction",
+                metadata={
+                    "intent": "research_source_assessment_record",
+                    **correction_metadata,
+                },
+            )
+        )
+        self.assertTrue(corrected.success)
+        correction = corrected.research_runs[0].assessments[-1]
+        self.assertEqual(correction.assessment_id, "assessment-124")
+        self.assertEqual(
+            correction.supersedes_assessment_id,
+            assessment.assessment_id,
+        )
+        self.assertEqual(store.save_calls, saves_before + 2)
         self.assertEqual(fetcher.calls, [])
         self.assertEqual(llm_provider.calls, [])
         self.assertEqual(extractor.calls, [])

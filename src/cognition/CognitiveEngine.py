@@ -634,11 +634,14 @@ class CognitiveEngine:
     @staticmethod
     def _research_source_assessment_write_values(
         request: BrainRequest,
-    ) -> tuple[str, str, list[str], str] | None:
+    ) -> tuple[str, str, list[str], str, str | None] | None:
         run_id = request.metadata.get("research_run_id")
         document_id = request.metadata.get("research_source_document_id")
         evidence_ids = request.metadata.get("research_assessment_evidence_ids")
         text = request.metadata.get("research_assessment_text")
+        supersedes_assessment_id = request.metadata.get(
+            "research_assessment_supersedes_id"
+        )
         if (
             not isinstance(run_id, str)
             or not run_id.strip()
@@ -652,6 +655,13 @@ class CognitiveEngine:
             )
             or not isinstance(text, str)
             or not text.strip()
+            or (
+                supersedes_assessment_id is not None
+                and (
+                    not isinstance(supersedes_assessment_id, str)
+                    or not supersedes_assessment_id.strip()
+                )
+            )
         ):
             return None
         return (
@@ -659,6 +669,7 @@ class CognitiveEngine:
             document_id,
             evidence_ids,
             text,
+            supersedes_assessment_id,
         )
 
     def _process_research_run_status_preview(

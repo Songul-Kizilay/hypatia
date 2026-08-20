@@ -138,6 +138,153 @@ class ResearchRunTests(unittest.TestCase):
                 assessments=(assessment,),
             )
 
+    def test_assessment_supersession_is_append_only_and_single_successor(self) -> None:
+        now = datetime(2026, 8, 20, 12, 0, tzinfo=UTC)
+        source = ResearchSourceRecord(
+            "document-1",
+            "https://example.com/source",
+            "Source",
+            "text/plain",
+            now,
+            now,
+        )
+        evidence = ResearchEvidenceRecord(
+            "evidence-1",
+            "document-1",
+            "chunk-1",
+            0,
+            "Evidence.",
+            False,
+            "a" * 64,
+            "Relevant.",
+            now,
+        )
+        original = ResearchSourceAssessmentRecord(
+            "assessment-1",
+            "document-1",
+            ("evidence-1",),
+            "Original.",
+            now,
+        )
+        correction = ResearchSourceAssessmentRecord(
+            "assessment-2",
+            "document-1",
+            ("evidence-1",),
+            "Correction.",
+            now,
+            "assessment-1",
+        )
+
+        run = ResearchRun(
+            "run-1",
+            "Question",
+            ResearchRunStatus.COLLECTING,
+            (source,),
+            (),
+            now,
+            now,
+            evidence=(evidence,),
+            assessments=(original, correction),
+        )
+
+        self.assertEqual(run.assessments, (original, correction))
+
+        competing_correction = ResearchSourceAssessmentRecord(
+            "assessment-3",
+            "document-1",
+            ("evidence-1",),
+            "Competing correction.",
+            now,
+            "assessment-1",
+        )
+        with self.assertRaisesRegex(ResearchError, "multiple superseding"):
+            ResearchRun(
+                "run-1",
+                "Question",
+                ResearchRunStatus.COLLECTING,
+                (source,),
+                (),
+                now,
+                now,
+                evidence=(evidence,),
+                assessments=(original, correction, competing_correction),
+            )
+
+    def test_assessment_supersession_requires_an_earlier_same_source_target(
+        self,
+    ) -> None:
+        now = datetime(2026, 8, 20, 12, 0, tzinfo=UTC)
+        sources = tuple(
+            ResearchSourceRecord(
+                f"document-{number}",
+                f"https://example.com/{number}",
+                f"Source {number}",
+                "text/plain",
+                now,
+                now,
+            )
+            for number in (1, 2)
+        )
+        evidence = tuple(
+            ResearchEvidenceRecord(
+                f"evidence-{number}",
+                f"document-{number}",
+                f"chunk-{number}",
+                0,
+                "Evidence.",
+                False,
+                str(number) * 64,
+                "Relevant.",
+                now,
+            )
+            for number in (1, 2)
+        )
+        original = ResearchSourceAssessmentRecord(
+            "assessment-1",
+            "document-1",
+            ("evidence-1",),
+            "Original.",
+            now,
+        )
+        invalid_records = (
+            (
+                ResearchSourceAssessmentRecord(
+                    "assessment-2",
+                    "document-1",
+                    ("evidence-1",),
+                    "Missing target.",
+                    now,
+                    "assessment-missing",
+                ),
+                "earlier assessment",
+            ),
+            (
+                ResearchSourceAssessmentRecord(
+                    "assessment-2",
+                    "document-2",
+                    ("evidence-2",),
+                    "Cross-source correction.",
+                    now,
+                    "assessment-1",
+                ),
+                "within one source",
+            ),
+        )
+        for correction, message in invalid_records:
+            with self.subTest(message=message):
+                with self.assertRaisesRegex(ResearchError, message):
+                    ResearchRun(
+                        "run-1",
+                        "Question",
+                        ResearchRunStatus.COLLECTING,
+                        sources,
+                        (),
+                        now,
+                        now,
+                        evidence=evidence,
+                        assessments=(original, correction),
+                    )
+
 
 if __name__ == "__main__":
     unittest.main()

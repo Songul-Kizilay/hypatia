@@ -35,7 +35,10 @@ or persistence mutation and assigns no automatic trust or quality score.
 comma-separated evidence IDs. The runtime shows a no-write preview and the
 window requests confirmation only when allowed; the separate record request
 revalidates the open run, accepted source, and same-source evidence before an
-atomic append. It never chooses evidence or generates a score.
+atomic append. An optional predecessor assessment ID creates a same-source
+supersession link only after the preview and final write both verify that the
+target is still current. The original remains visible; the desktop labels
+current and superseded history without choosing evidence or generating a score.
 The `Final status` selector offers only `completed`, `failed`, and `cancelled`.
 `Preview status` shows the runtime decision first and requests a separate
 confirmation only when allowed. A completed run requires source and evidence;

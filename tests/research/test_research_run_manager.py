@@ -45,13 +45,15 @@ class ResearchRunManagerTests(unittest.TestCase):
     def setUp(self) -> None:
         self.start = datetime(2026, 8, 20, 12, 0, tzinfo=UTC)
         self.store = RecordingRunStore()
+        evidence_ids = iter(f"evidence-{number}" for number in range(1, 10))
+        assessment_ids = iter(("assessment-1", "assessment-2", "assessment-3"))
         self.manager = ResearchRunManager(
             self.store,
             clock=SequenceClock(self.start),
             id_factory=lambda: "run-1",
-            evidence_id_factory=lambda: "evidence-1",
+            evidence_id_factory=evidence_ids.__next__,
             discovery_id_factory=lambda: "discovery-1",
-            assessment_id_factory=lambda: "assessment-1",
+            assessment_id_factory=assessment_ids.__next__,
         )
 
     def test_create_persists_before_publishing_the_run(self) -> None:
@@ -537,6 +539,122 @@ class ResearchRunManagerTests(unittest.TestCase):
         self.assertEqual(self.store.runs, [updated])
         history = self.manager.preview_source_assessment(run.run_id, "document-1")
         self.assertEqual(history.assessments, (assessment,))
+
+    def test_authored_assessment_correction_preserves_history_and_revalidates(
+        self,
+    ) -> None:
+        run = self.manager.create("Question")
+        self.manager.add_source(
+            run.run_id,
+            ResearchSource(
+                "https://example.com/source",
+                "Source",
+                "Evidence.",
+                "text/plain",
+                self.start,
+            ),
+            "document-1",
+        )
+        evidence = self.manager.add_evidence(
+            run.run_id,
+            Chunk("document-1", 0, "Evidence.", chunk_id="chunk-1"),
+            "Relevant.",
+        ).evidence[-1]
+        original = self.manager.record_source_assessment(
+            run.run_id,
+            "document-1",
+            [evidence.evidence_id],
+            "Original assessment.",
+        ).assessments[-1]
+        saves_before = len(self.store.saved)
+
+        preview = self.manager.preview_source_assessment_write(
+            run.run_id,
+            "document-1",
+            [evidence.evidence_id],
+            "Corrected assessment.",
+            original.assessment_id,
+        )
+
+        self.assertTrue(preview.allowed)
+        self.assertEqual(preview.supersedes_assessment, original)
+        self.assertEqual(len(self.store.saved), saves_before)
+
+        updated = self.manager.record_source_assessment(
+            run.run_id,
+            "document-1",
+            [evidence.evidence_id],
+            "Corrected assessment.",
+            original.assessment_id,
+        )
+
+        self.assertEqual(len(updated.assessments), 2)
+        self.assertEqual(
+            updated.assessments[-1].supersedes_assessment_id,
+            original.assessment_id,
+        )
+        self.assertEqual(updated.assessments[0], original)
+        history = self.manager.preview_source_assessment(run.run_id, "document-1")
+        self.assertEqual(history.assessments, updated.assessments)
+
+        with self.assertRaisesRegex(ResearchError, "already been superseded"):
+            self.manager.record_source_assessment(
+                run.run_id,
+                "document-1",
+                [evidence.evidence_id],
+                "Competing correction.",
+                original.assessment_id,
+            )
+
+    def test_authored_assessment_correction_rejects_missing_or_cross_source_target(
+        self,
+    ) -> None:
+        run = self.manager.create("Question")
+        for number in (1, 2):
+            self.manager.add_source(
+                run.run_id,
+                ResearchSource(
+                    f"https://example.com/{number}",
+                    f"Source {number}",
+                    f"Evidence {number}.",
+                    "text/plain",
+                    self.start,
+                ),
+                f"document-{number}",
+            )
+        evidence_1 = self.manager.add_evidence(
+            run.run_id,
+            Chunk("document-1", 0, "Evidence 1.", chunk_id="chunk-1"),
+            "First evidence.",
+        ).evidence[-1]
+        evidence_2 = self.manager.add_evidence(
+            run.run_id,
+            Chunk("document-2", 0, "Evidence 2.", chunk_id="chunk-2"),
+            "Second evidence.",
+        ).evidence[-1]
+        original = self.manager.record_source_assessment(
+            run.run_id,
+            "document-1",
+            [evidence_1.evidence_id],
+            "Original assessment.",
+        ).assessments[-1]
+
+        with self.assertRaisesRegex(ResearchError, "not found in this run"):
+            self.manager.preview_source_assessment_write(
+                run.run_id,
+                "document-1",
+                [evidence_1.evidence_id],
+                "Correction.",
+                "assessment-missing",
+            )
+        with self.assertRaisesRegex(ResearchError, "selected source"):
+            self.manager.preview_source_assessment_write(
+                run.run_id,
+                "document-2",
+                [evidence_2.evidence_id],
+                "Cross-source correction.",
+                original.assessment_id,
+            )
 
     def test_authored_assessment_rejects_cross_source_or_missing_evidence(self) -> None:
         run = self.manager.create("Question")

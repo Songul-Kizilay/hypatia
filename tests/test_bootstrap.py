@@ -379,6 +379,39 @@ class BootstrapTests(unittest.TestCase):
                 },
             )
         )
+        original_assessment_id = (
+            assessment_recorded.research_runs[0].assessments[0].assessment_id
+        )
+        correction_preview = brain.process(
+            BrainRequest(
+                message="Preview corrected user-authored assessment",
+                metadata={
+                    "intent": "research_source_assessment_write_preview",
+                    "research_run_id": run.run_id,
+                    "research_source_document_id": document_id,
+                    "research_assessment_evidence_ids": [evidence_id],
+                    "research_assessment_text": (
+                        "The source supports only the narrower comparison."
+                    ),
+                    "research_assessment_supersedes_id": original_assessment_id,
+                },
+            )
+        )
+        correction_recorded = brain.process(
+            BrainRequest(
+                message="Record corrected user-authored assessment",
+                metadata={
+                    "intent": "research_source_assessment_record",
+                    "research_run_id": run.run_id,
+                    "research_source_document_id": document_id,
+                    "research_assessment_evidence_ids": [evidence_id],
+                    "research_assessment_text": (
+                        "The source supports only the narrower comparison."
+                    ),
+                    "research_assessment_supersedes_id": original_assessment_id,
+                },
+            )
+        )
         closed = brain.process(
             BrainRequest(
                 message="Update selected research status",
@@ -421,6 +454,8 @@ class BootstrapTests(unittest.TestCase):
         self.assertTrue(recorded.success)
         self.assertTrue(assessment_preview.success)
         self.assertTrue(assessment_recorded.success)
+        self.assertTrue(correction_preview.success)
+        self.assertTrue(correction_recorded.success)
         self.assertTrue(closed.success)
         self.assertEqual(closed.research_runs[0].status.value, "completed")
         self.assertEqual(len(recorded.research_runs[0].evidence), 1)
@@ -428,15 +463,20 @@ class BootstrapTests(unittest.TestCase):
         self.assertTrue(evidence_listed.success)
         self.assertEqual(evidence_listed.research_runs, closed.research_runs)
         self.assertIn("Second finding.", evidence_listed.message)
-        self.assertEqual(len(assessment_recorded.research_runs[0].assessments), 1)
+        self.assertEqual(len(correction_recorded.research_runs[0].assessments), 2)
         self.assertTrue(assessment_listed.success)
         self.assertIsNotNone(assessment_listed.research_source_assessment_preview)
         assert assessment_listed.research_source_assessment_preview is not None
         self.assertEqual(
             len(assessment_listed.research_source_assessment_preview.assessments),
-            1,
+            2,
         )
         self.assertIn("supports the comparison", assessment_listed.message)
+        self.assertIn(
+            f"supersedes: {original_assessment_id}",
+            assessment_listed.message,
+        )
+        self.assertIn("state: superseded", assessment_listed.message)
 
     def test_missing_session_file_creates_and_persists_the_default_registry(
         self,

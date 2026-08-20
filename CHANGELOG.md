@@ -2,6 +2,35 @@
 
 All notable project changes are recorded here.
 
+## [0.3.41] - 2026-08-20
+
+### Added
+
+- A new user-authored source assessment may explicitly supersede one earlier
+  assessment from the same research run and accepted source. The earlier record
+  remains intact and the new immutable record stores its exact predecessor ID.
+- Assessment preview, confirmation, committed response, and read-only history
+  now show the optional supersession link. History marks records as `current`
+  or `superseded` without deleting or rewriting either record.
+- The desktop adds an optional `Supersedes assessment ID` field to the existing
+  preview-confirm-save flow.
+
+### Security
+
+- Preview and final recording independently reject missing, cross-source, or
+  already superseded targets. A target must appear earlier in the same run and
+  may have only one direct successor, preventing forks and cycles.
+- Corrections remain user-authored, collecting-run-only, evidence-explicit,
+  append-only, and atomically persisted. They invoke no network, provider, LLM,
+  memory, graph, or event-bus side effect.
+- Research-run schema v5 reads v1-v4 snapshots; v4 assessments receive a null
+  supersession link and are rewritten only on a later successful atomic save.
+
+### Verification
+
+- The package-aware full local suite contains 1,129 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass across 281 source files.
+
 ## [0.3.40] - 2026-08-20
 
 ### Added

@@ -436,6 +436,7 @@ class DesktopControllerTests(unittest.TestCase):
             " document-456 ",
             " evidence-1, evidence-2 ",
             "  The source supports the claim.  ",
+            " assessment-previous ",
         )
 
         preview = self.controller.preview_research_source_assessment_write(*values)
@@ -454,6 +455,7 @@ class DesktopControllerTests(unittest.TestCase):
             "research_source_document_id": "document-456",
             "research_assessment_evidence_ids": ["evidence-1", "evidence-2"],
             "research_assessment_text": "The source supports the claim.",
+            "research_assessment_supersedes_id": "assessment-previous",
         }
         self.assertEqual(
             preview_request.metadata,

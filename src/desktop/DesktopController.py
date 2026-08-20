@@ -247,6 +247,7 @@ class DesktopController:
         source_document_id: str,
         evidence_ids: str,
         assessment_text: str,
+        supersedes_assessment_id: str = "",
     ) -> BrainResponse:
         """Preview an authored assessment with explicit evidence references."""
         metadata = self._research_source_assessment_write_metadata(
@@ -254,6 +255,7 @@ class DesktopController:
             source_document_id,
             evidence_ids,
             assessment_text,
+            supersedes_assessment_id,
         )
         return self._brain.process(
             BrainRequest(
@@ -272,6 +274,7 @@ class DesktopController:
         source_document_id: str,
         evidence_ids: str,
         assessment_text: str,
+        supersedes_assessment_id: str = "",
     ) -> BrainResponse:
         """Submit one assessment only after the desktop confirmation step."""
         metadata = self._research_source_assessment_write_metadata(
@@ -279,6 +282,7 @@ class DesktopController:
             source_document_id,
             evidence_ids,
             assessment_text,
+            supersedes_assessment_id,
         )
         return self._brain.process(
             BrainRequest(
@@ -297,10 +301,12 @@ class DesktopController:
         source_document_id: str,
         evidence_ids: str,
         assessment_text: str,
+        supersedes_assessment_id: str = "",
     ) -> dict[str, object]:
         normalized_run_id = research_run_id.strip()
         normalized_document_id = source_document_id.strip()
         normalized_text = assessment_text.strip()
+        normalized_superseded_id = supersedes_assessment_id.strip()
         normalized_evidence_ids = [
             value.strip() for value in evidence_ids.split(",") if value.strip()
         ]
@@ -314,12 +320,15 @@ class DesktopController:
             raise ValueError("Research assessment evidence IDs cannot be duplicated.")
         if not normalized_text:
             raise ValueError("Research source assessment text cannot be empty.")
-        return {
+        metadata: dict[str, object] = {
             "research_run_id": normalized_run_id,
             "research_source_document_id": normalized_document_id,
             "research_assessment_evidence_ids": normalized_evidence_ids,
             "research_assessment_text": normalized_text,
         }
+        if normalized_superseded_id:
+            metadata["research_assessment_supersedes_id"] = normalized_superseded_id
+        return metadata
 
     def preview_research_run_status(
         self,

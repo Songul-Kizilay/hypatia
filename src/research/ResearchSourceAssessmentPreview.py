@@ -80,5 +80,22 @@ class ResearchSourceAssessmentPreview:
             raise ResearchError(
                 "Research source assessment records must cite displayed evidence."
             )
+        earlier_assessment_ids: set[str] = set()
+        superseded_assessment_ids: set[str] = set()
+        for record in self.assessments:
+            superseded_id = record.supersedes_assessment_id
+            if superseded_id is not None:
+                if superseded_id not in earlier_assessment_ids:
+                    raise ResearchError(
+                        "Research source assessment supersession must reference an "
+                        "earlier displayed assessment."
+                    )
+                if superseded_id in superseded_assessment_ids:
+                    raise ResearchError(
+                        "A displayed assessment cannot have multiple superseding "
+                        "records."
+                    )
+                superseded_assessment_ids.add(superseded_id)
+            earlier_assessment_ids.add(record.assessment_id)
         object.__setattr__(self, "run_id", self.run_id.strip())
         object.__setattr__(self, "reason", self.reason.strip())
