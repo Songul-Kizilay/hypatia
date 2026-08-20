@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 _DATA_DIRECTORY_OVERRIDE = "HYPATIA_DESKTOP_DATA_DIR"
 
@@ -45,16 +45,22 @@ class DesktopDataPaths:
     ) -> DesktopDataPaths:
         """Choose a user-writable local-data root without creating it eagerly."""
         values = os.environ if environment is None else environment
+        resolved_platform = os.name if platform_name is None else platform_name
         configured_root = values.get(_DATA_DIRECTORY_OVERRIDE, "").strip()
         if configured_root:
             root = Path(configured_root).expanduser()
-            if not root.is_absolute():
+            if platform_name is None:
+                is_absolute = root.is_absolute()
+            elif resolved_platform == "nt":
+                is_absolute = PureWindowsPath(configured_root).is_absolute()
+            else:
+                is_absolute = PurePosixPath(configured_root).is_absolute()
+            if not is_absolute:
                 raise ValueError(
                     f"{_DATA_DIRECTORY_OVERRIDE} must be an absolute path."
                 )
             return cls(root)
 
-        resolved_platform = os.name if platform_name is None else platform_name
         resolved_home = Path.home() if home is None else home
         if resolved_platform == "nt":
             local_app_data = values.get("LOCALAPPDATA", "").strip()

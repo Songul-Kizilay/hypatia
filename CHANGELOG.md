@@ -28,7 +28,7 @@ All notable project changes are recorded here.
 
 ### Verification
 
-- The package-aware full local suite contains 1,161 passing automated tests.
+- The package-aware full local suite contains 1,162 passing automated tests.
 - Black, Ruff, MyPy, and whitespace validation pass across 287 source files.
 - The Linux package build and packaged startup smoke check are verified by the
   Ubuntu workflow before release rather than inferred from Windows behavior.

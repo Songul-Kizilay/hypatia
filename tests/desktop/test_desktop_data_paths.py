@@ -68,6 +68,18 @@ class DesktopDataPathsTests(unittest.TestCase):
 
         self.assertEqual(paths.root, Path("/srv/songul-data/hypatia"))
 
+    def test_linux_absolute_override_wins_over_xdg_default(self) -> None:
+        paths = DesktopDataPaths.from_process_environment(
+            {
+                "HYPATIA_DESKTOP_DATA_DIR": "/mnt/private/hypatia",
+                "XDG_DATA_HOME": "/srv/songul-data",
+            },
+            platform_name="posix",
+            home=Path("/home/songul"),
+        )
+
+        self.assertEqual(paths.root, Path("/mnt/private/hypatia"))
+
     def test_linux_defaults_to_user_local_share_directory(self) -> None:
         paths = DesktopDataPaths.from_process_environment(
             {},

@@ -264,7 +264,7 @@ Not implemented:
 
 The current local verification baseline is:
 
-- package-aware `python -m unittest`: 1,161 tests passed. Explicit `tests.*`
+- package-aware `python -m unittest`: 1,162 tests passed. Explicit `tests.*`
   module names ensure nested test directories are included without shadowing
   source packages.
 - `python -m black --check src tests`: passed.
