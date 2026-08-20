@@ -100,6 +100,12 @@ To create the world's most capable personal AI research companion.
 - An optional append-only assessment supersession link that preserves the old
   record, accepts only one active same-source predecessor, and shows current
   versus superseded history without rewriting an assessment
+- A read-only manual comparison preview for two to five explicitly selected
+  sources accepted into the same run. It preserves selection order and shows
+  provenance, user-selected evidence, and current user-authored assessments
+  side by side without generating a verdict, score, or evidence selection. The
+  view shows at most 20 evidence records and 10 current assessments per source
+  while reporting the complete counts
 - An initial local desktop shell for text chat, a refreshable session overview,
   explicit session selection, session details/recent conversations/activity,
   explicit lexical/semantic conversation recall, and semantic-memory runtime
@@ -183,6 +189,14 @@ snapshot. Entering an optional previous assessment ID records a correction link
 only when that target is from the same run and source and has not already been
 superseded. Both records remain visible; Hypatia labels their audit state but
 never chooses evidence or assigns a score automatically.
+`Compare sources` accepts two to five comma-separated document IDs from the
+selected research run. It shows the sources in the entered order with persisted
+provenance, explicitly recorded evidence, and only current user-authored
+assessments. The preview works for collecting and closed runs and makes no
+network, LLM, memory, graph, knowledge-index, event-bus, or persistence call. It
+does not decide which source is correct or assign a trust score. To keep the
+desktop responsive, it shows at most 20 evidence records and 10 current
+assessments per source and reports both displayed and complete counts.
 The `Final status` control previews `completed`, `failed`, or `cancelled` before
 asking for separate confirmation. Completion requires at least one accepted
 source and one evidence record, while failure requires a recorded failure. A

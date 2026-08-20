@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.41 (Genesis)`
+`v0.3.42 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.41`** is the current executable package and GitHub
+- **Runtime release `v0.3.42`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -112,6 +112,15 @@ with optional OpenAI-compatible LLM conversation support.
   original remains immutable; read-only history labels current and superseded
   records. Missing, cross-source, already-superseded, and closed-run targets are
   rejected again at final recording time.
+- A separate manual comparison preview accepts an ordered list of two to five
+  unique accepted-source document IDs from one exact run. For each source it
+  renders persisted provenance, only explicitly recorded evidence, and only
+  current authored assessments. It remains read-only for collecting and
+  terminal runs, performs no provider, network, LLM, memory, graph,
+  knowledge-index, event-bus, or persistence work, and generates no verdict,
+  trust score, or automatic evidence selection. Each source column carries at
+  most 20 evidence records and 10 current assessments while exposing complete
+  counts, preventing unbounded response rendering without hiding truncation.
 - Research-run schema v5 remains backward compatible with v1-v4 snapshots.
   Legacy runs load with absent evidence, discovery, or assessment collections
   represented as empty, while v4 assessments load with no supersession link.
@@ -278,7 +287,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 1,129 automated tests pass through package-aware discovery.
+- 1,142 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -305,8 +314,10 @@ so this check did not alter the project's persisted data.
 
 ## Next Milestone
 
-Define a read-only manual comparison preview across separately accepted sources
-using only user-selected evidence and authored assessments. It may expose
-provenance and disagreements but must not generate a verdict, trust score, or
-automatic evidence selection. Ordinary-conversation augmentation, autonomous
-crawling, unattended acceptance, and implicit graph writes remain out of scope.
+Define a preview-confirm, append-only user-authored comparison note that cites
+exact current assessment and evidence IDs from explicitly selected accepted
+sources. It must preserve the manual comparison preview as its read boundary,
+revalidate every reference before atomic persistence, and generate no text,
+verdict, trust score, or automatic evidence selection. Ordinary-conversation
+augmentation, autonomous crawling, unattended acceptance, and implicit graph
+writes remain out of scope.

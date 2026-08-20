@@ -430,6 +430,35 @@ class DesktopControllerTests(unittest.TestCase):
 
         self.assertEqual(self.brain.requests, [])
 
+    def test_source_comparison_preview_uses_ordered_structured_request(self) -> None:
+        response = self.controller.preview_research_source_comparison(
+            " run-123 ",
+            " document-2, document-1 ",
+        )
+
+        self.assertIs(response, self.response)
+        request = self.brain.requests[0]
+        self.assertIsInstance(request, BrainRequest)
+        assert isinstance(request, BrainRequest)
+        self.assertEqual(
+            request.metadata,
+            {
+                "intent": "research_source_comparison_preview",
+                "research_run_id": "run-123",
+                "research_source_document_ids": ["document-2", "document-1"],
+            },
+        )
+
+    def test_source_comparison_rejects_count_or_duplicates_locally(self) -> None:
+        for source_ids in ("document-1", "document-1, document-1"):
+            with self.subTest(source_ids=source_ids), self.assertRaises(ValueError):
+                self.controller.preview_research_source_comparison(
+                    "run-123",
+                    source_ids,
+                )
+
+        self.assertEqual(self.brain.requests, [])
+
     def test_assessment_write_preview_and_record_use_explicit_evidence(self) -> None:
         values = (
             " run-123 ",

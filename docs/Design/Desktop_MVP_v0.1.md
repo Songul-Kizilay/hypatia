@@ -34,6 +34,9 @@ The MVP may present only current Brain/CognitiveEngine capabilities:
   as bounded research evidence;
 - preview-and-confirm recording of user-authored source assessments that cite
   only explicitly entered evidence IDs from the selected accepted source;
+- read-only side-by-side comparison of two to five explicitly selected accepted
+  sources, using persisted provenance, user-selected evidence, and only current
+  user-authored assessments without an automatic verdict or score;
 - preview-and-confirm transition of a collecting research run to one terminal
   lifecycle status;
 - an explicit Crossref scholarly-metadata discovery request for a selected

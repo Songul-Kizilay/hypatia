@@ -6516,6 +6516,147 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(self.memory_manager.count(), memory_count)
         self.assertEqual(store.save_calls, saves_before)
 
+    def test_source_comparison_preview_is_ordered_current_and_side_effect_free(
+        self,
+    ) -> None:
+        store = ToggleResearchRunStore()
+        assessment_ids = iter(("assessment-original", "assessment-current"))
+        evidence_ids = iter(("evidence-1", "evidence-2"))
+        manager = ResearchRunManager(
+            store,
+            id_factory=lambda: "run-123",
+            evidence_id_factory=evidence_ids.__next__,
+            assessment_id_factory=assessment_ids.__next__,
+        )
+        run = manager.create("Compare local models")
+        documents = []
+        for number in (1, 2):
+            source = ResearchSource(
+                f"https://example.com/{number}",
+                f"Source {number}",
+                f"Unique evidence {number}.",
+                "text/plain",
+                datetime(2026, 8, 20, 12, 30, tzinfo=UTC),
+            )
+            document = self.knowledge_engine.add_document(source.to_document())
+            documents.append(document)
+            manager.add_source(run.run_id, source, document.document_id)
+            manager.add_evidence(
+                run.run_id,
+                next(
+                    chunk
+                    for chunk in self.knowledge_engine.search("unique evidence")
+                    if chunk.document_id == document.document_id
+                ),
+                f"Selected note {number}.",
+            )
+        first_evidence = manager.get(run.run_id).evidence[0]
+        original = manager.record_source_assessment(
+            run.run_id,
+            documents[0].document_id,
+            [first_evidence.evidence_id],
+            "Original assessment.",
+        ).assessments[-1]
+        correction = manager.record_source_assessment(
+            run.run_id,
+            documents[0].document_id,
+            [first_evidence.evidence_id],
+            "Current assessment.",
+            original.assessment_id,
+        ).assessments[-1]
+        fetcher = RecordingResearchSourceFetcher()
+        llm_provider = RecordingLLMProvider("must not run")
+        extractor = RecordingCandidateExtractor()
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+            learned_memory_candidate_extractor=extractor,
+            research_source_fetcher=fetcher,
+            research_run_manager=manager,
+        )
+        documents_before = self.knowledge_engine.documents()
+        memory_count = self.memory_manager.count()
+        saves_before = store.save_calls
+        events: list[str] = []
+        self.event_bus.subscribe("*", lambda event: events.append(event.name))
+
+        response = engine.process(
+            BrainRequest(
+                "Compare selected sources",
+                metadata={
+                    "intent": "research_source_comparison_preview",
+                    "research_run_id": run.run_id,
+                    "research_source_document_ids": [
+                        documents[1].document_id,
+                        documents[0].document_id,
+                    ],
+                },
+            )
+        )
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "research_source_comparison_preview")
+        preview = response.research_source_comparison_preview
+        self.assertIsNotNone(preview)
+        assert preview is not None
+        self.assertEqual(
+            tuple(item.source.document_id for item in preview.sources),
+            (documents[1].document_id, documents[0].document_id),
+        )
+        self.assertEqual(preview.sources[1].current_assessments, (correction,))
+        self.assertNotIn("Original assessment.", response.message)
+        self.assertIn("Selected evidence: showing 1 of 1", response.message)
+        self.assertIn("Current assessments: showing 1 of 1", response.message)
+        self.assertIn("no verdict, trust score", response.message)
+        self.assertEqual(fetcher.calls, [])
+        self.assertEqual(llm_provider.calls, [])
+        self.assertEqual(extractor.calls, [])
+        self.assertEqual(events, [])
+        self.assertEqual(self.knowledge_engine.documents(), documents_before)
+        self.assertEqual(self.memory_manager.count(), memory_count)
+        self.assertEqual(store.save_calls, saves_before)
+
+    def test_source_comparison_rejects_invalid_selection_without_side_effects(
+        self,
+    ) -> None:
+        manager = ResearchRunManager(id_factory=lambda: "run-123")
+        run = manager.create("Question")
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            research_run_manager=manager,
+        )
+        for document_ids in ([], ["one"], ["one", "one"], ["one", "two"]):
+            with self.subTest(document_ids=document_ids):
+                response = engine.process(
+                    BrainRequest(
+                        "Compare selected sources",
+                        metadata={
+                            "intent": "research_source_comparison_preview",
+                            "research_run_id": run.run_id,
+                            "research_source_document_ids": document_ids,
+                        },
+                    )
+                )
+                self.assertFalse(response.success)
+                self.assertEqual(
+                    response.intent,
+                    "research_source_comparison_preview",
+                )
+
+        self.assertEqual(manager.get(run.run_id), run)
+
     def test_source_assessment_rejects_unknown_or_cross_run_source(self) -> None:
         manager = ResearchRunManager(id_factory=lambda: "run-123")
         run = manager.create("Question")

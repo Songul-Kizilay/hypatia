@@ -2,6 +2,38 @@
 
 All notable project changes are recorded here.
 
+## [0.3.42] - 2026-08-20
+
+### Added
+
+- A read-only manual comparison preview now accepts an ordered selection of two
+  to five unique sources already accepted into the same research run.
+- Each comparison column shows persisted source provenance, only evidence the
+  user explicitly selected for that source, and only current user-authored
+  assessments. Superseded assessment text remains in the audit history but is
+  not presented as current comparison material.
+- The desktop adds a comma-separated `Comparison source IDs` field and an
+  explicit `Compare sources` action. The preview remains available after a run
+  reaches a terminal status.
+
+### Security
+
+- Comparison validates the exact run and every source ID before rendering. It
+  rejects missing, duplicate, unaccepted, cross-run, or out-of-bounds source
+  selections and preserves the caller's explicit order.
+- The preview performs no network, discovery, fetch, LLM, memory, graph,
+  knowledge-index, event-bus, or persistence operation. It assigns no verdict,
+  trust score, or automatic evidence selection.
+- Comparison rendering is bounded to the first 20 persisted evidence records
+  and first 10 current assessments per selected source. It reports complete and
+  displayed counts so large valid histories remain honest without generating
+  an unbounded desktop response.
+
+### Verification
+
+- The package-aware full local suite contains 1,142 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass across 284 source files.
+
 ## [0.3.41] - 2026-08-20
 
 ### Added
