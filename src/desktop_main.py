@@ -16,6 +16,7 @@ def main() -> None:
         memory_path=data_paths.memory_path,
         session_path=data_paths.session_path,
         knowledge_relation_path=data_paths.knowledge_relation_path,
+        research_run_path=data_paths.research_run_path,
     )
     app.start()
 

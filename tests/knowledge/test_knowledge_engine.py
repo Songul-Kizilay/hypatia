@@ -78,6 +78,38 @@ class KnowledgeEngineTests(unittest.TestCase):
         self.assertEqual(engine.graph_edge_count(), 0)
         self.assertEqual(engine.search("hypatia"), [])
 
+    def test_remove_document_rolls_back_an_unlinked_loaded_source(self) -> None:
+        first_path = self._write_file("first.md", "First\n\nKeep")
+        second_path = self._write_file("second.md", "Second\n\nRemove")
+        engine = KnowledgeEngine()
+        first = engine.load(first_path)
+        second = engine.load(second_path)
+
+        removed = engine.remove_document(second.document_id)
+
+        self.assertIs(removed, second)
+        self.assertEqual(
+            [item.document_id for item in engine.documents()], [first.document_id]
+        )
+        self.assertEqual(engine.search("remove"), [])
+        self.assertEqual(engine.chunk_count(), 2)
+
+    def test_remove_document_rejects_a_source_with_explicit_relations(self) -> None:
+        first = self._write_file("first.md", "First")
+        second = self._write_file("second.md", "Second")
+        engine = KnowledgeEngine()
+        first_document = engine.load(first)
+        second_document = engine.load(second)
+        engine.apply_document_relation(
+            first_document.document_id,
+            second_document.document_id,
+        )
+
+        with self.assertRaisesRegex(KnowledgeError, "explicit relations"):
+            engine.remove_document(first_document.document_id)
+
+        self.assertEqual(engine.document_count(), 2)
+
     def test_reload_after_clear_preserves_a_file_source_document_id(self) -> None:
         path = self._write_file("example.md", "Hello\n\nHypatia")
         engine = KnowledgeEngine()

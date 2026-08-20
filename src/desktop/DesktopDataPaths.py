@@ -31,6 +31,11 @@ class DesktopDataPaths:
         """Return the local explicit-knowledge-relation snapshot path."""
         return self.root / "knowledge" / "relations.json"
 
+    @property
+    def research_run_path(self) -> Path:
+        """Return the persistent research-run audit snapshot path."""
+        return self.root / "research" / "runs.json"
+
     @classmethod
     def from_process_environment(
         cls,

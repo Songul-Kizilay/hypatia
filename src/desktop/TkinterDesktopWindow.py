@@ -129,6 +129,8 @@ class TkinterDesktopWindow:
         self._session_search_query = tk.StringVar()
         self._recall_query = tk.StringVar()
         self._knowledge_query = tk.StringVar()
+        self._research_question = tk.StringVar()
+        self._research_run_id = tk.StringVar()
         self._research_url = tk.StringVar()
         self._relation_source_id = tk.StringVar()
         self._relation_target_id = tk.StringVar()
@@ -318,8 +320,8 @@ class TkinterDesktopWindow:
         )
         research_frame.grid(row=4, column=0, sticky="ew", pady=(8, 0))
         research_frame.columnconfigure(1, weight=1)
-        ttk.Label(research_frame, text="HTTPS URL").grid(row=0, column=0, sticky="w")
-        ttk.Entry(research_frame, textvariable=self._research_url).grid(
+        ttk.Label(research_frame, text="Question").grid(row=0, column=0, sticky="w")
+        ttk.Entry(research_frame, textvariable=self._research_question).grid(
             row=0,
             column=1,
             sticky="ew",
@@ -327,9 +329,47 @@ class TkinterDesktopWindow:
         )
         ttk.Button(
             research_frame,
+            text="Start research",
+            command=self._create_research_run,
+        ).grid(row=0, column=2, sticky="ew")
+        ttk.Button(
+            research_frame,
+            text="Research runs",
+            command=self._show_research_runs,
+        ).grid(row=0, column=3, sticky="ew", padx=(8, 0))
+        ttk.Label(research_frame, text="Run ID").grid(
+            row=1,
+            column=0,
+            sticky="w",
+            pady=(8, 0),
+        )
+        ttk.Entry(research_frame, textvariable=self._research_run_id).grid(
+            row=1,
+            column=1,
+            columnspan=3,
+            sticky="ew",
+            padx=(8, 0),
+            pady=(8, 0),
+        )
+        ttk.Label(research_frame, text="HTTPS URL").grid(
+            row=2,
+            column=0,
+            sticky="w",
+            pady=(8, 0),
+        )
+        ttk.Entry(research_frame, textvariable=self._research_url).grid(
+            row=2,
+            column=1,
+            columnspan=2,
+            sticky="ew",
+            padx=(8, 8),
+            pady=(8, 0),
+        )
+        ttk.Button(
+            research_frame,
             text="Load source",
             command=self._load_research_source,
-        ).grid(row=0, column=2, sticky="ew")
+        ).grid(row=2, column=3, sticky="ew", pady=(8, 0))
 
         relation_frame = ttk.LabelFrame(
             container,
@@ -539,11 +579,31 @@ class TkinterDesktopWindow:
     def _load_research_source(self) -> None:
         """Fetch only the HTTPS source explicitly entered by the user."""
         try:
-            response = self._controller.load_research_source(self._research_url.get())
+            response = self._controller.load_research_source(
+                self._research_url.get(),
+                self._research_run_id.get(),
+            )
         except ValueError as error:
             self._status.set(str(error))
             return
         self._append_response(response)
+
+    def _create_research_run(self) -> None:
+        """Create a persistent run and select its returned identifier."""
+        try:
+            response = self._controller.create_research_run(
+                self._research_question.get()
+            )
+        except ValueError as error:
+            self._status.set(str(error))
+            return
+        self._append_response(response)
+        if response.success and response.research_runs:
+            self._research_run_id.set(response.research_runs[0].run_id)
+
+    def _show_research_runs(self) -> None:
+        """Render the current persisted run catalog without network access."""
+        self._append_response(self._controller.list_research_runs())
 
     def _preview_and_link_knowledge_relation(self) -> None:
         try:

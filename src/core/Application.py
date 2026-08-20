@@ -31,12 +31,14 @@ class HypatiaApplication:
         memory_path: Path | None = None,
         session_path: Path | None = None,
         knowledge_relation_path: Path | None = None,
+        research_run_path: Path | None = None,
     ) -> HypatiaApplication:
         """Create an application with optional caller-owned local data paths."""
         if (
             memory_path is None
             and session_path is None
             and knowledge_relation_path is None
+            and research_run_path is None
         ):
             bootstrap = Bootstrap.from_process_environment()
         else:
@@ -44,6 +46,7 @@ class HypatiaApplication:
                 memory_path=memory_path,
                 session_path=session_path,
                 knowledge_relation_path=knowledge_relation_path,
+                research_run_path=research_run_path,
             )
         return cls(bootstrap=bootstrap)
 

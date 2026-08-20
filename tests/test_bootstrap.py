@@ -23,6 +23,8 @@ from knowledge.KnowledgeEngine import KnowledgeEngine
 from memory.JsonFileMemoryStore import JsonFileMemoryStore
 from memory.MemoryManager import MemoryManager
 from memory.MemoryRecord import MemoryRecord
+from research.JsonFileResearchRunStore import JsonFileResearchRunStore
+from research.ResearchRunManager import ResearchRunManager
 from research.ResearchSource import ResearchSource
 from response.ResponseComposer import ResponseComposer
 from session.JsonFileSessionStore import JsonFileSessionStore
@@ -48,6 +50,9 @@ class BootstrapTests(unittest.TestCase):
         self.knowledge_relation_path = (
             Path(self.temporary_directory.name) / "knowledge_relations.json"
         )
+        self.research_run_path = (
+            Path(self.temporary_directory.name) / "research_runs.json"
+        )
 
     def tearDown(self) -> None:
         self.temporary_directory.cleanup()
@@ -57,6 +62,7 @@ class BootstrapTests(unittest.TestCase):
             memory_path=self.memory_path,
             session_path=self.session_path,
             knowledge_relation_path=self.knowledge_relation_path,
+            research_run_path=self.research_run_path,
         )
 
     def test_bootstrap_registers_response_composer(self) -> None:
@@ -161,6 +167,7 @@ class BootstrapTests(unittest.TestCase):
         memory_store = bootstrap.container.resolve(JsonFileMemoryStore)
         session_store = bootstrap.container.resolve(JsonFileSessionStore)
         relation_store = bootstrap.container.resolve(JsonFileKnowledgeRelationStore)
+        research_run_store = bootstrap.container.resolve(JsonFileResearchRunStore)
         project_root = Path(__file__).resolve().parents[1]
 
         self.assertEqual(
@@ -175,6 +182,10 @@ class BootstrapTests(unittest.TestCase):
             relation_store._path,
             project_root / "data" / "knowledge" / "relations.json",
         )
+        self.assertEqual(
+            research_run_store._path,
+            project_root / "data" / "research" / "runs.json",
+        )
 
     def test_bootstrap_registers_the_selected_knowledge_relation_store(self) -> None:
         bootstrap = self._bootstrap()
@@ -183,6 +194,42 @@ class BootstrapTests(unittest.TestCase):
         relation_store = bootstrap.container.resolve(JsonFileKnowledgeRelationStore)
 
         self.assertEqual(relation_store._path, self.knowledge_relation_path)
+
+    def test_bootstrap_registers_the_selected_research_run_store(self) -> None:
+        bootstrap = self._bootstrap()
+        bootstrap.initialize()
+
+        store = bootstrap.container.resolve(JsonFileResearchRunStore)
+        manager = bootstrap.container.resolve(ResearchRunManager)
+
+        self.assertEqual(store._path, self.research_run_path)
+        self.assertEqual(manager.list(), [])
+
+    def test_research_runs_survive_a_bootstrap_restart(self) -> None:
+        first = self._bootstrap()
+        first.initialize()
+        created = first.container.resolve(Brain).process(
+            BrainRequest(
+                message="Create internet research run",
+                metadata={
+                    "intent": "research_run_create",
+                    "research_question": "What should Hypatia compare?",
+                },
+            )
+        )
+
+        restarted = self._bootstrap()
+        restarted.initialize()
+        listed = restarted.container.resolve(Brain).process(
+            BrainRequest(
+                message="List internet research runs",
+                metadata={"intent": "research_run_list"},
+            )
+        )
+
+        self.assertTrue(created.success)
+        self.assertTrue(listed.success)
+        self.assertEqual(listed.research_runs, created.research_runs)
 
     def test_missing_session_file_creates_and_persists_the_default_registry(
         self,

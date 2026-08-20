@@ -49,6 +49,7 @@ from memory.NoOpLearnedMemoryCandidateExtractor import (
 from memory.SemanticMemoryIndexRuntime import SemanticMemoryIndexRuntime
 from memory.SemanticMemoryMatch import SemanticMemoryMatch
 from memory.SessionMemoryPolicy import SessionMemoryPolicy
+from research.ResearchRunManager import ResearchRunManager
 from research.ResearchSourceFetcher import ResearchSourceFetcher
 from response.ResponseComposer import ResponseComposer
 from session.SessionCreateService import SessionCreateService
@@ -88,6 +89,7 @@ class CognitiveEngine:
         learned_memory_selector: LearnedMemorySelector | None = None,
         semantic_memory_index_runtime: SemanticMemoryIndexRuntime | None = None,
         research_source_fetcher: ResearchSourceFetcher | None = None,
+        research_run_manager: ResearchRunManager | None = None,
     ) -> None:
         if llm_history_max_turns is not None and (
             isinstance(llm_history_max_turns, bool) or llm_history_max_turns <= 0
@@ -127,6 +129,7 @@ class CognitiveEngine:
         self._learned_memory_selector = learned_memory_selector
         self._semantic_memory_index_runtime = semantic_memory_index_runtime
         self._research_source_fetcher = research_source_fetcher
+        self._research_run_manager = research_run_manager
         self._hybrid_semantic_memory_ranker = HybridSemanticMemoryRanker()
         self._router = BrainRouter()
 
@@ -160,6 +163,12 @@ class CognitiveEngine:
             return self._process_session_delete_preview(request)
         if intent == "session_delete":
             return self._process_session_delete(request)
+
+        if self._is_research_run_create_request(request):
+            return self._process_research_run_create(request)
+
+        if self._is_research_run_list_request(request):
+            return self._process_research_run_list(request)
 
         if self._is_research_source_load_request(request):
             return self._process_research_source_load(request)
@@ -314,6 +323,49 @@ class CognitiveEngine:
         """Recognize only an explicit structured internet-source request."""
         return request.metadata.get("intent") == "research_source_load"
 
+    @staticmethod
+    def _is_research_run_create_request(request: BrainRequest) -> bool:
+        """Recognize only an explicit structured research-run creation request."""
+        return request.metadata.get("intent") == "research_run_create"
+
+    @staticmethod
+    def _is_research_run_list_request(request: BrainRequest) -> bool:
+        """Recognize the explicit structured research-run catalog request."""
+        return request.metadata.get("intent") == "research_run_list"
+
+    def _process_research_run_create(self, request: BrainRequest) -> BrainResponse:
+        question = request.metadata.get("research_question")
+        if not isinstance(question, str) or not question.strip():
+            return self._response_composer.research_run_failure(
+                request,
+                "A research question is required.",
+            )
+        if self._research_run_manager is None:
+            return self._response_composer.research_run_failure(
+                request,
+                "Research run persistence is unavailable.",
+            )
+        try:
+            run = self._research_run_manager.create(question)
+        except ResearchError:
+            return self._response_composer.research_run_failure(
+                request,
+                "Research run could not be created.",
+            )
+        return self._response_composer.research_run_create_success(request, run)
+
+    def _process_research_run_list(self, request: BrainRequest) -> BrainResponse:
+        if self._research_run_manager is None:
+            return self._response_composer.research_run_failure(
+                request,
+                "Research run persistence is unavailable.",
+                intent="research_run_list",
+            )
+        return self._response_composer.research_run_list_success(
+            request,
+            self._research_run_manager.list(),
+        )
+
     def _process_research_source_load(self, request: BrainRequest) -> BrainResponse:
         """Acquire and index one explicit source without LLM or memory side effects."""
         url = request.metadata.get("research_url")
@@ -327,14 +379,78 @@ class CognitiveEngine:
                 request,
                 "Internet research source loading is unavailable.",
             )
+        run_id_value = request.metadata.get("research_run_id")
+        run_id = run_id_value.strip() if isinstance(run_id_value, str) else ""
+        if run_id_value is not None and not run_id:
+            return self._response_composer.research_source_load_failure(
+                request,
+                "A valid research run ID is required.",
+            )
+        if run_id and self._research_run_manager is None:
+            return self._response_composer.research_source_load_failure(
+                request,
+                "Research run persistence is unavailable.",
+            )
+        if run_id:
+            assert self._research_run_manager is not None
+            try:
+                self._research_run_manager.get(run_id)
+            except ResearchError:
+                return self._response_composer.research_source_load_failure(
+                    request,
+                    "Research run was not found.",
+                )
         try:
             source = self._research_source_fetcher.fetch(url.strip())
             document = self._knowledge_engine.add_document(source.to_document())
         except (ResearchError, KnowledgeError) as error:
+            if run_id and self._research_run_manager is not None:
+                audit_reason = (
+                    "Research source acquisition failed."
+                    if isinstance(error, ResearchError)
+                    else "Research source indexing failed."
+                )
+                try:
+                    self._research_run_manager.record_failure(
+                        run_id,
+                        "source_load",
+                        audit_reason,
+                    )
+                except ResearchError:
+                    return self._response_composer.research_source_load_failure(
+                        request,
+                        (
+                            "Research source failed and its audit record "
+                            "could not be saved."
+                        ),
+                    )
             return self._response_composer.research_source_load_failure(
                 request,
                 f"Research source could not be loaded: {error}",
             )
+        run = None
+        if run_id and self._research_run_manager is not None:
+            try:
+                run = self._research_run_manager.add_source(
+                    run_id,
+                    source,
+                    document.document_id,
+                )
+            except ResearchError:
+                try:
+                    self._knowledge_engine.remove_document(document.document_id)
+                except KnowledgeError:
+                    return self._response_composer.research_source_load_failure(
+                        request,
+                        "Research source audit failed and knowledge rollback failed.",
+                    )
+                return self._response_composer.research_source_load_failure(
+                    request,
+                    (
+                        "Research source audit could not be saved; "
+                        "knowledge was rolled back."
+                    ),
+                )
         loaded_document = next(
             reference
             for reference in self._knowledge_engine.documents()
@@ -343,6 +459,7 @@ class CognitiveEngine:
         return self._response_composer.research_source_load_success(
             request,
             loaded_document,
+            run=run,
         )
 
     def _process_knowledge_load(self, request: BrainRequest) -> BrainResponse:

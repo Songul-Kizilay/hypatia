@@ -2,10 +2,10 @@
 
 ## Status
 
-Partially implemented: explicit public-HTTPS source acquisition and local
-knowledge indexing are available. Source discovery, multi-source synthesis,
-evidence ranking, contradiction detection, and research-run persistence remain
-planned.
+Partially implemented: explicit public-HTTPS source acquisition, local
+knowledge indexing, and persistent research-run audit records are available.
+Source discovery, explicit evidence records, multi-source synthesis, evidence
+ranking, and contradiction detection remain planned.
 
 ## Purpose
 
@@ -24,15 +24,26 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
 - HTML is converted to readable block text without executing scripts or styles.
 - Final URL, title, content type, fetch time, and stable identity are preserved
   when the source enters the existing in-memory knowledge index.
-- Acquisition does not invoke an LLM, write conversation memory, persist a
-  research run, or create graph relations automatically.
+- The user can create a persistent research run for one question, list runs,
+  and attach an accepted source through an explicit run ID. The versioned JSON
+  snapshot keeps collecting status, accepted source provenance, safe failure
+  reasons, and timezone-aware creation/update times.
+- The audit snapshot does not duplicate downloaded page content. Knowledge
+  chunks remain in memory and therefore are not reconstructed from a run after
+  restart.
+- If source indexing succeeds but the run snapshot cannot be saved, the newly
+  indexed unlinked document is removed before a controlled failure is returned.
+  Persistent failure reasons do not retain a rejected URL.
+- Acquisition and run management do not invoke an LLM, write conversation
+  memory, crawl links, discover sources, or create graph relations
+  automatically.
 
 ## Next increment
 
-Define a replaceable source-discovery provider and a persisted research-run
-model before adding synthesis. A run must keep the original question, source
-queries, accepted/rejected sources, evidence records, failures, and completion
-state so later summaries remain auditable.
+Add explicit evidence records and completion-state transitions, then define a
+replaceable source-discovery provider before synthesis. Discovery queries,
+candidate-source decisions, evidence-to-source links, and later summaries must
+remain auditable; no unattended crawling should be enabled at this boundary.
 
 ## Known boundary
 

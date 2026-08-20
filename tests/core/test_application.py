@@ -48,6 +48,7 @@ class HypatiaApplicationTests(unittest.TestCase):
         memory_path = Path("C:/Hypatia/memory/memory.json")
         session_path = Path("C:/Hypatia/sessions/sessions.json")
         relation_path = Path("C:/Hypatia/knowledge/relations.json")
+        research_run_path = Path("C:/Hypatia/research/runs.json")
 
         with patch(
             "core.Application.Bootstrap.from_process_environment",
@@ -57,11 +58,13 @@ class HypatiaApplicationTests(unittest.TestCase):
                 memory_path=memory_path,
                 session_path=session_path,
                 knowledge_relation_path=relation_path,
+                research_run_path=research_run_path,
             )
 
         bootstrap_factory.assert_called_once_with(
             memory_path=memory_path,
             session_path=session_path,
             knowledge_relation_path=relation_path,
+            research_run_path=research_run_path,
         )
         self.assertIs(application.bootstrap, sentinel_bootstrap)

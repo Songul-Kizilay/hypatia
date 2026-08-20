@@ -28,6 +28,10 @@ class DesktopDataPathsTests(unittest.TestCase):
             paths.knowledge_relation_path,
             paths.root / "knowledge" / "relations.json",
         )
+        self.assertEqual(
+            paths.research_run_path,
+            paths.root / "research" / "runs.json",
+        )
 
     def test_explicit_absolute_override_wins_over_platform_defaults(self) -> None:
         paths = DesktopDataPaths.from_process_environment(

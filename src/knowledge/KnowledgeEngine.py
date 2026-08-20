@@ -81,6 +81,28 @@ class KnowledgeEngine:
         self._graph.clear()
         self._documents.clear()
 
+    def remove_document(self, document_id: str) -> Document:
+        """Remove an unlinked document for a caller-owned transaction rollback."""
+        document = self._document_by_id(document_id)
+        if any(
+            document.document_id
+            in {relation.source.document_id, relation.target.document_id}
+            for relation in self.relations()
+        ):
+            raise KnowledgeError(
+                "Knowledge document with explicit relations cannot be removed."
+            )
+        chunk_ids = [
+            chunk.chunk_id
+            for chunk in self._indexer.all().values()
+            if chunk.document_id == document.document_id
+        ]
+        self._graph.remove_document(document.document_id)
+        for chunk_id in chunk_ids:
+            self._indexer.remove(chunk_id)
+        self._documents.pop(document.document_id)
+        return document
+
     def graph_for_chunks(self, chunks: list[Chunk]) -> KnowledgeGraphView:
         """Return the derived structural graph for indexed search results."""
         return self._graph.view_for_chunks(chunks)
