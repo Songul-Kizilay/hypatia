@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.52` in the current release candidate) are the
+- **Runtime releases** (`v0.3.53` in the current release candidate) are the
   executable package and GitHub release line. They are the source-backed
   implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
@@ -81,8 +81,9 @@ TLS certificate checks; redirects repeat that boundary.
 It can create/list a persistent research run and pass a selected run ID with
 the source request. Bootstrap—not the UI—owns the atomic run and content stores.
 The run snapshot records only question/status, source provenance, safe failures,
-and timestamps; exact accepted page text is stored separately and remains in the
-existing in-memory knowledge index only until startup restoration is added.
+and timestamps; exact accepted page text is stored separately. Bootstrap
+restores only records whose stable identity and source metadata exactly match
+accepted run provenance.
 An explicit evidence action resolves one currently indexed chunk by ID and
 accepts it only when its document is already attached to the selected run. The
 v2 snapshot retains a bounded excerpt, full-chunk SHA-256 fingerprint, source
@@ -129,9 +130,11 @@ Persistent state is stored locally as validated JSON snapshots through
 `JsonFileResearchSourceContentStore`. Snapshot writes are atomic. Accepted
 research content is saved after knowledge indexing and before run provenance;
 failure restores the prior content collection and removes the new unlinked
-knowledge document where possible. The knowledge index is in memory and uses
-case-insensitive lexical matching; startup does not yet reconstruct page content
-from the separate store.
+knowledge document where possible. Startup validates both snapshots before
+reconstructing at most 20,000 paragraphs in the empty knowledge index. Orphans,
+identity/metadata mismatches, conflicting provenance, or partial indexing fail
+closed without changing either snapshot. The knowledge index remains in memory
+and uses case-insensitive lexical matching.
 Research-run schema v6 loads v1-v5 snapshots with absent evidence, discovery,
 assessment, or comparison-note collections represented as empty and v4
 assessments represented with no supersession link, rewriting a legacy snapshot

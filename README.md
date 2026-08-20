@@ -93,8 +93,9 @@ To create the world's most capable personal AI research companion.
 - A separate, versioned and atomically replaced accepted-source content store
   with exact UTF-8 byte count/SHA-256 validation, duplicate and storage bounds.
   Sources accepted into a selected research run save content before provenance
-  publication with compensating content/knowledge rollback; startup restoration
-  remains a separate later increment
+  publication with compensating content/knowledge rollback. On startup, only
+  records that exactly match accepted run provenance are restored into the
+  knowledge index, without network access or persistent mutation
 - A read-only discovered-candidate acceptance preview followed by separate
   confirmation and final revalidation through the existing guarded HTTPS
   source loader

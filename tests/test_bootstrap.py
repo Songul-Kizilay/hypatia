@@ -16,7 +16,7 @@ if str(SRC_DIR) not in sys.path:
 from brain.Brain import Brain
 from brain.BrainRequest import BrainRequest
 from core.Bootstrap import Bootstrap
-from core.Exceptions import MemoryError, SessionError
+from core.Exceptions import MemoryError, ResearchError, SessionError
 from eventbus.EventBus import EventBus
 from knowledge.JsonFileKnowledgeRelationStore import JsonFileKnowledgeRelationStore
 from knowledge.KnowledgeEngine import KnowledgeEngine
@@ -30,6 +30,8 @@ from research.JsonFileResearchSourceContentStore import (
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchSource import ResearchSource
 from research.ResearchSourceCandidate import ResearchSourceCandidate
+from research.ResearchSourceContentRecord import ResearchSourceContentRecord
+from research.ResearchSourceContentRestorer import ResearchSourceContentRestorer
 from response.ResponseComposer import ResponseComposer
 from session.JsonFileSessionStore import JsonFileSessionStore
 from session.SessionManager import SessionManager
@@ -299,9 +301,32 @@ class BootstrapTests(unittest.TestCase):
         bootstrap.initialize()
 
         store = bootstrap.container.resolve(JsonFileResearchSourceContentStore)
+        restorer = bootstrap.container.resolve(ResearchSourceContentRestorer)
 
         self.assertEqual(store._path, self.research_source_content_path)
         self.assertEqual(store.load(), [])
+        self.assertIsInstance(restorer, ResearchSourceContentRestorer)
+
+    def test_bootstrap_rejects_orphaned_research_content(self) -> None:
+        source = ResearchSource(
+            url="https://example.com/orphan",
+            title="Orphan source",
+            content="Unattached persisted finding.",
+            content_type="text/plain",
+            fetched_at=datetime(2026, 8, 20, 12, 30, tzinfo=UTC),
+        )
+        record = ResearchSourceContentRecord.from_source(
+            source,
+            source.to_document().document_id,
+            datetime(2026, 8, 20, 12, 31, tzinfo=UTC),
+        )
+        store = JsonFileResearchSourceContentStore(self.research_source_content_path)
+        store.save([record])
+
+        with self.assertRaisesRegex(ResearchError, "no accepted provenance"):
+            self._bootstrap().initialize()
+
+        self.assertEqual(store.load(), [record])
 
     def test_research_runs_survive_a_bootstrap_restart(self) -> None:
         first = self._bootstrap()
@@ -329,7 +354,7 @@ class BootstrapTests(unittest.TestCase):
         self.assertTrue(listed.success)
         self.assertEqual(listed.research_runs, created.research_runs)
 
-    def test_accepted_research_content_is_saved_without_startup_restoration(
+    def test_accepted_research_content_is_saved_and_restored_at_startup(
         self,
     ) -> None:
         source = ResearchSource(
@@ -385,9 +410,14 @@ class BootstrapTests(unittest.TestCase):
             restarted.container.resolve(JsonFileResearchSourceContentStore).load(),
             records,
         )
+        restored_knowledge = restarted.container.resolve(KnowledgeEngine)
         self.assertEqual(
-            restarted.container.resolve(KnowledgeEngine).documents(),
-            [],
+            [document.document_id for document in restored_knowledge.documents()],
+            [records[0].document_id],
+        )
+        self.assertEqual(
+            restored_knowledge.search("accepted")[0].document_id,
+            records[0].document_id,
         )
 
     def test_research_evidence_survives_a_bootstrap_restart(self) -> None:
