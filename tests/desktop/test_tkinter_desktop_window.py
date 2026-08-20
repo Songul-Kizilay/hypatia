@@ -28,6 +28,9 @@ from knowledge.KnowledgeCitation import KnowledgeCitation
 from knowledge.KnowledgeDocumentReference import KnowledgeDocumentReference
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchRun import ResearchRun
+from research.ResearchRunMarkdownExportPreview import (
+    ResearchRunMarkdownExportPreview,
+)
 from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchRunStatusTransitionPreview import (
     ResearchRunStatusTransitionPreview,
@@ -298,6 +301,10 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         self.assertEqual(controller.export_previews, ["run-123"])
         self.assertEqual(controller.sources, [])
         self.assertEqual(responses, [controller.export_preview_response])
+        self.assertIs(
+            window._research_markdown_export_preview,
+            controller.export_preview_response.research_run_markdown_export_preview,
+        )
 
     def test_research_markdown_export_preview_reports_empty_selection_locally(
         self,
@@ -316,6 +323,67 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         self.assertEqual(controller.export_previews, [])
         self.assertIn("run ID cannot be empty", status.values[-1])
         self.assertEqual(responses, [])
+
+    def test_research_markdown_export_save_uses_only_confirmed_current_preview(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchSourceLoadController()
+        responses: list[BrainResponse] = []
+        destination = str(Path.cwd() / "saved-research.md")
+        preview = (
+            controller.export_preview_response.research_run_markdown_export_preview
+        )
+        assert preview is not None
+        window._root = object()
+        window._controller = controller
+        window._research_run_id = RecordingInput("run-123")
+        window._research_markdown_export_preview = preview
+        window._status = RecordingStatus()
+        window._append_response = responses.append
+
+        with (
+            patch(
+                "desktop.TkinterDesktopWindow.filedialog.asksaveasfilename",
+                return_value=destination,
+            ) as choose_file,
+            patch(
+                "desktop.TkinterDesktopWindow.messagebox.askyesno",
+                return_value=True,
+            ) as confirm,
+        ):
+            window._save_research_run_markdown_export()
+
+        self.assertEqual(controller.export_saves, [(preview, destination)])
+        self.assertEqual(responses, [controller.export_save_response])
+        self.assertEqual(
+            choose_file.call_args.kwargs["initialfile"],
+            preview.suggested_filename,
+        )
+        self.assertIn(destination, confirm.call_args.args[1])
+        self.assertIn(preview.content_sha256, confirm.call_args.args[1])
+
+    def test_research_markdown_export_save_requires_matching_preview(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchSourceLoadController()
+        status = RecordingStatus()
+        preview = (
+            controller.export_preview_response.research_run_markdown_export_preview
+        )
+        assert preview is not None
+        window._controller = controller
+        window._research_run_id = RecordingInput("different-run")
+        window._research_markdown_export_preview = preview
+        window._status = status
+
+        with patch(
+            "desktop.TkinterDesktopWindow.filedialog.asksaveasfilename"
+        ) as choose_file:
+            window._save_research_run_markdown_export()
+
+        choose_file.assert_not_called()
+        self.assertEqual(controller.export_saves, [])
+        self.assertIn("Preview the selected", status.values[-1])
 
     def test_discovery_renders_unaccepted_candidates_without_loading_them(
         self,
@@ -939,6 +1007,7 @@ class RecordingResearchSourceLoadController:
         self.list_calls = 0
         self.export_previews: list[str] = []
         self.discovery_calls: list[str] = []
+        self.export_saves: list[tuple[ResearchRunMarkdownExportPreview, str]] = []
         self.evidence_calls: list[tuple[str, str, str]] = []
         self.evidence_list_calls: list[str] = []
         self.status_previews: list[tuple[str, str]] = []
@@ -1028,10 +1097,28 @@ class RecordingResearchSourceLoadController:
             memory_count=0,
             research_runs=[run],
         )
+        markdown = "# Hypatia Research Export\n"
+        export_preview = ResearchRunMarkdownExportPreview(
+            run_id="run-123",
+            run_status=ResearchRunStatus.CANCELLED,
+            snapshot_updated_at=now,
+            suggested_filename="hypatia-research-run-123.md",
+            markdown_preview=markdown,
+            total_character_count=len(markdown),
+            omitted_character_count=0,
+            content_sha256="a" * 64,
+        )
         self.export_preview_response = BrainResponse(
             message="Markdown export preview.",
             request_id="research-export-preview",
             intent="research_run_markdown_export_preview",
+            memory_count=0,
+            research_run_markdown_export_preview=export_preview,
+        )
+        self.export_save_response = BrainResponse(
+            message="Markdown export saved.",
+            request_id="research-export-save",
+            intent="research_run_markdown_export_save",
             memory_count=0,
         )
         self.discovery_response = BrainResponse(
@@ -1249,6 +1336,16 @@ class RecordingResearchSourceLoadController:
             raise ValueError("A research run ID cannot be empty.")
         self.export_previews.append(run_id)
         return self.export_preview_response
+
+    def save_research_run_markdown_export(
+        self,
+        preview: ResearchRunMarkdownExportPreview,
+        destination_path: str,
+    ) -> BrainResponse:
+        if not destination_path.strip():
+            raise ValueError("A research export destination cannot be empty.")
+        self.export_saves.append((preview, destination_path))
+        return self.export_save_response
 
     def discover_research_sources(self, run_id: str) -> BrainResponse:
         if not run_id.strip():

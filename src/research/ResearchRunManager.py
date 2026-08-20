@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import os
 import re
+import tempfile
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from hashlib import sha256
+from pathlib import Path
 from threading import RLock
 from uuid import uuid4
 
@@ -17,6 +20,9 @@ from research.ResearchRun import ResearchRun
 from research.ResearchRunMarkdownExportPreview import (
     MAX_MARKDOWN_EXPORT_PREVIEW_CHARACTERS,
     ResearchRunMarkdownExportPreview,
+)
+from research.ResearchRunMarkdownExportResult import (
+    ResearchRunMarkdownExportResult,
 )
 from research.ResearchRunMarkdownRenderer import render_research_run_markdown
 from research.ResearchRunStatus import ResearchRunStatus
@@ -161,6 +167,41 @@ class ResearchRunManager:
                 total_character_count=len(markdown),
                 omitted_character_count=omitted_character_count,
                 content_sha256=content_sha256,
+            )
+
+    def save_markdown_export(
+        self,
+        run_id: str,
+        destination_path: str | Path,
+        *,
+        expected_snapshot_updated_at: datetime,
+        expected_content_sha256: str,
+    ) -> ResearchRunMarkdownExportResult:
+        """Revalidate a preview and atomically publish one new Markdown file."""
+        normalized_id = self._normalize_run_id(run_id)
+        destination = self._normalize_markdown_export_destination(destination_path)
+        expected_updated_at = self._normalize_export_snapshot_time(
+            expected_snapshot_updated_at
+        )
+        expected_sha256 = self._normalize_export_sha256(expected_content_sha256)
+        with self._lock:
+            _, run = self._find_with_index(normalized_id)
+            if not run.status.terminal:
+                raise ResearchError("A collecting research run cannot be exported yet.")
+            if run.updated_at != expected_updated_at:
+                raise ResearchError("Research export preview is stale.")
+            markdown = render_research_run_markdown(run)
+            encoded = markdown.encode("utf-8")
+            content_sha256 = sha256(encoded).hexdigest()
+            if content_sha256 != expected_sha256:
+                raise ResearchError("Research export preview fingerprint is stale.")
+            self._publish_new_export(destination, encoded)
+            return ResearchRunMarkdownExportResult(
+                run_id=run.run_id,
+                snapshot_updated_at=run.updated_at,
+                destination_path=str(destination),
+                content_sha256=content_sha256,
+                byte_count=len(encoded),
             )
 
     def has_source(self, run_id: str, document_id: str) -> bool:
@@ -1050,6 +1091,77 @@ class ResearchRunManager:
         if not safe_run_id:
             safe_run_id = "research"
         return f"hypatia-research-{safe_run_id[:80]}.md"
+
+    @staticmethod
+    def _normalize_markdown_export_destination(destination_path: str | Path) -> Path:
+        if not isinstance(destination_path, (str, Path)):
+            raise ResearchError("Research export destination is invalid.")
+        raw_destination = str(destination_path).strip()
+        if (
+            not raw_destination
+            or len(raw_destination) > 4_096
+            or "\x00" in raw_destination
+        ):
+            raise ResearchError("Research export destination is invalid.")
+        destination = Path(raw_destination)
+        if not destination.is_absolute():
+            raise ResearchError("Research export destination must be absolute.")
+        if destination.suffix.casefold() != ".md":
+            raise ResearchError("Research export destination must end with .md.")
+        parent = destination.parent
+        try:
+            parent_exists = parent.is_dir()
+        except OSError as error:
+            raise ResearchError("Research export destination is invalid.") from error
+        if not parent_exists:
+            raise ResearchError("Research export destination directory was not found.")
+        return destination
+
+    @staticmethod
+    def _normalize_export_snapshot_time(value: datetime) -> datetime:
+        if not isinstance(value, datetime) or value.utcoffset() is None:
+            raise ResearchError("Research export snapshot time must be timezone-aware.")
+        return value
+
+    @staticmethod
+    def _normalize_export_sha256(value: str) -> str:
+        if not isinstance(value, str):
+            raise ResearchError("Research export fingerprint is invalid.")
+        normalized = value.strip().casefold()
+        if len(normalized) != 64 or any(
+            character not in "0123456789abcdef" for character in normalized
+        ):
+            raise ResearchError("Research export fingerprint is invalid.")
+        return normalized
+
+    @staticmethod
+    def _publish_new_export(destination: Path, content: bytes) -> None:
+        """Publish complete bytes atomically without replacing an existing path."""
+        temporary_path: Path | None = None
+        try:
+            descriptor, raw_temporary_path = tempfile.mkstemp(
+                prefix=f".{destination.name}.",
+                suffix=".tmp",
+                dir=destination.parent,
+            )
+            temporary_path = Path(raw_temporary_path)
+            with os.fdopen(descriptor, "wb") as stream:
+                stream.write(content)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.link(temporary_path, destination)
+        except FileExistsError as error:
+            raise ResearchError(
+                "Research export destination already exists; no file was replaced."
+            ) from error
+        except OSError as error:
+            raise ResearchError("Research export file could not be saved.") from error
+        finally:
+            if temporary_path is not None:
+                try:
+                    temporary_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
 
     @staticmethod
     def _normalize_document_id(document_id: str) -> str:

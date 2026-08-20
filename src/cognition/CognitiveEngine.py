@@ -177,6 +177,9 @@ class CognitiveEngine:
         if self._is_research_run_list_request(request):
             return self._process_research_run_list(request)
 
+        if self._is_research_run_markdown_export_save_request(request):
+            return self._process_research_run_markdown_export_save(request)
+
         if self._is_research_run_markdown_export_preview_request(request):
             return self._process_research_run_markdown_export_preview(request)
 
@@ -410,6 +413,11 @@ class CognitiveEngine:
         return request.metadata.get("intent") == "research_run_markdown_export_preview"
 
     @staticmethod
+    def _is_research_run_markdown_export_save_request(request: BrainRequest) -> bool:
+        """Recognize one explicit revalidating new-file export request."""
+        return request.metadata.get("intent") == "research_run_markdown_export_save"
+
+    @staticmethod
     def _is_research_evidence_record_request(request: BrainRequest) -> bool:
         """Recognize one explicit indexed-chunk evidence selection."""
         return request.metadata.get("intent") == "research_evidence_record"
@@ -529,6 +537,48 @@ class CognitiveEngine:
         return self._response_composer.research_run_markdown_export_preview_success(
             request,
             preview,
+        )
+
+    def _process_research_run_markdown_export_save(
+        self,
+        request: BrainRequest,
+    ) -> BrainResponse:
+        run_id = request.metadata.get("research_run_id")
+        raw_updated_at = request.metadata.get("research_export_snapshot_updated_at")
+        content_sha256 = request.metadata.get("research_export_content_sha256")
+        destination_path = request.metadata.get("research_export_destination_path")
+        failure = self._response_composer.research_run_markdown_export_save_failure
+        if not isinstance(run_id, str) or not run_id.strip():
+            return failure(request, "A research run ID is required.")
+        if not isinstance(raw_updated_at, str) or not raw_updated_at.strip():
+            return failure(request, "A research export snapshot time is required.")
+        try:
+            expected_updated_at = datetime.fromisoformat(raw_updated_at.strip())
+        except ValueError:
+            return failure(request, "Research export snapshot time is invalid.")
+        if expected_updated_at.utcoffset() is None:
+            return failure(request, "Research export snapshot time is invalid.")
+        if not isinstance(content_sha256, str) or not content_sha256.strip():
+            return failure(request, "A research export fingerprint is required.")
+        if not isinstance(destination_path, str) or not destination_path.strip():
+            return failure(request, "A research export destination is required.")
+        if self._research_run_manager is None:
+            return failure(request, "Research run persistence is unavailable.")
+        try:
+            result = self._research_run_manager.save_markdown_export(
+                run_id,
+                destination_path,
+                expected_snapshot_updated_at=expected_updated_at,
+                expected_content_sha256=content_sha256,
+            )
+        except ResearchError:
+            return failure(
+                request,
+                "Research Markdown export could not be saved; no file was replaced.",
+            )
+        return self._response_composer.research_run_markdown_export_save_success(
+            request,
+            result,
         )
 
     def _process_research_evidence_record(

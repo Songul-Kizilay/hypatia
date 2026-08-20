@@ -70,6 +70,7 @@ from memory.SessionMemoryPolicy import SessionMemoryPolicy
 from planner.Planner import Planner
 from research.ResearchRun import ResearchRun
 from research.ResearchRunManager import ResearchRunManager
+from research.ResearchRunMarkdownRenderer import render_research_run_markdown
 from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSource import ResearchSource
 from research.ResearchSourceCandidate import ResearchSourceCandidate
@@ -6203,6 +6204,153 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(llm_provider.calls, [])
         self.assertEqual(extractor.calls, [])
         self.assertEqual(events, [])
+
+    def test_research_markdown_save_revalidates_preview_and_creates_only_new_file(
+        self,
+    ) -> None:
+        store = ToggleResearchRunStore()
+        manager = ResearchRunManager(store, id_factory=lambda: "run-123")
+        run = manager.create("Export local evidence")
+        terminal = manager.transition_status(run.run_id, ResearchRunStatus.CANCELLED)
+        preview = manager.preview_markdown_export(run.run_id)
+        llm_provider = RecordingLLMProvider("must not run")
+        extractor = RecordingCandidateExtractor()
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+            learned_memory_candidate_extractor=extractor,
+            research_run_manager=manager,
+        )
+        destination = Path(self.temporary_directory.name) / "research-export.md"
+        request = BrainRequest(
+            message="Save previewed research run as Markdown",
+            metadata={
+                "intent": "research_run_markdown_export_save",
+                "research_run_id": run.run_id,
+                "research_export_snapshot_updated_at": (
+                    preview.snapshot_updated_at.isoformat()
+                ),
+                "research_export_content_sha256": preview.content_sha256,
+                "research_export_destination_path": str(destination),
+            },
+        )
+        persisted_save_count = store.save_calls
+        memory_count = self.memory_manager.count()
+        events: list[str] = []
+        self.event_bus.subscribe("*", lambda event: events.append(event.name))
+
+        saved = engine.process(request)
+
+        self.assertTrue(saved.success)
+        self.assertEqual(saved.intent, "research_run_markdown_export_save")
+        result = saved.research_run_markdown_export_result
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result.destination_path, str(destination))
+        self.assertEqual(result.content_sha256, preview.content_sha256)
+        self.assertEqual(
+            destination.read_text(encoding="utf-8"),
+            render_research_run_markdown(terminal),
+        )
+        self.assertIn("no existing file was replaced", saved.message)
+        self.assertEqual(manager.get(run.run_id), terminal)
+        self.assertEqual(store.save_calls, persisted_save_count)
+        self.assertEqual(self.memory_manager.count(), memory_count)
+        self.assertEqual(llm_provider.calls, [])
+        self.assertEqual(extractor.calls, [])
+        self.assertEqual(events, [])
+
+    def test_research_markdown_save_rejects_stale_or_existing_destination_safely(
+        self,
+    ) -> None:
+        manager = ResearchRunManager(id_factory=lambda: "run-123")
+        run = manager.create("Protect export")
+        manager.transition_status(run.run_id, ResearchRunStatus.CANCELLED)
+        preview = manager.preview_markdown_export(run.run_id)
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            research_run_manager=manager,
+        )
+        destination = Path(self.temporary_directory.name) / "existing-export.md"
+        destination.write_text("keep this", encoding="utf-8")
+        metadata = {
+            "intent": "research_run_markdown_export_save",
+            "research_run_id": run.run_id,
+            "research_export_snapshot_updated_at": (
+                preview.snapshot_updated_at.isoformat()
+            ),
+            "research_export_content_sha256": preview.content_sha256,
+            "research_export_destination_path": str(destination),
+        }
+
+        existing = engine.process(BrainRequest(message="Save", metadata=metadata))
+        stale = engine.process(
+            BrainRequest(
+                message="Save",
+                metadata={**metadata, "research_export_content_sha256": "0" * 64},
+            )
+        )
+
+        self.assertFalse(existing.success)
+        self.assertFalse(stale.success)
+        self.assertEqual(existing.intent, "research_run_markdown_export_save")
+        self.assertEqual(stale.intent, "research_run_markdown_export_save")
+        self.assertEqual(destination.read_text(encoding="utf-8"), "keep this")
+        self.assertNotIn(str(destination), existing.message)
+
+    def test_research_markdown_save_rejects_invalid_metadata_before_file_access(
+        self,
+    ) -> None:
+        manager = ResearchRunManager(id_factory=lambda: "run-123")
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            research_run_manager=manager,
+        )
+        destination = Path(self.temporary_directory.name) / "must-not-exist.md"
+        base = {
+            "intent": "research_run_markdown_export_save",
+            "research_run_id": "run-123",
+            "research_export_snapshot_updated_at": "2026-08-21T00:00:00+00:00",
+            "research_export_content_sha256": "a" * 64,
+            "research_export_destination_path": str(destination),
+        }
+        invalid_values = (
+            {"research_run_id": ""},
+            {"research_export_snapshot_updated_at": "not-a-time"},
+            {"research_export_snapshot_updated_at": "2026-08-21T00:00:00"},
+            {"research_export_content_sha256": ""},
+            {"research_export_destination_path": ""},
+        )
+
+        for replacement in invalid_values:
+            with self.subTest(replacement=replacement):
+                response = engine.process(
+                    BrainRequest(message="Save", metadata={**base, **replacement})
+                )
+                self.assertFalse(response.success)
+                self.assertEqual(
+                    response.intent,
+                    "research_run_markdown_export_save",
+                )
+        self.assertFalse(destination.exists())
 
     def test_research_source_is_attached_to_the_selected_persisted_run(self) -> None:
         store = ToggleResearchRunStore()

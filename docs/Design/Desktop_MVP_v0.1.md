@@ -43,6 +43,9 @@ The MVP may present only current Brain/CognitiveEngine capabilities:
 - read-only Markdown export preview for one terminal research run, generated
   only from persisted audit records with bounded display, escaped remote and
   authored text, a safe suggested basename, and a full-content fingerprint;
+- separately confirmed Markdown save for that exact preview, with a
+  user-selected new-file destination, final snapshot/hash revalidation, and
+  atomic no-overwrite publication;
 - preview-and-confirm transition of a collecting research run to one terminal
   lifecycle status;
 - an explicit Crossref scholarly-metadata discovery request for a selected
@@ -177,8 +180,11 @@ source order, bounded to 20 displayed notes with the complete count reported.
 `Export preview` takes only the selected terminal run ID. The runtime renders
 the immutable snapshot deterministically, escapes untrusted Markdown structure,
 bounds the transcript display, and returns the snapshot time plus complete
-content fingerprint needed by a later save action. It does not open a file
-dialog, accept a destination, or write a document in this increment.
+content fingerprint. It does not open a file dialog, accept a destination, or
+write a document. `Save export` is a separate action bound to that displayed
+preview: the desktop chooses and confirms a destination, then Brain re-renders
+and revalidates the run before atomically creating a complete UTF-8 `.md` file.
+Existing destinations are never replaced, and no research audit state changes.
 The `Final status` selector exposes only completed, failed, and cancelled. The
 window first renders the runtime preview and opens confirmation only for an
 allowed decision; the separate update call revalidates before persistence.

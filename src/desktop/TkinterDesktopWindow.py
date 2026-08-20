@@ -12,6 +12,9 @@ from brain.BrainResponse import BrainResponse
 from brain.SessionSummary import SessionSummary
 from desktop.DesktopController import DesktopController
 from knowledge.KnowledgeCitation import KnowledgeCitation
+from research.ResearchRunMarkdownExportPreview import (
+    ResearchRunMarkdownExportPreview,
+)
 from research.ResearchSourceCandidate import ResearchSourceCandidate
 
 _DEFAULT_FONT_SIZE = 12
@@ -151,6 +154,9 @@ class TkinterDesktopWindow:
         self._research_candidates: tuple[ResearchSourceCandidate, ...] = ()
         self._research_candidate_run_id = ""
         self._research_candidate_discovery_id = ""
+        self._research_markdown_export_preview: (
+            ResearchRunMarkdownExportPreview | None
+        ) = None
         self._font_size = _DEFAULT_FONT_SIZE
         self._font_size_label = tk.StringVar()
         self._high_contrast = tk.BooleanVar(value=False)
@@ -636,6 +642,11 @@ class TkinterDesktopWindow:
             text="Export preview",
             command=self._preview_research_run_markdown_export,
         ).grid(row=14, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ttk.Button(
+            research_frame,
+            text="Save export",
+            command=self._save_research_run_markdown_export,
+        ).grid(row=15, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
 
         relation_frame = ttk.LabelFrame(
             container,
@@ -875,9 +886,54 @@ class TkinterDesktopWindow:
 
     def _preview_research_run_markdown_export(self) -> None:
         """Render one terminal run as bounded Markdown without writing a file."""
+        self._research_markdown_export_preview = None
         try:
             response = self._controller.preview_research_run_markdown_export(
                 self._research_run_id.get()
+            )
+        except ValueError as error:
+            self._status.set(str(error))
+            return
+        self._append_response(response)
+        preview = response.research_run_markdown_export_preview
+        if (
+            response.success
+            and preview is not None
+            and preview.run_id == self._research_run_id.get().strip()
+        ):
+            self._research_markdown_export_preview = preview
+
+    def _save_research_run_markdown_export(self) -> None:
+        """Choose, confirm, and save only the exact preview currently displayed."""
+        preview = self._research_markdown_export_preview
+        if preview is None or preview.run_id != self._research_run_id.get().strip():
+            self._status.set("Preview the selected terminal research run first.")
+            return
+        path = filedialog.asksaveasfilename(
+            parent=self._root,
+            title="Save research Markdown export as a new file",
+            initialfile=preview.suggested_filename,
+            defaultextension=".md",
+            filetypes=[("Markdown files", "*.md")],
+        )
+        if not path:
+            self._status.set("research export save: cancelled")
+            return
+        if not messagebox.askyesno(
+            "Save research export?",
+            (
+                f"Create this new file?\n\n{path}\n\n"
+                f"Content SHA-256: {preview.content_sha256}\n\n"
+                "Hypatia will not replace an existing file."
+            ),
+            parent=self._root,
+        ):
+            self._status.set("research export save: not saved")
+            return
+        try:
+            response = self._controller.save_research_run_markdown_export(
+                preview,
+                path,
             )
         except ValueError as error:
             self._status.set(str(error))

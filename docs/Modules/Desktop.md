@@ -59,8 +59,11 @@ generates a winner or score.
 renders persisted provenance, evidence, authored assessments, comparison notes,
 and failures as bounded Markdown, together with the immutable snapshot time,
 full character count, omitted count, safe suggested filename, and full-content
-SHA-256. It accepts no destination path and writes no file; saving remains a
-separate revalidating action.
+SHA-256. It accepts no destination path and writes no file. `Save export` then
+requires that exact displayed preview, opens a new-file chooser, and separately
+confirms the selected path and fingerprint. Brain revalidates the snapshot time
+and complete content before atomically publishing UTF-8 Markdown; an existing
+destination is never replaced.
 The `Final status` selector offers only `completed`, `failed`, and `cancelled`.
 `Preview status` shows the runtime decision first and requests a separate
 confirmation only when allowed. A completed run requires source and evidence;

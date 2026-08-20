@@ -6,6 +6,8 @@ import unittest
 from datetime import UTC, datetime, timedelta
 from functools import partial
 from hashlib import sha256
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from core.Exceptions import ResearchError
 from knowledge.Chunk import Chunk
@@ -187,6 +189,128 @@ class ResearchRunManagerTests(unittest.TestCase):
         )
         self.assertNotIn("/", preview.suggested_filename)
         self.assertNotIn("\\", preview.suggested_filename)
+
+    def test_markdown_export_save_revalidates_and_atomically_creates_new_file(
+        self,
+    ) -> None:
+        run = self.manager.create("Save this run")
+        terminal = self.manager.transition_status(
+            run.run_id,
+            ResearchRunStatus.CANCELLED,
+        )
+        preview = self.manager.preview_markdown_export(run.run_id)
+        persisted_save_count = len(self.store.saved)
+
+        with TemporaryDirectory() as directory:
+            destination = Path(directory) / preview.suggested_filename
+            result = self.manager.save_markdown_export(
+                run.run_id,
+                destination,
+                expected_snapshot_updated_at=preview.snapshot_updated_at,
+                expected_content_sha256=preview.content_sha256,
+            )
+
+            expected_markdown = render_research_run_markdown(terminal)
+            self.assertEqual(destination.read_text(encoding="utf-8"), expected_markdown)
+            self.assertEqual(result.run_id, run.run_id)
+            self.assertEqual(result.destination_path, str(destination))
+            self.assertEqual(result.content_sha256, preview.content_sha256)
+            self.assertEqual(result.byte_count, len(expected_markdown.encode("utf-8")))
+            self.assertEqual(
+                tuple(destination.parent.glob(f".{destination.name}.*.tmp")),
+                (),
+            )
+
+        self.assertEqual(self.manager.get(run.run_id), terminal)
+        self.assertEqual(len(self.store.saved), persisted_save_count)
+
+    def test_markdown_export_save_never_replaces_an_existing_file(self) -> None:
+        run = self.manager.create("Protect existing file")
+        self.manager.transition_status(run.run_id, ResearchRunStatus.CANCELLED)
+        preview = self.manager.preview_markdown_export(run.run_id)
+
+        with TemporaryDirectory() as directory:
+            destination = Path(directory) / "existing.md"
+            destination.write_text("keep this", encoding="utf-8")
+
+            with self.assertRaisesRegex(ResearchError, "already exists"):
+                self.manager.save_markdown_export(
+                    run.run_id,
+                    destination,
+                    expected_snapshot_updated_at=preview.snapshot_updated_at,
+                    expected_content_sha256=preview.content_sha256,
+                )
+
+            self.assertEqual(destination.read_text(encoding="utf-8"), "keep this")
+            self.assertEqual(
+                tuple(destination.parent.glob(f".{destination.name}.*.tmp")),
+                (),
+            )
+
+    def test_markdown_export_save_rejects_stale_preview_before_file_access(
+        self,
+    ) -> None:
+        run = self.manager.create("Reject stale export")
+        self.manager.transition_status(run.run_id, ResearchRunStatus.CANCELLED)
+        preview = self.manager.preview_markdown_export(run.run_id)
+
+        with TemporaryDirectory() as directory:
+            for updated_at, fingerprint in (
+                (
+                    preview.snapshot_updated_at - timedelta(seconds=1),
+                    preview.content_sha256,
+                ),
+                (preview.snapshot_updated_at, "0" * 64),
+            ):
+                destination = Path(directory) / f"{fingerprint[:8]}.md"
+                with self.subTest(updated_at=updated_at, fingerprint=fingerprint):
+                    with self.assertRaisesRegex(ResearchError, "stale"):
+                        self.manager.save_markdown_export(
+                            run.run_id,
+                            destination,
+                            expected_snapshot_updated_at=updated_at,
+                            expected_content_sha256=fingerprint,
+                        )
+                    self.assertFalse(destination.exists())
+
+    def test_markdown_export_save_rejects_unsafe_destination_and_collecting_run(
+        self,
+    ) -> None:
+        run = self.manager.create("Validate destination")
+        collecting_preview_time = run.updated_at
+
+        with self.assertRaisesRegex(ResearchError, "absolute"):
+            self.manager.save_markdown_export(
+                run.run_id,
+                "relative.md",
+                expected_snapshot_updated_at=collecting_preview_time,
+                expected_content_sha256="0" * 64,
+            )
+
+        for invalid_destination, expected_message in (
+            (str(Path.cwd() / "export.txt"), "end with .md"),
+            (str(Path.cwd() / "missing-directory" / "export.md"), "not found"),
+            (str(Path.cwd() / "invalid\x00.md"), "invalid"),
+        ):
+            with self.subTest(destination=invalid_destination):
+                with self.assertRaisesRegex(ResearchError, expected_message):
+                    self.manager.save_markdown_export(
+                        run.run_id,
+                        invalid_destination,
+                        expected_snapshot_updated_at=collecting_preview_time,
+                        expected_content_sha256="0" * 64,
+                    )
+
+        with TemporaryDirectory() as directory:
+            destination = Path(directory) / "collecting.md"
+            with self.assertRaisesRegex(ResearchError, "collecting"):
+                self.manager.save_markdown_export(
+                    run.run_id,
+                    destination,
+                    expected_snapshot_updated_at=collecting_preview_time,
+                    expected_content_sha256="0" * 64,
+                )
+            self.assertFalse(destination.exists())
 
     def test_add_source_persists_provenance_without_page_content(self) -> None:
         run = self.manager.create("Question")

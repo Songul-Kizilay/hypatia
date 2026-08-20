@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.45 (Genesis)`
+`v0.3.46 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.45`** is the current executable package and GitHub
+- **Runtime release `v0.3.46`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -142,6 +142,12 @@ with optional OpenAI-compatible LLM conversation support.
   neutralized. Collecting runs are rejected and no
   file, network, provider, LLM, memory, graph, live-index, or event-bus action
   occurs.
+- A separate `Save export` action requires that exact displayed preview and an
+  explicitly chosen absolute `.md` path. The final Brain request re-renders the
+  terminal run and matches its immutable update time and full-content SHA-256
+  before atomically publishing complete UTF-8 bytes. Existing destinations are
+  never replaced, temporary-file cleanup is attempted, and no research, memory,
+  graph, live-index, event-bus, provider, LLM, or network state changes.
 - Research runs have a persisted terminal lifecycle. The desktop previews a
   requested `completed`, `failed`, or `cancelled` transition and requires a
   separate confirmation before the runtime revalidates and atomically saves
@@ -313,7 +319,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 1,174 automated tests pass through package-aware discovery.
+- 1,187 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -340,9 +346,8 @@ so this check did not alter the project's persisted data.
 
 ## Next Milestone
 
-Add the separately confirmed Markdown save action for a user-selected new file.
-It must carry the preview's run ID, immutable snapshot time, and full-content
-SHA-256 back through Brain, re-render and revalidate before an atomic local
-write, reject collecting or changed snapshots, and never overwrite an existing
-file. Network, provider, LLM, memory, graph, and event-bus behavior must remain
-untouched.
+Audit a separately scoped, read-only export verification action. It should let
+the user select an existing Hypatia Markdown export and compare its complete
+SHA-256 with the current deterministic terminal-run rendering, without importing
+the document, changing research state, or calling the network, provider, LLM,
+memory, graph, or event bus.
