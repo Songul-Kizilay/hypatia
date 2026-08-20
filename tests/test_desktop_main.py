@@ -46,6 +46,7 @@ class DesktopMainTests(unittest.TestCase):
             memory_path=paths.memory_path,
             session_path=paths.session_path,
             knowledge_relation_path=paths.knowledge_relation_path,
+            research_run_path=paths.research_run_path,
         )
         application.start.assert_called_once_with()
         container.resolve.assert_called_once_with(Brain)

@@ -249,6 +249,59 @@ class DesktopControllerTests(unittest.TestCase):
             },
         )
 
+    def test_create_research_run_uses_a_structured_explicit_request(self) -> None:
+        response = self.controller.create_research_run("  Compare local models  ")
+
+        self.assertIs(response, self.response)
+        request = self.brain.requests[0]
+        self.assertIsInstance(request, BrainRequest)
+        assert isinstance(request, BrainRequest)
+        self.assertEqual(request.message, "Create internet research run")
+        self.assertEqual(request.source, "desktop")
+        self.assertEqual(
+            request.metadata,
+            {
+                "intent": "research_run_create",
+                "research_question": "Compare local models",
+            },
+        )
+
+    def test_create_research_run_rejects_empty_question_locally(self) -> None:
+        with self.assertRaisesRegex(ValueError, "cannot be empty"):
+            self.controller.create_research_run(" \t ")
+
+        self.assertEqual(self.brain.requests, [])
+
+    def test_list_research_runs_uses_a_structured_read_only_request(self) -> None:
+        response = self.controller.list_research_runs()
+
+        self.assertIs(response, self.response)
+        request = self.brain.requests[0]
+        self.assertIsInstance(request, BrainRequest)
+        assert isinstance(request, BrainRequest)
+        self.assertEqual(request.message, "List internet research runs")
+        self.assertEqual(request.source, "desktop")
+        self.assertEqual(request.metadata, {"intent": "research_run_list"})
+
+    def test_load_research_source_can_attach_to_an_explicit_run(self) -> None:
+        response = self.controller.load_research_source(
+            " https://example.com/research ",
+            " run-123 ",
+        )
+
+        self.assertIs(response, self.response)
+        request = self.brain.requests[0]
+        self.assertIsInstance(request, BrainRequest)
+        assert isinstance(request, BrainRequest)
+        self.assertEqual(
+            request.metadata,
+            {
+                "intent": "research_source_load",
+                "research_url": "https://example.com/research",
+                "research_run_id": "run-123",
+            },
+        )
+
     def test_load_research_source_rejects_empty_url_without_calling_brain(self) -> None:
         with self.assertRaisesRegex(ValueError, "cannot be empty"):
             self.controller.load_research_source(" \t ")

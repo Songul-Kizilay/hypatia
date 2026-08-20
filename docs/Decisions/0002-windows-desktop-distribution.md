@@ -27,6 +27,7 @@ The desktop entry point uses these user-owned paths by default:
 %LOCALAPPDATA%\Hypatia\memory\memory.json
 %LOCALAPPDATA%\Hypatia\sessions\sessions.json
 %LOCALAPPDATA%\Hypatia\knowledge\relations.json
+%LOCALAPPDATA%\Hypatia\research\runs.json
 ```
 
 `HYPATIA_DESKTOP_DATA_DIR` may override the root only with an absolute path.

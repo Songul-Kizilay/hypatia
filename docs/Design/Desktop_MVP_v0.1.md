@@ -1,7 +1,7 @@
 # Desktop MVP v0.1
 
-**Status:** Initial Tkinter shell and explicit HTTPS source intake implemented;
-broader MVP views remain planned.
+**Status:** Initial Tkinter shell, explicit HTTPS source intake, and persistent
+research-run controls implemented; broader MVP views remain planned.
 
 ## Purpose
 
@@ -28,6 +28,8 @@ The MVP may present only current Brain/CognitiveEngine capabilities:
 - explicit loading of one user-selected local Markdown or plain-text source;
 - explicit loading of one user-entered public HTTPS text source through the
   current research acquisition boundary;
+- explicit creation/listing of persistent research runs and optional attachment
+  of that source to a selected run ID;
 - the existing explicit `ask knowledge` request; and
 - preview-and-confirm application or removal of an explicit knowledge relation.
 
@@ -117,8 +119,12 @@ conversation memory, invoke an LLM, or retain a partial local source.
 `Load source` sends exactly one explicitly entered URL through the structured
 research-source request. The runtime validates public HTTPS resolution and
 redirects, bounds response type/size/time, extracts readable text, and indexes
-the source with its final URL. It does not discover other sources, crawl links,
-invoke an LLM, write conversation memory, or persist a research run.
+the source with its final URL. `Start research` persists one question and
+selects the returned run ID; `Research runs` lists the current audit catalog.
+When a run ID is present, a successful source load also persists provenance,
+while an audit-write failure rolls the new unlinked knowledge document back.
+It does not discover other sources, crawl links, invoke an LLM, write
+conversation memory, or duplicate downloaded page content in the run store.
 `Ask sources` is separately user initiated: it sends the entered question only
 through the existing `ask knowledge` local-RAG path. The runtime keeps its
 bounded cited-source and safe unavailable/failure behavior; this action never

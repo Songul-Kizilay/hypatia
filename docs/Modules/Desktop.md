@@ -11,6 +11,9 @@ session rename/delete flows. Users can choose a local text size between 10 and
 20 points and toggle high contrast without affecting runtime state. One
 explicitly entered public HTTPS research source can be validated, fetched, and
 indexed through Brain without background traffic or conversation-memory writes.
+The shell can also create/list persistent research runs and attach that source
+to a selected run ID while leaving page content in the existing in-memory
+knowledge boundary.
 Its first Windows onedir package and local-data boundary are defined in ADR
 0002; broader MVP views remain planned.
 

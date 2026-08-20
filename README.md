@@ -134,6 +134,11 @@ the URL and every redirect against private-network access, accepts only bounded
 HTML/plain-text/Markdown content, extracts readable text, and indexes it through
 the same knowledge pipeline with its final URL preserved. It does not search for
 sources, run in the background, call an LLM, or write conversation memory.
+`Start research` creates a local audit record for one question. `Research runs`
+lists those records, and entering the selected run ID before `Load source`
+attaches accepted source provenance to it. The run keeps timestamps and safe
+failure records, but does not duplicate downloaded page text or make web
+research autonomous.
 `Ask sources` deliberately invokes the existing `ask knowledge` local-RAG path
 only when its button is selected. It provides the configured runtime with up to
 three bounded cited local chunks and never adds retrieval to ordinary chat or
@@ -171,8 +176,9 @@ The first distributable target is Windows. Build it from the repository root:
 
 The resulting application is `dist\Hypatia\Hypatia.exe`. It uses local data
 under `%LOCALAPPDATA%\Hypatia` rather than writing beside the executable:
-conversation memory, sessions, and explicit knowledge relations remain on this
-device. Set `HYPATIA_DESKTOP_DATA_DIR` to an **absolute** path only when you
+conversation memory, sessions, explicit knowledge relations, and research-run
+audit records remain on this device. Set `HYPATIA_DESKTOP_DATA_DIR` to an
+**absolute** path only when you
 deliberately need a different local data root. The initial package has manual
 updates; it does not self-update or automatically migrate data from a developer
 checkout.

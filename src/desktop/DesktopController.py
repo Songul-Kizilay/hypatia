@@ -130,19 +130,53 @@ class DesktopController:
             )
         )
 
-    def load_research_source(self, url: str) -> BrainResponse:
-        """Load one explicitly selected HTTPS source through the Brain boundary."""
+    def create_research_run(self, question: str) -> BrainResponse:
+        """Create one explicit, persistent research run through Brain."""
+        normalized_question = question.strip()
+        if not normalized_question:
+            raise ValueError("A research question cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="Create internet research run",
+                source="desktop",
+                metadata={
+                    "intent": "research_run_create",
+                    "research_question": normalized_question,
+                },
+            )
+        )
+
+    def list_research_runs(self) -> BrainResponse:
+        """List persistent research runs without fetching a network source."""
+        return self._brain.process(
+            BrainRequest(
+                message="List internet research runs",
+                source="desktop",
+                metadata={"intent": "research_run_list"},
+            )
+        )
+
+    def load_research_source(
+        self,
+        url: str,
+        research_run_id: str = "",
+    ) -> BrainResponse:
+        """Load one explicit HTTPS source, optionally attaching it to a run."""
         normalized_url = url.strip()
         if not normalized_url:
             raise ValueError("A research source URL cannot be empty.")
+        normalized_run_id = research_run_id.strip()
+        metadata = {
+            "intent": "research_source_load",
+            "research_url": normalized_url,
+        }
+        if normalized_run_id:
+            metadata["research_run_id"] = normalized_run_id
         return self._brain.process(
             BrainRequest(
                 message="Load selected internet research source",
                 source="desktop",
-                metadata={
-                    "intent": "research_source_load",
-                    "research_url": normalized_url,
-                },
+                metadata=metadata,
             )
         )
 

@@ -68,6 +68,8 @@ from memory.NoOpLearnedMemoryCandidateExtractor import (
 )
 from memory.SessionMemoryPolicy import SessionMemoryPolicy
 from planner.Planner import Planner
+from research.ResearchRun import ResearchRun
+from research.ResearchRunManager import ResearchRunManager
 from research.ResearchSource import ResearchSource
 from response.ResponseComposer import ResponseComposer
 from session.SessionDeleteExecutionResult import SessionDeleteExecutionResult
@@ -266,6 +268,22 @@ class RecordingResearchSourceFetcher:
             raise self.error
         assert self.source is not None
         return self.source
+
+
+class ToggleResearchRunStore:
+    """Keep snapshots and optionally fail the next persistence operation."""
+
+    def __init__(self) -> None:
+        self.runs: list[ResearchRun] = []
+        self.fail_saves = False
+
+    def load(self) -> list[ResearchRun]:
+        return list(self.runs)
+
+    def save(self, runs: list[ResearchRun]) -> None:
+        if self.fail_saves:
+            raise ResearchError("Research run store unavailable.")
+        self.runs = list(runs)
 
 
 class RecordingCandidateExtractor:
@@ -5702,6 +5720,216 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertFalse(response.success)
         self.assertEqual(response.intent, "research_source_load")
         self.assertIn("Host is not public.", response.message)
+        self.assertEqual(self.knowledge_engine.documents(), documents_before)
+
+    def test_research_run_create_and_list_are_persisted_without_side_effects(
+        self,
+    ) -> None:
+        store = ToggleResearchRunStore()
+        manager = ResearchRunManager(store, id_factory=lambda: "run-123")
+        llm_provider = RecordingLLMProvider("must not run")
+        extractor = RecordingCandidateExtractor()
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+            learned_memory_candidate_extractor=extractor,
+            research_run_manager=manager,
+        )
+        memory_count = self.memory_manager.count()
+        events: list[str] = []
+        self.event_bus.subscribe("*", lambda event: events.append(event.name))
+
+        created = engine.process(
+            BrainRequest(
+                message="Create internet research run",
+                metadata={
+                    "intent": "research_run_create",
+                    "research_question": "  Compare local models  ",
+                },
+            )
+        )
+        listed = engine.process(
+            BrainRequest(
+                message="List internet research runs",
+                metadata={"intent": "research_run_list"},
+            )
+        )
+
+        self.assertTrue(created.success)
+        self.assertEqual(created.intent, "research_run_create")
+        self.assertEqual(created.research_runs[0].run_id, "run-123")
+        self.assertEqual(created.research_runs[0].question, "Compare local models")
+        self.assertEqual(listed.research_runs, created.research_runs)
+        self.assertEqual(store.runs, created.research_runs)
+        self.assertEqual(self.memory_manager.count(), memory_count)
+        self.assertEqual(llm_provider.calls, [])
+        self.assertEqual(extractor.calls, [])
+        self.assertEqual(events, [])
+
+    def test_research_source_is_attached_to_the_selected_persisted_run(self) -> None:
+        store = ToggleResearchRunStore()
+        manager = ResearchRunManager(store, id_factory=lambda: "run-123")
+        manager.create("Compare local models")
+        source = ResearchSource(
+            url="https://example.com/research",
+            title="Example research",
+            content="First finding.",
+            content_type="text/html",
+            fetched_at=datetime(2026, 8, 20, 12, 30, tzinfo=UTC),
+        )
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            research_source_fetcher=RecordingResearchSourceFetcher(source=source),
+            research_run_manager=manager,
+        )
+
+        response = engine.process(
+            BrainRequest(
+                message="Load selected internet research source",
+                metadata={
+                    "intent": "research_source_load",
+                    "research_url": source.url,
+                    "research_run_id": "run-123",
+                },
+            )
+        )
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.research_runs, manager.list())
+        self.assertEqual(len(response.research_runs[0].sources), 1)
+        self.assertEqual(
+            response.research_runs[0].sources[0].document_id,
+            response.knowledge_documents[0].document_id,
+        )
+        self.assertNotIn(source.content, repr(store.runs))
+
+    def test_research_source_failure_records_only_a_safe_audit_reason(self) -> None:
+        store = ToggleResearchRunStore()
+        manager = ResearchRunManager(store, id_factory=lambda: "run-123")
+        manager.create("Compare local models")
+        rejected_url = "https://secret.example/private?token=value"
+        fetcher = RecordingResearchSourceFetcher(
+            error=ResearchError(f"Could not fetch {rejected_url}")
+        )
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            research_source_fetcher=fetcher,
+            research_run_manager=manager,
+        )
+
+        response = engine.process(
+            BrainRequest(
+                message="Load selected internet research source",
+                metadata={
+                    "intent": "research_source_load",
+                    "research_url": rejected_url,
+                    "research_run_id": "run-123",
+                },
+            )
+        )
+
+        self.assertFalse(response.success)
+        failure = manager.get("run-123").failures[0]
+        self.assertEqual(failure.reason, "Research source acquisition failed.")
+        self.assertNotIn(rejected_url, repr(store.runs))
+
+    def test_failed_source_audit_rolls_back_the_new_knowledge_document(self) -> None:
+        store = ToggleResearchRunStore()
+        manager = ResearchRunManager(store, id_factory=lambda: "run-123")
+        manager.create("Compare local models")
+        store.fail_saves = True
+        source = ResearchSource(
+            url="https://example.com/research",
+            title="Example research",
+            content="Temporary finding.",
+            content_type="text/plain",
+            fetched_at=datetime(2026, 8, 20, 12, 30, tzinfo=UTC),
+        )
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            research_source_fetcher=RecordingResearchSourceFetcher(source=source),
+            research_run_manager=manager,
+        )
+        documents_before = self.knowledge_engine.documents()
+
+        response = engine.process(
+            BrainRequest(
+                message="Load selected internet research source",
+                metadata={
+                    "intent": "research_source_load",
+                    "research_url": source.url,
+                    "research_run_id": "run-123",
+                },
+            )
+        )
+
+        self.assertFalse(response.success)
+        self.assertIn("rolled back", response.message)
+        self.assertEqual(self.knowledge_engine.documents(), documents_before)
+        self.assertEqual(manager.get("run-123").sources, ())
+
+    def test_research_source_rejects_unknown_run_before_network_access(self) -> None:
+        documents_before = self.knowledge_engine.documents()
+        manager = ResearchRunManager(id_factory=lambda: "run-123")
+        fetcher = RecordingResearchSourceFetcher(
+            source=ResearchSource(
+                url="https://example.com/research",
+                title="Example",
+                content="Finding.",
+                content_type="text/plain",
+                fetched_at=datetime(2026, 8, 20, 12, 30, tzinfo=UTC),
+            )
+        )
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            research_source_fetcher=fetcher,
+            research_run_manager=manager,
+        )
+
+        response = engine.process(
+            BrainRequest(
+                message="Load selected internet research source",
+                metadata={
+                    "intent": "research_source_load",
+                    "research_url": "https://example.com/research",
+                    "research_run_id": "missing-run",
+                },
+            )
+        )
+
+        self.assertFalse(response.success)
+        self.assertEqual(response.message, "Research run was not found.")
+        self.assertEqual(fetcher.calls, [])
         self.assertEqual(self.knowledge_engine.documents(), documents_before)
 
     def test_research_source_load_requires_explicit_url_and_fetcher(self) -> None:

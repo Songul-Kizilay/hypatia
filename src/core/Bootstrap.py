@@ -42,6 +42,8 @@ from memory.UrllibOllamaEmbeddingTransport import (
 )
 from planner.Planner import Planner
 from research.HttpResearchSourceFetcher import HttpResearchSourceFetcher
+from research.JsonFileResearchRunStore import JsonFileResearchRunStore
+from research.ResearchRunManager import ResearchRunManager
 from research.ResearchSourceFetcher import ResearchSourceFetcher
 from response.ResponseComposer import ResponseComposer
 from session.JsonFileSessionStore import JsonFileSessionStore
@@ -55,6 +57,7 @@ class Bootstrap:
         memory_path: Path | None = None,
         session_path: Path | None = None,
         knowledge_relation_path: Path | None = None,
+        research_run_path: Path | None = None,
         llm_provider: LLMProvider | None = None,
         llm_config: LLMRuntimeConfig | None = None,
         llm_api_key: str | None = None,
@@ -71,6 +74,7 @@ class Bootstrap:
         self._memory_path = memory_path
         self._session_path = session_path
         self._knowledge_relation_path = knowledge_relation_path
+        self._research_run_path = research_run_path
         self._llm_provider = llm_provider
         self._llm_config = llm_config
         self._llm_api_key = llm_api_key
@@ -88,6 +92,7 @@ class Bootstrap:
         memory_path: Path | None = None,
         session_path: Path | None = None,
         knowledge_relation_path: Path | None = None,
+        research_run_path: Path | None = None,
     ) -> Bootstrap:
         """Create Bootstrap with LLM settings loaded from the process environment."""
         llm_config, llm_api_key = load_llm_process_environment_settings()
@@ -105,6 +110,7 @@ class Bootstrap:
             memory_path=memory_path,
             session_path=session_path,
             knowledge_relation_path=knowledge_relation_path,
+            research_run_path=research_run_path,
             llm_config=llm_config,
             llm_api_key=llm_api_key,
             llm_system_prompt=llm_system_prompt,
@@ -247,6 +253,11 @@ class Bootstrap:
             or self._knowledge_relation_store_path(self._memory_path)
         )
         knowledge_engine = KnowledgeEngine(relation_store=relation_store)
+        research_run_store = JsonFileResearchRunStore(
+            self._research_run_path or self._research_run_store_path(self._memory_path)
+        )
+        research_run_manager = ResearchRunManager(research_run_store)
+        research_run_manager.load()
         research_source_fetcher = (
             self._research_source_fetcher or HttpResearchSourceFetcher()
         )
@@ -277,6 +288,7 @@ class Bootstrap:
             learned_memory_selector=self._learned_memory_selector,
             semantic_memory_index_runtime=semantic_memory_index_runtime,
             research_source_fetcher=research_source_fetcher,
+            research_run_manager=research_run_manager,
         )
         brain = Brain(cognitive_engine, memory_manager, event_bus)
 
@@ -292,6 +304,8 @@ class Bootstrap:
             container.register(semantic_memory_index_runtime)
         container.register(session_rename_service)
         container.register(knowledge_engine)
+        container.register(research_run_store)
+        container.register(research_run_manager)
         container.register(research_source_fetcher)
         container.register(response_composer)
         container.register(cognitive_engine)
@@ -340,11 +354,22 @@ class Bootstrap:
         project_root = Path(__file__).resolve().parents[2]
         return project_root / "data" / "knowledge" / "relations.json"
 
+    @staticmethod
+    def _default_research_run_path() -> Path:
+        project_root = Path(__file__).resolve().parents[2]
+        return project_root / "data" / "research" / "runs.json"
+
     @classmethod
     def _knowledge_relation_store_path(cls, memory_path: Path | None) -> Path:
         if memory_path is None:
             return cls._default_knowledge_relation_path()
         return memory_path.with_name("knowledge_relations.json")
+
+    @classmethod
+    def _research_run_store_path(cls, memory_path: Path | None) -> Path:
+        if memory_path is None:
+            return cls._default_research_run_path()
+        return memory_path.with_name("research_runs.json")
 
     def _configured_llm_provider(self) -> LLMProvider | None:
         if self._llm_provider is not None:

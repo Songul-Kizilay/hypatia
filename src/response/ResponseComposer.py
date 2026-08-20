@@ -21,6 +21,7 @@ from knowledge.KnowledgeRelationRevocationPreview import (
 )
 from memory.MemoryRecord import MemoryRecord
 from planner.Plan import Plan
+from research.ResearchRun import ResearchRun
 from session.SessionDeleteExecutionResult import SessionDeleteExecutionResult
 from session.SessionDeletePolicy import SessionDeleteStatus
 from session.SessionRecord import SessionRecord
@@ -532,23 +533,27 @@ class ResponseComposer:
         self,
         request: BrainRequest,
         document: KnowledgeDocumentReference,
+        *,
+        run: ResearchRun | None = None,
     ) -> BrainResponse:
         """Report one explicitly selected internet source after local indexing."""
+        lines = [
+            "Research source loaded:",
+            f"Title: {document.title}",
+            f"Source: {document.source}",
+            f"Type: {document.document_type.value}",
+            f"Chunks: {document.chunk_count}",
+            f"ID: {document.document_id}",
+        ]
+        if run is not None:
+            lines.append(f"Research run: {run.run_id}")
         return BrainResponse(
-            message="\n".join(
-                [
-                    "Research source loaded:",
-                    f"Title: {document.title}",
-                    f"Source: {document.source}",
-                    f"Type: {document.document_type.value}",
-                    f"Chunks: {document.chunk_count}",
-                    f"ID: {document.document_id}",
-                ]
-            ),
+            message="\n".join(lines),
             request_id=request.request_id,
             intent="research_source_load",
             memory_count=0,
             knowledge_documents=[document],
+            research_runs=[] if run is None else [run],
         )
 
     def research_source_load_failure(
@@ -561,6 +566,71 @@ class ResponseComposer:
             message=message,
             request_id=request.request_id,
             intent="research_source_load",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_run_create_success(
+        self,
+        request: BrainRequest,
+        run: ResearchRun,
+    ) -> BrainResponse:
+        """Report a newly persisted auditable research run."""
+        return BrainResponse(
+            message="\n".join(
+                [
+                    "Research run created:",
+                    f"Question: {run.question}",
+                    f"Status: {run.status.value}",
+                    f"Sources: {len(run.sources)}",
+                    f"Failures: {len(run.failures)}",
+                    f"ID: {run.run_id}",
+                ]
+            ),
+            request_id=request.request_id,
+            intent="research_run_create",
+            memory_count=0,
+            research_runs=[run],
+        )
+
+    def research_run_list_success(
+        self,
+        request: BrainRequest,
+        runs: list[ResearchRun],
+    ) -> BrainResponse:
+        """Compose a deterministic audit catalog without reading source content."""
+        if not runs:
+            message = "No research runs are stored."
+        else:
+            lines = ["Research runs:"]
+            for run in runs:
+                lines.append(
+                    "- "
+                    f"{run.question} | status: {run.status.value} | "
+                    f"sources: {len(run.sources)} | failures: {len(run.failures)} | "
+                    f"id: {run.run_id}"
+                )
+            message = "\n".join(lines)
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="research_run_list",
+            memory_count=0,
+            research_runs=runs,
+        )
+
+    def research_run_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+        *,
+        intent: str = "research_run_create",
+    ) -> BrainResponse:
+        """Report a safe run persistence failure without exposing store paths."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent=intent,
             memory_count=0,
             success=False,
         )

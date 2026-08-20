@@ -2,6 +2,29 @@
 
 All notable project changes are recorded here.
 
+## [0.3.33] - 2026-08-20
+
+### Added
+
+- Persistent, versioned research runs now retain the user's original question,
+  collecting status, accepted source provenance, safe failure records, and
+  timezone-aware creation/update times without duplicating downloaded page
+  content.
+- The desktop can start a research run, list stored runs, and attach an
+  explicitly entered HTTPS source to the selected run. These structured Brain
+  actions remain user initiated and do not call an LLM or write conversation
+  memory.
+- Research-run snapshots use validated atomic JSON replacement under the
+  desktop's user-owned local data directory. A failed audit write rolls back a
+  newly indexed knowledge document so the two runtime views cannot silently
+  diverge.
+
+### Verification
+
+- The package-aware full local suite contains 1,017 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass with the documented
+  project virtual environment.
+
 ## [0.3.32] - 2026-08-20
 
 ### Added

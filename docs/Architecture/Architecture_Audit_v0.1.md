@@ -1,6 +1,7 @@
 # Hypatia Architecture Audit v0.1
 
 **Audit date:** 2026-08-15
+**Last verified:** 2026-08-20
 **Authority:** Current repository source, tests, and runtime configuration take
 precedence over vision and roadmap documents.
 
@@ -15,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.32` today) are the executable package and GitHub
+- **Runtime releases** (`v0.3.33` today) are the executable package and GitHub
   release line. They are the source-backed implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
   engineering increments. Sprint 4.16.50 is complete and is already in the
@@ -40,6 +41,7 @@ Hypatia is a Python 3.14+ local-first runtime. Its active source packages are:
 | `memory` | Immutable records, JSON snapshots, TTL, learned-memory extraction and selection |
 | `session` | Persistent session registry and targeted session operations |
 | `knowledge` | Local `.txt`/`.md` loading, source catalog, chunks, lexical search, cited prompt context, structural graph |
+| `research` | Explicit bounded HTTPS acquisition and persistent auditable research-run snapshots |
 | `llm` | Optional OpenAI-compatible chat-completions provider and history assembly |
 | `planner`, `response`, `eventbus` | Deterministic task planning, response composition, lifecycle events |
 | `desktop` | Local Tkinter adapter for text chat, session views/selection, explicit recall/context, selected `.md`/`.txt` loading, source graph/catalog, and guarded mutations |
@@ -72,8 +74,13 @@ persistence directly. It owns neither persistent state nor a provider client;
 the UI window does not add a browser, web server, or background network channel.
 Its explicit research-source action delegates one user-entered HTTPS URL to the
 Brain-owned bounded fetcher and never runs implicitly.
+It can create/list a persistent research run and pass a selected run ID with
+the source request. Bootstrap—not the UI—owns the atomic run store and records
+only question/status, source provenance, safe failures, and timestamps; page
+content remains in the existing in-memory knowledge index.
 When launched as the desktop application, Bootstrap receives user-writable
-memory, session, and relation paths beneath `%LOCALAPPDATA%\Hypatia` on
+memory, session, relation, and research-run paths beneath
+`%LOCALAPPDATA%\Hypatia` on
 Windows (or an explicit absolute override), rather than writing beside an
 installed executable. The terminal developer entry point remains unchanged.
 
@@ -99,8 +106,11 @@ the runtime preview, and refreshes the session view from Brain only after a
 successful result.
 
 Persistent state is stored locally as validated JSON snapshots through
-`JsonFileMemoryStore` and `JsonFileSessionStore`. Snapshot writes are atomic.
-The knowledge index is in memory and uses case-insensitive lexical matching.
+`JsonFileMemoryStore`, `JsonFileSessionStore`,
+`JsonFileKnowledgeRelationStore`, and `JsonFileResearchRunStore`. Snapshot
+writes are atomic. The knowledge index is in memory and uses case-insensitive
+lexical matching; research-run provenance does not reconstruct page content
+after restart.
 
 The optional OpenAI-compatible chat runtime supports keyless activation only
 for explicit loopback endpoints (`localhost`, `127.0.0.1`, or `::1`), including
@@ -209,19 +219,19 @@ Not implemented:
 
 - Embedding persistence enabled by default.
 - Automatic semantic augmentation of ordinary messages or generic Brain search.
-- Cross-document semantic relation extraction, web retrieval, or automatic
-  citations in ordinary model prompts.
+- Cross-document semantic relation extraction, automatic web discovery, or
+  automatic citations in ordinary model prompts.
 
 ## Quality Baseline
 
 The current local verification baseline is:
 
-- `python -m unittest discover -s tests -t .`: 990 tests passed. The top-level
+- `python -m unittest discover -s tests -t .`: 1,017 tests passed. The top-level
   package setting ensures nested test directories are included without
   shadowing source packages.
 - `python -m black --check src tests`: passed.
 - `python -m ruff check src tests`: passed.
-- `python -m mypy src tests`: passed with no issues in 243 files.
+- `python -m mypy src tests`: passed with no issues in 263 files.
 
 These checks verify the current local worktree; they do not create a release,
 tag, pull request, or GitHub deployment.

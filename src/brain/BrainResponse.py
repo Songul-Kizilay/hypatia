@@ -15,6 +15,7 @@ from knowledge.KnowledgeRelationRevocation import KnowledgeRelationRevocation
 from knowledge.KnowledgeRelationRevocationPreview import (
     KnowledgeRelationRevocationPreview,
 )
+from research.ResearchRun import ResearchRun
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,5 +37,6 @@ class BrainResponse:
         None
     )
     knowledge_relation_revocation: KnowledgeRelationRevocation | None = None
+    research_runs: list[ResearchRun] = field(default_factory=list)
     session_summaries: list[SessionSummary] = field(default_factory=list)
     session_delete_allowed: bool | None = None

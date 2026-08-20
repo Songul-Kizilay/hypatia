@@ -204,6 +204,30 @@ class KnowledgeGraph:
             edges=tuple(selected_edges),
         )
 
+    def remove_document(self, document_id: str) -> None:
+        """Remove one document and its derived chunk structure from the graph."""
+        if not isinstance(document_id, str) or not document_id.strip():
+            raise KnowledgeError("Knowledge graph document ID cannot be empty.")
+        document_node_id = self.document_node_id(document_id.strip())
+        if document_node_id not in self._nodes:
+            raise KnowledgeError(
+                f"Knowledge graph document was not found: {document_id}"
+            )
+        node_ids = {
+            node_id
+            for node_id, node in self._nodes.items()
+            if node_id == document_node_id
+            or node.metadata.get("document_id") == document_id.strip()
+        }
+        self._edges = {
+            key: edge
+            for key, edge in self._edges.items()
+            if edge.source_node_id not in node_ids
+            and edge.target_node_id not in node_ids
+        }
+        for node_id in node_ids:
+            self._nodes.pop(node_id)
+
     def add_document_relation(
         self,
         source_document_id: str,

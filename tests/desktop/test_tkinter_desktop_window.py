@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 import unittest
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
@@ -23,6 +24,8 @@ from desktop.TkinterDesktopWindow import (
     _preview_and_confirm_session_rename,
 )
 from knowledge.KnowledgeCitation import KnowledgeCitation
+from research.ResearchRun import ResearchRun
+from research.ResearchRunStatus import ResearchRunStatus
 
 
 class AccessibilityPreferenceTests(unittest.TestCase):
@@ -188,12 +191,16 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         responses: list[BrainResponse] = []
         window._controller = controller
         window._research_url = RecordingInput("https://example.com/research")
+        window._research_run_id = RecordingInput("run-123")
         window._status = RecordingStatus()
         window._append_response = responses.append
 
         window._load_research_source()
 
-        self.assertEqual(controller.urls, ["https://example.com/research"])
+        self.assertEqual(
+            controller.sources,
+            [("https://example.com/research", "run-123")],
+        )
         self.assertEqual(responses, [controller.response])
 
     def test_empty_url_stays_local_and_is_shown_as_status(self) -> None:
@@ -202,13 +209,44 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         status = RecordingStatus()
         window._controller = controller
         window._research_url = RecordingInput("  ")
+        window._research_run_id = RecordingInput("")
         window._status = status
         window._append_response = lambda _response: self.fail("must not append")
 
         window._load_research_source()
 
-        self.assertEqual(controller.urls, [])
+        self.assertEqual(controller.sources, [])
         self.assertEqual(status.values, ["A research source URL cannot be empty."])
+
+    def test_created_run_identifier_is_selected_for_the_next_source(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchSourceLoadController()
+        responses: list[BrainResponse] = []
+        run_id = RecordingVariable("")
+        window._controller = controller
+        window._research_question = RecordingInput("Compare local models")
+        window._research_run_id = run_id
+        window._status = RecordingStatus()
+        window._append_response = responses.append
+
+        window._create_research_run()
+
+        self.assertEqual(controller.questions, ["Compare local models"])
+        self.assertEqual(run_id.value, "run-123")
+        self.assertEqual(responses, [controller.create_response])
+
+    def test_research_run_catalog_is_requested_without_network_fetch(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchSourceLoadController()
+        responses: list[BrainResponse] = []
+        window._controller = controller
+        window._append_response = responses.append
+
+        window._show_research_runs()
+
+        self.assertEqual(controller.list_calls, 1)
+        self.assertEqual(controller.sources, [])
+        self.assertEqual(responses, [controller.list_response])
 
 
 class RecordingKnowledgeLoadController:
@@ -228,19 +266,57 @@ class RecordingKnowledgeLoadController:
 
 class RecordingResearchSourceLoadController:
     def __init__(self) -> None:
-        self.urls: list[str] = []
+        self.sources: list[tuple[str, str]] = []
+        self.questions: list[str] = []
+        self.list_calls = 0
         self.response = BrainResponse(
             message="Loaded.",
             request_id="research-source-load",
             intent="research_source_load",
             memory_count=0,
         )
+        now = datetime(2026, 8, 20, tzinfo=UTC)
+        run = ResearchRun(
+            run_id="run-123",
+            question="Compare local models",
+            status=ResearchRunStatus.COLLECTING,
+            sources=(),
+            failures=(),
+            created_at=now,
+            updated_at=now,
+        )
+        self.create_response = BrainResponse(
+            message="Created.",
+            request_id="research-run-create",
+            intent="research_run_create",
+            memory_count=0,
+            research_runs=[run],
+        )
+        self.list_response = BrainResponse(
+            message="Listed.",
+            request_id="research-run-list",
+            intent="research_run_list",
+            memory_count=0,
+            research_runs=[run],
+        )
 
-    def load_research_source(self, url: str) -> BrainResponse:
+    def load_research_source(
+        self, url: str, research_run_id: str = ""
+    ) -> BrainResponse:
         if not url.strip():
             raise ValueError("A research source URL cannot be empty.")
-        self.urls.append(url)
+        self.sources.append((url, research_run_id))
         return self.response
+
+    def create_research_run(self, question: str) -> BrainResponse:
+        if not question.strip():
+            raise ValueError("A research question cannot be empty.")
+        self.questions.append(question)
+        return self.create_response
+
+    def list_research_runs(self) -> BrainResponse:
+        self.list_calls += 1
+        return self.list_response
 
 
 class RecordingInput:
@@ -249,6 +325,15 @@ class RecordingInput:
 
     def get(self) -> str:
         return self._value
+
+
+class RecordingVariable(RecordingInput):
+    @property
+    def value(self) -> str:
+        return self._value
+
+    def set(self, value: str) -> None:
+        self._value = value
 
 
 class RecordingStatus:
