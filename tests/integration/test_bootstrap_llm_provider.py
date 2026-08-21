@@ -771,6 +771,10 @@ class BootstrapLLMProviderTests(unittest.TestCase):
             tempfile.TemporaryDirectory() as temporary_directory,
             patch.dict(os.environ, {}, clear=True),
             patch(
+                "core.Bootstrap.CrossrefResearchSourceDiscoveryProvider",
+                return_value=Mock(),
+            ),
+            patch(
                 "core.Bootstrap.HttpResearchSourceFetcher",
                 return_value=Mock(),
             ),
