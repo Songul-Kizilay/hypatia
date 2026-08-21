@@ -2,6 +2,33 @@
 
 All notable project changes are recorded here.
 
+## [0.3.70] - 2026-08-21
+
+### Changed
+
+- Explicit desktop chat, semantic recall, cited knowledge questions, research
+  discovery, and approved HTTPS source loading now run through one daemon
+  request worker instead of holding the Tkinter event thread.
+- Tkinter polls completed responses and performs every widget update on its own
+  event thread. All command buttons are disabled while the single request is
+  active, and a second keyboard submission is rejected instead of queued.
+- Text entered in the composer while a response is pending is preserved; only
+  the exact submitted text is cleared after its response is presented.
+
+### Safety
+
+- Window close stops accepting work, discards late results, and destroys the UI
+  without forcefully terminating the provider call. Existing provider and
+  transport timeouts remain the hard bound on that daemon operation.
+- Expected input-validation errors remain visible. Unexpected worker,
+  provider, and presentation exceptions produce one generic desktop failure
+  without exposing internal transport or credential details.
+
+### Verification
+
+- The package-aware full local suite contains 1,350 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass across 313 source files.
+
 ## [0.3.69] - 2026-08-21
 
 ### Changed

@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.69` in the current release candidate) are the
+- **Runtime releases** (`v0.3.70` in the current release candidate) are the
   executable package and GitHub release line. They are the source-backed
   implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
@@ -72,7 +72,12 @@ ordinary chat. It visibly renders existing knowledge-response citations in
 their response order without constructing or looking up new records. Its ordered
 `SessionSummary` response data avoids parsing human-formatted output or reading
 persistence directly. It owns neither persistent state nor a provider client;
-the UI window does not add a browser, web server, or background network channel.
+the UI window does not add a browser, web server, provider client, or autonomous
+network channel. Explicit provider-backed actions share one daemon request
+worker; Tkinter polls results and alone updates widgets. Every command button is
+disabled during that single flight, duplicate keyboard submission is rejected,
+and close discards late presentation results. The worker delegates to the same
+controller and Brain boundaries and owns no duplicate state.
 Its explicit research-source action delegates one user-entered HTTPS URL to the
 Brain-owned bounded fetcher and never runs implicitly. The default fetcher
 tries only the ordered public addresses from its own validation, once each and
@@ -317,12 +322,12 @@ Not implemented:
 
 The current local verification baseline is:
 
-- package-aware `python -m unittest`: 1,341 tests passed. Explicit `tests.*`
+- package-aware `python -m unittest`: 1,350 tests passed. Explicit `tests.*`
   module names ensure nested test directories are included without shadowing
   source packages.
 - `python -m black --check src tests`: passed.
 - `python -m ruff check src tests`: passed.
-- `python -m mypy src tests`: passed with no issues in 311 files.
+- `python -m mypy src tests`: passed with no issues in 313 files.
 - `git diff --check`: passed.
 
 These checks verify the current local worktree; they do not create a release,
@@ -360,10 +365,25 @@ memory/session files and leaving project data unchanged.
 4. Existing deterministic keyword selection must remain an available fallback
    until semantic retrieval has independently verified relevance, ties, bounds,
    and failure behavior.
-5. Semantic index construction and maintenance are now background work, but an
-   explicit semantic query or LLM conversation can still wait on a provider
-   from the Tkinter UI thread. The next availability boundary is bounded desktop
-   request execution with main-thread-only rendering and deterministic close.
+5. Semantic and desktop provider work now have separate single-flight daemon
+   boundaries. An active provider transport is not forcefully terminated;
+   existing request deadlines remain the execution bound, while desktop close
+   discards its eventual presentation result.
+
+## Completed Increment: Responsive Desktop Provider Requests
+
+- Chat, explicit semantic recall, cited knowledge questions, research discovery,
+  and approved source acquisition use one daemon worker rather than the Tkinter
+  event thread.
+- Tkinter polls the bounded completion queue and is the only thread that updates
+  widgets. All command buttons are disabled during the request, and keyboard
+  submission cannot create a second queued or concurrent Brain operation.
+- Closing stops new work and discards late results without touching destroyed
+  widgets. Provider calls remain bounded by their existing timeouts instead of
+  being unsafely force-killed.
+- Expected validation messages are retained; all other worker or presentation
+  exceptions become a generic desktop failure. Composer text typed after a
+  request began is not erased when the earlier response arrives.
 
 ## Completed Increment: Background Semantic Incremental Maintenance
 

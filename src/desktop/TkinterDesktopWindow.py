@@ -11,6 +11,7 @@ from typing import Protocol
 from brain.BrainResponse import BrainResponse
 from brain.SessionSummary import SessionSummary
 from desktop.DesktopController import DesktopController
+from desktop.DesktopRequestRunner import DesktopRequestRunner
 from knowledge.KnowledgeCitation import KnowledgeCitation
 from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
@@ -20,6 +21,7 @@ from research.ResearchSourceCandidate import ResearchSourceCandidate
 _DEFAULT_FONT_SIZE = 12
 _MINIMUM_FONT_SIZE = 10
 _MAXIMUM_FONT_SIZE = 20
+_REQUEST_POLL_INTERVAL_MS = 50
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,6 +129,10 @@ class TkinterDesktopWindow:
     ) -> None:
         self._controller = controller
         self._root = root or tk.Tk()
+        self._request_runner = DesktopRequestRunner()
+        self._request_completion_handler: Callable[[BrainResponse], None] | None = None
+        self._request_controls: list[ttk.Button] = []
+        self._closing = False
         self._status = tk.StringVar(value="Ready")
         self._session_id = tk.StringVar()
         self._session_rename_target = tk.StringVar()
@@ -166,10 +172,95 @@ class TkinterDesktopWindow:
         self._root.minsize(760, 520)
         self._build_layout()
         self._apply_accessibility_preferences()
+        self._root.protocol("WM_DELETE_WINDOW", self._close)
+        self._root.after(_REQUEST_POLL_INTERVAL_MS, self._poll_requests)
 
     def run(self) -> None:
         """Enter the local desktop event loop."""
         self._root.mainloop()
+
+    def _start_request(
+        self,
+        action: Callable[[], BrainResponse],
+        on_success: Callable[[BrainResponse], None],
+        label: str,
+    ) -> None:
+        """Start one long action without blocking or queueing the Tk event loop."""
+        if self._closing:
+            self._status.set("Hypatia is closing.")
+            return
+        start_result = self._request_runner.start(action)
+        if start_result == "started":
+            self._request_completion_handler = on_success
+            self._set_request_controls_busy(True)
+            self._status.set(f"{label}: working")
+            return
+        if start_result == "busy":
+            self._status.set("Hypatia is already processing a request.")
+            return
+        if start_result == "stopped":
+            self._status.set("Hypatia is closing.")
+            return
+        self._status.set("Desktop request could not be started.")
+
+    def _poll_requests(self) -> None:
+        """Consume worker results and touch widgets only from the Tk event loop."""
+        if self._closing:
+            return
+        for completion in self._request_runner.drain():
+            handler = self._request_completion_handler
+            self._request_completion_handler = None
+            self._set_request_controls_busy(False)
+            if completion.error is not None:
+                if isinstance(completion.error, ValueError):
+                    self._status.set(str(completion.error))
+                else:
+                    self._status.set("Desktop request failed.")
+                continue
+            if handler is None or not isinstance(completion.value, BrainResponse):
+                self._status.set("Desktop request failed.")
+                continue
+            try:
+                handler(completion.value)
+            except Exception:
+                self._status.set("Desktop request failed.")
+        if not self._closing:
+            self._root.after(_REQUEST_POLL_INTERVAL_MS, self._poll_requests)
+
+    def _set_request_controls_busy(self, busy: bool) -> None:
+        """Keep a second long request from being started by a clickable control."""
+        state = ("disabled",) if busy else ("!disabled",)
+        for button in self._request_controls:
+            button.state(state)
+
+    def _close(self) -> None:
+        """Discard late worker results before destroying Tkinter widgets."""
+        if self._closing:
+            return
+        self._closing = True
+        self._request_completion_handler = None
+        self._request_runner.stop()
+        self._root.destroy()
+
+    def _request_button(
+        self,
+        parent: tk.Misc,
+        text: str,
+        command: Callable[[], None],
+    ) -> ttk.Button:
+        """Create one control disabled while a long desktop request is active."""
+        button = ttk.Button(parent, text=text, command=command)
+        self._request_controls.append(button)
+        return button
+
+    def _collect_request_controls(self, parent: tk.Misc) -> list[ttk.Button]:
+        """Collect every command button so Brain is never called concurrently."""
+        buttons: list[ttk.Button] = []
+        for child in parent.winfo_children():
+            if isinstance(child, ttk.Button):
+                buttons.append(child)
+            buttons.extend(self._collect_request_controls(child))
+        return buttons
 
     def _build_layout(self) -> None:
         container = ttk.Frame(self._root, padding=12)
@@ -302,7 +393,7 @@ class TkinterDesktopWindow:
             text="Recall",
             command=self._show_recall,
         ).grid(row=0, column=1, sticky="ew")
-        ttk.Button(
+        self._request_button(
             recall_frame,
             text="Semantic recall",
             command=self._show_semantic_recall,
@@ -324,7 +415,7 @@ class TkinterDesktopWindow:
             text="Knowledge graph",
             command=self._show_knowledge_graph,
         ).grid(row=0, column=2, sticky="ew", padx=(8, 0))
-        ttk.Button(
+        self._request_button(
             knowledge_frame,
             text="Ask sources",
             command=self._ask_knowledge,
@@ -378,7 +469,7 @@ class TkinterDesktopWindow:
             padx=(8, 8),
             pady=(8, 0),
         )
-        ttk.Button(
+        self._request_button(
             research_frame,
             text="Find sources",
             command=self._discover_research_sources,
@@ -407,7 +498,7 @@ class TkinterDesktopWindow:
             text="Use selected URL",
             command=self._use_selected_research_candidate,
         ).grid(row=2, column=2, sticky="ew", pady=(8, 0))
-        ttk.Button(
+        self._request_button(
             research_frame,
             text="Preview & load",
             command=self._preview_and_accept_research_candidate,
@@ -426,7 +517,7 @@ class TkinterDesktopWindow:
             padx=(8, 8),
             pady=(8, 0),
         )
-        ttk.Button(
+        self._request_button(
             research_frame,
             text="Load source",
             command=self._load_research_source,
@@ -718,11 +809,14 @@ class TkinterDesktopWindow:
         composer_frame.columnconfigure(0, weight=1)
         self._composer = tk.Text(composer_frame, height=4, wrap=tk.WORD)
         self._composer.grid(row=0, column=0, sticky="ew", padx=(0, 8))
-        ttk.Button(composer_frame, text="Send", command=self._send_message).grid(
-            row=0, column=1, sticky="ns"
-        )
+        self._request_button(
+            composer_frame,
+            text="Send",
+            command=self._send_message,
+        ).grid(row=0, column=1, sticky="ns")
         self._composer.bind("<Control-Return>", self._send_with_keyboard)
         self._composer.focus_set()
+        self._request_controls = self._collect_request_controls(container)
 
     def _change_font_size(self, adjustment: int) -> None:
         """Apply only a bounded, user-initiated text-size preference."""
@@ -810,13 +904,17 @@ class TkinterDesktopWindow:
 
     def _send_message(self) -> None:
         message = self._composer.get("1.0", "end-1c")
-        try:
-            response = self._controller.submit_message(message)
-        except ValueError as error:
-            self._status.set(str(error))
-            return
+        self._start_request(
+            lambda: self._controller.submit_message(message),
+            lambda response: self._complete_message(message, response),
+            "message",
+        )
+
+    def _complete_message(self, message: str, response: BrainResponse) -> None:
+        """Render one completed message only from the Tkinter event thread."""
         self._append_exchange("You", message, response)
-        self._composer.delete("1.0", tk.END)
+        if self._composer.get("1.0", "end-1c") == message:
+            self._composer.delete("1.0", tk.END)
 
     def _select_session(self) -> None:
         try:
@@ -839,7 +937,12 @@ class TkinterDesktopWindow:
         self._show_recall_response(self._controller.recall)
 
     def _show_semantic_recall(self) -> None:
-        self._show_recall_response(self._controller.semantic_recall)
+        query = self._recall_query.get()
+        self._start_request(
+            lambda: self._controller.semantic_recall(query),
+            self._append_response,
+            "semantic recall",
+        )
 
     def _show_knowledge_context(self) -> None:
         self._show_knowledge_response(self._controller.knowledge_context)
@@ -848,7 +951,12 @@ class TkinterDesktopWindow:
         self._show_knowledge_response(self._controller.knowledge_graph)
 
     def _ask_knowledge(self) -> None:
-        self._show_knowledge_response(self._controller.ask_knowledge)
+        query = self._knowledge_query.get()
+        self._start_request(
+            lambda: self._controller.ask_knowledge(query),
+            self._append_response,
+            "knowledge answer",
+        )
 
     def _show_knowledge_list(self) -> None:
         self._append_response(self._controller.list_knowledge())
@@ -876,14 +984,16 @@ class TkinterDesktopWindow:
 
     def _load_research_source(self) -> None:
         """Fetch only the HTTPS source explicitly entered by the user."""
-        try:
-            response = self._controller.load_research_source(
-                self._research_url.get(),
-                self._research_run_id.get(),
-            )
-        except ValueError as error:
-            self._status.set(str(error))
-            return
+        url = self._research_url.get()
+        run_id = self._research_run_id.get()
+        self._start_request(
+            lambda: self._controller.load_research_source(url, run_id),
+            self._complete_research_source_load,
+            "research source load",
+        )
+
+    def _complete_research_source_load(self, response: BrainResponse) -> None:
+        """Present an accepted network source only on the Tkinter event thread."""
         self._append_response(response)
         self._capture_accepted_research_source(response)
 
@@ -987,13 +1097,15 @@ class TkinterDesktopWindow:
 
     def _discover_research_sources(self) -> None:
         """Discover and display metadata candidates for the selected run."""
-        try:
-            response = self._controller.discover_research_sources(
-                self._research_run_id.get()
-            )
-        except ValueError as error:
-            self._status.set(str(error))
-            return
+        run_id = self._research_run_id.get()
+        self._start_request(
+            lambda: self._controller.discover_research_sources(run_id),
+            self._complete_research_source_discovery,
+            "research source discovery",
+        )
+
+    def _complete_research_source_discovery(self, response: BrainResponse) -> None:
+        """Present discovered candidates only on the Tkinter event thread."""
         self._append_response(response)
         self._render_research_candidates(response)
 
@@ -1089,13 +1201,15 @@ class TkinterDesktopWindow:
         ):
             self._status.set("research candidate: not loaded")
             return
-        response = self._controller.accept_research_source_candidate(
-            run_id,
-            discovery_id,
-            candidate.url,
+        self._start_request(
+            lambda: self._controller.accept_research_source_candidate(
+                run_id,
+                discovery_id,
+                candidate.url,
+            ),
+            self._complete_research_source_load,
+            "research candidate load",
         )
-        self._append_response(response)
-        self._capture_accepted_research_source(response)
 
     def _capture_accepted_research_source(self, response: BrainResponse) -> None:
         """Select only a source that the returned run confirms as accepted."""

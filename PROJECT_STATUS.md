@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.69 (Genesis)`
+`v0.3.70 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.69`** is the current executable package and GitHub
+- **Runtime release `v0.3.70`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -38,6 +38,11 @@ with optional OpenAI-compatible LLM conversation support.
   conversations, and activity through explicit read-only actions. It is a thin
   adapter over the existing Brain and does not create a second store, provider,
   or network channel.
+- Explicit provider-backed desktop actions use one daemon request worker so
+  Ollama and approved HTTPS waits do not block Tkinter's event loop. Results
+  are rendered only by the event thread, all command buttons are single-flight,
+  close discards late results, and unexpected failures expose no internal
+  exception detail. The worker owns no provider or duplicate state.
 - Local desktop text-size controls bounded from 10 through 20 points and an
   explicit high-contrast palette. They alter only presentation and do not
   persist a preference, invoke a provider, or change session, memory, or
@@ -374,7 +379,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 1,341 automated tests pass through package-aware discovery.
+- 1,350 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -401,9 +406,8 @@ so this check did not alter the project's persisted data.
 
 ## Next Milestone
 
-Move explicit provider-backed desktop commands off the Tkinter UI thread.
-Semantic indexing no longer delays primary memory, but an explicit semantic
-query or LLM conversation can still keep the desktop event loop waiting for its
-bounded local provider call. A later increment needs one bounded UI request
-worker, disabled/re-enabled controls, main-thread-only rendering, and
-deterministic close behavior.
+Add bounded, user-visible progress and cancellation semantics to the desktop
+request boundary without pretending an active provider transport can be killed
+safely. The current daemon worker keeps Tkinter responsive and discards late
+results on close; provider and HTTPS calls remain bounded by their existing
+timeouts.

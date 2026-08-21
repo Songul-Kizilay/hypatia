@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import sys
 import unittest
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from unittest.mock import patch
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
@@ -14,6 +15,7 @@ if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
 from brain.BrainResponse import BrainResponse
+from desktop.DesktopRequestRunner import DesktopRequestCompletion
 from desktop.TkinterDesktopWindow import (
     TkinterDesktopWindow,
     _accessibility_palette,
@@ -245,8 +247,10 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_id = RecordingInput("run-123")
         window._status = RecordingStatus()
         window._append_response = responses.append
+        _configure_request_boundary(window)
 
         window._load_research_source()
+        window._poll_requests()
 
         self.assertEqual(
             controller.sources,
@@ -263,11 +267,13 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_id = RecordingInput("")
         window._status = status
         window._append_response = lambda _response: self.fail("must not append")
+        _configure_request_boundary(window)
 
         window._load_research_source()
+        window._poll_requests()
 
         self.assertEqual(controller.sources, [])
-        self.assertEqual(status.values, ["A research source URL cannot be empty."])
+        self.assertEqual(status.values[-1], "A research source URL cannot be empty.")
 
     def test_created_run_identifier_is_selected_for_the_next_source(self) -> None:
         window: Any = object.__new__(TkinterDesktopWindow)
@@ -484,8 +490,10 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_candidate_run_id = ""
         window._status = RecordingStatus()
         window._append_response = responses.append
+        _configure_request_boundary(window)
 
         window._discover_research_sources()
+        window._poll_requests()
 
         self.assertEqual(controller.discovery_calls, ["run-123"])
         self.assertEqual(controller.sources, [])
@@ -580,11 +588,13 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_id = RecordingInput("  ")
         window._status = status
         window._append_response = lambda _response: self.fail("must not append")
+        _configure_request_boundary(window)
 
         window._discover_research_sources()
+        window._poll_requests()
 
         self.assertEqual(controller.discovery_calls, [])
-        self.assertEqual(status.values, ["A research run ID cannot be empty."])
+        self.assertEqual(status.values[-1], "A research run ID cannot be empty.")
 
     def test_selected_chunk_and_note_are_passed_to_evidence_boundary(self) -> None:
         window: Any = object.__new__(TkinterDesktopWindow)
@@ -1011,11 +1021,13 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_candidate_selector = RecordingCandidateSelector(0)
         window._status = RecordingStatus()
         window._append_response = responses.append
+        _configure_request_boundary(window)
 
         with patch(
             "desktop.TkinterDesktopWindow.messagebox.askyesno", return_value=True
         ) as confirm:
             window._preview_and_accept_research_candidate()
+        window._poll_requests()
 
         expected = ("run-123", "discovery-1", controller.candidates[0].url)
         self.assertEqual(controller.candidate_previews, [expected])
@@ -1655,6 +1667,56 @@ class RecordingStatus:
 
     def set(self, value: str) -> None:
         self.values.append(value)
+
+
+class ImmediateRequestRunner:
+    """Deterministic worker seam for presentation-only unit tests."""
+
+    def __init__(self) -> None:
+        self.completions: list[DesktopRequestCompletion[object]] = []
+        self.stopped = False
+
+    def start(
+        self,
+        action: Callable[[], object],
+    ) -> Literal["started", "busy", "stopped", "failed"]:
+        if self.stopped:
+            return "stopped"
+        try:
+            completion = DesktopRequestCompletion(value=action())
+        except Exception as error:
+            completion = DesktopRequestCompletion(error=error)
+        self.completions.append(completion)
+        return "started"
+
+    def drain(self) -> tuple[DesktopRequestCompletion[object], ...]:
+        completions = tuple(self.completions)
+        self.completions.clear()
+        return completions
+
+    def stop(self) -> None:
+        self.stopped = True
+        self.completions.clear()
+
+
+class RecordingRequestRoot:
+    def __init__(self) -> None:
+        self.after_calls: list[tuple[int, Callable[[], None]]] = []
+        self.destroyed = False
+
+    def after(self, delay_ms: int, callback: Callable[[], None]) -> None:
+        self.after_calls.append((delay_ms, callback))
+
+    def destroy(self) -> None:
+        self.destroyed = True
+
+
+def _configure_request_boundary(window: Any) -> None:
+    window._request_runner = ImmediateRequestRunner()
+    window._request_completion_handler = None
+    window._request_controls = []
+    window._closing = False
+    window._root = RecordingRequestRoot()
 
 
 class RelationConfirmationTests(unittest.TestCase):
