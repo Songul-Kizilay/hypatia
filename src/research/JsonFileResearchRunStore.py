@@ -7,7 +7,7 @@ import os
 from datetime import datetime
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Any
+from typing import Any, Protocol
 
 from core.Exceptions import ResearchError
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
@@ -21,6 +21,49 @@ from research.ResearchSourceComparisonNoteRecord import (
 )
 from research.ResearchSourceDiscoveryRecord import ResearchSourceDiscoveryRecord
 from research.ResearchSourceRecord import ResearchSourceRecord
+
+MAX_RESEARCH_RUN_STORE_BYTES = 64 * 1024 * 1024
+MAX_RESEARCH_RUN_STORE_COLLECTION_ITEMS = 20_000
+
+
+class _BinaryWriter(Protocol):
+    def write(self, value: bytes) -> int: ...
+
+
+class _BoundedUtf8Writer:
+    """Stop temporary JSON output before its UTF-8 byte budget is exceeded."""
+
+    def __init__(self, stream: _BinaryWriter) -> None:
+        self._stream = stream
+        self._byte_count = 0
+
+    def write(self, value: str) -> int:
+        encoded = value.encode("utf-8")
+        encoded_size = len(encoded)
+        if self._byte_count + encoded_size > MAX_RESEARCH_RUN_STORE_BYTES:
+            raise OverflowError("Research run store byte limit exceeded.")
+        written = self._stream.write(encoded)
+        if written != encoded_size:
+            raise OSError("Research run store temporary write was incomplete.")
+        self._byte_count += encoded_size
+        return len(value)
+
+
+class _CollectionBudget:
+    """Bound aggregate list entries while decoding one validated snapshot."""
+
+    def __init__(self) -> None:
+        self._item_count = 0
+
+    def consume(self, values: list[Any]) -> None:
+        self.consume_count(len(values))
+
+    def consume_count(self, count: int) -> None:
+        if count > MAX_RESEARCH_RUN_STORE_COLLECTION_ITEMS - self._item_count:
+            raise ResearchError(
+                "Research run store contains too many collection items."
+            )
+        self._item_count += count
 
 
 class JsonFileResearchRunStore:
@@ -96,9 +139,17 @@ class JsonFileResearchRunStore:
         if not self._path.exists():
             return []
         try:
-            with self._path.open(encoding="utf-8") as file:
-                document = json.load(file)
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+            with self._path.open("rb") as file:
+                encoded_document = file.read(MAX_RESEARCH_RUN_STORE_BYTES + 1)
+        except OSError as error:
+            raise ResearchError(
+                f"Unable to read research run store '{self._path}'."
+            ) from error
+        if len(encoded_document) > MAX_RESEARCH_RUN_STORE_BYTES:
+            raise ResearchError(f"Research run store '{self._path}' is too large.")
+        try:
+            document = json.loads(encoded_document)
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
             raise ResearchError(
                 f"Unable to read research run store '{self._path}'."
             ) from error
@@ -115,20 +166,24 @@ class JsonFileResearchRunStore:
         try:
             self._path.parent.mkdir(parents=True, exist_ok=True)
             with NamedTemporaryFile(
-                mode="w",
-                encoding="utf-8",
+                mode="wb",
                 dir=self._path.parent,
                 prefix=f".{self._path.name}.",
                 suffix=".tmp",
                 delete=False,
             ) as file:
                 temporary_path = Path(file.name)
-                json.dump(document, file, ensure_ascii=False, indent=2)
-                file.write("\n")
+                bounded_file = _BoundedUtf8Writer(file)
+                json.dump(document, bounded_file, ensure_ascii=False, indent=2)
+                bounded_file.write("\n")
                 file.flush()
                 os.fsync(file.fileno())
             os.replace(temporary_path, self._path)
-        except (OSError, OverflowError, TypeError, ValueError) as error:
+        except OverflowError as error:
+            raise ResearchError(
+                f"Research run store '{self._path}' is too large."
+            ) from error
+        except (OSError, TypeError, ValueError) as error:
             raise ResearchError(
                 f"Unable to write research run store '{self._path}'."
             ) from error
@@ -154,11 +209,18 @@ class JsonFileResearchRunStore:
             raise ResearchError(
                 f"Research run store '{self._path}' runs must be a list."
             )
-        runs = [self._parse_run(value, schema_version) for value in runs_data]
+        budget = _CollectionBudget()
+        budget.consume(runs_data)
+        runs = [self._parse_run(value, schema_version, budget) for value in runs_data]
         self._validate_runs(runs)
         return runs
 
-    def _parse_run(self, value: Any, schema_version: int) -> ResearchRun:
+    def _parse_run(
+        self,
+        value: Any,
+        schema_version: int,
+        budget: _CollectionBudget,
+    ) -> ResearchRun:
         expected_fields = {
             1: self._RUN_FIELDS_V1,
             2: self._RUN_FIELDS_V2,
@@ -190,6 +252,15 @@ class JsonFileResearchRunStore:
             or not isinstance(comparison_notes_data, list)
         ):
             raise ResearchError("Research run store contains invalid run collections.")
+        for values in (
+            sources_data,
+            failures_data,
+            evidence_data,
+            discoveries_data,
+            assessments_data,
+            comparison_notes_data,
+        ):
+            budget.consume(values)
         return ResearchRun(
             run_id=value["run_id"],
             question=value["question"],
@@ -199,13 +270,16 @@ class JsonFileResearchRunStore:
             created_at=self._parse_datetime(value["created_at"], "created_at"),
             updated_at=self._parse_datetime(value["updated_at"], "updated_at"),
             evidence=tuple(self._parse_evidence(item) for item in evidence_data),
-            discoveries=tuple(self._parse_discovery(item) for item in discoveries_data),
+            discoveries=tuple(
+                self._parse_discovery(item, budget) for item in discoveries_data
+            ),
             assessments=tuple(
-                self._parse_assessment(item, schema_version)
+                self._parse_assessment(item, schema_version, budget)
                 for item in assessments_data
             ),
             comparison_notes=tuple(
-                self._parse_comparison_note(item) for item in comparison_notes_data
+                self._parse_comparison_note(item, budget)
+                for item in comparison_notes_data
             ),
         )
 
@@ -249,7 +323,11 @@ class JsonFileResearchRunStore:
             recorded_at=self._parse_datetime(value["recorded_at"], "recorded_at"),
         )
 
-    def _parse_discovery(self, value: Any) -> ResearchSourceDiscoveryRecord:
+    def _parse_discovery(
+        self,
+        value: Any,
+        budget: _CollectionBudget,
+    ) -> ResearchSourceDiscoveryRecord:
         if not isinstance(value, dict) or set(value) != self._DISCOVERY_FIELDS:
             raise ResearchError(
                 "Research run store contains an invalid discovery record."
@@ -259,6 +337,7 @@ class JsonFileResearchRunStore:
             raise ResearchError(
                 "Research run store discovery candidates must be a list."
             )
+        budget.consume(candidates)
         return ResearchSourceDiscoveryRecord(
             discovery_id=value["discovery_id"],
             query=value["query"],
@@ -289,6 +368,7 @@ class JsonFileResearchRunStore:
         self,
         value: Any,
         schema_version: int,
+        budget: _CollectionBudget,
     ) -> ResearchSourceAssessmentRecord:
         expected_fields = (
             self._ASSESSMENT_FIELDS_V4
@@ -304,6 +384,7 @@ class JsonFileResearchRunStore:
             raise ResearchError(
                 "Research run store assessment evidence IDs must be a list."
             )
+        budget.consume(evidence_ids)
         return ResearchSourceAssessmentRecord(
             assessment_id=value["assessment_id"],
             source_document_id=value["source_document_id"],
@@ -318,6 +399,7 @@ class JsonFileResearchRunStore:
     def _parse_comparison_note(
         self,
         value: Any,
+        budget: _CollectionBudget,
     ) -> ResearchSourceComparisonNoteRecord:
         if not isinstance(value, dict) or set(value) != self._COMPARISON_NOTE_FIELDS:
             raise ResearchError(
@@ -333,6 +415,8 @@ class JsonFileResearchRunStore:
             raise ResearchError(
                 "Research run store comparison note references must be lists."
             )
+        for values in (source_document_ids, evidence_ids, assessment_ids):
+            budget.consume(values)
         return ResearchSourceComparisonNoteRecord(
             note_id=value["note_id"],
             source_document_ids=tuple(source_document_ids),
@@ -443,8 +527,30 @@ class JsonFileResearchRunStore:
 
     @staticmethod
     def _validate_runs(runs: list[ResearchRun]) -> None:
+        if not isinstance(runs, list):
+            raise ResearchError("Research run store accepts a list of runs.")
+        budget = _CollectionBudget()
+        budget.consume_count(len(runs))
         if not all(isinstance(run, ResearchRun) for run in runs):
             raise ResearchError("Research run store accepts only ResearchRun records.")
+        for run in runs:
+            for values in (
+                run.sources,
+                run.failures,
+                run.evidence,
+                run.discoveries,
+                run.assessments,
+                run.comparison_notes,
+            ):
+                budget.consume_count(len(values))
+            for discovery in run.discoveries:
+                budget.consume_count(len(discovery.candidates))
+            for assessment in run.assessments:
+                budget.consume_count(len(assessment.evidence_ids))
+            for note in run.comparison_notes:
+                budget.consume_count(len(note.source_document_ids))
+                budget.consume_count(len(note.evidence_ids))
+                budget.consume_count(len(note.assessment_ids))
         run_ids = [run.run_id for run in runs]
         if len(run_ids) != len(set(run_ids)):
             raise ResearchError("Research run store contains duplicate run IDs.")

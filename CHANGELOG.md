@@ -2,6 +2,29 @@
 
 All notable project changes are recorded here.
 
+## [0.3.57] - 2026-08-21
+
+### Changed
+
+- Research-run schema v6 now limits the complete UTF-8 JSON snapshot to 64 MiB
+  and all nested collection entries to an aggregate 20,000 items.
+- Reads consume at most one byte beyond the physical limit before JSON decoding.
+  Writes count exact UTF-8 bytes while producing the temporary snapshot and
+  stop before atomically replacing the current file.
+
+### Safety
+
+- Oversized input is rejected before decoding, and oversized in-memory
+  collections are rejected before record parsing or serialization.
+- Failed bounded writes preserve the previous snapshot and remove partial
+  temporary files. Schema v1-v6 compatibility and successful atomic replacement
+  remain unchanged.
+
+### Verification
+
+- The package-aware full local suite contains 1,265 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass across 311 source files.
+
 ## [0.3.56] - 2026-08-21
 
 ### Added
