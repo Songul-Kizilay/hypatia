@@ -769,10 +769,10 @@ class BootstrapLLMProviderTests(unittest.TestCase):
 
         with (
             tempfile.TemporaryDirectory() as temporary_directory,
-            patch.dict(
-                os.environ,
-                {"HYPATIA_RESEARCH_SOURCE_DISCOVERY_PROVIDER": "disabled"},
-                clear=True,
+            patch.dict(os.environ, {}, clear=True),
+            patch(
+                "core.Bootstrap.HttpResearchSourceFetcher",
+                return_value=Mock(),
             ),
             patch(
                 "core.Bootstrap.activate_llm",
