@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.77` in the current release candidate) are the
+- **Runtime releases** (`v0.3.78` in the current release candidate) are the
   executable package and GitHub release line. They are the source-backed
   implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
@@ -204,6 +204,12 @@ and unordered duplicate-pair guard under the manager lock before atomic append.
 History remains readable after closure. The boundary does not detect or propose
 contradictions, select claims or evidence, decide truth, rewrite claims, invoke
 a provider or LLM, or grant external source text instruction authority.
+One separate explicit read boundary may ask the configured LLM to propose
+possible pairs among bounded current claims. Research fields are marked as
+untrusted data, no history or tools are supplied, output is constrained by an
+exact JSON schema, and evidence IDs are derived only from persisted claims.
+Existing pairs are omitted and the complete run snapshot is revalidated after
+the provider returns. The result is never a truth decision or stored relation.
 The ordered manual comparison is also the read boundary for append-only authored
 comparison notes. A collecting run accepts a note only after an exact no-write
 preview and separate confirmation. Evidence and current assessment IDs must
@@ -358,12 +364,12 @@ Not implemented:
 
 The current local verification baseline is:
 
-- package-aware `python -m unittest`: 1,403 tests passed. Explicit `tests.*`
+- package-aware `python -m unittest`: 1,420 tests passed. Explicit `tests.*`
   module names ensure nested test directories are included without shadowing
   source packages.
 - `python -m black --check src tests`: passed.
 - `python -m ruff check src tests`: passed.
-- `python -m mypy src tests`: passed with no issues in 326 source files.
+- `python -m mypy src tests`: passed with no issues in 331 source files.
 - `git diff --check`: passed.
 
 These checks verify the current local worktree; they do not create a release,
@@ -386,6 +392,11 @@ The published v0.3.9 local chat runtime was also exercised on 15 August 2026
 against `llama3.2:latest`. An ephemeral Bootstrap instance completed a Turkish
 greeting through Hypatia's OpenAI-compatible local chat path, using temporary
 memory/session files and leaving project data unchanged.
+
+The v0.3.78 structured review adapter was exercised on 21 August 2026 against
+local Ollama `qwen3:4b`. It returned one schema-constrained possible
+contradiction with exact code-derived evidence in about four seconds. The
+ephemeral claim records were not persisted and project data was unchanged.
 
 ## Architecture Risks and Boundaries
 

@@ -1125,6 +1125,27 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             [controller.claim_contradiction_preview_response],
         )
 
+    def test_claim_contradiction_suggestion_runs_on_cancellable_worker(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchSourceLoadController()
+        responses: list[BrainResponse] = []
+        window._controller = controller
+        window._research_run_id = RecordingInput("run-123")
+        window._status = RecordingStatus()
+        window._append_response = responses.append
+        _configure_request_boundary(window)
+
+        window._suggest_research_claim_contradictions()
+        window._poll_requests()
+
+        self.assertEqual(controller.claim_contradiction_suggestions, ["run-123"])
+        self.assertEqual(len(controller.claim_contradiction_cancellation_tokens), 1)
+        self.assertIsNotNone(controller.claim_contradiction_cancellation_tokens[0])
+        self.assertEqual(
+            responses,
+            [controller.claim_contradiction_proposal_response],
+        )
+
     def test_allowed_claim_contradiction_requires_confirmation_before_record(
         self,
     ) -> None:
@@ -1442,6 +1463,10 @@ class RecordingResearchSourceLoadController:
         self.claim_write_previews: list[tuple[str, str, str, str, str, str]] = []
         self.claim_records: list[tuple[str, str, str, str, str, str]] = []
         self.claim_contradiction_previews: list[str] = []
+        self.claim_contradiction_suggestions: list[str] = []
+        self.claim_contradiction_cancellation_tokens: list[CancellationToken | None] = (
+            []
+        )
         self.claim_contradiction_write_previews: list[tuple[str, str, str]] = []
         self.claim_contradiction_records: list[tuple[str, str, str]] = []
         self.response = BrainResponse(
@@ -1794,6 +1819,12 @@ class RecordingResearchSourceLoadController:
             memory_count=0,
             research_claim_contradiction_preview=contradiction_history,
         )
+        self.claim_contradiction_proposal_response = BrainResponse(
+            message="Possible contradiction candidates.",
+            request_id="research-claim-contradiction-proposal",
+            intent="research_claim_contradiction_proposal",
+            memory_count=0,
+        )
         contradiction_write_preview = ResearchClaimContradictionWritePreview(
             run_id=run.run_id,
             run_status=run.status,
@@ -1985,6 +2016,18 @@ class RecordingResearchSourceLoadController:
             raise ValueError("A research run ID cannot be empty.")
         self.claim_contradiction_previews.append(run_id)
         return self.claim_contradiction_preview_response
+
+    def suggest_research_claim_contradictions(
+        self,
+        run_id: str,
+        *,
+        cancellation_token: CancellationToken | None = None,
+    ) -> BrainResponse:
+        if not run_id.strip():
+            raise ValueError("A research run ID cannot be empty.")
+        self.claim_contradiction_suggestions.append(run_id)
+        self.claim_contradiction_cancellation_tokens.append(cancellation_token)
+        return self.claim_contradiction_proposal_response
 
     def preview_research_claim_contradiction_write(
         self,

@@ -2,6 +2,42 @@
 
 All notable project changes are recorded here.
 
+## [0.3.78] - 2026-08-21
+
+### Added
+
+- An explicit desktop action can ask the configured LLM for up to ten possible
+  contradiction pairs among at most fifty current, non-superseded claims.
+- Every read-only candidate cites exactly two persisted claim IDs and the exact
+  ordered evidence union derived by Hypatia from those claims; model-authored
+  rationale remains visibly labelled as an untrusted review suggestion.
+
+### Changed
+
+- The OpenAI-compatible provider supports bounded JSON-schema completions with
+  reasoning disabled and deterministic sampling for this structured review
+  task. Providers without that extension retain the existing strict JSON
+  fallback contract.
+- Already recorded unordered claim pairs are omitted, and a changed research
+  run invalidates the provider result before it can be displayed.
+
+### Safety
+
+- Candidate generation runs only after the user selects `Suggest
+  contradictions`. It receives no conversation history, tools, or instruction
+  authority from research data and performs no persistence.
+- Hypatia still does not decide truth, rewrite claims, select evidence from
+  model output, create a relationship automatically, or bypass the existing
+  user-authored note, preview, confirmation, and final revalidation boundary.
+
+### Verification
+
+- The package-aware full local suite contains 1,420 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass across 331 source files.
+- The focused suite was also exercised against local Ollama `qwen3:4b`; one
+  ephemeral contradictory pair returned in about four seconds without changing
+  project data.
+
 ## [0.3.77] - 2026-08-21
 
 ### Added

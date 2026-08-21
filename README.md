@@ -153,6 +153,10 @@ To create the world's most capable personal AI research companion.
   evidence before confirmation; the append-only record keeps the claim IDs,
   derived evidence IDs, and the user's own note. Reversed duplicate pairs are
   rejected, and Hypatia performs no automatic detection or truth decision
+- An explicitly requested, read-only contradiction-candidate review over
+  current claims. The configured LLM can suggest up to ten pairs, while Hypatia
+  derives exact claim/evidence references itself, omits already recorded pairs,
+  labels the rationale as untrusted, and records nothing automatically
 - A read-only manual comparison preview for two to five explicitly selected
   sources accepted into the same run. It preserves selection order and shows
   provenance, user-selected evidence, and current user-authored assessments
@@ -297,6 +301,12 @@ persisted claims and their exact combined evidence, shows a no-write preview,
 asks for confirmation, and revalidates before atomic append. The relationship
 is symmetric for duplicate detection, remains readable after restart, and does
 not change either claim or decide which one is true.
+`Suggest contradictions` is a separate optional read-only action. It sends only
+the selected run's bounded current claims to the configured LLM, with no chat
+history or tools, then displays possible pairs and exact persisted evidence IDs.
+Suggestions are not facts or saved relationships. To record one, the user must
+still enter the two IDs and their own explanation through the existing preview
+and confirmation flow.
 `Compare sources` accepts two to five comma-separated document IDs from the
 selected research run. It shows the sources in the entered order with persisted
 provenance, explicitly recorded evidence, and only current user-authored

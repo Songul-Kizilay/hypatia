@@ -52,8 +52,20 @@ from memory.NoOpLearnedMemoryCandidateExtractor import (
 from memory.SemanticMemoryIndexRuntime import SemanticMemoryIndexRuntime
 from memory.SemanticMemoryMatch import SemanticMemoryMatch
 from memory.SessionMemoryPolicy import SessionMemoryPolicy
+from research.ResearchClaimContradictionCandidate import (
+    ResearchClaimContradictionCandidate,
+)
+from research.ResearchClaimContradictionProposalPreview import (
+    ResearchClaimContradictionProposalPreview,
+)
+from research.ResearchClaimContradictionProposalProvider import (
+    ResearchClaimContradictionProposalError,
+    ResearchClaimContradictionProposalProvider,
+)
+from research.ResearchClaimRecord import ResearchClaimRecord
 from research.ResearchEvidenceIntegrityAuditor import ResearchEvidenceIntegrityAuditor
 from research.ResearchEvidenceIntegrityStatus import ResearchEvidenceIntegrityStatus
+from research.ResearchRun import ResearchRun
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSourceCandidate import ResearchSourceCandidate
@@ -79,6 +91,8 @@ if TYPE_CHECKING:
 
 LLM_CONVERSATION_HISTORY_MAX_TURNS = 8
 KNOWLEDGE_CONTEXT_MAX_RESULTS = 3
+RESEARCH_CLAIM_CONTRADICTION_PROPOSAL_LIMIT = 10
+RESEARCH_CLAIM_CONTRADICTION_PROPOSAL_MAX_CLAIMS = 50
 
 
 class CognitiveEngine:
@@ -105,6 +119,9 @@ class CognitiveEngine:
         research_run_manager: ResearchRunManager | None = None,
         research_source_discovery_provider: (
             ResearchSourceDiscoveryProvider | None
+        ) = None,
+        research_claim_contradiction_proposal_provider: (
+            ResearchClaimContradictionProposalProvider | None
         ) = None,
         research_source_content_store: ResearchSourceContentStore | None = None,
         research_source_content_restoration_status: (
@@ -154,6 +171,9 @@ class CognitiveEngine:
         self._research_source_fetcher = research_source_fetcher
         self._research_run_manager = research_run_manager
         self._research_source_discovery_provider = research_source_discovery_provider
+        self._research_claim_contradiction_proposal_provider = (
+            research_claim_contradiction_proposal_provider
+        )
         self._research_source_content_store = research_source_content_store
         self._research_source_content_restoration_status = (
             research_source_content_restoration_status
@@ -225,6 +245,9 @@ class CognitiveEngine:
 
         if self._is_research_claim_contradiction_preview_request(request):
             return self._process_research_claim_contradiction_preview(request)
+
+        if self._is_research_claim_contradiction_proposal_request(request):
+            return self._process_research_claim_contradiction_proposal(request)
 
         if self._is_research_claim_contradiction_write_preview_request(request):
             return self._process_research_claim_contradiction_write_preview(request)
@@ -505,6 +528,12 @@ class CognitiveEngine:
     ) -> bool:
         """Recognize one explicit read-only claim-contradiction request."""
         return request.metadata.get("intent") == "research_claim_contradiction_preview"
+
+    @staticmethod
+    def _is_research_claim_contradiction_proposal_request(
+        request: BrainRequest,
+    ) -> bool:
+        return request.metadata.get("intent") == "research_claim_contradiction_proposal"
 
     @staticmethod
     def _is_research_claim_contradiction_write_preview_request(
@@ -963,6 +992,174 @@ class CognitiveEngine:
             request,
             preview,
         )
+
+    def _process_research_claim_contradiction_proposal(
+        self,
+        request: BrainRequest,
+    ) -> BrainResponse:
+        """Request bounded review candidates without changing research state."""
+        failure = self._response_composer.research_claim_contradiction_proposal_failure
+        run_id = request.metadata.get("research_run_id")
+        if not isinstance(run_id, str) or not run_id.strip():
+            return failure(request, "A research run ID is required.")
+        if self._research_run_manager is None:
+            return failure(request, "Research run persistence is unavailable.")
+        try:
+            run = self._research_run_manager.get(run_id.strip())
+        except ResearchError:
+            return failure(request, "Research run was not found.")
+
+        current_claims = self._current_research_claims(run.claims)
+        provider = self._research_claim_contradiction_proposal_provider
+        if len(current_claims) < 2:
+            preview = ResearchClaimContradictionProposalPreview(
+                run_id=run.run_id,
+                question=run.question,
+                run_status=run.status,
+                snapshot_updated_at=run.updated_at,
+                provider_name="not_required",
+                claims=current_claims,
+                candidates=(),
+                reason="At least two current claims are required for suggestions.",
+            )
+            return (
+                self._response_composer.research_claim_contradiction_proposal_success(
+                    request,
+                    preview,
+                )
+            )
+        if len(current_claims) > RESEARCH_CLAIM_CONTRADICTION_PROPOSAL_MAX_CLAIMS:
+            return failure(
+                request,
+                "Research claim contradiction suggestions support at most 50 "
+                "current claims per run.",
+            )
+        if provider is None:
+            return failure(
+                request,
+                "Research claim contradiction suggestions are unavailable.",
+            )
+        if self._request_cancelled(request):
+            return failure(
+                request, "Research claim contradiction suggestion cancelled."
+            )
+        try:
+            provider_name = provider.provider_name
+            if not isinstance(provider_name, str) or not provider_name.strip():
+                raise ResearchClaimContradictionProposalError(
+                    "Research contradiction proposal provider identity is invalid."
+                )
+            proposed_candidates = provider.propose(
+                run.question,
+                current_claims,
+                limit=RESEARCH_CLAIM_CONTRADICTION_PROPOSAL_LIMIT,
+            )
+            if self._request_cancelled(request):
+                return failure(
+                    request,
+                    "Research claim contradiction suggestion cancelled.",
+                )
+            candidates = self._validate_research_claim_contradiction_candidates(
+                run,
+                current_claims,
+                proposed_candidates,
+            )
+            latest_run = self._research_run_manager.get(run.run_id)
+            if latest_run != run:
+                return failure(
+                    request,
+                    (
+                        "Research run changed while contradiction suggestions "
+                        "were generated."
+                    ),
+                )
+            preview = ResearchClaimContradictionProposalPreview(
+                run_id=run.run_id,
+                question=run.question,
+                run_status=run.status,
+                snapshot_updated_at=run.updated_at,
+                provider_name=provider_name,
+                claims=current_claims,
+                candidates=tuple(candidates),
+                reason=(
+                    f"{len(candidates)} possible contradiction candidate"
+                    f"{'s' if len(candidates) != 1 else ''} require manual review."
+                    if candidates
+                    else "No new possible contradiction candidates were proposed."
+                ),
+            )
+        except ResearchClaimContradictionProposalError, ResearchError:
+            return failure(
+                request,
+                "Research claim contradiction suggestions could not be generated.",
+            )
+        return self._response_composer.research_claim_contradiction_proposal_success(
+            request,
+            preview,
+        )
+
+    @staticmethod
+    def _current_research_claims(
+        claims: tuple[ResearchClaimRecord, ...],
+    ) -> tuple[ResearchClaimRecord, ...]:
+        superseded_ids = {
+            claim.supersedes_claim_id
+            for claim in claims
+            if claim.supersedes_claim_id is not None
+        }
+        return tuple(claim for claim in claims if claim.claim_id not in superseded_ids)
+
+    @staticmethod
+    def _validate_research_claim_contradiction_candidates(
+        run: ResearchRun,
+        claims: tuple[ResearchClaimRecord, ...],
+        candidates: object,
+    ) -> list[ResearchClaimContradictionCandidate]:
+        if (
+            not isinstance(candidates, list)
+            or len(candidates) > RESEARCH_CLAIM_CONTRADICTION_PROPOSAL_LIMIT
+            or not all(
+                isinstance(candidate, ResearchClaimContradictionCandidate)
+                for candidate in candidates
+            )
+        ):
+            raise ResearchError(
+                "Research claim contradiction provider returned invalid candidates."
+            )
+        claims_by_id = {claim.claim_id: claim for claim in claims}
+        existing_pairs = {
+            frozenset(contradiction.claim_ids)
+            for contradiction in run.claim_contradictions
+        }
+        seen_pairs: set[frozenset[str]] = set()
+        accepted: list[ResearchClaimContradictionCandidate] = []
+        for candidate in candidates:
+            if any(claim_id not in claims_by_id for claim_id in candidate.claim_ids):
+                raise ResearchError(
+                    "Research claim contradiction candidate references an "
+                    "invalid claim."
+                )
+            expected_evidence_ids = tuple(
+                dict.fromkeys(
+                    evidence_id
+                    for claim_id in candidate.claim_ids
+                    for evidence_id in claims_by_id[claim_id].evidence_ids
+                )
+            )
+            pair_key = frozenset(candidate.claim_ids)
+            if candidate.evidence_ids != expected_evidence_ids:
+                raise ResearchError(
+                    "Research claim contradiction candidate provenance is invalid."
+                )
+            if pair_key in existing_pairs:
+                continue
+            if pair_key in seen_pairs:
+                raise ResearchError(
+                    "Research claim contradiction candidate pair is duplicated."
+                )
+            seen_pairs.add(pair_key)
+            accepted.append(candidate)
+        return accepted
 
     def _process_research_claim_contradiction_write_preview(
         self,

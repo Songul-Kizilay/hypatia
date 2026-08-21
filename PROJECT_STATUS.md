@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.77 (Genesis)`
+`v0.3.78 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.77`** is the current executable package and GitHub
+- **Runtime release `v0.3.78`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -179,6 +179,12 @@ with optional OpenAI-compatible LLM conversation support.
   while Hypatia performs no automatic contradiction detection, claim or
   evidence selection, truth decision, claim rewrite, provider call, or change
   to external source instruction authority.
+- A collecting or terminal run can explicitly request a read-only contradiction
+  candidate review across at most 50 current, non-superseded claims. The
+  configured LLM receives no conversation history or tools and returns at most
+  10 schema-constrained pairs. Hypatia derives evidence only from the exact
+  persisted claims, omits already recorded unordered pairs, revalidates the
+  complete run snapshot, labels rationale as untrusted, and persists nothing.
 - A separate manual comparison preview accepts an ordered list of two to five
   unique accepted-source document IDs from one exact run. For each source it
   renders persisted provenance, only explicitly recorded evidence, and only
@@ -422,7 +428,8 @@ with optional OpenAI-compatible LLM conversation support.
 - General web discovery, automatic or unattended candidate acceptance,
   multi-source research
   planning/synthesis,
-  automatic contradiction detection, evidence ranking, automatic RAG augmentation, or
+  unattended/background contradiction review, automatic contradiction
+  persistence or truth decisions, evidence ranking, automatic RAG augmentation, or
   cross-document semantic relation extraction.
 - Agent execution, tool gateway, browser/OS control, voice, vision, robotics,
   and smart-home integrations.
@@ -443,7 +450,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,403 automated tests pass through package-aware discovery.
+- 1,420 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -468,10 +475,17 @@ instance completed a Turkish greeting request through Hypatia's
 OpenAI-compatible local chat path. Temporary memory/session files were used,
 so this check did not alter the project's persisted data.
 
+### Live local structured-review check
+
+On 21 August 2026, the v0.3.78 read-only contradiction proposal adapter was
+exercised against local Ollama `qwen3:4b`. A schema-constrained request with
+reasoning disabled returned one pair with exact code-derived evidence in about
+four seconds. The ephemeral records were not stored and project data was not
+changed.
+
 ## Next Milestone
 
-Add a read-only, explicitly requested contradiction-candidate proposal
-boundary. Every candidate must cite exact persisted claim and evidence IDs,
-remain separate from the manual recording flow, and never rewrite a claim,
-decide truth, record a relationship automatically, or weaken the fixed
-no-instruction-authority boundary for external source text.
+Add an explicit candidate-selection handoff that copies exactly one displayed
+pair's two claim IDs into the existing manual contradiction form. It must not
+generate the user's note, treat rationale as truth, bypass preview or
+confirmation, record automatically, or weaken final runtime revalidation.
