@@ -2,6 +2,33 @@
 
 All notable project changes are recorded here.
 
+## [0.3.61] - 2026-08-21
+
+### Changed
+
+- The schema-v1 general memory snapshot now accepts at most 20,000 ordered
+  records, 1,024 characters per memory ID, 1,000,000 characters per content
+  value, and 64 MiB of complete UTF-8 JSON.
+- Snapshot-wide metadata is capped at 100,000 top-level entries and 8 MiB of
+  compact UTF-8 JSON. Tags are capped at 100,000 total values and 256
+  characters per value.
+- Reads consume at most one byte beyond the physical limit before decoding;
+  atomic writes count exact UTF-8 bytes before publication.
+
+### Safety
+
+- Oversized collections and fields are rejected before record parsing or
+  serialization, boolean schema values are not coerced to schema v1, and
+  recursive or non-serializable metadata fails before a temporary write.
+- Invalid save candidates, duplicate IDs, timezone-naive timestamps, failed
+  replacements, and oversized output preserve the previous memory snapshot and
+  clean partial temporary files.
+
+### Verification
+
+- The package-aware full local suite contains 1,287 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass across 311 source files.
+
 ## [0.3.60] - 2026-08-21
 
 ### Changed

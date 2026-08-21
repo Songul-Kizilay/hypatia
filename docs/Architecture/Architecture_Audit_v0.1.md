@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.60` in the current release candidate) are the
+- **Runtime releases** (`v0.3.61` in the current release candidate) are the
   executable package and GitHub release line. They are the source-backed
   implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
@@ -308,7 +308,7 @@ Not implemented:
 
 The current local verification baseline is:
 
-- package-aware `python -m unittest`: 1,277 tests passed. Explicit `tests.*`
+- package-aware `python -m unittest`: 1,287 tests passed. Explicit `tests.*`
   module names ensure nested test directories are included without shadowing
   source packages.
 - `python -m black --check src tests`: passed.
@@ -351,9 +351,28 @@ memory/session files and leaving project data unchanged.
 4. Existing deterministic keyword selection must remain an available fallback
    until semantic retrieval has independently verified relevance, ties, bounds,
    and failure behavior.
-5. The schema-v1 general memory snapshot has no physical-file, record-count,
-   memory-ID/content, or metadata/tag aggregate bounds. Those limits are
-   required before long-lived learned memory is allowed to grow substantially.
+5. The optional schema-v1 semantic embedding cache has no physical-file,
+   entry-count, memory-ID/provider-key, or embedding-vector bounds. Those limits
+   are required before opt-in semantic caching is used for long-lived memory.
+
+## Completed Increment: General Memory Snapshot Bounds
+
+The schema-v1 general memory snapshot now has explicit resource and save-time
+integrity limits without changing its persisted shape.
+
+- Complete UTF-8 snapshots are capped at 64 MiB; reads consume at most one
+  detection byte beyond that limit from the opened descriptor before decoding.
+- Snapshots are capped at 20,000 ordered records, 1,024 characters per memory
+  ID, and 1,000,000 characters per content value.
+- Snapshot-wide metadata is capped at 100,000 top-level entries and 8 MiB of
+  compact UTF-8 JSON without retaining a serialized copy. Tags are capped at
+  100,000 total values and 256 characters per value.
+- Record counts and ID/content bounds are enforced before parsing or
+  serialization. Recursive, non-serializable, or excessive metadata and tags
+  fail before a temporary write.
+- Atomic writes count exact UTF-8 bytes, including the final newline. Invalid,
+  oversized, or failed writes preserve the prior snapshot and clean temporary
+  files; order, duplicate-ID rejection, and timezone-aware dates remain intact.
 
 ## Completed Increment: Session Registry Snapshot Bounds
 

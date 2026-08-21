@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.60 (Genesis)`
+`v0.3.61 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.60`** is the current executable package and GitHub
+- **Runtime release `v0.3.61`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -366,7 +366,8 @@ so this check did not alter the project's persisted data.
 
 ## Next Milestone
 
-Define physical-file, record-count, memory-ID/content, and metadata/tag
-aggregate bounds for the schema-v1 general memory snapshot. Reads must reject
+Define physical-file, entry-count, memory-ID/provider-key, and embedding-vector
+bounds for the optional schema-v1 semantic embedding cache. Reads must reject
 oversized input before decoding, and writes must count exact UTF-8 bytes before
-atomic publication while preserving record order and duplicate-ID rejection.
+atomic publication while preserving provider isolation and deterministic entry
+ordering.
