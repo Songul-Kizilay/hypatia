@@ -6,6 +6,9 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from core.Exceptions import ResearchError
+from research.ResearchClaimContradictionRecord import (
+    ResearchClaimContradictionRecord,
+)
 from research.ResearchClaimRecord import ResearchClaimRecord
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchFailureRecord import ResearchFailureRecord
@@ -34,6 +37,7 @@ class ResearchRun:
     assessments: tuple[ResearchSourceAssessmentRecord, ...] = ()
     comparison_notes: tuple[ResearchSourceComparisonNoteRecord, ...] = ()
     claims: tuple[ResearchClaimRecord, ...] = ()
+    claim_contradictions: tuple[ResearchClaimContradictionRecord, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.run_id, str) or not self.run_id.strip():
@@ -236,6 +240,51 @@ class ResearchRun:
                     )
                 superseded_claim_ids.add(superseded_id)
             claims_by_id[claim_record.claim_id] = claim_record
+        if not isinstance(self.claim_contradictions, tuple):
+            raise ResearchError(
+                "Research run claim contradictions must be an immutable tuple."
+            )
+        if not all(
+            isinstance(record, ResearchClaimContradictionRecord)
+            for record in self.claim_contradictions
+        ):
+            raise ResearchError(
+                "Research run contains an invalid claim contradiction record."
+            )
+        contradiction_ids = [
+            record.contradiction_id for record in self.claim_contradictions
+        ]
+        if len(contradiction_ids) != len(set(contradiction_ids)):
+            raise ResearchError(
+                "Research run contains duplicate claim contradiction IDs."
+            )
+        contradiction_pairs: set[frozenset[str]] = set()
+        for contradiction in self.claim_contradictions:
+            try:
+                related_claims = tuple(
+                    claims_by_id[claim_id] for claim_id in contradiction.claim_ids
+                )
+            except KeyError as error:
+                raise ResearchError(
+                    "Research claim contradictions must reference persisted claims."
+                ) from error
+            expected_evidence_ids = tuple(
+                dict.fromkeys(
+                    evidence_id
+                    for claim in related_claims
+                    for evidence_id in claim.evidence_ids
+                )
+            )
+            if contradiction.evidence_ids != expected_evidence_ids:
+                raise ResearchError(
+                    "Research claim contradiction evidence must match its claims."
+                )
+            pair = frozenset(contradiction.claim_ids)
+            if pair in contradiction_pairs:
+                raise ResearchError(
+                    "Research run contains a duplicate claim contradiction pair."
+                )
+            contradiction_pairs.add(pair)
         for value, field_name in (
             (self.created_at, "Research run creation time"),
             (self.updated_at, "Research run update time"),
@@ -257,6 +306,14 @@ class ResearchRun:
         ):
             raise ResearchError(
                 "Research claim time must stay within its run lifecycle."
+            )
+        if any(
+            contradiction.recorded_at < self.created_at
+            or contradiction.recorded_at > self.updated_at
+            for contradiction in self.claim_contradictions
+        ):
+            raise ResearchError(
+                "Research claim contradiction time must stay within its run lifecycle."
             )
         object.__setattr__(self, "run_id", self.run_id.strip())
         object.__setattr__(self, "question", self.question.strip())

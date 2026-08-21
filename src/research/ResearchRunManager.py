@@ -16,6 +16,16 @@ from uuid import uuid4
 from core.Exceptions import ResearchError
 from knowledge.Chunk import Chunk
 from research.ResearchClaimConfidence import ResearchClaimConfidence
+from research.ResearchClaimContradictionPreview import (
+    ResearchClaimContradictionPreview,
+)
+from research.ResearchClaimContradictionRecord import (
+    MAX_CLAIM_CONTRADICTION_NOTE_CHARACTERS,
+    ResearchClaimContradictionRecord,
+)
+from research.ResearchClaimContradictionWritePreview import (
+    ResearchClaimContradictionWritePreview,
+)
 from research.ResearchClaimPreview import ResearchClaimPreview
 from research.ResearchClaimRecord import (
     MAX_RESEARCH_CLAIM_CHARACTERS,
@@ -96,6 +106,7 @@ class ResearchRunManager:
         assessment_id_factory: Callable[[], str] | None = None,
         comparison_note_id_factory: Callable[[], str] | None = None,
         claim_id_factory: Callable[[], str] | None = None,
+        claim_contradiction_id_factory: Callable[[], str] | None = None,
     ) -> None:
         self._store = store
         self._clock = clock or (lambda: datetime.now(UTC))
@@ -107,6 +118,9 @@ class ResearchRunManager:
             lambda: str(uuid4())
         )
         self._claim_id_factory = claim_id_factory or (lambda: str(uuid4()))
+        self._claim_contradiction_id_factory = claim_contradiction_id_factory or (
+            lambda: str(uuid4())
+        )
         self._runs: tuple[ResearchRun, ...] = ()
         self._lock = RLock()
 
@@ -135,6 +149,7 @@ class ResearchRunManager:
                 assessments=(),
                 comparison_notes=(),
                 claims=(),
+                claim_contradictions=(),
             )
             candidate = (*self._runs, run)
             self._persist(candidate)
@@ -173,6 +188,29 @@ class ResearchRunManager:
                     f"{'s' if count != 1 else ''}."
                     if count
                     else "Run has no user-authored evidence-linked claims."
+                ),
+            )
+
+    def preview_claim_contradictions(
+        self,
+        run_id: str,
+    ) -> ResearchClaimContradictionPreview:
+        """Return persisted user-reviewed contradiction history without inference."""
+        normalized_id = self._normalize_run_id(run_id)
+        with self._lock:
+            _, run = self._find_with_index(normalized_id)
+            count = len(run.claim_contradictions)
+            return ResearchClaimContradictionPreview(
+                run_id=run.run_id,
+                question=run.question,
+                run_status=run.status,
+                claims=run.claims,
+                contradictions=run.claim_contradictions,
+                reason=(
+                    f"Run has {count} user-reviewed claim contradiction"
+                    f"{'s' if count != 1 else ''}."
+                    if count
+                    else "Run has no user-reviewed claim contradictions."
                 ),
             )
 
@@ -325,6 +363,7 @@ class ResearchRunManager:
                 assessments=run.assessments,
                 comparison_notes=run.comparison_notes,
                 claims=run.claims,
+                claim_contradictions=run.claim_contradictions,
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -356,6 +395,7 @@ class ResearchRunManager:
                 assessments=run.assessments,
                 comparison_notes=run.comparison_notes,
                 claims=run.claims,
+                claim_contradictions=run.claim_contradictions,
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -399,6 +439,7 @@ class ResearchRunManager:
                 assessments=run.assessments,
                 comparison_notes=run.comparison_notes,
                 claims=run.claims,
+                claim_contradictions=run.claim_contradictions,
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -456,6 +497,7 @@ class ResearchRunManager:
                 assessments=run.assessments,
                 comparison_notes=run.comparison_notes,
                 claims=run.claims,
+                claim_contradictions=run.claim_contradictions,
             )
             candidate_runs = list(self._runs)
             candidate_runs[index] = updated
@@ -831,6 +873,97 @@ class ResearchRunManager:
                 assessments=run.assessments,
                 comparison_notes=run.comparison_notes,
                 claims=(*run.claims, claim),
+                claim_contradictions=run.claim_contradictions,
+            )
+            candidate = list(self._runs)
+            candidate[index] = updated
+            candidate_tuple = tuple(candidate)
+            self._persist(candidate_tuple)
+            self._runs = candidate_tuple
+        return updated
+
+    def preview_claim_contradiction_write(
+        self,
+        run_id: str,
+        claim_ids: Sequence[str],
+        note: str,
+    ) -> ResearchClaimContradictionWritePreview:
+        """Validate one authored contradiction relationship without mutation."""
+        normalized_run_id = self._normalize_run_id(run_id)
+        normalized_claim_ids = self._normalize_claim_contradiction_claim_ids(claim_ids)
+        normalized_note = self._normalize_claim_contradiction_note(note)
+        with self._lock:
+            _, run = self._find_with_index(normalized_run_id)
+            claims, evidence = self._claim_contradiction_references(
+                run,
+                normalized_claim_ids,
+            )
+            duplicate = self._claim_contradiction_exists(
+                run,
+                normalized_claim_ids,
+            )
+            allowed = not run.status.terminal and not duplicate
+            if run.status.terminal:
+                reason = "A closed research run cannot accept claim contradictions."
+            elif duplicate:
+                reason = "A contradiction relationship already exists for these claims."
+            else:
+                reason = (
+                    "Research claim contradiction can be recorded after confirmation."
+                )
+            return ResearchClaimContradictionWritePreview(
+                run_id=run.run_id,
+                run_status=run.status,
+                claims=claims,
+                evidence=evidence,
+                note=normalized_note,
+                allowed=allowed,
+                reason=reason,
+            )
+
+    def record_claim_contradiction(
+        self,
+        run_id: str,
+        claim_ids: Sequence[str],
+        note: str,
+    ) -> ResearchRun:
+        """Revalidate and append one separately confirmed claim contradiction."""
+        normalized_run_id = self._normalize_run_id(run_id)
+        normalized_claim_ids = self._normalize_claim_contradiction_claim_ids(claim_ids)
+        normalized_note = self._normalize_claim_contradiction_note(note)
+        with self._lock:
+            index, run = self._find_with_index(normalized_run_id)
+            claims, evidence = self._claim_contradiction_references(
+                run,
+                normalized_claim_ids,
+            )
+            if self._claim_contradiction_exists(run, normalized_claim_ids):
+                raise ResearchError(
+                    "A contradiction relationship already exists for these claims."
+                )
+            self._require_collecting(run)
+            now = self._now()
+            contradiction = ResearchClaimContradictionRecord(
+                contradiction_id=self._new_claim_contradiction_id(),
+                claim_ids=(claims[0].claim_id, claims[1].claim_id),
+                evidence_ids=tuple(record.evidence_id for record in evidence),
+                note=normalized_note,
+                recorded_at=now,
+            )
+            updated = ResearchRun(
+                run_id=run.run_id,
+                question=run.question,
+                status=run.status,
+                sources=run.sources,
+                failures=run.failures,
+                created_at=run.created_at,
+                updated_at=now,
+                evidence=run.evidence,
+                discoveries=run.discoveries,
+                assessments=run.assessments,
+                comparison_notes=run.comparison_notes,
+                claims=run.claims,
+                claim_contradictions=(*run.claim_contradictions, contradiction),
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -901,6 +1034,7 @@ class ResearchRunManager:
                 assessments=(*run.assessments, assessment),
                 comparison_notes=run.comparison_notes,
                 claims=run.claims,
+                claim_contradictions=run.claim_contradictions,
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -1006,6 +1140,7 @@ class ResearchRunManager:
                 assessments=run.assessments,
                 comparison_notes=(*run.comparison_notes, note),
                 claims=run.claims,
+                claim_contradictions=run.claim_contradictions,
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -1042,6 +1177,7 @@ class ResearchRunManager:
                 assessments=run.assessments,
                 comparison_notes=run.comparison_notes,
                 claims=run.claims,
+                claim_contradictions=run.claim_contradictions,
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -1177,6 +1313,18 @@ class ResearchRunManager:
         ):
             raise ResearchError("Research claim ID already exists.")
         return claim_id
+
+    def _new_claim_contradiction_id(self) -> str:
+        contradiction_id = self._normalize_claim_contradiction_id(
+            self._claim_contradiction_id_factory()
+        )
+        if any(
+            record.contradiction_id == contradiction_id
+            for run in self._runs
+            for record in run.claim_contradictions
+        ):
+            raise ResearchError("Research claim contradiction ID already exists.")
+        return contradiction_id
 
     @staticmethod
     def _comparison_note_references(
@@ -1317,6 +1465,48 @@ class ResearchRunManager:
                 "Research claim evidence must belong to accepted sources."
             ) from error
         return sources, evidence
+
+    @staticmethod
+    def _claim_contradiction_references(
+        run: ResearchRun,
+        claim_ids: tuple[str, str],
+    ) -> tuple[
+        tuple[ResearchClaimRecord, ResearchClaimRecord],
+        tuple[ResearchEvidenceRecord, ...],
+    ]:
+        claims_by_id = {record.claim_id: record for record in run.claims}
+        try:
+            claims = (claims_by_id[claim_ids[0]], claims_by_id[claim_ids[1]])
+        except KeyError as error:
+            raise ResearchError(
+                "Research claim contradiction requires claims from this run."
+            ) from error
+        expected_evidence_ids = tuple(
+            dict.fromkeys(
+                evidence_id for claim in claims for evidence_id in claim.evidence_ids
+            )
+        )
+        evidence_by_id = {record.evidence_id: record for record in run.evidence}
+        try:
+            evidence = tuple(
+                evidence_by_id[evidence_id] for evidence_id in expected_evidence_ids
+            )
+        except KeyError as error:
+            raise ResearchError(
+                "Research claim contradiction evidence was not found in this run."
+            ) from error
+        return claims, evidence
+
+    @staticmethod
+    def _claim_contradiction_exists(
+        run: ResearchRun,
+        claim_ids: tuple[str, str],
+    ) -> bool:
+        selected_pair = frozenset(claim_ids)
+        return any(
+            frozenset(record.claim_ids) == selected_pair
+            for record in run.claim_contradictions
+        )
 
     @staticmethod
     def _superseded_claim_for_write(
@@ -1549,6 +1739,46 @@ class ResearchRunManager:
         normalized = claim_id.strip()
         if len(normalized) > 200:
             raise ResearchError("Research claim ID is too long.")
+        return normalized
+
+    @staticmethod
+    def _normalize_claim_contradiction_id(contradiction_id: str) -> str:
+        if not isinstance(contradiction_id, str) or not contradiction_id.strip():
+            raise ResearchError("Research claim contradiction ID cannot be empty.")
+        normalized = contradiction_id.strip()
+        if len(normalized) > 200:
+            raise ResearchError("Research claim contradiction ID is too long.")
+        return normalized
+
+    @staticmethod
+    def _normalize_claim_contradiction_claim_ids(
+        claim_ids: Sequence[str],
+    ) -> tuple[str, str]:
+        if isinstance(claim_ids, (str, bytes)) or not isinstance(
+            claim_ids,
+            Sequence,
+        ):
+            raise ResearchError("Research claim contradiction IDs must be a list.")
+        normalized = tuple(
+            ResearchRunManager._normalize_claim_id(value) for value in claim_ids
+        )
+        if len(normalized) != 2:
+            raise ResearchError(
+                "Research claim contradiction requires exactly two claim IDs."
+            )
+        if normalized[0] == normalized[1]:
+            raise ResearchError(
+                "Research claim contradiction requires two distinct claims."
+            )
+        return normalized[0], normalized[1]
+
+    @staticmethod
+    def _normalize_claim_contradiction_note(note: str) -> str:
+        if not isinstance(note, str) or not note.strip():
+            raise ResearchError("Research claim contradiction note cannot be empty.")
+        normalized = note.strip()
+        if len(normalized) > MAX_CLAIM_CONTRADICTION_NOTE_CHARACTERS:
+            raise ResearchError("Research claim contradiction note is too long.")
         return normalized
 
     @staticmethod

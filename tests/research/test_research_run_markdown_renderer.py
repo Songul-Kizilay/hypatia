@@ -6,6 +6,9 @@ import unittest
 from datetime import UTC, datetime, timedelta
 
 from research.ResearchClaimConfidence import ResearchClaimConfidence
+from research.ResearchClaimContradictionRecord import (
+    ResearchClaimContradictionRecord,
+)
 from research.ResearchClaimRecord import ResearchClaimRecord
 from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
@@ -48,6 +51,10 @@ class ResearchRunMarkdownRendererTests(unittest.TestCase):
         self.assertIn("- **Epistemic state:** contradicted", first)
         self.assertIn("- **Authored confidence:** high", first)
         self.assertIn("- **Supersedes:** claim-1", first)
+        self.assertIn("## User-reviewed Claim Contradictions", first)
+        self.assertIn("- **Contradiction ID:** contradiction-1", first)
+        self.assertIn("- **Claim IDs:** claim-1, claim-2", first)
+        self.assertIn(r"> \# contradiction note", first)
         self.assertIn("- **Note ID:** note-1", first)
         self.assertIn("> \\# comparison heading", first)
         self.assertNotIn("<script>", first)
@@ -75,6 +82,7 @@ class ResearchRunMarkdownRendererTests(unittest.TestCase):
         self.assertIn("_No accepted sources._", markdown)
         self.assertIn("_No comparison notes recorded._", markdown)
         self.assertIn("_No claims recorded._", markdown)
+        self.assertIn("_No claim contradictions recorded._", markdown)
         self.assertIn("_No failures recorded._", markdown)
 
     @staticmethod
@@ -180,6 +188,13 @@ class ResearchRunMarkdownRendererTests(unittest.TestCase):
                 supersedes_claim_id="claim-1",
             ),
         )
+        contradiction = ResearchClaimContradictionRecord(
+            contradiction_id="contradiction-1",
+            claim_ids=("claim-1", "claim-2"),
+            evidence_ids=("evidence-1", "evidence-2"),
+            note="# contradiction note",
+            recorded_at=started + timedelta(minutes=10),
+        )
         return ResearchRun(
             run_id="run-1",
             question="# user heading\nsecond line",
@@ -192,6 +207,7 @@ class ResearchRunMarkdownRendererTests(unittest.TestCase):
             assessments=(assessment_one, assessment_correction, assessment_two),
             comparison_notes=(note,),
             claims=claims,
+            claim_contradictions=(contradiction,),
         )
 
 

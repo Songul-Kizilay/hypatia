@@ -410,6 +410,100 @@ class DesktopController:
             metadata["research_claim_supersedes_id"] = normalized_superseded_id
         return metadata
 
+    def preview_research_claim_contradictions(
+        self,
+        research_run_id: str,
+    ) -> BrainResponse:
+        """Show persisted user-reviewed claim contradictions for one run."""
+        normalized_run_id = research_run_id.strip()
+        if not normalized_run_id:
+            raise ValueError("A research run ID cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="View user-reviewed research claim contradictions",
+                source="desktop",
+                metadata={
+                    "intent": "research_claim_contradiction_preview",
+                    "research_run_id": normalized_run_id,
+                },
+            )
+        )
+
+    def preview_research_claim_contradiction_write(
+        self,
+        research_run_id: str,
+        claim_ids: str,
+        note: str,
+    ) -> BrainResponse:
+        """Preview one exact user-authored contradiction relationship."""
+        metadata = self._research_claim_contradiction_metadata(
+            research_run_id,
+            claim_ids,
+            note,
+        )
+        return self._brain.process(
+            BrainRequest(
+                message="Preview user-reviewed research claim contradiction",
+                source="desktop",
+                metadata={
+                    "intent": "research_claim_contradiction_write_preview",
+                    **metadata,
+                },
+            )
+        )
+
+    def record_research_claim_contradiction(
+        self,
+        research_run_id: str,
+        claim_ids: str,
+        note: str,
+    ) -> BrainResponse:
+        """Submit one contradiction only after desktop confirmation."""
+        metadata = self._research_claim_contradiction_metadata(
+            research_run_id,
+            claim_ids,
+            note,
+        )
+        return self._brain.process(
+            BrainRequest(
+                message="Record user-reviewed research claim contradiction",
+                source="desktop",
+                metadata={
+                    "intent": "research_claim_contradiction_record",
+                    **metadata,
+                },
+            )
+        )
+
+    @staticmethod
+    def _research_claim_contradiction_metadata(
+        research_run_id: str,
+        claim_ids: str,
+        note: str,
+    ) -> dict[str, object]:
+        normalized_run_id = research_run_id.strip()
+        normalized_claim_ids = [
+            value.strip() for value in claim_ids.split(",") if value.strip()
+        ]
+        normalized_note = note.strip()
+        if not normalized_run_id:
+            raise ValueError("A research run ID cannot be empty.")
+        if len(normalized_claim_ids) != 2:
+            raise ValueError(
+                "Research claim contradiction requires exactly two claim IDs."
+            )
+        if normalized_claim_ids[0] == normalized_claim_ids[1]:
+            raise ValueError(
+                "Research claim contradiction requires two distinct claims."
+            )
+        if not normalized_note:
+            raise ValueError("Research claim contradiction note cannot be empty.")
+        return {
+            "research_run_id": normalized_run_id,
+            "research_claim_contradiction_claim_ids": normalized_claim_ids,
+            "research_claim_contradiction_note": normalized_note,
+        }
+
     def preview_research_source_assessment(
         self,
         research_run_id: str,

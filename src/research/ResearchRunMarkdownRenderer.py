@@ -39,6 +39,7 @@ def render_research_run_markdown(run: ResearchRun) -> str:
         f"- **Assessments:** {len(run.assessments)}",
         f"- **Comparison notes:** {len(run.comparison_notes)}",
         f"- **Claims:** {len(run.claims)}",
+        f"- **Claim contradictions:** {len(run.claim_contradictions)}",
         f"- **Failures:** {len(run.failures)}",
         "",
         "## Research Question",
@@ -195,6 +196,33 @@ def render_research_run_markdown(run: ResearchRun) -> str:
                 "- **User-authored claim:**",
                 "",
                 *_quote(claim.text),
+                "",
+            )
+        )
+
+    lines.extend(("## User-reviewed Claim Contradictions", ""))
+    if not run.claim_contradictions:
+        lines.extend(("_No claim contradictions recorded._", ""))
+    for contradiction_index, contradiction in enumerate(
+        run.claim_contradictions,
+        start=1,
+    ):
+        lines.extend(
+            (
+                f"### Claim Contradiction {contradiction_index}",
+                "",
+                (
+                    "- **Contradiction ID:** "
+                    f"{_inline(contradiction.contradiction_id)}"
+                ),
+                "- **Claim IDs:** "
+                + ", ".join(_inline(value) for value in contradiction.claim_ids),
+                "- **Evidence IDs:** "
+                + ", ".join(_inline(value) for value in contradiction.evidence_ids),
+                f"- **Recorded:** {contradiction.recorded_at.isoformat()}",
+                "- **User-authored contradiction note:**",
+                "",
+                *_quote(contradiction.note),
                 "",
             )
         )

@@ -11,6 +11,9 @@ from typing import Any, Protocol
 
 from core.Exceptions import ResearchError
 from research.ResearchClaimConfidence import ResearchClaimConfidence
+from research.ResearchClaimContradictionRecord import (
+    ResearchClaimContradictionRecord,
+)
 from research.ResearchClaimRecord import ResearchClaimRecord
 from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
@@ -77,8 +80,8 @@ class _CollectionBudget:
 class JsonFileResearchRunStore:
     """Load and atomically replace a strict versioned research-run document."""
 
-    _SCHEMA_VERSION = 8
-    _SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5, 6, 7, 8}
+    _SCHEMA_VERSION = 9
+    _SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5, 6, 7, 8, 9}
     _DOCUMENT_FIELDS = {"schema_version", "runs"}
     _RUN_FIELDS_V1 = {
         "run_id",
@@ -96,6 +99,7 @@ class JsonFileResearchRunStore:
     _RUN_FIELDS_V6 = _RUN_FIELDS_V5 | {"comparison_notes"}
     _RUN_FIELDS_V7 = _RUN_FIELDS_V6
     _RUN_FIELDS_V8 = _RUN_FIELDS_V7 | {"claims"}
+    _RUN_FIELDS_V9 = _RUN_FIELDS_V8 | {"claim_contradictions"}
     _SOURCE_FIELDS_V1_V6 = {
         "document_id",
         "url",
@@ -146,6 +150,13 @@ class JsonFileResearchRunStore:
         "evidence_ids",
         "recorded_at",
         "supersedes_claim_id",
+    }
+    _CLAIM_CONTRADICTION_FIELDS = {
+        "contradiction_id",
+        "claim_ids",
+        "evidence_ids",
+        "note",
+        "recorded_at",
     }
     _COMPARISON_NOTE_FIELDS = {
         "note_id",
@@ -255,6 +266,7 @@ class JsonFileResearchRunStore:
             6: self._RUN_FIELDS_V6,
             7: self._RUN_FIELDS_V7,
             8: self._RUN_FIELDS_V8,
+            9: self._RUN_FIELDS_V9,
         }[schema_version]
         if not isinstance(value, dict) or set(value) != expected_fields:
             raise ResearchError("Research run store contains an invalid run record.")
@@ -271,6 +283,9 @@ class JsonFileResearchRunStore:
         assessments_data = [] if schema_version < 4 else value["assessments"]
         comparison_notes_data = [] if schema_version < 6 else value["comparison_notes"]
         claims_data = [] if schema_version < 8 else value["claims"]
+        claim_contradictions_data = (
+            [] if schema_version < 9 else value["claim_contradictions"]
+        )
         if (
             not isinstance(sources_data, list)
             or not isinstance(failures_data, list)
@@ -279,6 +294,7 @@ class JsonFileResearchRunStore:
             or not isinstance(assessments_data, list)
             or not isinstance(comparison_notes_data, list)
             or not isinstance(claims_data, list)
+            or not isinstance(claim_contradictions_data, list)
         ):
             raise ResearchError("Research run store contains invalid run collections.")
         for values in (
@@ -289,6 +305,7 @@ class JsonFileResearchRunStore:
             assessments_data,
             comparison_notes_data,
             claims_data,
+            claim_contradictions_data,
         ):
             budget.consume(values)
         return ResearchRun(
@@ -314,6 +331,10 @@ class JsonFileResearchRunStore:
                 for item in comparison_notes_data
             ),
             claims=tuple(self._parse_claim(item, budget) for item in claims_data),
+            claim_contradictions=tuple(
+                self._parse_claim_contradiction(item, budget)
+                for item in claim_contradictions_data
+            ),
         )
 
     def _parse_source(
@@ -518,6 +539,34 @@ class JsonFileResearchRunStore:
             supersedes_claim_id=value["supersedes_claim_id"],
         )
 
+    def _parse_claim_contradiction(
+        self,
+        value: Any,
+        budget: _CollectionBudget,
+    ) -> ResearchClaimContradictionRecord:
+        if (
+            not isinstance(value, dict)
+            or set(value) != self._CLAIM_CONTRADICTION_FIELDS
+        ):
+            raise ResearchError(
+                "Research run store contains an invalid claim contradiction record."
+            )
+        claim_ids = value["claim_ids"]
+        evidence_ids = value["evidence_ids"]
+        if not isinstance(claim_ids, list) or not isinstance(evidence_ids, list):
+            raise ResearchError(
+                "Research run store claim contradiction references must be lists."
+            )
+        budget.consume(claim_ids)
+        budget.consume(evidence_ids)
+        return ResearchClaimContradictionRecord(
+            contradiction_id=value["contradiction_id"],
+            claim_ids=tuple(claim_ids),
+            evidence_ids=tuple(evidence_ids),
+            note=value["note"],
+            recorded_at=self._parse_datetime(value["recorded_at"], "recorded_at"),
+        )
+
     @staticmethod
     def _parse_epistemic_state(value: Any) -> ResearchEpistemicState:
         try:
@@ -647,6 +696,16 @@ class JsonFileResearchRunStore:
                 }
                 for claim in run.claims
             ],
+            "claim_contradictions": [
+                {
+                    "contradiction_id": contradiction.contradiction_id,
+                    "claim_ids": list(contradiction.claim_ids),
+                    "evidence_ids": list(contradiction.evidence_ids),
+                    "note": contradiction.note,
+                    "recorded_at": contradiction.recorded_at.isoformat(),
+                }
+                for contradiction in run.claim_contradictions
+            ],
             "created_at": run.created_at.isoformat(),
             "updated_at": run.updated_at.isoformat(),
         }
@@ -668,6 +727,7 @@ class JsonFileResearchRunStore:
                 run.assessments,
                 run.comparison_notes,
                 run.claims,
+                run.claim_contradictions,
             ):
                 budget.consume_count(len(values))
             for discovery in run.discoveries:
@@ -681,6 +741,9 @@ class JsonFileResearchRunStore:
             for claim in run.claims:
                 budget.consume_count(len(claim.source_document_ids))
                 budget.consume_count(len(claim.evidence_ids))
+            for contradiction in run.claim_contradictions:
+                budget.consume_count(len(contradiction.claim_ids))
+                budget.consume_count(len(contradiction.evidence_ids))
         run_ids = [run.run_id for run in runs]
         if len(run_ids) != len(set(run_ids)):
             raise ResearchError("Research run store contains duplicate run IDs.")
@@ -697,6 +760,15 @@ class JsonFileResearchRunStore:
         claim_ids = [claim.claim_id for run in runs for claim in run.claims]
         if len(claim_ids) != len(set(claim_ids)):
             raise ResearchError("Research run store contains duplicate claim IDs.")
+        contradiction_ids = [
+            contradiction.contradiction_id
+            for run in runs
+            for contradiction in run.claim_contradictions
+        ]
+        if len(contradiction_ids) != len(set(contradiction_ids)):
+            raise ResearchError(
+                "Research run store contains duplicate claim contradiction IDs."
+            )
 
     @staticmethod
     def _remove_temporary_file(path: Path | None) -> None:
