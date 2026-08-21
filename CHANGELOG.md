@@ -2,6 +2,29 @@
 
 All notable project changes are recorded here.
 
+## [0.3.58] - 2026-08-21
+
+### Changed
+
+- The accepted-source content store now reads at most its 40,000,000-byte
+  physical limit plus one detection byte directly from the opened descriptor
+  before JSON decoding.
+- Atomic writes stream JSON through an exact UTF-8 byte counter instead of
+  constructing a second complete serialized snapshot in memory.
+
+### Safety
+
+- The existing schema-v1, 64-record, 32,000,000-content-byte, SHA-256, rollback,
+  and atomic replacement contracts are unchanged.
+- Oversized input is never decoded. Oversized or incomplete temporary output is
+  not published, the previous snapshot is preserved, and partial files are
+  removed.
+
+### Verification
+
+- The package-aware full local suite contains 1,267 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass across 311 source files.
+
 ## [0.3.57] - 2026-08-21
 
 ### Changed

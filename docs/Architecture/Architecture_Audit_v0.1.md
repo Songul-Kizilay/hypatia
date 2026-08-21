@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.57` in the current release candidate) are the
+- **Runtime releases** (`v0.3.58` in the current release candidate) are the
   executable package and GitHub release line. They are the source-backed
   implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
@@ -134,7 +134,10 @@ Persistent state is stored locally as validated JSON snapshots through
 `JsonFileMemoryStore`, `JsonFileSessionStore`,
 `JsonFileKnowledgeRelationStore`, `JsonFileResearchRunStore`, and
 `JsonFileResearchSourceContentStore`. Snapshot writes are atomic. Accepted
-research content is saved after knowledge indexing and before run provenance;
+research content is read through an opened-descriptor 40,000,000-byte bound
+before JSON decoding and written through an exact UTF-8 byte counter without a
+second complete serialized copy. It is saved after knowledge indexing and
+before run provenance;
 failure restores the prior content collection and removes the new unlinked
 knowledge document where possible. Startup validates both snapshots before
 reconstructing at most 20,000 paragraphs in the empty knowledge index. Orphans,
@@ -302,7 +305,7 @@ Not implemented:
 
 The current local verification baseline is:
 
-- package-aware `python -m unittest`: 1,265 tests passed. Explicit `tests.*`
+- package-aware `python -m unittest`: 1,267 tests passed. Explicit `tests.*`
   module names ensure nested test directories are included without shadowing
   source packages.
 - `python -m black --check src tests`: passed.
@@ -345,10 +348,9 @@ memory/session files and leaving project data unchanged.
 4. Existing deterministic keyword selection must remain an available fallback
    until semantic retrieval has independently verified relevance, ties, bounds,
    and failure behavior.
-5. The accepted-source content store checks file size before opening it and
-   builds a second complete serialized snapshot before writing. Its existing
-   limits are safe for current local use, but descriptor-bound reading and
-   bounded output would make the physical limit race-resistant and cheaper.
+5. The explicit knowledge-relation JSON store has no physical-file or relation
+   count bound. Before a substantially larger knowledge graph is supported, it
+   needs bounded pre-decode reading and exact bounded atomic output.
 
 ## Completed Increment: Semantic Retrieval Core
 

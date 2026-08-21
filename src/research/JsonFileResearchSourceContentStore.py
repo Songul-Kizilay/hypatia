@@ -7,10 +7,34 @@ import os
 from datetime import datetime
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Any
+from typing import Any, Protocol
 
 from core.Exceptions import ResearchError
 from research.ResearchSourceContentRecord import ResearchSourceContentRecord
+
+
+class _BinaryWriter(Protocol):
+    def write(self, value: bytes) -> int: ...
+
+
+class _BoundedUtf8Writer:
+    """Write JSON text without exceeding its exact UTF-8 byte budget."""
+
+    def __init__(self, stream: _BinaryWriter, maximum_bytes: int) -> None:
+        self._stream = stream
+        self._maximum_bytes = maximum_bytes
+        self._byte_count = 0
+
+    def write(self, value: str) -> int:
+        encoded = value.encode("utf-8")
+        encoded_size = len(encoded)
+        if self._byte_count + encoded_size > self._maximum_bytes:
+            raise OverflowError("Research source content store byte limit exceeded.")
+        written = self._stream.write(encoded)
+        if written != encoded_size:
+            raise OSError("Research source content temporary write was incomplete.")
+        self._byte_count += encoded_size
+        return len(value)
 
 
 class JsonFileResearchSourceContentStore:
@@ -38,16 +62,20 @@ class JsonFileResearchSourceContentStore:
 
     def load(self) -> list[ResearchSourceContentRecord]:
         """Load a fully validated snapshot, or return empty when absent."""
-        if not self._path.exists():
-            return []
         try:
-            if self._path.stat().st_size > self._MAXIMUM_STORE_FILE_BYTES:
-                raise ResearchError("Research source content store is too large.")
-            with self._path.open(encoding="utf-8") as file:
-                document = json.load(file)
-        except ResearchError:
-            raise
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+            with self._path.open("rb") as file:
+                encoded_document = file.read(self._MAXIMUM_STORE_FILE_BYTES + 1)
+        except FileNotFoundError:
+            return []
+        except OSError as error:
+            raise ResearchError(
+                "Unable to read research source content store."
+            ) from error
+        if len(encoded_document) > self._MAXIMUM_STORE_FILE_BYTES:
+            raise ResearchError("Research source content store is too large.")
+        try:
+            document = json.loads(encoded_document)
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
             raise ResearchError(
                 "Unable to read research source content store."
             ) from error
@@ -60,16 +88,6 @@ class JsonFileResearchSourceContentStore:
             "schema_version": self._SCHEMA_VERSION,
             "records": [self._serialize_record(record) for record in records],
         }
-        try:
-            serialized = (
-                json.dumps(document, ensure_ascii=False, indent=2) + "\n"
-            ).encode("utf-8")
-        except (OverflowError, TypeError, ValueError) as error:
-            raise ResearchError(
-                "Unable to serialize research source content."
-            ) from error
-        if len(serialized) > self._MAXIMUM_STORE_FILE_BYTES:
-            raise ResearchError("Research source content store is too large.")
         temporary_path: Path | None = None
         try:
             self._path.parent.mkdir(parents=True, exist_ok=True)
@@ -81,11 +99,20 @@ class JsonFileResearchSourceContentStore:
                 delete=False,
             ) as file:
                 temporary_path = Path(file.name)
-                file.write(serialized)
+                bounded_file = _BoundedUtf8Writer(
+                    file,
+                    self._MAXIMUM_STORE_FILE_BYTES,
+                )
+                json.dump(document, bounded_file, ensure_ascii=False, indent=2)
+                bounded_file.write("\n")
                 file.flush()
                 os.fsync(file.fileno())
             os.replace(temporary_path, self._path)
-        except OSError as error:
+        except OverflowError as error:
+            raise ResearchError(
+                "Research source content store is too large."
+            ) from error
+        except (OSError, TypeError, ValueError) as error:
             raise ResearchError(
                 "Unable to write research source content store."
             ) from error
