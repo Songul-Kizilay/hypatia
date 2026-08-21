@@ -362,6 +362,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_question = RecordingInput("Compare local models")
         window._research_run_id = run_id
         window._research_run_choice = RecordingVariable("")
+        window._research_run_summary = RecordingVariable("Old summary")
         window._research_run_selector = RecordingCandidateSelector()
         window._research_runs = ()
         window._research_candidate = RecordingVariable("old candidate")
@@ -399,6 +400,10 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             ("Compare local models [collecting] — run-123",),
         )
         self.assertEqual(window._research_run_selector.current(), 0)
+        self.assertEqual(
+            window._research_run_summary.value,
+            "Status: collecting · Sources: 0 · Evidence: 0 · Claims: 0",
+        )
         self.assertIsNone(window._research_markdown_export_preview)
         self.assertEqual(responses, [controller.create_response])
 
@@ -410,6 +415,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._append_response = responses.append
         window._research_run_id = RecordingVariable("")
         window._research_run_choice = RecordingVariable("")
+        window._research_run_summary = RecordingVariable("")
         window._research_run_selector = RecordingCandidateSelector()
         window._research_runs = ()
         window._research_candidate = RecordingVariable("")
@@ -440,6 +446,10 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             window._status.values,
             ["research run selected: run-123; no action started"],
         )
+        self.assertEqual(
+            window._research_run_summary.value,
+            "Status: collecting · Sources: 0 · Evidence: 0 · Claims: 0",
+        )
 
     def test_empty_research_run_catalog_clears_only_run_bound_presentations(
         self,
@@ -447,6 +457,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window: Any = object.__new__(TkinterDesktopWindow)
         window._research_run_id = RecordingVariable("old-run")
         window._research_run_choice = RecordingVariable("Old run")
+        window._research_run_summary = RecordingVariable("Old summary")
         window._research_run_selector = RecordingCandidateSelector(selected_index=0)
         window._research_runs = ()
         window._research_candidate = RecordingVariable("Old candidate")
@@ -470,6 +481,10 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
 
         self.assertEqual(window._research_run_id.value, "")
         self.assertEqual(window._research_run_choice.value, "")
+        self.assertEqual(
+            window._research_run_summary.value,
+            "No research runs available.",
+        )
         self.assertEqual(window._research_candidate_run_id, "")
         self.assertEqual(window._research_claim_contradiction_proposal_run_id, "")
         self.assertIsNone(window._research_markdown_export_preview)
@@ -497,6 +512,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         )
         clears: list[bool] = []
         window._research_run_id = RecordingVariable("run-1")
+        window._research_run_summary = RecordingVariable("")
         window._research_run_selector = RecordingCandidateSelector(selected_index=1)
         window._research_runs = (first_run, second_run)
         window._status = RecordingStatus()
@@ -507,8 +523,30 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         self.assertEqual(window._research_run_id.value, "run-2")
         self.assertEqual(clears, [True])
         self.assertEqual(
+            window._research_run_summary.value,
+            "Status: completed · Sources: 0 · Evidence: 0 · Claims: 0",
+        )
+        self.assertEqual(
             window._status.values,
             ["research run selected: run-2; no action started"],
+        )
+
+    def test_invalid_research_run_selection_shows_no_snapshot_summary(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        window._research_run_selector = RecordingCandidateSelector(selected_index=-1)
+        window._research_runs = ()
+        window._research_run_summary = RecordingVariable("Old summary")
+        window._status = RecordingStatus()
+
+        window._select_research_run()
+
+        self.assertEqual(
+            window._research_run_summary.value,
+            "Refresh and select a research run.",
+        )
+        self.assertEqual(
+            window._status.values,
+            ["Refresh and select a research run first."],
         )
 
     def test_research_markdown_export_preview_uses_selected_run_only(self) -> None:

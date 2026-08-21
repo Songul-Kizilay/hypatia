@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.80 (Genesis)`
+`v0.3.81 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.80`** is the current executable package and GitHub
+- **Runtime release `v0.3.81`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -45,6 +45,10 @@ with optional OpenAI-compatible LLM conversation support.
   selects the new run, and switching clears only stale candidate/export views.
   Selection itself starts no network, provider, or mutation action and leaves
   authored research fields unchanged.
+- The selected run also exposes status and complete source, evidence, and claim
+  counts beneath the selector. The summary uses only the already loaded
+  immutable catalog object, distinguishes empty/invalid selection states, and
+  starts no Brain, storage, provider, network, or mutation action.
 - Explicit provider-backed desktop actions use one daemon request worker so
   Ollama and approved HTTPS waits do not block Tkinter's event loop. Results
   are rendered only by the event thread, all command buttons are single-flight,
@@ -460,7 +464,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,424 automated tests pass through package-aware discovery.
+- 1,425 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -495,7 +499,7 @@ changed.
 
 ## Next Milestone
 
-Add a compact read-only selected-run summary beside the selector, including
-status and bounded source/evidence/claim counts. It must use only the already
-loaded catalog snapshot, start no runtime action, and clearly distinguish
-displayed counts from any future truncated detail view.
+Add a read-only accepted-source selector for the selected research run, labelled
+with source title and exact document ID. It must use only the already loaded run
+snapshot, copy the exact ID into existing manual source fields only after an
+explicit selection, and start no fetch, provider, or mutation automatically.

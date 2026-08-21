@@ -45,7 +45,9 @@ Labels include the question, current status, and exact ID; creating a run select
 it immediately. A valid selection is preserved across refresh, while an empty
 catalog clears it. Switching runs starts no runtime action and clears only stale
 source-candidate, contradiction-suggestion, and export-preview presentation
-state.
+state. A compact line beneath the selector shows status and complete source,
+evidence, and claim counts from the same loaded snapshot; it opens no additional
+read or provider path.
 For an attached source, `Save evidence` records one explicitly entered chunk ID
 and note; `View evidence` displays the persisted bounded excerpt and locator.
 Neither action extracts, ranks, or interprets evidence automatically.

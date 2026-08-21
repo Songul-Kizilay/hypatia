@@ -186,6 +186,9 @@ class TkinterDesktopWindow:
         self._research_question = tk.StringVar()
         self._research_run_id = tk.StringVar()
         self._research_run_choice = tk.StringVar()
+        self._research_run_summary = tk.StringVar(
+            value="Select or create a research run."
+        )
         self._research_candidate = tk.StringVar()
         self._research_url = tk.StringVar()
         self._research_source_document_id = tk.StringVar()
@@ -642,13 +645,8 @@ class TkinterDesktopWindow:
             sticky="w",
             pady=(8, 0),
         )
-        self._research_run_selector = ttk.Combobox(
-            research_frame,
-            textvariable=self._research_run_choice,
-            values=(),
-            state="readonly",
-        )
-        self._research_run_selector.grid(
+        research_run_frame = ttk.Frame(research_frame)
+        research_run_frame.grid(
             row=1,
             column=1,
             columnspan=2,
@@ -656,10 +654,27 @@ class TkinterDesktopWindow:
             padx=(8, 8),
             pady=(8, 0),
         )
+        research_run_frame.columnconfigure(0, weight=1)
+        self._research_run_selector = ttk.Combobox(
+            research_run_frame,
+            textvariable=self._research_run_choice,
+            values=(),
+            state="readonly",
+        )
+        self._research_run_selector.grid(
+            row=0,
+            column=0,
+            sticky="ew",
+        )
         self._research_run_selector.bind(
             "<<ComboboxSelected>>",
             self._select_research_run,
         )
+        ttk.Label(
+            research_run_frame,
+            textvariable=self._research_run_summary,
+            style="Hint.TLabel",
+        ).grid(row=1, column=0, sticky="w", pady=(4, 0))
         self._request_button(
             research_frame,
             text="Find sources",
@@ -1509,6 +1524,7 @@ class TkinterDesktopWindow:
         if not normalized_runs:
             self._research_run_choice.set("")
             self._research_run_id.set("")
+            self._research_run_summary.set("No research runs available.")
             self._clear_research_run_dependent_presentations()
             return
         selected_index = next(
@@ -1533,6 +1549,7 @@ class TkinterDesktopWindow:
         """Select one catalogued run without starting any research action."""
         selected_index = self._research_run_selector.current()
         if not 0 <= selected_index < len(self._research_runs):
+            self._research_run_summary.set("Refresh and select a research run.")
             self._status.set("Refresh and select a research run first.")
             return
         selected_run = self._research_runs[selected_index]
@@ -1540,8 +1557,17 @@ class TkinterDesktopWindow:
         self._research_run_id.set(selected_run.run_id)
         if previous_run_id != selected_run.run_id:
             self._clear_research_run_dependent_presentations()
+        self._research_run_summary.set(self._research_run_summary_text(selected_run))
         self._status.set(
             f"research run selected: {selected_run.run_id}; no action started"
+        )
+
+    @staticmethod
+    def _research_run_summary_text(run: ResearchRun) -> str:
+        """Summarize bounded catalog counts without opening another read path."""
+        return (
+            f"Status: {run.status.value} · Sources: {len(run.sources)} · "
+            f"Evidence: {len(run.evidence)} · Claims: {len(run.claims)}"
         )
 
     def _clear_research_run_dependent_presentations(self) -> None:

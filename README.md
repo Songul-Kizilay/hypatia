@@ -252,9 +252,10 @@ call an LLM, or write conversation memory.
 `Start research` creates a local audit record for one question. `Research runs`
 fills a read-only selector with each question, status, and exact ID. Choosing a
 run only changes the local workspace selection and starts no research action;
-later explicit actions use that ID. The run keeps timestamps and safe failure
-records, but does not duplicate downloaded page text or make web research
-autonomous.
+the selector also shows complete source, evidence, and claim counts from that
+already loaded snapshot. Later explicit actions use the selected ID. The run
+keeps timestamps and safe failure records, but does not duplicate downloaded
+page text or make web research autonomous.
 `Find sources` sends the selected collecting run's question to Crossref and
 connects its fixed endpoint and same-origin redirects only to an address from
 their own public-DNS validation while TLS verifies `api.crossref.org`. It
