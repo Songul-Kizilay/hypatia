@@ -20,7 +20,11 @@ All explicit provider-backed actions share one daemon single-flight worker. The
 status line reports elapsed seconds without claiming a completion percentage.
 `Cancel request` discards the eventual presentation while keeping other actions
 disabled until active timeout-bounded I/O returns; it does not terminate the
-provider call or its worker thread.
+provider call or its worker thread. For Crossref discovery, explicit HTTPS
+source loading, and confirmed candidate loading, the same request also carries
+a cooperative signal through Brain. If cancellation is observed when the
+network call returns, the runtime stops before audit, indexing, or persistence
+mutation. Other desktop provider actions remain presentation-only cancellation.
 The research panel's `Evidence integrity` action performs a separate bounded
 in-memory comparison of recorded evidence and current accepted paragraphs. It
 reports only matched, missing, and changed totals and never repairs records.

@@ -15,6 +15,7 @@ if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
 from brain.BrainResponse import BrainResponse
+from core.CancellationSignal import CancellationSignal
 from desktop.DesktopRequestRunner import DesktopRequestRunner
 from desktop.TkinterDesktopWindow import TkinterDesktopWindow
 
@@ -79,16 +80,24 @@ class DesktopRequestRunnerTests(unittest.TestCase):
         runner = DesktopRequestRunner()
         entered = Event()
         release = Event()
+        cancellation_callbacks: list[str] = []
 
         def action() -> str:
             entered.set()
             release.wait(timeout=1)
             return "must not be presented"
 
-        self.assertEqual(runner.start(action), "started")
+        self.assertEqual(
+            runner.start(
+                action,
+                cancel_callback=lambda: cancellation_callbacks.append("cancelled"),
+            ),
+            "started",
+        )
         self.assertTrue(entered.wait(timeout=1))
         self.assertEqual(runner.request_cancel(), "requested")
         self.assertEqual(runner.request_cancel(), "already_requested")
+        self.assertEqual(cancellation_callbacks, ["cancelled"])
         self.assertTrue(runner.is_cancellation_requested())
         self.assertEqual(runner.start(lambda: "must not run"), "busy")
 
@@ -108,6 +117,18 @@ class DesktopRequestRunnerTests(unittest.TestCase):
         self.assertEqual(runner.request_cancel(), "idle")
         runner.stop()
         self.assertEqual(runner.request_cancel(), "stopped")
+
+    def test_cancel_request_can_replace_a_completed_unpresented_result(self) -> None:
+        runner = DesktopRequestRunner()
+
+        self.assertEqual(runner.start(lambda: "completed"), "started")
+        self._wait_until_idle(runner)
+
+        self.assertEqual(runner.request_cancel(), "requested")
+        completions = runner.drain()
+        self.assertEqual(len(completions), 1)
+        self.assertTrue(completions[0].cancelled)
+        self.assertIsNone(completions[0].value)
 
     def test_thread_start_failure_releases_the_single_flight_reservation(self) -> None:
         runner = DesktopRequestRunner()
@@ -189,6 +210,7 @@ class DesktopRequestRunnerTests(unittest.TestCase):
     def test_window_cancel_keeps_controls_busy_until_operation_finishes(self) -> None:
         runner = DesktopRequestRunner()
         window = self._window_with(runner)
+        cancellation_signal = CancellationSignal()
         entered = Event()
         release = Event()
         responses: list[BrainResponse] = []
@@ -204,12 +226,18 @@ class DesktopRequestRunnerTests(unittest.TestCase):
             release.wait(timeout=1)
             return response
 
-        window._start_request(action, responses.append, "knowledge question")
+        window._start_request(
+            action,
+            responses.append,
+            "knowledge question",
+            cancellation_signal=cancellation_signal,
+        )
         self.assertTrue(entered.wait(timeout=1))
         window._cancel_request()
 
         self.assertEqual(window._request_controls[0].states[-1], ("disabled",))
         self.assertEqual(window._cancel_button.states[-1], ("disabled",))
+        self.assertTrue(cancellation_signal.is_cancelled())
         self.assertIn("waiting for the active operation", window._status.values[-1])
 
         release.set()
@@ -247,6 +275,7 @@ class DesktopRequestRunnerTests(unittest.TestCase):
     def test_window_close_discards_a_late_worker_result(self) -> None:
         runner = DesktopRequestRunner()
         window = self._window_with(runner)
+        cancellation_signal = CancellationSignal()
         entered = Event()
         release = Event()
         responses: list[BrainResponse] = []
@@ -262,9 +291,15 @@ class DesktopRequestRunnerTests(unittest.TestCase):
             release.wait(timeout=1)
             return response
 
-        window._start_request(action, responses.append, "message")
+        window._start_request(
+            action,
+            responses.append,
+            "message",
+            cancellation_signal=cancellation_signal,
+        )
         self.assertTrue(entered.wait(timeout=1))
         window._close()
+        self.assertTrue(cancellation_signal.is_cancelled())
         release.set()
         self._wait_until_idle(runner)
 
