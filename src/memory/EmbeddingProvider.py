@@ -20,5 +20,10 @@ def validate_embedding_source_text(source_text: object) -> None:
 class EmbeddingProvider(Protocol):
     """Turn source text into a validated embedding value."""
 
-    def embed(self, source_text: str) -> Embedding:
+    def embed(
+        self,
+        source_text: str,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> Embedding:
         """Return one embedding for the exact supplied source text."""

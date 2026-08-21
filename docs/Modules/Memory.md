@@ -48,3 +48,10 @@ for later lifecycle updates, and reports unavailable until a complete index is
 published. The exact `semantic recall retry` command is the only full-rebuild
 retry path; failure preserves the last complete index when present and never
 changes primary memory.
+
+Every full rebuild now also shares one monotonic deadline: 120 seconds by
+default and configurable from greater than zero through 3,600 seconds. The
+deadline starts before record, source, and cache preflight. Every missing
+embedding receives only the remaining duration, further capped by the normal
+per-request timeout. Expiry prevents cache replacement and runtime publication,
+while a prior complete index remains available.

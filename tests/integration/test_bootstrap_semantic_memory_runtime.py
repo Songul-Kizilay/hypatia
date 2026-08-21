@@ -26,9 +26,16 @@ class RecordingEmbeddingProvider:
         self._embedding = embedding
         self.error = error
         self.sources: list[str] = []
+        self.timeouts: list[float | None] = []
 
-    def embed(self, source_text: str) -> Embedding:
+    def embed(
+        self,
+        source_text: str,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> Embedding:
         self.sources.append(source_text)
+        self.timeouts.append(timeout_seconds)
         if self.error is not None:
             raise self.error
         return self._embedding
@@ -91,6 +98,10 @@ class BootstrapSemanticMemoryRuntimeTests(unittest.TestCase):
             transport=unittest.mock.ANY,
         )
         self.assertEqual(provider.sources, ["Persistent fact"])
+        self.assertEqual(len(provider.timeouts), 1)
+        assert provider.timeouts[0] is not None
+        self.assertGreater(provider.timeouts[0], 0)
+        self.assertLessEqual(provider.timeouts[0], 120)
         assert runtime.current() is not None
         self.assertEqual(runtime.current().count(), 1)
 
@@ -119,6 +130,36 @@ class BootstrapSemanticMemoryRuntimeTests(unittest.TestCase):
             )
 
         construct_transport.assert_called_once_with(timeout_seconds=7.5)
+
+    def test_enabled_runtime_passes_configured_shared_rebuild_bounds(self) -> None:
+        provider = RecordingEmbeddingProvider(Embedding((1, 0)))
+
+        with (
+            tempfile.TemporaryDirectory() as temporary_directory,
+            patch.dict(
+                os.environ,
+                {
+                    "HYPATIA_SEMANTIC_MEMORY_ENABLED": "true",
+                    "HYPATIA_SEMANTIC_MEMORY_REBUILD_MAX_PROVIDER_CALLS": "7",
+                    "HYPATIA_SEMANTIC_MEMORY_REBUILD_TIMEOUT_SECONDS": "2.5",
+                },
+                clear=True,
+            ),
+            patch("core.Bootstrap.OllamaEmbeddingProvider", return_value=provider),
+            patch("core.Bootstrap.SemanticMemoryIndexBuilder") as construct_builder,
+        ):
+            temporary_path = Path(temporary_directory)
+            Bootstrap.from_process_environment(
+                temporary_path / "memory.json",
+                temporary_path / "sessions.json",
+            )
+
+        construct_builder.assert_called_once_with(
+            provider,
+            None,
+            max_rebuild_provider_calls=7,
+            max_rebuild_seconds=2.5,
+        )
 
     def test_rebuild_budget_starts_primary_runtime_without_provider_calls(self) -> None:
         provider = RecordingEmbeddingProvider(Embedding((1, 0)))
@@ -329,6 +370,27 @@ class BootstrapSemanticMemoryRuntimeTests(unittest.TestCase):
                     "HYPATIA_SEMANTIC_MEMORY_REBUILD_MAX_PROVIDER_CALLS": "20001",
                 },
                 "cannot exceed 20000",
+            ),
+            (
+                {
+                    "HYPATIA_SEMANTIC_MEMORY_ENABLED": "true",
+                    "HYPATIA_SEMANTIC_MEMORY_REBUILD_TIMEOUT_SECONDS": "offline",
+                },
+                "must be a positive finite number",
+            ),
+            (
+                {
+                    "HYPATIA_SEMANTIC_MEMORY_ENABLED": "true",
+                    "HYPATIA_SEMANTIC_MEMORY_REBUILD_TIMEOUT_SECONDS": "0",
+                },
+                "greater than 0 and no greater than 3600",
+            ),
+            (
+                {
+                    "HYPATIA_SEMANTIC_MEMORY_ENABLED": "true",
+                    "HYPATIA_SEMANTIC_MEMORY_REBUILD_TIMEOUT_SECONDS": "3600.1",
+                },
+                "greater than 0 and no greater than 3600",
             ),
         ):
             with self.subTest(environment=environment):

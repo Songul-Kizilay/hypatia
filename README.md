@@ -457,6 +457,7 @@ HYPATIA_SEMANTIC_MEMORY_OLLAMA_MODEL=embeddinggemma
 HYPATIA_SEMANTIC_MEMORY_OLLAMA_TIMEOUT_SECONDS=120
 HYPATIA_SEMANTIC_MEMORY_PERSIST_EMBEDDINGS=true
 HYPATIA_SEMANTIC_MEMORY_REBUILD_MAX_PROVIDER_CALLS=256
+HYPATIA_SEMANTIC_MEMORY_REBUILD_TIMEOUT_SECONDS=120
 ```
 
 The endpoint and model shown are defaults when their optional settings are
@@ -476,6 +477,15 @@ number from 0 through 20,000 when a different local policy is required. Zero is
 cache-only. If the count exceeds the configured budget, the semantic rebuild
 fails before the first Ollama call, cache replacement, or runtime publication;
 the primary application remains available.
+
+One monotonic deadline also covers the complete startup rebuild, including
+memory/source/cache preflight and every sequential provider call. It is 120
+seconds by default. Set `HYPATIA_SEMANTIC_MEMORY_REBUILD_TIMEOUT_SECONDS` to a
+positive finite value no greater than 3,600 when a different local policy is
+required. Each Ollama request uses the shorter of its normal request timeout and
+the remaining rebuild time. Expiry rejects the incomplete build before cache or
+runtime publication; the primary application retains the v0.3.66 degraded
+semantic behavior.
 
 The built-in local HTTP transport allows up to 120 seconds for each embedding
 request by default. Set `HYPATIA_SEMANTIC_MEMORY_OLLAMA_TIMEOUT_SECONDS` to a

@@ -30,7 +30,12 @@ class MappingEmbeddingProvider:
         self.should_fail = False
         self.calls: list[str] = []
 
-    def embed(self, source_text: str) -> Embedding:
+    def embed(
+        self,
+        source_text: str,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> Embedding:
         self.calls.append(source_text)
         if self.should_fail:
             raise MemoryError("Embedding provider unavailable.")
