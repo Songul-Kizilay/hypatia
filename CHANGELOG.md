@@ -2,6 +2,40 @@
 
 All notable project changes are recorded here.
 
+## [0.3.75] - 2026-08-21
+
+### Added
+
+- Research runs can store explicit user-authored claims with one epistemic
+  state: `fact`, `strong_evidence`, `likely`, `hypothesis`, `speculation`,
+  `unknown`, or `contradicted`.
+- Every claim cites persisted evidence IDs and the exact ordered accepted
+  source IDs derived from that evidence. It also carries one categorical
+  authored confidence label: `unassessed`, `low`, `medium`, or `high`.
+- The Brain, desktop, and deterministic Markdown export expose claim history
+  through read-only previews and a separate preview-confirm-record boundary.
+
+### Changed
+
+- Research-run schema v8 persists evidence-linked claims while loading v1-v7
+  snapshots with an empty claim collection and rewriting them only during a
+  later successful atomic save.
+- Claim corrections append a backward supersession link. The predecessor
+  remains immutable and can have at most one successor.
+
+### Safety
+
+- Hypatia does not extract claims automatically, select their evidence,
+  calculate truth, or turn authored confidence into a numeric score.
+- Final recording revalidates the collecting run, every evidence/source
+  relationship, categorical values, and any supersession target. External
+  source text retains instruction authority `none` regardless of claim state.
+
+### Verification
+
+- The package-aware full local suite contains 1,384 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass across 322 source files.
+
 ## [0.3.74] - 2026-08-21
 
 ### Added

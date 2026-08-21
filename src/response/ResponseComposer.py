@@ -21,6 +21,8 @@ from knowledge.KnowledgeRelationRevocationPreview import (
 )
 from memory.MemoryRecord import MemoryRecord
 from planner.Plan import Plan
+from research.ResearchClaimPreview import ResearchClaimPreview
+from research.ResearchClaimWritePreview import ResearchClaimWritePreview
 from research.ResearchEvidenceIntegrityStatus import ResearchEvidenceIntegrityStatus
 from research.ResearchRun import ResearchRun
 from research.ResearchRunMarkdownExportPreview import (
@@ -702,6 +704,7 @@ class ResponseComposer:
                     f"Evidence: {len(run.evidence)}",
                     f"Assessments: {len(run.assessments)}",
                     f"Comparison notes: {len(run.comparison_notes)}",
+                    f"Claims: {len(run.claims)}",
                     f"Failures: {len(run.failures)}",
                     f"ID: {run.run_id}",
                 ]
@@ -790,6 +793,7 @@ class ResponseComposer:
                     f"evidence: {len(run.evidence)} | "
                     f"assessments: {len(run.assessments)} | "
                     f"comparison notes: {len(run.comparison_notes)} | "
+                    f"claims: {len(run.claims)} | "
                     f"failures: {len(run.failures)} | "
                     f"id: {run.run_id}"
                 )
@@ -1374,6 +1378,148 @@ class ResponseComposer:
         intent: str,
     ) -> BrainResponse:
         """Report invalid assessment preview or record input safely."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent=intent,
+            memory_count=0,
+            success=False,
+        )
+
+    def research_claim_preview_success(
+        self,
+        request: BrainRequest,
+        preview: ResearchClaimPreview,
+    ) -> BrainResponse:
+        """Render persisted claim history without creating a conclusion."""
+        lines = [
+            "Research claim history:",
+            f"Run: {preview.run_id}",
+            f"Question: {preview.question}",
+            f"Run status: {preview.run_status.value}",
+            f"Recorded claims: {len(preview.claims)}",
+            f"Reason: {preview.reason}",
+        ]
+        superseded_ids = {
+            claim.supersedes_claim_id
+            for claim in preview.claims
+            if claim.supersedes_claim_id is not None
+        }
+        for claim in preview.claims:
+            lines.extend(
+                (
+                    f"- Claim: {claim.claim_id}",
+                    (
+                        "  audit state: superseded"
+                        if claim.claim_id in superseded_ids
+                        else "  audit state: current"
+                    ),
+                    f"  epistemic state: {claim.epistemic_state.value}",
+                    f"  authored confidence: {claim.confidence.value}",
+                    f"  source document IDs: {', '.join(claim.source_document_ids)}",
+                    f"  evidence IDs: {', '.join(claim.evidence_ids)}",
+                    f"  text: {claim.text}",
+                    f"  supersedes: {claim.supersedes_claim_id or 'none'}",
+                    f"  recorded: {claim.recorded_at.isoformat()}",
+                )
+            )
+        lines.append(
+            "Status: persisted user-authored claims only; no automatic extraction, "
+            "truth score, or instruction authority"
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_claim_preview",
+            memory_count=0,
+            research_claim_preview=preview,
+        )
+
+    def research_claim_preview_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Report an invalid claim-history request safely."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="research_claim_preview",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_claim_write_preview_success(
+        self,
+        request: BrainRequest,
+        preview: ResearchClaimWritePreview,
+    ) -> BrainResponse:
+        """Render exact authored claim metadata before confirmation."""
+        lines = [
+            "Research claim write preview:",
+            f"Run: {preview.run_id}",
+            f"Run status: {preview.run_status.value}",
+            f"Claim: {preview.text}",
+            f"Epistemic state: {preview.epistemic_state.value}",
+            f"Authored confidence: {preview.confidence.value}",
+            "Source document IDs: "
+            + ", ".join(source.document_id for source in preview.sources),
+            "Evidence IDs: "
+            + ", ".join(record.evidence_id for record in preview.evidence),
+            (
+                "Supersedes claim: "
+                + (
+                    preview.supersedes_claim.claim_id
+                    if preview.supersedes_claim is not None
+                    else "none"
+                )
+            ),
+            f"Allowed: {'yes' if preview.allowed else 'no'}",
+            f"Reason: {preview.reason}",
+            "Status: user-authored metadata only; no automatic fact determination",
+        ]
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_claim_write_preview",
+            memory_count=0,
+            success=preview.allowed,
+            research_claim_write_preview=preview,
+        )
+
+    def research_claim_record_success(
+        self,
+        request: BrainRequest,
+        run: ResearchRun,
+    ) -> BrainResponse:
+        """Render one claim only after the audit snapshot commits."""
+        claim = run.claims[-1]
+        return BrainResponse(
+            message=(
+                "Research claim recorded:\n"
+                f"ID: {claim.claim_id}\n"
+                f"Claim: {claim.text}\n"
+                f"Epistemic state: {claim.epistemic_state.value}\n"
+                f"Authored confidence: {claim.confidence.value}\n"
+                f"Source document IDs: {', '.join(claim.source_document_ids)}\n"
+                f"Evidence IDs: {', '.join(claim.evidence_ids)}\n"
+                f"Supersedes claim: {claim.supersedes_claim_id or 'none'}\n"
+                "Status: committed user-authored claim; no automatic truth score"
+            ),
+            request_id=request.request_id,
+            intent="research_claim_record",
+            memory_count=0,
+            research_runs=[run],
+        )
+
+    def research_claim_write_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+        *,
+        intent: str,
+    ) -> BrainResponse:
+        """Report invalid claim preview or record input safely."""
         return BrainResponse(
             message=message,
             request_id=request.request_id,

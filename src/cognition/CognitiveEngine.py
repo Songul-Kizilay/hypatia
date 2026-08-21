@@ -214,6 +214,15 @@ class CognitiveEngine:
         if self._is_research_evidence_list_request(request):
             return self._process_research_evidence_list(request)
 
+        if self._is_research_claim_preview_request(request):
+            return self._process_research_claim_preview(request)
+
+        if self._is_research_claim_write_preview_request(request):
+            return self._process_research_claim_write_preview(request)
+
+        if self._is_research_claim_record_request(request):
+            return self._process_research_claim_record(request)
+
         if self._is_research_source_comparison_preview_request(request):
             return self._process_research_source_comparison_preview(request)
 
@@ -465,6 +474,21 @@ class CognitiveEngine:
     def _is_research_evidence_list_request(request: BrainRequest) -> bool:
         """Recognize one explicit read-only research evidence catalog request."""
         return request.metadata.get("intent") == "research_evidence_list"
+
+    @staticmethod
+    def _is_research_claim_preview_request(request: BrainRequest) -> bool:
+        """Recognize one explicit read-only claim-history request."""
+        return request.metadata.get("intent") == "research_claim_preview"
+
+    @staticmethod
+    def _is_research_claim_write_preview_request(request: BrainRequest) -> bool:
+        """Recognize one no-write evidence-linked claim preview."""
+        return request.metadata.get("intent") == "research_claim_write_preview"
+
+    @staticmethod
+    def _is_research_claim_record_request(request: BrainRequest) -> bool:
+        """Recognize one separately confirmed authored claim write."""
+        return request.metadata.get("intent") == "research_claim_record"
 
     @staticmethod
     def _is_research_source_comparison_preview_request(
@@ -770,6 +794,122 @@ class CognitiveEngine:
                 "Research run was not found.",
             )
         return self._response_composer.research_evidence_list_success(request, run)
+
+    def _process_research_claim_preview(self, request: BrainRequest) -> BrainResponse:
+        """Read persisted claim history without providers or mutation."""
+        run_id = request.metadata.get("research_run_id")
+        failure = self._response_composer.research_claim_preview_failure
+        if not isinstance(run_id, str) or not run_id.strip():
+            return failure(request, "A research run ID is required.")
+        if self._research_run_manager is None:
+            return failure(request, "Research run persistence is unavailable.")
+        try:
+            preview = self._research_run_manager.preview_claims(run_id)
+        except ResearchError:
+            return failure(request, "Research run was not found.")
+        return self._response_composer.research_claim_preview_success(
+            request,
+            preview,
+        )
+
+    def _process_research_claim_write_preview(
+        self,
+        request: BrainRequest,
+    ) -> BrainResponse:
+        """Preview exact authored claim metadata without mutation."""
+        return self._process_research_claim_write(request, preview_only=True)
+
+    def _process_research_claim_record(self, request: BrainRequest) -> BrainResponse:
+        """Revalidate and commit one separately confirmed claim."""
+        return self._process_research_claim_write(request, preview_only=False)
+
+    def _process_research_claim_write(
+        self,
+        request: BrainRequest,
+        *,
+        preview_only: bool,
+    ) -> BrainResponse:
+        intent = (
+            "research_claim_write_preview" if preview_only else "research_claim_record"
+        )
+        failure = self._response_composer.research_claim_write_failure
+        values = self._research_claim_write_values(request)
+        if values is None:
+            return failure(
+                request,
+                "A run ID, explicit evidence IDs, authored claim text, and valid "
+                "epistemic state are required.",
+                intent=intent,
+            )
+        if self._research_run_manager is None:
+            return failure(
+                request,
+                "Research run persistence is unavailable.",
+                intent=intent,
+            )
+        try:
+            if preview_only:
+                preview = self._research_run_manager.preview_claim_write(*values)
+                return self._response_composer.research_claim_write_preview_success(
+                    request,
+                    preview,
+                )
+            run = self._research_run_manager.record_claim(*values)
+        except ResearchError:
+            return failure(
+                request,
+                "Research claim could not be validated or saved.",
+                intent=intent,
+            )
+        return self._response_composer.research_claim_record_success(request, run)
+
+    @staticmethod
+    def _research_claim_write_values(
+        request: BrainRequest,
+    ) -> tuple[str, list[str], str, str, str, str | None] | None:
+        run_id = request.metadata.get("research_run_id")
+        evidence_ids = request.metadata.get("research_claim_evidence_ids")
+        text = request.metadata.get("research_claim_text")
+        epistemic_state = request.metadata.get("research_claim_epistemic_state")
+        confidence = request.metadata.get(
+            "research_claim_confidence",
+            "unassessed",
+        )
+        supersedes_claim_id = request.metadata.get("research_claim_supersedes_id")
+        if (
+            not isinstance(run_id, str)
+            or not run_id.strip()
+            or not isinstance(evidence_ids, list)
+            or not evidence_ids
+            or not all(
+                isinstance(evidence_id, str) and evidence_id.strip()
+                for evidence_id in evidence_ids
+            )
+            or len(evidence_ids)
+            != len({evidence_id.strip() for evidence_id in evidence_ids})
+            or not isinstance(text, str)
+            or not text.strip()
+            or not isinstance(epistemic_state, str)
+            or not epistemic_state.strip()
+            or not isinstance(confidence, str)
+            or not confidence.strip()
+            or (
+                supersedes_claim_id is not None
+                and (
+                    not isinstance(supersedes_claim_id, str)
+                    or not supersedes_claim_id.strip()
+                )
+            )
+        ):
+            return None
+        return (
+            run_id,
+            evidence_ids,
+            text,
+            epistemic_state,
+            confidence,
+            supersedes_claim_id,
+        )
 
     def _process_research_source_comparison_preview(
         self,

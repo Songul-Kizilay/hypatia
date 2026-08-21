@@ -5,6 +5,9 @@ from __future__ import annotations
 import unittest
 from datetime import UTC, datetime, timedelta
 
+from research.ResearchClaimConfidence import ResearchClaimConfidence
+from research.ResearchClaimRecord import ResearchClaimRecord
+from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchFailureRecord import ResearchFailureRecord
 from research.ResearchInformationTrust import ResearchInformationTrust
@@ -40,6 +43,11 @@ class ResearchRunMarkdownRendererTests(unittest.TestCase):
         self.assertIn("- **Instruction authority:** none", first)
         self.assertIn("- **Information trust:** low", first)
         self.assertIn("- **Information trust:** high", first)
+        self.assertIn("## Evidence-linked Claims", first)
+        self.assertIn("- **Epistemic state:** hypothesis", first)
+        self.assertIn("- **Epistemic state:** contradicted", first)
+        self.assertIn("- **Authored confidence:** high", first)
+        self.assertIn("- **Supersedes:** claim-1", first)
         self.assertIn("- **Note ID:** note-1", first)
         self.assertIn("> \\# comparison heading", first)
         self.assertNotIn("<script>", first)
@@ -66,6 +74,7 @@ class ResearchRunMarkdownRendererTests(unittest.TestCase):
 
         self.assertIn("_No accepted sources._", markdown)
         self.assertIn("_No comparison notes recorded._", markdown)
+        self.assertIn("_No claims recorded._", markdown)
         self.assertIn("_No failures recorded._", markdown)
 
     @staticmethod
@@ -150,6 +159,27 @@ class ResearchRunMarkdownRendererTests(unittest.TestCase):
             reason="Safe failure reason",
             occurred_at=started + timedelta(minutes=9),
         )
+        claims = (
+            ResearchClaimRecord(
+                claim_id="claim-1",
+                text="The finding may affect the target.",
+                epistemic_state=ResearchEpistemicState.HYPOTHESIS,
+                confidence=ResearchClaimConfidence.LOW,
+                source_document_ids=("document-1",),
+                evidence_ids=("evidence-1",),
+                recorded_at=started + timedelta(minutes=8),
+            ),
+            ResearchClaimRecord(
+                claim_id="claim-2",
+                text="The persisted evidence contradicts the original claim.",
+                epistemic_state=ResearchEpistemicState.CONTRADICTED,
+                confidence=ResearchClaimConfidence.HIGH,
+                source_document_ids=("document-2",),
+                evidence_ids=("evidence-2",),
+                recorded_at=started + timedelta(minutes=9),
+                supersedes_claim_id="claim-1",
+            ),
+        )
         return ResearchRun(
             run_id="run-1",
             question="# user heading\nsecond line",
@@ -161,6 +191,7 @@ class ResearchRunMarkdownRendererTests(unittest.TestCase):
             evidence=(evidence_one, evidence_two),
             assessments=(assessment_one, assessment_correction, assessment_two),
             comparison_notes=(note,),
+            claims=claims,
         )
 
 

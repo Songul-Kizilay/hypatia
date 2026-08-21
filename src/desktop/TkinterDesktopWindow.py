@@ -15,6 +15,8 @@ from core.CancellationSignal import CancellationSignal
 from desktop.DesktopController import DesktopController
 from desktop.DesktopRequestRunner import DesktopRequestRunner
 from knowledge.KnowledgeCitation import KnowledgeCitation
+from research.ResearchClaimConfidence import ResearchClaimConfidence
+from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
@@ -161,6 +163,15 @@ class TkinterDesktopWindow:
         self._research_information_trust = tk.StringVar(
             value=ResearchInformationTrust.UNASSESSED.value
         )
+        self._research_claim_evidence_ids = tk.StringVar()
+        self._research_claim_text = tk.StringVar()
+        self._research_claim_epistemic_state = tk.StringVar(
+            value=ResearchEpistemicState.UNKNOWN.value
+        )
+        self._research_claim_confidence = tk.StringVar(
+            value=ResearchClaimConfidence.UNASSESSED.value
+        )
+        self._research_claim_supersedes_id = tk.StringVar()
         self._research_target_status = tk.StringVar(value="completed")
         self._relation_source_id = tk.StringVar()
         self._relation_target_id = tk.StringVar()
@@ -787,8 +798,80 @@ class TkinterDesktopWindow:
             padx=(8, 0),
             pady=(8, 0),
         )
-        ttk.Label(research_frame, text="Final status").grid(
+        ttk.Label(research_frame, text="Claim evidence IDs (comma-separated)").grid(
             row=15,
+            column=0,
+            sticky="w",
+            pady=(8, 0),
+        )
+        ttk.Entry(
+            research_frame,
+            textvariable=self._research_claim_evidence_ids,
+        ).grid(
+            row=15,
+            column=1,
+            columnspan=3,
+            sticky="ew",
+            padx=(8, 0),
+            pady=(8, 0),
+        )
+        ttk.Label(research_frame, text="User-authored claim").grid(
+            row=16,
+            column=0,
+            sticky="w",
+            pady=(8, 0),
+        )
+        ttk.Entry(
+            research_frame,
+            textvariable=self._research_claim_text,
+        ).grid(
+            row=16,
+            column=1,
+            columnspan=3,
+            sticky="ew",
+            padx=(8, 0),
+            pady=(8, 0),
+        )
+        ttk.Label(research_frame, text="Epistemic state / confidence").grid(
+            row=17,
+            column=0,
+            sticky="w",
+            pady=(8, 0),
+        )
+        ttk.Combobox(
+            research_frame,
+            textvariable=self._research_claim_epistemic_state,
+            values=tuple(value.value for value in ResearchEpistemicState),
+            state="readonly",
+        ).grid(row=17, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
+        ttk.Combobox(
+            research_frame,
+            textvariable=self._research_claim_confidence,
+            values=tuple(value.value for value in ResearchClaimConfidence),
+            state="readonly",
+        ).grid(row=17, column=2, sticky="ew", pady=(8, 0))
+        ttk.Button(
+            research_frame,
+            text="View claims",
+            command=self._preview_research_claims,
+        ).grid(row=17, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ttk.Label(research_frame, text="Supersedes claim ID (optional)").grid(
+            row=18,
+            column=0,
+            sticky="w",
+            pady=(8, 0),
+        )
+        ttk.Entry(
+            research_frame,
+            textvariable=self._research_claim_supersedes_id,
+        ).grid(row=18, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
+        ttk.Button(
+            research_frame,
+            text="Preview & save claim",
+            command=self._preview_and_record_research_claim,
+        ).grid(row=18, column=2, columnspan=2, sticky="ew", pady=(8, 0))
+        ttk.Label(research_frame, text="Final status").grid(
+            row=19,
             column=0,
             sticky="w",
             pady=(8, 0),
@@ -798,32 +881,32 @@ class TkinterDesktopWindow:
             textvariable=self._research_target_status,
             values=("completed", "failed", "cancelled"),
             state="readonly",
-        ).grid(row=15, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
+        ).grid(row=19, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
         ttk.Button(
             research_frame,
             text="Preview status",
             command=self._preview_and_update_research_status,
-        ).grid(row=15, column=2, sticky="ew", pady=(8, 0))
+        ).grid(row=19, column=2, sticky="ew", pady=(8, 0))
         ttk.Button(
             research_frame,
             text="Export preview",
             command=self._preview_research_run_markdown_export,
-        ).grid(row=15, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ).grid(row=19, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
         ttk.Button(
             research_frame,
             text="Verify export",
             command=self._verify_research_run_markdown_export,
-        ).grid(row=16, column=2, sticky="ew", pady=(8, 0))
+        ).grid(row=20, column=2, sticky="ew", pady=(8, 0))
         ttk.Button(
             research_frame,
             text="Save export",
             command=self._save_research_run_markdown_export,
-        ).grid(row=16, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ).grid(row=20, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
         ttk.Button(
             research_frame,
             text="Evidence integrity",
             command=self._show_research_evidence_integrity,
-        ).grid(row=16, column=0, columnspan=2, sticky="ew", pady=(8, 0))
+        ).grid(row=20, column=0, columnspan=2, sticky="ew", pady=(8, 0))
 
         relation_frame = ttk.LabelFrame(
             container,
@@ -1416,6 +1499,51 @@ class TkinterDesktopWindow:
             self._status.set("research assessment: not saved")
             return
         response = self._controller.record_research_source_assessment(*values)
+        self._append_response(response)
+
+    def _preview_research_claims(self) -> None:
+        """Show persisted claim history for the explicitly selected run."""
+        try:
+            response = self._controller.preview_research_claims(
+                self._research_run_id.get()
+            )
+        except ValueError as error:
+            self._status.set(str(error))
+            return
+        self._append_response(response)
+
+    def _preview_and_record_research_claim(self) -> None:
+        """Preview, confirm, and revalidate one evidence-linked claim."""
+        values = (
+            self._research_run_id.get(),
+            self._research_claim_evidence_ids.get(),
+            self._research_claim_text.get(),
+            self._research_claim_epistemic_state.get(),
+            self._research_claim_confidence.get(),
+            self._research_claim_supersedes_id.get(),
+        )
+        try:
+            preview_response = self._controller.preview_research_claim_write(*values)
+        except ValueError as error:
+            self._status.set(str(error))
+            return
+        self._append_response(preview_response)
+        preview = preview_response.research_claim_write_preview
+        if not preview_response.success or preview is None or not preview.allowed:
+            return
+        if not messagebox.askyesno(
+            "Save evidence-linked research claim?",
+            (
+                f"{preview_response.message}\n\n"
+                "This appends your claim, epistemic state, categorical confidence, "
+                "and exact evidence/source provenance to the research audit record. "
+                "Hypatia does not determine truth automatically. Continue?"
+            ),
+            parent=self._root,
+        ):
+            self._status.set("research claim: not saved")
+            return
+        response = self._controller.record_research_claim(*values)
         self._append_response(response)
 
     def _record_research_evidence(self) -> None:

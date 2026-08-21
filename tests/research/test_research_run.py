@@ -6,6 +6,9 @@ import unittest
 from datetime import UTC, datetime
 
 from core.Exceptions import ResearchError
+from research.ResearchClaimConfidence import ResearchClaimConfidence
+from research.ResearchClaimRecord import ResearchClaimRecord
+from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchRun import ResearchRun
 from research.ResearchRunStatus import ResearchRunStatus
@@ -369,6 +372,155 @@ class ResearchRunTests(unittest.TestCase):
                 evidence=evidence,
                 assessments=assessments,
                 comparison_notes=(incomplete,),
+            )
+
+    def test_claim_sources_must_exactly_follow_evidence_provenance(self) -> None:
+        now = datetime(2026, 8, 21, 20, 0, tzinfo=UTC)
+        sources = tuple(
+            ResearchSourceRecord(
+                f"document-{number}",
+                f"https://example.com/{number}",
+                f"Source {number}",
+                "text/plain",
+                now,
+                now,
+            )
+            for number in (1, 2)
+        )
+        evidence = tuple(
+            ResearchEvidenceRecord(
+                f"evidence-{number}",
+                f"document-{number}",
+                f"chunk-{number}",
+                0,
+                f"Evidence {number}.",
+                False,
+                str(number) * 64,
+                "Relevant.",
+                now,
+            )
+            for number in (1, 2)
+        )
+        claim = ResearchClaimRecord(
+            "claim-1",
+            "The sources support different parts of the finding.",
+            ResearchEpistemicState.STRONG_EVIDENCE,
+            ResearchClaimConfidence.HIGH,
+            ("document-2", "document-1"),
+            ("evidence-2", "evidence-1"),
+            now,
+        )
+
+        run = ResearchRun(
+            "run-1",
+            "Question",
+            ResearchRunStatus.COLLECTING,
+            sources,
+            (),
+            now,
+            now,
+            evidence=evidence,
+            claims=(claim,),
+        )
+
+        self.assertEqual(run.claims, (claim,))
+        mismatched = ResearchClaimRecord(
+            "claim-2",
+            "Mismatched provenance.",
+            ResearchEpistemicState.UNKNOWN,
+            ResearchClaimConfidence.LOW,
+            ("document-1", "document-2"),
+            ("evidence-2", "evidence-1"),
+            now,
+        )
+        with self.assertRaisesRegex(ResearchError, "match its evidence"):
+            ResearchRun(
+                "run-1",
+                "Question",
+                ResearchRunStatus.COLLECTING,
+                sources,
+                (),
+                now,
+                now,
+                evidence=evidence,
+                claims=(mismatched,),
+            )
+
+    def test_claim_supersession_is_append_only_and_single_successor(self) -> None:
+        now = datetime(2026, 8, 21, 20, 0, tzinfo=UTC)
+        source = ResearchSourceRecord(
+            "document-1",
+            "https://example.com/source",
+            "Source",
+            "text/plain",
+            now,
+            now,
+        )
+        evidence = ResearchEvidenceRecord(
+            "evidence-1",
+            "document-1",
+            "chunk-1",
+            0,
+            "Evidence.",
+            False,
+            "a" * 64,
+            "Relevant.",
+            now,
+        )
+        original = ResearchClaimRecord(
+            "claim-1",
+            "Original claim.",
+            ResearchEpistemicState.HYPOTHESIS,
+            ResearchClaimConfidence.LOW,
+            ("document-1",),
+            ("evidence-1",),
+            now,
+        )
+        correction = ResearchClaimRecord(
+            "claim-2",
+            "Evidence contradicts the claim.",
+            ResearchEpistemicState.CONTRADICTED,
+            ResearchClaimConfidence.HIGH,
+            ("document-1",),
+            ("evidence-1",),
+            now,
+            "claim-1",
+        )
+
+        run = ResearchRun(
+            "run-1",
+            "Question",
+            ResearchRunStatus.COLLECTING,
+            (source,),
+            (),
+            now,
+            now,
+            evidence=(evidence,),
+            claims=(original, correction),
+        )
+
+        self.assertEqual(run.claims, (original, correction))
+        competing = ResearchClaimRecord(
+            "claim-3",
+            "Competing correction.",
+            ResearchEpistemicState.LIKELY,
+            ResearchClaimConfidence.MEDIUM,
+            ("document-1",),
+            ("evidence-1",),
+            now,
+            "claim-1",
+        )
+        with self.assertRaisesRegex(ResearchError, "multiple superseding"):
+            ResearchRun(
+                "run-1",
+                "Question",
+                ResearchRunStatus.COLLECTING,
+                (source,),
+                (),
+                now,
+                now,
+                evidence=(evidence,),
+                claims=(original, correction, competing),
             )
 
 

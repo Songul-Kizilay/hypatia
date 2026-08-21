@@ -7,6 +7,8 @@ from typing import Protocol
 from brain.BrainRequest import BrainRequest
 from brain.BrainResponse import BrainResponse
 from core.CancellationSignal import CancellationToken
+from research.ResearchClaimConfidence import ResearchClaimConfidence
+from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
@@ -297,6 +299,116 @@ class DesktopController:
                 },
             )
         )
+
+    def preview_research_claims(self, research_run_id: str) -> BrainResponse:
+        """Show persisted claim history for one exact research run."""
+        normalized_run_id = research_run_id.strip()
+        if not normalized_run_id:
+            raise ValueError("A research run ID cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="View evidence-linked research claims",
+                source="desktop",
+                metadata={
+                    "intent": "research_claim_preview",
+                    "research_run_id": normalized_run_id,
+                },
+            )
+        )
+
+    def preview_research_claim_write(
+        self,
+        research_run_id: str,
+        evidence_ids: str,
+        claim_text: str,
+        epistemic_state: str,
+        confidence: str = ResearchClaimConfidence.UNASSESSED.value,
+        supersedes_claim_id: str = "",
+    ) -> BrainResponse:
+        """Preview one explicit evidence-linked claim without writing it."""
+        metadata = self._research_claim_write_metadata(
+            research_run_id,
+            evidence_ids,
+            claim_text,
+            epistemic_state,
+            confidence,
+            supersedes_claim_id,
+        )
+        return self._brain.process(
+            BrainRequest(
+                message="Preview user-authored research claim",
+                source="desktop",
+                metadata={"intent": "research_claim_write_preview", **metadata},
+            )
+        )
+
+    def record_research_claim(
+        self,
+        research_run_id: str,
+        evidence_ids: str,
+        claim_text: str,
+        epistemic_state: str,
+        confidence: str = ResearchClaimConfidence.UNASSESSED.value,
+        supersedes_claim_id: str = "",
+    ) -> BrainResponse:
+        """Submit one claim only after desktop confirmation."""
+        metadata = self._research_claim_write_metadata(
+            research_run_id,
+            evidence_ids,
+            claim_text,
+            epistemic_state,
+            confidence,
+            supersedes_claim_id,
+        )
+        return self._brain.process(
+            BrainRequest(
+                message="Record user-authored research claim",
+                source="desktop",
+                metadata={"intent": "research_claim_record", **metadata},
+            )
+        )
+
+    @staticmethod
+    def _research_claim_write_metadata(
+        research_run_id: str,
+        evidence_ids: str,
+        claim_text: str,
+        epistemic_state: str,
+        confidence: str = ResearchClaimConfidence.UNASSESSED.value,
+        supersedes_claim_id: str = "",
+    ) -> dict[str, object]:
+        normalized_run_id = research_run_id.strip()
+        normalized_text = claim_text.strip()
+        normalized_superseded_id = supersedes_claim_id.strip()
+        normalized_evidence_ids = [
+            value.strip() for value in evidence_ids.split(",") if value.strip()
+        ]
+        if not normalized_run_id:
+            raise ValueError("A research run ID cannot be empty.")
+        if not normalized_evidence_ids:
+            raise ValueError("Research claim evidence IDs cannot be empty.")
+        if len(normalized_evidence_ids) != len(set(normalized_evidence_ids)):
+            raise ValueError("Research claim evidence IDs cannot be duplicated.")
+        if not normalized_text:
+            raise ValueError("Research claim text cannot be empty.")
+        try:
+            normalized_state = ResearchEpistemicState(epistemic_state.strip())
+        except (AttributeError, ValueError) as error:
+            raise ValueError("Research claim epistemic state is invalid.") from error
+        try:
+            normalized_confidence = ResearchClaimConfidence(confidence.strip())
+        except (AttributeError, ValueError) as error:
+            raise ValueError("Research claim confidence is invalid.") from error
+        metadata: dict[str, object] = {
+            "research_run_id": normalized_run_id,
+            "research_claim_evidence_ids": normalized_evidence_ids,
+            "research_claim_text": normalized_text,
+            "research_claim_epistemic_state": normalized_state.value,
+            "research_claim_confidence": normalized_confidence.value,
+        }
+        if normalized_superseded_id:
+            metadata["research_claim_supersedes_id"] = normalized_superseded_id
+        return metadata
 
     def preview_research_source_assessment(
         self,

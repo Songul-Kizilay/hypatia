@@ -29,6 +29,10 @@ from desktop.TkinterDesktopWindow import (
 from knowledge.Document import DocumentType
 from knowledge.KnowledgeCitation import KnowledgeCitation
 from knowledge.KnowledgeDocumentReference import KnowledgeDocumentReference
+from research.ResearchClaimConfidence import ResearchClaimConfidence
+from research.ResearchClaimPreview import ResearchClaimPreview
+from research.ResearchClaimWritePreview import ResearchClaimWritePreview
+from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchRun import ResearchRun
 from research.ResearchRunMarkdownExportPreview import (
@@ -938,6 +942,107 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             ["Research assessment evidence IDs cannot be empty."],
         )
 
+    def test_claim_history_preview_uses_selected_run(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchSourceLoadController()
+        responses: list[BrainResponse] = []
+        window._controller = controller
+        window._research_run_id = RecordingInput("run-123")
+        window._status = RecordingStatus()
+        window._append_response = responses.append
+
+        window._preview_research_claims()
+
+        self.assertEqual(controller.claim_previews, ["run-123"])
+        self.assertEqual(responses, [controller.claim_preview_response])
+
+    def test_allowed_claim_requires_confirmation_before_record(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchSourceLoadController()
+        responses: list[BrainResponse] = []
+        values = (
+            "run-123",
+            "evidence-123",
+            "The evidence supports a bounded claim.",
+            "strong_evidence",
+            "high",
+            "claim-original",
+        )
+        window._root = object()
+        window._controller = controller
+        window._research_run_id = RecordingInput(values[0])
+        window._research_claim_evidence_ids = RecordingInput(values[1])
+        window._research_claim_text = RecordingInput(values[2])
+        window._research_claim_epistemic_state = RecordingInput(values[3])
+        window._research_claim_confidence = RecordingInput(values[4])
+        window._research_claim_supersedes_id = RecordingInput(values[5])
+        window._status = RecordingStatus()
+        window._append_response = responses.append
+
+        with patch(
+            "desktop.TkinterDesktopWindow.messagebox.askyesno",
+            return_value=True,
+        ) as confirm:
+            window._preview_and_record_research_claim()
+
+        self.assertEqual(controller.claim_write_previews, [values])
+        self.assertEqual(controller.claim_records, [values])
+        self.assertEqual(
+            responses,
+            [controller.claim_write_preview_response, controller.claim_record_response],
+        )
+        confirm.assert_called_once()
+
+    def test_declined_or_blocked_claim_preview_never_records(self) -> None:
+        for blocked in (False, True):
+            with self.subTest(blocked=blocked):
+                window: Any = object.__new__(TkinterDesktopWindow)
+                controller = RecordingResearchSourceLoadController()
+                if blocked:
+                    preview = controller.claim_write_preview_response
+                    assert preview.research_claim_write_preview is not None
+                    allowed_preview = preview.research_claim_write_preview
+                    controller.claim_write_preview_response = BrainResponse(
+                        message="Claim preview blocked.",
+                        request_id="claim-preview-blocked",
+                        intent="research_claim_write_preview",
+                        memory_count=0,
+                        success=False,
+                        research_claim_write_preview=ResearchClaimWritePreview(
+                            run_id=allowed_preview.run_id,
+                            run_status=ResearchRunStatus.CANCELLED,
+                            sources=allowed_preview.sources,
+                            evidence=allowed_preview.evidence,
+                            text=allowed_preview.text,
+                            epistemic_state=allowed_preview.epistemic_state,
+                            confidence=allowed_preview.confidence,
+                            allowed=False,
+                            reason="A closed run cannot accept claims.",
+                        ),
+                    )
+                window._root = object()
+                window._controller = controller
+                window._research_run_id = RecordingInput("run-123")
+                window._research_claim_evidence_ids = RecordingInput("evidence-123")
+                window._research_claim_text = RecordingInput("Claim.")
+                window._research_claim_epistemic_state = RecordingInput("unknown")
+                window._research_claim_confidence = RecordingInput("unassessed")
+                window._research_claim_supersedes_id = RecordingInput("")
+                window._status = RecordingStatus()
+                window._append_response = lambda _response: None
+
+                with patch(
+                    "desktop.TkinterDesktopWindow.messagebox.askyesno",
+                    return_value=False,
+                ) as confirm:
+                    window._preview_and_record_research_claim()
+
+                self.assertEqual(controller.claim_records, [])
+                if blocked:
+                    confirm.assert_not_called()
+                else:
+                    confirm.assert_called_once()
+
     def test_allowed_research_status_preview_requires_confirmation_before_update(
         self,
     ) -> None:
@@ -1157,6 +1262,9 @@ class RecordingResearchSourceLoadController:
         self.comparison_note_records: list[tuple[str, str, str, str, str]] = []
         self.assessment_write_previews: list[tuple[str, str, str, str, str, str]] = []
         self.assessment_records: list[tuple[str, str, str, str, str, str]] = []
+        self.claim_previews: list[str] = []
+        self.claim_write_previews: list[tuple[str, str, str, str, str, str]] = []
+        self.claim_records: list[tuple[str, str, str, str, str, str]] = []
         self.response = BrainResponse(
             message="Loaded.",
             request_id="research-source-load",
@@ -1434,6 +1542,44 @@ class RecordingResearchSourceLoadController:
             intent="research_source_assessment_record",
             memory_count=0,
         )
+        claim_preview = ResearchClaimPreview(
+            run_id=run.run_id,
+            question=run.question,
+            run_status=run.status,
+            claims=(),
+            reason="No claims recorded.",
+        )
+        self.claim_preview_response = BrainResponse(
+            message="Claim history preview.",
+            request_id="research-claim-preview",
+            intent="research_claim_preview",
+            memory_count=0,
+            research_claim_preview=claim_preview,
+        )
+        claim_write_preview = ResearchClaimWritePreview(
+            run_id=run.run_id,
+            run_status=run.status,
+            sources=(accepted_source,),
+            evidence=(assessment_evidence,),
+            text="The evidence supports a bounded claim.",
+            epistemic_state=ResearchEpistemicState.STRONG_EVIDENCE,
+            confidence=ResearchClaimConfidence.HIGH,
+            allowed=True,
+            reason="Research claim can be recorded after confirmation.",
+        )
+        self.claim_write_preview_response = BrainResponse(
+            message="Claim write preview allowed.",
+            request_id="research-claim-write-preview",
+            intent="research_claim_write_preview",
+            memory_count=0,
+            research_claim_write_preview=claim_write_preview,
+        )
+        self.claim_record_response = BrainResponse(
+            message="Claim recorded.",
+            request_id="research-claim-record",
+            intent="research_claim_record",
+            memory_count=0,
+        )
         status_preview = ResearchRunStatusTransitionPreview(
             run_id="run-123",
             current_status=ResearchRunStatus.COLLECTING,
@@ -1551,6 +1697,52 @@ class RecordingResearchSourceLoadController:
             raise ValueError("A research source document ID cannot be empty.")
         self.assessment_previews.append((run_id, document_id))
         return self.assessment_preview_response
+
+    def preview_research_claims(self, run_id: str) -> BrainResponse:
+        if not run_id.strip():
+            raise ValueError("A research run ID cannot be empty.")
+        self.claim_previews.append(run_id)
+        return self.claim_preview_response
+
+    def preview_research_claim_write(
+        self,
+        run_id: str,
+        evidence_ids: str,
+        text: str,
+        epistemic_state: str,
+        confidence: str = "unassessed",
+        supersedes_claim_id: str = "",
+    ) -> BrainResponse:
+        values = (
+            run_id,
+            evidence_ids,
+            text,
+            epistemic_state,
+            confidence,
+            supersedes_claim_id,
+        )
+        self.claim_write_previews.append(values)
+        return self.claim_write_preview_response
+
+    def record_research_claim(
+        self,
+        run_id: str,
+        evidence_ids: str,
+        text: str,
+        epistemic_state: str,
+        confidence: str = "unassessed",
+        supersedes_claim_id: str = "",
+    ) -> BrainResponse:
+        values = (
+            run_id,
+            evidence_ids,
+            text,
+            epistemic_state,
+            confidence,
+            supersedes_claim_id,
+        )
+        self.claim_records.append(values)
+        return self.claim_record_response
 
     def preview_research_source_comparison(
         self,

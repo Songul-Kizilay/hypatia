@@ -10,6 +10,9 @@ from tempfile import NamedTemporaryFile
 from typing import Any, Protocol
 
 from core.Exceptions import ResearchError
+from research.ResearchClaimConfidence import ResearchClaimConfidence
+from research.ResearchClaimRecord import ResearchClaimRecord
+from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchFailureRecord import ResearchFailureRecord
 from research.ResearchInformationTrust import ResearchInformationTrust
@@ -74,8 +77,8 @@ class _CollectionBudget:
 class JsonFileResearchRunStore:
     """Load and atomically replace a strict versioned research-run document."""
 
-    _SCHEMA_VERSION = 7
-    _SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5, 6, 7}
+    _SCHEMA_VERSION = 8
+    _SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5, 6, 7, 8}
     _DOCUMENT_FIELDS = {"schema_version", "runs"}
     _RUN_FIELDS_V1 = {
         "run_id",
@@ -92,6 +95,7 @@ class JsonFileResearchRunStore:
     _RUN_FIELDS_V5 = _RUN_FIELDS_V4
     _RUN_FIELDS_V6 = _RUN_FIELDS_V5 | {"comparison_notes"}
     _RUN_FIELDS_V7 = _RUN_FIELDS_V6
+    _RUN_FIELDS_V8 = _RUN_FIELDS_V7 | {"claims"}
     _SOURCE_FIELDS_V1_V6 = {
         "document_id",
         "url",
@@ -133,6 +137,16 @@ class JsonFileResearchRunStore:
     }
     _ASSESSMENT_FIELDS_V5 = _ASSESSMENT_FIELDS_V4 | {"supersedes_assessment_id"}
     _ASSESSMENT_FIELDS_V7 = _ASSESSMENT_FIELDS_V5 | {"information_trust"}
+    _CLAIM_FIELDS = {
+        "claim_id",
+        "text",
+        "epistemic_state",
+        "confidence",
+        "source_document_ids",
+        "evidence_ids",
+        "recorded_at",
+        "supersedes_claim_id",
+    }
     _COMPARISON_NOTE_FIELDS = {
         "note_id",
         "source_document_ids",
@@ -240,6 +254,7 @@ class JsonFileResearchRunStore:
             5: self._RUN_FIELDS_V5,
             6: self._RUN_FIELDS_V6,
             7: self._RUN_FIELDS_V7,
+            8: self._RUN_FIELDS_V8,
         }[schema_version]
         if not isinstance(value, dict) or set(value) != expected_fields:
             raise ResearchError("Research run store contains an invalid run record.")
@@ -255,6 +270,7 @@ class JsonFileResearchRunStore:
         discoveries_data = [] if schema_version < 3 else value["discoveries"]
         assessments_data = [] if schema_version < 4 else value["assessments"]
         comparison_notes_data = [] if schema_version < 6 else value["comparison_notes"]
+        claims_data = [] if schema_version < 8 else value["claims"]
         if (
             not isinstance(sources_data, list)
             or not isinstance(failures_data, list)
@@ -262,6 +278,7 @@ class JsonFileResearchRunStore:
             or not isinstance(discoveries_data, list)
             or not isinstance(assessments_data, list)
             or not isinstance(comparison_notes_data, list)
+            or not isinstance(claims_data, list)
         ):
             raise ResearchError("Research run store contains invalid run collections.")
         for values in (
@@ -271,6 +288,7 @@ class JsonFileResearchRunStore:
             discoveries_data,
             assessments_data,
             comparison_notes_data,
+            claims_data,
         ):
             budget.consume(values)
         return ResearchRun(
@@ -295,6 +313,7 @@ class JsonFileResearchRunStore:
                 self._parse_comparison_note(item, budget)
                 for item in comparison_notes_data
             ),
+            claims=tuple(self._parse_claim(item, budget) for item in claims_data),
         )
 
     def _parse_source(
@@ -472,6 +491,51 @@ class JsonFileResearchRunStore:
             recorded_at=self._parse_datetime(value["recorded_at"], "recorded_at"),
         )
 
+    def _parse_claim(
+        self,
+        value: Any,
+        budget: _CollectionBudget,
+    ) -> ResearchClaimRecord:
+        if not isinstance(value, dict) or set(value) != self._CLAIM_FIELDS:
+            raise ResearchError("Research run store contains an invalid claim record.")
+        source_document_ids = value["source_document_ids"]
+        evidence_ids = value["evidence_ids"]
+        if not isinstance(source_document_ids, list) or not isinstance(
+            evidence_ids,
+            list,
+        ):
+            raise ResearchError("Research run store claim references must be lists.")
+        budget.consume(source_document_ids)
+        budget.consume(evidence_ids)
+        return ResearchClaimRecord(
+            claim_id=value["claim_id"],
+            text=value["text"],
+            epistemic_state=self._parse_epistemic_state(value["epistemic_state"]),
+            confidence=self._parse_claim_confidence(value["confidence"]),
+            source_document_ids=tuple(source_document_ids),
+            evidence_ids=tuple(evidence_ids),
+            recorded_at=self._parse_datetime(value["recorded_at"], "recorded_at"),
+            supersedes_claim_id=value["supersedes_claim_id"],
+        )
+
+    @staticmethod
+    def _parse_epistemic_state(value: Any) -> ResearchEpistemicState:
+        try:
+            return ResearchEpistemicState(value)
+        except (TypeError, ValueError) as error:
+            raise ResearchError(
+                "Research run store contains an invalid epistemic state."
+            ) from error
+
+    @staticmethod
+    def _parse_claim_confidence(value: Any) -> ResearchClaimConfidence:
+        try:
+            return ResearchClaimConfidence(value)
+        except (TypeError, ValueError) as error:
+            raise ResearchError(
+                "Research run store contains invalid claim confidence."
+            ) from error
+
     def _parse_datetime(self, value: Any, field_name: str) -> datetime:
         if not isinstance(value, str):
             raise ResearchError(
@@ -570,6 +634,19 @@ class JsonFileResearchRunStore:
                 }
                 for note in run.comparison_notes
             ],
+            "claims": [
+                {
+                    "claim_id": claim.claim_id,
+                    "text": claim.text,
+                    "epistemic_state": claim.epistemic_state.value,
+                    "confidence": claim.confidence.value,
+                    "source_document_ids": list(claim.source_document_ids),
+                    "evidence_ids": list(claim.evidence_ids),
+                    "recorded_at": claim.recorded_at.isoformat(),
+                    "supersedes_claim_id": claim.supersedes_claim_id,
+                }
+                for claim in run.claims
+            ],
             "created_at": run.created_at.isoformat(),
             "updated_at": run.updated_at.isoformat(),
         }
@@ -590,6 +667,7 @@ class JsonFileResearchRunStore:
                 run.discoveries,
                 run.assessments,
                 run.comparison_notes,
+                run.claims,
             ):
                 budget.consume_count(len(values))
             for discovery in run.discoveries:
@@ -600,6 +678,9 @@ class JsonFileResearchRunStore:
                 budget.consume_count(len(note.source_document_ids))
                 budget.consume_count(len(note.evidence_ids))
                 budget.consume_count(len(note.assessment_ids))
+            for claim in run.claims:
+                budget.consume_count(len(claim.source_document_ids))
+                budget.consume_count(len(claim.evidence_ids))
         run_ids = [run.run_id for run in runs]
         if len(run_ids) != len(set(run_ids)):
             raise ResearchError("Research run store contains duplicate run IDs.")
@@ -613,6 +694,9 @@ class JsonFileResearchRunStore:
             raise ResearchError(
                 "Research run store contains duplicate comparison note IDs."
             )
+        claim_ids = [claim.claim_id for run in runs for claim in run.claims]
+        if len(claim_ids) != len(set(claim_ids)):
+            raise ResearchError("Research run store contains duplicate claim IDs.")
 
     @staticmethod
     def _remove_temporary_file(path: Path | None) -> None:
