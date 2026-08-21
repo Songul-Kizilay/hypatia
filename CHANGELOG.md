@@ -2,6 +2,28 @@
 
 All notable project changes are recorded here.
 
+## [0.3.81] - 2026-08-21
+
+### Added
+
+- The selected research run now has a compact read-only summary directly below
+  the desktop selector: status plus complete source, evidence, and claim counts.
+- Empty and invalid selection states provide explicit guidance instead of
+  retaining a stale summary.
+
+### Safety
+
+- The summary is computed only from the already loaded immutable catalog
+  snapshot. It opens no Brain, storage, provider, network, or mutation path.
+- Counts are complete collection sizes, not model estimates or silently
+  truncated detail counts.
+
+### Verification
+
+- The package-aware full local suite contains 1,425 passing automated tests.
+- Focused coverage verifies collecting/completed summaries, selection changes,
+  empty catalogs, invalid selection, and zero side-effect catalog behavior.
+
 ## [0.3.80] - 2026-08-21
 
 ### Added

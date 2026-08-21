@@ -31,6 +31,8 @@ The MVP may present only current Brain/CognitiveEngine capabilities:
 - explicit creation/listing of persistent research runs through a read-only
   question/status/ID selector, plus optional attachment of a source to that
   explicitly selected run;
+- a compact selected-run status and complete source/evidence/claim count summary
+  derived only from the selector's already loaded immutable snapshot;
 - read-only accepted-content restoration status captured during startup, with
   only availability and aggregate restored document/paragraph counts;
 - explicit recording and read-only viewing of a selected attached-source chunk
