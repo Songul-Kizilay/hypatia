@@ -97,6 +97,12 @@ Hypatia currently runs as a local-first CLI. The initial security boundary is:
   are disabled while Brain is active, duplicate keyboard requests are rejected,
   close discards late results, and unexpected exceptions are reduced to a
   generic message without exposing provider or transport detail;
+- explicit local-RAG requests place a code-owned instruction in the system role,
+  separate the explicit user question from retrieved text, and mark every
+  retrieved excerpt as untrusted data with no instruction authority. That path
+  receives no conversation history or tool capability. This is a defense in
+  depth boundary, not a complete prompt-injection firewall or a guarantee of
+  model compliance;
 - semantic embeddings are opt-in and restricted to the local Ollama endpoint
   policy enforced at bootstrap.
 

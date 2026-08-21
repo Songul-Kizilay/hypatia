@@ -53,7 +53,10 @@ class FakeLLMProvider(LLMProvider):
         self,
         prompt: str,
         history: tuple[LLMConversationMessage, ...] = (),
+        *,
+        system_instruction: str | None = None,
     ) -> str:
+        del system_instruction
         self.generate_calls += 1
         return "unused"
 
@@ -67,7 +70,10 @@ class RecordingLLMProvider(LLMProvider):
         self,
         prompt: str,
         history: tuple[LLMConversationMessage, ...] = (),
+        *,
+        system_instruction: str | None = None,
     ) -> str:
+        del system_instruction
         self.calls.append((prompt, history))
         return next(self._responses)
 

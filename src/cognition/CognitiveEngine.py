@@ -22,7 +22,10 @@ from core.Exceptions import (
 )
 from eventbus.EventBus import EventBus
 from knowledge.KnowledgeCitation import KnowledgeCitation
-from knowledge.KnowledgeContextPrompt import build_knowledge_context_prompt
+from knowledge.KnowledgeContextPrompt import (
+    KNOWLEDGE_CONTEXT_SYSTEM_INSTRUCTION,
+    build_knowledge_context_prompt,
+)
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from llm.LLMProvider import LLMError, LLMProvider
 from memory.HybridSemanticMemoryRanker import HybridSemanticMemoryRanker
@@ -1552,7 +1555,8 @@ class CognitiveEngine:
         citations = [KnowledgeCitation.from_chunk(result) for result in results]
         try:
             answer = self._llm_provider.generate(
-                build_knowledge_context_prompt(query, results, citations)
+                build_knowledge_context_prompt(query, results, citations),
+                system_instruction=KNOWLEDGE_CONTEXT_SYSTEM_INSTRUCTION,
             )
         except LLMError as error:
             return self._response_composer.ask_knowledge_failure(request, str(error))

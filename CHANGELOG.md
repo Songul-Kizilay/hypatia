@@ -2,6 +2,37 @@
 
 All notable project changes are recorded here.
 
+## [0.3.71] - 2026-08-21
+
+### Added
+
+- LLM providers accept one optional, trusted per-request system instruction
+  without changing ordinary conversation calls or persisted configuration.
+- Explicit `ask knowledge` requests use a code-owned system instruction that
+  treats every retrieved source excerpt as untrusted evidence rather than an
+  instruction.
+
+### Changed
+
+- The explicit user question is separated from bounded source excerpts, and
+  every supplied excerpt is visibly labelled `UNTRUSTED SOURCE` before it is
+  sent to the configured model.
+
+### Safety
+
+- Retrieved text is told that it has no authority to change roles or rules,
+  reveal secrets, request tools or files, or override other instructions. The
+  local-RAG path still receives no tool capability and uses no conversation
+  history.
+- This is a prompt-level instruction-authority boundary, not a claim that a
+  language model can never be influenced by adversarial text. Existing source,
+  response-size, transport, and user-initiation limits remain in force.
+
+### Verification
+
+- The package-aware full local suite contains 1,353 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass across 313 source files.
+
 ## [0.3.70] - 2026-08-21
 
 ### Changed

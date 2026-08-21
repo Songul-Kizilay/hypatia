@@ -37,6 +37,7 @@ from core.Exceptions import (
 )
 from eventbus.Event import Event
 from eventbus.EventBus import EventBus
+from knowledge.KnowledgeContextPrompt import KNOWLEDGE_CONTEXT_SYSTEM_INSTRUCTION
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from llm.LLMConversationMessage import LLMConversationMessage
 from llm.LLMProvider import LLMError
@@ -228,14 +229,18 @@ class RecordingLLMProvider:
 
     def __init__(self, response: str) -> None:
         self.calls: list[tuple[str, tuple[LLMConversationMessage, ...]]] = []
+        self.system_instructions: list[str | None] = []
         self.response = response
 
     def generate(
         self,
         prompt: str,
         history: tuple[LLMConversationMessage, ...] = (),
+        *,
+        system_instruction: str | None = None,
     ) -> str:
         self.calls.append((prompt, history))
+        self.system_instructions.append(system_instruction)
         return self.response
 
 
@@ -244,13 +249,17 @@ class FailingLLMProvider:
 
     def __init__(self) -> None:
         self.calls: list[tuple[str, tuple[LLMConversationMessage, ...]]] = []
+        self.system_instructions: list[str | None] = []
 
     def generate(
         self,
         prompt: str,
         history: tuple[LLMConversationMessage, ...] = (),
+        *,
+        system_instruction: str | None = None,
     ) -> str:
         self.calls.append((prompt, history))
+        self.system_instructions.append(system_instruction)
         raise LLMError("Generation unavailable.")
 
 
@@ -2378,10 +2387,14 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(len(response.knowledge_citations), 2)
         self.assertEqual(len(llm_provider.calls), 1)
         prompt, history = llm_provider.calls[0]
-        self.assertIn("Answer the user using only the local context below.", prompt)
-        self.assertIn("User question: hypatia", prompt)
+        self.assertIn("Explicit user question:\nhypatia", prompt)
+        self.assertIn("[UNTRUSTED SOURCE 1]", prompt)
         self.assertIn(str(Path(self.temporary_directory.name) / "knowledge.md"), prompt)
         self.assertEqual(history, ())
+        self.assertEqual(
+            llm_provider.system_instructions,
+            [KNOWLEDGE_CONTEXT_SYSTEM_INSTRUCTION],
+        )
         self.assertEqual(self.memory_manager.all(), [])
 
     def test_ask_knowledge_requires_an_llm_without_mutating_memory(self) -> None:

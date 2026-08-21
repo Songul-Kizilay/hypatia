@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.70 (Genesis)`
+`v0.3.71 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.70`** is the current executable package and GitHub
+- **Runtime release `v0.3.71`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -52,6 +52,11 @@ with optional OpenAI-compatible LLM conversation support.
   provider request unless the user deliberately selects it.
 - An explicit desktop `Knowledge context` action for bounded, cited local
   document context. It does not call an LLM or change conversation memory.
+- Explicit `ask knowledge` local-RAG requests separate the user's question from
+  source excerpts, label every excerpt as untrusted data, and add a code-owned
+  per-request system instruction denying source text any instruction authority.
+  That request receives no conversation history or tool capability. This is a
+  bounded prompt-level defense, not a complete prompt-injection firewall.
 - Separate desktop `Knowledge graph` and `Loaded sources` actions expose the
   existing bounded, cited source structure and read-only source catalog. They
   use only explicit user actions, do not call an LLM, and do not change
@@ -375,11 +380,21 @@ with optional OpenAI-compatible LLM conversation support.
 - Encryption at rest, cloud synchronization, multi-process storage locking,
   and persistence schema migration.
 
+## Current Local Hardware Baseline
+
+The development machine observed on 21 August 2026 has a 4-core/8-thread CPU,
+approximately 16 GiB RAM, and a 4 GiB-class discrete GPU. Its local Ollama
+0.32.14 installation currently includes 4B and 8B chat models plus a dedicated
+embedding model. These details are a privacy-minimal engineering snapshot, not
+a runtime requirement or performance benchmark. Hypatia should retain CPU
+fallback and remain useful with locally hosted 4B/8B models while allowing
+stronger hardware to scale the same provider boundaries.
+
 ## Verification
 
 Last verified in the local development environment:
 
-- 1,350 automated tests pass through package-aware discovery.
+- 1,353 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -406,8 +421,8 @@ so this check did not alter the project's persisted data.
 
 ## Next Milestone
 
-Add bounded, user-visible progress and cancellation semantics to the desktop
-request boundary without pretending an active provider transport can be killed
-safely. The current daemon worker keeps Tkinter responsive and discards late
-results on close; provider and HTTPS calls remain bounded by their existing
-timeouts.
+Add bounded, user-visible progress and cooperative cancellation semantics to
+the desktop request boundary without pretending an active provider transport
+can be forcefully killed. In parallel, preserve explicit source provenance so
+future trust or taint metadata can be added without granting retrieved text
+instruction authority.

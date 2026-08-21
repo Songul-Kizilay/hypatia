@@ -31,7 +31,10 @@ class RecordingProvider:
         self,
         prompt: str,
         history: tuple[LLMConversationMessage, ...] = (),
+        *,
+        system_instruction: str | None = None,
     ) -> str:
+        del system_instruction
         self.calls.append((prompt, history))
         return self.payload
 
@@ -45,7 +48,10 @@ class FailingProvider:
         self,
         prompt: str,
         history: tuple[LLMConversationMessage, ...] = (),
+        *,
+        system_instruction: str | None = None,
     ) -> str:
+        del system_instruction
         self.calls.append((prompt, history))
         raise self.error
 
