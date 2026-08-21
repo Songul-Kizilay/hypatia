@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.79 (Genesis)`
+`v0.3.80 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.79`** is the current executable package and GitHub
+- **Runtime release `v0.3.80`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -40,6 +40,11 @@ with optional OpenAI-compatible LLM conversation support.
   compact grouped controls, explanatory empty states, and a conversation-first
   opening view. It is a thin adapter over the existing Brain and does not create
   a second store, provider, or network channel.
+- The Research tab has a read-only persisted-run selector labelled with the
+  question, status, and exact ID. Refresh preserves a valid selection, creation
+  selects the new run, and switching clears only stale candidate/export views.
+  Selection itself starts no network, provider, or mutation action and leaves
+  authored research fields unchanged.
 - Explicit provider-backed desktop actions use one daemon request worker so
   Ollama and approved HTTPS waits do not block Tkinter's event loop. Results
   are rendered only by the event thread, all command buttons are single-flight,
@@ -455,7 +460,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,422 automated tests pass through package-aware discovery.
+- 1,424 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -490,7 +495,7 @@ changed.
 
 ## Next Milestone
 
-Add a read-only research-run selector backed by the persisted run catalog so
-desktop users do not need to copy and paste run IDs for ordinary research
-actions. Selection must remain presentation-only, preserve explicit action
-boundaries, and never start network, provider, or mutation work automatically.
+Add a compact read-only selected-run summary beside the selector, including
+status and bounded source/evidence/claim counts. It must use only the already
+loaded catalog snapshot, start no runtime action, and clearly distinguish
+displayed counts from any future truncated detail view.

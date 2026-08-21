@@ -2,6 +2,35 @@
 
 All notable project changes are recorded here.
 
+## [0.3.80] - 2026-08-21
+
+### Added
+
+- `Research runs` now populates a read-only desktop selector whose labels show
+  each persisted question, run status, and exact run ID.
+- Creating a run immediately places the new record in the same selector, so
+  ordinary research actions no longer require manual run-ID copy and paste.
+
+### Changed
+
+- Refresh preserves the current run when it still exists; otherwise it selects
+  the first persisted result. An empty catalog clears the selected run.
+- Changing runs clears only stale presentation state tied to the prior run:
+  source candidates, contradiction suggestions, and export preview.
+
+### Safety
+
+- Catalog refresh and selection are local, read-only presentation actions. They
+  start no discovery, source load, provider, network, or research mutation.
+- User-authored research fields remain untouched, and the status line explicitly
+  reports that selection started no action.
+
+### Verification
+
+- The package-aware full local suite contains 1,424 passing automated tests.
+- Focused coverage verifies catalog rendering, created-run selection,
+  empty-catalog clearing, run switching, and absence of runtime side effects.
+
 ## [0.3.79] - 2026-08-21
 
 ### Added

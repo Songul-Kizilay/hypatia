@@ -22,6 +22,7 @@ from research.ResearchClaimContradictionCandidate import (
 )
 from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchInformationTrust import ResearchInformationTrust
+from research.ResearchRun import ResearchRun
 from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
 )
@@ -184,6 +185,7 @@ class TkinterDesktopWindow:
         self._knowledge_query = tk.StringVar()
         self._research_question = tk.StringVar()
         self._research_run_id = tk.StringVar()
+        self._research_run_choice = tk.StringVar()
         self._research_candidate = tk.StringVar()
         self._research_url = tk.StringVar()
         self._research_source_document_id = tk.StringVar()
@@ -216,6 +218,7 @@ class TkinterDesktopWindow:
         self._relation_target_id = tk.StringVar()
         self._session_summaries: list[SessionSummary] = []
         self._research_candidates: tuple[ResearchSourceCandidate, ...] = ()
+        self._research_runs: tuple[ResearchRun, ...] = ()
         self._research_candidate_run_id = ""
         self._research_candidate_discovery_id = ""
         self._research_claim_contradiction_proposal_run_id = ""
@@ -633,19 +636,29 @@ class TkinterDesktopWindow:
             text="Research runs",
             command=self._show_research_runs,
         ).grid(row=0, column=3, sticky="ew", padx=(8, 0))
-        ttk.Label(research_frame, text="Run ID").grid(
+        ttk.Label(research_frame, text="Research run").grid(
             row=1,
             column=0,
             sticky="w",
             pady=(8, 0),
         )
-        ttk.Entry(research_frame, textvariable=self._research_run_id).grid(
+        self._research_run_selector = ttk.Combobox(
+            research_frame,
+            textvariable=self._research_run_choice,
+            values=(),
+            state="readonly",
+        )
+        self._research_run_selector.grid(
             row=1,
             column=1,
             columnspan=2,
             sticky="ew",
             padx=(8, 8),
             pady=(8, 0),
+        )
+        self._research_run_selector.bind(
+            "<<ComboboxSelected>>",
+            self._select_research_run,
         )
         self._request_button(
             research_frame,
@@ -1474,13 +1487,68 @@ class TkinterDesktopWindow:
             return
         self._append_response(response)
         if response.success and response.research_runs:
-            self._clear_research_candidates()
-            self._clear_research_claim_contradiction_proposals()
-            self._research_run_id.set(response.research_runs[0].run_id)
+            self._render_research_run_selector(response.research_runs)
 
     def _show_research_runs(self) -> None:
         """Render the current persisted run catalog without network access."""
-        self._append_response(self._controller.list_research_runs())
+        response = self._controller.list_research_runs()
+        self._append_response(response)
+        if response.success:
+            self._render_research_run_selector(tuple(response.research_runs))
+
+    def _render_research_run_selector(
+        self,
+        runs: tuple[ResearchRun, ...] | list[ResearchRun],
+    ) -> None:
+        """Replace the presentation-only run catalog and select a valid item."""
+        normalized_runs = tuple(runs)
+        selected_run_id = self._research_run_id.get().strip()
+        self._research_runs = normalized_runs
+        labels = tuple(self._research_run_label(run) for run in normalized_runs)
+        self._research_run_selector.configure(values=labels)
+        if not normalized_runs:
+            self._research_run_choice.set("")
+            self._research_run_id.set("")
+            self._clear_research_run_dependent_presentations()
+            return
+        selected_index = next(
+            (
+                index
+                for index, run in enumerate(normalized_runs)
+                if run.run_id == selected_run_id
+            ),
+            0,
+        )
+        self._research_run_selector.current(selected_index)
+        self._select_research_run()
+
+    @staticmethod
+    def _research_run_label(run: ResearchRun) -> str:
+        question = run.question
+        if len(question) > 80:
+            question = f"{question[:77]}..."
+        return f"{question} [{run.status.value}] — {run.run_id}"
+
+    def _select_research_run(self, _event: object | None = None) -> None:
+        """Select one catalogued run without starting any research action."""
+        selected_index = self._research_run_selector.current()
+        if not 0 <= selected_index < len(self._research_runs):
+            self._status.set("Refresh and select a research run first.")
+            return
+        selected_run = self._research_runs[selected_index]
+        previous_run_id = self._research_run_id.get().strip()
+        self._research_run_id.set(selected_run.run_id)
+        if previous_run_id != selected_run.run_id:
+            self._clear_research_run_dependent_presentations()
+        self._status.set(
+            f"research run selected: {selected_run.run_id}; no action started"
+        )
+
+    def _clear_research_run_dependent_presentations(self) -> None:
+        """Clear only ephemeral views tied to a previous exact run."""
+        self._clear_research_candidates()
+        self._clear_research_claim_contradiction_proposals()
+        self._research_markdown_export_preview = None
 
     def _preview_research_run_markdown_export(self) -> None:
         """Render one terminal run as bounded Markdown without writing a file."""
