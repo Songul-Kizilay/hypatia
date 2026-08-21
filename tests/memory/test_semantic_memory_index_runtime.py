@@ -4,6 +4,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from threading import Event as ThreadEvent
 from unittest.mock import patch
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
@@ -39,6 +40,50 @@ class ToggleEmbeddingProvider:
         if self.should_fail:
             raise MemoryError("Embedding provider unavailable.")
         return self.embedding
+
+
+class BlockingEmbeddingProvider:
+    def __init__(
+        self,
+        embedding: Embedding,
+        *,
+        blocked_call_count: int = 1,
+    ) -> None:
+        self.embedding = embedding
+        self.sources: list[str] = []
+        self.entered = tuple(ThreadEvent() for _ in range(blocked_call_count))
+        self.release = tuple(ThreadEvent() for _ in range(blocked_call_count))
+
+    def embed(
+        self,
+        source_text: str,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> Embedding:
+        self.sources.append(source_text)
+        call_index = len(self.sources) - 1
+        if call_index < len(self.entered):
+            self.entered[call_index].set()
+            if not self.release[call_index].wait(2):
+                raise RuntimeError("Test embedding release timed out.")
+        return self.embedding
+
+
+class RecordingEmbeddingCache:
+    def __init__(self) -> None:
+        self.replacements: list[tuple[tuple[str, str, Embedding], ...]] = []
+
+    def get(self, memory_id: str, source_text: str) -> Embedding | None:
+        return None
+
+    def replace(self, entries: tuple[tuple[str, str, Embedding], ...]) -> None:
+        self.replacements.append(entries)
+
+    def upsert(self, memory_id: str, source_text: str, embedding: Embedding) -> None:
+        raise AssertionError("No incremental cache write was expected.")
+
+    def remove(self, memory_id: str) -> None:
+        raise AssertionError("No incremental cache removal was expected.")
 
 
 class SemanticMemoryIndexRuntimeTests(unittest.TestCase):
@@ -246,6 +291,93 @@ class SemanticMemoryIndexRuntimeTests(unittest.TestCase):
                 runtime.last_update_error(),
                 "Semantic index update failed.",
             )
+
+    def test_background_refresh_is_single_flight_and_search_falls_back(self) -> None:
+        memory_manager = MemoryManager()
+        memory_manager.add("First fact")
+        provider = BlockingEmbeddingProvider(Embedding((1, 0)))
+        runtime = SemanticMemoryIndexRuntime(SemanticMemoryIndexBuilder(provider))
+
+        self.assertEqual(runtime.start_refresh(memory_manager), "started")
+        self.assertTrue(provider.entered[0].wait(1))
+        self.assertTrue(runtime.is_rebuilding())
+        self.assertEqual(runtime.start_refresh(memory_manager), "already_running")
+        self.assertEqual(runtime.search("query", limit=1), ())
+        self.assertEqual(provider.sources, ["First fact"])
+
+        provider.release[0].set()
+        self.assertTrue(runtime.wait_for_idle(1))
+        self.assertFalse(runtime.is_rebuilding())
+        current_index = runtime.current()
+        assert current_index is not None
+        self.assertEqual(current_index.count(), 1)
+
+    def test_background_refresh_retries_one_dirty_snapshot(self) -> None:
+        event_bus = EventBus()
+        memory_manager = MemoryManager(event_bus)
+        memory_manager.add("First fact")
+        provider = BlockingEmbeddingProvider(Embedding((1, 0)))
+        runtime = SemanticMemoryIndexRuntime(SemanticMemoryIndexBuilder(provider))
+        runtime.attach(event_bus)
+
+        self.assertEqual(runtime.start_refresh(memory_manager), "started")
+        self.assertTrue(provider.entered[0].wait(1))
+        memory_manager.add("Second fact")
+        provider.release[0].set()
+
+        self.assertTrue(runtime.wait_for_idle(1))
+        current_index = runtime.current()
+        assert current_index is not None
+        self.assertEqual(current_index.count(), 2)
+        self.assertEqual(provider.sources, ["First fact", "First fact", "Second fact"])
+        self.assertIsNone(runtime.last_rebuild_error())
+
+    def test_background_refresh_rejects_a_second_dirty_snapshot(self) -> None:
+        event_bus = EventBus()
+        memory_manager = MemoryManager(event_bus)
+        memory_manager.add("First fact")
+        provider = BlockingEmbeddingProvider(
+            Embedding((1, 0)),
+            blocked_call_count=2,
+        )
+        runtime = SemanticMemoryIndexRuntime(SemanticMemoryIndexBuilder(provider))
+        runtime.attach(event_bus)
+
+        self.assertEqual(runtime.start_refresh(memory_manager), "started")
+        self.assertTrue(provider.entered[0].wait(1))
+        memory_manager.add("Second fact")
+        provider.release[0].set()
+        self.assertTrue(provider.entered[1].wait(1))
+        memory_manager.add("Third fact")
+        provider.release[1].set()
+
+        self.assertTrue(runtime.wait_for_idle(1))
+        self.assertIsNone(runtime.current())
+        self.assertEqual(
+            runtime.last_rebuild_error(),
+            "Semantic index rebuild failed.",
+        )
+
+    def test_shutdown_cancels_publication_and_rejects_new_work(self) -> None:
+        memory_manager = MemoryManager()
+        memory_manager.add("First fact")
+        provider = BlockingEmbeddingProvider(Embedding((1, 0)))
+        cache = RecordingEmbeddingCache()
+        runtime = SemanticMemoryIndexRuntime(
+            SemanticMemoryIndexBuilder(provider, cache)
+        )
+
+        self.assertEqual(runtime.start_refresh(memory_manager), "started")
+        self.assertTrue(provider.entered[0].wait(1))
+        runtime.shutdown()
+
+        self.assertTrue(runtime.is_stopped())
+        self.assertEqual(runtime.start_refresh(memory_manager), "stopped")
+        self.assertEqual(runtime.search("query", limit=1), ())
+        provider.release[0].set()
+        self.assertTrue(runtime.wait_for_idle(1))
+        self.assertIsNone(runtime.current())
+        self.assertEqual(cache.replacements, [])
 
 
 if __name__ == "__main__":

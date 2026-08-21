@@ -2,6 +2,38 @@
 
 All notable project changes are recorded here.
 
+## [0.3.68] - 2026-08-21
+
+### Changed
+
+- Opt-in semantic-index initialization now starts as one daemon background job
+  after Bootstrap publishes the primary dependency container. A cold or
+  unavailable Ollama service no longer holds the primary startup path.
+- `semantic recall status` now reports `initializing`, `refreshing`, `ready`,
+  `unavailable`, `disabled`, or `stopped` without generating an embedding.
+- The exact `semantic recall retry` command schedules the same bounded
+  background rebuild and reports an already-running job without starting a
+  duplicate. Semantic queries use deterministic lexical fallback while a
+  rebuild is active.
+
+### Safety
+
+- Full rebuilds are single-flight. Memory events during a build mark its
+  snapshot dirty and permit at most one coalesced retry; a second changing
+  snapshot is rejected without publishing a partial or stale index.
+- Shutdown rejects new semantic work, signals the builder to cancel, and
+  suppresses index publication from in-flight work. Cancellation is checked
+  after provider calls and before derived-cache replacement; the provider call
+  itself remains bounded by the existing request and shared rebuild deadlines.
+
+### Verification
+
+- The package-aware full local suite contains 1,334 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass across 311 source files.
+- A temporary-data live smoke check against local Ollama
+  `embeddinggemma:latest` built one 768-dimensional record through the
+  background worker and returned it through explicit semantic recall.
+
 ## [0.3.67] - 2026-08-21
 
 ### Changed

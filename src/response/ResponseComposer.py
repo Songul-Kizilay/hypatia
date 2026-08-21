@@ -1809,11 +1809,11 @@ class ResponseComposer:
             else "not established"
         )
         last_rebuild = last_rebuild_error or (
-            "healthy" if runtime_state == "ready" else "unavailable"
+            "in progress"
+            if runtime_state in {"initializing", "refreshing"}
+            else "healthy" if runtime_state == "ready" else "unavailable"
         )
-        last_update = last_update_error or (
-            "healthy" if runtime_state == "ready" else "unavailable"
-        )
+        last_update = last_update_error or ("healthy" if available else "unavailable")
         return BrainResponse(
             message="\n".join(
                 (
@@ -1831,24 +1831,19 @@ class ResponseComposer:
             memory_count=0,
         )
 
-    def semantic_recall_retry_success(
+    def semantic_recall_retry_started(
         self,
         request: BrainRequest,
         *,
-        indexed_memory_records: int,
-        embedding_dimension: int | None,
+        already_running: bool,
     ) -> BrainResponse:
-        """Report one successful explicit semantic-index rebuild."""
-        dimension = (
-            embedding_dimension
-            if embedding_dimension is not None
-            else "not established"
-        )
+        """Report an accepted single-flight background rebuild request."""
         return BrainResponse(
             message=(
-                "Semantic recall retry succeeded:\n"
-                f"Indexed memory records: {indexed_memory_records}\n"
-                f"Embedding dimension: {dimension}"
+                "Semantic recall rebuild is already in progress; no second rebuild "
+                "was started."
+                if already_running
+                else "Semantic recall rebuild started in the background."
             ),
             request_id=request.request_id,
             intent="semantic_recall_retry",

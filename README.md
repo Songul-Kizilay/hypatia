@@ -90,6 +90,9 @@ To create the world's most capable personal AI research companion.
   before network access while preserving lexical fallback
 - A configurable cold semantic-rebuild provider-call budget (256 by default),
   with all cache misses counted before any local Ollama request
+- Single-flight background semantic initialization and explicit retry, with
+  observable safe states, lexical fallback during rebuilds, one dirty-snapshot
+  retry, and shutdown-aware publication
 - An opt-in, provider-scoped semantic-embedding cache with bounded UTF-8
   snapshots, entry/identifier/source/vector limits, deterministic ordering, and
   atomic rollback-safe replacement
@@ -461,14 +464,25 @@ HYPATIA_SEMANTIC_MEMORY_REBUILD_TIMEOUT_SECONDS=120
 ```
 
 The endpoint and model shown are defaults when their optional settings are
-absent. No API key is used. Startup calls the configured local endpoint only
-when the enabled value is exactly lowercase `true`. A successful refresh swaps
-in a complete replacement index. If the first refresh fails, the primary
-application still starts while semantic retrieval reports a safe unavailable
-state. Local memory add, update, delete, and expiry events update an available
-derived index on a best-effort basis. An embedding failure never undoes an
-already-completed primary-memory operation. The vectors remain in RAM and are
-recreated from local memory on the next successful rebuild.
+absent. No API key is used. When the enabled value is exactly lowercase `true`,
+Bootstrap publishes the primary application first and starts one daemon
+semantic rebuild in the background. A successful refresh swaps in a complete
+replacement index. A cold, slow, or unavailable local provider therefore does
+not hold the primary startup path; semantic retrieval reports `initializing`
+and uses deterministic lexical fallback until a complete index is ready. If
+the first refresh fails, the runtime reports a safe unavailable state. Local
+memory add, update, delete, and expiry events update an available derived index
+on a best-effort basis. An embedding failure never undoes an already-completed
+primary-memory operation. The vectors remain in RAM and are recreated from
+local memory on the next successful rebuild.
+
+Only one full rebuild can run at a time. A memory event during rebuilding marks
+the captured snapshot dirty and allows one coalesced rebuild attempt with a new
+snapshot; a second changing attempt publishes neither a stale nor partial
+index. Shutdown rejects new rebuilds, signals cancellation, and prevents an
+in-flight job from publishing an index. An already-running local HTTP request
+still completes or reaches its configured timeout before the worker can observe
+that cancellation.
 
 Before a startup rebuild opens any provider request, Hypatia resolves every
 provider-scoped cache lookup and counts the misses. The default maximum is 256;
@@ -516,16 +530,19 @@ fallback`.
 
 Use `semantic recall status` to inspect the optional runtime without generating
 an embedding or changing memory. It reports whether the runtime is disabled,
-initializing, unavailable, or ready; a ready runtime also reports its
-indexed-record count and embedding dimension. Separate safe rebuild and
-incremental-update diagnostics never expose provider, endpoint, model, cache,
-source-text, budget, or exception details.
+initializing, refreshing, unavailable, ready, or stopped. A ready runtime, and
+a refreshing runtime with a previous complete index, also report indexed-record
+count and embedding dimension. Separate safe rebuild and incremental-update
+diagnostics never expose provider, endpoint, model, cache, source-text, budget,
+or exception details.
 
-Use the exact `semantic recall retry` command to deliberately retry one complete
-bounded rebuild after an unavailable startup or later rebuild failure. It is
-never triggered by normal chat, recall, status, or a memory event. Success
-publishes only a complete replacement; failure preserves the last complete
-index when one exists and otherwise leaves semantic retrieval unavailable.
+Use the exact `semantic recall retry` command to schedule one complete bounded
+background rebuild after an unavailable startup or later rebuild failure. It
+returns immediately; another retry while work is active reports the existing
+job and does not start a second one. It is never triggered by normal chat,
+recall, or status. Success publishes only a complete replacement; failure
+preserves the last complete index when one exists and otherwise leaves semantic
+retrieval unavailable.
 
 Normal `recall <query>` remains lexical and does not call the semantic runtime.
 Semantic recall does not add a conversation record, alter ordinary messages, or

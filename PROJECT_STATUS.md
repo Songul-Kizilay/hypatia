@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.67 (Genesis)`
+`v0.3.68 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.67`** is the current executable package and GitHub
+- **Runtime release `v0.3.68`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -254,12 +254,14 @@ with optional OpenAI-compatible LLM conversation support.
   dependencies, rejects HTTP redirects, sends at most 8 MiB of exact compact
   UTF-8 JSON, rejects invalid or excessive bodies before opening the network
   request, and reads at most 1 MiB before parsing an embedding response. Opt-in
-  Bootstrap wiring builds and registers a replacement index at startup. If the
-  initial rebuild fails, primary Bootstrap remains available, the runtime is
-  registered and attached, and semantic
-  retrieval safely reports unavailable. The exact `semantic recall retry`
-  command deliberately retries one complete bounded rebuild; no ordinary chat,
-  recall, status, or memory event triggers a full retry. Once an index is ready,
+  Bootstrap wiring registers the runtime, publishes the primary container, and
+  starts one daemon replacement build in the background. Cold or unavailable
+  Ollama therefore does not hold primary startup. Full rebuilds are
+  single-flight; a memory event marks an active snapshot dirty and permits one
+  coalesced retry, while a second changing attempt publishes no stale result.
+  Shutdown rejects new work and suppresses in-flight index publication. The
+  exact `semantic recall retry` command schedules the same bounded background
+  rebuild and a duplicate request reuses the active job. Once an index is ready,
   memory lifecycle events apply best-effort incremental updates. An embedding
   failure never reverses a completed primary-memory write. Semantic results are
   used only by the explicit `semantic recall <query>` request path with
@@ -269,8 +271,9 @@ with optional OpenAI-compatible LLM conversation support.
   current-session semantic and lexical candidates exist. Hybrid responses use
   rank scores; semantic-only responses retain cosine-similarity scores.
 - A read-only `semantic recall status` diagnostic. It reports the optional
-  runtime's disabled, initializing, unavailable, or ready state, index size and
-  dimension when ready, and separate safe rebuild and incremental-update
+  runtime's disabled, initializing, refreshing, unavailable, ready, or stopped
+  state, index size and dimension when available, and separate safe rebuild and
+  incremental-update
   diagnostics; it does not generate an embedding or change conversation
   memory.
 - An optional model-scoped local semantic-embedding cache. It is disabled by
@@ -368,7 +371,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 1,324 automated tests pass through package-aware discovery.
+- 1,334 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -378,12 +381,12 @@ release, tag, commit, or pull-request approval.
 
 ### Live local semantic-runtime check
 
-On 15 August 2026, the opt-in runtime was exercised against the local Ollama
-service with the `embeddinggemma` model. Hypatia's own adapter received a
-valid 768-dimensional embedding, then an ephemeral Bootstrap instance indexed
-a newly created conversation and returned it through `semantic recall` as a
-semantic result. This check used temporary memory/session files and did not
-alter the project's persisted data.
+On 21 August 2026, the v0.3.68 opt-in runtime was exercised against the local
+Ollama service with `embeddinggemma:latest`. Bootstrap made the primary
+container available before the cold embedding call completed; its background
+worker then built one valid 768-dimensional record and explicit semantic recall
+returned that temporary conversation as a semantic result. This check used
+temporary memory/session files and did not alter the project's persisted data.
 
 ### Live local chat-runtime check
 
@@ -395,9 +398,9 @@ so this check did not alter the project's persisted data.
 
 ## Next Milestone
 
-Move optional semantic startup rebuilding out of the primary synchronous
-startup path. The shared deadline bounds work to 120 seconds by default, but an
-opted-in unavailable or cold provider can still delay the primary application
-for that duration before degraded mode becomes available. A later increment
-needs lazy or background initialization with single-flight retry, observable
-safe state, and deterministic shutdown behavior.
+Move best-effort incremental semantic embedding out of the synchronous
+memory-event path. Startup and explicit full rebuilds are now non-blocking, but
+an add or update after the index becomes ready can still wait for the local
+embedding provider. A later increment needs a bounded single-worker queue with
+deterministic coalescing, safe stale-event handling, observable failure state,
+and shutdown behavior that never delays or reverses primary-memory completion.

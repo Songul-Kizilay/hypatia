@@ -119,11 +119,14 @@ class ResponseComposerTests(unittest.TestCase):
         self.assertEqual(response.memory_count, 0)
         self.assertEqual(response.request_id, self.request.request_id)
 
-    def test_semantic_recall_retry_composes_explicit_success_and_failure(self) -> None:
-        success = self.composer.semantic_recall_retry_success(
+    def test_semantic_recall_retry_composes_started_duplicate_and_failure(self) -> None:
+        started = self.composer.semantic_recall_retry_started(
             self.request,
-            indexed_memory_records=0,
-            embedding_dimension=None,
+            already_running=False,
+        )
+        duplicate = self.composer.semantic_recall_retry_started(
+            self.request,
+            already_running=True,
         )
         failure = self.composer.semantic_recall_retry_failure(
             self.request,
@@ -131,17 +134,47 @@ class ResponseComposerTests(unittest.TestCase):
         )
 
         self.assertEqual(
-            success.message,
-            "Semantic recall retry succeeded:\n"
-            "Indexed memory records: 0\n"
-            "Embedding dimension: not established",
+            started.message,
+            "Semantic recall rebuild started in the background.",
         )
-        self.assertEqual(success.intent, "semantic_recall_retry")
-        self.assertTrue(success.success)
-        self.assertEqual(success.memory_count, 0)
+        self.assertEqual(
+            duplicate.message,
+            "Semantic recall rebuild is already in progress; no second rebuild "
+            "was started.",
+        )
+        self.assertEqual(started.intent, "semantic_recall_retry")
+        self.assertTrue(started.success)
+        self.assertEqual(started.memory_count, 0)
+        self.assertTrue(duplicate.success)
         self.assertEqual(failure.intent, "semantic_recall_retry")
         self.assertFalse(failure.success)
         self.assertEqual(failure.memory_count, 0)
+
+    def test_semantic_recall_status_composes_background_states(self) -> None:
+        initializing = self.composer.semantic_recall_status(
+            self.request,
+            runtime_state="initializing",
+            indexed_memory_records=None,
+            embedding_dimension=None,
+            last_rebuild_error=None,
+            last_update_error=None,
+        )
+        refreshing = self.composer.semantic_recall_status(
+            self.request,
+            runtime_state="refreshing",
+            indexed_memory_records=2,
+            embedding_dimension=3,
+            last_rebuild_error=None,
+            last_update_error=None,
+        )
+
+        self.assertIn("Runtime: initializing", initializing.message)
+        self.assertIn("Last rebuild: in progress", initializing.message)
+        self.assertIn("Last incremental update: unavailable", initializing.message)
+        self.assertIn("Runtime: refreshing", refreshing.message)
+        self.assertIn("Indexed memory records: 2", refreshing.message)
+        self.assertIn("Last rebuild: in progress", refreshing.message)
+        self.assertIn("Last incremental update: healthy", refreshing.message)
 
     def test_search_success_exposes_one_citation_per_result(self) -> None:
         results = [

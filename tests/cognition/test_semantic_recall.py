@@ -200,6 +200,21 @@ class SemanticRecallTests(unittest.TestCase):
         )
         self.assertEqual(self.memory_manager.count(), memory_count)
 
+    def test_semantic_recall_status_and_retry_report_a_stopped_runtime(self) -> None:
+        runtime, _ = self._runtime({})
+        runtime.shutdown()
+
+        status = self._engine(runtime).process(
+            BrainRequest(message="semantic recall status")
+        )
+        retry = self._engine(runtime).process(
+            BrainRequest(message="semantic recall retry")
+        )
+
+        self.assertIn("Runtime: stopped", status.message)
+        self.assertFalse(retry.success)
+        self.assertEqual(retry.message, "Semantic recall runtime is stopped.")
+
     def test_semantic_recall_status_reports_index_health_without_query_embedding(
         self,
     ) -> None:
@@ -231,6 +246,27 @@ class SemanticRecallTests(unittest.TestCase):
         )
         self.assertEqual(provider.calls, calls_before_status)
         self.assertEqual(self.memory_manager.count(), memory_count)
+
+    def test_semantic_recall_status_reports_refreshing_with_last_index(self) -> None:
+        content = "Indexed conversation"
+        self.memory_manager.add(
+            content,
+            metadata={"session_id": "default"},
+            tags={"brain", "conversation"},
+        )
+        runtime, provider = self._runtime({content: Embedding((1, 0))})
+        calls_before_status = list(provider.calls)
+
+        with patch.object(runtime, "is_rebuilding", return_value=True):
+            response = self._engine(runtime).process(
+                BrainRequest(message="semantic recall status")
+            )
+
+        self.assertIn("Runtime: refreshing", response.message)
+        self.assertIn("Indexed memory records: 1", response.message)
+        self.assertIn("Embedding dimension: 2", response.message)
+        self.assertIn("Last rebuild: in progress", response.message)
+        self.assertEqual(provider.calls, calls_before_status)
 
     def test_semantic_recall_status_marks_an_empty_ready_index_as_unestablished(
         self,
@@ -336,15 +372,14 @@ class SemanticRecallTests(unittest.TestCase):
         response = self._engine(runtime).process(
             BrainRequest(message="semantic recall retry", request_id="request-1")
         )
+        self.assertTrue(runtime.wait_for_idle(1))
 
         self.assertTrue(response.success)
         self.assertEqual(response.intent, "semantic_recall_retry")
         self.assertEqual(response.request_id, "request-1")
         self.assertEqual(
             response.message,
-            "Semantic recall retry succeeded:\n"
-            "Indexed memory records: 1\n"
-            "Embedding dimension: 2",
+            "Semantic recall rebuild started in the background.",
         )
         current_index = runtime.current()
         assert current_index is not None
@@ -368,14 +403,15 @@ class SemanticRecallTests(unittest.TestCase):
         response = self._engine(runtime).process(
             BrainRequest(message="semantic recall retry")
         )
+        self.assertTrue(runtime.wait_for_idle(1))
         status = self._engine(runtime).process(
             BrainRequest(message="semantic recall status")
         )
 
-        self.assertFalse(response.success)
+        self.assertTrue(response.success)
         self.assertEqual(
             response.message,
-            "Semantic recall retry failed. The last complete index remains available.",
+            "Semantic recall rebuild started in the background.",
         )
         self.assertIs(runtime.current(), stable_index)
         self.assertEqual(
