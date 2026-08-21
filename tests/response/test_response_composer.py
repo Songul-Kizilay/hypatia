@@ -101,6 +101,7 @@ class ResponseComposerTests(unittest.TestCase):
             runtime_state="ready",
             indexed_memory_records=3,
             embedding_dimension=768,
+            last_rebuild_error=None,
             last_update_error=None,
         )
 
@@ -110,12 +111,37 @@ class ResponseComposerTests(unittest.TestCase):
             "Runtime: ready\n"
             "Indexed memory records: 3\n"
             "Embedding dimension: 768\n"
+            "Last rebuild: healthy\n"
             "Last incremental update: healthy",
         )
         self.assertEqual(response.intent, "semantic_recall_status")
         self.assertTrue(response.success)
         self.assertEqual(response.memory_count, 0)
         self.assertEqual(response.request_id, self.request.request_id)
+
+    def test_semantic_recall_retry_composes_explicit_success_and_failure(self) -> None:
+        success = self.composer.semantic_recall_retry_success(
+            self.request,
+            indexed_memory_records=0,
+            embedding_dimension=None,
+        )
+        failure = self.composer.semantic_recall_retry_failure(
+            self.request,
+            "Semantic recall retry failed. Runtime remains unavailable.",
+        )
+
+        self.assertEqual(
+            success.message,
+            "Semantic recall retry succeeded:\n"
+            "Indexed memory records: 0\n"
+            "Embedding dimension: not established",
+        )
+        self.assertEqual(success.intent, "semantic_recall_retry")
+        self.assertTrue(success.success)
+        self.assertEqual(success.memory_count, 0)
+        self.assertEqual(failure.intent, "semantic_recall_retry")
+        self.assertFalse(failure.success)
+        self.assertEqual(failure.memory_count, 0)
 
     def test_search_success_exposes_one_citation_per_result(self) -> None:
         results = [

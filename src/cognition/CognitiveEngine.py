@@ -357,6 +357,9 @@ class CognitiveEngine:
         if self._is_semantic_recall_status_request(request):
             return self._process_semantic_recall_status(request)
 
+        if self._is_semantic_recall_retry_request(request):
+            return self._process_semantic_recall_retry(request)
+
         if self._is_semantic_recall_request(request):
             return self._process_semantic_recall(request)
 
@@ -1883,6 +1886,14 @@ class CognitiveEngine:
             or request.message.casefold().strip() == "semantic recall status"
         )
 
+    @staticmethod
+    def _is_semantic_recall_retry_request(request: BrainRequest) -> bool:
+        """Return whether a request explicitly asks for a full semantic retry."""
+        return (
+            request.metadata.get("intent") == "semantic_recall_retry"
+            or request.message.casefold().strip() == "semantic recall retry"
+        )
+
     def _process_semantic_recall_status(self, request: BrainRequest) -> BrainResponse:
         """Expose derived semantic-index health without querying or mutating it."""
         runtime = self._semantic_memory_index_runtime
@@ -1892,16 +1903,21 @@ class CognitiveEngine:
                 runtime_state="disabled",
                 indexed_memory_records=None,
                 embedding_dimension=None,
+                last_rebuild_error=None,
                 last_update_error=None,
             )
 
         index = runtime.current()
         if index is None:
+            last_rebuild_error = runtime.last_rebuild_error()
             return self._response_composer.semantic_recall_status(
                 request,
-                runtime_state="initializing",
+                runtime_state=(
+                    "unavailable" if last_rebuild_error is not None else "initializing"
+                ),
                 indexed_memory_records=None,
                 embedding_dimension=None,
+                last_rebuild_error=last_rebuild_error,
                 last_update_error=runtime.last_update_error(),
             )
 
@@ -1910,7 +1926,34 @@ class CognitiveEngine:
             runtime_state="ready",
             indexed_memory_records=index.count(),
             embedding_dimension=index.dimension,
+            last_rebuild_error=runtime.last_rebuild_error(),
             last_update_error=runtime.last_update_error(),
+        )
+
+    def _process_semantic_recall_retry(self, request: BrainRequest) -> BrainResponse:
+        """Retry one complete bounded rebuild only after an explicit request."""
+        runtime = self._semantic_memory_index_runtime
+        if runtime is None:
+            return self._response_composer.semantic_recall_retry_failure(
+                request,
+                "Semantic recall runtime is disabled.",
+            )
+        try:
+            index = runtime.refresh(self._memory_manager)
+        except Exception:
+            return self._response_composer.semantic_recall_retry_failure(
+                request,
+                (
+                    "Semantic recall retry failed. The last complete index remains "
+                    "available."
+                    if runtime.current() is not None
+                    else "Semantic recall retry failed. Runtime remains unavailable."
+                ),
+            )
+        return self._response_composer.semantic_recall_retry_success(
+            request,
+            indexed_memory_records=index.count(),
+            embedding_dimension=index.dimension,
         )
 
     @staticmethod

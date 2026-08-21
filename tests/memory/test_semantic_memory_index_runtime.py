@@ -43,6 +43,7 @@ class SemanticMemoryIndexRuntimeTests(unittest.TestCase):
         )
 
         self.assertIsNone(runtime.current())
+        self.assertIsNone(runtime.last_rebuild_error())
         self.assertIsNone(runtime.last_update_error())
 
     def test_refresh_publishes_a_complete_replacement_index(self) -> None:
@@ -80,7 +81,17 @@ class SemanticMemoryIndexRuntimeTests(unittest.TestCase):
 
         self.assertIs(runtime.current(), stable_index)
         self.assertEqual(stable_index.count(), 1)
+        self.assertEqual(
+            runtime.last_rebuild_error(),
+            "Semantic index rebuild failed.",
+        )
         self.assertIsNone(runtime.last_update_error())
+
+        provider.should_fail = False
+        replacement_index = runtime.refresh(memory_manager)
+
+        self.assertIs(runtime.current(), replacement_index)
+        self.assertIsNone(runtime.last_rebuild_error())
 
     def test_rebuild_budget_failure_preserves_last_index_without_provider_work(
         self,
@@ -103,6 +114,10 @@ class SemanticMemoryIndexRuntimeTests(unittest.TestCase):
         self.assertIs(runtime.current(), stable_index)
         self.assertEqual(stable_index.count(), 1)
         self.assertEqual(provider.sources, ["Stable fact"])
+        self.assertEqual(
+            runtime.last_rebuild_error(),
+            "Semantic index rebuild failed.",
+        )
         self.assertIsNone(runtime.last_update_error())
 
     def test_attached_runtime_tracks_added_updated_and_deleted_records(self) -> None:

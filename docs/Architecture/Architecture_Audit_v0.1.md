@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.65` in the current release candidate) are the
+- **Runtime releases** (`v0.3.66` in the current release candidate) are the
   executable package and GitHub release line. They are the source-backed
   implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
@@ -227,16 +227,19 @@ Implemented memory capabilities:
   validated local endpoint. Semantic source text is capped at 1,000,000
   characters; outbound compact JSON is capped at 8 MiB of exact UTF-8 before
   network access, and responses are read at most 1 MiB before JSON parsing. An
-  opt-in Bootstrap runtime owner rebuilds and registers
-  the index at startup, swapping only after a complete successful build, then
-  follows memory lifecycle events with best-effort incremental updates.
+  opt-in Bootstrap runtime owner attempts a complete index at startup. Failure
+  keeps primary Bootstrap available and registers an attached unavailable
+  runtime; success publishes only the complete replacement and then follows
+  memory lifecycle events with best-effort incremental updates. An exact
+  `semantic recall retry` command can deliberately retry the same bounded build.
 - A bounded `semantic recall <query>` request path. It is session-filtered and
   uses reciprocal-rank fusion when both semantic and lexical candidates exist.
   Semantic-only responses retain cosine-similarity scores; unavailable or empty
   semantic retrieval uses deterministic lexical fallback.
 - A read-only `semantic recall status` diagnostic. It exposes the optional
-  runtime state, and when ready its index size, embedding dimension, and safe
-  last incremental-update diagnostic without generating an embedding, querying
+  disabled, initializing, unavailable, or ready runtime state; when ready its
+  index size and embedding dimension; and separate safe full-rebuild and
+  incremental-update diagnostics without generating an embedding, querying
   memory, or changing persisted state.
 - Versioned hybrid-ranking fixture corpora at
   `tests/fixtures/semantic_memory_hybrid_v1.json` and
@@ -314,7 +317,7 @@ Not implemented:
 
 The current local verification baseline is:
 
-- package-aware `python -m unittest`: 1,312 tests passed. Explicit `tests.*`
+- package-aware `python -m unittest`: 1,317 tests passed. Explicit `tests.*`
   module names ensure nested test directories are included without shadowing
   source packages.
 - `python -m black --check src tests`: passed.
@@ -357,11 +360,31 @@ memory/session files and leaving project data unchanged.
 4. Existing deterministic keyword selection must remain an available fallback
    until semantic retrieval has independently verified relevance, ties, bounds,
    and failure behavior.
-5. Cold rebuild provider calls are now explicitly budgeted, but an initial
-   provider, cache-miss-budget, or rebuild failure still stops primary
-   Bootstrap even though semantic retrieval is optional. The next boundary is
-   degraded semantic startup with a safe unavailable diagnostic and explicit
-   retry, without publishing a partial index.
+5. Cold rebuild provider calls and individual local HTTP requests are bounded,
+   but the permitted sequence can still occupy startup or an explicit retry for
+   too long. The next boundary is one aggregate rebuild deadline or cancellation
+   policy that retains the last complete index and deterministic cache behavior.
+
+## Completed Increment: Degraded Semantic Startup and Explicit Retry
+
+An optional semantic rebuild can now fail without making the primary
+application unavailable.
+
+- Bootstrap catches the semantic refresh boundary, publishes its normal
+  dependency container, registers and attaches the unavailable runtime, and
+  emits only a generic warning. Conversation, sessions, lexical recall, and
+  primary memory remain available.
+- The runtime separately records a safe full-rebuild diagnostic. Failed initial
+  builds retain no partial index; failed later builds retain the last complete
+  index. A complete successful rebuild clears both rebuild and incremental
+  diagnostics before publication.
+- `semantic recall status` distinguishes disabled, initializing, unavailable,
+  and ready states. It reports separate safe rebuild and incremental-update
+  fields without exposing provider, transport, cache, source, or budget details.
+- Only the exact `semantic recall retry` request starts another complete bounded
+  rebuild. It is not triggered by ordinary chat, recall, status, or memory
+  events; success publishes a complete replacement and failure leaves primary
+  memory plus the last complete index unchanged.
 
 ## Completed Increment: Cold-Start Semantic Rebuild Budget
 

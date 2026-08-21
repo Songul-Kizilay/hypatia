@@ -2,6 +2,33 @@
 
 All notable project changes are recorded here.
 
+## [0.3.66] - 2026-08-21
+
+### Changed
+
+- An initial optional semantic-index failure no longer stops primary Bootstrap.
+  Hypatia publishes its normal dependency container, attaches the semantic
+  lifecycle listener, and keeps conversation, sessions, lexical recall, and
+  primary memory available while semantic retrieval is unavailable.
+- `semantic recall status` now distinguishes `unavailable` from `disabled` and
+  reports separate safe full-rebuild and incremental-update diagnostics.
+- An exact `semantic recall retry` request explicitly retries one complete
+  rebuild through the existing source, cache, index, and provider-call bounds.
+
+### Safety
+
+- Rebuild failures retain the last complete index, record only the generic
+  `Semantic index rebuild failed.` diagnostic, and never expose provider,
+  cache, transport, or budget details through status or retry responses.
+- Retry is never automatic and does not run for ordinary chat, recall, status,
+  or memory events. A failed retry leaves either the previous complete index
+  available or the runtime safely unavailable without changing primary memory.
+
+### Verification
+
+- The package-aware full local suite contains 1,317 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass across 311 source files.
+
 ## [0.3.65] - 2026-08-21
 
 ### Changed
