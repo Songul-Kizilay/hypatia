@@ -165,8 +165,10 @@ To create the world's most capable personal AI research companion.
 - A single-flight desktop request worker for explicit chat, semantic recall,
   cited knowledge answers, research discovery, and approved HTTPS loading. It
   keeps Tkinter responsive, renders results only on the event thread, rejects
-  duplicate submissions, preserves newly typed composer text, and discards late
-  results after close
+  duplicate submissions, preserves newly typed composer text, reports elapsed
+  seconds without a fake percentage, and discards late results after close or
+  an explicit cancellation request. Cancellation keeps other actions disabled
+  until active timeout-bounded provider I/O returns; it does not kill that call
 
 Roadmap modules listed above are product direction, not a claim that every module is
 already implemented.

@@ -2,6 +2,31 @@
 
 All notable project changes are recorded here.
 
+## [0.3.72] - 2026-08-21
+
+### Added
+
+- The desktop status line reports elapsed whole seconds for the one active
+  request without inventing a completion percentage or provider stage.
+- A dedicated `Cancel request` control lets the user discard the active
+  request's eventual value or error presentation.
+
+### Safety
+
+- Cancellation never claims to terminate an in-flight Ollama or HTTPS call.
+  Normal command controls remain disabled until that bounded operation returns,
+  and the late result is then replaced with one generic cancelled completion.
+- A completed-but-undrained result retains the single-flight reservation, so a
+  keyboard submission cannot replace its presentation handler before the
+  Tkinter event thread consumes it.
+- Closing the window still rejects new work and discards every late completion;
+  provider and transport timeouts remain the hard bound on active I/O.
+
+### Verification
+
+- The package-aware full local suite contains 1,357 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass across 313 source files.
+
 ## [0.3.71] - 2026-08-21
 
 ### Added

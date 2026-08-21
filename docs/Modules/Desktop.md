@@ -16,6 +16,11 @@ to a selected run ID. The `Research content` action reports the accepted-source
 content restoration state captured at startup plus aggregate restored document
 and paragraph counts. It neither reads persistence again nor exposes content,
 paths, source metadata, hashes, IDs, or internal errors.
+All explicit provider-backed actions share one daemon single-flight worker. The
+status line reports elapsed seconds without claiming a completion percentage.
+`Cancel request` discards the eventual presentation while keeping other actions
+disabled until active timeout-bounded I/O returns; it does not terminate the
+provider call or its worker thread.
 The research panel's `Evidence integrity` action performs a separate bounded
 in-memory comparison of recorded evidence and current accepted paragraphs. It
 reports only matched, missing, and changed totals and never repairs records.

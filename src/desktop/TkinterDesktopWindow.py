@@ -5,6 +5,7 @@ from __future__ import annotations
 import tkinter as tk
 from collections.abc import Callable
 from dataclasses import dataclass
+from time import monotonic
 from tkinter import filedialog, messagebox, scrolledtext, ttk
 from typing import Protocol
 
@@ -132,6 +133,8 @@ class TkinterDesktopWindow:
         self._request_runner = DesktopRequestRunner()
         self._request_completion_handler: Callable[[BrainResponse], None] | None = None
         self._request_controls: list[ttk.Button] = []
+        self._request_label: str | None = None
+        self._request_started_at: float | None = None
         self._closing = False
         self._status = tk.StringVar(value="Ready")
         self._session_id = tk.StringVar()
@@ -192,8 +195,10 @@ class TkinterDesktopWindow:
         start_result = self._request_runner.start(action)
         if start_result == "started":
             self._request_completion_handler = on_success
+            self._request_label = label
+            self._request_started_at = monotonic()
             self._set_request_controls_busy(True)
-            self._status.set(f"{label}: working")
+            self._status.set(f"{label}: working (0s elapsed)")
             return
         if start_result == "busy":
             self._status.set("Hypatia is already processing a request.")
@@ -211,6 +216,13 @@ class TkinterDesktopWindow:
             handler = self._request_completion_handler
             self._request_completion_handler = None
             self._set_request_controls_busy(False)
+            self._request_label = None
+            self._request_started_at = None
+            if completion.cancelled:
+                self._status.set(
+                    "Request cancelled after the active operation finished."
+                )
+                continue
             if completion.error is not None:
                 if isinstance(completion.error, ValueError):
                     self._status.set(str(completion.error))
@@ -224,14 +236,49 @@ class TkinterDesktopWindow:
                 handler(completion.value)
             except Exception:
                 self._status.set("Desktop request failed.")
+        if self._request_runner.is_running():
+            self._update_request_progress()
         if not self._closing:
             self._root.after(_REQUEST_POLL_INTERVAL_MS, self._poll_requests)
+
+    def _update_request_progress(self) -> None:
+        """Show elapsed time without inventing a provider completion percentage."""
+        if self._request_runner.is_cancellation_requested():
+            return
+        if self._request_label is None or self._request_started_at is None:
+            return
+        elapsed_seconds = max(0, int(monotonic() - self._request_started_at))
+        self._status.set(f"{self._request_label}: working ({elapsed_seconds}s elapsed)")
+
+    def _cancel_request(self) -> None:
+        """Request result cancellation without claiming to kill active I/O."""
+        if self._closing:
+            self._status.set("Hypatia is closing.")
+            return
+        result = self._request_runner.request_cancel()
+        if result in {"requested", "already_requested"}:
+            cancel_button = getattr(self, "_cancel_button", None)
+            if cancel_button is not None:
+                cancel_button.state(("disabled",))
+            label = self._request_label or "request"
+            self._status.set(
+                f"{label}: cancellation requested; waiting for the active "
+                "operation to finish"
+            )
+            return
+        if result == "stopped":
+            self._status.set("Hypatia is closing.")
+            return
+        self._status.set("No desktop request is currently running.")
 
     def _set_request_controls_busy(self, busy: bool) -> None:
         """Keep a second long request from being started by a clickable control."""
         state = ("disabled",) if busy else ("!disabled",)
         for button in self._request_controls:
             button.state(state)
+        cancel_button = getattr(self, "_cancel_button", None)
+        if cancel_button is not None:
+            cancel_button.state(("!disabled",) if busy else ("disabled",))
 
     def _close(self) -> None:
         """Discard late worker results before destroying Tkinter widgets."""
@@ -792,9 +839,19 @@ class TkinterDesktopWindow:
             command=self._show_knowledge_relation_list,
         ).grid(row=0, column=6, sticky="ew", padx=(8, 0))
 
-        ttk.Label(container, textvariable=self._status).grid(
-            row=6, column=0, sticky="w", pady=(8, 4)
+        status_frame = ttk.Frame(container)
+        status_frame.grid(row=6, column=0, sticky="ew", pady=(8, 4))
+        status_frame.columnconfigure(0, weight=1)
+        ttk.Label(status_frame, textvariable=self._status).grid(
+            row=0, column=0, sticky="w"
         )
+        self._cancel_button = ttk.Button(
+            status_frame,
+            text="Cancel request",
+            command=self._cancel_request,
+        )
+        self._cancel_button.grid(row=0, column=1, sticky="e")
+        self._cancel_button.state(("disabled",))
 
         self._transcript = scrolledtext.ScrolledText(
             container,
@@ -816,7 +873,11 @@ class TkinterDesktopWindow:
         ).grid(row=0, column=1, sticky="ns")
         self._composer.bind("<Control-Return>", self._send_with_keyboard)
         self._composer.focus_set()
-        self._request_controls = self._collect_request_controls(container)
+        self._request_controls = [
+            button
+            for button in self._collect_request_controls(container)
+            if button is not self._cancel_button
+        ]
 
     def _change_font_size(self, adjustment: int) -> None:
         """Apply only a bounded, user-initiated text-size preference."""

@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.71 (Genesis)`
+`v0.3.72 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.71`** is the current executable package and GitHub
+- **Runtime release `v0.3.72`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -42,7 +42,11 @@ with optional OpenAI-compatible LLM conversation support.
   Ollama and approved HTTPS waits do not block Tkinter's event loop. Results
   are rendered only by the event thread, all command buttons are single-flight,
   close discards late results, and unexpected failures expose no internal
-  exception detail. The worker owns no provider or duplicate state.
+  exception detail. The status line shows truthful elapsed seconds without a
+  fabricated percentage. A dedicated cancellation request leaves ordinary
+  controls disabled until active bounded I/O returns, then discards its value
+  or error instead of presenting it. It does not claim to kill a provider call.
+  The worker owns no provider or duplicate state.
 - Local desktop text-size controls bounded from 10 through 20 points and an
   explicit high-contrast palette. They alter only presentation and do not
   persist a preference, invoke a provider, or change session, memory, or
@@ -394,7 +398,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,353 automated tests pass through package-aware discovery.
+- 1,357 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -421,8 +425,8 @@ so this check did not alter the project's persisted data.
 
 ## Next Milestone
 
-Add bounded, user-visible progress and cooperative cancellation semantics to
-the desktop request boundary without pretending an active provider transport
-can be forcefully killed. In parallel, preserve explicit source provenance so
-future trust or taint metadata can be added without granting retrieved text
-instruction authority.
+Add an explicit cancellation token only to genuinely multi-stage service paths
+that can stop safely between stages. Active provider transports remain bounded
+by their own timeouts rather than forceful thread termination. Preserve source
+provenance so future trust or taint metadata can be added without granting
+retrieved text instruction authority.
