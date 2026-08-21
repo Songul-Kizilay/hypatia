@@ -27,6 +27,7 @@ from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
 )
 from research.ResearchSourceCandidate import ResearchSourceCandidate
+from research.ResearchSourceRecord import ResearchSourceRecord
 
 _DEFAULT_FONT_SIZE = 12
 _MINIMUM_FONT_SIZE = 10
@@ -189,6 +190,7 @@ class TkinterDesktopWindow:
         self._research_run_summary = tk.StringVar(
             value="Select or create a research run."
         )
+        self._research_source_choice = tk.StringVar()
         self._research_candidate = tk.StringVar()
         self._research_url = tk.StringVar()
         self._research_source_document_id = tk.StringVar()
@@ -222,6 +224,8 @@ class TkinterDesktopWindow:
         self._session_summaries: list[SessionSummary] = []
         self._research_candidates: tuple[ResearchSourceCandidate, ...] = ()
         self._research_runs: tuple[ResearchRun, ...] = ()
+        self._research_sources: tuple[ResearchSourceRecord, ...] = ()
+        self._research_source_run_id = ""
         self._research_candidate_run_id = ""
         self._research_candidate_discovery_id = ""
         self._research_claim_contradiction_proposal_run_id = ""
@@ -675,6 +679,32 @@ class TkinterDesktopWindow:
             textvariable=self._research_run_summary,
             style="Hint.TLabel",
         ).grid(row=1, column=0, sticky="w", pady=(4, 0))
+        accepted_source_frame = ttk.Frame(research_run_frame)
+        accepted_source_frame.grid(row=2, column=0, sticky="ew", pady=(8, 0))
+        accepted_source_frame.columnconfigure(1, weight=1)
+        ttk.Label(accepted_source_frame, text="Accepted source").grid(
+            row=0,
+            column=0,
+            sticky="w",
+            padx=(0, 8),
+        )
+        self._research_source_selector = ttk.Combobox(
+            accepted_source_frame,
+            textvariable=self._research_source_choice,
+            values=(),
+            state="readonly",
+        )
+        self._research_source_selector.grid(row=0, column=1, sticky="ew")
+        ttk.Button(
+            accepted_source_frame,
+            text="Use for assessment",
+            command=self._use_selected_research_source_for_assessment,
+        ).grid(row=0, column=2, sticky="ew", padx=(8, 0))
+        ttk.Button(
+            accepted_source_frame,
+            text="Add to comparison",
+            command=self._add_selected_research_source_to_comparison,
+        ).grid(row=0, column=3, sticky="ew", padx=(8, 0))
         self._request_button(
             research_frame,
             text="Find sources",
@@ -1549,6 +1579,7 @@ class TkinterDesktopWindow:
         """Select one catalogued run without starting any research action."""
         selected_index = self._research_run_selector.current()
         if not 0 <= selected_index < len(self._research_runs):
+            self._clear_research_sources()
             self._research_run_summary.set("Refresh and select a research run.")
             self._status.set("Refresh and select a research run first.")
             return
@@ -1557,6 +1588,7 @@ class TkinterDesktopWindow:
         self._research_run_id.set(selected_run.run_id)
         if previous_run_id != selected_run.run_id:
             self._clear_research_run_dependent_presentations()
+        self._render_research_source_selector(selected_run)
         self._research_run_summary.set(self._research_run_summary_text(selected_run))
         self._status.set(
             f"research run selected: {selected_run.run_id}; no action started"
@@ -1570,8 +1602,82 @@ class TkinterDesktopWindow:
             f"Evidence: {len(run.evidence)} · Claims: {len(run.claims)}"
         )
 
+    def _render_research_source_selector(self, run: ResearchRun) -> None:
+        """Render accepted sources from the already loaded exact run snapshot."""
+        self._research_sources = run.sources
+        self._research_source_run_id = run.run_id
+        labels = tuple(self._research_source_label(source) for source in run.sources)
+        self._research_source_selector.configure(values=labels)
+        if not run.sources:
+            self._research_source_choice.set("")
+            return
+        self._research_source_selector.current(0)
+
+    @staticmethod
+    def _research_source_label(source: ResearchSourceRecord) -> str:
+        """Keep the exact document ID visible beside a bounded source title."""
+        title = source.title
+        if len(title) > 80:
+            title = f"{title[:77]}..."
+        return f"{title} — {source.document_id}"
+
+    def _selected_research_source(self) -> ResearchSourceRecord | None:
+        """Return only a source tied to the currently selected loaded run."""
+        if self._research_run_id.get().strip() != self._research_source_run_id:
+            self._clear_research_sources()
+            return None
+        selected_index = self._research_source_selector.current()
+        if not 0 <= selected_index < len(self._research_sources):
+            return None
+        return self._research_sources[selected_index]
+
+    def _use_selected_research_source_for_assessment(self) -> None:
+        """Copy one exact source ID into the manual assessment field only."""
+        source = self._selected_research_source()
+        if source is None:
+            self._status.set("Select an accepted source first.")
+            return
+        self._research_source_document_id.set(source.document_id)
+        self._status.set(
+            "accepted source ID copied for assessment; nothing requested or saved"
+        )
+
+    def _add_selected_research_source_to_comparison(self) -> None:
+        """Append one exact source ID to the manual comparison field only."""
+        source = self._selected_research_source()
+        if source is None:
+            self._status.set("Select an accepted source first.")
+            return
+        current_ids = tuple(
+            value.strip()
+            for value in self._research_comparison_document_ids.get().split(",")
+            if value.strip()
+        )
+        if source.document_id in current_ids:
+            self._status.set(
+                "accepted source ID is already in the comparison; nothing changed"
+            )
+            return
+        if len(current_ids) >= 5:
+            self._status.set("A research source comparison accepts at most 5 IDs.")
+            return
+        self._research_comparison_document_ids.set(
+            ", ".join((*current_ids, source.document_id))
+        )
+        self._status.set(
+            "accepted source ID added to comparison; nothing requested or saved"
+        )
+
+    def _clear_research_sources(self) -> None:
+        """Discard the run-bound source presentation without editing form fields."""
+        self._research_sources = ()
+        self._research_source_run_id = ""
+        self._research_source_choice.set("")
+        self._research_source_selector.configure(values=())
+
     def _clear_research_run_dependent_presentations(self) -> None:
         """Clear only ephemeral views tied to a previous exact run."""
+        self._clear_research_sources()
         self._clear_research_candidates()
         self._clear_research_claim_contradiction_proposals()
         self._research_markdown_export_preview = None

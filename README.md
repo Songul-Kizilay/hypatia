@@ -256,6 +256,11 @@ the selector also shows complete source, evidence, and claim counts from that
 already loaded snapshot. Later explicit actions use the selected ID. The run
 keeps timestamps and safe failure records, but does not duplicate downloaded
 page text or make web research autonomous.
+Accepted sources from that same loaded snapshot appear by bounded title and
+exact document ID. Choosing a source does not edit the form or start an action;
+`Use for assessment` copies only its exact ID into the single-source field, and
+`Add to comparison` appends it once to the ordered manual comparison field while
+preserving the five-source limit.
 `Find sources` sends the selected collecting run's question to Crossref and
 connects its fixed endpoint and same-origin redirects only to an address from
 their own public-DNS validation while TLS verifies `api.crossref.org`. It

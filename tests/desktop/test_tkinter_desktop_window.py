@@ -365,6 +365,10 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_summary = RecordingVariable("Old summary")
         window._research_run_selector = RecordingCandidateSelector()
         window._research_runs = ()
+        window._research_source_choice = RecordingVariable("old source")
+        window._research_source_selector = RecordingCandidateSelector(selected_index=0)
+        window._research_sources = ()
+        window._research_source_run_id = "old-run"
         window._research_candidate = RecordingVariable("old candidate")
         window._research_candidate_selector = RecordingCandidateSelector(
             selected_index=0
@@ -418,6 +422,10 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_summary = RecordingVariable("")
         window._research_run_selector = RecordingCandidateSelector()
         window._research_runs = ()
+        window._research_source_choice = RecordingVariable("")
+        window._research_source_selector = RecordingCandidateSelector()
+        window._research_sources = ()
+        window._research_source_run_id = ""
         window._research_candidate = RecordingVariable("")
         window._research_candidate_selector = RecordingCandidateSelector()
         window._research_candidates = ()
@@ -460,6 +468,10 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_summary = RecordingVariable("Old summary")
         window._research_run_selector = RecordingCandidateSelector(selected_index=0)
         window._research_runs = ()
+        window._research_source_choice = RecordingVariable("Old source")
+        window._research_source_selector = RecordingCandidateSelector(selected_index=0)
+        window._research_sources = ()
+        window._research_source_run_id = "old-run"
         window._research_candidate = RecordingVariable("Old candidate")
         window._research_candidate_selector = RecordingCandidateSelector(
             selected_index=0
@@ -481,6 +493,9 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
 
         self.assertEqual(window._research_run_id.value, "")
         self.assertEqual(window._research_run_choice.value, "")
+        self.assertEqual(window._research_source_choice.value, "")
+        self.assertEqual(window._research_source_selector.values, ())
+        self.assertEqual(window._research_source_run_id, "")
         self.assertEqual(
             window._research_run_summary.value,
             "No research runs available.",
@@ -515,6 +530,10 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_summary = RecordingVariable("")
         window._research_run_selector = RecordingCandidateSelector(selected_index=1)
         window._research_runs = (first_run, second_run)
+        window._research_source_choice = RecordingVariable("")
+        window._research_source_selector = RecordingCandidateSelector()
+        window._research_sources = ()
+        window._research_source_run_id = ""
         window._status = RecordingStatus()
         window._clear_research_run_dependent_presentations = lambda: clears.append(True)
 
@@ -535,6 +554,10 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window: Any = object.__new__(TkinterDesktopWindow)
         window._research_run_selector = RecordingCandidateSelector(selected_index=-1)
         window._research_runs = ()
+        window._research_source_choice = RecordingVariable("Old source")
+        window._research_source_selector = RecordingCandidateSelector(selected_index=0)
+        window._research_sources = ()
+        window._research_source_run_id = "old-run"
         window._research_run_summary = RecordingVariable("Old summary")
         window._status = RecordingStatus()
 
@@ -547,6 +570,210 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         self.assertEqual(
             window._status.values,
             ["Refresh and select a research run first."],
+        )
+
+    def test_selected_run_renders_accepted_sources_without_copying_ids(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        now = datetime(2026, 8, 21, tzinfo=UTC)
+        first_source = ResearchSourceRecord(
+            "document-1",
+            "https://example.com/first",
+            "First accepted paper",
+            "text/plain",
+            now,
+            now,
+        )
+        second_source = ResearchSourceRecord(
+            "document-2",
+            "https://example.com/second",
+            "Second accepted paper",
+            "text/plain",
+            now,
+            now,
+        )
+        run = ResearchRun(
+            "run-123",
+            "Compare accepted papers",
+            ResearchRunStatus.COLLECTING,
+            (first_source, second_source),
+            (),
+            now,
+            now,
+        )
+        window._research_run_id = RecordingVariable("run-123")
+        window._research_run_summary = RecordingVariable("")
+        window._research_run_selector = RecordingCandidateSelector(selected_index=0)
+        window._research_runs = (run,)
+        window._research_source_choice = RecordingVariable("")
+        window._research_source_selector = RecordingCandidateSelector()
+        window._research_sources = ()
+        window._research_source_run_id = ""
+        window._research_source_document_id = RecordingVariable("manual-source")
+        window._research_comparison_document_ids = RecordingVariable(
+            "manual-comparison"
+        )
+        window._status = RecordingStatus()
+
+        window._select_research_run()
+
+        self.assertEqual(window._research_sources, (first_source, second_source))
+        self.assertEqual(window._research_source_run_id, "run-123")
+        self.assertEqual(
+            window._research_source_selector.values,
+            (
+                "First accepted paper — document-1",
+                "Second accepted paper — document-2",
+            ),
+        )
+        self.assertEqual(window._research_source_selector.current(), 0)
+        self.assertEqual(window._research_source_document_id.value, "manual-source")
+        self.assertEqual(
+            window._research_comparison_document_ids.value,
+            "manual-comparison",
+        )
+        self.assertEqual(
+            window._status.values,
+            ["research run selected: run-123; no action started"],
+        )
+
+    def test_explicit_accepted_source_assessment_handoff_copies_exact_id(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        now = datetime(2026, 8, 21, tzinfo=UTC)
+        source = ResearchSourceRecord(
+            "document-exact",
+            "https://example.com/source",
+            "Accepted paper",
+            "text/plain",
+            now,
+            now,
+        )
+        window._research_run_id = RecordingVariable("run-123")
+        window._research_source_run_id = "run-123"
+        window._research_sources = (source,)
+        window._research_source_selector = RecordingCandidateSelector(selected_index=0)
+        window._research_source_choice = RecordingVariable(
+            "Accepted paper — document-exact"
+        )
+        window._research_source_document_id = RecordingVariable("manual-source")
+        window._research_comparison_document_ids = RecordingVariable(
+            "manual-comparison"
+        )
+        window._status = RecordingStatus()
+
+        window._use_selected_research_source_for_assessment()
+
+        self.assertEqual(window._research_source_document_id.value, "document-exact")
+        self.assertEqual(
+            window._research_comparison_document_ids.value,
+            "manual-comparison",
+        )
+        self.assertEqual(
+            window._status.values,
+            ["accepted source ID copied for assessment; " "nothing requested or saved"],
+        )
+
+    def test_explicit_accepted_source_comparison_handoff_appends_once(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        now = datetime(2026, 8, 21, tzinfo=UTC)
+        source = ResearchSourceRecord(
+            "document-2",
+            "https://example.com/source",
+            "Accepted paper",
+            "text/plain",
+            now,
+            now,
+        )
+        window._research_run_id = RecordingVariable("run-123")
+        window._research_source_run_id = "run-123"
+        window._research_sources = (source,)
+        window._research_source_selector = RecordingCandidateSelector(selected_index=0)
+        window._research_source_choice = RecordingVariable(
+            "Accepted paper — document-2"
+        )
+        window._research_source_document_id = RecordingVariable("manual-source")
+        window._research_comparison_document_ids = RecordingVariable("document-1")
+        window._status = RecordingStatus()
+
+        window._add_selected_research_source_to_comparison()
+        window._add_selected_research_source_to_comparison()
+
+        self.assertEqual(window._research_source_document_id.value, "manual-source")
+        self.assertEqual(
+            window._research_comparison_document_ids.value,
+            "document-1, document-2",
+        )
+        self.assertEqual(
+            window._status.values,
+            [
+                "accepted source ID added to comparison; nothing requested or saved",
+                "accepted source ID is already in the comparison; nothing changed",
+            ],
+        )
+
+    def test_accepted_source_handoff_preserves_five_id_comparison_limit(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        now = datetime(2026, 8, 21, tzinfo=UTC)
+        source = ResearchSourceRecord(
+            "document-6",
+            "https://example.com/source",
+            "Sixth accepted paper",
+            "text/plain",
+            now,
+            now,
+        )
+        window._research_run_id = RecordingVariable("run-123")
+        window._research_source_run_id = "run-123"
+        window._research_sources = (source,)
+        window._research_source_selector = RecordingCandidateSelector(selected_index=0)
+        window._research_source_choice = RecordingVariable(
+            "Sixth accepted paper — document-6"
+        )
+        original_ids = "document-1, document-2, document-3, document-4, document-5"
+        window._research_comparison_document_ids = RecordingVariable(original_ids)
+        window._status = RecordingStatus()
+
+        window._add_selected_research_source_to_comparison()
+
+        self.assertEqual(window._research_comparison_document_ids.value, original_ids)
+        self.assertEqual(
+            window._status.values,
+            ["A research source comparison accepts at most 5 IDs."],
+        )
+
+    def test_stale_accepted_source_selection_cannot_overwrite_manual_field(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        now = datetime(2026, 8, 21, tzinfo=UTC)
+        source = ResearchSourceRecord(
+            "document-old",
+            "https://example.com/source",
+            "Old accepted paper",
+            "text/plain",
+            now,
+            now,
+        )
+        window._research_run_id = RecordingVariable("run-new")
+        window._research_source_run_id = "run-old"
+        window._research_sources = (source,)
+        window._research_source_selector = RecordingCandidateSelector(selected_index=0)
+        window._research_source_choice = RecordingVariable(
+            "Old accepted paper — document-old"
+        )
+        window._research_source_document_id = RecordingVariable("manual-source")
+        window._status = RecordingStatus()
+
+        window._use_selected_research_source_for_assessment()
+
+        self.assertEqual(window._research_source_document_id.value, "manual-source")
+        self.assertEqual(window._research_sources, ())
+        self.assertEqual(window._research_source_selector.values, ())
+        self.assertEqual(window._research_source_choice.value, "")
+        self.assertEqual(
+            window._status.values,
+            ["Select an accepted source first."],
         )
 
     def test_research_markdown_export_preview_uses_selected_run_only(self) -> None:
