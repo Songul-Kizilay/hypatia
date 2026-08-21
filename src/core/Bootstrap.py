@@ -55,6 +55,12 @@ from research.JsonFileResearchRunStore import JsonFileResearchRunStore
 from research.JsonFileResearchSourceContentStore import (
     JsonFileResearchSourceContentStore,
 )
+from research.LLMResearchClaimContradictionProposalProvider import (
+    LLMResearchClaimContradictionProposalProvider,
+)
+from research.ResearchClaimContradictionProposalProvider import (
+    ResearchClaimContradictionProposalProvider,
+)
 from research.ResearchEvidenceIntegrityAuditor import ResearchEvidenceIntegrityAuditor
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchSourceContentRestorer import ResearchSourceContentRestorer
@@ -88,6 +94,9 @@ class Bootstrap:
         research_source_discovery_provider: (
             ResearchSourceDiscoveryProvider | None
         ) = None,
+        research_claim_contradiction_proposal_provider: (
+            ResearchClaimContradictionProposalProvider | None
+        ) = None,
         research_source_content_path: Path | None = None,
     ) -> None:
         self._memory_path = memory_path
@@ -106,6 +115,9 @@ class Bootstrap:
         self._semantic_memory_index_runtime = semantic_memory_index_runtime
         self._research_source_fetcher = research_source_fetcher
         self._research_source_discovery_provider = research_source_discovery_provider
+        self._research_claim_contradiction_proposal_provider = (
+            research_claim_contradiction_proposal_provider
+        )
 
     @classmethod
     def from_process_environment(
@@ -376,6 +388,16 @@ class Bootstrap:
         planner = Planner()
         response_composer = ResponseComposer()
         llm_provider = self._configured_llm_provider()
+        research_claim_contradiction_proposal_provider = (
+            self._research_claim_contradiction_proposal_provider
+        )
+        if (
+            research_claim_contradiction_proposal_provider is None
+            and llm_provider is not None
+        ):
+            research_claim_contradiction_proposal_provider = (
+                LLMResearchClaimContradictionProposalProvider(llm_provider)
+            )
         learned_memory_candidate_extractor = self._learned_memory_candidate_extractor
         if (
             learned_memory_candidate_extractor is None
@@ -403,6 +425,9 @@ class Bootstrap:
             research_run_manager=research_run_manager,
             research_source_discovery_provider=(
                 self._research_source_discovery_provider
+            ),
+            research_claim_contradiction_proposal_provider=(
+                research_claim_contradiction_proposal_provider
             ),
             research_source_content_store=research_source_content_store,
             research_source_content_restoration_status=(
@@ -433,6 +458,8 @@ class Bootstrap:
         container.register(research_source_fetcher)
         if self._research_source_discovery_provider is not None:
             container.register(self._research_source_discovery_provider)
+        if research_claim_contradiction_proposal_provider is not None:
+            container.register(research_claim_contradiction_proposal_provider)
         container.register(response_composer)
         container.register(cognitive_engine)
         container.register(brain)

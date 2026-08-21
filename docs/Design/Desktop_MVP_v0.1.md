@@ -39,6 +39,9 @@ The MVP may present only current Brain/CognitiveEngine capabilities:
 - preview-and-confirm recording of one user-reviewed contradiction relationship
   between exactly two persisted claims, with the claims' exact combined
   evidence and the user's own note displayed before confirmation;
+- explicit, cancellable, read-only LLM suggestions for possible contradiction
+  pairs among bounded current claims, with exact persisted evidence provenance
+  and no automatic form fill or recording;
 - read-only side-by-side comparison of two to five explicitly selected accepted
   sources, using persisted provenance, user-selected evidence, and only current
   user-authored assessments without an automatic verdict or score;
@@ -286,8 +289,9 @@ optimistic local update is retained.
    provider exception details.
 4. Do not automatically call `ask knowledge`, semantic recall, or any mutation
    from ordinary chat text; each remains an explicit user-selected flow.
-5. Do not automatically propose or record claim contradictions; the user must
-   explicitly supply both persisted claim IDs and their own note.
+5. Do not propose contradictions in the background or record suggestions. The
+   user must explicitly request review and still supply both persisted claim IDs
+   and their own note through the separate preview-confirm-record flow.
 6. Keep standard copy/paste and keyboard navigation local. If a future
    framework includes a web view, its content-security and navigation policy
    requires a separate security review.

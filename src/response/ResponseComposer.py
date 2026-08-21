@@ -24,6 +24,9 @@ from planner.Plan import Plan
 from research.ResearchClaimContradictionPreview import (
     ResearchClaimContradictionPreview,
 )
+from research.ResearchClaimContradictionProposalPreview import (
+    ResearchClaimContradictionProposalPreview,
+)
 from research.ResearchClaimContradictionWritePreview import (
     ResearchClaimContradictionWritePreview,
 )
@@ -1584,6 +1587,60 @@ class ResponseComposer:
             message=message,
             request_id=request.request_id,
             intent="research_claim_contradiction_preview",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_claim_contradiction_proposal_success(
+        self,
+        request: BrainRequest,
+        preview: ResearchClaimContradictionProposalPreview,
+    ) -> BrainResponse:
+        """Render model suggestions as non-persistent, untrusted review leads."""
+        claims_by_id = {claim.claim_id: claim for claim in preview.claims}
+        lines = [
+            "Possible research claim contradictions:",
+            f"Run: {preview.run_id}",
+            f"Run status: {preview.run_status.value}",
+            f"Snapshot: {preview.snapshot_updated_at.isoformat()}",
+            f"Provider: {preview.provider_name}",
+            f"Candidates: {len(preview.candidates)}",
+            f"Reason: {preview.reason}",
+        ]
+        for index, candidate in enumerate(preview.candidates, start=1):
+            first_claim = claims_by_id[candidate.claim_ids[0]]
+            second_claim = claims_by_id[candidate.claim_ids[1]]
+            lines.extend(
+                (
+                    f"- Candidate {index}",
+                    f"  first claim: {first_claim.claim_id} — {first_claim.text}",
+                    f"  second claim: {second_claim.claim_id} — {second_claim.text}",
+                    f"  evidence IDs: {', '.join(candidate.evidence_ids)}",
+                    f"  model rationale (untrusted suggestion): {candidate.rationale}",
+                )
+            )
+        lines.append(
+            "Status: read-only suggestions; nothing recorded, no truth decision, "
+            "and manual preview plus confirmation are still required"
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_claim_contradiction_proposal",
+            memory_count=0,
+            research_claim_contradiction_proposal_preview=preview,
+        )
+
+    def research_claim_contradiction_proposal_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Report an unavailable or invalid read-only proposal safely."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="research_claim_contradiction_proposal",
             memory_count=0,
             success=False,
         )

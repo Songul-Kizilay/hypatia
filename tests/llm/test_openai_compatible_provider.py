@@ -101,6 +101,111 @@ class StaticResponseTransport:
 
 
 class OpenAICompatibleProviderTests(unittest.TestCase):
+    def test_generate_json_requests_one_bounded_json_object(self) -> None:
+        transport = RecordingTransport()
+        provider = OpenAICompatibleProvider(
+            base_url="https://api.example.test/v1",
+            api_key="test-api-key",
+            model="test-model",
+            transport=transport,
+            system_prompt="You are Hypatia.",
+        )
+        history = (LLMConversationMessage(role="user", content="Earlier question."),)
+
+        response = provider.generate_json(
+            "Return JSON.",
+            history,
+            system_instruction="Use the requested schema.",
+            max_tokens=256,
+        )
+
+        self.assertEqual(response, "Generated answer.")
+        self.assertEqual(
+            transport.calls,
+            [
+                (
+                    "https://api.example.test/v1",
+                    {"Authorization": "Bearer test-api-key"},
+                    {
+                        "model": "test-model",
+                        "messages": [
+                            {
+                                "role": "system",
+                                "content": (
+                                    "You are Hypatia.\n\nUse the requested schema."
+                                ),
+                            },
+                            {"role": "user", "content": "Earlier question."},
+                            {"role": "user", "content": "Return JSON."},
+                        ],
+                        "response_format": {"type": "json_object"},
+                        "max_tokens": 256,
+                        "reasoning_effort": "none",
+                        "temperature": 0,
+                    },
+                )
+            ],
+        )
+
+    def test_generate_json_rejects_invalid_max_tokens_without_transport(self) -> None:
+        transport = RecordingTransport()
+        provider = OpenAICompatibleProvider(
+            base_url="https://api.example.test/v1",
+            api_key=None,
+            model="test-model",
+            transport=transport,
+        )
+
+        for max_tokens in (0, -1, True, 4097, 12.5):
+            with self.subTest(max_tokens=max_tokens):
+                with self.assertRaisesRegex(LLMError, "JSON max tokens invalid"):
+                    provider.generate_json("prompt", max_tokens=cast(int, max_tokens))
+
+        self.assertEqual(transport.calls, [])
+
+    def test_generate_json_sends_an_exact_response_schema(self) -> None:
+        transport = RecordingTransport()
+        provider = OpenAICompatibleProvider(
+            base_url="https://api.example.test/v1",
+            api_key=None,
+            model="test-model",
+            transport=transport,
+        )
+        schema: dict[str, object] = {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {"answer": {"type": "string"}},
+            "required": ["answer"],
+        }
+
+        provider.generate_json("Return an answer.", response_schema=schema)
+
+        self.assertEqual(
+            transport.calls[0][2]["response_format"],
+            {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "hypatia_response",
+                    "strict": True,
+                    "schema": schema,
+                },
+            },
+        )
+
+    def test_generate_json_rejects_an_empty_response_schema(self) -> None:
+        transport = RecordingTransport()
+        provider = OpenAICompatibleProvider(
+            base_url="https://api.example.test/v1",
+            api_key=None,
+            model="test-model",
+            transport=transport,
+        )
+
+        with self.assertRaisesRegex(LLMError, "response schema invalid"):
+            provider.generate_json("prompt", response_schema={})
+
+        self.assertEqual(transport.calls, [])
+
     def test_generate_normalizes_malformed_or_non_string_response_shapes(
         self,
     ) -> None:

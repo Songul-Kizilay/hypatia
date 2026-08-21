@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 import tempfile
 import unittest
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import cast
@@ -71,6 +71,13 @@ from memory.NoOpLearnedMemoryCandidateExtractor import (
 from memory.SessionMemoryPolicy import SessionMemoryPolicy
 from planner.Planner import Planner
 from research.ResearchClaimConfidence import ResearchClaimConfidence
+from research.ResearchClaimContradictionCandidate import (
+    ResearchClaimContradictionCandidate,
+)
+from research.ResearchClaimContradictionProposalProvider import (
+    ResearchClaimContradictionProposalError,
+)
+from research.ResearchClaimRecord import ResearchClaimRecord
 from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRun import ResearchRun
@@ -316,6 +323,41 @@ class RecordingResearchSourceDiscoveryProvider:
         self.calls.append((query, limit))
         if self.error is not None:
             raise self.error
+        if self.cancellation_signal is not None:
+            self.cancellation_signal.cancel()
+        return list(self.candidates)
+
+
+class RecordingContradictionProposalProvider:
+    """Returns caller-supplied read-only candidates and records exact inputs."""
+
+    provider_name = "test-contradiction-provider"
+
+    def __init__(
+        self,
+        candidates: list[ResearchClaimContradictionCandidate] | None = None,
+        error: ResearchClaimContradictionProposalError | None = None,
+        cancellation_signal: CancellationSignal | None = None,
+        on_propose: Callable[[], None] | None = None,
+    ) -> None:
+        self.candidates = list(candidates or [])
+        self.error = error
+        self.cancellation_signal = cancellation_signal
+        self.on_propose = on_propose
+        self.calls: list[tuple[str, tuple[ResearchClaimRecord, ...], int]] = []
+
+    def propose(
+        self,
+        question: str,
+        claims: tuple[ResearchClaimRecord, ...],
+        *,
+        limit: int,
+    ) -> list[ResearchClaimContradictionCandidate]:
+        self.calls.append((question, claims, limit))
+        if self.error is not None:
+            raise self.error
+        if self.on_propose is not None:
+            self.on_propose()
         if self.cancellation_signal is not None:
             self.cancellation_signal.cancel()
         return list(self.candidates)
@@ -7803,6 +7845,262 @@ class CognitiveEngineTests(unittest.TestCase):
             len(manager.get(run.run_id).claim_contradictions),
             1,
         )
+
+    def test_explicit_contradiction_proposal_is_read_only_and_uses_current_claims(
+        self,
+    ) -> None:
+        store = ToggleResearchRunStore()
+        claim_ids = iter(("claim-1", "claim-2", "claim-3"))
+        manager = ResearchRunManager(
+            store,
+            id_factory=lambda: "run-123",
+            evidence_id_factory=lambda: "evidence-123",
+            claim_id_factory=claim_ids.__next__,
+        )
+        run = manager.create("Does the treatment help?")
+        source = ResearchSource(
+            "https://example.com/research",
+            "Example research",
+            "Evidence paragraph.",
+            "text/plain",
+            datetime(2026, 8, 21, 21, 0, tzinfo=UTC),
+        )
+        document = self.knowledge_engine.add_document(source.to_document())
+        manager.add_source(run.run_id, source, document.document_id)
+        evidence = manager.add_evidence(
+            run.run_id,
+            self.knowledge_engine.search("evidence")[0],
+            "User selected evidence.",
+        ).evidence[-1]
+        first_run = manager.record_claim(
+            run.run_id,
+            [evidence.evidence_id],
+            "The treatment improves recovery.",
+            "likely",
+            "medium",
+        )
+        first_claim = first_run.claims[-1]
+        second_run = manager.record_claim(
+            run.run_id,
+            [evidence.evidence_id],
+            "The treatment does not improve recovery.",
+            "likely",
+            "medium",
+        )
+        second_claim = second_run.claims[-1]
+        candidate = ResearchClaimContradictionCandidate(
+            (second_claim.claim_id, first_claim.claim_id),
+            (evidence.evidence_id,),
+            "The reported effects point in opposite directions.",
+        )
+        provider = RecordingContradictionProposalProvider([candidate])
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            research_run_manager=manager,
+            research_claim_contradiction_proposal_provider=provider,
+        )
+        before = manager.get(run.run_id)
+        saves_before = store.save_calls
+
+        response = engine.process(
+            BrainRequest(
+                "Suggest contradictions",
+                metadata={
+                    "intent": "research_claim_contradiction_proposal",
+                    "research_run_id": run.run_id,
+                },
+            )
+        )
+
+        self.assertTrue(response.success)
+        preview = response.research_claim_contradiction_proposal_preview
+        self.assertIsNotNone(preview)
+        assert preview is not None
+        self.assertEqual(preview.candidates, (candidate,))
+        self.assertEqual(preview.claims, (first_claim, second_claim))
+        self.assertIn("untrusted suggestion", response.message)
+        self.assertIn("nothing recorded", response.message)
+        self.assertEqual(
+            provider.calls,
+            [(run.question, (first_claim, second_claim), 10)],
+        )
+        self.assertEqual(store.save_calls, saves_before)
+        self.assertEqual(manager.get(run.run_id), before)
+
+        def add_concurrent_claim() -> None:
+            manager.record_claim(
+                run.run_id,
+                [evidence.evidence_id],
+                "A concurrently added claim.",
+                "unknown",
+                "unassessed",
+            )
+
+        changing_provider = RecordingContradictionProposalProvider(
+            [candidate],
+            on_propose=add_concurrent_claim,
+        )
+        changing_engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            research_run_manager=manager,
+            research_claim_contradiction_proposal_provider=changing_provider,
+        )
+        changed = changing_engine.process(
+            BrainRequest(
+                "Suggest contradictions",
+                metadata={
+                    "intent": "research_claim_contradiction_proposal",
+                    "research_run_id": run.run_id,
+                },
+            )
+        )
+        self.assertFalse(changed.success)
+        self.assertIn("changed while", changed.message)
+        self.assertEqual(store.save_calls, saves_before + 1)
+
+    def test_contradiction_proposal_rejects_unavailable_existing_and_cancelled(
+        self,
+    ) -> None:
+        store = ToggleResearchRunStore()
+        claim_ids = iter(("claim-1", "claim-2"))
+        manager = ResearchRunManager(
+            store,
+            id_factory=lambda: "run-123",
+            evidence_id_factory=lambda: "evidence-123",
+            claim_id_factory=claim_ids.__next__,
+            claim_contradiction_id_factory=lambda: "contradiction-1",
+        )
+        run = manager.create("Question")
+        source = ResearchSource(
+            "https://example.com/research",
+            "Example research",
+            "Evidence paragraph.",
+            "text/plain",
+            datetime(2026, 8, 21, 21, 0, tzinfo=UTC),
+        )
+        document = self.knowledge_engine.add_document(source.to_document())
+        manager.add_source(run.run_id, source, document.document_id)
+        evidence = manager.add_evidence(
+            run.run_id,
+            self.knowledge_engine.search("evidence")[0],
+            "Selected.",
+        ).evidence[-1]
+        manager.record_claim(
+            run.run_id,
+            [evidence.evidence_id],
+            "Claim one.",
+            "likely",
+            "medium",
+        )
+        manager.record_claim(
+            run.run_id,
+            [evidence.evidence_id],
+            "Claim two.",
+            "likely",
+            "medium",
+        )
+        claims = manager.get(run.run_id).claims
+        candidate = ResearchClaimContradictionCandidate(
+            (claims[0].claim_id, claims[1].claim_id),
+            (evidence.evidence_id,),
+            "Possible conflict.",
+        )
+        unavailable_engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            research_run_manager=manager,
+        )
+        unavailable = unavailable_engine.process(
+            BrainRequest(
+                "Suggest",
+                metadata={
+                    "intent": "research_claim_contradiction_proposal",
+                    "research_run_id": run.run_id,
+                },
+            )
+        )
+        self.assertFalse(unavailable.success)
+
+        manager.record_claim_contradiction(
+            run.run_id,
+            [claims[0].claim_id, claims[1].claim_id],
+            "User already reviewed this pair.",
+        )
+        provider = RecordingContradictionProposalProvider([candidate])
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            research_run_manager=manager,
+            research_claim_contradiction_proposal_provider=provider,
+        )
+        saves_before = store.save_calls
+        existing = engine.process(
+            BrainRequest(
+                "Suggest",
+                metadata={
+                    "intent": "research_claim_contradiction_proposal",
+                    "research_run_id": run.run_id,
+                },
+            )
+        )
+        self.assertTrue(existing.success)
+        existing_preview = existing.research_claim_contradiction_proposal_preview
+        self.assertIsNotNone(existing_preview)
+        assert existing_preview is not None
+        self.assertEqual(existing_preview.candidates, ())
+        self.assertEqual(store.save_calls, saves_before)
+
+        cancellation_signal = CancellationSignal()
+        cancelling_provider = RecordingContradictionProposalProvider(
+            [candidate],
+            cancellation_signal=cancellation_signal,
+        )
+        cancelling_engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            research_run_manager=manager,
+            research_claim_contradiction_proposal_provider=cancelling_provider,
+        )
+        cancelled = cancelling_engine.process(
+            BrainRequest(
+                "Suggest",
+                metadata={
+                    "intent": "research_claim_contradiction_proposal",
+                    "research_run_id": run.run_id,
+                },
+                cancellation_token=cancellation_signal,
+            )
+        )
+        self.assertFalse(cancelled.success)
+        self.assertIn("cancelled", cancelled.message)
+        self.assertEqual(store.save_calls, saves_before)
 
     def test_authored_source_assessment_previews_then_commits_without_providers(
         self,

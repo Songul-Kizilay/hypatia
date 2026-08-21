@@ -20,12 +20,16 @@ from core.Exceptions import MemoryError, ResearchError, SessionError
 from eventbus.EventBus import EventBus
 from knowledge.JsonFileKnowledgeRelationStore import JsonFileKnowledgeRelationStore
 from knowledge.KnowledgeEngine import KnowledgeEngine
+from llm.LLMConversationMessage import LLMConversationMessage
 from memory.JsonFileMemoryStore import JsonFileMemoryStore
 from memory.MemoryManager import MemoryManager
 from memory.MemoryRecord import MemoryRecord
 from research.JsonFileResearchRunStore import JsonFileResearchRunStore
 from research.JsonFileResearchSourceContentStore import (
     JsonFileResearchSourceContentStore,
+)
+from research.LLMResearchClaimContradictionProposalProvider import (
+    LLMResearchClaimContradictionProposalProvider,
 )
 from research.ResearchEvidenceIntegrityAuditor import ResearchEvidenceIntegrityAuditor
 from research.ResearchRunManager import ResearchRunManager
@@ -69,6 +73,17 @@ class RecordingResearchSourceDiscoveryProvider:
         return [self.candidate]
 
 
+class BootstrapRecordingLLMProvider:
+    def generate(
+        self,
+        prompt: str,
+        history: tuple[LLMConversationMessage, ...] = (),
+        *,
+        system_instruction: str | None = None,
+    ) -> str:
+        return '{"candidates":[]}'
+
+
 class BootstrapTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary_directory = tempfile.TemporaryDirectory()
@@ -103,6 +118,28 @@ class BootstrapTests(unittest.TestCase):
         response_composer = bootstrap.container.resolve(ResponseComposer)
 
         self.assertIsInstance(response_composer, ResponseComposer)
+
+    def test_bootstrap_wires_read_only_contradiction_proposer_when_llm_exists(
+        self,
+    ) -> None:
+        bootstrap = Bootstrap(
+            memory_path=self.memory_path,
+            session_path=self.session_path,
+            knowledge_relation_path=self.knowledge_relation_path,
+            research_run_path=self.research_run_path,
+            research_source_content_path=self.research_source_content_path,
+            llm_provider=BootstrapRecordingLLMProvider(),
+        )
+
+        bootstrap.initialize()
+
+        proposer = bootstrap.container.resolve(
+            LLMResearchClaimContradictionProposalProvider
+        )
+        self.assertIsInstance(
+            proposer,
+            LLMResearchClaimContradictionProposalProvider,
+        )
 
     def test_bootstrap_wires_an_injected_research_source_fetcher_to_brain(self) -> None:
         source = ResearchSource(

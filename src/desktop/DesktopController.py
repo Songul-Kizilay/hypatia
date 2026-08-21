@@ -429,6 +429,27 @@ class DesktopController:
             )
         )
 
+    def suggest_research_claim_contradictions(
+        self,
+        research_run_id: str,
+        *,
+        cancellation_token: CancellationToken | None = None,
+    ) -> BrainResponse:
+        """Request read-only candidates without recording a relationship."""
+        normalized_run_id = research_run_id.strip()
+        if not normalized_run_id:
+            raise ValueError("A research run ID cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="suggest research claim contradictions",
+                metadata={
+                    "intent": "research_claim_contradiction_proposal",
+                    "research_run_id": normalized_run_id,
+                },
+                cancellation_token=cancellation_token,
+            )
+        )
+
     def preview_research_claim_contradiction_write(
         self,
         research_run_id: str,

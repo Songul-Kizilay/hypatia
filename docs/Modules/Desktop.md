@@ -84,6 +84,12 @@ confirmation. The separate record action revalidates the open run, references,
 evidence, and unordered duplicate-pair guard before atomic append. It does not
 detect contradictions, choose claims or evidence, decide truth, rewrite either
 claim, invoke a provider or LLM, or change source instruction authority.
+`Suggest contradictions` is a separate explicit, cancellable provider action.
+It reads only bounded current claims, supplies no conversation history or tools,
+and displays possible pairs with exact persisted evidence IDs and visibly
+untrusted model rationale. It neither fills the manual form nor records a
+relationship; the user's own note, preview, confirmation, and final runtime
+revalidation remain required.
 `Export preview` is available for an explicitly selected terminal run. It
  renders persisted provenance, evidence, authored assessments, claims,
  user-reviewed claim contradictions, comparison notes, and failures as bounded

@@ -54,6 +54,64 @@ class OpenAICompatibleProvider:
         system_instruction: str | None = None,
     ) -> str:
         """Generate a response from optional history and one user message."""
+        return self._generate_with_payload(
+            prompt,
+            history,
+            system_instruction=system_instruction,
+        )
+
+    def generate_json(
+        self,
+        prompt: str,
+        history: tuple[LLMConversationMessage, ...] = (),
+        *,
+        system_instruction: str | None = None,
+        max_tokens: int = 512,
+        response_schema: dict[str, object] | None = None,
+    ) -> str:
+        """Generate one bounded JSON object through a compatible endpoint."""
+        if (
+            isinstance(max_tokens, bool)
+            or not isinstance(max_tokens, int)
+            or not 1 <= max_tokens <= 4096
+        ):
+            raise LLMError("LLM JSON max tokens invalid.")
+        if response_schema is not None and (
+            not isinstance(response_schema, dict) or not response_schema
+        ):
+            raise LLMError("LLM JSON response schema invalid.")
+        response_format: dict[str, object]
+        if response_schema is None:
+            response_format = {"type": "json_object"}
+        else:
+            response_format = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "hypatia_response",
+                    "strict": True,
+                    "schema": response_schema,
+                },
+            }
+        return self._generate_with_payload(
+            prompt,
+            history,
+            system_instruction=system_instruction,
+            payload_options={
+                "response_format": response_format,
+                "max_tokens": max_tokens,
+                "reasoning_effort": "none",
+                "temperature": 0,
+            },
+        )
+
+    def _generate_with_payload(
+        self,
+        prompt: str,
+        history: tuple[LLMConversationMessage, ...],
+        *,
+        system_instruction: str | None,
+        payload_options: dict[str, object] | None = None,
+    ) -> str:
         messages: list[dict[str, str]] = []
         effective_system_prompt = self._system_prompt
         if system_instruction is not None:
@@ -79,13 +137,16 @@ class OpenAICompatibleProvider:
             else {}
         )
         try:
+            payload: dict[str, object] = {
+                "model": self._model,
+                "messages": messages,
+            }
+            if payload_options is not None:
+                payload.update(payload_options)
             response = self._transport(
                 self._base_url,
                 headers,
-                {
-                    "model": self._model,
-                    "messages": messages,
-                },
+                payload,
             )
         except OSError as error:
             raise LLMError("LLM transport failed.") from error

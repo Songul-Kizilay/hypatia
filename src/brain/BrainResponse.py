@@ -18,6 +18,9 @@ from knowledge.KnowledgeRelationRevocationPreview import (
 from research.ResearchClaimContradictionPreview import (
     ResearchClaimContradictionPreview,
 )
+from research.ResearchClaimContradictionProposalPreview import (
+    ResearchClaimContradictionProposalPreview,
+)
 from research.ResearchClaimContradictionWritePreview import (
     ResearchClaimContradictionWritePreview,
 )
@@ -78,6 +81,9 @@ class BrainResponse:
     research_claim_contradiction_preview: ResearchClaimContradictionPreview | None = (
         None
     )
+    research_claim_contradiction_proposal_preview: (
+        ResearchClaimContradictionProposalPreview | None
+    ) = None
     research_claim_contradiction_write_preview: (
         ResearchClaimContradictionWritePreview | None
     ) = None

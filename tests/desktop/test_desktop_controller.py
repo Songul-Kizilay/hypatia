@@ -632,6 +632,32 @@ class DesktopControllerTests(unittest.TestCase):
             },
         )
 
+    def test_claim_contradiction_suggestion_is_explicit_and_cancellable(self) -> None:
+        cancellation_signal = CancellationSignal()
+
+        response = self.controller.suggest_research_claim_contradictions(
+            " run-123 ",
+            cancellation_token=cancellation_signal,
+        )
+
+        self.assertIs(response, self.response)
+        request = cast(BrainRequest, self.brain.requests[0])
+        self.assertEqual(request.message, "suggest research claim contradictions")
+        self.assertEqual(
+            request.metadata,
+            {
+                "intent": "research_claim_contradiction_proposal",
+                "research_run_id": "run-123",
+            },
+        )
+        self.assertIs(request.cancellation_token, cancellation_signal)
+
+    def test_claim_contradiction_suggestion_rejects_empty_run_locally(self) -> None:
+        with self.assertRaisesRegex(ValueError, "cannot be empty"):
+            self.controller.suggest_research_claim_contradictions(" ")
+
+        self.assertEqual(self.brain.requests, [])
+
     def test_claim_contradiction_preview_and_record_use_exact_authored_metadata(
         self,
     ) -> None:

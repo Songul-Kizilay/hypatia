@@ -979,7 +979,12 @@ class TkinterDesktopWindow:
         ttk.Entry(
             research_frame,
             textvariable=self._research_claim_contradiction_ids,
-        ).grid(row=19, column=1, columnspan=2, sticky="ew", padx=(8, 8), pady=(8, 0))
+        ).grid(row=19, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
+        ttk.Button(
+            research_frame,
+            text="Suggest contradictions",
+            command=self._suggest_research_claim_contradictions,
+        ).grid(row=19, column=2, sticky="ew", pady=(8, 0))
         ttk.Button(
             research_frame,
             text="View contradictions",
@@ -1811,6 +1816,20 @@ class TkinterDesktopWindow:
             self._status.set(str(error))
             return
         self._append_response(response)
+
+    def _suggest_research_claim_contradictions(self) -> None:
+        """Request non-persistent candidates on the provider worker."""
+        run_id = self._research_run_id.get()
+        cancellation_signal = CancellationSignal()
+        self._start_request(
+            lambda: self._controller.suggest_research_claim_contradictions(
+                run_id,
+                cancellation_token=cancellation_signal,
+            ),
+            self._append_response,
+            "research claim contradiction suggestion",
+            cancellation_signal=cancellation_signal,
+        )
 
     def _preview_and_record_research_claim_contradiction(self) -> None:
         """Preview, confirm, and revalidate one claim contradiction."""
