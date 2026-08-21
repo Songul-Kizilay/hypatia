@@ -2,6 +2,39 @@
 
 All notable project changes are recorded here.
 
+## [0.3.76] - 2026-08-21
+
+### Added
+
+- The desktop now separates Chat, Knowledge, Research, and Appearance into
+  dedicated tabs so ordinary conversation is not crowded by specialist tools.
+- A soft eye-comfort theme is the default, with separate light and high-contrast
+  choices plus the existing 10-to-20-point text-size controls.
+- Empty session lists, unavailable session data, the conversation transcript,
+  and the message composer now provide concise guidance instead of blank space.
+
+### Changed
+
+- Session, recall, knowledge, and research controls use clearer labels and more
+  compact grouped layouts. Session actions share consistent widths, and the
+  message composer advertises its `Ctrl+Enter` shortcut.
+- Tkinter uses a style backend and explicit active, focused, disabled,
+  read-only, selection, border, and scrollbar colors so native Windows widgets
+  remain readable in every supported theme.
+
+### Accessibility
+
+- The default palette avoids pure black and pure white while retaining visible
+  focus and selection states. High contrast remains an explicit opt-in mode.
+- Theme and text-size changes remain presentation-only: they do not invoke a
+  provider or change conversation, session, memory, knowledge, or research
+  state.
+
+### Verification
+
+- The package-aware full local suite contains 1,388 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass across 322 source files.
+
 ## [0.3.75] - 2026-08-21
 
 ### Added

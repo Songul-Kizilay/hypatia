@@ -7,10 +7,14 @@ overview and explicit selection, selected-session details/recent/activity, and
 explicit lexical/semantic recall, bounded cited knowledge context, and
 semantic-runtime status. It also provides explicit local Markdown/text source
 loading, source-catalog/graph views, source-relation controls, and guarded
-session rename/delete flows. Users can choose a local text size between 10 and
-20 points and toggle high contrast without affecting runtime state. One
-explicitly entered public HTTPS research source can be validated, fetched, and
-indexed through Brain without background traffic or conversation-memory writes.
+session rename/delete flows. Chat, Knowledge, Research, and Appearance are
+separate tabs so ordinary conversation is not crowded by specialist controls.
+Users can choose a local text size between 10 and 20 points and select Eye
+comfort, Light, or High contrast without affecting runtime state. Eye comfort
+is the default; it uses softened dark surfaces while preserving explicit focus,
+selection, disabled, and read-only states. One explicitly entered public HTTPS
+research source can be validated, fetched, and indexed through Brain without
+background traffic or conversation-memory writes.
 The shell can also create/list persistent research runs and attach that source
 to a selected run ID. The `Research content` action reports the accepted-source
 content restoration state captured at startup plus aggregate restored document

@@ -293,9 +293,11 @@ optimistic local update is retained.
 - Status, error, and confirmation messages are readable by assistive
   technology and do not rely on color alone.
 - **Met for local controls:** the user can change the interface text size from
-  10 through 20 points and toggle an explicit high-contrast palette. These
+  10 through 20 points and choose Eye comfort, Light, or High contrast. Eye
+  comfort is the default and avoids pure black/white surfaces; every theme
+  retains explicit focus, selection, disabled, and read-only states. These
   presentation preferences do not persist data, invoke a provider, or change
-  conversation, session, or knowledge state.
+  conversation, session, knowledge, or research state.
 - Destructive confirmation defaults to the non-destructive choice and has no
   time pressure.
 
