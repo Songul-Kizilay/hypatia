@@ -71,6 +71,8 @@ To create the world's most capable personal AI research companion.
   conversation search, rename, and guarded deletion
 - A bounded session registry with atomic UTF-8 snapshots, deterministic order,
   and enforced default/active-session invariants
+- A bounded general-memory store with atomic UTF-8 snapshots, validated record
+  identity/content, and controlled metadata and tag aggregates
 - Deterministic Brain request flow when the LLM runtime is disabled
 - Deterministic English and Turkish standalone greetings; substantive messages
   that begin with a greeting continue through the normal conversation path
