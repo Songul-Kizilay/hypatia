@@ -9,6 +9,11 @@ semantic-runtime status. It also provides explicit local Markdown/text source
 loading, source-catalog/graph views, source-relation controls, and guarded
 session rename/delete flows. Chat, Knowledge, Research, and Appearance are
 separate tabs so ordinary conversation is not crowded by specialist controls.
+Within Research, four ordered workflow tabs separate overview, sources/evidence,
+authored analysis, and review/export. Authored analysis uses four smaller tabs
+for saved records, comparison, assessment, and claims/contradictions. This is a
+presentation-only reparenting of the existing controls: all 59 command bindings
+and 41 field bindings remain unchanged, and navigation starts no runtime work.
 Users can choose a local text size between 10 and 20 points and select Eye
 comfort, Light, or High contrast without affecting runtime state. Eye comfort
 is the default; it uses softened dark surfaces while preserving explicit focus,

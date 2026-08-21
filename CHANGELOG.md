@@ -2,6 +2,34 @@
 
 All notable project changes are recorded here.
 
+## [0.3.88] - 2026-08-22
+
+### Changed
+
+- The dense desktop Research workspace is now presented as four ordered workflow
+  tabs: Overview, Sources & evidence, Authored analysis, and Review & export.
+- Authored analysis has four compact sub-tabs for saved records, comparison,
+  assessment, and claims/contradictions so the complete workspace fits a 1080p
+  desktop without hiding controls below the screen.
+- Each section includes concise guidance while retaining every existing field,
+  selector, button, confirmation boundary, and keyboard-reachable control.
+
+### Safety
+
+- Changing workflow or analysis tabs is presentation-only and starts no Brain,
+  controller, storage, provider, network, LLM, knowledge-index, event-bus, or
+  mutation work.
+- The exact multisets of 59 existing command bindings and 41 field bindings are
+  preserved from v0.3.87; no research contract or persisted schema changes.
+
+### Verification
+
+- The package-aware full local suite contains 1,452 passing automated tests.
+- Focused desktop coverage contains 93 passing tests, including the exact ordered
+  workflow and analysis section labels.
+- A real Tk layout measurement confirms a 973-pixel requested window height on a
+  1080-pixel desktop, down from the initial 1,110-pixel intermediate layout.
+
 ## [0.3.87] - 2026-08-22
 
 ### Added

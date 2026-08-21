@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.87 (Genesis)`
+`v0.3.88 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.87`** is the current executable package and GitHub
+- **Runtime release `v0.3.88`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -40,6 +40,12 @@ with optional OpenAI-compatible LLM conversation support.
   compact grouped controls, explanatory empty states, and a conversation-first
   opening view. It is a thin adapter over the existing Brain and does not create
   a second store, provider, or network channel.
+- The dense Research workspace is organized into four ordered presentation-only
+  workflow tabs for run overview, sources/evidence, authored analysis, and
+  review/export. Authored analysis is further divided into saved records,
+  comparison, assessment, and claims/contradictions. The layout retains all 59
+  existing command bindings and 41 field bindings, changes no runtime contract,
+  and fits within the measured 1080p desktop height.
 - The Research tab has a read-only persisted-run selector labelled with the
   question, status, and exact ID. Refresh preserves a valid selection, creation
   selects the new run, and switching clears only stale candidate/export views.
@@ -495,7 +501,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,451 automated tests pass through package-aware discovery.
+- 1,452 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -530,8 +536,8 @@ changed.
 
 ## Next Milestone
 
-Reorganize the dense Research workspace into presentation-only workflow sections
-for run overview, sources/evidence, authored analysis, and review/export. Every
-existing field, confirmation boundary, keyboard path, accessible theme, and exact
-runtime action must remain available without changing Brain, controllers,
-storage, providers, network, LLM, knowledge-index, or mutation contracts.
+Add a presentation-only selected-run context banner to the Sources, Authored
+analysis, and Review workflow tabs so users can always see which exact run their
+next action targets. The banner must use only the already selected immutable
+snapshot, update without a runtime request, and preserve every existing field,
+command, confirmation boundary, provider path, and mutation contract.

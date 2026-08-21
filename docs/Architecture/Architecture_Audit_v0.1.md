@@ -1,7 +1,7 @@
 # Hypatia Architecture Audit v0.1
 
 **Audit date:** 2026-08-15
-**Last verified:** 2026-08-21
+**Last verified:** 2026-08-22
 **Authority:** Current repository source, tests, and runtime configuration take
 precedence over vision and roadmap documents.
 
@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.87` in the current release candidate) are the
+- **Runtime releases** (`v0.3.88` in the current release candidate) are the
   executable package and GitHub release line. They are the source-backed
   implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
@@ -218,6 +218,13 @@ The Research tab also renders the persisted run catalog as a read-only selector
 using question, status, and exact ID. Selecting a catalog snapshot performs no
 Brain request; it only updates presentation state and clears stale run-bound
 candidate/export views.
+The Research presentation is divided into four ordered workflow tabs for run
+overview, sources/evidence, authored analysis, and review/export. Authored
+analysis has four bounded sub-tabs for saved records, comparison, assessment,
+and claims/contradictions. This reparenting preserves the exact multisets of 59
+command and 41 field bindings from v0.3.87, starts no runtime action when tabs
+change, and reduces the measured requested window height to 973 pixels on the
+current 1080p desktop baseline.
 The same already loaded immutable run object supplies a compact status and
 complete source/evidence/claim count summary. No additional manager or Brain
 read is opened, and empty or invalid selections cannot retain stale counts.
@@ -408,7 +415,7 @@ Not implemented:
 
 The current local verification baseline is:
 
-- package-aware `python -m unittest`: 1,451 tests passed. Explicit `tests.*`
+- package-aware `python -m unittest`: 1,452 tests passed. Explicit `tests.*`
   module names ensure nested test directories are included without shadowing
   source packages.
 - `python -m black --check src tests`: passed.

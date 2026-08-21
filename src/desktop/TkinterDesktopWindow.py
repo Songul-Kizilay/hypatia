@@ -47,6 +47,18 @@ _DEFAULT_FONT_SIZE = 12
 _MINIMUM_FONT_SIZE = 10
 _MAXIMUM_FONT_SIZE = 20
 _REQUEST_POLL_INTERVAL_MS = 50
+_RESEARCH_WORKFLOW_TAB_TITLES = (
+    "1  Overview",
+    "2  Sources & evidence",
+    "3  Authored analysis",
+    "4  Review & export",
+)
+_RESEARCH_ANALYSIS_TAB_TITLES = (
+    "Saved records",
+    "Comparison",
+    "Assessment",
+    "Claims & contradictions",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -665,37 +677,103 @@ class TkinterDesktopWindow:
             padding=8,
         )
         research_frame.grid(row=0, column=0, sticky="nsew")
-        research_frame.columnconfigure(1, weight=1)
-        ttk.Label(research_frame, text="Question").grid(row=0, column=0, sticky="w")
-        ttk.Entry(research_frame, textvariable=self._research_question).grid(
-            row=0,
+        research_tab.rowconfigure(0, weight=1)
+        research_frame.columnconfigure(0, weight=1)
+        research_frame.rowconfigure(1, weight=1)
+        ttk.Label(
+            research_frame,
+            text=(
+                "Follow the four steps from left to right. Changing sections never "
+                "starts a request or saves data."
+            ),
+            style="Hint.TLabel",
+        ).grid(row=0, column=0, sticky="w", pady=(0, 8))
+        self._research_workflow_tabs = ttk.Notebook(research_frame)
+        self._research_workflow_tabs.grid(row=1, column=0, sticky="nsew")
+        research_overview_frame = ttk.Frame(
+            self._research_workflow_tabs,
+            padding=10,
+        )
+        research_sources_frame = ttk.Frame(
+            self._research_workflow_tabs,
+            padding=10,
+        )
+        research_analysis_frame = ttk.Frame(
+            self._research_workflow_tabs,
+            padding=10,
+        )
+        research_review_frame = ttk.Frame(
+            self._research_workflow_tabs,
+            padding=10,
+        )
+        self._research_workflow_tabs.add(
+            research_overview_frame,
+            text=_RESEARCH_WORKFLOW_TAB_TITLES[0],
+        )
+        self._research_workflow_tabs.add(
+            research_sources_frame,
+            text=_RESEARCH_WORKFLOW_TAB_TITLES[1],
+        )
+        self._research_workflow_tabs.add(
+            research_analysis_frame,
+            text=_RESEARCH_WORKFLOW_TAB_TITLES[2],
+        )
+        self._research_workflow_tabs.add(
+            research_review_frame,
+            text=_RESEARCH_WORKFLOW_TAB_TITLES[3],
+        )
+        for section in (
+            research_overview_frame,
+            research_sources_frame,
+            research_analysis_frame,
+            research_review_frame,
+        ):
+            section.columnconfigure(1, weight=1)
+        ttk.Label(
+            research_overview_frame,
+            text=(
+                "Start one research question or select an existing run before "
+                "continuing to sources."
+            ),
+            style="Hint.TLabel",
+        ).grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 8))
+        ttk.Label(research_overview_frame, text="Question").grid(
+            row=1,
+            column=0,
+            sticky="w",
+        )
+        ttk.Entry(
+            research_overview_frame,
+            textvariable=self._research_question,
+        ).grid(
+            row=1,
             column=1,
             sticky="ew",
             padx=(8, 8),
         )
         ttk.Button(
-            research_frame,
+            research_overview_frame,
             text="Start research",
             command=self._create_research_run,
-        ).grid(row=0, column=2, sticky="ew")
+        ).grid(row=1, column=2, sticky="ew")
         ttk.Button(
-            research_frame,
+            research_overview_frame,
             text="Research runs",
             command=self._show_research_runs,
-        ).grid(row=0, column=3, sticky="ew", padx=(8, 0))
-        ttk.Label(research_frame, text="Research run").grid(
-            row=1,
+        ).grid(row=1, column=3, sticky="ew", padx=(8, 0))
+        ttk.Label(research_overview_frame, text="Research run").grid(
+            row=2,
             column=0,
             sticky="w",
             pady=(8, 0),
         )
-        research_run_frame = ttk.Frame(research_frame)
+        research_run_frame = ttk.Frame(research_overview_frame)
         research_run_frame.grid(
-            row=1,
+            row=2,
             column=1,
-            columnspan=2,
+            columnspan=3,
             sticky="ew",
-            padx=(8, 8),
+            padx=(8, 0),
             pady=(8, 0),
         )
         research_run_frame.columnconfigure(0, weight=1)
@@ -719,8 +797,25 @@ class TkinterDesktopWindow:
             textvariable=self._research_run_summary,
             style="Hint.TLabel",
         ).grid(row=1, column=0, sticky="w", pady=(4, 0))
-        accepted_source_frame = ttk.Frame(research_run_frame)
-        accepted_source_frame.grid(row=2, column=0, sticky="ew", pady=(8, 0))
+        ttk.Label(
+            research_sources_frame,
+            text=(
+                "Discover or load sources, inspect recorded evidence, and pass exact "
+                "references to later steps."
+            ),
+            style="Hint.TLabel",
+        ).grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 8))
+        accepted_source_frame = ttk.LabelFrame(
+            research_sources_frame,
+            text="Selected run records",
+            padding=8,
+        )
+        accepted_source_frame.grid(
+            row=1,
+            column=0,
+            columnspan=4,
+            sticky="ew",
+        )
         accepted_source_frame.columnconfigure(1, weight=1)
         ttk.Label(accepted_source_frame, text="Accepted source").grid(
             row=0,
@@ -814,8 +909,72 @@ class TkinterDesktopWindow:
             text="Add to comparison",
             command=self._add_selected_research_assessment_to_comparison,
         ).grid(row=4, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
-        authored_claim_frame = ttk.Frame(research_run_frame)
-        authored_claim_frame.grid(row=3, column=0, sticky="ew", pady=(8, 0))
+        ttk.Label(
+            research_analysis_frame,
+            text=(
+                "Review saved analysis, then author comparisons, assessments, "
+                "claims, and contradiction notes with explicit previews."
+            ),
+            style="Hint.TLabel",
+        ).grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 8))
+        research_analysis_frame.rowconfigure(1, weight=1)
+        self._research_analysis_tabs = ttk.Notebook(research_analysis_frame)
+        self._research_analysis_tabs.grid(
+            row=1,
+            column=0,
+            columnspan=4,
+            sticky="nsew",
+        )
+        research_saved_records_frame = ttk.Frame(
+            self._research_analysis_tabs,
+            padding=8,
+        )
+        research_comparison_frame = ttk.Frame(
+            self._research_analysis_tabs,
+            padding=8,
+        )
+        research_assessment_frame = ttk.Frame(
+            self._research_analysis_tabs,
+            padding=8,
+        )
+        research_claims_frame = ttk.Frame(
+            self._research_analysis_tabs,
+            padding=8,
+        )
+        self._research_analysis_tabs.add(
+            research_saved_records_frame,
+            text=_RESEARCH_ANALYSIS_TAB_TITLES[0],
+        )
+        self._research_analysis_tabs.add(
+            research_comparison_frame,
+            text=_RESEARCH_ANALYSIS_TAB_TITLES[1],
+        )
+        self._research_analysis_tabs.add(
+            research_assessment_frame,
+            text=_RESEARCH_ANALYSIS_TAB_TITLES[2],
+        )
+        self._research_analysis_tabs.add(
+            research_claims_frame,
+            text=_RESEARCH_ANALYSIS_TAB_TITLES[3],
+        )
+        for analysis_section in (
+            research_saved_records_frame,
+            research_comparison_frame,
+            research_assessment_frame,
+            research_claims_frame,
+        ):
+            analysis_section.columnconfigure(1, weight=1)
+        authored_claim_frame = ttk.LabelFrame(
+            research_saved_records_frame,
+            text="Recorded claims and contradictions",
+            padding=8,
+        )
+        authored_claim_frame.grid(
+            row=0,
+            column=0,
+            columnspan=4,
+            sticky="ew",
+        )
         authored_claim_frame.columnconfigure(1, weight=1)
         ttk.Label(authored_claim_frame, text="Authored claims").grid(
             row=0,
@@ -870,10 +1029,20 @@ class TkinterDesktopWindow:
             text="Use selected pair",
             command=self._use_selected_persisted_contradiction_pair,
         ).grid(row=3, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
-        comparison_note_frame = ttk.Frame(research_run_frame)
-        comparison_note_frame.grid(row=4, column=0, sticky="ew", pady=(8, 0))
+        comparison_note_frame = ttk.LabelFrame(
+            research_saved_records_frame,
+            text="Recorded comparison notes",
+            padding=8,
+        )
+        comparison_note_frame.grid(
+            row=1,
+            column=0,
+            columnspan=4,
+            sticky="ew",
+            pady=(8, 0),
+        )
         comparison_note_frame.columnconfigure(1, weight=1)
-        ttk.Label(comparison_note_frame, text="Recorded comparison notes").grid(
+        ttk.Label(comparison_note_frame, text="Comparison note").grid(
             row=0,
             column=0,
             sticky="w",
@@ -917,48 +1086,54 @@ class TkinterDesktopWindow:
             text="Use assessments",
             command=self._use_selected_persisted_comparison_note_assessments,
         ).grid(row=2, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ttk.Label(research_sources_frame, text="Source discovery").grid(
+            row=2,
+            column=0,
+            sticky="w",
+            pady=(8, 0),
+        )
         self._request_button(
-            research_frame,
+            research_sources_frame,
             text="Find sources",
             command=self._discover_research_sources,
-        ).grid(row=1, column=3, sticky="ew", pady=(8, 0))
-        ttk.Label(research_frame, text="Candidates").grid(
-            row=2,
+        ).grid(row=2, column=3, sticky="ew", pady=(8, 0))
+        ttk.Label(research_sources_frame, text="Candidates").grid(
+            row=3,
             column=0,
             sticky="w",
             pady=(8, 0),
         )
         self._research_candidate_selector = ttk.Combobox(
-            research_frame,
+            research_sources_frame,
             textvariable=self._research_candidate,
             values=(),
             state="readonly",
         )
         self._research_candidate_selector.grid(
-            row=2,
+            row=3,
             column=1,
             sticky="ew",
             padx=(8, 8),
             pady=(8, 0),
         )
         ttk.Button(
-            research_frame,
+            research_sources_frame,
             text="Use selected URL",
             command=self._use_selected_research_candidate,
-        ).grid(row=2, column=2, sticky="ew", pady=(8, 0))
+        ).grid(row=3, column=2, sticky="ew", pady=(8, 0))
         self._request_button(
-            research_frame,
+            research_sources_frame,
             text="Preview & load",
             command=self._preview_and_accept_research_candidate,
-        ).grid(row=2, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
-        ttk.Label(research_frame, text="HTTPS URL").grid(
-            row=3,
+        ).grid(row=3, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ttk.Label(research_sources_frame, text="HTTPS URL").grid(
+            row=4,
             column=0,
             sticky="w",
             pady=(8, 0),
         )
-        ttk.Entry(research_frame, textvariable=self._research_url).grid(
-            row=3,
+        ttk.Entry(research_sources_frame, textvariable=self._research_url).grid(
+            row=4,
             column=1,
             columnspan=2,
             sticky="ew",
@@ -966,21 +1141,21 @@ class TkinterDesktopWindow:
             pady=(8, 0),
         )
         self._request_button(
-            research_frame,
+            research_sources_frame,
             text="Load source",
             command=self._load_research_source,
-        ).grid(row=3, column=3, sticky="ew", pady=(8, 0))
-        ttk.Label(research_frame, text="Source document ID").grid(
-            row=4,
+        ).grid(row=4, column=3, sticky="ew", pady=(8, 0))
+        ttk.Label(research_sources_frame, text="Source document ID").grid(
+            row=5,
             column=0,
             sticky="w",
             pady=(8, 0),
         )
         ttk.Entry(
-            research_frame,
+            research_sources_frame,
             textvariable=self._research_source_document_id,
         ).grid(
-            row=4,
+            row=5,
             column=1,
             columnspan=2,
             sticky="ew",
@@ -988,21 +1163,21 @@ class TkinterDesktopWindow:
             pady=(8, 0),
         )
         ttk.Button(
-            research_frame,
+            research_sources_frame,
             text="Preview assessment",
             command=self._preview_research_source_assessment,
-        ).grid(row=4, column=3, sticky="ew", pady=(8, 0))
-        ttk.Label(research_frame, text="Comparison source IDs").grid(
-            row=5,
+        ).grid(row=5, column=3, sticky="ew", pady=(8, 0))
+        ttk.Label(research_comparison_frame, text="Comparison source IDs").grid(
+            row=0,
             column=0,
             sticky="w",
             pady=(8, 0),
         )
         ttk.Entry(
-            research_frame,
+            research_comparison_frame,
             textvariable=self._research_comparison_document_ids,
         ).grid(
-            row=5,
+            row=0,
             column=1,
             columnspan=2,
             sticky="ew",
@@ -1010,55 +1185,55 @@ class TkinterDesktopWindow:
             pady=(8, 0),
         )
         ttk.Button(
-            research_frame,
+            research_comparison_frame,
             text="Compare sources",
             command=self._preview_research_source_comparison,
-        ).grid(row=5, column=3, sticky="ew", pady=(8, 0))
-        ttk.Label(research_frame, text="Comparison evidence IDs").grid(
-            row=6,
+        ).grid(row=0, column=3, sticky="ew")
+        ttk.Label(research_comparison_frame, text="Comparison evidence IDs").grid(
+            row=1,
             column=0,
             sticky="w",
             pady=(8, 0),
         )
         ttk.Entry(
-            research_frame,
+            research_comparison_frame,
             textvariable=self._research_comparison_evidence_ids,
         ).grid(
-            row=6,
+            row=1,
             column=1,
             columnspan=3,
             sticky="ew",
             padx=(8, 0),
             pady=(8, 0),
         )
-        ttk.Label(research_frame, text="Comparison assessment IDs").grid(
-            row=7,
+        ttk.Label(research_comparison_frame, text="Comparison assessment IDs").grid(
+            row=2,
             column=0,
             sticky="w",
             pady=(8, 0),
         )
         ttk.Entry(
-            research_frame,
+            research_comparison_frame,
             textvariable=self._research_comparison_assessment_ids,
         ).grid(
-            row=7,
+            row=2,
             column=1,
             columnspan=3,
             sticky="ew",
             padx=(8, 0),
             pady=(8, 0),
         )
-        ttk.Label(research_frame, text="Comparison note").grid(
-            row=8,
+        ttk.Label(research_comparison_frame, text="Comparison note").grid(
+            row=3,
             column=0,
             sticky="w",
             pady=(8, 0),
         )
         ttk.Entry(
-            research_frame,
+            research_comparison_frame,
             textvariable=self._research_comparison_note_text,
         ).grid(
-            row=8,
+            row=3,
             column=1,
             columnspan=2,
             sticky="ew",
@@ -1066,18 +1241,18 @@ class TkinterDesktopWindow:
             pady=(8, 0),
         )
         ttk.Button(
-            research_frame,
+            research_comparison_frame,
             text="Preview & save note",
             command=self._preview_and_record_research_source_comparison_note,
-        ).grid(row=8, column=3, sticky="ew", pady=(8, 0))
-        ttk.Label(research_frame, text="Chunk ID").grid(
-            row=9,
+        ).grid(row=3, column=3, sticky="ew", pady=(8, 0))
+        ttk.Label(research_sources_frame, text="Chunk ID").grid(
+            row=6,
             column=0,
             sticky="w",
             pady=(8, 0),
         )
-        ttk.Entry(research_frame, textvariable=self._research_chunk_id).grid(
-            row=9,
+        ttk.Entry(research_sources_frame, textvariable=self._research_chunk_id).grid(
+            row=6,
             column=1,
             columnspan=2,
             sticky="ew",
@@ -1085,57 +1260,60 @@ class TkinterDesktopWindow:
             pady=(8, 0),
         )
         ttk.Button(
-            research_frame,
+            research_sources_frame,
             text="View evidence",
             command=self._show_research_evidence,
-        ).grid(row=9, column=3, sticky="ew", pady=(8, 0))
-        ttk.Label(research_frame, text="Evidence note").grid(
-            row=10,
-            column=0,
-            sticky="w",
-            pady=(8, 0),
-        )
-        ttk.Entry(research_frame, textvariable=self._research_evidence_note).grid(
-            row=10,
-            column=1,
-            columnspan=2,
-            sticky="ew",
-            padx=(8, 8),
-            pady=(8, 0),
-        )
-        ttk.Button(
-            research_frame,
-            text="Save evidence",
-            command=self._record_research_evidence,
-        ).grid(row=10, column=3, sticky="ew", pady=(8, 0))
-        ttk.Label(research_frame, text="Assessment evidence IDs").grid(
-            row=11,
+        ).grid(row=6, column=3, sticky="ew", pady=(8, 0))
+        ttk.Label(research_sources_frame, text="Evidence note").grid(
+            row=7,
             column=0,
             sticky="w",
             pady=(8, 0),
         )
         ttk.Entry(
-            research_frame,
+            research_sources_frame,
+            textvariable=self._research_evidence_note,
+        ).grid(
+            row=7,
+            column=1,
+            columnspan=2,
+            sticky="ew",
+            padx=(8, 8),
+            pady=(8, 0),
+        )
+        ttk.Button(
+            research_sources_frame,
+            text="Save evidence",
+            command=self._record_research_evidence,
+        ).grid(row=7, column=3, sticky="ew", pady=(8, 0))
+        ttk.Label(research_assessment_frame, text="Assessment evidence IDs").grid(
+            row=0,
+            column=0,
+            sticky="w",
+            pady=(8, 0),
+        )
+        ttk.Entry(
+            research_assessment_frame,
             textvariable=self._research_assessment_evidence_ids,
         ).grid(
-            row=11,
+            row=0,
             column=1,
             columnspan=3,
             sticky="ew",
             padx=(8, 0),
             pady=(8, 0),
         )
-        ttk.Label(research_frame, text="Assessment text").grid(
-            row=12,
+        ttk.Label(research_assessment_frame, text="Assessment text").grid(
+            row=1,
             column=0,
             sticky="w",
             pady=(8, 0),
         )
         ttk.Entry(
-            research_frame,
+            research_assessment_frame,
             textvariable=self._research_assessment_text,
         ).grid(
-            row=12,
+            row=1,
             column=1,
             columnspan=2,
             sticky="ew",
@@ -1143,144 +1321,156 @@ class TkinterDesktopWindow:
             pady=(8, 0),
         )
         ttk.Button(
-            research_frame,
+            research_assessment_frame,
             text="Preview & save assessment",
             command=self._preview_and_record_research_source_assessment,
-        ).grid(row=12, column=3, sticky="ew", pady=(8, 0))
-        ttk.Label(research_frame, text="Information trust (user-authored)").grid(
-            row=13,
+        ).grid(row=1, column=3, sticky="ew", pady=(8, 0))
+        ttk.Label(
+            research_assessment_frame,
+            text="Information trust (user-authored)",
+        ).grid(
+            row=2,
             column=0,
             sticky="w",
             pady=(8, 0),
         )
         ttk.Combobox(
-            research_frame,
+            research_assessment_frame,
             textvariable=self._research_information_trust,
             values=tuple(value.value for value in ResearchInformationTrust),
             state="readonly",
-        ).grid(row=13, column=1, columnspan=3, sticky="ew", padx=(8, 0), pady=(8, 0))
-        ttk.Label(research_frame, text="Supersedes assessment ID (optional)").grid(
-            row=14,
+        ).grid(row=2, column=1, columnspan=3, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ttk.Label(
+            research_assessment_frame,
+            text="Supersedes assessment ID (optional)",
+        ).grid(
+            row=3,
             column=0,
             sticky="w",
             pady=(8, 0),
         )
         ttk.Entry(
-            research_frame,
+            research_assessment_frame,
             textvariable=self._research_assessment_supersedes_id,
         ).grid(
-            row=14,
+            row=3,
             column=1,
             columnspan=3,
             sticky="ew",
             padx=(8, 0),
             pady=(8, 0),
         )
-        ttk.Label(research_frame, text="Claim evidence IDs (comma-separated)").grid(
-            row=15,
+        ttk.Label(
+            research_claims_frame,
+            text="Claim evidence IDs (comma-separated)",
+        ).grid(
+            row=0,
             column=0,
             sticky="w",
             pady=(8, 0),
         )
         ttk.Entry(
-            research_frame,
+            research_claims_frame,
             textvariable=self._research_claim_evidence_ids,
         ).grid(
-            row=15,
+            row=0,
             column=1,
             columnspan=3,
             sticky="ew",
             padx=(8, 0),
             pady=(8, 0),
         )
-        ttk.Label(research_frame, text="User-authored claim").grid(
-            row=16,
+        ttk.Label(research_claims_frame, text="User-authored claim").grid(
+            row=1,
             column=0,
             sticky="w",
             pady=(8, 0),
         )
         ttk.Entry(
-            research_frame,
+            research_claims_frame,
             textvariable=self._research_claim_text,
         ).grid(
-            row=16,
+            row=1,
             column=1,
             columnspan=3,
             sticky="ew",
             padx=(8, 0),
             pady=(8, 0),
         )
-        ttk.Label(research_frame, text="Epistemic state / confidence").grid(
-            row=17,
+        ttk.Label(research_claims_frame, text="Epistemic state / confidence").grid(
+            row=2,
             column=0,
             sticky="w",
             pady=(8, 0),
         )
         ttk.Combobox(
-            research_frame,
+            research_claims_frame,
             textvariable=self._research_claim_epistemic_state,
             values=tuple(value.value for value in ResearchEpistemicState),
             state="readonly",
-        ).grid(row=17, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
+        ).grid(row=2, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
         ttk.Combobox(
-            research_frame,
+            research_claims_frame,
             textvariable=self._research_claim_confidence,
             values=tuple(value.value for value in ResearchClaimConfidence),
             state="readonly",
-        ).grid(row=17, column=2, sticky="ew", pady=(8, 0))
+        ).grid(row=2, column=2, sticky="ew", pady=(8, 0))
         ttk.Button(
-            research_frame,
+            research_claims_frame,
             text="View claims",
             command=self._preview_research_claims,
-        ).grid(row=17, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
-        ttk.Label(research_frame, text="Supersedes claim ID (optional)").grid(
-            row=18,
+        ).grid(row=2, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ttk.Label(research_claims_frame, text="Supersedes claim ID (optional)").grid(
+            row=3,
             column=0,
             sticky="w",
             pady=(8, 0),
         )
         ttk.Entry(
-            research_frame,
+            research_claims_frame,
             textvariable=self._research_claim_supersedes_id,
-        ).grid(row=18, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
+        ).grid(row=3, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
         ttk.Button(
-            research_frame,
+            research_claims_frame,
             text="Preview & save claim",
             command=self._preview_and_record_research_claim,
-        ).grid(row=18, column=2, columnspan=2, sticky="ew", pady=(8, 0))
-        ttk.Label(research_frame, text="Contradicting claim IDs (exactly two)").grid(
-            row=19,
+        ).grid(row=3, column=2, columnspan=2, sticky="ew", pady=(8, 0))
+        ttk.Label(
+            research_claims_frame,
+            text="Contradicting claim IDs (exactly two)",
+        ).grid(
+            row=4,
             column=0,
             sticky="w",
             pady=(8, 0),
         )
         ttk.Entry(
-            research_frame,
+            research_claims_frame,
             textvariable=self._research_claim_contradiction_ids,
-        ).grid(row=19, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
+        ).grid(row=4, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
         ttk.Button(
-            research_frame,
+            research_claims_frame,
             text="Suggest contradictions",
             command=self._suggest_research_claim_contradictions,
-        ).grid(row=19, column=2, sticky="ew", pady=(8, 0))
+        ).grid(row=4, column=2, sticky="ew", pady=(8, 0))
         ttk.Button(
-            research_frame,
+            research_claims_frame,
             text="View contradictions",
             command=self._preview_research_claim_contradictions,
-        ).grid(row=19, column=3, sticky="ew", pady=(8, 0))
-        ttk.Label(research_frame, text="Suggested pair (not saved)").grid(
-            row=20,
+        ).grid(row=4, column=3, sticky="ew", pady=(8, 0))
+        ttk.Label(research_claims_frame, text="Suggested pair (not saved)").grid(
+            row=5,
             column=0,
             sticky="w",
             pady=(8, 0),
         )
         self._research_claim_contradiction_proposal_selector = ttk.Combobox(
-            research_frame,
+            research_claims_frame,
             textvariable=self._research_claim_contradiction_proposal,
             state="readonly",
         )
         self._research_claim_contradiction_proposal_selector.grid(
-            row=20,
+            row=5,
             column=1,
             columnspan=2,
             sticky="ew",
@@ -1288,67 +1478,75 @@ class TkinterDesktopWindow:
             pady=(8, 0),
         )
         ttk.Button(
-            research_frame,
+            research_claims_frame,
             text="Use selected pair",
             command=self._use_selected_research_claim_contradiction_proposal,
-        ).grid(row=20, column=3, sticky="ew", pady=(8, 0))
-        ttk.Label(research_frame, text="User contradiction note").grid(
-            row=21,
+        ).grid(row=5, column=3, sticky="ew", pady=(8, 0))
+        ttk.Label(research_claims_frame, text="User contradiction note").grid(
+            row=6,
             column=0,
             sticky="w",
             pady=(8, 0),
         )
         ttk.Entry(
-            research_frame,
+            research_claims_frame,
             textvariable=self._research_claim_contradiction_note,
-        ).grid(row=21, column=1, columnspan=2, sticky="ew", padx=(8, 8), pady=(8, 0))
+        ).grid(row=6, column=1, columnspan=2, sticky="ew", padx=(8, 8), pady=(8, 0))
         ttk.Button(
-            research_frame,
+            research_claims_frame,
             text="Preview & save contradiction",
             command=self._preview_and_record_research_claim_contradiction,
-        ).grid(row=21, column=3, sticky="ew", pady=(8, 0))
-        ttk.Label(research_frame, text="Final status").grid(
-            row=22,
+        ).grid(row=6, column=3, sticky="ew", pady=(8, 0))
+        ttk.Label(
+            research_review_frame,
+            text=(
+                "Review integrity, choose a terminal status, and explicitly preview "
+                "or save the final Markdown export."
+            ),
+            style="Hint.TLabel",
+        ).grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 8))
+        ttk.Label(research_review_frame, text="Final status").grid(
+            row=1,
             column=0,
             sticky="w",
             pady=(8, 0),
         )
         ttk.Combobox(
-            research_frame,
+            research_review_frame,
             textvariable=self._research_target_status,
             values=("completed", "failed", "cancelled"),
             state="readonly",
-        ).grid(row=22, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
+        ).grid(row=1, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
         ttk.Button(
-            research_frame,
+            research_review_frame,
             text="Preview status",
             command=self._preview_and_update_research_status,
-        ).grid(row=22, column=2, sticky="ew", pady=(8, 0))
+        ).grid(row=1, column=2, sticky="ew", pady=(8, 0))
         ttk.Button(
-            research_frame,
+            research_review_frame,
             text="Export preview",
             command=self._preview_research_run_markdown_export,
-        ).grid(row=22, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ).grid(row=1, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
         ttk.Button(
-            research_frame,
+            research_review_frame,
             text="Verify export",
             command=self._verify_research_run_markdown_export,
-        ).grid(row=23, column=2, sticky="ew", pady=(8, 0))
+        ).grid(row=2, column=2, sticky="ew", pady=(8, 0))
         ttk.Button(
-            research_frame,
+            research_review_frame,
             text="Save export",
             command=self._save_research_run_markdown_export,
-        ).grid(row=23, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ).grid(row=2, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
         ttk.Button(
-            research_frame,
+            research_review_frame,
             text="Evidence integrity",
             command=self._show_research_evidence_integrity,
-        ).grid(row=23, column=0, sticky="ew", pady=(8, 0))
+        ).grid(row=2, column=0, sticky="ew", pady=(8, 0))
         ttk.Button(
-            research_frame,
+            research_review_frame,
             text="Research data status",
             command=self._show_research_content_status,
-        ).grid(row=23, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
+        ).grid(row=2, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
 
         relation_frame = ttk.LabelFrame(
             knowledge_tab,
