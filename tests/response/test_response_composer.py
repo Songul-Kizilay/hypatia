@@ -167,6 +167,14 @@ class ResponseComposerTests(unittest.TestCase):
             last_rebuild_error=None,
             last_update_error=None,
         )
+        updating = self.composer.semantic_recall_status(
+            self.request,
+            runtime_state="updating",
+            indexed_memory_records=2,
+            embedding_dimension=3,
+            last_rebuild_error=None,
+            last_update_error=None,
+        )
 
         self.assertIn("Runtime: initializing", initializing.message)
         self.assertIn("Last rebuild: in progress", initializing.message)
@@ -175,6 +183,8 @@ class ResponseComposerTests(unittest.TestCase):
         self.assertIn("Indexed memory records: 2", refreshing.message)
         self.assertIn("Last rebuild: in progress", refreshing.message)
         self.assertIn("Last incremental update: healthy", refreshing.message)
+        self.assertIn("Runtime: updating", updating.message)
+        self.assertIn("Last incremental update: in progress", updating.message)
 
     def test_search_success_exposes_one_citation_per_result(self) -> None:
         results = [

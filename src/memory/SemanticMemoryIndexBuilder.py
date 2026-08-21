@@ -150,7 +150,25 @@ class SemanticMemoryIndexBuilder:
         """Update the live index before best-effort cache retention."""
         self._validate_source_text(source_text)
         embedding = self._embedding_provider.embed(source_text)
+        self.upsert_memory_embedding(index, memory_id, embedding)
+        self.retain_memory_record_embedding(memory_id, source_text, embedding)
+
+    @staticmethod
+    def upsert_memory_embedding(
+        index: InMemorySemanticMemoryIndex,
+        memory_id: str,
+        embedding: Embedding,
+    ) -> None:
+        """Publish one already-created embedding to the live derived index."""
         index.upsert(memory_id, embedding)
+
+    def retain_memory_record_embedding(
+        self,
+        memory_id: str,
+        source_text: str,
+        embedding: Embedding,
+    ) -> None:
+        """Best-effort retain one completed embedding in the derived cache."""
         if self._embedding_cache is not None:
             try:
                 self._embedding_cache.upsert(memory_id, source_text, embedding)

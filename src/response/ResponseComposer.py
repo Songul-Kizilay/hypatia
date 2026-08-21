@@ -1811,9 +1811,15 @@ class ResponseComposer:
         last_rebuild = last_rebuild_error or (
             "in progress"
             if runtime_state in {"initializing", "refreshing"}
-            else "healthy" if runtime_state == "ready" else "unavailable"
+            else (
+                "healthy" if runtime_state in {"ready", "updating"} else "unavailable"
+            )
         )
-        last_update = last_update_error or ("healthy" if available else "unavailable")
+        last_update = last_update_error or (
+            "in progress"
+            if runtime_state == "updating"
+            else "healthy" if available else "unavailable"
+        )
         return BrainResponse(
             message="\n".join(
                 (

@@ -1926,6 +1926,15 @@ class CognitiveEngine:
                 last_rebuild_error=runtime.last_rebuild_error(),
                 last_update_error=runtime.last_update_error(),
             )
+        if runtime.is_updating():
+            return self._response_composer.semantic_recall_status(
+                request,
+                runtime_state="updating",
+                indexed_memory_records=index.count() if index is not None else None,
+                embedding_dimension=index.dimension if index is not None else None,
+                last_rebuild_error=runtime.last_rebuild_error(),
+                last_update_error=runtime.last_update_error(),
+            )
         if index is None:
             last_rebuild_error = runtime.last_rebuild_error()
             return self._response_composer.semantic_recall_status(

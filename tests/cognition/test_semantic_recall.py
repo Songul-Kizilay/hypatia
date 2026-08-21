@@ -268,6 +268,27 @@ class SemanticRecallTests(unittest.TestCase):
         self.assertIn("Last rebuild: in progress", response.message)
         self.assertEqual(provider.calls, calls_before_status)
 
+    def test_semantic_recall_status_reports_incremental_update_progress(self) -> None:
+        content = "Indexed conversation"
+        self.memory_manager.add(
+            content,
+            metadata={"session_id": "default"},
+            tags={"brain", "conversation"},
+        )
+        runtime, provider = self._runtime({content: Embedding((1, 0))})
+        calls_before_status = list(provider.calls)
+
+        with patch.object(runtime, "is_updating", return_value=True):
+            response = self._engine(runtime).process(
+                BrainRequest(message="semantic recall status")
+            )
+
+        self.assertIn("Runtime: updating", response.message)
+        self.assertIn("Indexed memory records: 1", response.message)
+        self.assertIn("Last rebuild: healthy", response.message)
+        self.assertIn("Last incremental update: in progress", response.message)
+        self.assertEqual(provider.calls, calls_before_status)
+
     def test_semantic_recall_status_marks_an_empty_ready_index_as_unestablished(
         self,
     ) -> None:

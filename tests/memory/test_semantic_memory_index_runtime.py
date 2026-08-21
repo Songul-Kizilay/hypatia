@@ -180,6 +180,7 @@ class SemanticMemoryIndexRuntimeTests(unittest.TestCase):
         runtime.attach(event_bus)
 
         record = memory_manager.add("Initial fact")
+        self.assertTrue(runtime.wait_for_idle(1))
         self.assertEqual(index.count(), 1)
         self.assertEqual(
             index.search(Embedding((1, 0))),
@@ -187,8 +188,10 @@ class SemanticMemoryIndexRuntimeTests(unittest.TestCase):
         )
 
         memory_manager.update(record.memory_id, content="Updated fact")
+        self.assertTrue(runtime.wait_for_idle(1))
         self.assertEqual(index.count(), 1)
         self.assertTrue(memory_manager.delete(record.memory_id))
+        self.assertTrue(runtime.wait_for_idle(1))
         self.assertEqual(index.count(), 0)
         self.assertIsNone(runtime.last_update_error())
 
@@ -204,6 +207,7 @@ class SemanticMemoryIndexRuntimeTests(unittest.TestCase):
         provider.should_fail = True
 
         memory_manager.add("Primary memory write still succeeds")
+        self.assertTrue(runtime.wait_for_idle(1))
 
         self.assertEqual(memory_manager.count(), 1)
         self.assertEqual(index.count(), 0)
@@ -219,6 +223,7 @@ class SemanticMemoryIndexRuntimeTests(unittest.TestCase):
         provider.should_crash = True
 
         record = memory_manager.add("Primary memory write still succeeds")
+        self.assertTrue(runtime.wait_for_idle(1))
 
         self.assertIsNotNone(memory_manager.get(record.memory_id))
         self.assertEqual(index.count(), 0)
@@ -241,12 +246,14 @@ class SemanticMemoryIndexRuntimeTests(unittest.TestCase):
             runtime.attach(event_bus)
 
             record = memory_manager.add("Initial fact")
+            self.assertTrue(runtime.wait_for_idle(1))
             self.assertEqual(
                 cache.get(record.memory_id, "Initial fact"),
                 Embedding((1, 0)),
             )
 
             memory_manager.update(record.memory_id, content="Updated fact")
+            self.assertTrue(runtime.wait_for_idle(1))
             self.assertIsNone(cache.get(record.memory_id, "Initial fact"))
             self.assertEqual(
                 cache.get(record.memory_id, "Updated fact"),
@@ -254,6 +261,7 @@ class SemanticMemoryIndexRuntimeTests(unittest.TestCase):
             )
 
             self.assertTrue(memory_manager.delete(record.memory_id))
+            self.assertTrue(runtime.wait_for_idle(1))
             self.assertIsNone(cache.get(record.memory_id, "Updated fact"))
 
     def test_incremental_limit_failure_preserves_index_and_cache(self) -> None:
@@ -279,6 +287,7 @@ class SemanticMemoryIndexRuntimeTests(unittest.TestCase):
                 1,
             ):
                 second = memory_manager.add("Second fact")
+            self.assertTrue(runtime.wait_for_idle(1))
 
             self.assertEqual(memory_manager.count(), 2)
             self.assertEqual(index.count(), 1)
@@ -378,6 +387,135 @@ class SemanticMemoryIndexRuntimeTests(unittest.TestCase):
         self.assertTrue(runtime.wait_for_idle(1))
         self.assertIsNone(runtime.current())
         self.assertEqual(cache.replacements, [])
+
+    def test_incremental_embedding_runs_in_background_with_search_fallback(
+        self,
+    ) -> None:
+        event_bus = EventBus()
+        memory_manager = MemoryManager(event_bus)
+        provider = BlockingEmbeddingProvider(Embedding((1, 0)))
+        runtime = SemanticMemoryIndexRuntime(SemanticMemoryIndexBuilder(provider))
+        index = runtime.refresh(memory_manager)
+        runtime.attach(event_bus)
+
+        record = memory_manager.add("First fact")
+
+        self.assertTrue(provider.entered[0].wait(1))
+        self.assertTrue(runtime.is_updating())
+        self.assertEqual(memory_manager.count(), 1)
+        self.assertEqual(index.count(), 0)
+        self.assertEqual(runtime.search("First", limit=1), ())
+        provider.release[0].set()
+        self.assertTrue(runtime.wait_for_idle(1))
+        self.assertFalse(runtime.is_updating())
+        self.assertEqual(
+            index.search(Embedding((1, 0))),
+            (SemanticMemoryMatch(memory_id=record.memory_id, score=1.0),),
+        )
+
+    def test_incremental_events_coalesce_and_discard_stale_embedding(self) -> None:
+        event_bus = EventBus()
+        memory_manager = MemoryManager(event_bus)
+        provider = BlockingEmbeddingProvider(Embedding((1, 0)))
+        runtime = SemanticMemoryIndexRuntime(SemanticMemoryIndexBuilder(provider))
+        index = runtime.refresh(memory_manager)
+        runtime.attach(event_bus)
+
+        record = memory_manager.add("First fact")
+        self.assertTrue(provider.entered[0].wait(1))
+        memory_manager.update(record.memory_id, content="Second fact")
+        memory_manager.update(record.memory_id, content="Final fact")
+        provider.release[0].set()
+
+        self.assertTrue(runtime.wait_for_idle(1))
+        self.assertEqual(provider.sources, ["First fact", "Final fact"])
+        self.assertEqual(index.count(), 1)
+        self.assertIsNone(runtime.last_update_error())
+
+    def test_incremental_delete_supersedes_in_flight_upsert(self) -> None:
+        event_bus = EventBus()
+        memory_manager = MemoryManager(event_bus)
+        provider = BlockingEmbeddingProvider(Embedding((1, 0)))
+        runtime = SemanticMemoryIndexRuntime(SemanticMemoryIndexBuilder(provider))
+        index = runtime.refresh(memory_manager)
+        runtime.attach(event_bus)
+
+        record = memory_manager.add("Transient fact")
+        self.assertTrue(provider.entered[0].wait(1))
+        self.assertTrue(memory_manager.delete(record.memory_id))
+        provider.release[0].set()
+
+        self.assertTrue(runtime.wait_for_idle(1))
+        self.assertEqual(provider.sources, ["Transient fact"])
+        self.assertEqual(index.count(), 0)
+        self.assertIsNone(runtime.last_update_error())
+
+    def test_full_refresh_waits_behind_incremental_provider_work(self) -> None:
+        event_bus = EventBus()
+        memory_manager = MemoryManager(event_bus)
+        provider = BlockingEmbeddingProvider(Embedding((1, 0)))
+        runtime = SemanticMemoryIndexRuntime(SemanticMemoryIndexBuilder(provider))
+        runtime.refresh(memory_manager)
+        runtime.attach(event_bus)
+
+        memory_manager.add("Current fact")
+        self.assertTrue(provider.entered[0].wait(1))
+        self.assertEqual(runtime.start_refresh(memory_manager), "started")
+        self.assertEqual(provider.sources, ["Current fact"])
+        provider.release[0].set()
+
+        self.assertTrue(runtime.wait_for_idle(1))
+        self.assertEqual(provider.sources, ["Current fact", "Current fact"])
+        current_index = runtime.current()
+        assert current_index is not None
+        self.assertEqual(current_index.count(), 1)
+
+    def test_incremental_queue_is_bounded_and_retains_failure_diagnostic(
+        self,
+    ) -> None:
+        event_bus = EventBus()
+        memory_manager = MemoryManager(event_bus)
+        provider = BlockingEmbeddingProvider(Embedding((1, 0)))
+        runtime = SemanticMemoryIndexRuntime(SemanticMemoryIndexBuilder(provider))
+        index = runtime.refresh(memory_manager)
+        runtime.attach(event_bus)
+
+        with patch(
+            "memory.SemanticMemoryIndexRuntime." "MAX_PENDING_SEMANTIC_MEMORY_UPDATES",
+            1,
+        ):
+            memory_manager.add("In flight")
+            self.assertTrue(provider.entered[0].wait(1))
+            memory_manager.add("Queued")
+            rejected = memory_manager.add("Rejected from semantic queue")
+            provider.release[0].set()
+            self.assertTrue(runtime.wait_for_idle(1))
+
+        self.assertEqual(index.count(), 2)
+        self.assertEqual(
+            runtime.last_update_error(),
+            "Semantic index update failed.",
+        )
+        self.assertTrue(memory_manager.delete(rejected.memory_id))
+        self.assertTrue(runtime.wait_for_idle(1))
+        self.assertIsNone(runtime.last_update_error())
+
+    def test_shutdown_suppresses_in_flight_incremental_publication(self) -> None:
+        event_bus = EventBus()
+        memory_manager = MemoryManager(event_bus)
+        provider = BlockingEmbeddingProvider(Embedding((1, 0)))
+        runtime = SemanticMemoryIndexRuntime(SemanticMemoryIndexBuilder(provider))
+        index = runtime.refresh(memory_manager)
+        runtime.attach(event_bus)
+
+        memory_manager.add("Never published")
+        self.assertTrue(provider.entered[0].wait(1))
+        runtime.shutdown()
+        provider.release[0].set()
+
+        self.assertTrue(runtime.wait_for_idle(1))
+        self.assertEqual(index.count(), 0)
+        self.assertTrue(runtime.is_stopped())
 
 
 if __name__ == "__main__":
