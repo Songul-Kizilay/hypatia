@@ -17,6 +17,9 @@ from desktop.DesktopController import DesktopController
 from desktop.DesktopRequestRunner import DesktopRequestRunner
 from knowledge.KnowledgeCitation import KnowledgeCitation
 from research.ResearchClaimConfidence import ResearchClaimConfidence
+from research.ResearchClaimContradictionCandidate import (
+    ResearchClaimContradictionCandidate,
+)
 from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRunMarkdownExportPreview import (
@@ -207,6 +210,7 @@ class TkinterDesktopWindow:
         self._research_claim_supersedes_id = tk.StringVar()
         self._research_claim_contradiction_ids = tk.StringVar()
         self._research_claim_contradiction_note = tk.StringVar()
+        self._research_claim_contradiction_proposal = tk.StringVar()
         self._research_target_status = tk.StringVar(value="completed")
         self._relation_source_id = tk.StringVar()
         self._relation_target_id = tk.StringVar()
@@ -214,6 +218,10 @@ class TkinterDesktopWindow:
         self._research_candidates: tuple[ResearchSourceCandidate, ...] = ()
         self._research_candidate_run_id = ""
         self._research_candidate_discovery_id = ""
+        self._research_claim_contradiction_proposal_run_id = ""
+        self._research_claim_contradiction_proposals: tuple[
+            ResearchClaimContradictionCandidate, ...
+        ] = ()
         self._research_markdown_export_preview: (
             ResearchRunMarkdownExportPreview | None
         ) = None
@@ -990,8 +998,32 @@ class TkinterDesktopWindow:
             text="View contradictions",
             command=self._preview_research_claim_contradictions,
         ).grid(row=19, column=3, sticky="ew", pady=(8, 0))
-        ttk.Label(research_frame, text="User contradiction note").grid(
+        ttk.Label(research_frame, text="Suggested pair (not saved)").grid(
             row=20,
+            column=0,
+            sticky="w",
+            pady=(8, 0),
+        )
+        self._research_claim_contradiction_proposal_selector = ttk.Combobox(
+            research_frame,
+            textvariable=self._research_claim_contradiction_proposal,
+            state="readonly",
+        )
+        self._research_claim_contradiction_proposal_selector.grid(
+            row=20,
+            column=1,
+            columnspan=2,
+            sticky="ew",
+            padx=(8, 8),
+            pady=(8, 0),
+        )
+        ttk.Button(
+            research_frame,
+            text="Use selected pair",
+            command=self._use_selected_research_claim_contradiction_proposal,
+        ).grid(row=20, column=3, sticky="ew", pady=(8, 0))
+        ttk.Label(research_frame, text="User contradiction note").grid(
+            row=21,
             column=0,
             sticky="w",
             pady=(8, 0),
@@ -999,14 +1031,14 @@ class TkinterDesktopWindow:
         ttk.Entry(
             research_frame,
             textvariable=self._research_claim_contradiction_note,
-        ).grid(row=20, column=1, columnspan=2, sticky="ew", padx=(8, 8), pady=(8, 0))
+        ).grid(row=21, column=1, columnspan=2, sticky="ew", padx=(8, 8), pady=(8, 0))
         ttk.Button(
             research_frame,
             text="Preview & save contradiction",
             command=self._preview_and_record_research_claim_contradiction,
-        ).grid(row=20, column=3, sticky="ew", pady=(8, 0))
+        ).grid(row=21, column=3, sticky="ew", pady=(8, 0))
         ttk.Label(research_frame, text="Final status").grid(
-            row=21,
+            row=22,
             column=0,
             sticky="w",
             pady=(8, 0),
@@ -1016,37 +1048,37 @@ class TkinterDesktopWindow:
             textvariable=self._research_target_status,
             values=("completed", "failed", "cancelled"),
             state="readonly",
-        ).grid(row=21, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
+        ).grid(row=22, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
         ttk.Button(
             research_frame,
             text="Preview status",
             command=self._preview_and_update_research_status,
-        ).grid(row=21, column=2, sticky="ew", pady=(8, 0))
+        ).grid(row=22, column=2, sticky="ew", pady=(8, 0))
         ttk.Button(
             research_frame,
             text="Export preview",
             command=self._preview_research_run_markdown_export,
-        ).grid(row=21, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ).grid(row=22, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
         ttk.Button(
             research_frame,
             text="Verify export",
             command=self._verify_research_run_markdown_export,
-        ).grid(row=22, column=2, sticky="ew", pady=(8, 0))
+        ).grid(row=23, column=2, sticky="ew", pady=(8, 0))
         ttk.Button(
             research_frame,
             text="Save export",
             command=self._save_research_run_markdown_export,
-        ).grid(row=22, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ).grid(row=23, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
         ttk.Button(
             research_frame,
             text="Evidence integrity",
             command=self._show_research_evidence_integrity,
-        ).grid(row=22, column=0, sticky="ew", pady=(8, 0))
+        ).grid(row=23, column=0, sticky="ew", pady=(8, 0))
         ttk.Button(
             research_frame,
             text="Research data status",
             command=self._show_research_content_status,
-        ).grid(row=22, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
+        ).grid(row=23, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
 
         relation_frame = ttk.LabelFrame(
             knowledge_tab,
@@ -1443,6 +1475,7 @@ class TkinterDesktopWindow:
         self._append_response(response)
         if response.success and response.research_runs:
             self._clear_research_candidates()
+            self._clear_research_claim_contradiction_proposals()
             self._research_run_id.set(response.research_runs[0].run_id)
 
     def _show_research_runs(self) -> None:
@@ -1819,6 +1852,7 @@ class TkinterDesktopWindow:
 
     def _suggest_research_claim_contradictions(self) -> None:
         """Request non-persistent candidates on the provider worker."""
+        self._clear_research_claim_contradiction_proposals()
         run_id = self._research_run_id.get()
         cancellation_signal = CancellationSignal()
         self._start_request(
@@ -1826,10 +1860,59 @@ class TkinterDesktopWindow:
                 run_id,
                 cancellation_token=cancellation_signal,
             ),
-            self._append_response,
+            self._render_research_claim_contradiction_proposals,
             "research claim contradiction suggestion",
             cancellation_signal=cancellation_signal,
         )
+
+    def _render_research_claim_contradiction_proposals(
+        self,
+        response: BrainResponse,
+    ) -> None:
+        """Expose successful candidates only for the still-selected exact run."""
+        self._append_response(response)
+        self._clear_research_claim_contradiction_proposals()
+        preview = response.research_claim_contradiction_proposal_preview
+        selected_run_id = self._research_run_id.get().strip()
+        if (
+            not response.success
+            or preview is None
+            or preview.run_id != selected_run_id
+            or not preview.candidates
+        ):
+            return
+        self._research_claim_contradiction_proposal_run_id = preview.run_id
+        self._research_claim_contradiction_proposals = preview.candidates
+        labels = tuple(
+            f"{index}. {candidate.claim_ids[0]} ↔ {candidate.claim_ids[1]}"
+            for index, candidate in enumerate(preview.candidates, start=1)
+        )
+        self._research_claim_contradiction_proposal_selector.configure(values=labels)
+        self._research_claim_contradiction_proposal_selector.current(0)
+
+    def _clear_research_claim_contradiction_proposals(self) -> None:
+        """Discard ephemeral model suggestions without touching authored fields."""
+        self._research_claim_contradiction_proposal_run_id = ""
+        self._research_claim_contradiction_proposals = ()
+        self._research_claim_contradiction_proposal.set("")
+        self._research_claim_contradiction_proposal_selector.configure(values=())
+
+    def _use_selected_research_claim_contradiction_proposal(self) -> None:
+        """Copy exactly one current pair into the manual form without recording."""
+        selected_index = self._research_claim_contradiction_proposal_selector.current()
+        if (
+            self._research_run_id.get().strip()
+            != self._research_claim_contradiction_proposal_run_id
+        ):
+            self._clear_research_claim_contradiction_proposals()
+            self._status.set("Request and select a contradiction suggestion first.")
+            return
+        if not 0 <= selected_index < len(self._research_claim_contradiction_proposals):
+            self._status.set("Request and select a contradiction suggestion first.")
+            return
+        candidate = self._research_claim_contradiction_proposals[selected_index]
+        self._research_claim_contradiction_ids.set(", ".join(candidate.claim_ids))
+        self._status.set("suggested claim IDs copied; note unchanged; nothing recorded")
 
     def _preview_and_record_research_claim_contradiction(self) -> None:
         """Preview, confirm, and revalidate one claim contradiction."""
