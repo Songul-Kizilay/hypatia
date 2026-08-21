@@ -82,8 +82,9 @@ To create the world's most capable personal AI research companion.
 - Opt-in learned-memory extraction with append-only corrections, bounded
   context, deterministic keyword selection, and ranked top-k selection
 - A local, derived semantic-memory index core with validated embeddings and
-  deterministic cosine ranking, available through the explicit semantic-recall
-  request flow
+  overflow-safe deterministic cosine ranking, capped vector dimensions, and
+  bounded entry/identifier/aggregate live-memory use, available through the
+  explicit semantic-recall request flow
 - An opt-in, provider-scoped semantic-embedding cache with bounded UTF-8
   snapshots, entry/identifier/source/vector limits, deterministic ordering, and
   atomic rollback-safe replacement

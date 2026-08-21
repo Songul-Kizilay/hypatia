@@ -19,3 +19,10 @@ primary memory. Its schema-v1 snapshot has explicit physical-file, entry,
 identifier, source-text, vector-dimension, and aggregate-vector bounds. Reads
 stop before decoding oversized files; exact-byte atomic writes preserve the
 previous file and in-memory cache after invalid or failed updates.
+
+The derived live semantic index separately caps embeddings at 16,384 values,
+index populations at 20,000 entries, memory IDs at 1,024 characters, and the
+aggregate at 4,000,000 vector values. Full rebuilds preflight these limits;
+incremental failures keep the previous index and cache while primary memory
+remains committed. Overflow-safe cosine math retains finite deterministic
+ranking for every accepted vector.

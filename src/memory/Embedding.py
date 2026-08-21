@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from math import isfinite
 
+MAX_EMBEDDING_DIMENSION = 16_384
+
 
 @dataclass(frozen=True, slots=True)
 class Embedding:
@@ -15,6 +17,11 @@ class Embedding:
     def __post_init__(self) -> None:
         if not self.values:
             raise ValueError("Embedding values cannot be empty.")
+        if len(self.values) > MAX_EMBEDDING_DIMENSION:
+            raise ValueError(
+                "Embedding dimension cannot exceed "
+                f"{MAX_EMBEDDING_DIMENSION:,} values."
+            )
 
         normalized_values: list[float] = []
         for value in self.values:

@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from memory.Embedding import Embedding
 from memory.EmbeddingProvider import EmbeddingProvider
-from memory.InMemorySemanticMemoryIndex import InMemorySemanticMemoryIndex
+from memory.InMemorySemanticMemoryIndex import (
+    InMemorySemanticMemoryIndex,
+    validate_semantic_memory_index_population,
+)
 from memory.MemoryManager import MemoryManager
 from memory.SemanticEmbeddingCache import SemanticEmbeddingCache
 
@@ -22,12 +25,19 @@ class SemanticMemoryIndexBuilder:
 
     def build(self, memory_manager: MemoryManager) -> InMemorySemanticMemoryIndex:
         """Embed current active records into a new index in memory-record order."""
+        records = memory_manager.all()
+        validate_semantic_memory_index_population(len(records))
         index = InMemorySemanticMemoryIndex()
         cache_entries: list[tuple[str, str, Embedding]] = []
-        for record in memory_manager.all():
+        for record in records:
             embedding = self._cached_embedding(record.memory_id, record.content)
             if embedding is None:
                 embedding = self._embedding_provider.embed(record.content)
+            if not cache_entries:
+                validate_semantic_memory_index_population(
+                    len(records),
+                    embedding.dimension,
+                )
             index.upsert(record.memory_id, embedding)
             cache_entries.append((record.memory_id, record.content, embedding))
         self._replace_cache(tuple(cache_entries))
@@ -37,15 +47,20 @@ class SemanticMemoryIndexBuilder:
         """Create one query embedding through the configured provider."""
         return self._embedding_provider.embed(source_text)
 
-    def embed_memory_record(self, memory_id: str, source_text: str) -> Embedding:
-        """Embed one changed record and best-effort retain it for a later restart."""
+    def upsert_memory_record(
+        self,
+        index: InMemorySemanticMemoryIndex,
+        memory_id: str,
+        source_text: str,
+    ) -> None:
+        """Update the live index before best-effort cache retention."""
         embedding = self._embedding_provider.embed(source_text)
+        index.upsert(memory_id, embedding)
         if self._embedding_cache is not None:
             try:
                 self._embedding_cache.upsert(memory_id, source_text, embedding)
             except Exception:
                 pass
-        return embedding
 
     def remove_memory_record(self, memory_id: str) -> None:
         """Best-effort remove a stale entry from the optional derived cache."""

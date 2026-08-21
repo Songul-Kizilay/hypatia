@@ -4,6 +4,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
@@ -38,6 +39,23 @@ class FailingEmbeddingCache:
 
     def remove(self, memory_id: str) -> None:
         raise OSError("cache unavailable")
+
+
+class RecordingEmbeddingCache:
+    def __init__(self) -> None:
+        self.replacements: list[tuple[tuple[str, str, Embedding], ...]] = []
+
+    def get(self, memory_id: str, source_text: str) -> Embedding | None:
+        return None
+
+    def replace(self, entries: tuple[tuple[str, str, Embedding], ...]) -> None:
+        self.replacements.append(entries)
+
+    def upsert(self, memory_id: str, source_text: str, embedding: Embedding) -> None:
+        raise AssertionError("Full builds use atomic cache replacement only.")
+
+    def remove(self, memory_id: str) -> None:
+        raise AssertionError("Full builds never remove individual cache entries.")
 
 
 class SemanticMemoryIndexBuilderTests(unittest.TestCase):
@@ -151,6 +169,39 @@ class SemanticMemoryIndexBuilderTests(unittest.TestCase):
 
         self.assertEqual(index.count(), 1)
         self.assertEqual(provider.requests, ["Stable fact"])
+
+    def test_build_preflights_entry_and_aggregate_limits_before_publication(
+        self,
+    ) -> None:
+        memory_manager = MemoryManager()
+        memory_manager.add("First fact")
+        memory_manager.add("Second fact")
+        provider = StubEmbeddingProvider(
+            {
+                "First fact": Embedding((1, 0)),
+                "Second fact": Embedding((0, 1)),
+            }
+        )
+        cache = RecordingEmbeddingCache()
+        builder = SemanticMemoryIndexBuilder(provider, cache)
+
+        with patch(
+            "memory.InMemorySemanticMemoryIndex." "MAX_SEMANTIC_MEMORY_INDEX_ENTRIES",
+            1,
+        ):
+            with self.assertRaisesRegex(ValueError, "too many entries"):
+                builder.build(memory_manager)
+        self.assertEqual(provider.requests, [])
+        self.assertEqual(cache.replacements, [])
+
+        with patch(
+            "memory.InMemorySemanticMemoryIndex." "MAX_SEMANTIC_MEMORY_INDEX_VALUES",
+            3,
+        ):
+            with self.assertRaisesRegex(ValueError, "too many embedding values"):
+                builder.build(memory_manager)
+        self.assertEqual(provider.requests, ["First fact"])
+        self.assertEqual(cache.replacements, [])
 
 
 if __name__ == "__main__":
