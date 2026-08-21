@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.75 (Genesis)`
+`v0.3.76 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.75`** is the current executable package and GitHub
+- **Runtime release `v0.3.76`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -35,9 +35,11 @@ with optional OpenAI-compatible LLM conversation support.
 - An initial local Tkinter desktop shell for text conversation, explicit
   session selection, a refreshable read-only session overview, and
   semantic-runtime status. It also provides selected-session details, recent
-  conversations, and activity through explicit read-only actions. It is a thin
-  adapter over the existing Brain and does not create a second store, provider,
-  or network channel.
+  conversations, and activity through explicit read-only actions. Chat,
+  Knowledge, Research, and Appearance are separated into dedicated tabs, with
+  compact grouped controls, explanatory empty states, and a conversation-first
+  opening view. It is a thin adapter over the existing Brain and does not create
+  a second store, provider, or network channel.
 - Explicit provider-backed desktop actions use one daemon request worker so
   Ollama and approved HTTPS waits do not block Tkinter's event loop. Results
   are rendered only by the event thread, all command buttons are single-flight,
@@ -51,10 +53,13 @@ with optional OpenAI-compatible LLM conversation support.
   knowledge-index, or persistence mutation when cancellation is observed after
   network return. Other provider paths remain presentation-only cancellation.
   The worker owns no provider or duplicate state.
-- Local desktop text-size controls bounded from 10 through 20 points and an
-  explicit high-contrast palette. They alter only presentation and do not
-  persist a preference, invoke a provider, or change session, memory, or
-  knowledge state. A full assistive-technology audit remains planned.
+- Local desktop text-size controls bounded from 10 through 20 points plus Eye
+  comfort, Light, and High contrast themes. Eye comfort is the default and
+  avoids pure black/white surfaces; every theme defines explicit focus,
+  selection, disabled, read-only, border, and scrollbar colors. These settings
+  alter only presentation and do not persist a preference, invoke a provider,
+  or change session, memory, knowledge, or research state. A full
+  assistive-technology audit remains planned.
 - Explicit desktop actions for normal lexical recall and opt-in semantic recall.
   Neither action augments ordinary chat, persists a recall result, or issues a
   provider request unless the user deliberately selects it.
@@ -428,7 +433,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,384 automated tests pass through package-aware discovery.
+- 1,388 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.

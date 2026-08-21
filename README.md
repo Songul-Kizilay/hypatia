@@ -170,8 +170,11 @@ To create the world's most capable personal AI research companion.
   explicit lexical/semantic conversation recall, and semantic-memory runtime
   status, bounded cited local knowledge context/graph, a read-only local source
   catalog, explicit local-RAG questions, and user-initiated public HTTPS source
-  loading; it delegates every action to the existing Brain runtime and adds no
-  browser, cloud store, background crawler, or duplicate data store
+  loading. Chat, Knowledge, Research, and Appearance use separate tabs; the
+  default eye-comfort palette, optional light/high-contrast themes, clear empty
+  states, and grouped controls keep common chat tasks approachable. It delegates
+  every action to the existing Brain runtime and adds no browser, cloud store,
+  background crawler, or duplicate data store
 - A single-flight desktop request worker for explicit chat, semantic recall,
   cited knowledge answers, research discovery, and approved HTTPS loading. It
   keeps Tkinter responsive, renders results only on the event thread, rejects
@@ -199,6 +202,13 @@ variables:
 ```powershell
 .\.venv\Scripts\python.exe src\desktop_main.py
 ```
+
+The Chat tab opens first and keeps sessions, conversation history, and the
+message composer together. Knowledge and Research are available only when their
+tabs are chosen, while Appearance contains the 10-to-20-point text-size setting
+and Eye comfort, Light, and High contrast themes. Eye comfort is the default and
+uses softened dark surfaces instead of pure black or white. These controls alter
+presentation only and are not persisted between launches.
 
 The window uses the same Bootstrap and Brain as the terminal entry point. A
 clicked session only fills the selection field; choosing it remains explicit.

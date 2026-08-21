@@ -18,6 +18,7 @@ from brain.BrainResponse import BrainResponse
 from core.CancellationSignal import CancellationToken
 from desktop.DesktopRequestRunner import DesktopRequestCompletion
 from desktop.TkinterDesktopWindow import (
+    DesktopTheme,
     TkinterDesktopWindow,
     _accessibility_palette,
     _format_citations,
@@ -67,7 +68,7 @@ class AccessibilityPreferenceTests(unittest.TestCase):
         self.assertEqual(_next_font_size(20, 1), 20)
 
     def test_high_contrast_palette_uses_explicit_readable_colors(self) -> None:
-        palette = _accessibility_palette(high_contrast=True)
+        palette = _accessibility_palette(DesktopTheme.HIGH_CONTRAST)
 
         self.assertEqual(palette.background, "#000000")
         self.assertEqual(palette.foreground, "#FFFFFF")
@@ -75,10 +76,26 @@ class AccessibilityPreferenceTests(unittest.TestCase):
         self.assertNotEqual(palette.selection_background, palette.background)
         self.assertNotEqual(palette.focus_color, palette.background)
 
+    def test_eye_comfort_palette_avoids_pure_black_and_white(self) -> None:
+        palette = _accessibility_palette(DesktopTheme.EYE_COMFORT)
+
+        self.assertEqual(palette.background, "#20242B")
+        self.assertEqual(palette.field_background, "#2B313A")
+        self.assertNotEqual(palette.background, "#000000")
+        self.assertNotEqual(palette.foreground, "#FFFFFF")
+        self.assertNotEqual(palette.button_background, palette.field_background)
+        self.assertNotEqual(palette.border_color, palette.background)
+
+    def test_unknown_theme_falls_back_to_eye_comfort(self) -> None:
+        self.assertEqual(
+            _accessibility_palette("unknown"),
+            _accessibility_palette(DesktopTheme.EYE_COMFORT),
+        )
+
     def test_window_applies_text_size_and_high_contrast_to_text_controls(self) -> None:
         window: Any = object.__new__(TkinterDesktopWindow)
         window._font_size = 18
-        window._high_contrast = RecordingBoolean(True)
+        window._theme_mode = RecordingVariable(DesktopTheme.HIGH_CONTRAST.value)
         window._font_size_label = RecordingStatus()
         window._root = RecordingWidget()
         window._style = RecordingStyle()
@@ -96,6 +113,47 @@ class AccessibilityPreferenceTests(unittest.TestCase):
         self.assertEqual(window._composer.configurations["foreground"], "#FFFFFF")
         self.assertIn("TButton", window._style.configurations)
         self.assertIn("TEntry", window._style.mappings)
+        self.assertIn("TCombobox", window._style.configurations)
+        self.assertIn("TNotebook.Tab", window._style.mappings)
+
+
+class SessionPresentationTests(unittest.TestCase):
+    def test_session_placeholder_cannot_be_selected_as_a_real_session(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        window._session_list = RecordingSessionList(selected_indices=(0,))
+        window._session_summaries = []
+        window._session_id = RecordingVariable("")
+
+        window._choose_session(None)
+
+        self.assertEqual(window._session_id.value, "")
+
+    def test_empty_and_failed_session_views_explain_what_happened(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        session_list = RecordingSessionList()
+        window._session_list = session_list
+        window._session_summaries = []
+        empty = BrainResponse(
+            message="No sessions.",
+            request_id="empty-sessions",
+            intent="session_overview",
+            memory_count=0,
+        )
+
+        window._render_session_summaries(empty)
+
+        self.assertEqual(session_list.items, ["No saved sessions yet."])
+
+        failed = BrainResponse(
+            message="Unavailable.",
+            request_id="failed-sessions",
+            intent="session_overview",
+            memory_count=0,
+            success=False,
+        )
+        window._render_session_summaries(failed)
+
+        self.assertEqual(session_list.items, ["Sessions are currently unavailable."])
 
 
 class RecordingBoolean:
@@ -1886,6 +1944,21 @@ class RecordingCandidateSelector:
         if selected_index is not None:
             self.selected_index = selected_index
         return self.selected_index
+
+
+class RecordingSessionList:
+    def __init__(self, selected_indices: tuple[int, ...] = ()) -> None:
+        self.selected_indices = selected_indices
+        self.items: list[str] = []
+
+    def curselection(self) -> tuple[int, ...]:
+        return self.selected_indices
+
+    def delete(self, _start: object, _end: object) -> None:
+        self.items.clear()
+
+    def insert(self, _position: object, value: str) -> None:
+        self.items.append(value)
 
 
 class RecordingStatus:

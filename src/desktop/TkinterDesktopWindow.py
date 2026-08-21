@@ -5,6 +5,7 @@ from __future__ import annotations
 import tkinter as tk
 from collections.abc import Callable
 from dataclasses import dataclass
+from enum import StrEnum
 from time import monotonic
 from tkinter import filedialog, messagebox, scrolledtext, ttk
 from typing import Protocol
@@ -40,11 +41,27 @@ class AccessibilityPalette:
     active_background: str
     selection_background: str
     focus_color: str
+    border_color: str
+    muted_foreground: str
 
 
-def _accessibility_palette(high_contrast: bool) -> AccessibilityPalette:
-    """Return a fully explicit palette so contrast never depends on color alone."""
-    if high_contrast:
+class DesktopTheme(StrEnum):
+    """User-selectable presentation themes with no runtime side effects."""
+
+    EYE_COMFORT = "eye_comfort"
+    LIGHT = "light"
+    HIGH_CONTRAST = "high_contrast"
+
+
+def _accessibility_palette(
+    theme: DesktopTheme | str = DesktopTheme.EYE_COMFORT,
+) -> AccessibilityPalette:
+    """Return a complete palette independent of platform-native ttk colors."""
+    try:
+        normalized_theme = DesktopTheme(theme)
+    except ValueError:
+        normalized_theme = DesktopTheme.EYE_COMFORT
+    if normalized_theme is DesktopTheme.HIGH_CONTRAST:
         return AccessibilityPalette(
             background="#000000",
             foreground="#FFFFFF",
@@ -53,15 +70,31 @@ def _accessibility_palette(high_contrast: bool) -> AccessibilityPalette:
             active_background="#005A9C",
             selection_background="#005A9C",
             focus_color="#00B7FF",
+            border_color="#FFFFFF",
+            muted_foreground="#D6D6D6",
+        )
+    if normalized_theme is DesktopTheme.LIGHT:
+        return AccessibilityPalette(
+            background="#F0F2F5",
+            foreground="#20242A",
+            field_background="#FFFFFF",
+            button_background="#E2E7EC",
+            active_background="#D2DAE2",
+            selection_background="#3B73AF",
+            focus_color="#1A73E8",
+            border_color="#B8C1CB",
+            muted_foreground="#68727D",
         )
     return AccessibilityPalette(
-        background="#F0F0F0",
-        foreground="#111111",
-        field_background="#FFFFFF",
-        button_background="#E1E1E1",
-        active_background="#D0D0D0",
-        selection_background="#3B73AF",
-        focus_color="#1A73E8",
+        background="#20242B",
+        foreground="#E4E9EF",
+        field_background="#2B313A",
+        button_background="#343C46",
+        active_background="#44515F",
+        selection_background="#365F83",
+        focus_color="#78A9D4",
+        border_color="#4A5562",
+        muted_foreground="#98A3AF",
     )
 
 
@@ -184,8 +217,10 @@ class TkinterDesktopWindow:
         ) = None
         self._font_size = _DEFAULT_FONT_SIZE
         self._font_size_label = tk.StringVar()
-        self._high_contrast = tk.BooleanVar(value=False)
+        self._theme_mode = tk.StringVar(value=DesktopTheme.EYE_COMFORT.value)
         self._style = ttk.Style(self._root)
+        if "clam" in self._style.theme_names():
+            self._style.theme_use("clam")
 
         self._root.title("Hypatia")
         self._root.minsize(760, 520)
@@ -333,26 +368,48 @@ class TkinterDesktopWindow:
         return buttons
 
     def _build_layout(self) -> None:
-        container = ttk.Frame(self._root, padding=12)
+        container = ttk.Frame(self._root, padding=8)
         container.grid(sticky="nsew")
         self._root.columnconfigure(0, weight=1)
         self._root.rowconfigure(0, weight=1)
         container.columnconfigure(0, weight=1)
-        container.rowconfigure(7, weight=1)
+        container.rowconfigure(0, weight=1)
+
+        self._workspace_tabs = ttk.Notebook(container)
+        self._workspace_tabs.grid(row=0, column=0, sticky="nsew")
+        chat_tab = ttk.Frame(self._workspace_tabs, padding=10)
+        knowledge_tab = ttk.Frame(self._workspace_tabs, padding=10)
+        research_tab = ttk.Frame(self._workspace_tabs, padding=10)
+        appearance_tab = ttk.Frame(self._workspace_tabs, padding=10)
+        self._workspace_tabs.add(chat_tab, text="Chat")
+        self._workspace_tabs.add(knowledge_tab, text="Knowledge")
+        self._workspace_tabs.add(research_tab, text="Research")
+        self._workspace_tabs.add(appearance_tab, text="Appearance")
+        for tab in (chat_tab, knowledge_tab, research_tab, appearance_tab):
+            tab.columnconfigure(0, weight=1)
+        chat_tab.rowconfigure(3, weight=1)
 
         accessibility_frame = ttk.LabelFrame(
-            container,
-            text="Accessibility",
-            padding=8,
+            appearance_tab,
+            text="Comfort and accessibility",
+            padding=12,
         )
         accessibility_frame.grid(row=0, column=0, sticky="ew")
+        ttk.Label(
+            accessibility_frame,
+            text=(
+                "Eye comfort uses soft charcoal colors for everyday use. "
+                "High contrast remains available for maximum separation."
+            ),
+            wraplength=720,
+        ).grid(row=0, column=0, columnspan=6, sticky="w", pady=(0, 12))
         ttk.Button(
             accessibility_frame,
             text="Text −",
             command=lambda: self._change_font_size(-1),
-        ).grid(row=0, column=0, sticky="ew")
+        ).grid(row=1, column=0, sticky="ew")
         ttk.Label(accessibility_frame, textvariable=self._font_size_label).grid(
-            row=0,
+            row=1,
             column=1,
             padx=8,
         )
@@ -360,63 +417,93 @@ class TkinterDesktopWindow:
             accessibility_frame,
             text="Text +",
             command=lambda: self._change_font_size(1),
-        ).grid(row=0, column=2, sticky="ew")
-        ttk.Checkbutton(
+        ).grid(row=1, column=2, sticky="ew")
+        ttk.Radiobutton(
+            accessibility_frame,
+            text="Eye comfort",
+            variable=self._theme_mode,
+            value=DesktopTheme.EYE_COMFORT.value,
+            command=self._apply_accessibility_preferences,
+        ).grid(row=1, column=3, sticky="w", padx=(20, 0))
+        ttk.Radiobutton(
+            accessibility_frame,
+            text="Light",
+            variable=self._theme_mode,
+            value=DesktopTheme.LIGHT.value,
+            command=self._apply_accessibility_preferences,
+        ).grid(row=1, column=4, sticky="w", padx=(12, 0))
+        ttk.Radiobutton(
             accessibility_frame,
             text="High contrast",
-            variable=self._high_contrast,
+            variable=self._theme_mode,
+            value=DesktopTheme.HIGH_CONTRAST.value,
             command=self._apply_accessibility_preferences,
-        ).grid(row=0, column=3, sticky="w", padx=(12, 0))
+        ).grid(row=1, column=5, sticky="w", padx=(12, 0))
 
-        session_frame = ttk.LabelFrame(container, text="Session", padding=8)
-        session_frame.grid(row=1, column=0, sticky="ew", pady=(8, 0))
-        session_frame.columnconfigure(0, weight=1)
+        session_frame = ttk.LabelFrame(chat_tab, text="Sessions", padding=8)
+        session_frame.grid(row=0, column=0, sticky="ew")
+        session_frame.columnconfigure(1, weight=1)
         self._session_list = tk.Listbox(
             session_frame,
-            height=4,
+            height=3,
             exportselection=False,
         )
         self._session_list.grid(row=0, column=0, columnspan=4, sticky="ew", pady=(0, 8))
         self._session_list.bind("<<ListboxSelect>>", self._choose_session)
+        self._session_list.insert(
+            tk.END,
+            "No sessions shown yet — choose Refresh.",
+        )
+        ttk.Label(session_frame, text="Session ID").grid(
+            row=1,
+            column=0,
+            sticky="w",
+            padx=(0, 8),
+        )
         ttk.Entry(session_frame, textvariable=self._session_id).grid(
-            row=1, column=0, sticky="ew", padx=(0, 8)
+            row=1, column=1, sticky="ew", padx=(0, 8)
         )
         ttk.Button(
             session_frame,
-            text="Select session",
+            text="Open session",
             command=self._select_session,
-        ).grid(row=1, column=1, sticky="ew")
+        ).grid(row=1, column=2, sticky="ew")
         ttk.Button(
             session_frame,
-            text="Refresh sessions",
+            text="Refresh",
             command=self._refresh_sessions,
-        ).grid(row=1, column=2, sticky="ew", padx=(8, 0))
-        ttk.Button(
-            session_frame,
-            text="Semantic status",
-            command=self._show_semantic_status,
         ).grid(row=1, column=3, sticky="ew", padx=(8, 0))
+        session_actions = ttk.Frame(session_frame)
+        session_actions.grid(
+            row=2,
+            column=0,
+            columnspan=4,
+            sticky="ew",
+            pady=(8, 0),
+        )
+        for column in range(4):
+            session_actions.columnconfigure(column, weight=1)
         ttk.Button(
-            session_frame,
-            text="Research content",
-            command=self._show_research_content_status,
-        ).grid(row=2, column=0, sticky="ew", pady=(8, 0))
-        ttk.Button(
-            session_frame,
-            text="Session details",
+            session_actions,
+            text="Details",
             command=self._show_session_details,
-        ).grid(row=2, column=1, sticky="ew", pady=(8, 0))
+        ).grid(row=0, column=0, sticky="ew")
         ttk.Button(
-            session_frame,
-            text="Recent chats",
+            session_actions,
+            text="Recent messages",
             command=self._show_session_recent,
-        ).grid(row=2, column=2, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ).grid(row=0, column=1, sticky="ew", padx=(8, 0))
         ttk.Button(
-            session_frame,
-            text="Session activity",
+            session_actions,
+            text="Activity",
             command=self._show_session_activity,
-        ).grid(row=2, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
-        ttk.Label(session_frame, text="New session ID").grid(
+        ).grid(row=0, column=2, sticky="ew", padx=(8, 0))
+        ttk.Button(
+            session_actions,
+            text="Memory status",
+            command=self._show_semantic_status,
+        ).grid(row=0, column=3, sticky="ew", padx=(8, 0))
+        ttk.Label(session_frame, text="Rename selected to").grid(
             row=3,
             column=0,
             sticky="w",
@@ -425,88 +512,99 @@ class TkinterDesktopWindow:
         ttk.Entry(session_frame, textvariable=self._session_rename_target).grid(
             row=3,
             column=1,
-            columnspan=2,
             sticky="ew",
-            padx=(8, 8),
+            padx=(0, 8),
             pady=(8, 0),
         )
         ttk.Button(
             session_frame,
-            text="Preview rename",
+            text="Rename…",
             command=self._preview_and_rename_session,
-        ).grid(row=3, column=3, sticky="ew", pady=(8, 0))
+        ).grid(row=3, column=2, sticky="ew", pady=(8, 0))
         ttk.Button(
             session_frame,
-            text="Preview delete",
+            text="Delete…",
             command=self._preview_and_delete_session,
-        ).grid(row=4, column=3, sticky="ew", pady=(8, 0))
-        ttk.Label(session_frame, text="Search this session").grid(
-            row=5, column=0, sticky="w", pady=(8, 0)
+        ).grid(row=3, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ttk.Label(session_frame, text="Search selected session").grid(
+            row=4, column=0, sticky="w", padx=(0, 8), pady=(8, 0)
         )
         ttk.Entry(session_frame, textvariable=self._session_search_query).grid(
-            row=5, column=1, columnspan=2, sticky="ew", padx=(8, 8), pady=(8, 0)
+            row=4, column=1, columnspan=2, sticky="ew", padx=(0, 8), pady=(8, 0)
         )
         ttk.Button(
             session_frame,
             text="Search",
             command=self._show_session_search,
-        ).grid(row=5, column=3, sticky="ew", pady=(8, 0))
+        ).grid(row=4, column=3, sticky="ew", pady=(8, 0))
 
-        recall_frame = ttk.LabelFrame(container, text="Conversation recall", padding=8)
-        recall_frame.grid(row=2, column=0, sticky="ew", pady=(8, 0))
+        recall_frame = ttk.LabelFrame(chat_tab, text="Search past chats", padding=8)
+        recall_frame.grid(row=1, column=0, sticky="ew", pady=(8, 0))
         recall_frame.columnconfigure(0, weight=1)
         ttk.Entry(recall_frame, textvariable=self._recall_query).grid(
             row=0, column=0, sticky="ew", padx=(0, 8)
         )
         ttk.Button(
             recall_frame,
-            text="Recall",
+            text="Keyword search",
             command=self._show_recall,
         ).grid(row=0, column=1, sticky="ew")
         self._request_button(
             recall_frame,
-            text="Semantic recall",
+            text="Meaning search",
             command=self._show_semantic_recall,
         ).grid(row=0, column=2, sticky="ew", padx=(8, 0))
 
-        knowledge_frame = ttk.LabelFrame(container, text="Local knowledge", padding=8)
-        knowledge_frame.grid(row=3, column=0, sticky="ew", pady=(8, 0))
+        knowledge_frame = ttk.LabelFrame(
+            knowledge_tab,
+            text="Local knowledge",
+            padding=10,
+        )
+        knowledge_frame.grid(row=0, column=0, sticky="ew")
         knowledge_frame.columnconfigure(0, weight=1)
+        ttk.Label(
+            knowledge_frame,
+            text=(
+                "Search your local notes, ask a cited question, or add a Markdown "
+                "or text file. Nothing is sent automatically."
+            ),
+            style="Hint.TLabel",
+        ).grid(row=0, column=0, columnspan=6, sticky="w", pady=(0, 8))
         ttk.Entry(knowledge_frame, textvariable=self._knowledge_query).grid(
-            row=0, column=0, sticky="ew", padx=(0, 8)
+            row=1, column=0, sticky="ew", padx=(0, 8)
         )
         ttk.Button(
             knowledge_frame,
-            text="Knowledge context",
+            text="Find in notes",
             command=self._show_knowledge_context,
-        ).grid(row=0, column=1, sticky="ew")
+        ).grid(row=1, column=1, sticky="ew")
         ttk.Button(
             knowledge_frame,
-            text="Knowledge graph",
+            text="Show connections",
             command=self._show_knowledge_graph,
-        ).grid(row=0, column=2, sticky="ew", padx=(8, 0))
+        ).grid(row=1, column=2, sticky="ew", padx=(8, 0))
         self._request_button(
             knowledge_frame,
-            text="Ask sources",
+            text="Ask my sources",
             command=self._ask_knowledge,
-        ).grid(row=0, column=3, sticky="ew", padx=(8, 0))
+        ).grid(row=1, column=3, sticky="ew", padx=(8, 0))
         ttk.Button(
             knowledge_frame,
-            text="Loaded sources",
+            text="My sources",
             command=self._show_knowledge_list,
-        ).grid(row=0, column=4, sticky="ew", padx=(8, 0))
+        ).grid(row=1, column=4, sticky="ew", padx=(8, 0))
         ttk.Button(
             knowledge_frame,
-            text="Load file",
+            text="Add file…",
             command=self._load_knowledge,
-        ).grid(row=0, column=5, sticky="ew", padx=(8, 0))
+        ).grid(row=1, column=5, sticky="ew", padx=(8, 0))
 
         research_frame = ttk.LabelFrame(
-            container,
-            text="Internet research source",
+            research_tab,
+            text="Research workspace",
             padding=8,
         )
-        research_frame.grid(row=4, column=0, sticky="ew", pady=(8, 0))
+        research_frame.grid(row=0, column=0, sticky="nsew")
         research_frame.columnconfigure(1, weight=1)
         ttk.Label(research_frame, text="Question").grid(row=0, column=0, sticky="w")
         ttk.Entry(research_frame, textvariable=self._research_question).grid(
@@ -906,14 +1004,19 @@ class TkinterDesktopWindow:
             research_frame,
             text="Evidence integrity",
             command=self._show_research_evidence_integrity,
-        ).grid(row=20, column=0, columnspan=2, sticky="ew", pady=(8, 0))
+        ).grid(row=20, column=0, sticky="ew", pady=(8, 0))
+        ttk.Button(
+            research_frame,
+            text="Research data status",
+            command=self._show_research_content_status,
+        ).grid(row=20, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
 
         relation_frame = ttk.LabelFrame(
-            container,
+            knowledge_tab,
             text="Local source relation",
-            padding=8,
+            padding=10,
         )
-        relation_frame.grid(row=5, column=0, sticky="ew", pady=(8, 0))
+        relation_frame.grid(row=1, column=0, sticky="ew", pady=(10, 0))
         relation_frame.columnconfigure(1, weight=1)
         relation_frame.columnconfigure(3, weight=1)
         ttk.Label(relation_frame, text="Source ID").grid(row=0, column=0, sticky="w")
@@ -946,8 +1049,8 @@ class TkinterDesktopWindow:
             command=self._show_knowledge_relation_list,
         ).grid(row=0, column=6, sticky="ew", padx=(8, 0))
 
-        status_frame = ttk.Frame(container)
-        status_frame.grid(row=6, column=0, sticky="ew", pady=(8, 4))
+        status_frame = ttk.Frame(chat_tab)
+        status_frame.grid(row=2, column=0, sticky="ew", pady=(8, 4))
         status_frame.columnconfigure(0, weight=1)
         ttk.Label(status_frame, textvariable=self._status).grid(
             row=0, column=0, sticky="w"
@@ -960,16 +1063,32 @@ class TkinterDesktopWindow:
         self._cancel_button.grid(row=0, column=1, sticky="e")
         self._cancel_button.state(("disabled",))
 
+        transcript_frame = ttk.LabelFrame(chat_tab, text="Conversation", padding=6)
+        transcript_frame.grid(row=3, column=0, sticky="nsew")
+        transcript_frame.columnconfigure(0, weight=1)
+        transcript_frame.rowconfigure(0, weight=1)
         self._transcript = scrolledtext.ScrolledText(
-            container,
+            transcript_frame,
             wrap=tk.WORD,
-            state=tk.DISABLED,
             height=18,
         )
-        self._transcript.grid(row=7, column=0, sticky="nsew")
+        self._transcript.grid(row=0, column=0, sticky="nsew")
+        self._transcript.insert(
+            "1.0",
+            (
+                "Welcome to Hypatia.\n"
+                "Open a session above, then type a message below. "
+                "Use Ctrl+Enter to send.\n\n"
+            ),
+        )
+        self._transcript.configure(state=tk.DISABLED)
 
-        composer_frame = ttk.LabelFrame(container, text="Message", padding=8)
-        composer_frame.grid(row=8, column=0, sticky="ew", pady=(8, 0))
+        composer_frame = ttk.LabelFrame(
+            chat_tab,
+            text="Message · Ctrl+Enter to send",
+            padding=8,
+        )
+        composer_frame.grid(row=4, column=0, sticky="ew", pady=(8, 0))
         composer_frame.columnconfigure(0, weight=1)
         self._composer = tk.Text(composer_frame, height=4, wrap=tk.WORD)
         self._composer.grid(row=0, column=0, sticky="ew", padx=(0, 8))
@@ -992,8 +1111,13 @@ class TkinterDesktopWindow:
         self._apply_accessibility_preferences()
 
     def _apply_accessibility_preferences(self) -> None:
-        """Render explicit size and contrast choices without changing runtime state."""
-        palette = _accessibility_palette(bool(self._high_contrast.get()))
+        """Render explicit size and theme choices without changing runtime state."""
+        try:
+            theme = DesktopTheme(self._theme_mode.get())
+        except ValueError:
+            theme = DesktopTheme.EYE_COMFORT
+            self._theme_mode.set(theme.value)
+        palette = _accessibility_palette(theme)
         font = ("TkDefaultFont", self._font_size)
         self._font_size_label.set(f"Text size: {self._font_size} pt")
         self._root.configure(background=palette.background)
@@ -1002,15 +1126,26 @@ class TkinterDesktopWindow:
             background=palette.background,
             foreground=palette.foreground,
             font=font,
+            bordercolor=palette.border_color,
+            darkcolor=palette.border_color,
+            lightcolor=palette.border_color,
+            troughcolor=palette.field_background,
         )
         self._style.configure(
             "TFrame",
             background=palette.background,
         )
         self._style.configure(
+            "Hint.TLabel",
+            background=palette.background,
+            foreground=palette.muted_foreground,
+            font=font,
+        )
+        self._style.configure(
             "TLabelframe",
             background=palette.background,
             foreground=palette.foreground,
+            bordercolor=palette.border_color,
         )
         self._style.configure(
             "TLabelframe.Label",
@@ -1024,30 +1159,118 @@ class TkinterDesktopWindow:
             foreground=palette.foreground,
             font=font,
             focuscolor=palette.focus_color,
+            bordercolor=palette.border_color,
+            lightcolor=palette.border_color,
+            darkcolor=palette.border_color,
+            padding=(10, 5),
         )
         self._style.map(
             "TButton",
             background=[
+                ("disabled", palette.field_background),
+                ("pressed", palette.selection_background),
                 ("active", palette.active_background),
                 ("focus", palette.focus_color),
             ],
+            foreground=[
+                ("disabled", palette.muted_foreground),
+                ("active", palette.foreground),
+                ("pressed", palette.foreground),
+            ],
+            bordercolor=[
+                ("focus", palette.focus_color),
+                ("!focus", palette.border_color),
+            ],
         )
-        self._style.configure(
-            "TCheckbutton",
-            background=palette.background,
-            foreground=palette.foreground,
-            font=font,
-            focuscolor=palette.focus_color,
-        )
+        for style_name in ("TCheckbutton", "TRadiobutton"):
+            self._style.configure(
+                style_name,
+                background=palette.background,
+                foreground=palette.foreground,
+                font=font,
+                focuscolor=palette.focus_color,
+            )
+            self._style.map(
+                style_name,
+                background=[("active", palette.background)],
+                foreground=[("disabled", palette.muted_foreground)],
+            )
         self._style.configure(
             "TEntry",
             fieldbackground=palette.field_background,
             foreground=palette.foreground,
             font=font,
+            insertcolor=palette.foreground,
+            bordercolor=palette.border_color,
+            lightcolor=palette.border_color,
+            darkcolor=palette.border_color,
         )
         self._style.map(
             "TEntry",
-            fieldbackground=[("focus", palette.field_background)],
+            fieldbackground=[
+                ("disabled", palette.background),
+                ("focus", palette.field_background),
+            ],
+            foreground=[("disabled", palette.muted_foreground)],
+            bordercolor=[
+                ("focus", palette.focus_color),
+                ("!focus", palette.border_color),
+            ],
+        )
+        self._style.configure(
+            "TCombobox",
+            background=palette.button_background,
+            fieldbackground=palette.field_background,
+            foreground=palette.foreground,
+            arrowcolor=palette.foreground,
+            bordercolor=palette.border_color,
+            lightcolor=palette.border_color,
+            darkcolor=palette.border_color,
+            font=font,
+        )
+        self._style.map(
+            "TCombobox",
+            background=[("active", palette.active_background)],
+            fieldbackground=[
+                ("readonly", palette.field_background),
+                ("disabled", palette.background),
+            ],
+            foreground=[("disabled", palette.muted_foreground)],
+            arrowcolor=[("disabled", palette.muted_foreground)],
+            bordercolor=[
+                ("focus", palette.focus_color),
+                ("!focus", palette.border_color),
+            ],
+        )
+        self._style.configure(
+            "TNotebook",
+            background=palette.background,
+            bordercolor=palette.border_color,
+            tabmargins=(2, 2, 2, 0),
+        )
+        self._style.configure(
+            "TNotebook.Tab",
+            background=palette.button_background,
+            foreground=palette.foreground,
+            padding=(16, 8),
+            font=font,
+            focuscolor=palette.focus_color,
+            bordercolor=palette.border_color,
+        )
+        self._style.map(
+            "TNotebook.Tab",
+            background=[
+                ("selected", palette.active_background),
+                ("active", palette.selection_background),
+            ],
+            foreground=[("disabled", palette.muted_foreground)],
+        )
+        self._style.configure(
+            "TScrollbar",
+            background=palette.button_background,
+            troughcolor=palette.field_background,
+            arrowcolor=palette.foreground,
+            bordercolor=palette.border_color,
         )
         self._session_list.configure(
             background=palette.field_background,
@@ -1773,15 +1996,22 @@ class TkinterDesktopWindow:
         selected_indices = self._session_list.curselection()
         if not selected_indices:
             return
-        self._session_id.set(self._session_summaries[selected_indices[0]].session_id)
+        selected_index = selected_indices[0]
+        if selected_index >= len(self._session_summaries):
+            return
+        self._session_id.set(self._session_summaries[selected_index].session_id)
 
     def _render_session_summaries(self, response: BrainResponse) -> None:
         """Show only current successful Brain data, never a stale local copy."""
         self._session_list.delete(0, tk.END)
         self._session_summaries = []
         if not response.success:
+            self._session_list.insert(tk.END, "Sessions are currently unavailable.")
             return
         self._session_summaries = response.session_summaries
+        if not self._session_summaries:
+            self._session_list.insert(tk.END, "No saved sessions yet.")
+            return
         for summary in self._session_summaries:
             active_label = " (active)" if summary.active else ""
             conversations = summary.conversation_count
