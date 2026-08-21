@@ -462,19 +462,20 @@ HYPATIA_SEMANTIC_MEMORY_REBUILD_MAX_PROVIDER_CALLS=256
 The endpoint and model shown are defaults when their optional settings are
 absent. No API key is used. Startup calls the configured local endpoint only
 when the enabled value is exactly lowercase `true`. A successful refresh swaps
-in a complete replacement index; if the first refresh fails, bootstrap stops
-before publishing its dependency container. After a successful startup, local
-memory add, update, delete, and expiry events update the derived index on a
-best-effort basis. An embedding failure never undoes an already-completed
-primary-memory operation. The vectors remain in RAM and are recreated from
-local memory on the next successful startup.
+in a complete replacement index. If the first refresh fails, the primary
+application still starts while semantic retrieval reports a safe unavailable
+state. Local memory add, update, delete, and expiry events update an available
+derived index on a best-effort basis. An embedding failure never undoes an
+already-completed primary-memory operation. The vectors remain in RAM and are
+recreated from local memory on the next successful rebuild.
 
 Before a startup rebuild opens any provider request, Hypatia resolves every
 provider-scoped cache lookup and counts the misses. The default maximum is 256;
 set `HYPATIA_SEMANTIC_MEMORY_REBUILD_MAX_PROVIDER_CALLS` to an ASCII whole
 number from 0 through 20,000 when a different local policy is required. Zero is
-cache-only. If the count exceeds the configured budget, startup fails before
-the first Ollama call, cache replacement, or semantic-runtime publication.
+cache-only. If the count exceeds the configured budget, the semantic rebuild
+fails before the first Ollama call, cache replacement, or runtime publication;
+the primary application remains available.
 
 The built-in local HTTP transport allows up to 120 seconds for each embedding
 request by default. Set `HYPATIA_SEMANTIC_MEMORY_OLLAMA_TIMEOUT_SECONDS` to a
@@ -505,8 +506,16 @@ fallback`.
 
 Use `semantic recall status` to inspect the optional runtime without generating
 an embedding or changing memory. It reports whether the runtime is disabled,
-initializing, or ready; a ready runtime also reports its indexed-record count,
-embedding dimension, and its safe most-recent incremental-update diagnostic.
+initializing, unavailable, or ready; a ready runtime also reports its
+indexed-record count and embedding dimension. Separate safe rebuild and
+incremental-update diagnostics never expose provider, endpoint, model, cache,
+source-text, budget, or exception details.
+
+Use the exact `semantic recall retry` command to deliberately retry one complete
+bounded rebuild after an unavailable startup or later rebuild failure. It is
+never triggered by normal chat, recall, status, or a memory event. Success
+publishes only a complete replacement; failure preserves the last complete
+index when one exists and otherwise leaves semantic retrieval unavailable.
 
 Normal `recall <query>` remains lexical and does not call the semantic runtime.
 Semantic recall does not add a conversation record, alter ordinary messages, or

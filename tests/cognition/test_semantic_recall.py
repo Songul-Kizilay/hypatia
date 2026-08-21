@@ -190,6 +190,7 @@ class SemanticRecallTests(unittest.TestCase):
             "Runtime: disabled\n"
             "Indexed memory records: unavailable\n"
             "Embedding dimension: unavailable\n"
+            "Last rebuild: unavailable\n"
             "Last incremental update: unavailable",
         )
         self.assertEqual(self.memory_manager.count(), memory_count)
@@ -220,6 +221,7 @@ class SemanticRecallTests(unittest.TestCase):
             "Runtime: ready\n"
             "Indexed memory records: 1\n"
             "Embedding dimension: 2\n"
+            "Last rebuild: healthy\n"
             "Last incremental update: healthy",
         )
         self.assertEqual(provider.calls, calls_before_status)
@@ -241,6 +243,7 @@ class SemanticRecallTests(unittest.TestCase):
             "Runtime: ready\n"
             "Indexed memory records: 0\n"
             "Embedding dimension: not established\n"
+            "Last rebuild: healthy\n"
             "Last incremental update: healthy",
         )
         self.assertEqual(provider.calls, calls_before_status)
@@ -270,6 +273,117 @@ class SemanticRecallTests(unittest.TestCase):
             response.message,
         )
         self.assertNotIn("Embedding provider unavailable.", response.message)
+
+    def test_semantic_recall_status_exposes_safe_unavailable_rebuild_state(
+        self,
+    ) -> None:
+        content = "Indexed conversation"
+        self.memory_manager.add(
+            content,
+            metadata={"session_id": "default"},
+            tags={"brain", "conversation"},
+        )
+        provider = MappingEmbeddingProvider({content: Embedding((1, 0))})
+        provider.should_fail = True
+        runtime = SemanticMemoryIndexRuntime(SemanticMemoryIndexBuilder(provider))
+        with self.assertRaisesRegex(MemoryError, "provider unavailable"):
+            runtime.refresh(self.memory_manager)
+
+        response = self._engine(runtime).process(
+            BrainRequest(message="semantic recall status")
+        )
+
+        self.assertEqual(
+            response.message,
+            "Semantic recall status:\n"
+            "Runtime: unavailable\n"
+            "Indexed memory records: unavailable\n"
+            "Embedding dimension: unavailable\n"
+            "Last rebuild: Semantic index rebuild failed.\n"
+            "Last incremental update: unavailable",
+        )
+        self.assertNotIn("provider unavailable", response.message)
+
+    def test_semantic_recall_retry_reports_disabled_runtime(self) -> None:
+        response = self._engine().process(
+            BrainRequest(message="semantic recall retry", request_id="request-1")
+        )
+
+        self.assertFalse(response.success)
+        self.assertEqual(response.intent, "semantic_recall_retry")
+        self.assertEqual(response.request_id, "request-1")
+        self.assertEqual(response.message, "Semantic recall runtime is disabled.")
+
+    def test_semantic_recall_retry_recovers_unavailable_runtime(self) -> None:
+        content = "Indexed conversation"
+        self.memory_manager.add(
+            content,
+            metadata={"session_id": "default"},
+            tags={"brain", "conversation"},
+        )
+        provider = MappingEmbeddingProvider({content: Embedding((1, 0))})
+        provider.should_fail = True
+        runtime = SemanticMemoryIndexRuntime(SemanticMemoryIndexBuilder(provider))
+        with self.assertRaises(MemoryError):
+            runtime.refresh(self.memory_manager)
+        provider.should_fail = False
+
+        response = self._engine(runtime).process(
+            BrainRequest(message="semantic recall retry", request_id="request-1")
+        )
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "semantic_recall_retry")
+        self.assertEqual(response.request_id, "request-1")
+        self.assertEqual(
+            response.message,
+            "Semantic recall retry succeeded:\n"
+            "Indexed memory records: 1\n"
+            "Embedding dimension: 2",
+        )
+        current_index = runtime.current()
+        assert current_index is not None
+        self.assertEqual(current_index.count(), 1)
+        self.assertIsNone(runtime.last_rebuild_error())
+        self.assertEqual(provider.calls, [content, content])
+
+    def test_failed_semantic_retry_preserves_last_index_and_hides_provider_error(
+        self,
+    ) -> None:
+        content = "Indexed conversation"
+        self.memory_manager.add(
+            content,
+            metadata={"session_id": "default"},
+            tags={"brain", "conversation"},
+        )
+        runtime, provider = self._runtime({content: Embedding((1, 0))})
+        stable_index = runtime.current()
+        provider.should_fail = True
+
+        response = self._engine(runtime).process(
+            BrainRequest(message="semantic recall retry")
+        )
+        status = self._engine(runtime).process(
+            BrainRequest(message="semantic recall status")
+        )
+
+        self.assertFalse(response.success)
+        self.assertEqual(
+            response.message,
+            "Semantic recall retry failed. The last complete index remains available.",
+        )
+        self.assertIs(runtime.current(), stable_index)
+        self.assertEqual(
+            runtime.last_rebuild_error(),
+            "Semantic index rebuild failed.",
+        )
+        self.assertNotIn("Embedding provider unavailable.", response.message)
+        self.assertIn("Runtime: ready", status.message)
+        self.assertIn(
+            "Last rebuild: Semantic index rebuild failed.",
+            status.message,
+        )
+        self.assertNotIn("Embedding provider unavailable.", status.message)
 
     def test_provider_failure_uses_deterministic_lexical_fallback(self) -> None:
         content = "User: I like cats\nHypatia: Noted."

@@ -24,13 +24,13 @@ from memory.SemanticMemoryIndexRuntime import SemanticMemoryIndexRuntime
 class RecordingEmbeddingProvider:
     def __init__(self, embedding: Embedding, error: Exception | None = None) -> None:
         self._embedding = embedding
-        self._error = error
+        self.error = error
         self.sources: list[str] = []
 
     def embed(self, source_text: str) -> Embedding:
         self.sources.append(source_text)
-        if self._error is not None:
-            raise self._error
+        if self.error is not None:
+            raise self.error
         return self._embedding
 
 
@@ -120,7 +120,7 @@ class BootstrapSemanticMemoryRuntimeTests(unittest.TestCase):
 
         construct_transport.assert_called_once_with(timeout_seconds=7.5)
 
-    def test_enabled_runtime_applies_rebuild_budget_before_provider_calls(self) -> None:
+    def test_rebuild_budget_starts_primary_runtime_without_provider_calls(self) -> None:
         provider = RecordingEmbeddingProvider(Embedding((1, 0)))
 
         with (
@@ -147,12 +147,19 @@ class BootstrapSemanticMemoryRuntimeTests(unittest.TestCase):
                 memory_path,
                 temporary_path / "sessions.json",
             )
-
-            with self.assertRaisesRegex(MemoryError, "provider-call budget exceeded"):
-                bootstrap.initialize()
+            bootstrap.initialize()
+            runtime = bootstrap.container.resolve(SemanticMemoryIndexRuntime)
+            engine = bootstrap.container.resolve(CognitiveEngine)
+            status = engine.process(BrainRequest(message="semantic recall status"))
 
         self.assertEqual(provider.sources, [])
-        self.assertFalse(hasattr(bootstrap, "container"))
+        self.assertIsNone(runtime.current())
+        self.assertEqual(
+            runtime.last_rebuild_error(),
+            "Semantic index rebuild failed.",
+        )
+        self.assertIn("Runtime: unavailable", status.message)
+        self.assertNotIn("provider-call budget", status.message)
 
     def test_enabled_runtime_indexes_new_conversation_memory_after_bootstrap(
         self,
@@ -221,7 +228,7 @@ class BootstrapSemanticMemoryRuntimeTests(unittest.TestCase):
 
         self.assertEqual(provider.sources, ["Persistent fact"])
 
-    def test_enabled_runtime_failure_stops_bootstrap_before_container_publish(
+    def test_enabled_runtime_failure_keeps_primary_container_available(
         self,
     ) -> None:
         provider = RecordingEmbeddingProvider(
@@ -247,11 +254,26 @@ class BootstrapSemanticMemoryRuntimeTests(unittest.TestCase):
                 memory_path,
                 temporary_path / "sessions.json",
             )
+            bootstrap.initialize()
+            runtime = bootstrap.container.resolve(SemanticMemoryIndexRuntime)
+            engine = bootstrap.container.resolve(CognitiveEngine)
+            conversation = engine.process(BrainRequest(message="Hello Hypatia"))
+            status = engine.process(BrainRequest(message="semantic recall status"))
+            provider.error = None
+            retry = engine.process(BrainRequest(message="semantic recall retry"))
+            second_conversation = engine.process(
+                BrainRequest(message="Hello again Hypatia")
+            )
 
-            with self.assertRaisesRegex(MemoryError, "transport failed"):
-                bootstrap.initialize()
-
-        self.assertFalse(hasattr(bootstrap, "container"))
+        self.assertTrue(conversation.success)
+        self.assertIn("Runtime: unavailable", status.message)
+        self.assertIn("Last rebuild: Semantic index rebuild failed.", status.message)
+        self.assertNotIn("transport failed", status.message)
+        self.assertTrue(retry.success)
+        self.assertTrue(second_conversation.success)
+        assert runtime.current() is not None
+        self.assertEqual(runtime.current().count(), 3)
+        self.assertIsNone(runtime.last_rebuild_error())
 
     def test_enabled_runtime_rejects_empty_endpoint_or_model_before_provider_constructs(
         self,

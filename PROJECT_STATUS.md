@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.65 (Genesis)`
+`v0.3.66 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.65`** is the current executable package and GitHub
+- **Runtime release `v0.3.66`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -245,25 +245,28 @@ with optional OpenAI-compatible LLM conversation support.
   semantic-runtime publication. Embedding source text is capped at 1,000,000
   characters and is preflighted across rebuild, incremental, and query paths.
   An explicit Ollama `/api/embed` adapter is available without third-party
-  dependencies,
-  rejects HTTP redirects, and
-  sends at most 8 MiB of exact compact UTF-8 JSON, rejects invalid or excessive
-  bodies before opening the network request, and reads at most 1 MiB before
-  parsing an embedding response. Opt-in Bootstrap wiring builds and registers a
-  replacement index at startup. After a successful startup it
-  follows memory lifecycle events with best-effort incremental updates; an
-  embedding failure never reverses a completed primary-memory write. Semantic
-  results are used only by the explicit `semantic recall <query>` request path
-  with deterministic lexical fallback.
-  The runtime retains a safe diagnostic when its most recent incremental index
-  update failed, without exposing provider-specific error details.
+  dependencies, rejects HTTP redirects, sends at most 8 MiB of exact compact
+  UTF-8 JSON, rejects invalid or excessive bodies before opening the network
+  request, and reads at most 1 MiB before parsing an embedding response. Opt-in
+  Bootstrap wiring builds and registers a
+  replacement index at startup. If the initial rebuild fails, primary Bootstrap
+  remains available, the runtime is registered and attached, and semantic
+  retrieval safely reports unavailable. The exact `semantic recall retry`
+  command deliberately retries one complete bounded rebuild; no ordinary chat,
+  recall, status, or memory event triggers a full retry. Once an index is ready,
+  memory lifecycle events apply best-effort incremental updates. An embedding
+  failure never reverses a completed primary-memory write. Semantic results are
+  used only by the explicit `semantic recall <query>` request path with
+  deterministic lexical fallback. The runtime retains separate safe full
+  rebuild and incremental-update diagnostics without exposing provider details.
 - Deterministic reciprocal-rank fusion for explicit semantic recall when both
   current-session semantic and lexical candidates exist. Hybrid responses use
   rank scores; semantic-only responses retain cosine-similarity scores.
 - A read-only `semantic recall status` diagnostic. It reports the optional
-  runtime's state, index size and dimension when ready, and only the safe
-  latest incremental-update diagnostic; it does not generate an embedding or
-  change conversation memory.
+  runtime's disabled, initializing, unavailable, or ready state, index size and
+  dimension when ready, and separate safe rebuild and incremental-update
+  diagnostics; it does not generate an embedding or change conversation
+  memory.
 - An optional model-scoped local semantic-embedding cache. It is disabled by
   default, validates a source-content fingerprint before reuse, updates with
   memory lifecycle events, and remains separate from the primary memory schema.
@@ -359,7 +362,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 1,312 automated tests pass through package-aware discovery.
+- 1,317 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -386,8 +389,8 @@ so this check did not alter the project's persisted data.
 
 ## Next Milestone
 
-Define degraded semantic startup and retry. Semantic retrieval is opt-in, but
-an initial provider, cache-miss-budget, or rebuild failure currently stops the
-primary Bootstrap. Startup should keep the primary application available,
-expose a safe unavailable diagnostic, and allow an explicit retry without
-publishing a partial index.
+Define an aggregate semantic-rebuild time boundary. The provider-call count and
+each local HTTP request are bounded, but a sequence of permitted slow requests
+can still keep startup or an explicit retry occupied for too long. A complete
+rebuild needs one shared deadline or cancellation policy while preserving the
+last complete index, deterministic cache handling, and explicit-only retry.

@@ -18,6 +18,7 @@ class SemanticMemoryIndexRuntime:
     def __init__(self, builder: SemanticMemoryIndexBuilder) -> None:
         self._builder = builder
         self._index: InMemorySemanticMemoryIndex | None = None
+        self._last_rebuild_error: str | None = None
         self._last_update_error: str | None = None
         self._lock = RLock()
 
@@ -29,10 +30,20 @@ class SemanticMemoryIndexRuntime:
     def refresh(self, memory_manager: MemoryManager) -> InMemorySemanticMemoryIndex:
         """Build and atomically publish a replacement index on success only."""
         with self._lock:
-            replacement = self._builder.build(memory_manager)
+            try:
+                replacement = self._builder.build(memory_manager)
+            except Exception:
+                self._last_rebuild_error = "Semantic index rebuild failed."
+                raise
             self._index = replacement
+            self._last_rebuild_error = None
             self._last_update_error = None
             return replacement
+
+    def last_rebuild_error(self) -> str | None:
+        """Return a safe diagnostic when the latest full rebuild failed."""
+        with self._lock:
+            return self._last_rebuild_error
 
     def last_update_error(self) -> str | None:
         """Return a safe diagnostic when the latest incremental update failed."""

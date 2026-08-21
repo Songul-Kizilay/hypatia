@@ -41,3 +41,10 @@ cache-only. An excessive miss count fails before provider access, cache
 replacement, or runtime publication. A cache-read failure is attempted once
 and conservatively makes the rebuild fully uncached, while a valid
 foreign-provider snapshot is cached as an isolated empty view.
+
+An initial optional rebuild failure no longer stops the primary application.
+The semantic runtime records only a safe rebuild diagnostic, remains attached
+for later lifecycle updates, and reports unavailable until a complete index is
+published. The exact `semantic recall retry` command is the only full-rebuild
+retry path; failure preserves the last complete index when present and never
+changes primary memory.

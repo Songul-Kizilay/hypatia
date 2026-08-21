@@ -1798,6 +1798,7 @@ class ResponseComposer:
         runtime_state: str,
         indexed_memory_records: int | None,
         embedding_dimension: int | None,
+        last_rebuild_error: str | None,
         last_update_error: str | None,
     ) -> BrainResponse:
         """Compose a read-only diagnostic for the optional semantic runtime."""
@@ -1807,10 +1808,11 @@ class ResponseComposer:
             if embedding_dimension is not None
             else "not established"
         )
-        last_update = (
-            last_update_error
-            if last_update_error is not None
-            else "healthy" if runtime_state != "disabled" else "unavailable"
+        last_rebuild = last_rebuild_error or (
+            "healthy" if runtime_state == "ready" else "unavailable"
+        )
+        last_update = last_update_error or (
+            "healthy" if runtime_state == "ready" else "unavailable"
         )
         return BrainResponse(
             message="\n".join(
@@ -1820,12 +1822,51 @@ class ResponseComposer:
                     "Indexed memory records: "
                     f"{indexed_memory_records if available else 'unavailable'}",
                     f"Embedding dimension: {dimension if available else 'unavailable'}",
+                    f"Last rebuild: {last_rebuild}",
                     f"Last incremental update: {last_update}",
                 )
             ),
             request_id=request.request_id,
             intent="semantic_recall_status",
             memory_count=0,
+        )
+
+    def semantic_recall_retry_success(
+        self,
+        request: BrainRequest,
+        *,
+        indexed_memory_records: int,
+        embedding_dimension: int | None,
+    ) -> BrainResponse:
+        """Report one successful explicit semantic-index rebuild."""
+        dimension = (
+            embedding_dimension
+            if embedding_dimension is not None
+            else "not established"
+        )
+        return BrainResponse(
+            message=(
+                "Semantic recall retry succeeded:\n"
+                f"Indexed memory records: {indexed_memory_records}\n"
+                f"Embedding dimension: {dimension}"
+            ),
+            request_id=request.request_id,
+            intent="semantic_recall_retry",
+            memory_count=0,
+        )
+
+    def semantic_recall_retry_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Report a safe explicit semantic-index rebuild failure."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="semantic_recall_retry",
+            memory_count=0,
+            success=False,
         )
 
     @staticmethod

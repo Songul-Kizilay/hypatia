@@ -310,7 +310,13 @@ class Bootstrap:
         memory_manager.load()
         semantic_memory_index_runtime = self._semantic_memory_index_runtime
         if semantic_memory_index_runtime is not None:
-            semantic_memory_index_runtime.refresh(memory_manager)
+            try:
+                semantic_memory_index_runtime.refresh(memory_manager)
+            except Exception:
+                # Semantic retrieval is explicitly optional. Keep the primary
+                # application available and expose only the runtime's safe
+                # diagnostic through its explicit status command.
+                logger.warning("Semantic Memory Runtime Unavailable")
             semantic_memory_index_runtime.attach(event_bus)
         session_rename_service = SessionRenameTransactionService(
             session_manager=session_manager,
