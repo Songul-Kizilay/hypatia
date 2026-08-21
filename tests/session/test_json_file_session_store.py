@@ -16,7 +16,10 @@ if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
 from core.Exceptions import SessionError
-from session.JsonFileSessionStore import JsonFileSessionStore
+from session.JsonFileSessionStore import (
+    MAX_SESSION_ID_CHARACTERS,
+    JsonFileSessionStore,
+)
 from session.SessionRecord import SessionRecord
 from session.SessionRegistrySnapshot import SessionRegistrySnapshot
 
@@ -150,13 +153,127 @@ class JsonFileSessionStoreTests(unittest.TestCase):
         with self.assertRaises(SessionError):
             self.store.load()
 
-    def test_unsupported_schema_raises_session_error(self) -> None:
-        self._write_document(
-            {"schema_version": 2, "active_session_id": "default", "sessions": []}
+    def test_unsupported_schema_raises_session_error_without_coercion(self) -> None:
+        for schema_version in (2, True):
+            with self.subTest(schema_version=schema_version):
+                self._write_document(
+                    {
+                        "schema_version": schema_version,
+                        "active_session_id": "default",
+                        "sessions": [],
+                    }
+                )
+
+                with self.assertRaisesRegex(SessionError, "unsupported schema"):
+                    self.store.load()
+
+    def test_oversized_file_is_rejected_before_json_decoding(self) -> None:
+        self.path.write_bytes(b"{}")
+
+        with (
+            patch("session.JsonFileSessionStore.MAX_SESSION_STORE_BYTES", 1),
+            patch(
+                "session.JsonFileSessionStore.json.loads",
+                side_effect=AssertionError("Oversized JSON must not be decoded."),
+            ),
+        ):
+            with self.assertRaisesRegex(SessionError, "too large"):
+                self.store.load()
+
+    def test_load_uses_open_descriptor_without_preflight_stat(self) -> None:
+        snapshot = self._snapshot()
+        self.store.save(snapshot)
+
+        with patch.object(
+            Path,
+            "stat",
+            side_effect=AssertionError("Session load must not preflight file size."),
+        ):
+            loaded = self.store.load()
+
+        self.assertEqual(loaded, snapshot)
+
+    def test_session_bound_is_checked_before_parse_and_serialization(self) -> None:
+        snapshot = self._snapshot()
+        self._write_document(self._document(snapshot))
+
+        with (
+            patch("session.JsonFileSessionStore.MAX_SESSIONS", 1),
+            patch.object(
+                self.store,
+                "_parse_session",
+                side_effect=AssertionError("Oversized sessions must not be parsed."),
+            ),
+        ):
+            with self.assertRaisesRegex(SessionError, "too many sessions"):
+                self.store.load()
+
+        with (
+            patch("session.JsonFileSessionStore.MAX_SESSIONS", 1),
+            patch.object(
+                self.store,
+                "_serialize_session",
+                side_effect=AssertionError(
+                    "Oversized sessions must not be serialized."
+                ),
+            ),
+        ):
+            with self.assertRaisesRegex(SessionError, "too many sessions"):
+                self.store.save(snapshot)
+
+    def test_session_id_bound_applies_on_load_and_before_serialization(self) -> None:
+        maximum_id = "s" * MAX_SESSION_ID_CHARACTERS
+        maximum_snapshot = SessionRegistrySnapshot(
+            active_session_id=maximum_id,
+            sessions=(self._record("default"), self._record(maximum_id)),
+        )
+        self.store.save(maximum_snapshot)
+        self.assertEqual(self.store.load(), maximum_snapshot)
+
+        oversized_id = "s" * (MAX_SESSION_ID_CHARACTERS + 1)
+        oversized_snapshot = SessionRegistrySnapshot(
+            active_session_id="default",
+            sessions=(self._record("default"), self._record(oversized_id)),
+        )
+        self._write_document(self._document(oversized_snapshot))
+
+        with self.assertRaisesRegex(SessionError, "session_id.*too long"):
+            self.store.load()
+        with patch.object(
+            self.store,
+            "_serialize_session",
+            side_effect=AssertionError("Oversized IDs must not be serialized."),
+        ):
+            with self.assertRaisesRegex(SessionError, "session_id.*too long"):
+                self.store.save(oversized_snapshot)
+
+    def test_exact_count_and_utf8_byte_bounds_preserve_the_snapshot(self) -> None:
+        snapshot = SessionRegistrySnapshot(
+            active_session_id="çalışma-ş",
+            sessions=(self._record("default"), self._record("çalışma-ş")),
         )
 
-        with self.assertRaises(SessionError):
-            self.store.load()
+        with patch("session.JsonFileSessionStore.MAX_SESSIONS", 2):
+            self.store.save(snapshot)
+            self.assertEqual(self.store.load(), snapshot)
+        exact_snapshot = self.path.read_bytes()
+
+        with patch(
+            "session.JsonFileSessionStore.MAX_SESSION_STORE_BYTES",
+            len(exact_snapshot),
+        ):
+            self.store.save(snapshot)
+
+        self.assertEqual(self.path.read_bytes(), exact_snapshot)
+        with patch(
+            "session.JsonFileSessionStore.MAX_SESSION_STORE_BYTES",
+            len(exact_snapshot) - 1,
+        ):
+            with self.assertRaisesRegex(SessionError, "too large"):
+                self.store.save(snapshot)
+
+        self.assertEqual(self.path.read_bytes(), exact_snapshot)
+        self.assertEqual(list(self.path.parent.glob(f".{self.path.name}.*.tmp")), [])
 
     def test_save_creates_a_missing_parent_directory(self) -> None:
         nested_path = self.path.parent / "nested" / "sessions.json"

@@ -2,6 +2,30 @@
 
 All notable project changes are recorded here.
 
+## [0.3.60] - 2026-08-21
+
+### Changed
+
+- The schema-v1 session registry now accepts at most 20,000 ordered sessions,
+  1,024 characters per session ID, and 64 MiB of complete UTF-8 JSON.
+- Reads consume at most one byte beyond the physical limit from the opened file
+  descriptor before decoding. Atomic writes count exact UTF-8 bytes in the
+  temporary file before publication.
+
+### Safety
+
+- Oversized files are not decoded, excessive session collections and IDs are
+  rejected before record parsing or serialization, and boolean schema values
+  are not coerced to schema v1.
+- Failed or oversized writes preserve the previous registry and clean partial
+  temporary files. Session order and the default/active-session invariants
+  remain unchanged.
+
+### Verification
+
+- The package-aware full local suite contains 1,277 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass across 311 source files.
+
 ## [0.3.59] - 2026-08-21
 
 ### Changed
