@@ -41,6 +41,10 @@ Hypatia currently runs as a local-first CLI. The initial security boundary is:
   decoding; reads and writes reject more than 20,000 aggregate nested list
   entries, while writes count exact UTF-8 bytes and cannot publish a snapshot
   larger than 64 MiB;
+- explicit knowledge-relation snapshots are limited to 20,000 ordered records,
+  1,024 characters per endpoint ID, and 64 MiB of UTF-8 JSON; opened-descriptor
+  reads stop before oversized decoding, and bounded temporary writes preserve
+  the prior snapshot on failure;
 - semantic embeddings are opt-in and restricted to the local Ollama endpoint
   policy enforced at bootstrap.
 

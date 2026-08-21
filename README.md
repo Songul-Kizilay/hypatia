@@ -535,6 +535,8 @@ add a conversation record.
 When running through Hypatia's standard Bootstrap runtime, an applied relation
 is also saved in a separate local, versioned relation file. After restart it is
 restored only when both original local source files have been loaded again.
+The complete ordered snapshot is capped at 20,000 relations and 64 MiB, with
+1,024-character endpoint IDs and exact UTF-8 bounded atomic output.
 If that file cannot be written, Hypatia removes the in-memory edge instead of
 claiming success. This store is separate from conversation memory and is never
 sent to an LLM.

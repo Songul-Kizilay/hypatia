@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.58` in the current release candidate) are the
+- **Runtime releases** (`v0.3.59` in the current release candidate) are the
   executable package and GitHub release line. They are the source-backed
   implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
@@ -279,7 +279,10 @@ Implemented memory capabilities:
   nor calls an LLM.
 - A distinct, versioned `relations.json` store for explicitly applied document
   relations. It atomically replaces complete snapshots and validates every
-  record before use. On a storage failure the in-memory edge is rolled back.
+  record before use. It accepts at most 20,000 ordered relations, 1,024
+  characters per endpoint ID, and 64 MiB of exact UTF-8 JSON; oversized reads
+  stop before decoding and bounded temporary output precedes publication. On a
+  storage failure the in-memory edge is rolled back.
   On restart, a stored relation is restored only after both file-derived stable
   source IDs have been loaded again; it is never guessed from a source title or
   content.
@@ -305,7 +308,7 @@ Not implemented:
 
 The current local verification baseline is:
 
-- package-aware `python -m unittest`: 1,267 tests passed. Explicit `tests.*`
+- package-aware `python -m unittest`: 1,272 tests passed. Explicit `tests.*`
   module names ensure nested test directories are included without shadowing
   source packages.
 - `python -m black --check src tests`: passed.
@@ -348,9 +351,9 @@ memory/session files and leaving project data unchanged.
 4. Existing deterministic keyword selection must remain an available fallback
    until semantic retrieval has independently verified relevance, ties, bounds,
    and failure behavior.
-5. The explicit knowledge-relation JSON store has no physical-file or relation
-   count bound. Before a substantially larger knowledge graph is supported, it
-   needs bounded pre-decode reading and exact bounded atomic output.
+5. The schema-v1 session registry has no physical-file, session-count, or
+   session-ID length bounds. Those limits are required before session history
+   is allowed to grow substantially.
 
 ## Completed Increment: Semantic Retrieval Core
 

@@ -2,6 +2,31 @@
 
 All notable project changes are recorded here.
 
+## [0.3.59] - 2026-08-21
+
+### Changed
+
+- The explicit knowledge-relation schema-v1 snapshot now accepts at most 20,000
+  ordered relations, 1,024 characters per endpoint document ID, and 64 MiB of
+  complete UTF-8 JSON.
+- Reads consume at most one byte beyond the physical limit from the opened file
+  descriptor before decoding. Atomic writes count exact UTF-8 bytes in the
+  temporary file before publication.
+
+### Safety
+
+- Oversized files are not decoded, excessive collections and endpoint IDs are
+  rejected before record parsing or serialization, and boolean schema values
+  are not coerced to schema v1.
+- Failed or oversized writes preserve the previous relation snapshot and clean
+  partial temporary files. Relation order, duplicate rejection, graph rollback,
+  and schema v1 remain unchanged.
+
+### Verification
+
+- The package-aware full local suite contains 1,272 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass across 311 source files.
+
 ## [0.3.58] - 2026-08-21
 
 ### Changed
