@@ -33,3 +33,11 @@ validate before changing the index/cache, and excessive direct queries keep the
 lexical fallback. The local Ollama transport serializes compact Unicode JSON
 through an 8 MiB exact UTF-8 writer and rejects invalid or excessive payloads
 before opening a network request.
+
+Cold rebuilds also resolve all provider-scoped cache results before network
+work and allow at most 256 provider calls by default. The process environment
+can set an explicit ASCII whole-number budget from 0 through 20,000; zero is
+cache-only. An excessive miss count fails before provider access, cache
+replacement, or runtime publication. A cache-read failure is attempted once
+and conservatively makes the rebuild fully uncached, while a valid
+foreign-provider snapshot is cached as an isolated empty view.

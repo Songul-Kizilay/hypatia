@@ -29,7 +29,11 @@ class StubEmbeddingProvider:
 
 
 class FailingEmbeddingCache:
+    def __init__(self) -> None:
+        self.get_calls = 0
+
     def get(self, memory_id: str, source_text: str) -> Embedding | None:
+        self.get_calls += 1
         raise OSError("cache unavailable")
 
     def replace(self, entries: tuple[tuple[str, str, Embedding], ...]) -> None:
@@ -43,11 +47,17 @@ class FailingEmbeddingCache:
 
 
 class RecordingEmbeddingCache:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        cached_by_text: dict[str, Embedding] | None = None,
+    ) -> None:
+        self._cached_by_text = cached_by_text or {}
+        self.get_requests: list[tuple[str, str]] = []
         self.replacements: list[tuple[tuple[str, str, Embedding], ...]] = []
 
     def get(self, memory_id: str, source_text: str) -> Embedding | None:
-        return None
+        self.get_requests.append((memory_id, source_text))
+        return self._cached_by_text.get(source_text)
 
     def replace(self, entries: tuple[tuple[str, str, Embedding], ...]) -> None:
         self.replacements.append(entries)
@@ -60,6 +70,17 @@ class RecordingEmbeddingCache:
 
 
 class SemanticMemoryIndexBuilderTests(unittest.TestCase):
+    def test_rejects_invalid_rebuild_provider_call_budgets(self) -> None:
+        provider = StubEmbeddingProvider({})
+
+        for budget in (True, -1, 20_001):
+            with self.subTest(budget=budget):
+                with self.assertRaisesRegex(ValueError, "between 0 and 20,000"):
+                    SemanticMemoryIndexBuilder(
+                        provider,
+                        max_rebuild_provider_calls=budget,
+                    )
+
     def test_build_uses_exact_active_memory_content_in_creation_order(self) -> None:
         memory_manager = MemoryManager()
         first = memory_manager.add("First fact")
@@ -228,6 +249,104 @@ class SemanticMemoryIndexBuilderTests(unittest.TestCase):
 
         self.assertEqual(provider.requests, [])
         self.assertEqual(cache.replacements, [])
+
+    def test_rebuild_budget_counts_cache_misses_before_provider_work(self) -> None:
+        memory_manager = MemoryManager()
+        first = memory_manager.add("Cached fact")
+        second = memory_manager.add("Second fact")
+        third = memory_manager.add("Third fact")
+        cached_embedding = Embedding((1, 0))
+        provider = StubEmbeddingProvider(
+            {
+                "Second fact": Embedding((0, 1)),
+                "Third fact": Embedding((1, 1)),
+            }
+        )
+        cache = RecordingEmbeddingCache({"Cached fact": cached_embedding})
+
+        with self.assertRaisesRegex(MemoryError, "provider-call budget exceeded"):
+            SemanticMemoryIndexBuilder(
+                provider,
+                cache,
+                max_rebuild_provider_calls=1,
+            ).build(memory_manager)
+
+        self.assertEqual(provider.requests, [])
+        self.assertEqual(
+            cache.get_requests,
+            [
+                (first.memory_id, "Cached fact"),
+                (second.memory_id, "Second fact"),
+                (third.memory_id, "Third fact"),
+            ],
+        )
+        self.assertEqual(cache.replacements, [])
+
+        cache.get_requests.clear()
+        index = SemanticMemoryIndexBuilder(
+            provider,
+            cache,
+            max_rebuild_provider_calls=2,
+        ).build(memory_manager)
+
+        self.assertEqual(index.count(), 3)
+        self.assertEqual(provider.requests, ["Second fact", "Third fact"])
+        self.assertEqual(len(cache.replacements), 1)
+        self.assertEqual(
+            cache.replacements[0],
+            (
+                (first.memory_id, "Cached fact", cached_embedding),
+                (second.memory_id, "Second fact", Embedding((0, 1))),
+                (third.memory_id, "Third fact", Embedding((1, 1))),
+            ),
+        )
+
+    def test_zero_rebuild_budget_allows_empty_or_fully_cached_indexes(self) -> None:
+        provider = StubEmbeddingProvider({})
+        empty_index = SemanticMemoryIndexBuilder(
+            provider,
+            max_rebuild_provider_calls=0,
+        ).build(MemoryManager())
+        self.assertEqual(empty_index.count(), 0)
+
+        memory_manager = MemoryManager()
+        record = memory_manager.add("Cached fact")
+        cached_embedding = Embedding((1, 0))
+        cache = RecordingEmbeddingCache({"Cached fact": cached_embedding})
+        cached_index = SemanticMemoryIndexBuilder(
+            provider,
+            cache,
+            max_rebuild_provider_calls=0,
+        ).build(memory_manager)
+
+        self.assertEqual(cached_index.count(), 1)
+        self.assertEqual(provider.requests, [])
+        self.assertEqual(
+            cache.replacements,
+            [((record.memory_id, "Cached fact", cached_embedding),)],
+        )
+
+    def test_cache_failure_becomes_one_bounded_all_miss_preflight(self) -> None:
+        memory_manager = MemoryManager()
+        memory_manager.add("First fact")
+        memory_manager.add("Second fact")
+        provider = StubEmbeddingProvider(
+            {
+                "First fact": Embedding((1, 0)),
+                "Second fact": Embedding((0, 1)),
+            }
+        )
+        cache = FailingEmbeddingCache()
+
+        with self.assertRaisesRegex(MemoryError, "provider-call budget exceeded"):
+            SemanticMemoryIndexBuilder(
+                provider,
+                cache,
+                max_rebuild_provider_calls=1,
+            ).build(memory_manager)
+
+        self.assertEqual(cache.get_calls, 1)
+        self.assertEqual(provider.requests, [])
 
 
 if __name__ == "__main__":

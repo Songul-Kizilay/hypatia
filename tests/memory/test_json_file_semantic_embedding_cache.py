@@ -177,12 +177,15 @@ class JsonFileSemanticEmbeddingCacheTests(unittest.TestCase):
                 "entries": "foreign entries are not parsed",
             }
         )
+        foreign_cache = JsonFileSemanticEmbeddingCache(self.path, "provider")
         self.assertIsNone(
-            JsonFileSemanticEmbeddingCache(self.path, "provider").get(
+            foreign_cache.get(
                 "memory-1",
                 "Fact",
             )
         )
+        self.path.write_bytes(b"invalid JSON must not be re-read")
+        self.assertIsNone(foreign_cache.get("memory-1", "Fact"))
 
         self._write_document(
             {

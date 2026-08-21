@@ -69,6 +69,10 @@ Hypatia currently runs as a local-first CLI. The initial security boundary is:
   rebuild, incremental, query, and Ollama-provider paths; outbound Ollama JSON
   is limited to 8 MiB of exact compact UTF-8, and invalid, recursive, or
   oversized payloads fail before a network request is opened;
+- cold semantic rebuilds allow 256 cache misses/provider calls by default and
+  accept an explicit 0-through-20,000 process setting; all cache results and
+  misses are resolved before network work, so an excessive rebuild fails before
+  provider access, cache replacement, or runtime publication;
 - semantic embeddings are opt-in and restricted to the local Ollama endpoint
   policy enforced at bootstrap.
 

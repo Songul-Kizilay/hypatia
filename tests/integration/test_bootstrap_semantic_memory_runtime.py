@@ -120,6 +120,40 @@ class BootstrapSemanticMemoryRuntimeTests(unittest.TestCase):
 
         construct_transport.assert_called_once_with(timeout_seconds=7.5)
 
+    def test_enabled_runtime_applies_rebuild_budget_before_provider_calls(self) -> None:
+        provider = RecordingEmbeddingProvider(Embedding((1, 0)))
+
+        with (
+            tempfile.TemporaryDirectory() as temporary_directory,
+            patch.dict(
+                os.environ,
+                {
+                    "HYPATIA_SEMANTIC_MEMORY_ENABLED": "true",
+                    "HYPATIA_SEMANTIC_MEMORY_REBUILD_MAX_PROVIDER_CALLS": "1",
+                },
+                clear=True,
+            ),
+            patch("core.Bootstrap.OllamaEmbeddingProvider", return_value=provider),
+        ):
+            temporary_path = Path(temporary_directory)
+            memory_path = temporary_path / "memory.json"
+            JsonFileMemoryStore(memory_path).save(
+                [
+                    MemoryRecord(memory_id="memory-1", content="First fact"),
+                    MemoryRecord(memory_id="memory-2", content="Second fact"),
+                ]
+            )
+            bootstrap = Bootstrap.from_process_environment(
+                memory_path,
+                temporary_path / "sessions.json",
+            )
+
+            with self.assertRaisesRegex(MemoryError, "provider-call budget exceeded"):
+                bootstrap.initialize()
+
+        self.assertEqual(provider.sources, [])
+        self.assertFalse(hasattr(bootstrap, "container"))
+
     def test_enabled_runtime_indexes_new_conversation_memory_after_bootstrap(
         self,
     ) -> None:
@@ -252,6 +286,27 @@ class BootstrapSemanticMemoryRuntimeTests(unittest.TestCase):
                     "HYPATIA_SEMANTIC_MEMORY_OLLAMA_TIMEOUT_SECONDS": "nan",
                 },
                 "must be a positive finite number",
+            ),
+            (
+                {
+                    "HYPATIA_SEMANTIC_MEMORY_ENABLED": "true",
+                    "HYPATIA_SEMANTIC_MEMORY_REBUILD_MAX_PROVIDER_CALLS": "-1",
+                },
+                "must be a non-negative integer",
+            ),
+            (
+                {
+                    "HYPATIA_SEMANTIC_MEMORY_ENABLED": "true",
+                    "HYPATIA_SEMANTIC_MEMORY_REBUILD_MAX_PROVIDER_CALLS": "٢٠",
+                },
+                "must be a non-negative integer",
+            ),
+            (
+                {
+                    "HYPATIA_SEMANTIC_MEMORY_ENABLED": "true",
+                    "HYPATIA_SEMANTIC_MEMORY_REBUILD_MAX_PROVIDER_CALLS": "20001",
+                },
+                "cannot exceed 20000",
             ),
         ):
             with self.subTest(environment=environment):

@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.64` in the current release candidate) are the
+- **Runtime releases** (`v0.3.65` in the current release candidate) are the
   executable package and GitHub release line. They are the source-backed
   implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
@@ -314,7 +314,7 @@ Not implemented:
 
 The current local verification baseline is:
 
-- package-aware `python -m unittest`: 1,306 tests passed. Explicit `tests.*`
+- package-aware `python -m unittest`: 1,312 tests passed. Explicit `tests.*`
   module names ensure nested test directories are included without shadowing
   source packages.
 - `python -m black --check src tests`: passed.
@@ -357,11 +357,30 @@ memory/session files and leaving project data unchanged.
 4. Existing deterministic keyword selection must remain an available fallback
    until semantic retrieval has independently verified relevance, ties, bounds,
    and failure behavior.
-5. Source text, request bodies, provider output, cache snapshots, and live index
-   populations are bounded, but a cold rebuild can still issue up to 20,000
-   sequential Ollama requests when the optional cache is empty or stale. An
-   explicit cache-miss/provider-call budget is required before larger long-lived
-   memory sets use opt-in semantic startup rebuilding.
+5. Cold rebuild provider calls are now explicitly budgeted, but an initial
+   provider, cache-miss-budget, or rebuild failure still stops primary
+   Bootstrap even though semantic retrieval is optional. The next boundary is
+   degraded semantic startup with a safe unavailable diagnostic and explicit
+   retry, without publishing a partial index.
+
+## Completed Increment: Cold-Start Semantic Rebuild Budget
+
+Optional semantic startup rebuilding now has a complete cache preflight and an
+explicit provider-call boundary.
+
+- The default budget is 256 calls. The process environment accepts an ASCII
+  whole number from 0 through the 20,000-entry live-index limit; zero permits
+  only empty or fully cached rebuilds.
+- Every provider-scoped cache lookup is resolved before network work. If total
+  misses exceed the budget, rebuilding stops before the first provider call,
+  cache replacement, or semantic-runtime publication.
+- At the exact budget, missing embeddings are generated in deterministic
+  memory-record order. Cache replacement is attempted only after every provider
+  result succeeds, and the runtime publishes only a complete returned index;
+  cache-save failure preserves the prior cache without discarding that index.
+- A cache-read failure is attempted once and conservatively treats the whole
+  rebuild as uncached. A valid foreign-provider snapshot is retained as a
+  cached isolated empty view, avoiding repeated file reads and decoding.
 
 ## Completed Increment: Semantic Request Bounds
 

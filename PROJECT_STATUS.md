@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.64 (Genesis)`
+`v0.3.65 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.64`** is the current executable package and GitHub
+- **Runtime release `v0.3.65`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -238,9 +238,14 @@ with optional OpenAI-compatible LLM conversation support.
   16,384 values; a live index is capped at 20,000 entries, 1,024 characters per
   memory ID, and 4,000,000 aggregate vector values. Full rebuilds preflight
   population limits, and incremental failures preserve the last working index
-  and optional cache. Embedding source text is capped at 1,000,000 characters
-  and is preflighted across rebuild, incremental, and query paths. An explicit
-  Ollama `/api/embed` adapter is available without third-party dependencies,
+  and optional cache. Cold rebuilds resolve every cache lookup before provider
+  work and allow 256 provider calls by default; an ASCII whole-number process
+  setting can select 0 through 20,000, where zero is cache-only. An excessive
+  miss count fails before the first provider call, cache replacement, or
+  semantic-runtime publication. Embedding source text is capped at 1,000,000
+  characters and is preflighted across rebuild, incremental, and query paths.
+  An explicit Ollama `/api/embed` adapter is available without third-party
+  dependencies,
   rejects HTTP redirects, and
   sends at most 8 MiB of exact compact UTF-8 JSON, rejects invalid or excessive
   bodies before opening the network request, and reads at most 1 MiB before
@@ -266,7 +271,9 @@ with optional OpenAI-compatible LLM conversation support.
   1,024-character provider and memory IDs, 1,000,000-character source values,
   16,384-dimensional vectors, and 4,000,000 aggregate vector values. Reads and
   writes enforce exact byte and collection bounds while preserving the previous
-  cache after an invalid or failed update.
+  cache after an invalid or failed update. Cache-read failure is attempted once
+  per rebuild and a valid foreign-provider snapshot becomes a cached isolated
+  empty view rather than being repeatedly decoded.
 - Ordered local source citations for knowledge-search responses, preserving
   document identity, title, source path, paragraph index, and chunk ID.
 - An explicit bounded `knowledge context <query>` flow that renders no more
@@ -352,7 +359,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 1,306 automated tests pass through package-aware discovery.
+- 1,312 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -379,8 +386,8 @@ so this check did not alter the project's persisted data.
 
 ## Next Milestone
 
-Define a cold-start semantic rebuild provider-call budget. A bounded live index
-can still cause up to 20,000 sequential Ollama requests when the optional cache
-is empty or stale. Startup must reject or deliberately defer excessive cache
-misses before network work while preserving explicit opt-in behavior, cache
-isolation, and atomic runtime publication.
+Define degraded semantic startup and retry. Semantic retrieval is opt-in, but
+an initial provider, cache-miss-budget, or rebuild failure currently stops the
+primary Bootstrap. Startup should keep the primary application available,
+expose a safe unavailable diagnostic, and allow an explicit retry without
+publishing a partial index.

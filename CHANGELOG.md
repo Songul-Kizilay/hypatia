@@ -2,6 +2,33 @@
 
 All notable project changes are recorded here.
 
+## [0.3.65] - 2026-08-21
+
+### Changed
+
+- Cold semantic-index rebuilds now allow at most 256 embedding-provider calls
+  by default. `HYPATIA_SEMANTIC_MEMORY_REBUILD_MAX_PROVIDER_CALLS` can set an
+  explicit whole-number budget from 0 through the 20,000-entry index limit;
+  zero permits only empty or fully cached rebuilds.
+- Rebuilds resolve the complete provider-scoped cache view before any network
+  work. Exact-budget misses are embedded in deterministic memory-record order,
+  the cache is replaced only after the full build succeeds, and the live index
+  is published only after the builder returns a complete replacement.
+
+### Safety
+
+- A rebuild whose cache misses exceed its budget fails before the first
+  provider call, cache replacement, or runtime publication. Cache-read failure
+  is attempted once and conservatively treats the whole rebuild as uncached.
+- A valid foreign-provider cache snapshot is retained as an in-memory empty
+  provider view, preserving isolation without repeatedly reading or decoding
+  the same file for every active memory record.
+
+### Verification
+
+- The package-aware full local suite contains 1,312 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass across 311 source files.
+
 ## [0.3.64] - 2026-08-21
 
 ### Changed
