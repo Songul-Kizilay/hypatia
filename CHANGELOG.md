@@ -2,6 +2,33 @@
 
 All notable project changes are recorded here.
 
+## [0.3.62] - 2026-08-21
+
+### Changed
+
+- The optional schema-v1 semantic embedding cache now accepts at most 20,000
+  ordered entries, 1,024 characters per provider key and memory ID, 1,000,000
+  characters per source value, 16,384 values per embedding, 4,000,000 values
+  across the snapshot, and 64 MiB of complete UTF-8 JSON.
+- Reads consume at most one byte beyond the physical limit from the opened file
+  descriptor before decoding. Atomic writes count exact UTF-8 bytes before
+  publishing the deterministic provider-scoped snapshot.
+
+### Safety
+
+- Oversized collections, fields, and vectors are rejected before entry parsing,
+  hashing, or serialization. Embedding dimensions must remain consistent within
+  one provider cache, while a valid foreign-provider snapshot remains isolated
+  without parsing its entries.
+- Invalid candidates, oversized output, and failed replacements preserve the
+  previous on-disk snapshot and in-memory entries and clean partial temporary
+  files.
+
+### Verification
+
+- The package-aware full local suite contains 1,296 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass across 311 source files.
+
 ## [0.3.61] - 2026-08-21
 
 ### Changed

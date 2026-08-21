@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.61 (Genesis)`
+`v0.3.62 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.61`** is the current executable package and GitHub
+- **Runtime release `v0.3.62`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -254,6 +254,11 @@ with optional OpenAI-compatible LLM conversation support.
 - An optional model-scoped local semantic-embedding cache. It is disabled by
   default, validates a source-content fingerprint before reuse, updates with
   memory lifecycle events, and remains separate from the primary memory schema.
+  Its provider-scoped schema-v1 snapshot is capped at 64 MiB, 20,000 entries,
+  1,024-character provider and memory IDs, 1,000,000-character source values,
+  16,384-dimensional vectors, and 4,000,000 aggregate vector values. Reads and
+  writes enforce exact byte and collection bounds while preserving the previous
+  cache after an invalid or failed update.
 - Ordered local source citations for knowledge-search responses, preserving
   document identity, title, source path, paragraph index, and chunk ID.
 - An explicit bounded `knowledge context <query>` flow that renders no more
@@ -339,7 +344,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 1,221 automated tests pass through package-aware discovery.
+- 1,296 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -366,8 +371,8 @@ so this check did not alter the project's persisted data.
 
 ## Next Milestone
 
-Define physical-file, entry-count, memory-ID/provider-key, and embedding-vector
-bounds for the optional schema-v1 semantic embedding cache. Reads must reject
-oversized input before decoding, and writes must count exact UTF-8 bytes before
-atomic publication while preserving provider isolation and deterministic entry
-ordering.
+Define global embedding-dimension and aggregate in-memory semantic-index limits.
+The cache now rejects excessive persisted snapshots, but provider output and a
+fresh live index still need a shared resource boundary that rejects oversized
+vectors and index populations before retaining them, while preserving atomic
+refresh and deterministic ranking.
