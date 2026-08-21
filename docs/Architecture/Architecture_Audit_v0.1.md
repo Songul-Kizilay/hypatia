@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.56` in the current release candidate) are the
+- **Runtime releases** (`v0.3.57` in the current release candidate) are the
   executable package and GitHub release line. They are the source-backed
   implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
@@ -144,7 +144,10 @@ and uses case-insensitive lexical matching.
 Research-run schema v6 loads v1-v5 snapshots with absent evidence, discovery,
 assessment, or comparison-note collections represented as empty and v4
 assessments represented with no supersession link, rewriting a legacy snapshot
-only on a subsequent successful mutation. The source-discovery boundary keeps
+only on a subsequent successful mutation. Its complete UTF-8 file is capped at
+64 MiB before JSON decoding or atomic publication, and all nested list entries
+share one aggregate 20,000-item parsing and serialization budget. The
+source-discovery boundary keeps
 ordered candidate metadata auditable without accepting or fetching content.
 The process-environment runtime provides a bounded Crossref REST v1 adapter
 whose fixed endpoint and redirects share the public-address-pinned,
@@ -299,7 +302,7 @@ Not implemented:
 
 The current local verification baseline is:
 
-- package-aware `python -m unittest`: 1,258 tests passed. Explicit `tests.*`
+- package-aware `python -m unittest`: 1,265 tests passed. Explicit `tests.*`
   module names ensure nested test directories are included without shadowing
   source packages.
 - `python -m black --check src tests`: passed.
@@ -342,9 +345,10 @@ memory/session files and leaving project data unchanged.
 4. Existing deterministic keyword selection must remain an available fallback
    until semantic retrieval has independently verified relevance, ties, bounds,
    and failure behavior.
-5. The research-run JSON store does not yet impose an explicit physical-file or
-   aggregate collection bound. A bounded read/write contract is required before
-   research history is allowed to grow substantially.
+5. The accepted-source content store checks file size before opening it and
+   builds a second complete serialized snapshot before writing. Its existing
+   limits are safe for current local use, but descriptor-bound reading and
+   bounded output would make the physical limit race-resistant and cheaper.
 
 ## Completed Increment: Semantic Retrieval Core
 

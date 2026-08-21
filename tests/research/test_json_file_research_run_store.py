@@ -38,6 +38,17 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
     def test_missing_store_loads_as_empty(self) -> None:
         self.assertEqual(self.store.load(), [])
 
+    def _minimal_run(self, run_id: str = "run-1") -> ResearchRun:
+        return ResearchRun(
+            run_id=run_id,
+            question="Question",
+            status=ResearchRunStatus.COLLECTING,
+            sources=(),
+            failures=(),
+            created_at=self.now,
+            updated_at=self.now,
+        )
+
     def test_round_trip_preserves_sources_failures_and_unicode(self) -> None:
         run = ResearchRun(
             run_id="run-1",
@@ -384,6 +395,136 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
             self.store.load()
 
         self.assertNotIn("secret", str(context.exception))
+
+    def test_oversized_file_is_rejected_before_json_decoding(self) -> None:
+        self.path.write_bytes(b"{}")
+
+        with (
+            patch(
+                "research.JsonFileResearchRunStore.MAX_RESEARCH_RUN_STORE_BYTES",
+                1,
+            ),
+            patch(
+                "research.JsonFileResearchRunStore.json.loads",
+                side_effect=AssertionError("Oversized JSON must not be decoded."),
+            ),
+        ):
+            with self.assertRaisesRegex(ResearchError, "too large"):
+                self.store.load()
+
+    def test_collection_bound_is_checked_before_run_parsing(self) -> None:
+        self.store.save([self._minimal_run()])
+
+        with (
+            patch(
+                "research.JsonFileResearchRunStore."
+                "MAX_RESEARCH_RUN_STORE_COLLECTION_ITEMS",
+                0,
+            ),
+            patch.object(
+                self.store,
+                "_parse_run",
+                side_effect=AssertionError("Oversized runs must not be parsed."),
+            ),
+        ):
+            with self.assertRaisesRegex(ResearchError, "too many collection items"):
+                self.store.load()
+
+    def test_exact_collection_bound_remains_compatible(self) -> None:
+        run = self._minimal_run()
+
+        with patch(
+            "research.JsonFileResearchRunStore."
+            "MAX_RESEARCH_RUN_STORE_COLLECTION_ITEMS",
+            1,
+        ):
+            self.store.save([run])
+            loaded = self.store.load()
+
+        self.assertEqual(loaded, [run])
+
+    def test_collection_bound_counts_nested_records_aggregately(self) -> None:
+        run = replace(
+            self._minimal_run(),
+            sources=(
+                ResearchSourceRecord(
+                    document_id="document-1",
+                    url="https://example.com/source",
+                    title="Source",
+                    content_type="text/plain",
+                    fetched_at=self.now,
+                    added_at=self.now,
+                ),
+            ),
+        )
+
+        with patch(
+            "research.JsonFileResearchRunStore."
+            "MAX_RESEARCH_RUN_STORE_COLLECTION_ITEMS",
+            1,
+        ):
+            with self.assertRaisesRegex(ResearchError, "too many collection items"):
+                self.store.save([run])
+
+        self.assertFalse(self.path.exists())
+
+    def test_oversized_save_preserves_snapshot_and_cleans_temporary_file(self) -> None:
+        original = self._minimal_run("original-run")
+        self.store.save([original])
+        original_bytes = self.path.read_bytes()
+
+        with patch(
+            "research.JsonFileResearchRunStore.MAX_RESEARCH_RUN_STORE_BYTES",
+            1,
+        ):
+            with self.assertRaisesRegex(ResearchError, "too large"):
+                self.store.save([])
+
+        self.assertEqual(self.path.read_bytes(), original_bytes)
+        self.assertEqual(list(self.path.parent.glob(f".{self.path.name}.*.tmp")), [])
+
+    def test_utf8_byte_limit_is_exact_and_includes_the_final_newline(self) -> None:
+        run = replace(self._minimal_run(), question="Songül için kanıt")
+        self.store.save([run])
+        encoded_snapshot = self.path.read_bytes()
+
+        with patch(
+            "research.JsonFileResearchRunStore.MAX_RESEARCH_RUN_STORE_BYTES",
+            len(encoded_snapshot),
+        ):
+            self.store.save([run])
+
+        self.assertEqual(self.path.read_bytes(), encoded_snapshot)
+        with patch(
+            "research.JsonFileResearchRunStore.MAX_RESEARCH_RUN_STORE_BYTES",
+            len(encoded_snapshot) - 1,
+        ):
+            with self.assertRaisesRegex(ResearchError, "too large"):
+                self.store.save([run])
+        self.assertEqual(self.path.read_bytes(), encoded_snapshot)
+
+    def test_oversized_collection_is_rejected_before_serialization(self) -> None:
+        original = self._minimal_run("original-run")
+        self.store.save([original])
+        original_bytes = self.path.read_bytes()
+
+        with (
+            patch(
+                "research.JsonFileResearchRunStore."
+                "MAX_RESEARCH_RUN_STORE_COLLECTION_ITEMS",
+                0,
+            ),
+            patch.object(
+                self.store,
+                "_serialize_run",
+                side_effect=AssertionError("Oversized runs must not be serialized."),
+            ),
+        ):
+            with self.assertRaisesRegex(ResearchError, "too many collection items"):
+                self.store.save([self._minimal_run("replacement-run")])
+
+        self.assertEqual(self.path.read_bytes(), original_bytes)
+        self.assertEqual(list(self.path.parent.glob(f".{self.path.name}.*.tmp")), [])
 
     def test_failed_atomic_replace_preserves_previous_snapshot_and_cleans_temp(
         self,

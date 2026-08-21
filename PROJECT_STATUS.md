@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.56 (Genesis)`
+`v0.3.57 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.56`** is the current executable package and GitHub
+- **Runtime release `v0.3.57`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -366,7 +366,7 @@ so this check did not alter the project's persisted data.
 
 ## Next Milestone
 
-Define and enforce explicit collection and physical-file bounds for the
-research-run JSON snapshot without changing schema v6. Read and write paths
-must reject oversized state before unbounded parsing or publication while
-preserving atomic replacement and existing valid snapshots.
+Apply descriptor-bound reading and bounded UTF-8 output to the accepted-source
+content store. This must close its size-check/open race and avoid constructing
+an extra complete serialized snapshot while preserving its existing record,
+content, fingerprint, and atomic replacement contracts.

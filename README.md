@@ -102,7 +102,9 @@ To create the world's most capable personal AI research companion.
   and startup restoration so newly recorded evidence retains its locator across
   restarts. The explicit `Evidence integrity` action compares recorded evidence
   with the current accepted paragraphs and reports only aggregate matched,
-  missing, or changed counts without reading or writing persistence
+  missing, or changed counts without reading or writing persistence. The
+  separate research-history snapshot is capped at 64 MiB and 20,000 aggregate
+  nested collection entries before decode, serialization, or publication
 - A read-only discovered-candidate acceptance preview followed by separate
   confirmation and final revalidation through the existing guarded HTTPS
   source loader
