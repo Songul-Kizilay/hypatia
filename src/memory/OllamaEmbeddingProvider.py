@@ -8,6 +8,7 @@ from typing import cast
 
 from core.Exceptions import MemoryError
 from memory.Embedding import MAX_EMBEDDING_DIMENSION, Embedding
+from memory.EmbeddingProvider import validate_embedding_source_text
 
 OllamaEmbeddingTransport = Callable[[str, dict[str, object]], object]
 
@@ -27,6 +28,10 @@ class OllamaEmbeddingProvider:
 
     def embed(self, source_text: str) -> Embedding:
         """Request exactly one embedding for the exact supplied source text."""
+        try:
+            validate_embedding_source_text(source_text)
+        except ValueError as error:
+            raise MemoryError("Embedding source text invalid.") from error
         try:
             response = self._transport(
                 self._endpoint,

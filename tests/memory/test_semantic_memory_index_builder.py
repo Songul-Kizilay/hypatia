@@ -10,6 +10,7 @@ SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
+from core.Exceptions import MemoryError
 from memory.Embedding import Embedding
 from memory.JsonFileSemanticEmbeddingCache import JsonFileSemanticEmbeddingCache
 from memory.MemoryManager import MemoryManager
@@ -201,6 +202,31 @@ class SemanticMemoryIndexBuilderTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "too many embedding values"):
                 builder.build(memory_manager)
         self.assertEqual(provider.requests, ["First fact"])
+        self.assertEqual(cache.replacements, [])
+
+    def test_source_text_limit_is_preflighted_before_provider_and_cache(self) -> None:
+        memory_manager = MemoryManager()
+        memory_manager.add("abcde")
+        memory_manager.add("abcdef")
+        provider = StubEmbeddingProvider(
+            {
+                "abcde": Embedding((1, 0)),
+                "abcdef": Embedding((0, 1)),
+            }
+        )
+        cache = RecordingEmbeddingCache()
+        builder = SemanticMemoryIndexBuilder(provider, cache)
+
+        with patch(
+            "memory.EmbeddingProvider.MAX_EMBEDDING_SOURCE_TEXT_CHARACTERS",
+            5,
+        ):
+            with self.assertRaisesRegex(MemoryError, "source text invalid"):
+                builder.build(memory_manager)
+            with self.assertRaisesRegex(MemoryError, "source text invalid"):
+                builder.embed("abcdef")
+
+        self.assertEqual(provider.requests, [])
         self.assertEqual(cache.replacements, [])
 
 

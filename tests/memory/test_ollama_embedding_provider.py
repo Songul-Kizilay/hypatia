@@ -98,6 +98,34 @@ class OllamaEmbeddingProviderTests(unittest.TestCase):
             with self.assertRaisesRegex(MemoryError, "response invalid"):
                 provider.embed("source")
 
+    def test_source_text_bound_preserves_exact_input_and_skips_transport(self) -> None:
+        calls: list[dict[str, object]] = []
+
+        def transport(_: str, payload: dict[str, object]) -> object:
+            calls.append(payload)
+            return {"embeddings": [[1, 0]]}
+
+        provider = OllamaEmbeddingProvider(
+            endpoint="http://localhost:11434/api/embed",
+            model="embeddinggemma",
+            transport=transport,
+        )
+
+        with patch(
+            "memory.EmbeddingProvider.MAX_EMBEDDING_SOURCE_TEXT_CHARACTERS",
+            5,
+        ):
+            self.assertEqual(provider.embed("  abc"), Embedding((1, 0)))
+            with self.assertRaisesRegex(MemoryError, "source text invalid"):
+                provider.embed("abcdef")
+            with self.assertRaisesRegex(MemoryError, "source text invalid"):
+                provider.embed(123)  # type: ignore[arg-type]
+
+        self.assertEqual(
+            calls,
+            [{"model": "embeddinggemma", "input": "  abc"}],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

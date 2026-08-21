@@ -69,6 +69,10 @@ class UrllibOllamaEmbeddingTransportTests(unittest.TestCase):
             json.loads(request.data.decode("utf-8")),
             {"model": "embeddinggemma", "input": "Exact source"},
         )
+        self.assertEqual(
+            request.data,
+            b'{"model":"embeddinggemma","input":"Exact source"}',
+        )
 
     def test_uses_a_valid_explicit_timeout(self) -> None:
         timeouts: list[float] = []
@@ -122,6 +126,67 @@ class UrllibOllamaEmbeddingTransportTests(unittest.TestCase):
                     "http://localhost:11434/api/embed",
                     {"model": "embeddinggemma", "input": "Exact source"},
                 )
+
+    def test_exact_utf8_request_bound_and_invalid_payload_skip_network(self) -> None:
+        transport = UrllibOllamaEmbeddingTransport()
+        payload: dict[str, object] = {"model": "model", "input": "Türkçe"}
+        expected_body = json.dumps(
+            payload,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        requests: list[Request] = []
+
+        def fake_open(request: Request, **_: object) -> FakeResponse:
+            requests.append(request)
+            return FakeResponse()
+
+        with (
+            patch(
+                "memory.UrllibOllamaEmbeddingTransport.MAX_REQUEST_BYTES",
+                len(expected_body),
+            ),
+            patch(
+                "memory.UrllibOllamaEmbeddingTransport._open_without_redirects",
+                side_effect=fake_open,
+            ),
+        ):
+            transport("http://localhost:11434/api/embed", payload)
+
+        self.assertEqual(len(requests), 1)
+        self.assertEqual(requests[0].data, expected_body)
+
+        with (
+            patch(
+                "memory.UrllibOllamaEmbeddingTransport.MAX_REQUEST_BYTES",
+                len(expected_body) - 1,
+            ),
+            patch(
+                "memory.UrllibOllamaEmbeddingTransport._open_without_redirects",
+                side_effect=AssertionError("Oversized requests must not be sent."),
+            ),
+        ):
+            with self.assertRaisesRegex(OSError, "maximum allowed size"):
+                transport("http://localhost:11434/api/embed", payload)
+
+        recursive_payload: dict[str, object] = {}
+        recursive_payload["self"] = recursive_payload
+        invalid_payloads: tuple[dict[str, object], ...] = (
+            recursive_payload,
+            {"input": object()},
+            {"input": float("nan")},
+        )
+        with patch(
+            "memory.UrllibOllamaEmbeddingTransport._open_without_redirects",
+            side_effect=AssertionError("Invalid requests must not be sent."),
+        ):
+            for invalid_payload in invalid_payloads:
+                with self.subTest(payload=invalid_payload):
+                    with self.assertRaisesRegex(OSError, "payload is invalid"):
+                        transport(
+                            "http://localhost:11434/api/embed",
+                            invalid_payload,
+                        )
 
     def test_rejects_invalid_timeouts(self) -> None:
         for timeout in (True, 0, -1, float("inf"), "30"):

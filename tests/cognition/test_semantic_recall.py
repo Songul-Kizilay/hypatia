@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
@@ -289,6 +290,30 @@ class SemanticRecallTests(unittest.TestCase):
         self.assertTrue(response.success)
         self.assertIn("Semantic recall (lexical fallback):", response.message)
         self.assertIn(record.content, response.message)
+
+    def test_oversized_semantic_query_skips_provider_and_uses_lexical_fallback(
+        self,
+    ) -> None:
+        content = "User: I like cats\nHypatia: Noted."
+        record = self.memory_manager.add(
+            content,
+            metadata={"session_id": "default"},
+            tags={"brain", "conversation"},
+        )
+        runtime, provider = self._runtime({content: Embedding((1, 0))})
+
+        with patch(
+            "memory.EmbeddingProvider.MAX_EMBEDDING_SOURCE_TEXT_CHARACTERS",
+            3,
+        ):
+            response = self._engine(runtime).process(
+                BrainRequest(message="semantic recall cats")
+            )
+
+        self.assertTrue(response.success)
+        self.assertIn("Semantic recall (lexical fallback):", response.message)
+        self.assertIn(record.content, response.message)
+        self.assertEqual(provider.calls, [content])
 
     def test_semantic_recall_filters_records_to_the_resolved_session(self) -> None:
         default_content = "Default conversation"

@@ -85,6 +85,9 @@ To create the world's most capable personal AI research companion.
   overflow-safe deterministic cosine ranking, capped vector dimensions, and
   bounded entry/identifier/aggregate live-memory use, available through the
   explicit semantic-recall request flow
+- A shared 1,000,000-character semantic source limit and an 8 MiB exact UTF-8
+  Ollama embedding-request boundary that rejects invalid or excessive payloads
+  before network access while preserving lexical fallback
 - An opt-in, provider-scoped semantic-embedding cache with bounded UTF-8
   snapshots, entry/identifier/source/vector limits, deterministic ordering, and
   atomic rollback-safe replacement

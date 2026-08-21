@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.63 (Genesis)`
+`v0.3.64 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.63`** is the current executable package and GitHub
+- **Runtime release `v0.3.64`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -238,10 +238,14 @@ with optional OpenAI-compatible LLM conversation support.
   16,384 values; a live index is capped at 20,000 entries, 1,024 characters per
   memory ID, and 4,000,000 aggregate vector values. Full rebuilds preflight
   population limits, and incremental failures preserve the last working index
-  and optional cache. An explicit Ollama `/api/embed` adapter
-  is available without third-party dependencies, rejects HTTP redirects, and
-  reads at most 1 MiB before parsing an embedding response. Opt-in Bootstrap wiring builds
-  and registers a replacement index at startup. After a successful startup it
+  and optional cache. Embedding source text is capped at 1,000,000 characters
+  and is preflighted across rebuild, incremental, and query paths. An explicit
+  Ollama `/api/embed` adapter is available without third-party dependencies,
+  rejects HTTP redirects, and
+  sends at most 8 MiB of exact compact UTF-8 JSON, rejects invalid or excessive
+  bodies before opening the network request, and reads at most 1 MiB before
+  parsing an embedding response. Opt-in Bootstrap wiring builds and registers a
+  replacement index at startup. After a successful startup it
   follows memory lifecycle events with best-effort incremental updates; an
   embedding failure never reverses a completed primary-memory write. Semantic
   results are used only by the explicit `semantic recall <query>` request path
@@ -348,7 +352,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 1,302 automated tests pass through package-aware discovery.
+- 1,306 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -375,8 +379,8 @@ so this check did not alter the project's persisted data.
 
 ## Next Milestone
 
-Define semantic source-text and outbound Ollama embedding-request payload
-bounds. Persisted records and vector responses are bounded, but direct semantic
-queries still need a shared character/UTF-8 request boundary before JSON body
-construction and transport, without changing exact-text embedding semantics or
-the deterministic lexical fallback.
+Define a cold-start semantic rebuild provider-call budget. A bounded live index
+can still cause up to 20,000 sequential Ollama requests when the optional cache
+is empty or stale. Startup must reject or deliberately defer excessive cache
+misses before network work while preserving explicit opt-in behavior, cache
+isolation, and atomic runtime publication.
