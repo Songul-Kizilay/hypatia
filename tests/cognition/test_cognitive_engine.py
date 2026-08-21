@@ -70,6 +70,7 @@ from memory.NoOpLearnedMemoryCandidateExtractor import (
 )
 from memory.SessionMemoryPolicy import SessionMemoryPolicy
 from planner.Planner import Planner
+from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRun import ResearchRun
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchRunMarkdownRenderer import render_research_run_markdown
@@ -7223,7 +7224,8 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(preview.source.document_id, document.document_id)
         self.assertEqual(preview.evidence, (evidence,))
         self.assertTrue(preview.has_recorded_evidence)
-        self.assertIn("manual preview only", response.message)
+        self.assertIn("information trust is user-authored", response.message)
+        self.assertIn("Instruction authority: none", response.message)
         self.assertEqual(fetcher.calls, [])
         self.assertEqual(llm_provider.calls, [])
         self.assertEqual(extractor.calls, [])
@@ -7623,6 +7625,7 @@ class CognitiveEngineTests(unittest.TestCase):
             "research_source_document_id": document.document_id,
             "research_assessment_evidence_ids": [evidence.evidence_id],
             "research_assessment_text": "The source supports the claim.",
+            "research_information_trust": "high",
         }
         saves_before = store.save_calls
         documents_before = self.knowledge_engine.documents()
@@ -7646,6 +7649,9 @@ class CognitiveEngineTests(unittest.TestCase):
         assert preview is not None
         self.assertTrue(preview.allowed)
         self.assertEqual(preview.evidence, (evidence,))
+        self.assertEqual(preview.information_trust, ResearchInformationTrust.HIGH)
+        self.assertIn("Information trust: high", preview_response.message)
+        self.assertIn("Instruction authority: none", preview_response.message)
         self.assertEqual(store.save_calls, saves_before)
 
         recorded = engine.process(
@@ -7663,12 +7669,19 @@ class CognitiveEngineTests(unittest.TestCase):
         assessment = recorded.research_runs[0].assessments[-1]
         self.assertEqual(assessment.assessment_id, "assessment-123")
         self.assertEqual(assessment.evidence_ids, (evidence.evidence_id,))
+        self.assertEqual(
+            assessment.information_trust,
+            ResearchInformationTrust.HIGH,
+        )
+        self.assertIn("Information trust: high", recorded.message)
+        self.assertIn("Instruction authority: none", recorded.message)
         self.assertEqual(store.save_calls, saves_before + 1)
 
         correction_metadata = {
             **metadata,
             "research_assessment_text": "The source supports a narrower claim.",
             "research_assessment_supersedes_id": assessment.assessment_id,
+            "research_information_trust": "low",
         }
         correction_preview_response = engine.process(
             BrainRequest(
@@ -7686,6 +7699,10 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertIsNotNone(correction_preview)
         assert correction_preview is not None
         self.assertEqual(correction_preview.supersedes_assessment, assessment)
+        self.assertEqual(
+            correction_preview.information_trust,
+            ResearchInformationTrust.LOW,
+        )
 
         corrected = engine.process(
             BrainRequest(
@@ -7702,6 +7719,10 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(
             correction.supersedes_assessment_id,
             assessment.assessment_id,
+        )
+        self.assertEqual(
+            correction.information_trust,
+            ResearchInformationTrust.LOW,
         )
         self.assertEqual(store.save_calls, saves_before + 2)
         self.assertEqual(fetcher.calls, [])
@@ -7742,6 +7763,7 @@ class CognitiveEngineTests(unittest.TestCase):
                     "research_source_document_id": "document-1",
                     "research_assessment_evidence_ids": ["evidence-1"],
                     "research_assessment_text": "Assessment.",
+                    "research_information_trust": "trusted",
                 },
             ):
                 with self.subTest(intent=intent, metadata=metadata):

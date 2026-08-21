@@ -17,6 +17,7 @@ from core.Exceptions import ResearchError
 from knowledge.Chunk import Chunk
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchFailureRecord import ResearchFailureRecord
+from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRun import ResearchRun
 from research.ResearchRunMarkdownExportPreview import (
     MAX_MARKDOWN_EXPORT_PREVIEW_CHARACTERS,
@@ -636,6 +637,9 @@ class ResearchRunManager:
         evidence_ids: Sequence[str],
         text: str,
         supersedes_assessment_id: str | None = None,
+        information_trust: ResearchInformationTrust | str = (
+            ResearchInformationTrust.UNASSESSED
+        ),
     ) -> ResearchSourceAssessmentWritePreview:
         """Validate one authored assessment without mutating persisted state."""
         normalized_run_id = self._normalize_run_id(run_id)
@@ -644,6 +648,9 @@ class ResearchRunManager:
         normalized_text = self._normalize_assessment_text(text)
         normalized_superseded_id = self._normalize_optional_assessment_id(
             supersedes_assessment_id
+        )
+        normalized_information_trust = self._normalize_information_trust(
+            information_trust
         )
         with self._lock:
             _, run = self._find_with_index(normalized_run_id)
@@ -680,6 +687,7 @@ class ResearchRunManager:
                 allowed=allowed,
                 reason=reason,
                 supersedes_assessment=superseded_assessment,
+                information_trust=normalized_information_trust,
             )
 
     def record_source_assessment(
@@ -689,6 +697,9 @@ class ResearchRunManager:
         evidence_ids: Sequence[str],
         text: str,
         supersedes_assessment_id: str | None = None,
+        information_trust: ResearchInformationTrust | str = (
+            ResearchInformationTrust.UNASSESSED
+        ),
     ) -> ResearchRun:
         """Revalidate and atomically append one user-authored assessment."""
         normalized_run_id = self._normalize_run_id(run_id)
@@ -697,6 +708,9 @@ class ResearchRunManager:
         normalized_text = self._normalize_assessment_text(text)
         normalized_superseded_id = self._normalize_optional_assessment_id(
             supersedes_assessment_id
+        )
+        normalized_information_trust = self._normalize_information_trust(
+            information_trust
         )
         with self._lock:
             index, run = self._find_with_index(normalized_run_id)
@@ -723,6 +737,7 @@ class ResearchRunManager:
                     if superseded_assessment is None
                     else superseded_assessment.assessment_id
                 ),
+                information_trust=normalized_information_trust,
             )
             updated = ResearchRun(
                 run_id=run.run_id,
@@ -1337,6 +1352,17 @@ class ResearchRunManager:
         if assessment_id is None:
             return None
         return ResearchRunManager._normalize_assessment_id(assessment_id)
+
+    @staticmethod
+    def _normalize_information_trust(
+        value: ResearchInformationTrust | str,
+    ) -> ResearchInformationTrust:
+        try:
+            return ResearchInformationTrust(value)
+        except (TypeError, ValueError) as error:
+            raise ResearchError(
+                "Research source information trust is invalid."
+            ) from error
 
     @staticmethod
     def _normalize_assessment_evidence_ids(

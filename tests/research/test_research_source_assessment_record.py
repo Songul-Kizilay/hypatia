@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 
 from core.Exceptions import ResearchError
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
+from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
 from research.ResearchSourceAssessmentWritePreview import (
@@ -51,6 +52,45 @@ class ResearchSourceAssessmentRecordTests(unittest.TestCase):
         self.assertEqual(record.source_document_id, "document-1")
         self.assertEqual(record.evidence_ids, ("evidence-1",))
         self.assertEqual(record.text, "The source supports the claim.")
+        self.assertEqual(
+            record.information_trust,
+            ResearchInformationTrust.UNASSESSED,
+        )
+
+    def test_information_trust_is_explicit_and_never_grants_instruction_authority(
+        self,
+    ) -> None:
+        record = ResearchSourceAssessmentRecord(
+            "assessment-1",
+            "document-1",
+            ("evidence-1",),
+            "The evidence is strong.",
+            self.now,
+            information_trust=ResearchInformationTrust.HIGH,
+        )
+
+        self.assertEqual(record.information_trust, ResearchInformationTrust.HIGH)
+        self.assertEqual(self.source.taint_label, "external_untrusted_data")
+        self.assertEqual(self.source.instruction_authority, "none")
+        with self.assertRaisesRegex(ResearchError, "information trust"):
+            ResearchSourceAssessmentRecord(
+                "assessment-2",
+                "document-1",
+                ("evidence-1",),
+                "Invalid label.",
+                self.now,
+                information_trust="high",  # type: ignore[arg-type]
+            )
+        with self.assertRaisesRegex(ResearchError, "authority must be none"):
+            ResearchSourceRecord(
+                "document-2",
+                "https://example.com/other",
+                "Other",
+                "text/plain",
+                self.now,
+                self.now,
+                instruction_authority="execute",
+            )
 
     def test_record_requires_unique_explicit_evidence_and_bounded_text(self) -> None:
         for evidence_ids, text in (

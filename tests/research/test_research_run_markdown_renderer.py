@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchFailureRecord import ResearchFailureRecord
+from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRun import ResearchRun
 from research.ResearchRunMarkdownRenderer import render_research_run_markdown
 from research.ResearchRunStatus import ResearchRunStatus
@@ -35,6 +36,10 @@ class ResearchRunMarkdownRendererTests(unittest.TestCase):
         self.assertIn("- **Audit state:** superseded", first)
         self.assertIn("- **Audit state:** current", first)
         self.assertIn("- **Supersedes:** assessment-1", first)
+        self.assertIn(r"- **Data taint:** external\_untrusted\_data", first)
+        self.assertIn("- **Instruction authority:** none", first)
+        self.assertIn("- **Information trust:** low", first)
+        self.assertIn("- **Information trust:** high", first)
         self.assertIn("- **Note ID:** note-1", first)
         self.assertIn("> \\# comparison heading", first)
         self.assertNotIn("<script>", first)
@@ -113,6 +118,7 @@ class ResearchRunMarkdownRendererTests(unittest.TestCase):
             evidence_ids=("evidence-1",),
             text="Original assessment",
             recorded_at=started + timedelta(minutes=5),
+            information_trust=ResearchInformationTrust.MEDIUM,
         )
         assessment_correction = ResearchSourceAssessmentRecord(
             assessment_id="assessment-1b",
@@ -121,6 +127,7 @@ class ResearchRunMarkdownRendererTests(unittest.TestCase):
             text="Corrected assessment",
             recorded_at=started + timedelta(minutes=6),
             supersedes_assessment_id="assessment-1",
+            information_trust=ResearchInformationTrust.LOW,
         )
         assessment_two = ResearchSourceAssessmentRecord(
             assessment_id="assessment-2",
@@ -128,6 +135,7 @@ class ResearchRunMarkdownRendererTests(unittest.TestCase):
             evidence_ids=("evidence-2",),
             text="Second assessment",
             recorded_at=started + timedelta(minutes=7),
+            information_trust=ResearchInformationTrust.HIGH,
         )
         note = ResearchSourceComparisonNoteRecord(
             note_id="note-1",

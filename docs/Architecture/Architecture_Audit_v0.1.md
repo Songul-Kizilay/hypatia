@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.73` in the current release candidate) are the
+- **Runtime releases** (`v0.3.74` in the current release candidate) are the
   executable package and GitHub release line. They are the source-backed
   implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
@@ -156,11 +156,13 @@ reconstructing at most 20,000 paragraphs in the empty knowledge index. Orphans,
 identity/metadata mismatches, conflicting provenance, or partial indexing fail
 closed without changing either snapshot. The knowledge index remains in memory
 and uses case-insensitive lexical matching.
-Research-run schema v6 loads v1-v5 snapshots with absent evidence, discovery,
+Research-run schema v7 loads v1-v6 snapshots with absent evidence, discovery,
 assessment, or comparison-note collections represented as empty and v4
 assessments represented with no supersession link, rewriting a legacy snapshot
-only on a subsequent successful mutation. Its complete UTF-8 file is capped at
-64 MiB before JSON decoding or atomic publication, and all nested list entries
+only on a subsequent successful mutation. Legacy sources receive the fixed
+`external_untrusted_data` taint and instruction authority `none`; legacy
+assessments receive `unassessed` information trust. Its complete UTF-8 file is
+capped at 64 MiB before JSON decoding or atomic publication, and all nested list entries
 share one aggregate 20,000-item parsing and serialization budget. The
 source-discovery boundary keeps
 ordered candidate metadata auditable without accepting or fetching content.
@@ -179,6 +181,12 @@ open run, accepted source, and same-source evidence before an atomic append.
 An optional predecessor ID creates a backward-only, same-source supersession
 link. The original stays immutable; missing targets, cross-source targets,
 forked successors, cycles, and stale-preview writes are rejected.
+Each authored assessment also carries one explicit information-trust label from
+`unassessed`, `low`, `medium`, or `high`. This label is visible in history,
+comparison, confirmation, committed responses, and exports, and a superseding
+assessment can revise it without altering the predecessor. Hypatia never
+calculates the label. External source text remains tainted data with instruction
+authority fixed to `none`, even when the user selects `high` information trust.
 The ordered manual comparison is also the read boundary for append-only authored
 comparison notes. A collecting run accepts a note only after an exact no-write
 preview and separate confirmation. Evidence and current assessment IDs must
@@ -333,12 +341,12 @@ Not implemented:
 
 The current local verification baseline is:
 
-- package-aware `python -m unittest`: 1,362 tests passed. Explicit `tests.*`
+- package-aware `python -m unittest`: 1,366 tests passed. Explicit `tests.*`
   module names ensure nested test directories are included without shadowing
   source packages.
 - `python -m black --check src tests`: passed.
 - `python -m ruff check src tests`: passed.
-- `python -m mypy src tests`: passed with no issues in 315 files.
+- `python -m mypy src tests`: passed with no issues in 316 files.
 - `git diff --check`: passed.
 
 These checks verify the current local worktree; they do not create a release,

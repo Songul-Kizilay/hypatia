@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from core.Exceptions import ResearchError
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
+from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
 from research.ResearchSourceRecord import ResearchSourceRecord
@@ -23,6 +24,7 @@ class ResearchSourceAssessmentWritePreview:
     allowed: bool
     reason: str
     supersedes_assessment: ResearchSourceAssessmentRecord | None = None
+    information_trust: ResearchInformationTrust = ResearchInformationTrust.UNASSESSED
 
     def __post_init__(self) -> None:
         for value, field_name in (
@@ -58,6 +60,10 @@ class ResearchSourceAssessmentWritePreview:
             )
         if not isinstance(self.allowed, bool):
             raise ResearchError("Research assessment preview decision must be boolean.")
+        if not isinstance(self.information_trust, ResearchInformationTrust):
+            raise ResearchError(
+                "Research assessment preview information trust is invalid."
+            )
         if self.supersedes_assessment is not None:
             if not isinstance(
                 self.supersedes_assessment,

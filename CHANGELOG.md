@@ -2,6 +2,40 @@
 
 All notable project changes are recorded here.
 
+## [0.3.74] - 2026-08-21
+
+### Added
+
+- User-authored source assessments can carry one explicit information-trust
+  label: `unassessed`, `low`, `medium`, or `high`.
+- Accepted external sources persist the fixed taint label
+  `external_untrusted_data` and fixed instruction authority `none`.
+- The desktop assessment preview-confirm flow, source comparison, committed
+  response, and deterministic Markdown export display the new trust metadata.
+
+### Changed
+
+- Research-run schema v7 stores source taint, instruction authority, and
+  assessment information trust while loading v1-v6 snapshots with safe
+  defaults and rewriting them only during a later successful atomic save.
+- Assessment corrections may replace an earlier authored information-trust
+  label through the existing append-only supersession link; the original audit
+  record remains immutable.
+
+### Safety
+
+- Information trust describes the user's assessment of source content only.
+  It never grants an external source instruction authority, tool access, or
+  permission to override trusted code-owned instructions.
+- Hypatia does not calculate the label, choose evidence, or convert it into an
+  automatic truth, credibility, or execution score. Invalid labels and any
+  attempt to elevate source authority fail closed before persistence.
+
+### Verification
+
+- The package-aware full local suite contains 1,366 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass across 316 source files.
+
 ## [0.3.73] - 2026-08-21
 
 ### Added

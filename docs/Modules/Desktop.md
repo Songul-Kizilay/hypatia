@@ -46,13 +46,16 @@ successful attached-source load fills the document field, but opening the view
 is still explicit. The action performs no fetch, LLM, memory, graph, knowledge,
 or persistence mutation and assigns no automatic trust or quality score.
 `Preview & save assessment` requires the user's assessment text and explicit
-comma-separated evidence IDs. The runtime shows a no-write preview and the
-window requests confirmation only when allowed; the separate record request
+comma-separated evidence IDs plus one user-authored information-trust label:
+`unassessed`, `low`, `medium`, or `high`. The runtime shows a no-write preview
+and the window requests confirmation only when allowed; the separate record request
 revalidates the open run, accepted source, and same-source evidence before an
 atomic append. An optional predecessor assessment ID creates a same-source
 supersession link only after the preview and final write both verify that the
 target is still current. The original remains visible; the desktop labels
 current and superseded history without choosing evidence or generating a score.
+The selected label describes information only: every accepted external source
+remains tainted as untrusted data with instruction authority fixed to `none`.
 `Compare sources` accepts two to five comma-separated accepted-source document
 IDs for the selected run. It preserves the entered order and displays persisted
 provenance, user-selected evidence, and only current authored assessments side

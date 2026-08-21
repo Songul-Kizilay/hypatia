@@ -7,6 +7,7 @@ from typing import Protocol
 from brain.BrainRequest import BrainRequest
 from brain.BrainResponse import BrainResponse
 from core.CancellationSignal import CancellationToken
+from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
 )
@@ -452,6 +453,7 @@ class DesktopController:
         evidence_ids: str,
         assessment_text: str,
         supersedes_assessment_id: str = "",
+        information_trust: str = ResearchInformationTrust.UNASSESSED.value,
     ) -> BrainResponse:
         """Preview an authored assessment with explicit evidence references."""
         metadata = self._research_source_assessment_write_metadata(
@@ -460,6 +462,7 @@ class DesktopController:
             evidence_ids,
             assessment_text,
             supersedes_assessment_id,
+            information_trust,
         )
         return self._brain.process(
             BrainRequest(
@@ -479,6 +482,7 @@ class DesktopController:
         evidence_ids: str,
         assessment_text: str,
         supersedes_assessment_id: str = "",
+        information_trust: str = ResearchInformationTrust.UNASSESSED.value,
     ) -> BrainResponse:
         """Submit one assessment only after the desktop confirmation step."""
         metadata = self._research_source_assessment_write_metadata(
@@ -487,6 +491,7 @@ class DesktopController:
             evidence_ids,
             assessment_text,
             supersedes_assessment_id,
+            information_trust,
         )
         return self._brain.process(
             BrainRequest(
@@ -506,11 +511,18 @@ class DesktopController:
         evidence_ids: str,
         assessment_text: str,
         supersedes_assessment_id: str = "",
+        information_trust: str = ResearchInformationTrust.UNASSESSED.value,
     ) -> dict[str, object]:
         normalized_run_id = research_run_id.strip()
         normalized_document_id = source_document_id.strip()
         normalized_text = assessment_text.strip()
         normalized_superseded_id = supersedes_assessment_id.strip()
+        try:
+            normalized_information_trust = ResearchInformationTrust(
+                information_trust.strip()
+            )
+        except (AttributeError, ValueError) as error:
+            raise ValueError("Research source information trust is invalid.") from error
         normalized_evidence_ids = [
             value.strip() for value in evidence_ids.split(",") if value.strip()
         ]
@@ -529,6 +541,7 @@ class DesktopController:
             "research_source_document_id": normalized_document_id,
             "research_assessment_evidence_ids": normalized_evidence_ids,
             "research_assessment_text": normalized_text,
+            "research_information_trust": normalized_information_trust.value,
         }
         if normalized_superseded_id:
             metadata["research_assessment_supersedes_id"] = normalized_superseded_id

@@ -14,6 +14,7 @@ from core.Exceptions import ResearchError
 from research.JsonFileResearchRunStore import JsonFileResearchRunStore
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchFailureRecord import ResearchFailureRecord
+from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRun import ResearchRun
 from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
@@ -129,7 +130,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
 
     def test_rejects_unknown_fields_schema_and_duplicate_ids(self) -> None:
         for document in (
-            {"schema_version": 7, "runs": []},
+            {"schema_version": 8, "runs": []},
             {"schema_version": True, "runs": []},
             {"schema_version": 1, "runs": [], "unexpected": True},
         ):
@@ -150,7 +151,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
         with self.assertRaisesRegex(ResearchError, "duplicate run IDs"):
             self.store.save([run, run])
 
-    def test_loads_v1_without_new_collections_and_rewrites_as_v6(self) -> None:
+    def test_loads_v1_without_new_collections_and_rewrites_as_v7(self) -> None:
         legacy_document = {
             "schema_version": 1,
             "runs": [
@@ -175,13 +176,13 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
         self.assertEqual(runs[0].assessments, ())
         self.assertEqual(runs[0].comparison_notes, ())
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 6)
+        self.assertEqual(rewritten["schema_version"], 7)
         self.assertEqual(rewritten["runs"][0]["evidence"], [])
         self.assertEqual(rewritten["runs"][0]["discoveries"], [])
         self.assertEqual(rewritten["runs"][0]["assessments"], [])
         self.assertEqual(rewritten["runs"][0]["comparison_notes"], [])
 
-    def test_loads_v2_without_discoveries_and_rewrites_as_v6(self) -> None:
+    def test_loads_v2_without_discoveries_and_rewrites_as_v7(self) -> None:
         legacy_document = {
             "schema_version": 2,
             "runs": [
@@ -204,12 +205,12 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
 
         self.assertEqual(runs[0].discoveries, ())
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 6)
+        self.assertEqual(rewritten["schema_version"], 7)
         self.assertEqual(rewritten["runs"][0]["discoveries"], [])
         self.assertEqual(rewritten["runs"][0]["assessments"], [])
         self.assertEqual(rewritten["runs"][0]["comparison_notes"], [])
 
-    def test_loads_v3_without_assessments_and_rewrites_as_v6(self) -> None:
+    def test_loads_v3_without_assessments_and_rewrites_as_v7(self) -> None:
         legacy_document = {
             "schema_version": 3,
             "runs": [
@@ -233,11 +234,11 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
 
         self.assertEqual(runs[0].assessments, ())
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 6)
+        self.assertEqual(rewritten["schema_version"], 7)
         self.assertEqual(rewritten["runs"][0]["assessments"], [])
         self.assertEqual(rewritten["runs"][0]["comparison_notes"], [])
 
-    def test_loads_v4_assessments_without_supersession_and_rewrites_as_v6(
+    def test_loads_v4_assessments_without_supersession_and_rewrites_as_v7(
         self,
     ) -> None:
         legacy_document = {
@@ -292,14 +293,32 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
         self.store.save(runs)
 
         self.assertIsNone(runs[0].assessments[0].supersedes_assessment_id)
+        self.assertEqual(
+            runs[0].assessments[0].information_trust,
+            ResearchInformationTrust.UNASSESSED,
+        )
+        self.assertEqual(runs[0].sources[0].taint_label, "external_untrusted_data")
+        self.assertEqual(runs[0].sources[0].instruction_authority, "none")
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 6)
+        self.assertEqual(rewritten["schema_version"], 7)
         self.assertIsNone(
             rewritten["runs"][0]["assessments"][0]["supersedes_assessment_id"]
         )
+        self.assertEqual(
+            rewritten["runs"][0]["assessments"][0]["information_trust"],
+            "unassessed",
+        )
+        self.assertEqual(
+            rewritten["runs"][0]["sources"][0]["taint_label"],
+            "external_untrusted_data",
+        )
+        self.assertEqual(
+            rewritten["runs"][0]["sources"][0]["instruction_authority"],
+            "none",
+        )
         self.assertEqual(rewritten["runs"][0]["comparison_notes"], [])
 
-    def test_loads_v5_without_comparison_notes_and_rewrites_as_v6(self) -> None:
+    def test_loads_v5_without_comparison_notes_and_rewrites_as_v7(self) -> None:
         legacy_document = {
             "schema_version": 5,
             "runs": [
@@ -324,8 +343,149 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
 
         self.assertEqual(runs[0].comparison_notes, ())
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 6)
+        self.assertEqual(rewritten["schema_version"], 7)
         self.assertEqual(rewritten["runs"][0]["comparison_notes"], [])
+
+    def test_loads_v6_without_trust_metadata_and_rewrites_as_v7(self) -> None:
+        legacy_document = {
+            "schema_version": 6,
+            "runs": [
+                {
+                    "run_id": "legacy-run",
+                    "question": "Legacy question",
+                    "status": "collecting",
+                    "sources": [
+                        {
+                            "document_id": "document-1",
+                            "url": "https://example.com/source",
+                            "title": "Source",
+                            "content_type": "text/plain",
+                            "fetched_at": self.now.isoformat(),
+                            "added_at": self.now.isoformat(),
+                        }
+                    ],
+                    "failures": [],
+                    "evidence": [
+                        {
+                            "evidence_id": "evidence-1",
+                            "source_document_id": "document-1",
+                            "chunk_id": "chunk-1",
+                            "chunk_index": 0,
+                            "excerpt": "Evidence.",
+                            "excerpt_truncated": False,
+                            "chunk_sha256": "a" * 64,
+                            "note": "Relevant.",
+                            "recorded_at": self.now.isoformat(),
+                        }
+                    ],
+                    "discoveries": [],
+                    "assessments": [
+                        {
+                            "assessment_id": "assessment-1",
+                            "source_document_id": "document-1",
+                            "evidence_ids": ["evidence-1"],
+                            "text": "Legacy assessment.",
+                            "recorded_at": self.now.isoformat(),
+                            "supersedes_assessment_id": None,
+                        }
+                    ],
+                    "comparison_notes": [],
+                    "created_at": self.now.isoformat(),
+                    "updated_at": self.now.isoformat(),
+                }
+            ],
+        }
+        self.path.write_text(json.dumps(legacy_document), encoding="utf-8")
+
+        runs = self.store.load()
+        self.store.save(runs)
+
+        source = runs[0].sources[0]
+        assessment = runs[0].assessments[0]
+        self.assertEqual(source.taint_label, "external_untrusted_data")
+        self.assertEqual(source.instruction_authority, "none")
+        self.assertEqual(
+            assessment.information_trust,
+            ResearchInformationTrust.UNASSESSED,
+        )
+        rewritten = json.loads(self.path.read_text(encoding="utf-8"))
+        self.assertEqual(rewritten["schema_version"], 7)
+        self.assertEqual(
+            rewritten["runs"][0]["sources"][0]["taint_label"],
+            "external_untrusted_data",
+        )
+        self.assertEqual(
+            rewritten["runs"][0]["sources"][0]["instruction_authority"],
+            "none",
+        )
+        self.assertEqual(
+            rewritten["runs"][0]["assessments"][0]["information_trust"],
+            "unassessed",
+        )
+
+    def test_v7_rejects_mutable_source_authority_and_invalid_trust_labels(
+        self,
+    ) -> None:
+        run = ResearchRun(
+            run_id="run-1",
+            question="Question",
+            status=ResearchRunStatus.COLLECTING,
+            sources=(
+                ResearchSourceRecord(
+                    "document-1",
+                    "https://example.com/source",
+                    "Source",
+                    "text/plain",
+                    self.now,
+                    self.now,
+                ),
+            ),
+            failures=(),
+            created_at=self.now,
+            updated_at=self.now,
+            evidence=(
+                ResearchEvidenceRecord(
+                    "evidence-1",
+                    "document-1",
+                    "chunk-1",
+                    0,
+                    "Evidence.",
+                    False,
+                    "a" * 64,
+                    "Relevant.",
+                    self.now,
+                ),
+            ),
+            assessments=(
+                ResearchSourceAssessmentRecord(
+                    "assessment-1",
+                    "document-1",
+                    ("evidence-1",),
+                    "Assessment.",
+                    self.now,
+                    information_trust=ResearchInformationTrust.HIGH,
+                ),
+            ),
+        )
+        self.store.save([run])
+        valid_document = json.loads(self.path.read_text(encoding="utf-8"))
+
+        for field, invalid_value, message in (
+            ("taint_label", "trusted", "taint label"),
+            ("instruction_authority", "execute", "authority must be none"),
+        ):
+            with self.subTest(field=field):
+                document = json.loads(json.dumps(valid_document))
+                document["runs"][0]["sources"][0][field] = invalid_value
+                self.path.write_text(json.dumps(document), encoding="utf-8")
+                with self.assertRaisesRegex(ResearchError, message):
+                    self.store.load()
+
+        document = json.loads(json.dumps(valid_document))
+        document["runs"][0]["assessments"][0]["information_trust"] = "trusted"
+        self.path.write_text(json.dumps(document), encoding="utf-8")
+        with self.assertRaisesRegex(ResearchError, "information trust"):
+            self.store.load()
 
     def test_round_trip_preserves_comparison_note_references(self) -> None:
         sources = tuple(
