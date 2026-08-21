@@ -26,3 +26,10 @@ aggregate at 4,000,000 vector values. Full rebuilds preflight these limits;
 incremental failures keep the previous index and cache while primary memory
 remains committed. Overflow-safe cosine math retains finite deterministic
 ranking for every accepted vector.
+
+Semantic source text is capped at 1,000,000 characters before cache or provider
+work. Full rebuilds validate all active sources first, incremental updates
+validate before changing the index/cache, and excessive direct queries keep the
+lexical fallback. The local Ollama transport serializes compact Unicode JSON
+through an 8 MiB exact UTF-8 writer and rejects invalid or excessive payloads
+before opening a network request.

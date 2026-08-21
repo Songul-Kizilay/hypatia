@@ -10,7 +10,25 @@ from typing import Protocol, Self, cast
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 DEFAULT_TIMEOUT_SECONDS = 120.0
+MAX_REQUEST_BYTES = 8 * 1024 * 1024
 MAX_RESPONSE_BYTES = 1_048_576
+
+
+class _JsonRequestWriter:
+    """Accumulate exact UTF-8 request bytes up to the outbound body limit."""
+
+    def __init__(self) -> None:
+        self._body = bytearray()
+
+    def write(self, value: str) -> int:
+        encoded = value.encode("utf-8")
+        if len(self._body) + len(encoded) > MAX_REQUEST_BYTES:
+            raise OSError("Embedding request exceeds the maximum allowed size.")
+        self._body.extend(encoded)
+        return len(value)
+
+    def body(self) -> bytes:
+        return bytes(self._body)
 
 
 class _ReadableResponse(Protocol):
@@ -63,6 +81,24 @@ def _read_response_body(response: _ReadableResponse) -> bytes:
     return body
 
 
+def _encode_request_body(payload: dict[str, object]) -> bytes:
+    """Serialize one bounded compact JSON body without an intermediate string."""
+    writer = _JsonRequestWriter()
+    try:
+        json.dump(
+            payload,
+            writer,
+            ensure_ascii=False,
+            allow_nan=False,
+            separators=(",", ":"),
+        )
+    except OSError:
+        raise
+    except (RecursionError, TypeError, ValueError) as error:
+        raise OSError("Embedding request payload is invalid.") from error
+    return writer.body()
+
+
 class UrllibOllamaEmbeddingTransport:
     """Send one JSON embedding request through urllib."""
 
@@ -79,7 +115,7 @@ class UrllibOllamaEmbeddingTransport:
     def __call__(self, endpoint: str, payload: dict[str, object]) -> object:
         request = Request(
             endpoint,
-            data=json.dumps(payload).encode("utf-8"),
+            data=_encode_request_body(payload),
             headers={"Content-Type": "application/json"},
             method="POST",
         )

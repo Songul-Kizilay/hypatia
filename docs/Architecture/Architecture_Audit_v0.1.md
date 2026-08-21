@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.63` in the current release candidate) are the
+- **Runtime releases** (`v0.3.64` in the current release candidate) are the
   executable package and GitHub release line. They are the source-backed
   implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
@@ -224,7 +224,9 @@ Implemented memory capabilities:
   current active memory-record snapshot without changing persistence.
 - An explicit stdlib-based Ollama `/api/embed` adapter with strict single-vector
   response validation and redirect rejection, keeping opted-in requests at the
-  validated local endpoint. It reads at most 1 MiB before JSON parsing. An
+  validated local endpoint. Semantic source text is capped at 1,000,000
+  characters; outbound compact JSON is capped at 8 MiB of exact UTF-8 before
+  network access, and responses are read at most 1 MiB before JSON parsing. An
   opt-in Bootstrap runtime owner rebuilds and registers
   the index at startup, swapping only after a complete successful build, then
   follows memory lifecycle events with best-effort incremental updates.
@@ -312,7 +314,7 @@ Not implemented:
 
 The current local verification baseline is:
 
-- package-aware `python -m unittest`: 1,302 tests passed. Explicit `tests.*`
+- package-aware `python -m unittest`: 1,306 tests passed. Explicit `tests.*`
   module names ensure nested test directories are included without shadowing
   source packages.
 - `python -m black --check src tests`: passed.
@@ -355,10 +357,29 @@ memory/session files and leaving project data unchanged.
 4. Existing deterministic keyword selection must remain an available fallback
    until semantic retrieval has independently verified relevance, ties, bounds,
    and failure behavior.
-5. Embedding output and live-index populations are bounded, but semantic query
-   source text and the outbound Ollama JSON request body have no shared
-   character or exact UTF-8 byte boundary. Those limits are required before
-   broader semantic input paths are enabled.
+5. Source text, request bodies, provider output, cache snapshots, and live index
+   populations are bounded, but a cold rebuild can still issue up to 20,000
+   sequential Ollama requests when the optional cache is empty or stale. An
+   explicit cache-miss/provider-call budget is required before larger long-lived
+   memory sets use opt-in semantic startup rebuilding.
+
+## Completed Increment: Semantic Request Bounds
+
+Every semantic embedding path now shares a source-text boundary, and the local
+Ollama transport has an exact outbound request-body boundary.
+
+- Source text is capped at 1,000,000 characters without trimming or otherwise
+  changing exact Turkish, English, whitespace, or Unicode content.
+- Full rebuilds preflight every active source before cache lookup or provider
+  work. Incremental updates validate before provider/cache changes, and an
+  oversized direct query skips embedding and uses deterministic lexical
+  fallback.
+- Compact Ollama JSON is capped at 8 MiB of exact UTF-8. A bounded writer stops
+  during serialization without constructing a complete intermediate JSON
+  string, and Unicode is not expanded into ASCII escape sequences.
+- Oversized, recursive, and non-serializable payloads fail before the request
+  opener is called. The existing redirect rejection, timeout, and 1 MiB
+  response boundary remain unchanged.
 
 ## Completed Increment: Live Semantic Index Bounds
 

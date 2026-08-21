@@ -2,6 +2,30 @@
 
 All notable project changes are recorded here.
 
+## [0.3.64] - 2026-08-21
+
+### Changed
+
+- Embedding source text is capped at 1,000,000 characters across full rebuilds,
+  incremental updates, direct semantic queries, and the Ollama provider.
+- Outbound Ollama embedding JSON is capped at 8 MiB of exact compact UTF-8.
+  A bounded writer streams serialization into the request body without first
+  constructing a complete JSON string.
+
+### Safety
+
+- Full rebuilds validate every active source before cache lookup or provider
+  work. Oversized semantic queries skip the provider and retain deterministic
+  lexical fallback behavior.
+- Oversized, recursive, or non-serializable request payloads fail before the
+  network opener is called. Turkish and other Unicode input remains exact and
+  is sent without ASCII escape expansion.
+
+### Verification
+
+- The package-aware full local suite contains 1,306 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass across 311 source files.
+
 ## [0.3.63] - 2026-08-21
 
 ### Changed

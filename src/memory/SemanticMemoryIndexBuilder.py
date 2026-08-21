@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from core.Exceptions import MemoryError
 from memory.Embedding import Embedding
-from memory.EmbeddingProvider import EmbeddingProvider
+from memory.EmbeddingProvider import EmbeddingProvider, validate_embedding_source_text
 from memory.InMemorySemanticMemoryIndex import (
     InMemorySemanticMemoryIndex,
     validate_semantic_memory_index_population,
@@ -27,6 +28,8 @@ class SemanticMemoryIndexBuilder:
         """Embed current active records into a new index in memory-record order."""
         records = memory_manager.all()
         validate_semantic_memory_index_population(len(records))
+        for record in records:
+            self._validate_source_text(record.content)
         index = InMemorySemanticMemoryIndex()
         cache_entries: list[tuple[str, str, Embedding]] = []
         for record in records:
@@ -45,6 +48,7 @@ class SemanticMemoryIndexBuilder:
 
     def embed(self, source_text: str) -> Embedding:
         """Create one query embedding through the configured provider."""
+        self._validate_source_text(source_text)
         return self._embedding_provider.embed(source_text)
 
     def upsert_memory_record(
@@ -54,6 +58,7 @@ class SemanticMemoryIndexBuilder:
         source_text: str,
     ) -> None:
         """Update the live index before best-effort cache retention."""
+        self._validate_source_text(source_text)
         embedding = self._embedding_provider.embed(source_text)
         index.upsert(memory_id, embedding)
         if self._embedding_cache is not None:
@@ -87,3 +92,10 @@ class SemanticMemoryIndexBuilder:
                 self._embedding_cache.replace(entries)
             except Exception:
                 pass
+
+    @staticmethod
+    def _validate_source_text(source_text: object) -> None:
+        try:
+            validate_embedding_source_text(source_text)
+        except ValueError as error:
+            raise MemoryError("Embedding source text invalid.") from error
