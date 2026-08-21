@@ -2,6 +2,32 @@
 
 All notable project changes are recorded here.
 
+## [0.3.87] - 2026-08-22
+
+### Added
+
+- The selected desktop research run now exposes its persisted user-authored
+  source-comparison notes from the already loaded immutable run snapshot.
+- Each selector label retains bounded authored text, timezone-aware recorded
+  time, and exact note ID; a separate read-only summary shows every exact source,
+  evidence, and assessment reference.
+- Three separate explicit actions can copy only the selected note's source,
+  evidence, or assessment references into the matching manual field.
+
+### Safety
+
+- Selecting a comparison note never edits form fields or starts Brain, storage,
+  provider, network, LLM, knowledge-index, event-bus, or mutation work.
+- Each handoff preserves the authored comparison text and all non-target fields;
+  stale or invalid selections are cleared or refused locally.
+
+### Verification
+
+- The package-aware full local suite contains 1,451 passing automated tests.
+- Focused desktop coverage contains 92 passing tests for immutable-snapshot
+  rendering, bounded labels, complete exact-reference summaries, selection-only
+  behavior, isolated handoffs, field preservation, and stale-run guards.
+
 ## [0.3.86] - 2026-08-21
 
 ### Added

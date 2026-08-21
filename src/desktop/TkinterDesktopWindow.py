@@ -39,6 +39,7 @@ from research.ResearchSourceCandidate import ResearchSourceCandidate
 from research.ResearchSourceComparisonNoteRecord import (
     MAX_COMPARISON_NOTE_ASSESSMENTS,
     MAX_COMPARISON_NOTE_EVIDENCE,
+    ResearchSourceComparisonNoteRecord,
 )
 from research.ResearchSourceRecord import ResearchSourceRecord
 
@@ -208,6 +209,8 @@ class TkinterDesktopWindow:
         self._research_assessment_choice = tk.StringVar()
         self._research_claim_choice = tk.StringVar()
         self._research_persisted_contradiction_choice = tk.StringVar()
+        self._research_persisted_comparison_note_choice = tk.StringVar()
+        self._research_persisted_comparison_note_references = tk.StringVar()
         self._research_candidate = tk.StringVar()
         self._research_url = tk.StringVar()
         self._research_source_document_id = tk.StringVar()
@@ -259,6 +262,10 @@ class TkinterDesktopWindow:
             ResearchClaimContradictionRecord, ...
         ] = ()
         self._research_persisted_contradiction_run_id = ""
+        self._research_persisted_comparison_note_records: tuple[
+            ResearchSourceComparisonNoteRecord, ...
+        ] = ()
+        self._research_persisted_comparison_note_run_id = ""
         self._research_candidate_run_id = ""
         self._research_candidate_discovery_id = ""
         self._research_claim_contradiction_proposal_run_id = ""
@@ -863,6 +870,53 @@ class TkinterDesktopWindow:
             text="Use selected pair",
             command=self._use_selected_persisted_contradiction_pair,
         ).grid(row=3, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
+        comparison_note_frame = ttk.Frame(research_run_frame)
+        comparison_note_frame.grid(row=4, column=0, sticky="ew", pady=(8, 0))
+        comparison_note_frame.columnconfigure(1, weight=1)
+        ttk.Label(comparison_note_frame, text="Recorded comparison notes").grid(
+            row=0,
+            column=0,
+            sticky="w",
+            padx=(0, 8),
+        )
+        self._research_persisted_comparison_note_selector = ttk.Combobox(
+            comparison_note_frame,
+            textvariable=self._research_persisted_comparison_note_choice,
+            values=(),
+            state="readonly",
+        )
+        self._research_persisted_comparison_note_selector.grid(
+            row=0,
+            column=1,
+            columnspan=3,
+            sticky="ew",
+        )
+        self._research_persisted_comparison_note_selector.bind(
+            "<<ComboboxSelected>>",
+            self._select_persisted_research_comparison_note,
+        )
+        ttk.Label(
+            comparison_note_frame,
+            textvariable=self._research_persisted_comparison_note_references,
+            style="Hint.TLabel",
+            justify="left",
+            wraplength=1000,
+        ).grid(row=1, column=1, columnspan=3, sticky="w", pady=(4, 0))
+        ttk.Button(
+            comparison_note_frame,
+            text="Use sources",
+            command=self._use_selected_persisted_comparison_note_sources,
+        ).grid(row=2, column=1, sticky="ew", pady=(8, 0))
+        ttk.Button(
+            comparison_note_frame,
+            text="Use evidence",
+            command=self._use_selected_persisted_comparison_note_evidence,
+        ).grid(row=2, column=2, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ttk.Button(
+            comparison_note_frame,
+            text="Use assessments",
+            command=self._use_selected_persisted_comparison_note_assessments,
+        ).grid(row=2, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
         self._request_button(
             research_frame,
             text="Find sources",
@@ -1740,6 +1794,7 @@ class TkinterDesktopWindow:
             self._clear_research_sources()
             self._clear_research_claims()
             self._clear_research_persisted_contradictions()
+            self._clear_research_persisted_comparison_notes()
             self._research_run_summary.set("Refresh and select a research run.")
             self._status.set("Refresh and select a research run first.")
             return
@@ -1751,6 +1806,7 @@ class TkinterDesktopWindow:
         self._render_research_source_selector(selected_run)
         self._render_research_claim_selector(selected_run)
         self._render_research_persisted_contradiction_selector(selected_run)
+        self._render_research_persisted_comparison_note_selector(selected_run)
         self._research_run_summary.set(self._research_run_summary_text(selected_run))
         self._status.set(
             f"research run selected: {selected_run.run_id}; no action started"
@@ -1924,6 +1980,130 @@ class TkinterDesktopWindow:
         self._research_claim_contradiction_ids.set(", ".join(record.claim_ids))
         self._status.set(
             "recorded claim pair copied; note unchanged; nothing requested or saved"
+        )
+
+    def _render_research_persisted_comparison_note_selector(
+        self,
+        run: ResearchRun,
+    ) -> None:
+        """Render recorded comparison notes from the loaded exact run snapshot."""
+        records = run.comparison_notes
+        self._research_persisted_comparison_note_records = records
+        self._research_persisted_comparison_note_run_id = run.run_id
+        labels = tuple(
+            self._research_persisted_comparison_note_label(record) for record in records
+        )
+        self._research_persisted_comparison_note_selector.configure(values=labels)
+        if not records:
+            self._research_persisted_comparison_note_choice.set("")
+            self._research_persisted_comparison_note_references.set("")
+            return
+        self._research_persisted_comparison_note_selector.current(0)
+        self._render_selected_persisted_comparison_note_references()
+
+    @staticmethod
+    def _research_persisted_comparison_note_label(
+        record: ResearchSourceComparisonNoteRecord,
+    ) -> str:
+        """Show bounded authored text, time, and the exact comparison-note ID."""
+        text = " ".join(record.text.split())
+        if len(text) > 100:
+            text = f"{text[:97]}..."
+        return f"[{record.recorded_at.isoformat()}] {text} — {record.note_id}"
+
+    @staticmethod
+    def _research_persisted_comparison_note_reference_summary(
+        record: ResearchSourceComparisonNoteRecord,
+    ) -> str:
+        """Expose every persisted exact reference without changing form fields."""
+        return (
+            f"Sources: {', '.join(record.source_document_ids)}\n"
+            f"Evidence: {', '.join(record.evidence_ids)}\n"
+            f"Assessments: {', '.join(record.assessment_ids)}"
+        )
+
+    def _selected_persisted_research_comparison_note(
+        self,
+    ) -> ResearchSourceComparisonNoteRecord | None:
+        """Return only a comparison note bound to the selected loaded run."""
+        if (
+            self._research_run_id.get().strip()
+            != self._research_persisted_comparison_note_run_id
+        ):
+            self._clear_research_persisted_comparison_notes()
+            return None
+        selected_index = self._research_persisted_comparison_note_selector.current()
+        if (
+            not 0
+            <= selected_index
+            < len(self._research_persisted_comparison_note_records)
+        ):
+            return None
+        return self._research_persisted_comparison_note_records[selected_index]
+
+    def _render_selected_persisted_comparison_note_references(self) -> None:
+        """Refresh only the read-only exact-reference summary."""
+        record = self._selected_persisted_research_comparison_note()
+        if record is None:
+            self._research_persisted_comparison_note_references.set("")
+            return
+        self._research_persisted_comparison_note_references.set(
+            self._research_persisted_comparison_note_reference_summary(record)
+        )
+
+    def _select_persisted_research_comparison_note(
+        self,
+        _event: object | None = None,
+    ) -> None:
+        """Select one recorded note without editing fields or starting work."""
+        record = self._selected_persisted_research_comparison_note()
+        if record is None:
+            self._research_persisted_comparison_note_references.set("")
+            self._status.set("Select a recorded comparison note first.")
+            return
+        self._research_persisted_comparison_note_references.set(
+            self._research_persisted_comparison_note_reference_summary(record)
+        )
+        self._status.set(
+            f"recorded comparison note selected: {record.note_id}; no action started"
+        )
+
+    def _use_selected_persisted_comparison_note_sources(self) -> None:
+        """Copy only one recorded note's exact ordered source references."""
+        record = self._selected_persisted_research_comparison_note()
+        if record is None:
+            self._status.set("Select a recorded comparison note first.")
+            return
+        self._research_comparison_document_ids.set(
+            ", ".join(record.source_document_ids)
+        )
+        self._status.set(
+            "recorded comparison source IDs copied; other fields unchanged; "
+            "nothing requested or saved"
+        )
+
+    def _use_selected_persisted_comparison_note_evidence(self) -> None:
+        """Copy only one recorded note's exact evidence references."""
+        record = self._selected_persisted_research_comparison_note()
+        if record is None:
+            self._status.set("Select a recorded comparison note first.")
+            return
+        self._research_comparison_evidence_ids.set(", ".join(record.evidence_ids))
+        self._status.set(
+            "recorded comparison evidence IDs copied; other fields unchanged; "
+            "nothing requested or saved"
+        )
+
+    def _use_selected_persisted_comparison_note_assessments(self) -> None:
+        """Copy only one recorded note's exact assessment references."""
+        record = self._selected_persisted_research_comparison_note()
+        if record is None:
+            self._status.set("Select a recorded comparison note first.")
+            return
+        self._research_comparison_assessment_ids.set(", ".join(record.assessment_ids))
+        self._status.set(
+            "recorded comparison assessment IDs copied; other fields unchanged; "
+            "nothing requested or saved"
         )
 
     def _render_research_source_selector(self, run: ResearchRun) -> None:
@@ -2313,11 +2493,20 @@ class TkinterDesktopWindow:
         self._research_persisted_contradiction_choice.set("")
         self._research_persisted_contradiction_selector.configure(values=())
 
+    def _clear_research_persisted_comparison_notes(self) -> None:
+        """Discard run-bound comparison-note views without editing manual fields."""
+        self._research_persisted_comparison_note_records = ()
+        self._research_persisted_comparison_note_run_id = ""
+        self._research_persisted_comparison_note_choice.set("")
+        self._research_persisted_comparison_note_references.set("")
+        self._research_persisted_comparison_note_selector.configure(values=())
+
     def _clear_research_run_dependent_presentations(self) -> None:
         """Clear only ephemeral views tied to a previous exact run."""
         self._clear_research_sources()
         self._clear_research_claims()
         self._clear_research_persisted_contradictions()
+        self._clear_research_persisted_comparison_notes()
         self._clear_research_candidates()
         self._clear_research_claim_contradiction_proposals()
         self._research_markdown_export_preview = None

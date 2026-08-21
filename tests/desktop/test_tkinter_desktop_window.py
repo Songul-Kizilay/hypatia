@@ -69,6 +69,9 @@ from research.ResearchSourceCandidateAcceptancePreview import (
     ResearchSourceCandidateAcceptancePreview,
 )
 from research.ResearchSourceComparisonItem import ResearchSourceComparisonItem
+from research.ResearchSourceComparisonNoteRecord import (
+    ResearchSourceComparisonNoteRecord,
+)
 from research.ResearchSourceComparisonNoteWritePreview import (
     ResearchSourceComparisonNoteWritePreview,
 )
@@ -1583,6 +1586,256 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         self.assertEqual(
             window._status.values,
             ["Select a recorded contradiction first."],
+        )
+
+    def test_selected_run_renders_recorded_comparison_notes_and_exact_references(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        now = datetime(2026, 8, 21, tzinfo=UTC)
+        first_source = _research_source_record("document-1", "First paper")
+        second_source = _research_source_record("document-2", "Second paper")
+        first_evidence = _research_evidence_record(
+            "evidence-1",
+            first_source.document_id,
+            "First evidence.",
+        )
+        second_evidence = _research_evidence_record(
+            "evidence-2",
+            second_source.document_id,
+            "Second evidence.",
+        )
+        first_assessment = _research_assessment_record(
+            "assessment-1",
+            first_source.document_id,
+            first_evidence.evidence_id,
+            "First assessment.",
+        )
+        second_assessment = _research_assessment_record(
+            "assessment-2",
+            second_source.document_id,
+            second_evidence.evidence_id,
+            "Second assessment.",
+        )
+        note = _research_comparison_note_record(
+            "note-1",
+            (first_source.document_id, second_source.document_id),
+            (first_evidence.evidence_id, second_evidence.evidence_id),
+            (first_assessment.assessment_id, second_assessment.assessment_id),
+            "x" * 101,
+        )
+        run = ResearchRun(
+            "run-123",
+            "Review comparison notes",
+            ResearchRunStatus.COLLECTING,
+            (first_source, second_source),
+            (),
+            now,
+            now,
+            evidence=(first_evidence, second_evidence),
+            assessments=(first_assessment, second_assessment),
+            comparison_notes=(note,),
+        )
+        window._research_run_id = RecordingVariable("run-123")
+        window._research_run_summary = RecordingVariable("")
+        window._research_run_selector = RecordingCandidateSelector(selected_index=0)
+        window._research_runs = (run,)
+        window._research_source_choice = RecordingVariable("")
+        window._research_source_selector = RecordingCandidateSelector()
+        window._research_sources = ()
+        window._research_source_run_id = ""
+        _configure_research_evidence_selector(window)
+        window._research_comparison_document_ids = RecordingVariable("manual-sources")
+        window._research_comparison_evidence_ids = RecordingVariable("manual-evidence")
+        window._research_comparison_assessment_ids = RecordingVariable(
+            "manual-assessments"
+        )
+        window._research_comparison_note_text = RecordingVariable("manual-note")
+        window._status = RecordingStatus()
+
+        window._select_research_run()
+
+        self.assertEqual(
+            window._research_persisted_comparison_note_records,
+            (note,),
+        )
+        self.assertEqual(
+            window._research_persisted_comparison_note_run_id,
+            run.run_id,
+        )
+        self.assertEqual(
+            window._research_persisted_comparison_note_selector.values,
+            (f"[2026-08-21T00:00:00+00:00] {'x' * 97}... — note-1",),
+        )
+        self.assertEqual(
+            window._research_persisted_comparison_note_references.value,
+            "Sources: document-1, document-2\n"
+            "Evidence: evidence-1, evidence-2\n"
+            "Assessments: assessment-1, assessment-2",
+        )
+        self.assertEqual(
+            window._research_comparison_document_ids.value, "manual-sources"
+        )
+        self.assertEqual(
+            window._research_comparison_evidence_ids.value, "manual-evidence"
+        )
+        self.assertEqual(
+            window._research_comparison_assessment_ids.value,
+            "manual-assessments",
+        )
+        self.assertEqual(window._research_comparison_note_text.value, "manual-note")
+
+    def test_recorded_comparison_note_selection_updates_read_only_references(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        first = _research_comparison_note_record(
+            "note-1",
+            ("document-1", "document-2"),
+            ("evidence-1", "evidence-2"),
+            ("assessment-1", "assessment-2"),
+            "First comparison.",
+        )
+        second = _research_comparison_note_record(
+            "note-2",
+            ("document-2", "document-3"),
+            ("evidence-2", "evidence-3"),
+            ("assessment-2", "assessment-3"),
+            "Second comparison.",
+        )
+        _configure_selected_persisted_comparison_notes(
+            window,
+            (first, second),
+            selected_index=1,
+        )
+        window._research_comparison_document_ids = RecordingVariable("manual-sources")
+        window._research_comparison_evidence_ids = RecordingVariable("manual-evidence")
+        window._research_comparison_assessment_ids = RecordingVariable(
+            "manual-assessments"
+        )
+        window._research_comparison_note_text = RecordingVariable("manual-note")
+        window._status = RecordingStatus()
+
+        window._select_persisted_research_comparison_note()
+
+        self.assertEqual(
+            window._research_persisted_comparison_note_references.value,
+            "Sources: document-2, document-3\n"
+            "Evidence: evidence-2, evidence-3\n"
+            "Assessments: assessment-2, assessment-3",
+        )
+        self.assertEqual(
+            window._research_comparison_document_ids.value, "manual-sources"
+        )
+        self.assertEqual(
+            window._research_comparison_evidence_ids.value, "manual-evidence"
+        )
+        self.assertEqual(
+            window._research_comparison_assessment_ids.value,
+            "manual-assessments",
+        )
+        self.assertEqual(window._research_comparison_note_text.value, "manual-note")
+        self.assertEqual(
+            window._status.values,
+            ["recorded comparison note selected: note-2; no action started"],
+        )
+
+    def test_recorded_comparison_note_handoffs_copy_only_selected_references(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        record = _research_comparison_note_record(
+            "note-1",
+            ("document-1", "document-2"),
+            ("evidence-1", "evidence-2"),
+            ("assessment-1", "assessment-2"),
+            "Recorded comparison.",
+        )
+        _configure_selected_persisted_comparison_notes(window, (record,))
+        window._research_comparison_document_ids = RecordingVariable("old-sources")
+        window._research_comparison_evidence_ids = RecordingVariable("old-evidence")
+        window._research_comparison_assessment_ids = RecordingVariable(
+            "old-assessments"
+        )
+        window._research_comparison_note_text = RecordingVariable("manual-note")
+        window._status = RecordingStatus()
+
+        window._use_selected_persisted_comparison_note_sources()
+        window._use_selected_persisted_comparison_note_evidence()
+        window._use_selected_persisted_comparison_note_assessments()
+
+        self.assertEqual(
+            window._research_comparison_document_ids.value,
+            "document-1, document-2",
+        )
+        self.assertEqual(
+            window._research_comparison_evidence_ids.value,
+            "evidence-1, evidence-2",
+        )
+        self.assertEqual(
+            window._research_comparison_assessment_ids.value,
+            "assessment-1, assessment-2",
+        )
+        self.assertEqual(window._research_comparison_note_text.value, "manual-note")
+        self.assertEqual(
+            window._status.values,
+            [
+                "recorded comparison source IDs copied; other fields unchanged; "
+                "nothing requested or saved",
+                "recorded comparison evidence IDs copied; other fields unchanged; "
+                "nothing requested or saved",
+                "recorded comparison assessment IDs copied; other fields unchanged; "
+                "nothing requested or saved",
+            ],
+        )
+
+    def test_stale_recorded_comparison_note_cannot_overwrite_manual_fields(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        record = _research_comparison_note_record(
+            "note-old",
+            ("document-old-1", "document-old-2"),
+            ("evidence-old-1", "evidence-old-2"),
+            ("assessment-old-1", "assessment-old-2"),
+            "Old comparison.",
+        )
+        _configure_selected_persisted_comparison_notes(window, (record,))
+        window._research_run_id.set("run-new")
+        window._research_comparison_document_ids = RecordingVariable("manual-sources")
+        window._research_comparison_evidence_ids = RecordingVariable("manual-evidence")
+        window._research_comparison_assessment_ids = RecordingVariable(
+            "manual-assessments"
+        )
+        window._research_comparison_note_text = RecordingVariable("manual-note")
+        window._status = RecordingStatus()
+
+        window._use_selected_persisted_comparison_note_sources()
+
+        self.assertEqual(
+            window._research_comparison_document_ids.value, "manual-sources"
+        )
+        self.assertEqual(
+            window._research_comparison_evidence_ids.value, "manual-evidence"
+        )
+        self.assertEqual(
+            window._research_comparison_assessment_ids.value,
+            "manual-assessments",
+        )
+        self.assertEqual(window._research_comparison_note_text.value, "manual-note")
+        self.assertEqual(window._research_persisted_comparison_note_records, ())
+        self.assertEqual(window._research_persisted_comparison_note_run_id, "")
+        self.assertEqual(
+            window._research_persisted_comparison_note_selector.values,
+            (),
+        )
+        self.assertEqual(
+            window._research_persisted_comparison_note_references.value,
+            "",
+        )
+        self.assertEqual(
+            window._status.values,
+            ["Select a recorded comparison note first."],
         )
 
     def test_research_markdown_export_preview_uses_selected_run_only(self) -> None:
@@ -3488,6 +3741,31 @@ def _configure_research_persisted_contradiction_selector(window: Any) -> None:
     window._research_persisted_contradiction_selector = RecordingCandidateSelector()
     window._research_persisted_contradiction_records = ()
     window._research_persisted_contradiction_run_id = ""
+    _configure_research_persisted_comparison_note_selector(window)
+
+
+def _configure_research_persisted_comparison_note_selector(window: Any) -> None:
+    window._research_persisted_comparison_note_choice = RecordingVariable("")
+    window._research_persisted_comparison_note_references = RecordingVariable("")
+    window._research_persisted_comparison_note_selector = RecordingCandidateSelector()
+    window._research_persisted_comparison_note_records = ()
+    window._research_persisted_comparison_note_run_id = ""
+
+
+def _configure_selected_persisted_comparison_notes(
+    window: Any,
+    records: tuple[ResearchSourceComparisonNoteRecord, ...],
+    *,
+    selected_index: int = 0,
+) -> None:
+    window._research_run_id = RecordingVariable("run-123")
+    window._research_persisted_comparison_note_records = records
+    window._research_persisted_comparison_note_run_id = "run-123"
+    window._research_persisted_comparison_note_selector = RecordingCandidateSelector(
+        selected_index=selected_index
+    )
+    window._research_persisted_comparison_note_choice = RecordingVariable("")
+    window._research_persisted_comparison_note_references = RecordingVariable("")
 
 
 def _configure_selected_persisted_contradictions(
@@ -3637,6 +3915,23 @@ def _research_claim_contradiction_record(
         claim_ids=(first_claim_id, second_claim_id),
         evidence_ids=evidence_ids,
         note=note,
+        recorded_at=datetime(2026, 8, 21, tzinfo=UTC),
+    )
+
+
+def _research_comparison_note_record(
+    note_id: str,
+    source_document_ids: tuple[str, ...],
+    evidence_ids: tuple[str, ...],
+    assessment_ids: tuple[str, ...],
+    text: str,
+) -> ResearchSourceComparisonNoteRecord:
+    return ResearchSourceComparisonNoteRecord(
+        note_id=note_id,
+        source_document_ids=source_document_ids,
+        evidence_ids=evidence_ids,
+        assessment_ids=assessment_ids,
+        text=text,
         recorded_at=datetime(2026, 8, 21, tzinfo=UTC),
     )
 

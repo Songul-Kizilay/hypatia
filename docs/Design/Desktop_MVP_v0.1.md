@@ -43,6 +43,8 @@ The MVP may present only current Brain/CognitiveEngine capabilities:
   epistemic state, confidence, bounded text, exact ID, and guarded handoffs;
 - a selected-run read-only persisted-contradiction selector with exact claim
   pair, bounded authored note, recorded time, ID, and explicit pair handoff;
+- a selected-run read-only persisted comparison-note selector with bounded text,
+  time, exact ID/reference summary, and three isolated reference handoffs;
 - read-only accepted-content restoration status captured during startup, with
   only availability and aggregate restored document/paragraph counts;
 - explicit recording and read-only viewing of a selected attached-source chunk
@@ -247,6 +249,13 @@ authored note, timezone-aware recorded time, and exact contradiction ID. Selecti
 edits nothing. A separate explicit handoff replaces only the two-ID manual field,
 preserves the manual note, and rejects stale or invalid selection state locally
 without Brain, storage, provider, network, LLM, or mutation work.
+The persisted comparison-note selector likewise reads only `comparison_notes`
+already present in that run. Its label bounds authored text while retaining time
+and exact note ID. A separate read-only summary exposes all exact source,
+evidence, and assessment IDs for the selected record. Selection edits no form
+field; source, evidence, and assessment handoffs each replace only their matching
+manual field and preserve comparison text plus all non-target fields. Stale state
+fails locally without a runtime boundary.
 `Preview & save assessment` also accepts an optional predecessor assessment ID.
 The preview shows the exact link; confirmation sends the captured value, and
 the runtime revalidates that it is an unsuperseded assessment from the same run
