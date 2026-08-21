@@ -34,7 +34,11 @@ from memory.OllamaEmbeddingProvider import OllamaEmbeddingProvider
 from memory.RankedKeywordLearnedMemorySelector import (
     RankedKeywordLearnedMemorySelector,
 )
-from memory.SemanticMemoryIndexBuilder import SemanticMemoryIndexBuilder
+from memory.SemanticMemoryIndexBuilder import (
+    DEFAULT_SEMANTIC_REBUILD_PROVIDER_CALLS,
+    MAX_SEMANTIC_REBUILD_PROVIDER_CALLS,
+    SemanticMemoryIndexBuilder,
+)
 from memory.SemanticMemoryIndexRuntime import SemanticMemoryIndexRuntime
 from memory.UrllibOllamaEmbeddingTransport import (
     DEFAULT_TIMEOUT_SECONDS,
@@ -227,6 +231,9 @@ class Bootstrap:
         if not model.strip():
             raise ValueError("HYPATIA_SEMANTIC_MEMORY_OLLAMA_MODEL cannot be empty.")
         timeout_seconds = Bootstrap._load_process_semantic_memory_timeout_seconds()
+        max_rebuild_provider_calls = (
+            Bootstrap._load_process_semantic_rebuild_provider_calls()
+        )
 
         provider = OllamaEmbeddingProvider(
             endpoint=endpoint,
@@ -240,7 +247,11 @@ class Bootstrap:
                 provider_key=f"ollama:{endpoint}:{model}",
             )
         return SemanticMemoryIndexRuntime(
-            SemanticMemoryIndexBuilder(provider, embedding_cache)
+            SemanticMemoryIndexBuilder(
+                provider,
+                embedding_cache,
+                max_rebuild_provider_calls=max_rebuild_provider_calls,
+            )
         )
 
     @staticmethod
@@ -261,6 +272,26 @@ class Bootstrap:
                 "positive finite number."
             )
         return timeout_seconds
+
+    @staticmethod
+    def _load_process_semantic_rebuild_provider_calls() -> int:
+        raw_budget = os.environ.get(
+            "HYPATIA_SEMANTIC_MEMORY_REBUILD_MAX_PROVIDER_CALLS"
+        )
+        if raw_budget is None:
+            return DEFAULT_SEMANTIC_REBUILD_PROVIDER_CALLS
+        if not raw_budget.isascii() or not raw_budget.isdecimal():
+            raise ValueError(
+                "HYPATIA_SEMANTIC_MEMORY_REBUILD_MAX_PROVIDER_CALLS must be a "
+                "non-negative integer."
+            )
+        budget = int(raw_budget)
+        if budget > MAX_SEMANTIC_REBUILD_PROVIDER_CALLS:
+            raise ValueError(
+                "HYPATIA_SEMANTIC_MEMORY_REBUILD_MAX_PROVIDER_CALLS cannot exceed "
+                f"{MAX_SEMANTIC_REBUILD_PROVIDER_CALLS}."
+            )
+        return budget
 
     def initialize(self) -> None:
         config = Config()

@@ -145,7 +145,8 @@ class JsonFileSemanticEmbeddingCache:
                 f"Semantic embedding cache '{self._path}' has an invalid provider key."
             ) from error
         if persisted_provider_key != self._provider_key:
-            return {}
+            self._entries = {}
+            return self._entries
         raw_entries = document.get("entries")
         if not isinstance(raw_entries, list):
             raise MemoryError(

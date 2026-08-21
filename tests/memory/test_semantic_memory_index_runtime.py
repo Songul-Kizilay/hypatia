@@ -25,8 +25,10 @@ class ToggleEmbeddingProvider:
         self.embedding = embedding
         self.should_fail = False
         self.should_crash = False
+        self.sources: list[str] = []
 
     def embed(self, source_text: str) -> Embedding:
+        self.sources.append(source_text)
         if self.should_crash:
             raise RuntimeError("Unexpected provider failure.")
         if self.should_fail:
@@ -78,6 +80,29 @@ class SemanticMemoryIndexRuntimeTests(unittest.TestCase):
 
         self.assertIs(runtime.current(), stable_index)
         self.assertEqual(stable_index.count(), 1)
+        self.assertIsNone(runtime.last_update_error())
+
+    def test_rebuild_budget_failure_preserves_last_index_without_provider_work(
+        self,
+    ) -> None:
+        memory_manager = MemoryManager()
+        memory_manager.add("Stable fact")
+        provider = ToggleEmbeddingProvider(Embedding((1, 0)))
+        runtime = SemanticMemoryIndexRuntime(
+            SemanticMemoryIndexBuilder(
+                provider,
+                max_rebuild_provider_calls=1,
+            )
+        )
+        stable_index = runtime.refresh(memory_manager)
+        memory_manager.add("New fact")
+
+        with self.assertRaisesRegex(MemoryError, "provider-call budget exceeded"):
+            runtime.refresh(memory_manager)
+
+        self.assertIs(runtime.current(), stable_index)
+        self.assertEqual(stable_index.count(), 1)
+        self.assertEqual(provider.sources, ["Stable fact"])
         self.assertIsNone(runtime.last_update_error())
 
     def test_attached_runtime_tracks_added_updated_and_deleted_records(self) -> None:

@@ -6,11 +6,16 @@ from core.Exceptions import MemoryError
 from memory.Embedding import Embedding
 from memory.EmbeddingProvider import EmbeddingProvider, validate_embedding_source_text
 from memory.InMemorySemanticMemoryIndex import (
+    MAX_SEMANTIC_MEMORY_INDEX_ENTRIES,
     InMemorySemanticMemoryIndex,
     validate_semantic_memory_index_population,
 )
 from memory.MemoryManager import MemoryManager
+from memory.MemoryRecord import MemoryRecord
 from memory.SemanticEmbeddingCache import SemanticEmbeddingCache
+
+DEFAULT_SEMANTIC_REBUILD_PROVIDER_CALLS = 256
+MAX_SEMANTIC_REBUILD_PROVIDER_CALLS = MAX_SEMANTIC_MEMORY_INDEX_ENTRIES
 
 
 class SemanticMemoryIndexBuilder:
@@ -20,9 +25,22 @@ class SemanticMemoryIndexBuilder:
         self,
         embedding_provider: EmbeddingProvider,
         embedding_cache: SemanticEmbeddingCache | None = None,
+        *,
+        max_rebuild_provider_calls: int = DEFAULT_SEMANTIC_REBUILD_PROVIDER_CALLS,
     ) -> None:
+        if (
+            isinstance(max_rebuild_provider_calls, bool)
+            or not isinstance(max_rebuild_provider_calls, int)
+            or max_rebuild_provider_calls < 0
+            or max_rebuild_provider_calls > MAX_SEMANTIC_REBUILD_PROVIDER_CALLS
+        ):
+            raise ValueError(
+                "Semantic rebuild provider-call budget must be an integer "
+                f"between 0 and {MAX_SEMANTIC_REBUILD_PROVIDER_CALLS:,}."
+            )
         self._embedding_provider = embedding_provider
         self._embedding_cache = embedding_cache
+        self._max_rebuild_provider_calls = max_rebuild_provider_calls
 
     def build(self, memory_manager: MemoryManager) -> InMemorySemanticMemoryIndex:
         """Embed current active records into a new index in memory-record order."""
@@ -30,10 +48,19 @@ class SemanticMemoryIndexBuilder:
         validate_semantic_memory_index_population(len(records))
         for record in records:
             self._validate_source_text(record.content)
+        cached_embeddings = self._cached_embeddings(records)
+        provider_call_count = sum(embedding is None for embedding in cached_embeddings)
+        if provider_call_count > self._max_rebuild_provider_calls:
+            raise MemoryError("Semantic index rebuild provider-call budget exceeded.")
+
         index = InMemorySemanticMemoryIndex()
         cache_entries: list[tuple[str, str, Embedding]] = []
-        for record in records:
-            embedding = self._cached_embedding(record.memory_id, record.content)
+        for record, cached_embedding in zip(
+            records,
+            cached_embeddings,
+            strict=True,
+        ):
+            embedding = cached_embedding
             if embedding is None:
                 embedding = self._embedding_provider.embed(record.content)
             if not cache_entries:
@@ -75,13 +102,27 @@ class SemanticMemoryIndexBuilder:
             except Exception:
                 pass
 
-    def _cached_embedding(self, memory_id: str, source_text: str) -> Embedding | None:
+    def _cached_embeddings(
+        self,
+        records: list[MemoryRecord],
+    ) -> tuple[Embedding | None, ...]:
         if self._embedding_cache is None:
-            return None
+            return (None,) * len(records)
+        cached_embeddings: list[Embedding | None] = []
         try:
-            return self._embedding_cache.get(memory_id, source_text)
+            for record in records:
+                embedding = self._embedding_cache.get(
+                    record.memory_id,
+                    record.content,
+                )
+                if embedding is not None and not isinstance(embedding, Embedding):
+                    raise TypeError(
+                        "Semantic embedding cache returned an invalid value."
+                    )
+                cached_embeddings.append(embedding)
         except Exception:
-            return None
+            return (None,) * len(records)
+        return tuple(cached_embeddings)
 
     def _replace_cache(
         self,

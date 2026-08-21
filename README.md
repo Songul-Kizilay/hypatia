@@ -88,6 +88,8 @@ To create the world's most capable personal AI research companion.
 - A shared 1,000,000-character semantic source limit and an 8 MiB exact UTF-8
   Ollama embedding-request boundary that rejects invalid or excessive payloads
   before network access while preserving lexical fallback
+- A configurable cold semantic-rebuild provider-call budget (256 by default),
+  with all cache misses counted before any local Ollama request
 - An opt-in, provider-scoped semantic-embedding cache with bounded UTF-8
   snapshots, entry/identifier/source/vector limits, deterministic ordering, and
   atomic rollback-safe replacement
@@ -454,6 +456,7 @@ HYPATIA_SEMANTIC_MEMORY_OLLAMA_ENDPOINT=http://localhost:11434/api/embed
 HYPATIA_SEMANTIC_MEMORY_OLLAMA_MODEL=embeddinggemma
 HYPATIA_SEMANTIC_MEMORY_OLLAMA_TIMEOUT_SECONDS=120
 HYPATIA_SEMANTIC_MEMORY_PERSIST_EMBEDDINGS=true
+HYPATIA_SEMANTIC_MEMORY_REBUILD_MAX_PROVIDER_CALLS=256
 ```
 
 The endpoint and model shown are defaults when their optional settings are
@@ -465,6 +468,13 @@ memory add, update, delete, and expiry events update the derived index on a
 best-effort basis. An embedding failure never undoes an already-completed
 primary-memory operation. The vectors remain in RAM and are recreated from
 local memory on the next successful startup.
+
+Before a startup rebuild opens any provider request, Hypatia resolves every
+provider-scoped cache lookup and counts the misses. The default maximum is 256;
+set `HYPATIA_SEMANTIC_MEMORY_REBUILD_MAX_PROVIDER_CALLS` to an ASCII whole
+number from 0 through 20,000 when a different local policy is required. Zero is
+cache-only. If the count exceeds the configured budget, startup fails before
+the first Ollama call, cache replacement, or semantic-runtime publication.
 
 The built-in local HTTP transport allows up to 120 seconds for each embedding
 request by default. Set `HYPATIA_SEMANTIC_MEMORY_OLLAMA_TIMEOUT_SECONDS` to a
