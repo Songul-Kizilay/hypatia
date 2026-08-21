@@ -580,7 +580,12 @@ conversation record, inject text into an LLM request, or affect ordinary
 With an enabled LLM runtime, `ask knowledge <query>` sends only the bounded,
 cited local context to the model. It is explicit, limits each supplied source
 chunk to 600 characters, keeps citations on the response, and does not add a
-conversation-memory record.
+conversation-memory record. The user's question and source excerpts are
+separated, each excerpt is labelled as an untrusted source, and a code-owned
+per-request system instruction denies source text any instruction authority.
+The request has no conversation history or tool capability. This reduces the
+authority of prompt-injection text found in a document; it is not a guarantee
+that a language model will always ignore adversarial content.
 
 Use `list knowledge` to show the local source catalog before inspecting a
 specific source or creating a future explicit relationship. Every entry shows

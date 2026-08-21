@@ -50,11 +50,25 @@ class OpenAICompatibleProvider:
         self,
         prompt: str,
         history: tuple[LLMConversationMessage, ...] = (),
+        *,
+        system_instruction: str | None = None,
     ) -> str:
         """Generate a response from optional history and one user message."""
         messages: list[dict[str, str]] = []
-        if self._system_prompt is not None:
-            messages.append({"role": "system", "content": self._system_prompt})
+        effective_system_prompt = self._system_prompt
+        if system_instruction is not None:
+            if (
+                not isinstance(system_instruction, str)
+                or not system_instruction.strip()
+            ):
+                raise LLMError("LLM system instruction invalid.")
+            effective_system_prompt = (
+                f"{effective_system_prompt}\n\n{system_instruction}"
+                if effective_system_prompt is not None
+                else system_instruction
+            )
+        if effective_system_prompt is not None:
+            messages.append({"role": "system", "content": effective_system_prompt})
         messages.extend(
             {"role": message.role, "content": message.content} for message in history
         )

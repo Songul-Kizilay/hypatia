@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.70` in the current release candidate) are the
+- **Runtime releases** (`v0.3.71` in the current release candidate) are the
   executable package and GitHub release line. They are the source-backed
   implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
@@ -265,8 +265,12 @@ Implemented memory capabilities:
   conversation memory or automatically augment an LLM prompt.
 - An explicit `ask knowledge <query>` local-RAG flow. With an enabled LLM, it
   sends only up to three cited local chunks and the user question, with each
-  source chunk bounded to 600 characters. It preserves citations on the answer,
-  uses no conversation history, and does not mutate conversation memory.
+  source chunk bounded to 600 characters. The user question is separated from
+  excerpts, every excerpt is labelled untrusted, and a code-owned per-request
+  system instruction denies retrieved text instruction authority. It preserves
+  citations on the answer, uses no conversation history or tool capability,
+  and does not mutate conversation memory. This prompt-level boundary is not a
+  complete prompt-injection firewall.
 - A derived, in-memory local knowledge graph built from loaded documents and
   paragraph chunks. It uses typed `contains` and `precedes` edges, validates a
   whole document graph before changing state, and remains separate from the
@@ -322,7 +326,7 @@ Not implemented:
 
 The current local verification baseline is:
 
-- package-aware `python -m unittest`: 1,350 tests passed. Explicit `tests.*`
+- package-aware `python -m unittest`: 1,353 tests passed. Explicit `tests.*`
   module names ensure nested test directories are included without shadowing
   source packages.
 - `python -m black --check src tests`: passed.

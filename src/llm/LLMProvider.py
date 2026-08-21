@@ -18,5 +18,7 @@ class LLMProvider(Protocol):
         self,
         prompt: str,
         history: tuple[LLMConversationMessage, ...] = (),
+        *,
+        system_instruction: str | None = None,
     ) -> str:
-        """Return a response for the prompt and optional conversation history."""
+        """Return text with an optional trusted per-request system boundary."""
