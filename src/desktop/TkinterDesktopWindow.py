@@ -28,8 +28,12 @@ from research.ResearchRun import ResearchRun
 from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
 )
+from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
 from research.ResearchSourceCandidate import ResearchSourceCandidate
-from research.ResearchSourceComparisonNoteRecord import MAX_COMPARISON_NOTE_EVIDENCE
+from research.ResearchSourceComparisonNoteRecord import (
+    MAX_COMPARISON_NOTE_ASSESSMENTS,
+    MAX_COMPARISON_NOTE_EVIDENCE,
+)
 from research.ResearchSourceRecord import ResearchSourceRecord
 
 _DEFAULT_FONT_SIZE = 12
@@ -195,6 +199,7 @@ class TkinterDesktopWindow:
         )
         self._research_source_choice = tk.StringVar()
         self._research_evidence_choice = tk.StringVar()
+        self._research_assessment_choice = tk.StringVar()
         self._research_candidate = tk.StringVar()
         self._research_url = tk.StringVar()
         self._research_source_document_id = tk.StringVar()
@@ -233,6 +238,12 @@ class TkinterDesktopWindow:
         self._research_evidence_records: tuple[ResearchEvidenceRecord, ...] = ()
         self._research_evidence_run_id = ""
         self._research_evidence_source_document_id = ""
+        self._research_assessment_records: tuple[
+            ResearchSourceAssessmentRecord, ...
+        ] = ()
+        self._research_current_assessment_ids: frozenset[str] = frozenset()
+        self._research_assessment_run_id = ""
+        self._research_assessment_source_document_id = ""
         self._research_candidate_run_id = ""
         self._research_candidate_discovery_id = ""
         self._research_claim_contradiction_proposal_run_id = ""
@@ -751,6 +762,36 @@ class TkinterDesktopWindow:
             text="Add to comparison",
             command=self._add_selected_research_evidence_to_comparison,
         ).grid(row=2, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ttk.Label(accepted_source_frame, text="Authored assessments").grid(
+            row=3,
+            column=0,
+            sticky="w",
+            padx=(0, 8),
+            pady=(8, 0),
+        )
+        self._research_assessment_selector = ttk.Combobox(
+            accepted_source_frame,
+            textvariable=self._research_assessment_choice,
+            values=(),
+            state="readonly",
+        )
+        self._research_assessment_selector.grid(
+            row=3,
+            column=1,
+            columnspan=3,
+            sticky="ew",
+            pady=(8, 0),
+        )
+        ttk.Button(
+            accepted_source_frame,
+            text="Use as correction target",
+            command=self._use_selected_research_assessment_as_correction_target,
+        ).grid(row=4, column=2, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ttk.Button(
+            accepted_source_frame,
+            text="Add to comparison",
+            command=self._add_selected_research_assessment_to_comparison,
+        ).grid(row=4, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
         self._request_button(
             research_frame,
             text="Find sources",
@@ -1657,9 +1698,11 @@ class TkinterDesktopWindow:
         if not run.sources:
             self._research_source_choice.set("")
             self._clear_research_evidence()
+            self._clear_research_assessments()
             return
         self._research_source_selector.current(0)
         self._render_research_evidence_selector(run, run.sources[0])
+        self._render_research_assessment_selector(run, run.sources[0])
 
     @staticmethod
     def _research_source_label(source: ResearchSourceRecord) -> str:
@@ -1692,9 +1735,11 @@ class TkinterDesktopWindow:
         )
         if source is None or selected_run is None:
             self._clear_research_evidence()
+            self._clear_research_assessments()
             self._status.set("Select an accepted source first.")
             return
         self._render_research_evidence_selector(selected_run, source)
+        self._render_research_assessment_selector(selected_run, source)
         self._status.set(
             f"accepted source selected: {source.document_id}; no action started"
         )
@@ -1727,6 +1772,139 @@ class TkinterDesktopWindow:
         if len(excerpt) > 100:
             excerpt = f"{excerpt[:97]}..."
         return f"{excerpt} — {record.evidence_id}"
+
+    def _render_research_assessment_selector(
+        self,
+        run: ResearchRun,
+        source: ResearchSourceRecord,
+    ) -> None:
+        """Render source-owned authored assessments from one loaded snapshot."""
+        records = tuple(
+            record
+            for record in run.assessments
+            if record.source_document_id == source.document_id
+        )
+        superseded_ids = {
+            record.supersedes_assessment_id
+            for record in run.assessments
+            if record.supersedes_assessment_id is not None
+        }
+        current_ids = frozenset(
+            record.assessment_id
+            for record in records
+            if record.assessment_id not in superseded_ids
+        )
+        self._research_assessment_records = records
+        self._research_current_assessment_ids = current_ids
+        self._research_assessment_run_id = run.run_id
+        self._research_assessment_source_document_id = source.document_id
+        labels = tuple(
+            self._research_assessment_label(
+                record,
+                is_current=record.assessment_id in current_ids,
+            )
+            for record in records
+        )
+        self._research_assessment_selector.configure(values=labels)
+        if not records:
+            self._research_assessment_choice.set("")
+            return
+        selected_index = next(
+            (
+                index
+                for index, record in enumerate(records)
+                if record.assessment_id in current_ids
+            ),
+            0,
+        )
+        self._research_assessment_selector.current(selected_index)
+
+    @staticmethod
+    def _research_assessment_label(
+        record: ResearchSourceAssessmentRecord,
+        *,
+        is_current: bool,
+    ) -> str:
+        """Show audit state, bounded authored text, and the exact assessment ID."""
+        text = " ".join(record.text.split())
+        if len(text) > 100:
+            text = f"{text[:97]}..."
+        state = "current" if is_current else "superseded"
+        return f"[{state}] {text} — {record.assessment_id}"
+
+    def _selected_research_assessment(
+        self,
+    ) -> ResearchSourceAssessmentRecord | None:
+        """Return only an assessment bound to the current exact run and source."""
+        source = self._selected_research_source()
+        if (
+            source is None
+            or self._research_run_id.get().strip() != self._research_assessment_run_id
+            or source.document_id != self._research_assessment_source_document_id
+        ):
+            self._clear_research_assessments()
+            return None
+        selected_index = self._research_assessment_selector.current()
+        if not 0 <= selected_index < len(self._research_assessment_records):
+            return None
+        return self._research_assessment_records[selected_index]
+
+    def _use_selected_research_assessment_as_correction_target(self) -> None:
+        """Copy one current same-source ID into the manual predecessor field."""
+        record = self._selected_research_assessment()
+        if record is None:
+            self._status.set("Select an authored assessment first.")
+            return
+        if record.assessment_id not in self._research_current_assessment_ids:
+            self._status.set("Only a current assessment can be corrected.")
+            return
+        if self._research_source_document_id.get().strip() != record.source_document_id:
+            self._status.set("Use the accepted source for assessment first.")
+            return
+        self._research_assessment_supersedes_id.set(record.assessment_id)
+        self._status.set(
+            "assessment ID copied as correction target; nothing requested or saved"
+        )
+
+    def _add_selected_research_assessment_to_comparison(self) -> None:
+        """Append one current same-source assessment ID to the manual comparison."""
+        record = self._selected_research_assessment()
+        if record is None:
+            self._status.set("Select an authored assessment first.")
+            return
+        if record.assessment_id not in self._research_current_assessment_ids:
+            self._status.set("Only a current assessment can be compared.")
+            return
+        comparison_source_ids = {
+            value.strip()
+            for value in self._research_comparison_document_ids.get().split(",")
+            if value.strip()
+        }
+        if record.source_document_id not in comparison_source_ids:
+            self._status.set("Add the accepted source to the comparison first.")
+            return
+        current_ids = tuple(
+            value.strip()
+            for value in self._research_comparison_assessment_ids.get().split(",")
+            if value.strip()
+        )
+        if record.assessment_id in current_ids:
+            self._status.set(
+                "assessment ID is already in the comparison; nothing changed"
+            )
+            return
+        if len(current_ids) >= MAX_COMPARISON_NOTE_ASSESSMENTS:
+            self._status.set(
+                "The comparison accepts at most "
+                f"{MAX_COMPARISON_NOTE_ASSESSMENTS} assessment IDs."
+            )
+            return
+        self._research_comparison_assessment_ids.set(
+            ", ".join((*current_ids, record.assessment_id))
+        )
+        self._status.set(
+            "assessment ID added to comparison; nothing requested or saved"
+        )
 
     def _selected_research_evidence(self) -> ResearchEvidenceRecord | None:
         """Return only evidence bound to the current exact run and source."""
@@ -1860,6 +2038,7 @@ class TkinterDesktopWindow:
     def _clear_research_sources(self) -> None:
         """Discard the run-bound source presentation without editing form fields."""
         self._clear_research_evidence()
+        self._clear_research_assessments()
         self._research_sources = ()
         self._research_source_run_id = ""
         self._research_source_choice.set("")
@@ -1872,6 +2051,15 @@ class TkinterDesktopWindow:
         self._research_evidence_source_document_id = ""
         self._research_evidence_choice.set("")
         self._research_evidence_selector.configure(values=())
+
+    def _clear_research_assessments(self) -> None:
+        """Discard source-bound assessment views without editing form fields."""
+        self._research_assessment_records = ()
+        self._research_current_assessment_ids = frozenset()
+        self._research_assessment_run_id = ""
+        self._research_assessment_source_document_id = ""
+        self._research_assessment_choice.set("")
+        self._research_assessment_selector.configure(values=())
 
     def _clear_research_run_dependent_presentations(self) -> None:
         """Clear only ephemeral views tied to a previous exact run."""

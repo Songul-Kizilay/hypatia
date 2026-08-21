@@ -267,6 +267,12 @@ selection alone changes nothing. Separate handoffs append one exact ID to the
 assessment, claim, or comparison evidence field. Source ownership is required
 for assessment and comparison, duplicates are ignored, and the existing 20-ID
 claim and 100-ID comparison-note limits remain enforced.
+User-authored assessments for the chosen source appear from the same loaded run
+snapshot with `current` or `superseded` audit state, bounded text, and exact ID.
+Selection alone changes nothing. Only a current same-source record can be copied
+as the next correction target or appended to the manual comparison assessment
+field; comparison source membership, duplicate refusal, and the 50-ID limit are
+enforced locally.
 `Find sources` sends the selected collecting run's question to Crossref and
 connects its fixed endpoint and same-origin redirects only to an address from
 their own public-DNS validation while TLS verifies `api.crossref.org`. It

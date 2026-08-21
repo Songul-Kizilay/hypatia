@@ -60,6 +60,12 @@ ID. Separate assessment, claim, and comparison handoffs append only that ID;
 same-source/comparison-membership guards, duplicate refusal, and 20/100 limits
 run locally. Selecting or handing off evidence performs no Brain, persistence,
 provider, network, LLM, knowledge-index, event-bus, or mutation operation.
+Authored assessments for that source are filtered from the same run snapshot.
+Their labels distinguish current/superseded state and retain bounded text plus
+the exact ID. Selection edits nothing; explicit correction-target and comparison
+handoffs accept only current same-source records. Stale state, comparison source
+membership, duplicates, and the 50-assessment limit are checked locally without
+Brain, persistence, provider, network, LLM, or mutation work.
 For an attached source, `Save evidence` records one explicitly entered chunk ID
 and note; `View evidence` displays the persisted bounded excerpt and locator.
 Neither action extracts, ranks, or interprets evidence automatically.

@@ -974,6 +974,227 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             ["Select recorded evidence first."],
         )
 
+    def test_selected_source_renders_current_and_superseded_assessments(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        now = datetime(2026, 8, 21, tzinfo=UTC)
+        source = _research_source_record("document-1", "Accepted paper")
+        evidence = _research_evidence_record(
+            "evidence-1",
+            source.document_id,
+            "Assessment evidence.",
+        )
+        original = _research_assessment_record(
+            "assessment-1",
+            source.document_id,
+            evidence.evidence_id,
+            "Original assessment.",
+        )
+        correction = _research_assessment_record(
+            "assessment-2",
+            source.document_id,
+            evidence.evidence_id,
+            "Corrected\nauthored assessment.",
+            supersedes_assessment_id=original.assessment_id,
+        )
+        run = ResearchRun(
+            "run-123",
+            "Review assessments",
+            ResearchRunStatus.COLLECTING,
+            (source,),
+            (),
+            now,
+            now,
+            evidence=(evidence,),
+            assessments=(original, correction),
+        )
+        window._research_run_id = RecordingVariable("run-123")
+        window._research_runs = (run,)
+        window._research_source_run_id = "run-123"
+        window._research_sources = (source,)
+        window._research_source_selector = RecordingCandidateSelector(selected_index=0)
+        window._research_source_choice = RecordingVariable(
+            "Accepted paper — document-1"
+        )
+        _configure_research_evidence_selector(window)
+        window._research_assessment_supersedes_id = RecordingVariable(
+            "manual-predecessor"
+        )
+        window._research_comparison_assessment_ids = RecordingVariable(
+            "manual-comparison"
+        )
+        window._status = RecordingStatus()
+
+        window._select_research_source()
+
+        self.assertEqual(
+            window._research_assessment_records,
+            (original, correction),
+        )
+        self.assertEqual(
+            window._research_current_assessment_ids,
+            frozenset({"assessment-2"}),
+        )
+        self.assertEqual(
+            window._research_assessment_selector.values,
+            (
+                "[superseded] Original assessment. — assessment-1",
+                "[current] Corrected authored assessment. — assessment-2",
+            ),
+        )
+        self.assertEqual(window._research_assessment_selector.current(), 1)
+        self.assertEqual(
+            window._research_assessment_supersedes_id.value,
+            "manual-predecessor",
+        )
+        self.assertEqual(
+            window._research_comparison_assessment_ids.value,
+            "manual-comparison",
+        )
+
+    def test_correction_target_handoff_requires_current_same_source_record(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        source = _research_source_record("document-1", "Accepted paper")
+        original = _research_assessment_record(
+            "assessment-1",
+            source.document_id,
+            "evidence-1",
+            "Original assessment.",
+        )
+        correction = _research_assessment_record(
+            "assessment-2",
+            source.document_id,
+            "evidence-1",
+            "Current correction.",
+            supersedes_assessment_id=original.assessment_id,
+        )
+        _configure_selected_research_assessments(
+            window,
+            source,
+            (original, correction),
+            current_ids=frozenset({correction.assessment_id}),
+            selected_index=0,
+        )
+        window._research_source_document_id = RecordingVariable("document-other")
+        window._research_assessment_supersedes_id = RecordingVariable(
+            "manual-predecessor"
+        )
+        window._status = RecordingStatus()
+
+        window._use_selected_research_assessment_as_correction_target()
+        window._research_assessment_selector.current(1)
+        window._use_selected_research_assessment_as_correction_target()
+        window._research_source_document_id.set(source.document_id)
+        window._use_selected_research_assessment_as_correction_target()
+
+        self.assertEqual(
+            window._research_assessment_supersedes_id.value,
+            correction.assessment_id,
+        )
+        self.assertEqual(
+            window._status.values,
+            [
+                "Only a current assessment can be corrected.",
+                "Use the accepted source for assessment first.",
+                "assessment ID copied as correction target; "
+                "nothing requested or saved",
+            ],
+        )
+
+    def test_comparison_assessment_handoff_guards_state_source_and_limit(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        source = _research_source_record("document-1", "Accepted paper")
+        old = _research_assessment_record(
+            "assessment-old",
+            source.document_id,
+            "evidence-1",
+            "Superseded assessment.",
+        )
+        current = _research_assessment_record(
+            "assessment-51",
+            source.document_id,
+            "evidence-1",
+            "Current assessment.",
+            supersedes_assessment_id=old.assessment_id,
+        )
+        _configure_selected_research_assessments(
+            window,
+            source,
+            (old, current),
+            current_ids=frozenset({current.assessment_id}),
+            selected_index=0,
+        )
+        window._research_comparison_document_ids = RecordingVariable("document-2")
+        window._research_comparison_assessment_ids = RecordingVariable(
+            "assessment-existing"
+        )
+        window._status = RecordingStatus()
+
+        window._add_selected_research_assessment_to_comparison()
+        window._research_assessment_selector.current(1)
+        window._add_selected_research_assessment_to_comparison()
+        window._research_comparison_document_ids.set("document-1, document-2")
+        window._add_selected_research_assessment_to_comparison()
+        window._add_selected_research_assessment_to_comparison()
+        bounded_ids = ", ".join(f"assessment-{index}" for index in range(1, 51))
+        window._research_comparison_assessment_ids.set(bounded_ids)
+        window._add_selected_research_assessment_to_comparison()
+
+        self.assertEqual(
+            window._research_comparison_assessment_ids.value,
+            bounded_ids,
+        )
+        self.assertEqual(
+            window._status.values,
+            [
+                "Only a current assessment can be compared.",
+                "Add the accepted source to the comparison first.",
+                "assessment ID added to comparison; nothing requested or saved",
+                "assessment ID is already in the comparison; nothing changed",
+                "The comparison accepts at most 50 assessment IDs.",
+            ],
+        )
+
+    def test_stale_assessment_selection_cannot_overwrite_manual_field(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        source = _research_source_record("document-old", "Old paper")
+        record = _research_assessment_record(
+            "assessment-old",
+            source.document_id,
+            "evidence-old",
+            "Old assessment.",
+        )
+        _configure_selected_research_assessments(
+            window,
+            source,
+            (record,),
+            current_ids=frozenset({record.assessment_id}),
+        )
+        window._research_run_id.set("run-new")
+        window._research_assessment_supersedes_id = RecordingVariable(
+            "manual-predecessor"
+        )
+        window._status = RecordingStatus()
+
+        window._use_selected_research_assessment_as_correction_target()
+
+        self.assertEqual(
+            window._research_assessment_supersedes_id.value,
+            "manual-predecessor",
+        )
+        self.assertEqual(window._research_sources, ())
+        self.assertEqual(window._research_assessment_records, ())
+        self.assertEqual(window._research_assessment_selector.values, ())
+        self.assertEqual(
+            window._status.values,
+            ["Select an authored assessment first."],
+        )
+
     def test_research_markdown_export_preview_uses_selected_run_only(self) -> None:
         window: Any = object.__new__(TkinterDesktopWindow)
         controller = RecordingResearchSourceLoadController()
@@ -2850,6 +3071,16 @@ def _configure_research_evidence_selector(window: Any) -> None:
     window._research_evidence_records = ()
     window._research_evidence_run_id = ""
     window._research_evidence_source_document_id = ""
+    _configure_research_assessment_selector(window)
+
+
+def _configure_research_assessment_selector(window: Any) -> None:
+    window._research_assessment_choice = RecordingVariable("")
+    window._research_assessment_selector = RecordingCandidateSelector()
+    window._research_assessment_records = ()
+    window._research_current_assessment_ids = frozenset()
+    window._research_assessment_run_id = ""
+    window._research_assessment_source_document_id = ""
 
 
 def _configure_selected_research_evidence(
@@ -2871,6 +3102,33 @@ def _configure_selected_research_evidence(
     window._research_evidence_choice = RecordingVariable(
         f"{record.excerpt} — {record.evidence_id}"
     )
+    _configure_research_assessment_selector(window)
+
+
+def _configure_selected_research_assessments(
+    window: Any,
+    source: ResearchSourceRecord,
+    records: tuple[ResearchSourceAssessmentRecord, ...],
+    *,
+    current_ids: frozenset[str],
+    selected_index: int = 0,
+) -> None:
+    window._research_run_id = RecordingVariable("run-123")
+    window._research_source_run_id = "run-123"
+    window._research_sources = (source,)
+    window._research_source_selector = RecordingCandidateSelector(selected_index=0)
+    window._research_source_choice = RecordingVariable(
+        f"{source.title} — {source.document_id}"
+    )
+    _configure_research_evidence_selector(window)
+    window._research_assessment_records = records
+    window._research_current_assessment_ids = current_ids
+    window._research_assessment_run_id = "run-123"
+    window._research_assessment_source_document_id = source.document_id
+    window._research_assessment_selector = RecordingCandidateSelector(
+        selected_index=selected_index
+    )
+    window._research_assessment_choice = RecordingVariable("")
 
 
 def _research_source_record(
@@ -2885,6 +3143,24 @@ def _research_source_record(
         content_type="text/plain",
         fetched_at=now,
         added_at=now,
+    )
+
+
+def _research_assessment_record(
+    assessment_id: str,
+    source_document_id: str,
+    evidence_id: str,
+    text: str,
+    *,
+    supersedes_assessment_id: str | None = None,
+) -> ResearchSourceAssessmentRecord:
+    return ResearchSourceAssessmentRecord(
+        assessment_id=assessment_id,
+        source_document_id=source_document_id,
+        evidence_ids=(evidence_id,),
+        text=text,
+        recorded_at=datetime(2026, 8, 21, tzinfo=UTC),
+        supersedes_assessment_id=supersedes_assessment_id,
     )
 
 

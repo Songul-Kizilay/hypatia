@@ -2,6 +2,31 @@
 
 All notable project changes are recorded here.
 
+## [0.3.84] - 2026-08-21
+
+### Added
+
+- The accepted source currently selected in the desktop now exposes its
+  user-authored assessments from the already loaded immutable run snapshot.
+- Assessment labels distinguish `current` and `superseded` audit state while
+  retaining bounded authored text and the exact assessment ID.
+- Explicit actions can copy one current assessment ID into the manual
+  correction-target field or append it to comparison-assessment IDs.
+
+### Safety
+
+- Selecting a source or assessment never edits authored fields or starts Brain,
+  storage, provider, network, LLM, knowledge-index, or mutation work.
+- Superseded, stale, cross-source, duplicate, non-comparison-source, and over-50
+  comparison selections are refused locally without changing form values.
+
+### Verification
+
+- The package-aware full local suite contains 1,439 passing automated tests.
+- Focused desktop coverage contains 80 passing tests for audit-state rendering,
+  current-record preference, exact-ID handoff, ownership, duplicate/limit, and
+  stale-selection guards.
+
 ## [0.3.83] - 2026-08-21
 
 ### Added
