@@ -50,10 +50,15 @@ jobs:
           $env:HYPATIA_DESKTOP_DATA_DIR = $smokeDirectory
           $executable = Resolve-Path ".\dist\Hypatia\Hypatia.exe"
           $workingDirectory = Split-Path -Parent $executable
-          $process = Start-Process `
-            -FilePath $executable `
-            -WorkingDirectory $workingDirectory `
-            -PassThru
+          $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+          $startInfo.FileName = $executable.Path
+          $startInfo.WorkingDirectory = $workingDirectory
+          $startInfo.UseShellExecute = $false
+          $startInfo.Environment["HYPATIA_DESKTOP_DATA_DIR"] = $smokeDirectory
+          $process = [System.Diagnostics.Process]::Start($startInfo)
+          if ($null -eq $process) {
+            throw "Hypatia process could not be started."
+          }
           $sessionPath = Join-Path $smokeDirectory "sessions\sessions.json"
           $deadline = (Get-Date).AddSeconds(30)
           try {
