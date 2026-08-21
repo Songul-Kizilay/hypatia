@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.59` in the current release candidate) are the
+- **Runtime releases** (`v0.3.60` in the current release candidate) are the
   executable package and GitHub release line. They are the source-backed
   implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
@@ -308,7 +308,7 @@ Not implemented:
 
 The current local verification baseline is:
 
-- package-aware `python -m unittest`: 1,272 tests passed. Explicit `tests.*`
+- package-aware `python -m unittest`: 1,277 tests passed. Explicit `tests.*`
   module names ensure nested test directories are included without shadowing
   source packages.
 - `python -m black --check src tests`: passed.
@@ -351,9 +351,25 @@ memory/session files and leaving project data unchanged.
 4. Existing deterministic keyword selection must remain an available fallback
    until semantic retrieval has independently verified relevance, ties, bounds,
    and failure behavior.
-5. The schema-v1 session registry has no physical-file, session-count, or
-   session-ID length bounds. Those limits are required before session history
-   is allowed to grow substantially.
+5. The schema-v1 general memory snapshot has no physical-file, record-count,
+   memory-ID/content, or metadata/tag aggregate bounds. Those limits are
+   required before long-lived learned memory is allowed to grow substantially.
+
+## Completed Increment: Session Registry Snapshot Bounds
+
+The schema-v1 session registry now has explicit resource limits without
+changing its persisted shape or transaction semantics.
+
+- Complete UTF-8 snapshots are capped at 64 MiB; reads consume at most one
+  detection byte beyond that limit from the opened descriptor before decoding.
+- Registries are capped at 20,000 ordered sessions and each active or record
+  session ID is capped at 1,024 characters.
+- Collection and ID limits are enforced before record parsing or serialization,
+  and boolean values cannot be coerced into schema version 1.
+- Atomic writes count exact UTF-8 bytes, including the final newline. Oversized
+  or failed writes preserve the prior snapshot and clean temporary files.
+- Default-session presence, active-session membership, case-sensitive IDs,
+  duplicate rejection, timezone-aware timestamps, and order remain unchanged.
 
 ## Completed Increment: Semantic Retrieval Core
 

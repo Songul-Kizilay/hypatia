@@ -69,6 +69,8 @@ To create the world's most capable personal AI research companion.
 - Sessions and persisted structured conversation memory
 - Session creation, activation, targeted overview/details/activity/recent views,
   conversation search, rename, and guarded deletion
+- A bounded session registry with atomic UTF-8 snapshots, deterministic order,
+  and enforced default/active-session invariants
 - Deterministic Brain request flow when the LLM runtime is disabled
 - Deterministic English and Turkish standalone greetings; substantive messages
   that begin with a greeting continue through the normal conversation path

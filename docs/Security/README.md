@@ -45,6 +45,10 @@ Hypatia currently runs as a local-first CLI. The initial security boundary is:
   1,024 characters per endpoint ID, and 64 MiB of UTF-8 JSON; opened-descriptor
   reads stop before oversized decoding, and bounded temporary writes preserve
   the prior snapshot on failure;
+- session-registry snapshots are limited to 20,000 ordered sessions, 1,024
+  characters per session ID, and 64 MiB of UTF-8 JSON; opened-descriptor reads
+  stop before oversized decoding, and exact-byte atomic writes preserve the
+  prior registry and its default/active-session invariants on failure;
 - semantic embeddings are opt-in and restricted to the local Ollama endpoint
   policy enforced at bootstrap.
 
