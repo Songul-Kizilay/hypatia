@@ -92,6 +92,11 @@ Hypatia currently runs as a local-first CLI. The initial security boundary is:
   pending IDs, coalesces repeated record events, rejects superseded embeddings,
   preserves per-record failure diagnostics, and never rolls back or delays an
   already-persisted primary-memory mutation;
+- explicit desktop provider and HTTPS actions share one daemon single-flight
+  worker; Tkinter alone consumes and renders completions, all command buttons
+  are disabled while Brain is active, duplicate keyboard requests are rejected,
+  close discards late results, and unexpected exceptions are reduced to a
+  generic message without exposing provider or transport detail;
 - semantic embeddings are opt-in and restricted to the local Ollama endpoint
   policy enforced at bootstrap.
 

@@ -162,6 +162,11 @@ To create the world's most capable personal AI research companion.
   catalog, explicit local-RAG questions, and user-initiated public HTTPS source
   loading; it delegates every action to the existing Brain runtime and adds no
   browser, cloud store, background crawler, or duplicate data store
+- A single-flight desktop request worker for explicit chat, semantic recall,
+  cited knowledge answers, research discovery, and approved HTTPS loading. It
+  keeps Tkinter responsive, renders results only on the event thread, rejects
+  duplicate submissions, preserves newly typed composer text, and discards late
+  results after close
 
 Roadmap modules listed above are product direction, not a claim that every module is
 already implemented.
@@ -207,8 +212,9 @@ checks. If that address fails, only the remaining addresses from the same
 public-only DNS answer are tried within one decreasing connection-time budget.
 It accepts only bounded HTML/plain-text/Markdown content, extracts
 readable text, and indexes it through the same knowledge pipeline with its final
-URL preserved. It does not search for sources, run in the background, call an
-LLM, or write conversation memory.
+URL preserved. The explicit request runs on the desktop's single daemon worker
+so the Tkinter event loop stays responsive; it does not search for sources,
+call an LLM, or write conversation memory.
 `Start research` creates a local audit record for one question. `Research runs`
 lists those records, and entering the selected run ID before `Load source`
 attaches accepted source provenance to it. The run keeps timestamps and safe
