@@ -4,6 +4,7 @@ import json
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
@@ -75,6 +76,27 @@ class OllamaEmbeddingProviderTests(unittest.TestCase):
                 )
                 with self.assertRaisesRegex(MemoryError, expected):
                     provider.embed("source")
+
+    def test_rejects_oversized_provider_vector_before_embedding_construction(
+        self,
+    ) -> None:
+        provider = OllamaEmbeddingProvider(
+            endpoint="http://localhost:11434/api/embed",
+            model="embeddinggemma",
+            transport=lambda *_: {"embeddings": [[1, 0, 0]]},
+        )
+
+        with (
+            patch("memory.OllamaEmbeddingProvider.MAX_EMBEDDING_DIMENSION", 2),
+            patch(
+                "memory.OllamaEmbeddingProvider.Embedding",
+                side_effect=AssertionError(
+                    "Oversized provider output must not construct an Embedding."
+                ),
+            ),
+        ):
+            with self.assertRaisesRegex(MemoryError, "response invalid"):
+                provider.embed("source")
 
 
 if __name__ == "__main__":

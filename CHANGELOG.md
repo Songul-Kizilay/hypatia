@@ -2,6 +2,33 @@
 
 All notable project changes are recorded here.
 
+## [0.3.63] - 2026-08-21
+
+### Changed
+
+- Every `Embedding` is capped at 16,384 finite values. The derived live semantic
+  index accepts at most 20,000 entries, 1,024 characters per memory ID, and
+  4,000,000 aggregate vector values.
+- Full index rebuilds reject excessive record populations before provider work
+  and reject an excessive aggregate after the first dimension is established.
+  Ollama responses reject oversized raw vectors before constructing a second
+  normalized representation.
+- Cosine ranking now uses overflow-safe norms and normalized summation, keeping
+  scores finite and within `[-1.0, 1.0]` even for very large finite values.
+
+### Safety
+
+- Rejected incremental updates preserve the last complete live index and do not
+  add the rejected entry to the optional cache. Primary memory writes remain
+  successful and the existing safe semantic-update diagnostic is retained.
+- Exact-limit inserts and replacements remain deterministic; failed new-entry
+  attempts do not establish a dimension or partially change the live index.
+
+### Verification
+
+- The package-aware full local suite contains 1,302 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass across 311 source files.
+
 ## [0.3.62] - 2026-08-21
 
 ### Changed

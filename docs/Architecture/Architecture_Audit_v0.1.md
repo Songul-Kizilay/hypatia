@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.62` in the current release candidate) are the
+- **Runtime releases** (`v0.3.63` in the current release candidate) are the
   executable package and GitHub release line. They are the source-backed
   implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
@@ -218,7 +218,9 @@ Implemented memory capabilities:
   context, keyword selection, and stable ranked keyword top-k selection.
 - A dependency-free semantic retrieval core: immutable validated embeddings, an
   embedding-provider boundary, and a derived in-memory cosine-similarity index
-  keyed by existing memory IDs. A builder produces a fresh index from the
+  keyed by existing memory IDs. Embeddings are capped at 16,384 values, and a
+  live index is capped at 20,000 entries, 1,024 characters per memory ID, and
+  4,000,000 aggregate values. A builder preflights a fresh index from the
   current active memory-record snapshot without changing persistence.
 - An explicit stdlib-based Ollama `/api/embed` adapter with strict single-vector
   response validation and redirect rejection, keeping opted-in requests at the
@@ -310,7 +312,7 @@ Not implemented:
 
 The current local verification baseline is:
 
-- package-aware `python -m unittest`: 1,296 tests passed. Explicit `tests.*`
+- package-aware `python -m unittest`: 1,302 tests passed. Explicit `tests.*`
   module names ensure nested test directories are included without shadowing
   source packages.
 - `python -m black --check src tests`: passed.
@@ -353,10 +355,30 @@ memory/session files and leaving project data unchanged.
 4. Existing deterministic keyword selection must remain an available fallback
    until semantic retrieval has independently verified relevance, ties, bounds,
    and failure behavior.
-5. Persisted semantic-cache input is bounded, but the general `Embedding` value
-   and derived in-memory semantic index do not yet share global dimension,
-   entry-count, or aggregate-value limits. Provider output and fresh-index
-   construction need those live-memory limits before broader semantic use.
+5. Embedding output and live-index populations are bounded, but semantic query
+   source text and the outbound Ollama JSON request body have no shared
+   character or exact UTF-8 byte boundary. Those limits are required before
+   broader semantic input paths are enabled.
+
+## Completed Increment: Live Semantic Index Bounds
+
+Provider output and the derived in-memory semantic index now share explicit
+resource boundaries without making primary-memory writes depend on embeddings.
+
+- Every embedding is capped at 16,384 finite values. Ollama rejects a larger
+  raw response vector before constructing its normalized tuple.
+- Live indexes are capped at 20,000 entries, 1,024 characters per memory ID,
+  and 4,000,000 aggregate vector values. Replacements do not consume additional
+  capacity.
+- Full rebuilds reject excessive record counts before provider requests and
+  reject an excessive aggregate as soon as the first dimension is known,
+  before cache replacement or runtime publication.
+- Incremental limit failures retain the last working index and do not add the
+  rejected record to the optional cache. Primary memory stays committed and
+  exposes only the safe existing semantic-update diagnostic.
+- Overflow-safe norms and normalized summation keep cosine scores finite and
+  clamped to the mathematical range for every accepted finite vector while
+  preserving deterministic score and memory-ID ordering.
 
 ## Completed Increment: Semantic Embedding Cache Bounds
 

@@ -4,6 +4,7 @@ import math
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
@@ -28,6 +29,12 @@ class EmbeddingTests(unittest.TestCase):
             with self.subTest(value=value):
                 with self.assertRaisesRegex(ValueError, "finite numbers"):
                     Embedding((value,))  # type: ignore[arg-type]
+
+    def test_dimension_bound_accepts_exact_limit_and_rejects_overflow(self) -> None:
+        with patch("memory.Embedding.MAX_EMBEDDING_DIMENSION", 2):
+            self.assertEqual(Embedding((1, 0)).dimension, 2)
+            with self.assertRaisesRegex(ValueError, "cannot exceed 2"):
+                Embedding((1, 0, 0))
 
 
 if __name__ == "__main__":

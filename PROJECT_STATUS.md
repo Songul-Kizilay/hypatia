@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.62 (Genesis)`
+`v0.3.63 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.62`** is the current executable package and GitHub
+- **Runtime release `v0.3.63`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -233,8 +233,12 @@ with optional OpenAI-compatible LLM conversation support.
   keyword selection, deterministic ranked selection, and optional top-k
   selection configured through the process environment.
 - A derived, in-memory semantic retrieval core with validated embeddings, an
-  embedding-provider boundary, deterministic cosine ranking, and a fresh-index
-  builder for current active records. An explicit Ollama `/api/embed` adapter
+  embedding-provider boundary, overflow-safe deterministic cosine ranking, and
+  a fresh-index builder for current active records. Embeddings are capped at
+  16,384 values; a live index is capped at 20,000 entries, 1,024 characters per
+  memory ID, and 4,000,000 aggregate vector values. Full rebuilds preflight
+  population limits, and incremental failures preserve the last working index
+  and optional cache. An explicit Ollama `/api/embed` adapter
   is available without third-party dependencies, rejects HTTP redirects, and
   reads at most 1 MiB before parsing an embedding response. Opt-in Bootstrap wiring builds
   and registers a replacement index at startup. After a successful startup it
@@ -344,7 +348,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 1,296 automated tests pass through package-aware discovery.
+- 1,302 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -371,8 +375,8 @@ so this check did not alter the project's persisted data.
 
 ## Next Milestone
 
-Define global embedding-dimension and aggregate in-memory semantic-index limits.
-The cache now rejects excessive persisted snapshots, but provider output and a
-fresh live index still need a shared resource boundary that rejects oversized
-vectors and index populations before retaining them, while preserving atomic
-refresh and deterministic ranking.
+Define semantic source-text and outbound Ollama embedding-request payload
+bounds. Persisted records and vector responses are bounded, but direct semantic
+queries still need a shared character/UTF-8 request boundary before JSON body
+construction and transport, without changing exact-text embedding semantics or
+the deterministic lexical fallback.

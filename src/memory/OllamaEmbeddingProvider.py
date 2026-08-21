@@ -7,7 +7,7 @@ from collections.abc import Callable
 from typing import cast
 
 from core.Exceptions import MemoryError
-from memory.Embedding import Embedding
+from memory.Embedding import MAX_EMBEDDING_DIMENSION, Embedding
 
 OllamaEmbeddingTransport = Callable[[str, dict[str, object]], object]
 
@@ -48,6 +48,8 @@ def _extract_single_embedding(response: object) -> Embedding:
     if not isinstance(embeddings, list) or len(embeddings) != 1:
         raise MemoryError("Embedding response invalid.")
     if not isinstance(raw_embedding, list):
+        raise MemoryError("Embedding response invalid.")
+    if len(raw_embedding) > MAX_EMBEDDING_DIMENSION:
         raise MemoryError("Embedding response invalid.")
 
     try:

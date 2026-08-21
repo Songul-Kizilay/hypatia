@@ -4,6 +4,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
@@ -164,6 +165,42 @@ class SemanticMemoryIndexRuntimeTests(unittest.TestCase):
 
             self.assertTrue(memory_manager.delete(record.memory_id))
             self.assertIsNone(cache.get(record.memory_id, "Updated fact"))
+
+    def test_incremental_limit_failure_preserves_index_and_cache(self) -> None:
+        event_bus = EventBus()
+        memory_manager = MemoryManager(event_bus)
+        first = memory_manager.add("First fact")
+        provider = ToggleEmbeddingProvider(Embedding((1, 0)))
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            cache = JsonFileSemanticEmbeddingCache(
+                Path(temporary_directory) / "semantic_embeddings.json",
+                "provider",
+            )
+            runtime = SemanticMemoryIndexRuntime(
+                SemanticMemoryIndexBuilder(provider, cache)
+            )
+            index = runtime.refresh(memory_manager)
+            runtime.attach(event_bus)
+
+            with patch(
+                "memory.InMemorySemanticMemoryIndex."
+                "MAX_SEMANTIC_MEMORY_INDEX_ENTRIES",
+                1,
+            ):
+                second = memory_manager.add("Second fact")
+
+            self.assertEqual(memory_manager.count(), 2)
+            self.assertEqual(index.count(), 1)
+            self.assertEqual(
+                index.search(Embedding((1, 0))),
+                (SemanticMemoryMatch(memory_id=first.memory_id, score=1.0),),
+            )
+            self.assertIsNone(cache.get(second.memory_id, "Second fact"))
+            self.assertEqual(
+                runtime.last_update_error(),
+                "Semantic index update failed.",
+            )
 
 
 if __name__ == "__main__":

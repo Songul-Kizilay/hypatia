@@ -60,6 +60,11 @@ Hypatia currently runs as a local-first CLI. The initial security boundary is:
   aggregate vector values, and 64 MiB of UTF-8 JSON; descriptor-bounded reads
   and exact-byte atomic writes preserve provider isolation and the prior cache
   after invalid, oversized, or failed updates;
+- semantic embeddings are limited to 16,384 finite values, and the live
+  semantic index is limited to 20,000 entries, 1,024-character memory IDs, and
+  4,000,000 aggregate vector values; full builds preflight limits before
+  publication, incremental failures preserve the last working index and cache,
+  and overflow-safe cosine math cannot emit a non-finite accepted score;
 - semantic embeddings are opt-in and restricted to the local Ollama endpoint
   policy enforced at bootstrap.
 

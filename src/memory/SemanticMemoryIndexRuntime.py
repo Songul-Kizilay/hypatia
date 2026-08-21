@@ -82,9 +82,10 @@ class SemanticMemoryIndexRuntime:
                 content = event.payload.get("content")
                 if not isinstance(content, str):
                     return
-                index.upsert(
+                self._builder.upsert_memory_record(
+                    index,
                     memory_id,
-                    self._builder.embed_memory_record(memory_id, content),
+                    content,
                 )
                 self._last_update_error = None
         except Exception:

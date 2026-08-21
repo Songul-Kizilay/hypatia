@@ -2,10 +2,28 @@
 
 from __future__ import annotations
 
-from math import sqrt
+from math import fsum, sqrt
 
-from memory.Embedding import Embedding
+from memory.Embedding import MAX_EMBEDDING_DIMENSION, Embedding
 from memory.SemanticMemoryMatch import SemanticMemoryMatch
+
+MAX_SEMANTIC_MEMORY_INDEX_ENTRIES = 20_000
+MAX_SEMANTIC_MEMORY_INDEX_MEMORY_ID_CHARACTERS = 1_024
+MAX_SEMANTIC_MEMORY_INDEX_VALUES = 4_000_000
+
+
+def validate_semantic_memory_index_population(
+    entry_count: int,
+    dimension: int | None = None,
+) -> None:
+    """Reject a prospective live index before retaining excessive vectors."""
+    if entry_count > MAX_SEMANTIC_MEMORY_INDEX_ENTRIES:
+        raise ValueError("Semantic memory index has too many entries.")
+    if (
+        dimension is not None
+        and entry_count * dimension > MAX_SEMANTIC_MEMORY_INDEX_VALUES
+    ):
+        raise ValueError("Semantic memory index has too many embedding values.")
 
 
 class InMemorySemanticMemoryIndex:
@@ -16,9 +34,11 @@ class InMemorySemanticMemoryIndex:
             isinstance(dimension, bool)
             or not isinstance(dimension, int)
             or dimension < 1
+            or dimension > MAX_EMBEDDING_DIMENSION
         ):
             raise ValueError(
-                "Semantic memory index dimension must be a positive integer."
+                "Semantic memory index dimension must be a supported positive "
+                "integer."
             )
         self._dimension = dimension
         self._embeddings: dict[str, Embedding] = {}
@@ -36,6 +56,13 @@ class InMemorySemanticMemoryIndex:
         """Insert or replace one memory embedding."""
         self._validate_memory_id(memory_id)
         self._validate_embedding(embedding)
+        prospective_count = len(self._embeddings) + (
+            0 if memory_id in self._embeddings else 1
+        )
+        validate_semantic_memory_index_population(
+            prospective_count,
+            embedding.dimension,
+        )
         if self._dimension is None:
             self._dimension = embedding.dimension
         self._embeddings[memory_id] = embedding
@@ -57,18 +84,29 @@ class InMemorySemanticMemoryIndex:
         if limit == 0 or not self._embeddings:
             return ()
 
-        query_norm = self._norm(query)
-        if query_norm == 0.0:
+        query_scale, query_scaled_norm = self._scaled_norm(query)
+        if query_scale == 0.0:
             return ()
 
-        matches = tuple(
-            SemanticMemoryMatch(
-                memory_id=memory_id,
-                score=self._cosine_similarity(query, embedding, query_norm),
+        matches_list: list[SemanticMemoryMatch] = []
+        for memory_id, embedding in self._embeddings.items():
+            embedding_scale, embedding_scaled_norm = self._scaled_norm(embedding)
+            if embedding_scale == 0.0:
+                continue
+            matches_list.append(
+                SemanticMemoryMatch(
+                    memory_id=memory_id,
+                    score=self._cosine_similarity(
+                        query,
+                        embedding,
+                        query_scale,
+                        query_scaled_norm,
+                        embedding_scale,
+                        embedding_scaled_norm,
+                    ),
+                )
             )
-            for memory_id, embedding in self._embeddings.items()
-            if self._norm(embedding) != 0.0
-        )
+        matches = tuple(matches_list)
         ranked_matches = tuple(
             sorted(matches, key=lambda match: (-match.score, match.memory_id))
         )
@@ -90,6 +128,8 @@ class InMemorySemanticMemoryIndex:
             or memory_id != memory_id.strip()
         ):
             raise ValueError("Semantic memory index requires a non-empty memory ID.")
+        if len(memory_id) > MAX_SEMANTIC_MEMORY_INDEX_MEMORY_ID_CHARACTERS:
+            raise ValueError("Semantic memory index memory ID is too long.")
 
     @staticmethod
     def _validate_limit(limit: int | None) -> None:
@@ -101,19 +141,26 @@ class InMemorySemanticMemoryIndex:
             )
 
     @staticmethod
-    def _norm(embedding: Embedding) -> float:
-        return sqrt(sum(value * value for value in embedding.values))
+    def _scaled_norm(embedding: Embedding) -> tuple[float, float]:
+        scale = max(abs(value) for value in embedding.values)
+        if scale == 0.0:
+            return 0.0, 0.0
+        return scale, sqrt(fsum((value / scale) ** 2 for value in embedding.values))
 
     def _cosine_similarity(
         self,
         query: Embedding,
         embedding: Embedding,
-        query_norm: float,
+        query_scale: float,
+        query_scaled_norm: float,
+        embedding_scale: float,
+        embedding_scaled_norm: float,
     ) -> float:
-        embedding_norm = self._norm(embedding)
-        return sum(
-            query_value * embedding_value
+        score = fsum(
+            (query_value / query_scale / query_scaled_norm)
+            * (embedding_value / embedding_scale / embedding_scaled_norm)
             for query_value, embedding_value in zip(
                 query.values, embedding.values, strict=True
             )
-        ) / (query_norm * embedding_norm)
+        )
+        return max(-1.0, min(1.0, score))
