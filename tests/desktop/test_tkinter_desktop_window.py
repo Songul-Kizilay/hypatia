@@ -18,6 +18,8 @@ from brain.BrainResponse import BrainResponse
 from core.CancellationSignal import CancellationToken
 from desktop.DesktopRequestRunner import DesktopRequestCompletion
 from desktop.TkinterDesktopWindow import (
+    _RESEARCH_ANALYSIS_TAB_TITLES,
+    _RESEARCH_WORKFLOW_TAB_TITLES,
     DesktopTheme,
     TkinterDesktopWindow,
     _accessibility_palette,
@@ -110,6 +112,28 @@ class AccessibilityPreferenceTests(unittest.TestCase):
             _accessibility_palette("unknown"),
             _accessibility_palette(DesktopTheme.EYE_COMFORT),
         )
+
+    def test_research_workflow_tabs_present_four_ordered_user_steps(self) -> None:
+        self.assertEqual(
+            _RESEARCH_WORKFLOW_TAB_TITLES,
+            (
+                "1  Overview",
+                "2  Sources & evidence",
+                "3  Authored analysis",
+                "4  Review & export",
+            ),
+        )
+        self.assertEqual(len(set(_RESEARCH_WORKFLOW_TAB_TITLES)), 4)
+        self.assertEqual(
+            _RESEARCH_ANALYSIS_TAB_TITLES,
+            (
+                "Saved records",
+                "Comparison",
+                "Assessment",
+                "Claims & contradictions",
+            ),
+        )
+        self.assertEqual(len(set(_RESEARCH_ANALYSIS_TAB_TITLES)), 4)
 
     def test_window_applies_text_size_and_high_contrast_to_text_controls(self) -> None:
         window: Any = object.__new__(TkinterDesktopWindow)

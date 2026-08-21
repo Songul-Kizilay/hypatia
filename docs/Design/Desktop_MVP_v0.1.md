@@ -1,7 +1,8 @@
 # Desktop MVP v0.1
 
-**Status:** Initial Tkinter shell, explicit HTTPS source intake, and persistent
-research-run controls implemented; broader MVP views remain planned.
+**Status:** Initial Tkinter shell, explicit HTTPS source intake, persistent
+research-run controls, and a bounded research workflow layout implemented;
+broader MVP views remain planned.
 
 ## Purpose
 
@@ -45,6 +46,9 @@ The MVP may present only current Brain/CognitiveEngine capabilities:
   pair, bounded authored note, recorded time, ID, and explicit pair handoff;
 - a selected-run read-only persisted comparison-note selector with bounded text,
   time, exact ID/reference summary, and three isolated reference handoffs;
+- four ordered presentation-only Research workflow tabs, plus four Authored
+  analysis sub-tabs, that retain every existing field and command without
+  opening a runtime action when navigation changes;
 - read-only accepted-content restoration status captured during startup, with
   only availability and aggregate restored document/paragraph counts;
 - explicit recording and read-only viewing of a selected attached-source chunk
@@ -159,6 +163,12 @@ The same explicitly entered query can request the existing bounded, cited
 `Knowledge graph` view, while `Loaded sources` opens the existing read-only
 local source catalog. Neither action calls an LLM, augments ordinary chat, or
 changes conversation memory or knowledge state.
+The Research tab presents its existing controls as `Overview`, `Sources &
+evidence`, `Authored analysis`, and `Review & export`. The authored-analysis
+section further separates saved records, comparison, assessment, and
+claims/contradictions. These are navigation-only Tkinter notebooks: all fields,
+commands, previews, confirmations, and runtime boundaries remain the existing
+ones, and switching sections changes no selected value or persisted state.
 `Load file` opens a native picker for exactly one `.md` or `.txt` file. The
 desktop passes that selected path to the existing Brain boundary as a structured
 local-source request; the runtime validates and indexes it before returning its
