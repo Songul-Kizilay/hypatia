@@ -2,6 +2,35 @@
 
 All notable project changes are recorded here.
 
+## [0.3.79] - 2026-08-21
+
+### Added
+
+- Successful contradiction suggestions now populate a read-only desktop pair
+  selector for the exact research run that produced them.
+- `Use selected pair` copies only the chosen two persisted claim IDs into the
+  existing manual contradiction form.
+
+### Changed
+
+- Starting a new suggestion or creating a different research run clears the
+  ephemeral candidate selector. A run mismatch also discards stale candidates
+  before refusing the handoff.
+
+### Safety
+
+- Selecting a pair never copies model rationale into the user's note, invokes a
+  provider, records a relationship, or bypasses preview, confirmation, and final
+  runtime revalidation.
+- The user's existing note remains untouched and the interface states that
+  nothing was recorded.
+
+### Verification
+
+- The package-aware full local suite contains 1,422 passing automated tests.
+- Focused coverage verifies successful handoff, unchanged authored notes,
+  cancellable generation, stale-run rejection, and selector clearing.
+
 ## [0.3.78] - 2026-08-21
 
 ### Added

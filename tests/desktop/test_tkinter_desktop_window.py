@@ -31,8 +31,14 @@ from knowledge.Document import DocumentType
 from knowledge.KnowledgeCitation import KnowledgeCitation
 from knowledge.KnowledgeDocumentReference import KnowledgeDocumentReference
 from research.ResearchClaimConfidence import ResearchClaimConfidence
+from research.ResearchClaimContradictionCandidate import (
+    ResearchClaimContradictionCandidate,
+)
 from research.ResearchClaimContradictionPreview import (
     ResearchClaimContradictionPreview,
+)
+from research.ResearchClaimContradictionProposalPreview import (
+    ResearchClaimContradictionProposalPreview,
 )
 from research.ResearchClaimContradictionWritePreview import (
     ResearchClaimContradictionWritePreview,
@@ -367,6 +373,14 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             ),
         )
         window._research_candidate_run_id = "old-run"
+        window._research_claim_contradiction_proposal = RecordingVariable(
+            "old proposal"
+        )
+        window._research_claim_contradiction_proposal_selector = (
+            RecordingCandidateSelector(selected_index=0)
+        )
+        window._research_claim_contradiction_proposal_run_id = "old-run"
+        window._research_claim_contradiction_proposals = ()
         window._status = RecordingStatus()
         window._append_response = responses.append
 
@@ -1133,6 +1147,12 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_id = RecordingInput("run-123")
         window._status = RecordingStatus()
         window._append_response = responses.append
+        window._research_claim_contradiction_proposal = RecordingVariable("")
+        window._research_claim_contradiction_proposal_selector = (
+            RecordingCandidateSelector()
+        )
+        window._research_claim_contradiction_proposal_run_id = ""
+        window._research_claim_contradiction_proposals = ()
         _configure_request_boundary(window)
 
         window._suggest_research_claim_contradictions()
@@ -1144,6 +1164,82 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         self.assertEqual(
             responses,
             [controller.claim_contradiction_proposal_response],
+        )
+        self.assertEqual(
+            window._research_claim_contradiction_proposal_run_id,
+            "run-123",
+        )
+        self.assertEqual(
+            window._research_claim_contradiction_proposal_selector.values,
+            ("1. claim-1 ↔ claim-2",),
+        )
+
+    def test_selected_contradiction_proposal_only_copies_ids_into_manual_form(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        candidate = ResearchClaimContradictionCandidate(
+            ("claim-1", "claim-2"),
+            ("evidence-1", "evidence-2"),
+            "Possible conflict.",
+        )
+        window._research_run_id = RecordingInput("run-123")
+        window._research_claim_contradiction_proposal_run_id = "run-123"
+        window._research_claim_contradiction_proposals = (candidate,)
+        window._research_claim_contradiction_proposal_selector = (
+            RecordingCandidateSelector(selected_index=0)
+        )
+        window._research_claim_contradiction_proposal = RecordingVariable(
+            "1. claim-1 ↔ claim-2"
+        )
+        window._research_claim_contradiction_ids = RecordingVariable("old IDs")
+        window._research_claim_contradiction_note = RecordingVariable(
+            "User-authored note stays unchanged."
+        )
+        window._status = RecordingStatus()
+
+        window._use_selected_research_claim_contradiction_proposal()
+
+        self.assertEqual(
+            window._research_claim_contradiction_ids.value,
+            "claim-1, claim-2",
+        )
+        self.assertEqual(
+            window._research_claim_contradiction_note.value,
+            "User-authored note stays unchanged.",
+        )
+        self.assertEqual(
+            window._status.values,
+            ["suggested claim IDs copied; note unchanged; nothing recorded"],
+        )
+
+    def test_stale_contradiction_proposal_never_changes_manual_form(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        candidate = ResearchClaimContradictionCandidate(
+            ("claim-1", "claim-2"),
+            ("evidence-1", "evidence-2"),
+            "Possible conflict.",
+        )
+        window._research_run_id = RecordingInput("different-run")
+        window._research_claim_contradiction_proposal_run_id = "run-123"
+        window._research_claim_contradiction_proposals = (candidate,)
+        window._research_claim_contradiction_proposal_selector = (
+            RecordingCandidateSelector(selected_index=0)
+        )
+        window._research_claim_contradiction_proposal = RecordingVariable(
+            "1. claim-1 ↔ claim-2"
+        )
+        window._research_claim_contradiction_ids = RecordingVariable("old IDs")
+        window._status = RecordingStatus()
+
+        window._use_selected_research_claim_contradiction_proposal()
+
+        self.assertEqual(window._research_claim_contradiction_ids.value, "old IDs")
+        self.assertEqual(window._research_claim_contradiction_proposals, ())
+        self.assertEqual(window._research_claim_contradiction_proposal.value, "")
+        self.assertEqual(
+            window._status.values,
+            ["Request and select a contradiction suggestion first."],
         )
 
     def test_allowed_claim_contradiction_requires_confirmation_before_record(
@@ -1819,11 +1915,28 @@ class RecordingResearchSourceLoadController:
             memory_count=0,
             research_claim_contradiction_preview=contradiction_history,
         )
+        contradiction_proposal = ResearchClaimContradictionProposalPreview(
+            run_id=run.run_id,
+            question=run.question,
+            run_status=run.status,
+            snapshot_updated_at=run.updated_at,
+            provider_name="configured_llm",
+            claims=contradiction_claims,
+            candidates=(
+                ResearchClaimContradictionCandidate(
+                    ("claim-1", "claim-2"),
+                    (assessment_evidence.evidence_id, second_evidence.evidence_id),
+                    "The conclusions may conflict.",
+                ),
+            ),
+            reason="One candidate requires review.",
+        )
         self.claim_contradiction_proposal_response = BrainResponse(
             message="Possible contradiction candidates.",
             request_id="research-claim-contradiction-proposal",
             intent="research_claim_contradiction_proposal",
             memory_count=0,
+            research_claim_contradiction_proposal_preview=contradiction_proposal,
         )
         contradiction_write_preview = ResearchClaimContradictionWritePreview(
             run_id=run.run_id,

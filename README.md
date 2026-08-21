@@ -305,8 +305,10 @@ not change either claim or decide which one is true.
 the selected run's bounded current claims to the configured LLM, with no chat
 history or tools, then displays possible pairs and exact persisted evidence IDs.
 Suggestions are not facts or saved relationships. To record one, the user must
-still enter the two IDs and their own explanation through the existing preview
-and confirmation flow.
+select it and choose `Use selected pair`, or enter the two IDs manually. The
+handoff copies only the two claim IDs; it never copies model rationale into the
+user's explanation. The existing preview and confirmation flow remains
+mandatory.
 `Compare sources` accepts two to five comma-separated document IDs from the
 selected research run. It shows the sources in the entered order with persisted
 provenance, explicitly recorded evidence, and only current user-authored

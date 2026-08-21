@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.78 (Genesis)`
+`v0.3.79 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.78`** is the current executable package and GitHub
+- **Runtime release `v0.3.79`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -185,6 +185,11 @@ with optional OpenAI-compatible LLM conversation support.
   10 schema-constrained pairs. Hypatia derives evidence only from the exact
   persisted claims, omits already recorded unordered pairs, revalidates the
   complete run snapshot, labels rationale as untrusted, and persists nothing.
+- Successful candidates populate an ephemeral selector tied to the exact run.
+  An explicit `Use selected pair` action copies only two claim IDs into the
+  manual write form. It leaves the user's note unchanged, clears stale
+  cross-run candidates, performs no provider or persistence operation, and does
+  not bypass the existing preview-confirm-record boundary.
 - A separate manual comparison preview accepts an ordered list of two to five
   unique accepted-source document IDs from one exact run. For each source it
   renders persisted provenance, only explicitly recorded evidence, and only
@@ -450,7 +455,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,420 automated tests pass through package-aware discovery.
+- 1,422 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -485,7 +490,7 @@ changed.
 
 ## Next Milestone
 
-Add an explicit candidate-selection handoff that copies exactly one displayed
-pair's two claim IDs into the existing manual contradiction form. It must not
-generate the user's note, treat rationale as truth, bypass preview or
-confirmation, record automatically, or weaken final runtime revalidation.
+Add a read-only research-run selector backed by the persisted run catalog so
+desktop users do not need to copy and paste run IDs for ordinary research
+actions. Selection must remain presentation-only, preserve explicit action
+boundaries, and never start network, provider, or mutation work automatically.
