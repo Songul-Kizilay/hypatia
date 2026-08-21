@@ -273,6 +273,12 @@ Selection alone changes nothing. Only a current same-source record can be copied
 as the next correction target or appended to the manual comparison assessment
 field; comparison source membership, duplicate refusal, and the 50-ID limit are
 enforced locally.
+User-authored claims for the selected run also appear from that immutable
+snapshot. Each label retains `current` or `superseded` audit state, epistemic
+state, categorical confidence, bounded text, and exact claim ID. Selection edits
+nothing. Separate handoffs accept only a current claim and either copy its ID as
+the next predecessor or append it once to the manual contradiction field without
+exceeding exactly two IDs.
 `Find sources` sends the selected collecting run's question to Crossref and
 connects its fixed endpoint and same-origin redirects only to an address from
 their own public-DNS validation while TLS verifies `api.crossref.org`. It

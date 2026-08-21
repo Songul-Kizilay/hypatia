@@ -1195,6 +1195,219 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             ["Select an authored assessment first."],
         )
 
+    def test_selected_run_renders_current_and_superseded_claims(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        now = datetime(2026, 8, 21, tzinfo=UTC)
+        source = _research_source_record("document-1", "Accepted paper")
+        evidence = _research_evidence_record(
+            "evidence-1",
+            source.document_id,
+            "Claim evidence.",
+        )
+        original = _research_claim_record(
+            "claim-1",
+            source.document_id,
+            evidence.evidence_id,
+            "x" * 101,
+            epistemic_state=ResearchEpistemicState.HYPOTHESIS,
+            confidence=ResearchClaimConfidence.LOW,
+        )
+        correction = _research_claim_record(
+            "claim-2",
+            source.document_id,
+            evidence.evidence_id,
+            "Corrected\nauthored claim.",
+            epistemic_state=ResearchEpistemicState.STRONG_EVIDENCE,
+            confidence=ResearchClaimConfidence.HIGH,
+            supersedes_claim_id=original.claim_id,
+        )
+        run = ResearchRun(
+            "run-123",
+            "Review claims",
+            ResearchRunStatus.COLLECTING,
+            (source,),
+            (),
+            now,
+            now,
+            evidence=(evidence,),
+            claims=(original, correction),
+        )
+        window._research_run_id = RecordingVariable("run-123")
+        window._research_run_summary = RecordingVariable("")
+        window._research_run_selector = RecordingCandidateSelector(selected_index=0)
+        window._research_runs = (run,)
+        window._research_source_choice = RecordingVariable("")
+        window._research_source_selector = RecordingCandidateSelector()
+        window._research_sources = ()
+        window._research_source_run_id = ""
+        _configure_research_evidence_selector(window)
+        window._research_claim_supersedes_id = RecordingVariable("manual-predecessor")
+        window._research_claim_contradiction_ids = RecordingVariable("manual-pair")
+        window._status = RecordingStatus()
+
+        window._select_research_run()
+
+        self.assertEqual(window._research_claim_records, (original, correction))
+        self.assertEqual(
+            window._research_current_claim_ids,
+            frozenset({correction.claim_id}),
+        )
+        self.assertEqual(
+            window._research_claim_selector.values,
+            (
+                f"[superseded] [hypothesis/low] {'x' * 97}... — claim-1",
+                "[current] [strong_evidence/high] Corrected authored claim. — claim-2",
+            ),
+        )
+        self.assertEqual(window._research_claim_selector.current(), 1)
+        self.assertEqual(
+            window._research_claim_supersedes_id.value,
+            "manual-predecessor",
+        )
+        self.assertEqual(
+            window._research_claim_contradiction_ids.value,
+            "manual-pair",
+        )
+
+    def test_claim_predecessor_handoff_requires_current_record(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        original = _research_claim_record(
+            "claim-1",
+            "document-1",
+            "evidence-1",
+            "Original claim.",
+        )
+        correction = _research_claim_record(
+            "claim-2",
+            "document-1",
+            "evidence-1",
+            "Current correction.",
+            supersedes_claim_id=original.claim_id,
+        )
+        _configure_selected_research_claims(
+            window,
+            (original, correction),
+            current_ids=frozenset({correction.claim_id}),
+            selected_index=0,
+        )
+        window._research_claim_supersedes_id = RecordingVariable("manual-predecessor")
+        window._status = RecordingStatus()
+
+        window._use_selected_research_claim_as_predecessor()
+        window._research_claim_selector.current(1)
+        window._use_selected_research_claim_as_predecessor()
+
+        self.assertEqual(
+            window._research_claim_supersedes_id.value,
+            correction.claim_id,
+        )
+        self.assertEqual(
+            window._status.values,
+            [
+                "Only a current claim can be superseded.",
+                "claim ID copied as predecessor; nothing requested or saved",
+            ],
+        )
+
+    def test_claim_contradiction_handoff_guards_state_duplicate_and_limit(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        old = _research_claim_record(
+            "claim-old",
+            "document-1",
+            "evidence-1",
+            "Superseded claim.",
+        )
+        first = _research_claim_record(
+            "claim-first",
+            "document-1",
+            "evidence-1",
+            "First current claim.",
+            supersedes_claim_id=old.claim_id,
+        )
+        second = _research_claim_record(
+            "claim-second",
+            "document-1",
+            "evidence-1",
+            "Second current claim.",
+        )
+        third = _research_claim_record(
+            "claim-third",
+            "document-1",
+            "evidence-1",
+            "Third current claim.",
+        )
+        _configure_selected_research_claims(
+            window,
+            (old, first, second, third),
+            current_ids=frozenset({first.claim_id, second.claim_id, third.claim_id}),
+            selected_index=0,
+        )
+        window._research_claim_contradiction_ids = RecordingVariable("")
+        window._status = RecordingStatus()
+
+        window._add_selected_research_claim_to_contradiction()
+        window._research_claim_selector.current(1)
+        window._add_selected_research_claim_to_contradiction()
+        window._add_selected_research_claim_to_contradiction()
+        window._research_claim_selector.current(2)
+        window._add_selected_research_claim_to_contradiction()
+        window._research_claim_selector.current(3)
+        window._add_selected_research_claim_to_contradiction()
+
+        self.assertEqual(
+            window._research_claim_contradiction_ids.value,
+            "claim-first, claim-second",
+        )
+        self.assertEqual(
+            window._status.values,
+            [
+                "Only a current claim can be used in a contradiction.",
+                "claim ID added to contradiction; nothing requested or saved",
+                "claim ID is already in the contradiction; nothing changed",
+                "claim ID added to contradiction; nothing requested or saved",
+                "A contradiction accepts exactly two claim IDs.",
+            ],
+        )
+
+    def test_stale_claim_selection_cannot_overwrite_manual_fields(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        record = _research_claim_record(
+            "claim-old",
+            "document-old",
+            "evidence-old",
+            "Old claim.",
+        )
+        _configure_selected_research_claims(
+            window,
+            (record,),
+            current_ids=frozenset({record.claim_id}),
+        )
+        window._research_run_id.set("run-new")
+        window._research_claim_supersedes_id = RecordingVariable("manual-predecessor")
+        window._research_claim_contradiction_ids = RecordingVariable("manual-pair")
+        window._status = RecordingStatus()
+
+        window._use_selected_research_claim_as_predecessor()
+
+        self.assertEqual(
+            window._research_claim_supersedes_id.value,
+            "manual-predecessor",
+        )
+        self.assertEqual(
+            window._research_claim_contradiction_ids.value,
+            "manual-pair",
+        )
+        self.assertEqual(window._research_claim_records, ())
+        self.assertEqual(window._research_current_claim_ids, frozenset())
+        self.assertEqual(window._research_claim_run_id, "")
+        self.assertEqual(window._research_claim_selector.values, ())
+        self.assertEqual(
+            window._status.values,
+            ["Select an authored claim first."],
+        )
+
     def test_research_markdown_export_preview_uses_selected_run_only(self) -> None:
         window: Any = object.__new__(TkinterDesktopWindow)
         controller = RecordingResearchSourceLoadController()
@@ -3072,6 +3285,7 @@ def _configure_research_evidence_selector(window: Any) -> None:
     window._research_evidence_run_id = ""
     window._research_evidence_source_document_id = ""
     _configure_research_assessment_selector(window)
+    _configure_research_claim_selector(window)
 
 
 def _configure_research_assessment_selector(window: Any) -> None:
@@ -3081,6 +3295,31 @@ def _configure_research_assessment_selector(window: Any) -> None:
     window._research_current_assessment_ids = frozenset()
     window._research_assessment_run_id = ""
     window._research_assessment_source_document_id = ""
+
+
+def _configure_research_claim_selector(window: Any) -> None:
+    window._research_claim_choice = RecordingVariable("")
+    window._research_claim_selector = RecordingCandidateSelector()
+    window._research_claim_records = ()
+    window._research_current_claim_ids = frozenset()
+    window._research_claim_run_id = ""
+
+
+def _configure_selected_research_claims(
+    window: Any,
+    records: tuple[ResearchClaimRecord, ...],
+    *,
+    current_ids: frozenset[str],
+    selected_index: int = 0,
+) -> None:
+    window._research_run_id = RecordingVariable("run-123")
+    window._research_claim_records = records
+    window._research_current_claim_ids = current_ids
+    window._research_claim_run_id = "run-123"
+    window._research_claim_selector = RecordingCandidateSelector(
+        selected_index=selected_index
+    )
+    window._research_claim_choice = RecordingVariable("")
 
 
 def _configure_selected_research_evidence(
@@ -3161,6 +3400,28 @@ def _research_assessment_record(
         text=text,
         recorded_at=datetime(2026, 8, 21, tzinfo=UTC),
         supersedes_assessment_id=supersedes_assessment_id,
+    )
+
+
+def _research_claim_record(
+    claim_id: str,
+    source_document_id: str,
+    evidence_id: str,
+    text: str,
+    *,
+    epistemic_state: ResearchEpistemicState = ResearchEpistemicState.UNKNOWN,
+    confidence: ResearchClaimConfidence = ResearchClaimConfidence.UNASSESSED,
+    supersedes_claim_id: str | None = None,
+) -> ResearchClaimRecord:
+    return ResearchClaimRecord(
+        claim_id=claim_id,
+        text=text,
+        epistemic_state=epistemic_state,
+        confidence=confidence,
+        source_document_ids=(source_document_id,),
+        evidence_ids=(evidence_id,),
+        recorded_at=datetime(2026, 8, 21, tzinfo=UTC),
+        supersedes_claim_id=supersedes_claim_id,
     )
 
 

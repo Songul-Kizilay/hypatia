@@ -20,7 +20,10 @@ from research.ResearchClaimConfidence import ResearchClaimConfidence
 from research.ResearchClaimContradictionCandidate import (
     ResearchClaimContradictionCandidate,
 )
-from research.ResearchClaimRecord import MAX_RESEARCH_CLAIM_EVIDENCE
+from research.ResearchClaimRecord import (
+    MAX_RESEARCH_CLAIM_EVIDENCE,
+    ResearchClaimRecord,
+)
 from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchInformationTrust import ResearchInformationTrust
@@ -200,6 +203,7 @@ class TkinterDesktopWindow:
         self._research_source_choice = tk.StringVar()
         self._research_evidence_choice = tk.StringVar()
         self._research_assessment_choice = tk.StringVar()
+        self._research_claim_choice = tk.StringVar()
         self._research_candidate = tk.StringVar()
         self._research_url = tk.StringVar()
         self._research_source_document_id = tk.StringVar()
@@ -244,6 +248,9 @@ class TkinterDesktopWindow:
         self._research_current_assessment_ids: frozenset[str] = frozenset()
         self._research_assessment_run_id = ""
         self._research_assessment_source_document_id = ""
+        self._research_claim_records: tuple[ResearchClaimRecord, ...] = ()
+        self._research_current_claim_ids: frozenset[str] = frozenset()
+        self._research_claim_run_id = ""
         self._research_candidate_run_id = ""
         self._research_candidate_discovery_id = ""
         self._research_claim_contradiction_proposal_run_id = ""
@@ -792,6 +799,37 @@ class TkinterDesktopWindow:
             text="Add to comparison",
             command=self._add_selected_research_assessment_to_comparison,
         ).grid(row=4, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
+        authored_claim_frame = ttk.Frame(research_run_frame)
+        authored_claim_frame.grid(row=3, column=0, sticky="ew", pady=(8, 0))
+        authored_claim_frame.columnconfigure(1, weight=1)
+        ttk.Label(authored_claim_frame, text="Authored claims").grid(
+            row=0,
+            column=0,
+            sticky="w",
+            padx=(0, 8),
+        )
+        self._research_claim_selector = ttk.Combobox(
+            authored_claim_frame,
+            textvariable=self._research_claim_choice,
+            values=(),
+            state="readonly",
+        )
+        self._research_claim_selector.grid(
+            row=0,
+            column=1,
+            columnspan=3,
+            sticky="ew",
+        )
+        ttk.Button(
+            authored_claim_frame,
+            text="Use as predecessor",
+            command=self._use_selected_research_claim_as_predecessor,
+        ).grid(row=1, column=2, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ttk.Button(
+            authored_claim_frame,
+            text="Add to contradiction",
+            command=self._add_selected_research_claim_to_contradiction,
+        ).grid(row=1, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
         self._request_button(
             research_frame,
             text="Find sources",
@@ -1667,6 +1705,7 @@ class TkinterDesktopWindow:
         selected_index = self._research_run_selector.current()
         if not 0 <= selected_index < len(self._research_runs):
             self._clear_research_sources()
+            self._clear_research_claims()
             self._research_run_summary.set("Refresh and select a research run.")
             self._status.set("Refresh and select a research run first.")
             return
@@ -1676,6 +1715,7 @@ class TkinterDesktopWindow:
         if previous_run_id != selected_run.run_id:
             self._clear_research_run_dependent_presentations()
         self._render_research_source_selector(selected_run)
+        self._render_research_claim_selector(selected_run)
         self._research_run_summary.set(self._research_run_summary_text(selected_run))
         self._status.set(
             f"research run selected: {selected_run.run_id}; no action started"
@@ -1688,6 +1728,108 @@ class TkinterDesktopWindow:
             f"Status: {run.status.value} · Sources: {len(run.sources)} · "
             f"Evidence: {len(run.evidence)} · Claims: {len(run.claims)}"
         )
+
+    def _render_research_claim_selector(self, run: ResearchRun) -> None:
+        """Render authored claims from the already loaded exact run snapshot."""
+        records = run.claims
+        superseded_ids = {
+            record.supersedes_claim_id
+            for record in records
+            if record.supersedes_claim_id is not None
+        }
+        current_ids = frozenset(
+            record.claim_id
+            for record in records
+            if record.claim_id not in superseded_ids
+        )
+        self._research_claim_records = records
+        self._research_current_claim_ids = current_ids
+        self._research_claim_run_id = run.run_id
+        labels = tuple(
+            self._research_claim_label(
+                record,
+                is_current=record.claim_id in current_ids,
+            )
+            for record in records
+        )
+        self._research_claim_selector.configure(values=labels)
+        if not records:
+            self._research_claim_choice.set("")
+            return
+        selected_index = next(
+            (
+                index
+                for index, record in enumerate(records)
+                if record.claim_id in current_ids
+            ),
+            0,
+        )
+        self._research_claim_selector.current(selected_index)
+
+    @staticmethod
+    def _research_claim_label(
+        record: ResearchClaimRecord,
+        *,
+        is_current: bool,
+    ) -> str:
+        """Show audit state, uncertainty, bounded text, and the exact claim ID."""
+        text = " ".join(record.text.split())
+        if len(text) > 100:
+            text = f"{text[:97]}..."
+        audit_state = "current" if is_current else "superseded"
+        return (
+            f"[{audit_state}] [{record.epistemic_state.value}/"
+            f"{record.confidence.value}] {text} — {record.claim_id}"
+        )
+
+    def _selected_research_claim(self) -> ResearchClaimRecord | None:
+        """Return only a claim bound to the currently selected loaded run."""
+        if self._research_run_id.get().strip() != self._research_claim_run_id:
+            self._clear_research_claims()
+            return None
+        selected_index = self._research_claim_selector.current()
+        if not 0 <= selected_index < len(self._research_claim_records):
+            return None
+        return self._research_claim_records[selected_index]
+
+    def _use_selected_research_claim_as_predecessor(self) -> None:
+        """Copy one current claim ID into the manual supersession field only."""
+        record = self._selected_research_claim()
+        if record is None:
+            self._status.set("Select an authored claim first.")
+            return
+        if record.claim_id not in self._research_current_claim_ids:
+            self._status.set("Only a current claim can be superseded.")
+            return
+        self._research_claim_supersedes_id.set(record.claim_id)
+        self._status.set("claim ID copied as predecessor; nothing requested or saved")
+
+    def _add_selected_research_claim_to_contradiction(self) -> None:
+        """Append one current claim ID to the two-ID contradiction field only."""
+        record = self._selected_research_claim()
+        if record is None:
+            self._status.set("Select an authored claim first.")
+            return
+        if record.claim_id not in self._research_current_claim_ids:
+            self._status.set("Only a current claim can be used in a contradiction.")
+            return
+        current_ids = tuple(
+            value.strip()
+            for value in self._research_claim_contradiction_ids.get().split(",")
+            if value.strip()
+        )
+        if record.claim_id in current_ids:
+            self._status.set(
+                "claim ID is already in the contradiction; nothing changed"
+            )
+            return
+        if len(current_ids) >= 2:
+            self._status.set("A contradiction accepts exactly two claim IDs.")
+            return
+        self._research_claim_contradiction_ids.set(
+            ", ".join((*current_ids, record.claim_id))
+        )
+        self._status.set("claim ID added to contradiction; nothing requested or saved")
 
     def _render_research_source_selector(self, run: ResearchRun) -> None:
         """Render accepted sources from the already loaded exact run snapshot."""
@@ -2061,9 +2203,18 @@ class TkinterDesktopWindow:
         self._research_assessment_choice.set("")
         self._research_assessment_selector.configure(values=())
 
+    def _clear_research_claims(self) -> None:
+        """Discard run-bound claim views without editing manual form fields."""
+        self._research_claim_records = ()
+        self._research_current_claim_ids = frozenset()
+        self._research_claim_run_id = ""
+        self._research_claim_choice.set("")
+        self._research_claim_selector.configure(values=())
+
     def _clear_research_run_dependent_presentations(self) -> None:
         """Clear only ephemeral views tied to a previous exact run."""
         self._clear_research_sources()
+        self._clear_research_claims()
         self._clear_research_candidates()
         self._clear_research_claim_contradiction_proposals()
         self._research_markdown_export_preview = None
