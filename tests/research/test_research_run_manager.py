@@ -13,6 +13,8 @@ from unittest.mock import patch
 
 from core.Exceptions import ResearchError
 from knowledge.Chunk import Chunk
+from research.ResearchClaimConfidence import ResearchClaimConfidence
+from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRun import ResearchRun
@@ -62,6 +64,7 @@ class ResearchRunManagerTests(unittest.TestCase):
         self.store = RecordingRunStore()
         evidence_ids = iter(f"evidence-{number}" for number in range(1, 10))
         assessment_ids = iter(("assessment-1", "assessment-2", "assessment-3"))
+        claim_ids = iter(("claim-1", "claim-2", "claim-3"))
         self.manager = ResearchRunManager(
             self.store,
             clock=SequenceClock(self.start),
@@ -70,6 +73,7 @@ class ResearchRunManagerTests(unittest.TestCase):
             discovery_id_factory=lambda: "discovery-1",
             assessment_id_factory=assessment_ids.__next__,
             comparison_note_id_factory=lambda: "comparison-note-1",
+            claim_id_factory=claim_ids.__next__,
         )
 
     def _prepare_comparison_material(
@@ -1506,6 +1510,193 @@ class ResearchRunManagerTests(unittest.TestCase):
             )
 
         self.assertEqual(self.manager.get(run.run_id), before)
+
+    def test_claim_preview_record_and_correction_preserve_auditable_history(
+        self,
+    ) -> None:
+        run = self.manager.create("Question")
+        evidence = []
+        for number in (1, 2):
+            self.manager.add_source(
+                run.run_id,
+                ResearchSource(
+                    f"https://example.com/{number}",
+                    f"Source {number}",
+                    f"Evidence {number}.",
+                    "text/plain",
+                    self.start,
+                ),
+                f"document-{number}",
+            )
+            evidence.append(
+                self.manager.add_evidence(
+                    run.run_id,
+                    Chunk(
+                        f"document-{number}",
+                        0,
+                        f"Evidence {number}.",
+                        chunk_id=f"claim-chunk-{number}",
+                    ),
+                    f"Claim evidence {number}.",
+                ).evidence[-1]
+            )
+        saves_before = len(self.store.saved)
+
+        empty_history = self.manager.preview_claims(run.run_id)
+        preview = self.manager.preview_claim_write(
+            run.run_id,
+            [evidence[1].evidence_id, evidence[0].evidence_id],
+            "  The combined evidence likely supports the claim.  ",
+            "likely",
+            "medium",
+        )
+
+        self.assertEqual(empty_history.claims, ())
+        self.assertEqual(len(self.store.saved), saves_before)
+        self.assertTrue(preview.allowed)
+        self.assertEqual(
+            preview.text, "The combined evidence likely supports the claim."
+        )
+        self.assertEqual(preview.epistemic_state, ResearchEpistemicState.LIKELY)
+        self.assertEqual(preview.confidence, ResearchClaimConfidence.MEDIUM)
+        self.assertEqual(
+            tuple(source.document_id for source in preview.sources),
+            ("document-2", "document-1"),
+        )
+
+        original = self.manager.record_claim(
+            run.run_id,
+            [evidence[1].evidence_id, evidence[0].evidence_id],
+            "The combined evidence likely supports the claim.",
+            ResearchEpistemicState.LIKELY,
+            ResearchClaimConfidence.MEDIUM,
+        ).claims[-1]
+        correction_preview = self.manager.preview_claim_write(
+            run.run_id,
+            [evidence[0].evidence_id],
+            "The available evidence contradicts the original claim.",
+            ResearchEpistemicState.CONTRADICTED,
+            ResearchClaimConfidence.HIGH,
+            original.claim_id,
+        )
+        corrected_run = self.manager.record_claim(
+            run.run_id,
+            [evidence[0].evidence_id],
+            "The available evidence contradicts the original claim.",
+            ResearchEpistemicState.CONTRADICTED,
+            ResearchClaimConfidence.HIGH,
+            original.claim_id,
+        )
+
+        self.assertEqual(original.claim_id, "claim-1")
+        self.assertEqual(correction_preview.supersedes_claim, original)
+        self.assertEqual(len(corrected_run.claims), 2)
+        correction = corrected_run.claims[-1]
+        self.assertEqual(correction.claim_id, "claim-2")
+        self.assertEqual(correction.supersedes_claim_id, original.claim_id)
+        self.assertEqual(correction.source_document_ids, ("document-1",))
+        self.assertEqual(
+            self.manager.preview_claims(run.run_id).claims,
+            corrected_run.claims,
+        )
+        with self.assertRaisesRegex(ResearchError, "already been superseded"):
+            self.manager.record_claim(
+                run.run_id,
+                [evidence[1].evidence_id],
+                "Competing correction.",
+                ResearchEpistemicState.UNKNOWN,
+                ResearchClaimConfidence.UNASSESSED,
+                original.claim_id,
+            )
+
+    def test_claim_write_rejects_invalid_inputs_before_mutation(self) -> None:
+        run = self.manager.create("Question")
+        self.manager.add_source(
+            run.run_id,
+            ResearchSource(
+                "https://example.com/source",
+                "Source",
+                "Evidence.",
+                "text/plain",
+                self.start,
+            ),
+            "document-1",
+        )
+        evidence = self.manager.add_evidence(
+            run.run_id,
+            Chunk("document-1", 0, "Evidence.", chunk_id="claim-chunk"),
+            "Relevant.",
+        ).evidence[-1]
+        before = self.manager.get(run.run_id)
+        saves_before = len(self.store.saved)
+
+        invalid_values = (
+            (["missing-evidence"], "Claim.", "unknown", "unassessed"),
+            ([evidence.evidence_id], "Claim.", "certain", "high"),
+            ([evidence.evidence_id], "Claim.", "fact", "certain"),
+        )
+        for evidence_ids, text, state, confidence in invalid_values:
+            with self.subTest(state=state, confidence=confidence):
+                with self.assertRaises(ResearchError):
+                    self.manager.preview_claim_write(
+                        run.run_id,
+                        evidence_ids,
+                        text,
+                        state,
+                        confidence,
+                    )
+
+        self.assertEqual(self.manager.get(run.run_id), before)
+        self.assertEqual(len(self.store.saved), saves_before)
+
+    def test_closed_run_blocks_claim_write_and_failed_save_is_atomic(self) -> None:
+        run = self.manager.create("Question")
+        self.manager.add_source(
+            run.run_id,
+            ResearchSource(
+                "https://example.com/source",
+                "Source",
+                "Evidence.",
+                "text/plain",
+                self.start,
+            ),
+            "document-1",
+        )
+        evidence = self.manager.add_evidence(
+            run.run_id,
+            Chunk("document-1", 0, "Evidence.", chunk_id="claim-chunk"),
+            "Relevant.",
+        ).evidence[-1]
+        before = self.manager.get(run.run_id)
+        self.store.error = ResearchError("Store unavailable.")
+
+        with self.assertRaisesRegex(ResearchError, "Store unavailable"):
+            self.manager.record_claim(
+                run.run_id,
+                [evidence.evidence_id],
+                "Claim.",
+                ResearchEpistemicState.UNKNOWN,
+            )
+        self.assertEqual(self.manager.get(run.run_id), before)
+        self.store.error = None
+        self.manager.transition_status(run.run_id, ResearchRunStatus.COMPLETED)
+
+        preview = self.manager.preview_claim_write(
+            run.run_id,
+            [evidence.evidence_id],
+            "Too late.",
+            ResearchEpistemicState.UNKNOWN,
+        )
+
+        self.assertFalse(preview.allowed)
+        self.assertIn("closed", preview.reason)
+        with self.assertRaisesRegex(ResearchError, "closed"):
+            self.manager.record_claim(
+                run.run_id,
+                [evidence.evidence_id],
+                "Too late.",
+                ResearchEpistemicState.UNKNOWN,
+            )
 
 
 if __name__ == "__main__":

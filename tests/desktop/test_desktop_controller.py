@@ -545,6 +545,74 @@ class DesktopControllerTests(unittest.TestCase):
 
         self.assertEqual(self.brain.requests, [])
 
+    def test_claim_history_uses_structured_read_only_request(self) -> None:
+        response = self.controller.preview_research_claims(" run-123 ")
+
+        self.assertIs(response, self.response)
+        request = cast(BrainRequest, self.brain.requests[0])
+        self.assertEqual(request.message, "View evidence-linked research claims")
+        self.assertEqual(
+            request.metadata,
+            {
+                "intent": "research_claim_preview",
+                "research_run_id": "run-123",
+            },
+        )
+
+    def test_claim_preview_and_record_use_exact_authored_metadata(self) -> None:
+        values = (
+            " run-123 ",
+            " evidence-2, evidence-1 ",
+            "  The evidence contradicts the claim.  ",
+            " contradicted ",
+            " high ",
+            " claim-previous ",
+        )
+
+        preview = self.controller.preview_research_claim_write(*values)
+        recorded = self.controller.record_research_claim(*values)
+
+        self.assertIs(preview, self.response)
+        self.assertIs(recorded, self.response)
+        expected = {
+            "research_run_id": "run-123",
+            "research_claim_evidence_ids": ["evidence-2", "evidence-1"],
+            "research_claim_text": "The evidence contradicts the claim.",
+            "research_claim_epistemic_state": "contradicted",
+            "research_claim_confidence": "high",
+            "research_claim_supersedes_id": "claim-previous",
+        }
+        self.assertEqual(
+            cast(BrainRequest, self.brain.requests[0]).metadata,
+            {"intent": "research_claim_write_preview", **expected},
+        )
+        self.assertEqual(
+            cast(BrainRequest, self.brain.requests[1]).metadata,
+            {"intent": "research_claim_record", **expected},
+        )
+
+    def test_claim_actions_reject_invalid_values_locally(self) -> None:
+        with self.assertRaisesRegex(ValueError, "cannot be empty"):
+            self.controller.preview_research_claims(" ")
+        invalid_values = (
+            ("", "evidence-1", "Claim.", "unknown"),
+            ("run-1", "", "Claim.", "unknown"),
+            ("run-1", "evidence-1", "", "unknown"),
+            ("run-1", "evidence-1, evidence-1", "Claim.", "unknown"),
+            ("run-1", "evidence-1", "Claim.", "certain"),
+            ("run-1", "evidence-1", "Claim.", "fact", "certain"),
+        )
+        for action in (
+            self.controller.preview_research_claim_write,
+            self.controller.record_research_claim,
+        ):
+            for values in invalid_values:
+                with self.subTest(action=action.__name__, values=values):
+                    with self.assertRaises(ValueError):
+                        action(*values)
+
+        self.assertEqual(self.brain.requests, [])
+
     def test_source_assessment_preview_uses_structured_read_only_request(self) -> None:
         response = self.controller.preview_research_source_assessment(
             " run-123 ",

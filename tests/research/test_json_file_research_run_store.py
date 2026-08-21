@@ -12,6 +12,9 @@ from unittest.mock import patch
 
 from core.Exceptions import ResearchError
 from research.JsonFileResearchRunStore import JsonFileResearchRunStore
+from research.ResearchClaimConfidence import ResearchClaimConfidence
+from research.ResearchClaimRecord import ResearchClaimRecord
+from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchFailureRecord import ResearchFailureRecord
 from research.ResearchInformationTrust import ResearchInformationTrust
@@ -119,6 +122,17 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
                     supersedes_assessment_id="assessment-1",
                 ),
             ),
+            claims=(
+                ResearchClaimRecord(
+                    claim_id="claim-1",
+                    text="The corrected assessment supports a narrower claim.",
+                    epistemic_state=ResearchEpistemicState.STRONG_EVIDENCE,
+                    confidence=ResearchClaimConfidence.HIGH,
+                    source_document_ids=("document-1",),
+                    evidence_ids=("evidence-1",),
+                    recorded_at=self.now,
+                ),
+            ),
         )
 
         self.store.save([run])
@@ -130,7 +144,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
 
     def test_rejects_unknown_fields_schema_and_duplicate_ids(self) -> None:
         for document in (
-            {"schema_version": 8, "runs": []},
+            {"schema_version": 9, "runs": []},
             {"schema_version": True, "runs": []},
             {"schema_version": 1, "runs": [], "unexpected": True},
         ):
@@ -151,7 +165,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
         with self.assertRaisesRegex(ResearchError, "duplicate run IDs"):
             self.store.save([run, run])
 
-    def test_loads_v1_without_new_collections_and_rewrites_as_v7(self) -> None:
+    def test_loads_v1_without_new_collections_and_rewrites_as_v8(self) -> None:
         legacy_document = {
             "schema_version": 1,
             "runs": [
@@ -176,13 +190,14 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
         self.assertEqual(runs[0].assessments, ())
         self.assertEqual(runs[0].comparison_notes, ())
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 7)
+        self.assertEqual(rewritten["schema_version"], 8)
         self.assertEqual(rewritten["runs"][0]["evidence"], [])
         self.assertEqual(rewritten["runs"][0]["discoveries"], [])
         self.assertEqual(rewritten["runs"][0]["assessments"], [])
         self.assertEqual(rewritten["runs"][0]["comparison_notes"], [])
+        self.assertEqual(rewritten["runs"][0]["claims"], [])
 
-    def test_loads_v2_without_discoveries_and_rewrites_as_v7(self) -> None:
+    def test_loads_v2_without_discoveries_and_rewrites_as_v8(self) -> None:
         legacy_document = {
             "schema_version": 2,
             "runs": [
@@ -205,12 +220,13 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
 
         self.assertEqual(runs[0].discoveries, ())
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 7)
+        self.assertEqual(rewritten["schema_version"], 8)
         self.assertEqual(rewritten["runs"][0]["discoveries"], [])
         self.assertEqual(rewritten["runs"][0]["assessments"], [])
         self.assertEqual(rewritten["runs"][0]["comparison_notes"], [])
+        self.assertEqual(rewritten["runs"][0]["claims"], [])
 
-    def test_loads_v3_without_assessments_and_rewrites_as_v7(self) -> None:
+    def test_loads_v3_without_assessments_and_rewrites_as_v8(self) -> None:
         legacy_document = {
             "schema_version": 3,
             "runs": [
@@ -234,11 +250,12 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
 
         self.assertEqual(runs[0].assessments, ())
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 7)
+        self.assertEqual(rewritten["schema_version"], 8)
         self.assertEqual(rewritten["runs"][0]["assessments"], [])
         self.assertEqual(rewritten["runs"][0]["comparison_notes"], [])
+        self.assertEqual(rewritten["runs"][0]["claims"], [])
 
-    def test_loads_v4_assessments_without_supersession_and_rewrites_as_v7(
+    def test_loads_v4_assessments_without_supersession_and_rewrites_as_v8(
         self,
     ) -> None:
         legacy_document = {
@@ -300,7 +317,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
         self.assertEqual(runs[0].sources[0].taint_label, "external_untrusted_data")
         self.assertEqual(runs[0].sources[0].instruction_authority, "none")
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 7)
+        self.assertEqual(rewritten["schema_version"], 8)
         self.assertIsNone(
             rewritten["runs"][0]["assessments"][0]["supersedes_assessment_id"]
         )
@@ -317,8 +334,9 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
             "none",
         )
         self.assertEqual(rewritten["runs"][0]["comparison_notes"], [])
+        self.assertEqual(rewritten["runs"][0]["claims"], [])
 
-    def test_loads_v5_without_comparison_notes_and_rewrites_as_v7(self) -> None:
+    def test_loads_v5_without_comparison_notes_and_rewrites_as_v8(self) -> None:
         legacy_document = {
             "schema_version": 5,
             "runs": [
@@ -343,10 +361,11 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
 
         self.assertEqual(runs[0].comparison_notes, ())
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 7)
+        self.assertEqual(rewritten["schema_version"], 8)
         self.assertEqual(rewritten["runs"][0]["comparison_notes"], [])
+        self.assertEqual(rewritten["runs"][0]["claims"], [])
 
-    def test_loads_v6_without_trust_metadata_and_rewrites_as_v7(self) -> None:
+    def test_loads_v6_without_trust_metadata_and_rewrites_as_v8(self) -> None:
         legacy_document = {
             "schema_version": 6,
             "runs": [
@@ -409,7 +428,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
             ResearchInformationTrust.UNASSESSED,
         )
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 7)
+        self.assertEqual(rewritten["schema_version"], 8)
         self.assertEqual(
             rewritten["runs"][0]["sources"][0]["taint_label"],
             "external_untrusted_data",
@@ -422,8 +441,25 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
             rewritten["runs"][0]["assessments"][0]["information_trust"],
             "unassessed",
         )
+        self.assertEqual(rewritten["runs"][0]["claims"], [])
 
-    def test_v7_rejects_mutable_source_authority_and_invalid_trust_labels(
+    def test_loads_v7_without_claims_and_rewrites_as_v8(self) -> None:
+        run = self._minimal_run()
+        self.store.save([run])
+        legacy_document = json.loads(self.path.read_text(encoding="utf-8"))
+        legacy_document["schema_version"] = 7
+        legacy_document["runs"][0].pop("claims")
+        self.path.write_text(json.dumps(legacy_document), encoding="utf-8")
+
+        runs = self.store.load()
+        self.store.save(runs)
+
+        self.assertEqual(runs[0].claims, ())
+        rewritten = json.loads(self.path.read_text(encoding="utf-8"))
+        self.assertEqual(rewritten["schema_version"], 8)
+        self.assertEqual(rewritten["runs"][0]["claims"], [])
+
+    def test_v8_rejects_mutable_source_authority_and_invalid_trust_labels(
         self,
     ) -> None:
         run = ResearchRun(
@@ -466,6 +502,17 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
                     information_trust=ResearchInformationTrust.HIGH,
                 ),
             ),
+            claims=(
+                ResearchClaimRecord(
+                    "claim-1",
+                    "Evidence supports the claim.",
+                    ResearchEpistemicState.STRONG_EVIDENCE,
+                    ResearchClaimConfidence.HIGH,
+                    ("document-1",),
+                    ("evidence-1",),
+                    self.now,
+                ),
+            ),
         )
         self.store.save([run])
         valid_document = json.loads(self.path.read_text(encoding="utf-8"))
@@ -485,6 +532,24 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
         document["runs"][0]["assessments"][0]["information_trust"] = "trusted"
         self.path.write_text(json.dumps(document), encoding="utf-8")
         with self.assertRaisesRegex(ResearchError, "information trust"):
+            self.store.load()
+
+        invalid_claim_values: tuple[tuple[str, object, str], ...] = (
+            ("epistemic_state", "certain", "epistemic state"),
+            ("confidence", 100, "claim confidence"),
+        )
+        for claim_field, invalid_claim_value, claim_message in invalid_claim_values:
+            with self.subTest(claim_field=claim_field):
+                document = json.loads(json.dumps(valid_document))
+                document["runs"][0]["claims"][0][claim_field] = invalid_claim_value
+                self.path.write_text(json.dumps(document), encoding="utf-8")
+                with self.assertRaisesRegex(ResearchError, claim_message):
+                    self.store.load()
+
+        document = json.loads(json.dumps(valid_document))
+        document["runs"][0]["claims"][0]["source_document_ids"] = ["document-mismatch"]
+        self.path.write_text(json.dumps(document), encoding="utf-8")
+        with self.assertRaisesRegex(ResearchError, "match its evidence"):
             self.store.load()
 
     def test_round_trip_preserves_comparison_note_references(self) -> None:

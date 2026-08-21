@@ -14,7 +14,8 @@ only on persisted provenance and explicitly recorded evidence. The manual
 multi-source comparison also supports append-only user-authored notes with
 explicit evidence and current-assessment references. Automatic evidence
 extraction, multi-source synthesis, evidence ranking, and contradiction
-detection remain planned.
+detection remain planned. Explicit evidence-linked authored claims now persist
+epistemic states, categorical confidence, and append-only correction history.
 
 ## Purpose
 
@@ -116,11 +117,24 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
   appended only when the predecessor belongs to the same run and source and has
   no existing successor. History remains ordered and immutable while the view
   labels current and superseded records.
-- Schema v7 reads v1-v6 run snapshots with later collections absent and empty,
+- A collecting run can preview and separately append one user-authored claim
+  that cites one to 20 unique persisted evidence IDs. Its exact ordered source
+  IDs are derived from the cited evidence and stored with the record. The user
+  selects `fact`, `strong_evidence`, `likely`, `hypothesis`, `speculation`,
+  `unknown`, or `contradicted` plus categorical confidence `unassessed`, `low`,
+  `medium`, or `high`. No numeric probability or automatic truth decision is
+  produced.
+- Claim history is read-only for collecting and terminal runs. A correction
+  appends an optional predecessor ID and leaves the predecessor immutable; one
+  predecessor can have only one successor. Final recording revalidates run
+  state, evidence/source provenance, categorical values, and supersession
+  before an atomic snapshot replacement.
+- Schema v8 reads v1-v7 run snapshots with later collections absent and empty,
   v4 assessments carrying no supersession link, and v1-v5 snapshots carrying no
-  comparison notes. Legacy sources receive the fixed external-data taint and no
-  instruction authority; legacy assessments receive `unassessed` information
-  trust. A legacy snapshot is upgraded only on a later successful atomic save.
+  comparison notes. V1-v7 snapshots carry no claims. Legacy sources receive the
+  fixed external-data taint and no instruction authority; legacy assessments
+  receive `unassessed` information trust. A legacy snapshot is upgraded only on
+  a later successful atomic save.
 - A collecting run may be previewed and then explicitly closed as `completed`,
   `failed`, or `cancelled`. Completion requires at least one accepted source
   and evidence record; failure requires at least one failure record;
@@ -153,8 +167,9 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
   No provider, fetcher, LLM, memory, graph, or automatic scoring path is used.
 - A completed, failed, or cancelled run can be rendered as a deterministic
   Markdown export preview from persisted state only. It includes accepted
-  provenance, evidence, authored assessment history, comparison notes, and safe
-  failures. The desktop view is bounded to 24,000 source characters while
+  provenance, evidence, authored assessment history, evidence-linked claims,
+  comparison notes, and safe failures. The desktop view is bounded to 24,000
+  source characters while
   exposing the full length and full-content SHA-256. Remote and authored text is
   escaped as literal block-quoted data; no path is accepted and no file is
   written during preview.
@@ -171,7 +186,7 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
   SHA-256 values with an exact match flag. A mismatch does not import or repair
   the file. Unexpected input is bounded to 64 MiB, while an authentic larger
   run export remains eligible up to its exact expected length.
-- The research-run JSON snapshot keeps schema v7 and legacy v1-v6 loading while
+- The research-run JSON snapshot keeps schema v8 and legacy v1-v7 loading while
   limiting the complete UTF-8 file to 64 MiB and all nested list entries to an
   aggregate 20,000 items. Reads stop before oversized JSON decoding; writes
   count exact UTF-8 bytes in a temporary file and publish only a complete
@@ -183,9 +198,9 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
 
 ## Next increment
 
-Add explicit physical-file and relation-count bounds to the schema-v1
-knowledge-relation snapshot, preserving deterministic ordering, duplicate
-rejection, and atomic replacement.
+Add explicit, user-reviewed contradiction relationships between persisted
+claims. Any future automated analysis should return evidence-linked proposals,
+not silently mutate claims or decide truth.
 
 ## Known boundary
 

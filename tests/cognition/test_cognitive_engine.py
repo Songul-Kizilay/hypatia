@@ -70,6 +70,8 @@ from memory.NoOpLearnedMemoryCandidateExtractor import (
 )
 from memory.SessionMemoryPolicy import SessionMemoryPolicy
 from planner.Planner import Planner
+from research.ResearchClaimConfidence import ResearchClaimConfidence
+from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRun import ResearchRun
 from research.ResearchRunManager import ResearchRunManager
@@ -7577,6 +7579,134 @@ class CognitiveEngineTests(unittest.TestCase):
                 )
 
         self.assertEqual(manager.get(run.run_id), run)
+
+    def test_evidence_linked_claim_previews_then_commits_without_providers(
+        self,
+    ) -> None:
+        store = ToggleResearchRunStore()
+        claim_ids = iter(("claim-123", "claim-124"))
+        manager = ResearchRunManager(
+            store,
+            id_factory=lambda: "run-123",
+            evidence_id_factory=lambda: "evidence-123",
+            claim_id_factory=claim_ids.__next__,
+        )
+        run = manager.create("Evaluate a claim")
+        source = ResearchSource(
+            "https://example.com/research",
+            "Example research",
+            "Evidence paragraph.",
+            "text/plain",
+            datetime(2026, 8, 21, 20, 0, tzinfo=UTC),
+        )
+        document = self.knowledge_engine.add_document(source.to_document())
+        manager.add_source(run.run_id, source, document.document_id)
+        evidence = manager.add_evidence(
+            run.run_id,
+            self.knowledge_engine.search("evidence")[0],
+            "Supports authored claim review.",
+        ).evidence[-1]
+        llm_provider = RecordingLLMProvider("must not run")
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+            research_run_manager=manager,
+        )
+        saves_before = store.save_calls
+
+        history_response = engine.process(
+            BrainRequest(
+                "View claims",
+                metadata={
+                    "intent": "research_claim_preview",
+                    "research_run_id": run.run_id,
+                },
+            )
+        )
+        metadata = {
+            "research_run_id": run.run_id,
+            "research_claim_evidence_ids": [evidence.evidence_id],
+            "research_claim_text": "The evidence likely supports the claim.",
+            "research_claim_epistemic_state": "likely",
+            "research_claim_confidence": "medium",
+        }
+        preview_response = engine.process(
+            BrainRequest(
+                "Preview claim",
+                metadata={"intent": "research_claim_write_preview", **metadata},
+            )
+        )
+
+        self.assertTrue(history_response.success)
+        history = history_response.research_claim_preview
+        self.assertIsNotNone(history)
+        assert history is not None
+        self.assertEqual(history.claims, ())
+        self.assertTrue(preview_response.success)
+        preview = preview_response.research_claim_write_preview
+        self.assertIsNotNone(preview)
+        assert preview is not None
+        self.assertEqual(preview.epistemic_state, ResearchEpistemicState.LIKELY)
+        self.assertEqual(preview.confidence, ResearchClaimConfidence.MEDIUM)
+        self.assertEqual(store.save_calls, saves_before)
+
+        recorded = engine.process(
+            BrainRequest(
+                "Record claim",
+                metadata={"intent": "research_claim_record", **metadata},
+            )
+        )
+
+        self.assertTrue(recorded.success)
+        claim = recorded.research_runs[0].claims[-1]
+        self.assertEqual(claim.claim_id, "claim-123")
+        self.assertEqual(claim.source_document_ids, (document.document_id,))
+        self.assertEqual(claim.evidence_ids, (evidence.evidence_id,))
+        self.assertIn("Epistemic state: likely", recorded.message)
+        self.assertEqual(store.save_calls, saves_before + 1)
+
+        correction_metadata = {
+            **metadata,
+            "research_claim_text": "The evidence contradicts the original claim.",
+            "research_claim_epistemic_state": "contradicted",
+            "research_claim_confidence": "high",
+            "research_claim_supersedes_id": claim.claim_id,
+        }
+        corrected = engine.process(
+            BrainRequest(
+                "Correct claim",
+                metadata={"intent": "research_claim_record", **correction_metadata},
+            )
+        )
+
+        self.assertTrue(corrected.success)
+        correction = corrected.research_runs[0].claims[-1]
+        self.assertEqual(correction.claim_id, "claim-124")
+        self.assertEqual(correction.supersedes_claim_id, claim.claim_id)
+        self.assertEqual(
+            correction.epistemic_state,
+            ResearchEpistemicState.CONTRADICTED,
+        )
+        self.assertEqual(llm_provider.calls, [])
+
+        invalid = engine.process(
+            BrainRequest(
+                "Invalid claim",
+                metadata={
+                    **metadata,
+                    "intent": "research_claim_record",
+                    "research_claim_epistemic_state": "certain",
+                },
+            )
+        )
+        self.assertFalse(invalid.success)
+        self.assertEqual(len(manager.get(run.run_id).claims), 2)
 
     def test_authored_source_assessment_previews_then_commits_without_providers(
         self,

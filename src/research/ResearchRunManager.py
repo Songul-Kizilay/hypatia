@@ -15,6 +15,15 @@ from uuid import uuid4
 
 from core.Exceptions import ResearchError
 from knowledge.Chunk import Chunk
+from research.ResearchClaimConfidence import ResearchClaimConfidence
+from research.ResearchClaimPreview import ResearchClaimPreview
+from research.ResearchClaimRecord import (
+    MAX_RESEARCH_CLAIM_CHARACTERS,
+    MAX_RESEARCH_CLAIM_EVIDENCE,
+    ResearchClaimRecord,
+)
+from research.ResearchClaimWritePreview import ResearchClaimWritePreview
+from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchFailureRecord import ResearchFailureRecord
 from research.ResearchInformationTrust import ResearchInformationTrust
@@ -86,6 +95,7 @@ class ResearchRunManager:
         discovery_id_factory: Callable[[], str] | None = None,
         assessment_id_factory: Callable[[], str] | None = None,
         comparison_note_id_factory: Callable[[], str] | None = None,
+        claim_id_factory: Callable[[], str] | None = None,
     ) -> None:
         self._store = store
         self._clock = clock or (lambda: datetime.now(UTC))
@@ -96,6 +106,7 @@ class ResearchRunManager:
         self._comparison_note_id_factory = comparison_note_id_factory or (
             lambda: str(uuid4())
         )
+        self._claim_id_factory = claim_id_factory or (lambda: str(uuid4()))
         self._runs: tuple[ResearchRun, ...] = ()
         self._lock = RLock()
 
@@ -123,6 +134,7 @@ class ResearchRunManager:
                 discoveries=(),
                 assessments=(),
                 comparison_notes=(),
+                claims=(),
             )
             candidate = (*self._runs, run)
             self._persist(candidate)
@@ -144,6 +156,25 @@ class ResearchRunManager:
         if run is None:
             raise ResearchError(f"Research run was not found: {normalized_id}")
         return run
+
+    def preview_claims(self, run_id: str) -> ResearchClaimPreview:
+        """Return persisted claim history without inference or mutation."""
+        normalized_id = self._normalize_run_id(run_id)
+        with self._lock:
+            _, run = self._find_with_index(normalized_id)
+            count = len(run.claims)
+            return ResearchClaimPreview(
+                run_id=run.run_id,
+                question=run.question,
+                run_status=run.status,
+                claims=run.claims,
+                reason=(
+                    f"Run has {count} user-authored evidence-linked claim"
+                    f"{'s' if count != 1 else ''}."
+                    if count
+                    else "Run has no user-authored evidence-linked claims."
+                ),
+            )
 
     def preview_markdown_export(
         self,
@@ -293,6 +324,7 @@ class ResearchRunManager:
                 discoveries=run.discoveries,
                 assessments=run.assessments,
                 comparison_notes=run.comparison_notes,
+                claims=run.claims,
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -323,6 +355,7 @@ class ResearchRunManager:
                 discoveries=run.discoveries,
                 assessments=run.assessments,
                 comparison_notes=run.comparison_notes,
+                claims=run.claims,
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -365,6 +398,7 @@ class ResearchRunManager:
                 discoveries=run.discoveries,
                 assessments=run.assessments,
                 comparison_notes=run.comparison_notes,
+                claims=run.claims,
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -421,6 +455,7 @@ class ResearchRunManager:
                 discoveries=(*run.discoveries, discovery),
                 assessments=run.assessments,
                 comparison_notes=run.comparison_notes,
+                claims=run.claims,
             )
             candidate_runs = list(self._runs)
             candidate_runs[index] = updated
@@ -690,6 +725,120 @@ class ResearchRunManager:
                 information_trust=normalized_information_trust,
             )
 
+    def preview_claim_write(
+        self,
+        run_id: str,
+        evidence_ids: Sequence[str],
+        text: str,
+        epistemic_state: ResearchEpistemicState | str,
+        confidence: ResearchClaimConfidence | str = ResearchClaimConfidence.UNASSESSED,
+        supersedes_claim_id: str | None = None,
+    ) -> ResearchClaimWritePreview:
+        """Validate one authored evidence-linked claim without mutation."""
+        normalized_run_id = self._normalize_run_id(run_id)
+        normalized_evidence_ids = self._normalize_claim_evidence_ids(evidence_ids)
+        normalized_text = self._normalize_claim_text(text)
+        normalized_state = self._normalize_epistemic_state(epistemic_state)
+        normalized_confidence = self._normalize_claim_confidence(confidence)
+        normalized_superseded_id = self._normalize_optional_claim_id(
+            supersedes_claim_id
+        )
+        with self._lock:
+            _, run = self._find_with_index(normalized_run_id)
+            sources, evidence = self._claim_sources_and_evidence(
+                run,
+                normalized_evidence_ids,
+            )
+            superseded_claim = self._superseded_claim_for_write(
+                run,
+                normalized_superseded_id,
+            )
+            allowed = not run.status.terminal
+            reason = (
+                (
+                    "Research claim correction can be recorded after confirmation."
+                    if superseded_claim is not None
+                    else "Research claim can be recorded after confirmation."
+                )
+                if allowed
+                else "A closed research run cannot accept new claims."
+            )
+            return ResearchClaimWritePreview(
+                run_id=run.run_id,
+                run_status=run.status,
+                sources=sources,
+                evidence=evidence,
+                text=normalized_text,
+                epistemic_state=normalized_state,
+                confidence=normalized_confidence,
+                allowed=allowed,
+                reason=reason,
+                supersedes_claim=superseded_claim,
+            )
+
+    def record_claim(
+        self,
+        run_id: str,
+        evidence_ids: Sequence[str],
+        text: str,
+        epistemic_state: ResearchEpistemicState | str,
+        confidence: ResearchClaimConfidence | str = ResearchClaimConfidence.UNASSESSED,
+        supersedes_claim_id: str | None = None,
+    ) -> ResearchRun:
+        """Revalidate and atomically append one user-authored research claim."""
+        normalized_run_id = self._normalize_run_id(run_id)
+        normalized_evidence_ids = self._normalize_claim_evidence_ids(evidence_ids)
+        normalized_text = self._normalize_claim_text(text)
+        normalized_state = self._normalize_epistemic_state(epistemic_state)
+        normalized_confidence = self._normalize_claim_confidence(confidence)
+        normalized_superseded_id = self._normalize_optional_claim_id(
+            supersedes_claim_id
+        )
+        with self._lock:
+            index, run = self._find_with_index(normalized_run_id)
+            sources, evidence = self._claim_sources_and_evidence(
+                run,
+                normalized_evidence_ids,
+            )
+            superseded_claim = self._superseded_claim_for_write(
+                run,
+                normalized_superseded_id,
+            )
+            self._require_collecting(run)
+            now = self._now()
+            claim = ResearchClaimRecord(
+                claim_id=self._new_claim_id(),
+                text=normalized_text,
+                epistemic_state=normalized_state,
+                confidence=normalized_confidence,
+                source_document_ids=tuple(source.document_id for source in sources),
+                evidence_ids=tuple(record.evidence_id for record in evidence),
+                recorded_at=now,
+                supersedes_claim_id=(
+                    None if superseded_claim is None else superseded_claim.claim_id
+                ),
+            )
+            updated = ResearchRun(
+                run_id=run.run_id,
+                question=run.question,
+                status=run.status,
+                sources=run.sources,
+                failures=run.failures,
+                created_at=run.created_at,
+                updated_at=now,
+                evidence=run.evidence,
+                discoveries=run.discoveries,
+                assessments=run.assessments,
+                comparison_notes=run.comparison_notes,
+                claims=(*run.claims, claim),
+            )
+            candidate = list(self._runs)
+            candidate[index] = updated
+            candidate_tuple = tuple(candidate)
+            self._persist(candidate_tuple)
+            self._runs = candidate_tuple
+        return updated
+
     def record_source_assessment(
         self,
         run_id: str,
@@ -751,6 +900,7 @@ class ResearchRunManager:
                 discoveries=run.discoveries,
                 assessments=(*run.assessments, assessment),
                 comparison_notes=run.comparison_notes,
+                claims=run.claims,
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -855,6 +1005,7 @@ class ResearchRunManager:
                 discoveries=run.discoveries,
                 assessments=run.assessments,
                 comparison_notes=(*run.comparison_notes, note),
+                claims=run.claims,
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -890,6 +1041,7 @@ class ResearchRunManager:
                 discoveries=run.discoveries,
                 assessments=run.assessments,
                 comparison_notes=run.comparison_notes,
+                claims=run.claims,
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -1018,6 +1170,14 @@ class ResearchRunManager:
             raise ResearchError("Research comparison note ID already exists.")
         return note_id
 
+    def _new_claim_id(self) -> str:
+        claim_id = self._normalize_claim_id(self._claim_id_factory())
+        if any(
+            record.claim_id == claim_id for run in self._runs for record in run.claims
+        ):
+            raise ResearchError("Research claim ID already exists.")
+        return claim_id
+
     @staticmethod
     def _comparison_note_references(
         run: ResearchRun,
@@ -1128,6 +1288,52 @@ class ResearchRunManager:
                 "Research source assessment has already been superseded."
             )
         return assessment
+
+    @staticmethod
+    def _claim_sources_and_evidence(
+        run: ResearchRun,
+        evidence_ids: tuple[str, ...],
+    ) -> tuple[
+        tuple[ResearchSourceRecord, ...],
+        tuple[ResearchEvidenceRecord, ...],
+    ]:
+        evidence_by_id = {record.evidence_id: record for record in run.evidence}
+        try:
+            evidence = tuple(
+                evidence_by_id[evidence_id] for evidence_id in evidence_ids
+            )
+        except KeyError as error:
+            raise ResearchError(
+                "Research claim evidence was not found in this run."
+            ) from error
+        source_ids = tuple(
+            dict.fromkeys(record.source_document_id for record in evidence)
+        )
+        sources_by_id = {record.document_id: record for record in run.sources}
+        try:
+            sources = tuple(sources_by_id[source_id] for source_id in source_ids)
+        except KeyError as error:
+            raise ResearchError(
+                "Research claim evidence must belong to accepted sources."
+            ) from error
+        return sources, evidence
+
+    @staticmethod
+    def _superseded_claim_for_write(
+        run: ResearchRun,
+        supersedes_claim_id: str | None,
+    ) -> ResearchClaimRecord | None:
+        if supersedes_claim_id is None:
+            return None
+        claim = next(
+            (record for record in run.claims if record.claim_id == supersedes_claim_id),
+            None,
+        )
+        if claim is None:
+            raise ResearchError("Superseded research claim was not found in this run.")
+        if any(record.supersedes_claim_id == claim.claim_id for record in run.claims):
+            raise ResearchError("Research claim has already been superseded.")
+        return claim
 
     @staticmethod
     def _normalize_question(question: str) -> str:
@@ -1335,6 +1541,68 @@ class ResearchRunManager:
         if len(normalized) > 1_000:
             raise ResearchError("Research evidence note is too long.")
         return normalized
+
+    @staticmethod
+    def _normalize_claim_id(claim_id: str) -> str:
+        if not isinstance(claim_id, str) or not claim_id.strip():
+            raise ResearchError("Research claim ID cannot be empty.")
+        normalized = claim_id.strip()
+        if len(normalized) > 200:
+            raise ResearchError("Research claim ID is too long.")
+        return normalized
+
+    @staticmethod
+    def _normalize_optional_claim_id(claim_id: str | None) -> str | None:
+        if claim_id is None:
+            return None
+        return ResearchRunManager._normalize_claim_id(claim_id)
+
+    @staticmethod
+    def _normalize_claim_evidence_ids(
+        evidence_ids: Sequence[str],
+    ) -> tuple[str, ...]:
+        if isinstance(evidence_ids, (str, bytes)) or not isinstance(
+            evidence_ids,
+            Sequence,
+        ):
+            raise ResearchError("Research claim evidence IDs must be a list.")
+        normalized = tuple(
+            ResearchRunManager._normalize_evidence_id(value) for value in evidence_ids
+        )
+        if not normalized:
+            raise ResearchError("Research claim requires explicit evidence IDs.")
+        if len(normalized) != len(set(normalized)):
+            raise ResearchError("Research claim contains duplicate evidence IDs.")
+        if len(normalized) > MAX_RESEARCH_CLAIM_EVIDENCE:
+            raise ResearchError("Research claim cites too many evidence records.")
+        return normalized
+
+    @staticmethod
+    def _normalize_claim_text(text: str) -> str:
+        if not isinstance(text, str) or not text.strip():
+            raise ResearchError("Research claim text cannot be empty.")
+        normalized = text.strip()
+        if len(normalized) > MAX_RESEARCH_CLAIM_CHARACTERS:
+            raise ResearchError("Research claim text is too long.")
+        return normalized
+
+    @staticmethod
+    def _normalize_epistemic_state(
+        value: ResearchEpistemicState | str,
+    ) -> ResearchEpistemicState:
+        try:
+            return ResearchEpistemicState(value)
+        except (TypeError, ValueError) as error:
+            raise ResearchError("Research claim epistemic state is invalid.") from error
+
+    @staticmethod
+    def _normalize_claim_confidence(
+        value: ResearchClaimConfidence | str,
+    ) -> ResearchClaimConfidence:
+        try:
+            return ResearchClaimConfidence(value)
+        except (TypeError, ValueError) as error:
+            raise ResearchError("Research claim confidence is invalid.") from error
 
     @staticmethod
     def _normalize_assessment_id(assessment_id: str) -> str:

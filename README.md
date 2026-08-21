@@ -142,6 +142,12 @@ To create the world's most capable personal AI research companion.
 - An optional append-only assessment supersession link that preserves the old
   record, accepts only one active same-source predecessor, and shows current
   versus superseded history without rewriting an assessment
+- Evidence-linked user-authored research claims with one explicit epistemic
+  state (`fact`, `strong_evidence`, `likely`, `hypothesis`, `speculation`,
+  `unknown`, or `contradicted`) and categorical confidence (`unassessed`,
+  `low`, `medium`, or `high`). Exact evidence and ordered source provenance are
+  persisted through a preview-confirm-record boundary. Corrections append a
+  supersession link; Hypatia does not extract claims or calculate truth
 - A read-only manual comparison preview for two to five explicitly selected
   sources accepted into the same run. It preserves selection order and shows
   provenance, user-selected evidence, and current user-authored assessments
@@ -261,6 +267,13 @@ superseded. Both records remain visible; Hypatia labels their audit state but
 never chooses evidence or assigns a score automatically. `High` information
 trust still leaves the source marked as external untrusted data with instruction
 authority `none`.
+`View claims` shows the selected run's persisted claim history. `Preview & save
+claim` requires comma-separated evidence IDs, the user's own claim text, an
+epistemic state, and categorical confidence. Hypatia derives and displays the
+exact accepted sources from the cited evidence, then asks for confirmation and
+revalidates before an atomic append. An optional predecessor claim ID creates a
+single backward correction link without changing the old record. No LLM,
+automatic claim extraction, evidence selection, or truth score is involved.
 `Compare sources` accepts two to five comma-separated document IDs from the
 selected research run. It shows the sources in the entered order with persisted
 provenance, explicitly recorded evidence, and only current user-authored

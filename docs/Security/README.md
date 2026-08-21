@@ -41,12 +41,15 @@ Hypatia currently runs as a local-first CLI. The initial security boundary is:
   decoding; reads and writes reject more than 20,000 aggregate nested list
   entries, while writes count exact UTF-8 bytes and cannot publish a snapshot
   larger than 64 MiB;
-- research-run schema v7 persists external-source taint and authored
+- research-run schema v8 persists external-source taint, authored
   information-trust labels as separate fields. External source taint is fixed
   to `external_untrusted_data` and instruction authority is fixed to `none`;
   even a `high` information-trust label grants no instruction, tool, or policy
-  authority. Invalid values fail closed, and v1-v6 snapshots load with those
-  safe defaults before any later atomic rewrite;
+  authority. It also stores authored claims only with exact persisted evidence
+  and ordered accepted-source provenance, categorical epistemic/confidence
+  values, and single-successor append-only corrections. Invalid values fail
+  closed, and v1-v7 snapshots load with safe defaults and no claims before any
+  later atomic rewrite;
 - explicit knowledge-relation snapshots are limited to 20,000 ordered records,
   1,024 characters per endpoint ID, and 64 MiB of UTF-8 JSON; opened-descriptor
   reads stop before oversized decoding, and bounded temporary writes preserve

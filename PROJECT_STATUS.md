@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.74 (Genesis)`
+`v0.3.75 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.74`** is the current executable package and GitHub
+- **Runtime release `v0.3.75`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -154,6 +154,18 @@ with optional OpenAI-compatible LLM conversation support.
   `external_untrusted_data` and fixed instruction authority `none`. Information
   trust and instruction authority are separate: even a user-authored `high`
   label cannot grant source text permission to issue instructions or use tools.
+- A collecting run can preview and append one user-authored claim only when it
+  cites persisted evidence. The record keeps the exact ordered source IDs
+  derived from that evidence, one explicit epistemic state (`fact`,
+  `strong_evidence`, `likely`, `hypothesis`, `speculation`, `unknown`, or
+  `contradicted`), and categorical authored confidence (`unassessed`, `low`,
+  `medium`, or `high`). Hypatia does not extract the claim, choose evidence,
+  calculate truth, or create a numeric score.
+- Claim history remains readable for collecting and terminal runs. A correction
+  appends one backward supersession link while preserving its predecessor;
+  missing, already-superseded, cross-run, closed-run, and mismatched-provenance
+  writes fail before publication. The desktop uses a separate preview and
+  confirmation before final revalidation and atomic persistence.
 - A separate manual comparison preview accepts an ordered list of two to five
   unique accepted-source document IDs from one exact run. For each source it
   renders persisted provenance, only explicitly recorded evidence, and only
@@ -169,17 +181,19 @@ with optional OpenAI-compatible LLM conversation support.
   exact selected source order after restart. It displays at most 20 notes and
   reports the complete count. Hypatia generates no note text, verdict, score,
   or reference selection.
-- Research-run schema v7 remains backward compatible with v1-v6 snapshots.
+- Research-run schema v8 remains backward compatible with v1-v7 snapshots.
   Legacy runs load with absent evidence, discovery, or assessment collections
   represented as empty, v4 assessments load with no supersession link, and
-  v1-v5 runs load with no comparison notes. Every v1-v6 source receives the
+  v1-v5 runs load with no comparison notes, and v1-v7 runs load with no claims.
+  Every v1-v6 source receives the
   fixed external-data taint and no instruction authority, while every legacy
   assessment receives `unassessed` information trust.
   They are rewritten only after a later successful mutation; no eager or
   partial migration occurs.
 - One terminal run can be explicitly previewed as deterministic Markdown using
   only its immutable persisted audit snapshot. The bounded view includes source
-  provenance, evidence, authored assessment history, comparison notes, and safe
+  provenance, evidence, authored assessment history, evidence-linked claims,
+  comparison notes, and safe
   failures; it reports the complete character count and full-content SHA-256.
   Authored and remote text is escaped as literal quoted material, and a safe
   suggested basename cannot contain a path. Hidden directional controls are
@@ -414,7 +428,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,366 automated tests pass through package-aware discovery.
+- 1,384 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -441,7 +455,7 @@ so this check did not alter the project's persisted data.
 
 ## Next Milestone
 
-Add claim-level epistemic states and confidence annotations that remain
-user-authored, evidence-linked, and reversible. They must not become automatic
-truth scores or weaken the fixed no-instruction-authority boundary for external
-source text.
+Add explicit user-reviewed contradiction relationships between persisted
+claims. Any future detector must only propose candidates with cited evidence;
+it must not silently rewrite claims, decide truth, or weaken the fixed
+no-instruction-authority boundary for external source text.

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from core.Exceptions import ResearchError
+from research.ResearchClaimRecord import ResearchClaimRecord
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchFailureRecord import ResearchFailureRecord
 from research.ResearchRunStatus import ResearchRunStatus
@@ -32,6 +33,7 @@ class ResearchRun:
     discoveries: tuple[ResearchSourceDiscoveryRecord, ...] = ()
     assessments: tuple[ResearchSourceAssessmentRecord, ...] = ()
     comparison_notes: tuple[ResearchSourceComparisonNoteRecord, ...] = ()
+    claims: tuple[ResearchClaimRecord, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.run_id, str) or not self.run_id.strip():
@@ -189,6 +191,51 @@ class ResearchRun:
                 raise ResearchError(
                     "Research comparison notes must cite each assessment's evidence."
                 )
+        if not isinstance(self.claims, tuple):
+            raise ResearchError("Research run claims must be an immutable tuple.")
+        if not all(
+            isinstance(claim_record, ResearchClaimRecord)
+            for claim_record in self.claims
+        ):
+            raise ResearchError("Research run contains an invalid claim record.")
+        claim_ids = [claim_record.claim_id for claim_record in self.claims]
+        if len(claim_ids) != len(set(claim_ids)):
+            raise ResearchError("Research run contains duplicate claim IDs.")
+        claims_by_id: dict[str, ResearchClaimRecord] = {}
+        superseded_claim_ids: set[str] = set()
+        for claim_record in self.claims:
+            if any(
+                evidence_id not in evidence_id_set
+                for evidence_id in claim_record.evidence_ids
+            ):
+                raise ResearchError("Research claims must reference recorded evidence.")
+            expected_source_ids = tuple(
+                dict.fromkeys(
+                    evidence_source_by_id[evidence_id]
+                    for evidence_id in claim_record.evidence_ids
+                )
+            )
+            if claim_record.source_document_ids != expected_source_ids:
+                raise ResearchError(
+                    "Research claim sources must match its evidence provenance."
+                )
+            superseded_id = claim_record.supersedes_claim_id
+            if superseded_id is not None:
+                superseded_claim = claims_by_id.get(superseded_id)
+                if superseded_claim is None:
+                    raise ResearchError(
+                        "Research claim supersession must reference an earlier claim."
+                    )
+                if superseded_id in superseded_claim_ids:
+                    raise ResearchError(
+                        "A research claim cannot have multiple superseding records."
+                    )
+                if claim_record.recorded_at < superseded_claim.recorded_at:
+                    raise ResearchError(
+                        "A superseding research claim cannot precede its target."
+                    )
+                superseded_claim_ids.add(superseded_id)
+            claims_by_id[claim_record.claim_id] = claim_record
         for value, field_name in (
             (self.created_at, "Research run creation time"),
             (self.updated_at, "Research run update time"),
@@ -203,6 +250,13 @@ class ResearchRun:
         ):
             raise ResearchError(
                 "Research comparison note time must stay within its run lifecycle."
+            )
+        if any(
+            claim.recorded_at < self.created_at or claim.recorded_at > self.updated_at
+            for claim in self.claims
+        ):
+            raise ResearchError(
+                "Research claim time must stay within its run lifecycle."
             )
         object.__setattr__(self, "run_id", self.run_id.strip())
         object.__setattr__(self, "question", self.question.strip())

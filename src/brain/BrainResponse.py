@@ -15,6 +15,8 @@ from knowledge.KnowledgeRelationRevocation import KnowledgeRelationRevocation
 from knowledge.KnowledgeRelationRevocationPreview import (
     KnowledgeRelationRevocationPreview,
 )
+from research.ResearchClaimPreview import ResearchClaimPreview
+from research.ResearchClaimWritePreview import ResearchClaimWritePreview
 from research.ResearchEvidenceIntegrityStatus import ResearchEvidenceIntegrityStatus
 from research.ResearchRun import ResearchRun
 from research.ResearchRunMarkdownExportPreview import (
@@ -65,6 +67,8 @@ class BrainResponse:
     )
     knowledge_relation_revocation: KnowledgeRelationRevocation | None = None
     research_runs: list[ResearchRun] = field(default_factory=list)
+    research_claim_preview: ResearchClaimPreview | None = None
+    research_claim_write_preview: ResearchClaimWritePreview | None = None
     research_run_markdown_export_preview: ResearchRunMarkdownExportPreview | None = None
     research_run_markdown_export_result: ResearchRunMarkdownExportResult | None = None
     research_run_markdown_export_verification: (

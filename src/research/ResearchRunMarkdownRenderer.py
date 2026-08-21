@@ -38,6 +38,7 @@ def render_research_run_markdown(run: ResearchRun) -> str:
         f"- **Evidence records:** {len(run.evidence)}",
         f"- **Assessments:** {len(run.assessments)}",
         f"- **Comparison notes:** {len(run.comparison_notes)}",
+        f"- **Claims:** {len(run.claims)}",
         f"- **Failures:** {len(run.failures)}",
         "",
         "## Research Question",
@@ -161,6 +162,39 @@ def render_research_run_markdown(run: ResearchRun) -> str:
                 "- **User comparison note:**",
                 "",
                 *_quote(note.text),
+                "",
+            )
+        )
+
+    lines.extend(("## Evidence-linked Claims", ""))
+    superseded_claim_ids = {
+        claim.supersedes_claim_id
+        for claim in run.claims
+        if claim.supersedes_claim_id is not None
+    }
+    if not run.claims:
+        lines.extend(("_No claims recorded._", ""))
+    for claim_index, claim in enumerate(run.claims, start=1):
+        audit_state = (
+            "superseded" if claim.claim_id in superseded_claim_ids else "current"
+        )
+        lines.extend(
+            (
+                f"### Claim {claim_index}",
+                "",
+                f"- **Claim ID:** {_inline(claim.claim_id)}",
+                f"- **Audit state:** {audit_state}",
+                f"- **Epistemic state:** {claim.epistemic_state.value}",
+                f"- **Authored confidence:** {claim.confidence.value}",
+                "- **Source document IDs:** "
+                + ", ".join(_inline(value) for value in claim.source_document_ids),
+                "- **Evidence IDs:** "
+                + ", ".join(_inline(value) for value in claim.evidence_ids),
+                f"- **Supersedes:** {_inline(claim.supersedes_claim_id or 'none')}",
+                f"- **Recorded:** {claim.recorded_at.isoformat()}",
+                "- **User-authored claim:**",
+                "",
+                *_quote(claim.text),
                 "",
             )
         )
