@@ -35,6 +35,8 @@ The MVP may present only current Brain/CognitiveEngine capabilities:
   derived only from the selector's already loaded immutable snapshot;
 - a read-only accepted-source selector from that same run snapshot, with
   explicit exact-ID handoffs to the manual assessment and comparison fields;
+- a source-filtered read-only evidence selector with bounded excerpts, exact
+  IDs, and separate handoffs to manual assessment, claim, and comparison fields;
 - read-only accepted-content restoration status captured during startup, with
   only availability and aggregate restored document/paragraph counts;
 - explicit recording and read-only viewing of a selected attached-source chunk
@@ -213,6 +215,13 @@ does not touch authored form values. `Use for assessment` copies one exact ID to
 the single-source field, while `Add to comparison` appends it once to the
 ordered comparison field without exceeding five IDs. Both are presentation-only
 handoffs and reject a source snapshot belonging to another run.
+The evidence selector uses only records in that same loaded `ResearchRun` whose
+source document ID matches the chosen accepted source. Labels normalize the
+bounded excerpt to one line while retaining the exact evidence ID. Selection
+alone edits nothing. Explicit handoffs append the ID once to the assessment,
+claim, or comparison evidence field; assessment requires the matching manual
+source, comparison requires source membership, and the existing 20/100 limits
+remain enforced. Stale run/source state is cleared before any handoff.
 `Preview & save assessment` also accepts an optional predecessor assessment ID.
 The preview shows the exact link; confirmation sends the captured value, and
 the runtime revalidates that it is an unsuperseded assessment from the same run

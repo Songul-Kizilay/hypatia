@@ -20,13 +20,16 @@ from research.ResearchClaimConfidence import ResearchClaimConfidence
 from research.ResearchClaimContradictionCandidate import (
     ResearchClaimContradictionCandidate,
 )
+from research.ResearchClaimRecord import MAX_RESEARCH_CLAIM_EVIDENCE
 from research.ResearchEpistemicState import ResearchEpistemicState
+from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRun import ResearchRun
 from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
 )
 from research.ResearchSourceCandidate import ResearchSourceCandidate
+from research.ResearchSourceComparisonNoteRecord import MAX_COMPARISON_NOTE_EVIDENCE
 from research.ResearchSourceRecord import ResearchSourceRecord
 
 _DEFAULT_FONT_SIZE = 12
@@ -191,6 +194,7 @@ class TkinterDesktopWindow:
             value="Select or create a research run."
         )
         self._research_source_choice = tk.StringVar()
+        self._research_evidence_choice = tk.StringVar()
         self._research_candidate = tk.StringVar()
         self._research_url = tk.StringVar()
         self._research_source_document_id = tk.StringVar()
@@ -226,6 +230,9 @@ class TkinterDesktopWindow:
         self._research_runs: tuple[ResearchRun, ...] = ()
         self._research_sources: tuple[ResearchSourceRecord, ...] = ()
         self._research_source_run_id = ""
+        self._research_evidence_records: tuple[ResearchEvidenceRecord, ...] = ()
+        self._research_evidence_run_id = ""
+        self._research_evidence_source_document_id = ""
         self._research_candidate_run_id = ""
         self._research_candidate_discovery_id = ""
         self._research_claim_contradiction_proposal_run_id = ""
@@ -695,6 +702,10 @@ class TkinterDesktopWindow:
             state="readonly",
         )
         self._research_source_selector.grid(row=0, column=1, sticky="ew")
+        self._research_source_selector.bind(
+            "<<ComboboxSelected>>",
+            self._select_research_source,
+        )
         ttk.Button(
             accepted_source_frame,
             text="Use for assessment",
@@ -705,6 +716,41 @@ class TkinterDesktopWindow:
             text="Add to comparison",
             command=self._add_selected_research_source_to_comparison,
         ).grid(row=0, column=3, sticky="ew", padx=(8, 0))
+        ttk.Label(accepted_source_frame, text="Recorded evidence").grid(
+            row=1,
+            column=0,
+            sticky="w",
+            padx=(0, 8),
+            pady=(8, 0),
+        )
+        self._research_evidence_selector = ttk.Combobox(
+            accepted_source_frame,
+            textvariable=self._research_evidence_choice,
+            values=(),
+            state="readonly",
+        )
+        self._research_evidence_selector.grid(
+            row=1,
+            column=1,
+            columnspan=3,
+            sticky="ew",
+            pady=(8, 0),
+        )
+        ttk.Button(
+            accepted_source_frame,
+            text="Use in assessment",
+            command=self._add_selected_research_evidence_to_assessment,
+        ).grid(row=2, column=1, sticky="ew", pady=(8, 0))
+        ttk.Button(
+            accepted_source_frame,
+            text="Use in claim",
+            command=self._add_selected_research_evidence_to_claim,
+        ).grid(row=2, column=2, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ttk.Button(
+            accepted_source_frame,
+            text="Add to comparison",
+            command=self._add_selected_research_evidence_to_comparison,
+        ).grid(row=2, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
         self._request_button(
             research_frame,
             text="Find sources",
@@ -1610,8 +1656,10 @@ class TkinterDesktopWindow:
         self._research_source_selector.configure(values=labels)
         if not run.sources:
             self._research_source_choice.set("")
+            self._clear_research_evidence()
             return
         self._research_source_selector.current(0)
+        self._render_research_evidence_selector(run, run.sources[0])
 
     @staticmethod
     def _research_source_label(source: ResearchSourceRecord) -> str:
@@ -1630,6 +1678,147 @@ class TkinterDesktopWindow:
         if not 0 <= selected_index < len(self._research_sources):
             return None
         return self._research_sources[selected_index]
+
+    def _select_research_source(self, _event: object | None = None) -> None:
+        """Select one accepted source without editing fields or starting work."""
+        source = self._selected_research_source()
+        selected_run = next(
+            (
+                run
+                for run in self._research_runs
+                if run.run_id == self._research_source_run_id
+            ),
+            None,
+        )
+        if source is None or selected_run is None:
+            self._clear_research_evidence()
+            self._status.set("Select an accepted source first.")
+            return
+        self._render_research_evidence_selector(selected_run, source)
+        self._status.set(
+            f"accepted source selected: {source.document_id}; no action started"
+        )
+
+    def _render_research_evidence_selector(
+        self,
+        run: ResearchRun,
+        source: ResearchSourceRecord,
+    ) -> None:
+        """Render source-owned evidence from one already loaded run snapshot."""
+        records = tuple(
+            record
+            for record in run.evidence
+            if record.source_document_id == source.document_id
+        )
+        self._research_evidence_records = records
+        self._research_evidence_run_id = run.run_id
+        self._research_evidence_source_document_id = source.document_id
+        labels = tuple(self._research_evidence_label(record) for record in records)
+        self._research_evidence_selector.configure(values=labels)
+        if not records:
+            self._research_evidence_choice.set("")
+            return
+        self._research_evidence_selector.current(0)
+
+    @staticmethod
+    def _research_evidence_label(record: ResearchEvidenceRecord) -> str:
+        """Keep an exact evidence ID visible beside one bounded-line excerpt."""
+        excerpt = " ".join(record.excerpt.split())
+        if len(excerpt) > 100:
+            excerpt = f"{excerpt[:97]}..."
+        return f"{excerpt} — {record.evidence_id}"
+
+    def _selected_research_evidence(self) -> ResearchEvidenceRecord | None:
+        """Return only evidence bound to the current exact run and source."""
+        source = self._selected_research_source()
+        if (
+            source is None
+            or self._research_run_id.get().strip() != self._research_evidence_run_id
+            or source.document_id != self._research_evidence_source_document_id
+        ):
+            self._clear_research_evidence()
+            return None
+        selected_index = self._research_evidence_selector.current()
+        if not 0 <= selected_index < len(self._research_evidence_records):
+            return None
+        return self._research_evidence_records[selected_index]
+
+    def _add_selected_research_evidence_to_assessment(self) -> None:
+        """Append exact same-source evidence to the manual assessment field."""
+        record = self._selected_research_evidence()
+        if record is None:
+            self._status.set("Select recorded evidence first.")
+            return
+        if self._research_source_document_id.get().strip() != record.source_document_id:
+            self._status.set("Use the accepted source for assessment first.")
+            return
+        self._append_research_evidence_id(
+            record,
+            self._research_assessment_evidence_ids,
+            maximum=None,
+            destination="assessment",
+        )
+
+    def _add_selected_research_evidence_to_claim(self) -> None:
+        """Append exact evidence to the manual claim field within its bound."""
+        record = self._selected_research_evidence()
+        if record is None:
+            self._status.set("Select recorded evidence first.")
+            return
+        self._append_research_evidence_id(
+            record,
+            self._research_claim_evidence_ids,
+            maximum=MAX_RESEARCH_CLAIM_EVIDENCE,
+            destination="claim",
+        )
+
+    def _add_selected_research_evidence_to_comparison(self) -> None:
+        """Append exact evidence only when its source is in the comparison."""
+        record = self._selected_research_evidence()
+        if record is None:
+            self._status.set("Select recorded evidence first.")
+            return
+        comparison_source_ids = {
+            value.strip()
+            for value in self._research_comparison_document_ids.get().split(",")
+            if value.strip()
+        }
+        if record.source_document_id not in comparison_source_ids:
+            self._status.set("Add the accepted source to the comparison first.")
+            return
+        self._append_research_evidence_id(
+            record,
+            self._research_comparison_evidence_ids,
+            maximum=MAX_COMPARISON_NOTE_EVIDENCE,
+            destination="comparison",
+        )
+
+    def _append_research_evidence_id(
+        self,
+        record: ResearchEvidenceRecord,
+        target: tk.StringVar,
+        *,
+        maximum: int | None,
+        destination: str,
+    ) -> None:
+        """Append one unique exact ID without invoking any runtime boundary."""
+        current_ids = tuple(
+            value.strip() for value in target.get().split(",") if value.strip()
+        )
+        if record.evidence_id in current_ids:
+            self._status.set(
+                f"evidence ID is already in the {destination}; nothing changed"
+            )
+            return
+        if maximum is not None and len(current_ids) >= maximum:
+            self._status.set(
+                f"The {destination} accepts at most {maximum} evidence IDs."
+            )
+            return
+        target.set(", ".join((*current_ids, record.evidence_id)))
+        self._status.set(
+            f"evidence ID added to {destination}; nothing requested or saved"
+        )
 
     def _use_selected_research_source_for_assessment(self) -> None:
         """Copy one exact source ID into the manual assessment field only."""
@@ -1670,10 +1859,19 @@ class TkinterDesktopWindow:
 
     def _clear_research_sources(self) -> None:
         """Discard the run-bound source presentation without editing form fields."""
+        self._clear_research_evidence()
         self._research_sources = ()
         self._research_source_run_id = ""
         self._research_source_choice.set("")
         self._research_source_selector.configure(values=())
+
+    def _clear_research_evidence(self) -> None:
+        """Discard source-bound evidence presentation without editing form fields."""
+        self._research_evidence_records = ()
+        self._research_evidence_run_id = ""
+        self._research_evidence_source_document_id = ""
+        self._research_evidence_choice.set("")
+        self._research_evidence_selector.configure(values=())
 
     def _clear_research_run_dependent_presentations(self) -> None:
         """Clear only ephemeral views tied to a previous exact run."""

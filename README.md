@@ -261,6 +261,12 @@ exact document ID. Choosing a source does not edit the form or start an action;
 `Use for assessment` copies only its exact ID into the single-source field, and
 `Add to comparison` appends it once to the ordered manual comparison field while
 preserving the five-source limit.
+The source choice also filters recorded evidence from that same immutable run
+snapshot. Each option shows a bounded single-line excerpt and exact evidence ID;
+selection alone changes nothing. Separate handoffs append one exact ID to the
+assessment, claim, or comparison evidence field. Source ownership is required
+for assessment and comparison, duplicates are ignored, and the existing 20-ID
+claim and 100-ID comparison-note limits remain enforced.
 `Find sources` sends the selected collecting run's question to Crossref and
 connects its fixed endpoint and same-origin redirects only to an address from
 their own public-DNS validation while TLS verifies `api.crossref.org`. It

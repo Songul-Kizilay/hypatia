@@ -54,6 +54,12 @@ explicit assessment handoff replaces only the single-source document field; the
 comparison handoff appends the exact ID once without exceeding five entries.
 Stale cross-run selections are cleared, and neither handoff calls Brain,
 persistence, a provider, the network, or any mutation boundary.
+The chosen source also filters persisted evidence from the already loaded run
+snapshot. Read-only labels show a bounded one-line excerpt and exact evidence
+ID. Separate assessment, claim, and comparison handoffs append only that ID;
+same-source/comparison-membership guards, duplicate refusal, and 20/100 limits
+run locally. Selecting or handing off evidence performs no Brain, persistence,
+provider, network, LLM, knowledge-index, event-bus, or mutation operation.
 For an attached source, `Save evidence` records one explicitly entered chunk ID
 and note; `View evidence` displays the persisted bounded excerpt and locator.
 Neither action extracts, ranks, or interprets evidence automatically.

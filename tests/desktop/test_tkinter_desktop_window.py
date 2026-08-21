@@ -369,6 +369,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_source_selector = RecordingCandidateSelector(selected_index=0)
         window._research_sources = ()
         window._research_source_run_id = "old-run"
+        _configure_research_evidence_selector(window)
         window._research_candidate = RecordingVariable("old candidate")
         window._research_candidate_selector = RecordingCandidateSelector(
             selected_index=0
@@ -426,6 +427,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_source_selector = RecordingCandidateSelector()
         window._research_sources = ()
         window._research_source_run_id = ""
+        _configure_research_evidence_selector(window)
         window._research_candidate = RecordingVariable("")
         window._research_candidate_selector = RecordingCandidateSelector()
         window._research_candidates = ()
@@ -472,6 +474,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_source_selector = RecordingCandidateSelector(selected_index=0)
         window._research_sources = ()
         window._research_source_run_id = "old-run"
+        _configure_research_evidence_selector(window)
         window._research_candidate = RecordingVariable("Old candidate")
         window._research_candidate_selector = RecordingCandidateSelector(
             selected_index=0
@@ -534,6 +537,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_source_selector = RecordingCandidateSelector()
         window._research_sources = ()
         window._research_source_run_id = ""
+        _configure_research_evidence_selector(window)
         window._status = RecordingStatus()
         window._clear_research_run_dependent_presentations = lambda: clears.append(True)
 
@@ -558,6 +562,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_source_selector = RecordingCandidateSelector(selected_index=0)
         window._research_sources = ()
         window._research_source_run_id = "old-run"
+        _configure_research_evidence_selector(window)
         window._research_run_summary = RecordingVariable("Old summary")
         window._status = RecordingStatus()
 
@@ -608,6 +613,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_source_selector = RecordingCandidateSelector()
         window._research_sources = ()
         window._research_source_run_id = ""
+        _configure_research_evidence_selector(window)
         window._research_source_document_id = RecordingVariable("manual-source")
         window._research_comparison_document_ids = RecordingVariable(
             "manual-comparison"
@@ -762,6 +768,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_source_choice = RecordingVariable(
             "Old accepted paper — document-old"
         )
+        _configure_research_evidence_selector(window)
         window._research_source_document_id = RecordingVariable("manual-source")
         window._status = RecordingStatus()
 
@@ -774,6 +781,197 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         self.assertEqual(
             window._status.values,
             ["Select an accepted source first."],
+        )
+
+    def test_selected_source_filters_loaded_evidence_without_copying_ids(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        now = datetime(2026, 8, 21, tzinfo=UTC)
+        first_source = ResearchSourceRecord(
+            "document-1",
+            "https://example.com/first",
+            "First paper",
+            "text/plain",
+            now,
+            now,
+        )
+        second_source = ResearchSourceRecord(
+            "document-2",
+            "https://example.com/second",
+            "Second paper",
+            "text/plain",
+            now,
+            now,
+        )
+        first_evidence = _research_evidence_record(
+            "evidence-1",
+            "document-1",
+            "First source evidence.",
+        )
+        second_evidence = _research_evidence_record(
+            "evidence-2",
+            "document-2",
+            "Second source\nrecorded evidence.",
+        )
+        run = ResearchRun(
+            "run-123",
+            "Compare evidence",
+            ResearchRunStatus.COLLECTING,
+            (first_source, second_source),
+            (),
+            now,
+            now,
+            evidence=(first_evidence, second_evidence),
+        )
+        window._research_run_id = RecordingVariable("run-123")
+        window._research_runs = (run,)
+        window._research_source_run_id = "run-123"
+        window._research_sources = (first_source, second_source)
+        window._research_source_selector = RecordingCandidateSelector(selected_index=1)
+        window._research_source_choice = RecordingVariable("Second paper — document-2")
+        _configure_research_evidence_selector(window)
+        window._research_assessment_evidence_ids = RecordingVariable("manual-a")
+        window._research_claim_evidence_ids = RecordingVariable("manual-c")
+        window._research_comparison_evidence_ids = RecordingVariable("manual-x")
+        window._status = RecordingStatus()
+
+        window._select_research_source()
+
+        self.assertEqual(window._research_evidence_records, (second_evidence,))
+        self.assertEqual(window._research_evidence_run_id, "run-123")
+        self.assertEqual(
+            window._research_evidence_source_document_id,
+            "document-2",
+        )
+        self.assertEqual(
+            window._research_evidence_selector.values,
+            ("Second source recorded evidence. — evidence-2",),
+        )
+        self.assertEqual(window._research_evidence_selector.current(), 0)
+        self.assertEqual(window._research_assessment_evidence_ids.value, "manual-a")
+        self.assertEqual(window._research_claim_evidence_ids.value, "manual-c")
+        self.assertEqual(window._research_comparison_evidence_ids.value, "manual-x")
+        self.assertEqual(
+            window._status.values,
+            ["accepted source selected: document-2; no action started"],
+        )
+
+    def test_assessment_evidence_handoff_requires_source_and_appends_once(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        source = _research_source_record("document-1", "Accepted paper")
+        record = _research_evidence_record(
+            "evidence-2",
+            source.document_id,
+            "Assessment evidence.",
+        )
+        _configure_selected_research_evidence(window, source, record)
+        window._research_source_document_id = RecordingVariable("document-other")
+        window._research_assessment_evidence_ids = RecordingVariable("evidence-1")
+        window._status = RecordingStatus()
+
+        window._add_selected_research_evidence_to_assessment()
+        window._research_source_document_id.set("document-1")
+        window._add_selected_research_evidence_to_assessment()
+        window._add_selected_research_evidence_to_assessment()
+
+        self.assertEqual(
+            window._research_assessment_evidence_ids.value,
+            "evidence-1, evidence-2",
+        )
+        self.assertEqual(
+            window._status.values,
+            [
+                "Use the accepted source for assessment first.",
+                "evidence ID added to assessment; nothing requested or saved",
+                "evidence ID is already in the assessment; nothing changed",
+            ],
+        )
+
+    def test_claim_evidence_handoff_appends_once_and_preserves_limit(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        source = _research_source_record("document-1", "Accepted paper")
+        record = _research_evidence_record(
+            "evidence-21",
+            source.document_id,
+            "Claim evidence.",
+        )
+        _configure_selected_research_evidence(window, source, record)
+        window._research_claim_evidence_ids = RecordingVariable("evidence-old")
+        window._status = RecordingStatus()
+
+        window._add_selected_research_evidence_to_claim()
+        window._add_selected_research_evidence_to_claim()
+        bounded_ids = ", ".join(f"evidence-{index}" for index in range(1, 21))
+        window._research_claim_evidence_ids.set(bounded_ids)
+        window._add_selected_research_evidence_to_claim()
+
+        self.assertEqual(window._research_claim_evidence_ids.value, bounded_ids)
+        self.assertEqual(
+            window._status.values,
+            [
+                "evidence ID added to claim; nothing requested or saved",
+                "evidence ID is already in the claim; nothing changed",
+                "The claim accepts at most 20 evidence IDs.",
+            ],
+        )
+
+    def test_comparison_evidence_handoff_requires_source_and_preserves_limit(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        source = _research_source_record("document-1", "Accepted paper")
+        record = _research_evidence_record(
+            "evidence-101",
+            source.document_id,
+            "Comparison evidence.",
+        )
+        _configure_selected_research_evidence(window, source, record)
+        window._research_comparison_document_ids = RecordingVariable("document-2")
+        window._research_comparison_evidence_ids = RecordingVariable("evidence-old")
+        window._status = RecordingStatus()
+
+        window._add_selected_research_evidence_to_comparison()
+        window._research_comparison_document_ids.set("document-1, document-2")
+        window._add_selected_research_evidence_to_comparison()
+        bounded_ids = ", ".join(f"evidence-{index}" for index in range(1, 101))
+        window._research_comparison_evidence_ids.set(bounded_ids)
+        window._add_selected_research_evidence_to_comparison()
+
+        self.assertEqual(window._research_comparison_evidence_ids.value, bounded_ids)
+        self.assertEqual(
+            window._status.values,
+            [
+                "Add the accepted source to the comparison first.",
+                "evidence ID added to comparison; nothing requested or saved",
+                "The comparison accepts at most 100 evidence IDs.",
+            ],
+        )
+
+    def test_stale_evidence_selection_cannot_overwrite_manual_field(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        source = _research_source_record("document-old", "Old paper")
+        record = _research_evidence_record(
+            "evidence-old",
+            source.document_id,
+            "Old evidence.",
+        )
+        _configure_selected_research_evidence(window, source, record)
+        window._research_run_id.set("run-new")
+        window._research_claim_evidence_ids = RecordingVariable("manual-evidence")
+        window._status = RecordingStatus()
+
+        window._add_selected_research_evidence_to_claim()
+
+        self.assertEqual(window._research_claim_evidence_ids.value, "manual-evidence")
+        self.assertEqual(window._research_sources, ())
+        self.assertEqual(window._research_evidence_records, ())
+        self.assertEqual(window._research_evidence_selector.values, ())
+        self.assertEqual(
+            window._status.values,
+            ["Select recorded evidence first."],
         )
 
     def test_research_markdown_export_preview_uses_selected_run_only(self) -> None:
@@ -2644,6 +2842,68 @@ class RecordingResearchSourceLoadController:
         self.candidate_accepts.append((run_id, discovery_id, candidate_url))
         self.candidate_cancellation_tokens.append(cancellation_token)
         return self.candidate_accept_response
+
+
+def _configure_research_evidence_selector(window: Any) -> None:
+    window._research_evidence_choice = RecordingVariable("")
+    window._research_evidence_selector = RecordingCandidateSelector()
+    window._research_evidence_records = ()
+    window._research_evidence_run_id = ""
+    window._research_evidence_source_document_id = ""
+
+
+def _configure_selected_research_evidence(
+    window: Any,
+    source: ResearchSourceRecord,
+    record: ResearchEvidenceRecord,
+) -> None:
+    window._research_run_id = RecordingVariable("run-123")
+    window._research_source_run_id = "run-123"
+    window._research_sources = (source,)
+    window._research_source_selector = RecordingCandidateSelector(selected_index=0)
+    window._research_source_choice = RecordingVariable(
+        f"{source.title} — {source.document_id}"
+    )
+    window._research_evidence_records = (record,)
+    window._research_evidence_run_id = "run-123"
+    window._research_evidence_source_document_id = source.document_id
+    window._research_evidence_selector = RecordingCandidateSelector(selected_index=0)
+    window._research_evidence_choice = RecordingVariable(
+        f"{record.excerpt} — {record.evidence_id}"
+    )
+
+
+def _research_source_record(
+    document_id: str,
+    title: str,
+) -> ResearchSourceRecord:
+    now = datetime(2026, 8, 21, tzinfo=UTC)
+    return ResearchSourceRecord(
+        document_id=document_id,
+        url=f"https://example.com/{document_id}",
+        title=title,
+        content_type="text/plain",
+        fetched_at=now,
+        added_at=now,
+    )
+
+
+def _research_evidence_record(
+    evidence_id: str,
+    source_document_id: str,
+    excerpt: str,
+) -> ResearchEvidenceRecord:
+    return ResearchEvidenceRecord(
+        evidence_id=evidence_id,
+        source_document_id=source_document_id,
+        chunk_id=f"chunk-{evidence_id}",
+        chunk_index=0,
+        excerpt=excerpt,
+        excerpt_truncated=False,
+        chunk_sha256="0" * 64,
+        note="User-selected evidence.",
+        recorded_at=datetime(2026, 8, 21, tzinfo=UTC),
+    )
 
 
 class RecordingInput:
