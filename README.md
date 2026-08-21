@@ -92,6 +92,8 @@ To create the world's most capable personal AI research companion.
   TLS transport as explicit page loading
 - A separate, versioned and atomically replaced accepted-source content store
   with exact UTF-8 byte count/SHA-256 validation, duplicate and storage bounds.
+  Physical reads use the opened file descriptor and stop at 40,000,001 bytes;
+  writes count exact UTF-8 output without constructing a second full snapshot.
   Sources accepted into a selected research run save content before provenance
   publication with compensating content/knowledge rollback. On startup, only
   records that exactly match accepted run provenance are restored into the

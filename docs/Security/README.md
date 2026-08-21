@@ -20,7 +20,10 @@ Hypatia currently runs as a local-first CLI. The initial security boundary is:
   validation and shares one decreasing timeout across TCP and TLS attempts;
 - the accepted-source content store verifies complete UTF-8 byte
   counts and SHA-256 values, enforces bounded snapshots, and atomically replaces
-  local data; selected-run acceptance writes it transactionally before
+  local data; physical reads consume at most 40,000,000 bytes plus one detection
+  byte from the opened descriptor, and writes count exact UTF-8 output without
+  retaining a second serialized copy; selected-run acceptance writes it
+  transactionally before
   provenance publication, while startup restores at most 20,000 paragraphs only
   after exact run-provenance and stable-identity reconciliation and performs no
   network or persistent write; the explicit restoration-status view reads only

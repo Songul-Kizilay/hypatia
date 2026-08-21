@@ -117,9 +117,61 @@ class JsonFileResearchSourceContentStoreTests(unittest.TestCase):
                 "_MAXIMUM_STORE_FILE_BYTES",
                 16,
             ),
+            patch(
+                "research.JsonFileResearchSourceContentStore.json.loads",
+                side_effect=AssertionError("Oversized JSON must not be decoded."),
+            ),
             self.assertRaisesRegex(ResearchError, "store is too large"),
         ):
             self.store.load()
+
+    def test_load_uses_the_open_descriptor_without_a_preflight_stat(self) -> None:
+        self.store.save([self.record])
+
+        with patch.object(
+            Path,
+            "stat",
+            side_effect=AssertionError("Content load must not preflight file size."),
+        ):
+            loaded = self.store.load()
+
+        self.assertEqual(loaded, [self.record])
+
+    def test_utf8_file_bound_is_exact_and_preserves_the_previous_snapshot(
+        self,
+    ) -> None:
+        unicode_record = ResearchSourceContentRecord.from_source(
+            ResearchSource(
+                url=self.record.url,
+                title="Songül araştırması",
+                content="Kanıt içeriği.",
+                content_type=self.record.content_type,
+                fetched_at=self.record.fetched_at,
+            ),
+            self.record.document_id,
+            self.record.stored_at,
+        )
+        self.store.save([unicode_record])
+        exact_snapshot = self.path.read_bytes()
+
+        with patch.object(
+            JsonFileResearchSourceContentStore,
+            "_MAXIMUM_STORE_FILE_BYTES",
+            len(exact_snapshot),
+        ):
+            self.store.save([unicode_record])
+
+        self.assertEqual(self.path.read_bytes(), exact_snapshot)
+        with patch.object(
+            JsonFileResearchSourceContentStore,
+            "_MAXIMUM_STORE_FILE_BYTES",
+            len(exact_snapshot) - 1,
+        ):
+            with self.assertRaisesRegex(ResearchError, "store is too large"):
+                self.store.save([unicode_record])
+
+        self.assertEqual(self.path.read_bytes(), exact_snapshot)
+        self.assertEqual(list(self.path.parent.glob(".content.json.*.tmp")), [])
 
     def test_failed_atomic_replace_preserves_previous_snapshot_and_cleans_temp(
         self,

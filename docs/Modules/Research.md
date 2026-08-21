@@ -170,12 +170,16 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
   aggregate 20,000 items. Reads stop before oversized JSON decoding; writes
   count exact UTF-8 bytes in a temporary file and publish only a complete
   bounded snapshot through the existing atomic replacement.
+- The separate accepted-source content store reads at most 40,000,001 bytes
+  from its opened descriptor before decoding and streams exact UTF-8 JSON into
+  its temporary file. The existing 64-record, 32,000,000-content-byte,
+  fingerprint, rollback, and atomic publication rules remain unchanged.
 
 ## Next increment
 
-Apply the same descriptor-bound maximum-plus-one read and bounded UTF-8 output
-pattern to the accepted-source content store. Preserve its current record,
-content-byte, fingerprint, rollback, and atomic replacement contracts.
+Add explicit physical-file and relation-count bounds to the schema-v1
+knowledge-relation snapshot, preserving deterministic ordering, duplicate
+rejection, and atomic replacement.
 
 ## Known boundary
 
