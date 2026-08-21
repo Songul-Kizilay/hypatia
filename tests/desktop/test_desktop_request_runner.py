@@ -75,6 +75,40 @@ class DesktopRequestRunnerTests(unittest.TestCase):
         self.assertEqual(runner.drain(), ())
         self.assertEqual(runner.start(lambda: "must not run"), "stopped")
 
+    def test_cancel_request_discards_value_after_active_action_returns(self) -> None:
+        runner = DesktopRequestRunner()
+        entered = Event()
+        release = Event()
+
+        def action() -> str:
+            entered.set()
+            release.wait(timeout=1)
+            return "must not be presented"
+
+        self.assertEqual(runner.start(action), "started")
+        self.assertTrue(entered.wait(timeout=1))
+        self.assertEqual(runner.request_cancel(), "requested")
+        self.assertEqual(runner.request_cancel(), "already_requested")
+        self.assertTrue(runner.is_cancellation_requested())
+        self.assertEqual(runner.start(lambda: "must not run"), "busy")
+
+        release.set()
+        self._wait_until_idle(runner)
+
+        self.assertEqual(runner.start(lambda: "still must not run"), "busy")
+        completions = runner.drain()
+        self.assertEqual(len(completions), 1)
+        self.assertTrue(completions[0].cancelled)
+        self.assertIsNone(completions[0].value)
+        self.assertIsNone(completions[0].error)
+        self.assertFalse(runner.is_cancellation_requested())
+
+    def test_cancel_request_reports_idle_and_stopped_states(self) -> None:
+        runner = DesktopRequestRunner()
+        self.assertEqual(runner.request_cancel(), "idle")
+        runner.stop()
+        self.assertEqual(runner.request_cancel(), "stopped")
+
     def test_thread_start_failure_releases_the_single_flight_reservation(self) -> None:
         runner = DesktopRequestRunner()
         with patch("desktop.DesktopRequestRunner.Thread") as thread_type:
@@ -120,7 +154,74 @@ class DesktopRequestRunnerTests(unittest.TestCase):
 
         self.assertEqual(responses, [response])
         self.assertEqual(window._request_controls[0].states[-1], ("!disabled",))
+        self.assertEqual(window._cancel_button.states[-1], ("disabled",))
         self.assertEqual(len(window._root.after_calls), 1)
+
+    def test_window_reports_elapsed_time_without_a_fake_percentage(self) -> None:
+        runner = DesktopRequestRunner()
+        window = self._window_with(runner)
+        release = Event()
+        response = BrainResponse(
+            message="Completed.",
+            request_id="desktop-progress",
+            intent="conversation",
+            memory_count=0,
+        )
+
+        def action() -> BrainResponse:
+            release.wait(timeout=1)
+            return response
+
+        with patch("desktop.TkinterDesktopWindow.monotonic", return_value=10.0):
+            window._start_request(
+                action,
+                self.fail,
+                "source load",
+            )
+        with patch("desktop.TkinterDesktopWindow.monotonic", return_value=14.9):
+            window._update_request_progress()
+
+        self.assertEqual(window._status.values[-1], "source load: working (4s elapsed)")
+        self.assertNotIn("%", window._status.values[-1])
+        release.set()
+        self._wait_until_idle(runner)
+
+    def test_window_cancel_keeps_controls_busy_until_operation_finishes(self) -> None:
+        runner = DesktopRequestRunner()
+        window = self._window_with(runner)
+        entered = Event()
+        release = Event()
+        responses: list[BrainResponse] = []
+        response = BrainResponse(
+            message="Must not be presented.",
+            request_id="desktop-cancelled",
+            intent="conversation",
+            memory_count=0,
+        )
+
+        def action() -> BrainResponse:
+            entered.set()
+            release.wait(timeout=1)
+            return response
+
+        window._start_request(action, responses.append, "knowledge question")
+        self.assertTrue(entered.wait(timeout=1))
+        window._cancel_request()
+
+        self.assertEqual(window._request_controls[0].states[-1], ("disabled",))
+        self.assertEqual(window._cancel_button.states[-1], ("disabled",))
+        self.assertIn("waiting for the active operation", window._status.values[-1])
+
+        release.set()
+        self._wait_until_idle(runner)
+        window._poll_requests()
+
+        self.assertEqual(responses, [])
+        self.assertEqual(window._request_controls[0].states[-1], ("!disabled",))
+        self.assertEqual(
+            window._status.values[-1],
+            "Request cancelled after the active operation finished.",
+        )
 
     def test_window_shows_validation_errors_but_sanitizes_other_failures(self) -> None:
         runner = DesktopRequestRunner()
@@ -212,6 +313,9 @@ class DesktopRequestRunnerTests(unittest.TestCase):
         window._request_runner = runner
         window._request_completion_handler = None
         window._request_controls = [RecordingControl()]
+        window._cancel_button = RecordingControl()
+        window._request_label = None
+        window._request_started_at = None
         window._closing = False
         window._status = RecordingStatus()
         window._root = RecordingRoot()

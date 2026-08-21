@@ -1694,6 +1694,15 @@ class ImmediateRequestRunner:
         self.completions.clear()
         return completions
 
+    def is_running(self) -> bool:
+        return False
+
+    def is_cancellation_requested(self) -> bool:
+        return False
+
+    def request_cancel(self) -> Literal["idle", "stopped"]:
+        return "stopped" if self.stopped else "idle"
+
     def stop(self) -> None:
         self.stopped = True
         self.completions.clear()
@@ -1715,6 +1724,8 @@ def _configure_request_boundary(window: Any) -> None:
     window._request_runner = ImmediateRequestRunner()
     window._request_completion_handler = None
     window._request_controls = []
+    window._request_label = None
+    window._request_started_at = None
     window._closing = False
     window._root = RecordingRequestRoot()
 
