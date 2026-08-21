@@ -20,6 +20,9 @@ from research.ResearchClaimConfidence import ResearchClaimConfidence
 from research.ResearchClaimContradictionCandidate import (
     ResearchClaimContradictionCandidate,
 )
+from research.ResearchClaimContradictionRecord import (
+    ResearchClaimContradictionRecord,
+)
 from research.ResearchClaimRecord import (
     MAX_RESEARCH_CLAIM_EVIDENCE,
     ResearchClaimRecord,
@@ -204,6 +207,7 @@ class TkinterDesktopWindow:
         self._research_evidence_choice = tk.StringVar()
         self._research_assessment_choice = tk.StringVar()
         self._research_claim_choice = tk.StringVar()
+        self._research_persisted_contradiction_choice = tk.StringVar()
         self._research_candidate = tk.StringVar()
         self._research_url = tk.StringVar()
         self._research_source_document_id = tk.StringVar()
@@ -251,6 +255,10 @@ class TkinterDesktopWindow:
         self._research_claim_records: tuple[ResearchClaimRecord, ...] = ()
         self._research_current_claim_ids: frozenset[str] = frozenset()
         self._research_claim_run_id = ""
+        self._research_persisted_contradiction_records: tuple[
+            ResearchClaimContradictionRecord, ...
+        ] = ()
+        self._research_persisted_contradiction_run_id = ""
         self._research_candidate_run_id = ""
         self._research_candidate_discovery_id = ""
         self._research_claim_contradiction_proposal_run_id = ""
@@ -830,6 +838,31 @@ class TkinterDesktopWindow:
             text="Add to contradiction",
             command=self._add_selected_research_claim_to_contradiction,
         ).grid(row=1, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ttk.Label(authored_claim_frame, text="Recorded contradictions").grid(
+            row=2,
+            column=0,
+            sticky="w",
+            padx=(0, 8),
+            pady=(8, 0),
+        )
+        self._research_persisted_contradiction_selector = ttk.Combobox(
+            authored_claim_frame,
+            textvariable=self._research_persisted_contradiction_choice,
+            values=(),
+            state="readonly",
+        )
+        self._research_persisted_contradiction_selector.grid(
+            row=2,
+            column=1,
+            columnspan=3,
+            sticky="ew",
+            pady=(8, 0),
+        )
+        ttk.Button(
+            authored_claim_frame,
+            text="Use selected pair",
+            command=self._use_selected_persisted_contradiction_pair,
+        ).grid(row=3, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
         self._request_button(
             research_frame,
             text="Find sources",
@@ -1706,6 +1739,7 @@ class TkinterDesktopWindow:
         if not 0 <= selected_index < len(self._research_runs):
             self._clear_research_sources()
             self._clear_research_claims()
+            self._clear_research_persisted_contradictions()
             self._research_run_summary.set("Refresh and select a research run.")
             self._status.set("Refresh and select a research run first.")
             return
@@ -1716,6 +1750,7 @@ class TkinterDesktopWindow:
             self._clear_research_run_dependent_presentations()
         self._render_research_source_selector(selected_run)
         self._render_research_claim_selector(selected_run)
+        self._render_research_persisted_contradiction_selector(selected_run)
         self._research_run_summary.set(self._research_run_summary_text(selected_run))
         self._status.set(
             f"research run selected: {selected_run.run_id}; no action started"
@@ -1830,6 +1865,66 @@ class TkinterDesktopWindow:
             ", ".join((*current_ids, record.claim_id))
         )
         self._status.set("claim ID added to contradiction; nothing requested or saved")
+
+    def _render_research_persisted_contradiction_selector(
+        self,
+        run: ResearchRun,
+    ) -> None:
+        """Render recorded contradictions from the loaded exact run snapshot."""
+        records = run.claim_contradictions
+        self._research_persisted_contradiction_records = records
+        self._research_persisted_contradiction_run_id = run.run_id
+        labels = tuple(
+            self._research_persisted_contradiction_label(record) for record in records
+        )
+        self._research_persisted_contradiction_selector.configure(values=labels)
+        if not records:
+            self._research_persisted_contradiction_choice.set("")
+            return
+        self._research_persisted_contradiction_selector.current(0)
+
+    @staticmethod
+    def _research_persisted_contradiction_label(
+        record: ResearchClaimContradictionRecord,
+    ) -> str:
+        """Show exact pair, bounded note, time, and exact contradiction ID."""
+        note = " ".join(record.note.split())
+        if len(note) > 100:
+            note = f"{note[:97]}..."
+        return (
+            f"[{record.recorded_at.isoformat()}] {record.claim_ids[0]} ↔ "
+            f"{record.claim_ids[1]} | {note} — {record.contradiction_id}"
+        )
+
+    def _selected_persisted_research_contradiction(
+        self,
+    ) -> ResearchClaimContradictionRecord | None:
+        """Return only a contradiction bound to the selected loaded run."""
+        if (
+            self._research_run_id.get().strip()
+            != self._research_persisted_contradiction_run_id
+        ):
+            self._clear_research_persisted_contradictions()
+            return None
+        selected_index = self._research_persisted_contradiction_selector.current()
+        if (
+            not 0
+            <= selected_index
+            < len(self._research_persisted_contradiction_records)
+        ):
+            return None
+        return self._research_persisted_contradiction_records[selected_index]
+
+    def _use_selected_persisted_contradiction_pair(self) -> None:
+        """Copy one recorded exact claim pair without editing its authored note."""
+        record = self._selected_persisted_research_contradiction()
+        if record is None:
+            self._status.set("Select a recorded contradiction first.")
+            return
+        self._research_claim_contradiction_ids.set(", ".join(record.claim_ids))
+        self._status.set(
+            "recorded claim pair copied; note unchanged; nothing requested or saved"
+        )
 
     def _render_research_source_selector(self, run: ResearchRun) -> None:
         """Render accepted sources from the already loaded exact run snapshot."""
@@ -2211,10 +2306,18 @@ class TkinterDesktopWindow:
         self._research_claim_choice.set("")
         self._research_claim_selector.configure(values=())
 
+    def _clear_research_persisted_contradictions(self) -> None:
+        """Discard run-bound contradiction views without editing manual fields."""
+        self._research_persisted_contradiction_records = ()
+        self._research_persisted_contradiction_run_id = ""
+        self._research_persisted_contradiction_choice.set("")
+        self._research_persisted_contradiction_selector.configure(values=())
+
     def _clear_research_run_dependent_presentations(self) -> None:
         """Clear only ephemeral views tied to a previous exact run."""
         self._clear_research_sources()
         self._clear_research_claims()
+        self._clear_research_persisted_contradictions()
         self._clear_research_candidates()
         self._clear_research_claim_contradiction_proposals()
         self._research_markdown_export_preview = None

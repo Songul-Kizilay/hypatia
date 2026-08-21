@@ -40,6 +40,9 @@ from research.ResearchClaimContradictionPreview import (
 from research.ResearchClaimContradictionProposalPreview import (
     ResearchClaimContradictionProposalPreview,
 )
+from research.ResearchClaimContradictionRecord import (
+    ResearchClaimContradictionRecord,
+)
 from research.ResearchClaimContradictionWritePreview import (
     ResearchClaimContradictionWritePreview,
 )
@@ -1406,6 +1409,180 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         self.assertEqual(
             window._status.values,
             ["Select an authored claim first."],
+        )
+
+    def test_selected_run_renders_recorded_contradictions_from_snapshot(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        now = datetime(2026, 8, 21, tzinfo=UTC)
+        source = _research_source_record("document-1", "Accepted paper")
+        first_evidence = _research_evidence_record(
+            "evidence-1",
+            source.document_id,
+            "First claim evidence.",
+        )
+        second_evidence = _research_evidence_record(
+            "evidence-2",
+            source.document_id,
+            "Second claim evidence.",
+        )
+        first_claim = _research_claim_record(
+            "claim-1",
+            source.document_id,
+            first_evidence.evidence_id,
+            "First claim.",
+        )
+        second_claim = _research_claim_record(
+            "claim-2",
+            source.document_id,
+            second_evidence.evidence_id,
+            "Second claim.",
+        )
+        contradiction = _research_claim_contradiction_record(
+            "contradiction-1",
+            first_claim.claim_id,
+            second_claim.claim_id,
+            (first_evidence.evidence_id, second_evidence.evidence_id),
+            "x" * 101,
+        )
+        run = ResearchRun(
+            "run-123",
+            "Review contradictions",
+            ResearchRunStatus.COLLECTING,
+            (source,),
+            (),
+            now,
+            now,
+            evidence=(first_evidence, second_evidence),
+            claims=(first_claim, second_claim),
+            claim_contradictions=(contradiction,),
+        )
+        window._research_run_id = RecordingVariable("run-123")
+        window._research_run_summary = RecordingVariable("")
+        window._research_run_selector = RecordingCandidateSelector(selected_index=0)
+        window._research_runs = (run,)
+        window._research_source_choice = RecordingVariable("")
+        window._research_source_selector = RecordingCandidateSelector()
+        window._research_sources = ()
+        window._research_source_run_id = ""
+        _configure_research_evidence_selector(window)
+        window._research_claim_contradiction_ids = RecordingVariable("manual-pair")
+        window._research_claim_contradiction_note = RecordingVariable("manual-note")
+        window._status = RecordingStatus()
+
+        window._select_research_run()
+
+        self.assertEqual(
+            window._research_persisted_contradiction_records,
+            (contradiction,),
+        )
+        self.assertEqual(
+            window._research_persisted_contradiction_run_id,
+            run.run_id,
+        )
+        self.assertEqual(
+            window._research_persisted_contradiction_selector.values,
+            (
+                f"[2026-08-21T00:00:00+00:00] claim-1 ↔ claim-2 | "
+                f"{'x' * 97}... — contradiction-1",
+            ),
+        )
+        self.assertEqual(
+            window._research_persisted_contradiction_selector.current(),
+            0,
+        )
+        self.assertEqual(window._research_claim_contradiction_ids.value, "manual-pair")
+        self.assertEqual(window._research_claim_contradiction_note.value, "manual-note")
+
+    def test_recorded_contradiction_handoff_copies_pair_and_preserves_note(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        record = _research_claim_contradiction_record(
+            "contradiction-1",
+            "claim-1",
+            "claim-2",
+            ("evidence-1", "evidence-2"),
+            "Recorded contradiction.",
+        )
+        _configure_selected_persisted_contradictions(window, (record,))
+        window._research_claim_contradiction_ids = RecordingVariable("manual-pair")
+        window._research_claim_contradiction_note = RecordingVariable("manual-note")
+        window._status = RecordingStatus()
+
+        window._use_selected_persisted_contradiction_pair()
+
+        self.assertEqual(
+            window._research_claim_contradiction_ids.value,
+            "claim-1, claim-2",
+        )
+        self.assertEqual(window._research_claim_contradiction_note.value, "manual-note")
+        self.assertEqual(
+            window._status.values,
+            [
+                "recorded claim pair copied; note unchanged; "
+                "nothing requested or saved"
+            ],
+        )
+
+    def test_stale_recorded_contradiction_cannot_overwrite_manual_fields(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        record = _research_claim_contradiction_record(
+            "contradiction-old",
+            "claim-old-1",
+            "claim-old-2",
+            ("evidence-old-1", "evidence-old-2"),
+            "Old contradiction.",
+        )
+        _configure_selected_persisted_contradictions(window, (record,))
+        window._research_run_id.set("run-new")
+        window._research_claim_contradiction_ids = RecordingVariable("manual-pair")
+        window._research_claim_contradiction_note = RecordingVariable("manual-note")
+        window._status = RecordingStatus()
+
+        window._use_selected_persisted_contradiction_pair()
+
+        self.assertEqual(window._research_claim_contradiction_ids.value, "manual-pair")
+        self.assertEqual(window._research_claim_contradiction_note.value, "manual-note")
+        self.assertEqual(window._research_persisted_contradiction_records, ())
+        self.assertEqual(window._research_persisted_contradiction_run_id, "")
+        self.assertEqual(
+            window._research_persisted_contradiction_selector.values,
+            (),
+        )
+        self.assertEqual(
+            window._status.values,
+            ["Select a recorded contradiction first."],
+        )
+
+    def test_invalid_recorded_contradiction_selection_preserves_manual_fields(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        record = _research_claim_contradiction_record(
+            "contradiction-1",
+            "claim-1",
+            "claim-2",
+            ("evidence-1", "evidence-2"),
+            "Recorded contradiction.",
+        )
+        _configure_selected_persisted_contradictions(
+            window,
+            (record,),
+            selected_index=-1,
+        )
+        window._research_claim_contradiction_ids = RecordingVariable("manual-pair")
+        window._research_claim_contradiction_note = RecordingVariable("manual-note")
+        window._status = RecordingStatus()
+
+        window._use_selected_persisted_contradiction_pair()
+
+        self.assertEqual(window._research_claim_contradiction_ids.value, "manual-pair")
+        self.assertEqual(window._research_claim_contradiction_note.value, "manual-note")
+        self.assertEqual(
+            window._status.values,
+            ["Select a recorded contradiction first."],
         )
 
     def test_research_markdown_export_preview_uses_selected_run_only(self) -> None:
@@ -3303,6 +3480,29 @@ def _configure_research_claim_selector(window: Any) -> None:
     window._research_claim_records = ()
     window._research_current_claim_ids = frozenset()
     window._research_claim_run_id = ""
+    _configure_research_persisted_contradiction_selector(window)
+
+
+def _configure_research_persisted_contradiction_selector(window: Any) -> None:
+    window._research_persisted_contradiction_choice = RecordingVariable("")
+    window._research_persisted_contradiction_selector = RecordingCandidateSelector()
+    window._research_persisted_contradiction_records = ()
+    window._research_persisted_contradiction_run_id = ""
+
+
+def _configure_selected_persisted_contradictions(
+    window: Any,
+    records: tuple[ResearchClaimContradictionRecord, ...],
+    *,
+    selected_index: int = 0,
+) -> None:
+    window._research_run_id = RecordingVariable("run-123")
+    window._research_persisted_contradiction_records = records
+    window._research_persisted_contradiction_run_id = "run-123"
+    window._research_persisted_contradiction_selector = RecordingCandidateSelector(
+        selected_index=selected_index
+    )
+    window._research_persisted_contradiction_choice = RecordingVariable("")
 
 
 def _configure_selected_research_claims(
@@ -3422,6 +3622,22 @@ def _research_claim_record(
         evidence_ids=(evidence_id,),
         recorded_at=datetime(2026, 8, 21, tzinfo=UTC),
         supersedes_claim_id=supersedes_claim_id,
+    )
+
+
+def _research_claim_contradiction_record(
+    contradiction_id: str,
+    first_claim_id: str,
+    second_claim_id: str,
+    evidence_ids: tuple[str, ...],
+    note: str,
+) -> ResearchClaimContradictionRecord:
+    return ResearchClaimContradictionRecord(
+        contradiction_id=contradiction_id,
+        claim_ids=(first_claim_id, second_claim_id),
+        evidence_ids=evidence_ids,
+        note=note,
+        recorded_at=datetime(2026, 8, 21, tzinfo=UTC),
     )
 
 

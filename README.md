@@ -279,6 +279,11 @@ state, categorical confidence, bounded text, and exact claim ID. Selection edits
 nothing. Separate handoffs accept only a current claim and either copy its ID as
 the next predecessor or append it once to the manual contradiction field without
 exceeding exactly two IDs.
+Persisted user-reviewed contradictions for that run appear beside the claims.
+Each label retains its exact claim pair, bounded authored note, recorded time,
+and exact contradiction ID. Selection edits nothing. `Use selected pair` copies
+only the two claim IDs into the manual contradiction field, preserves the manual
+note, and rejects stale or invalid run-bound presentation state locally.
 `Find sources` sends the selected collecting run's question to Crossref and
 connects its fixed endpoint and same-origin redirects only to an address from
 their own public-DNS validation while TLS verifies `api.crossref.org`. It
