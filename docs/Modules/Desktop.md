@@ -66,6 +66,13 @@ the exact ID. Selection edits nothing; explicit correction-target and comparison
 handoffs accept only current same-source records. Stale state, comparison source
 membership, duplicates, and the 50-assessment limit are checked locally without
 Brain, persistence, provider, network, LLM, or mutation work.
+Authored claims for the selected run are also rendered from that immutable
+snapshot. Labels distinguish current/superseded state and retain epistemic state,
+categorical confidence, bounded text, and exact ID. Selection edits nothing;
+separate predecessor and contradiction handoffs accept only current records.
+Stale state, duplicates, and the exact two-ID contradiction bound are checked
+locally without Brain, persistence, provider, network, LLM, event-bus, or
+mutation work.
 For an attached source, `Save evidence` records one explicitly entered chunk ID
 and note; `View evidence` displays the persisted bounded excerpt and locator.
 Neither action extracts, ranks, or interprets evidence automatically.

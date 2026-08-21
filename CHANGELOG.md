@@ -2,6 +2,31 @@
 
 All notable project changes are recorded here.
 
+## [0.3.85] - 2026-08-21
+
+### Added
+
+- The selected desktop research run now exposes its user-authored claims from
+  the already loaded immutable run snapshot.
+- Claim labels distinguish `current` and `superseded` audit state while showing
+  bounded authored text, epistemic state, categorical confidence, and exact ID.
+- Separate explicit actions can copy one current claim ID into the manual
+  predecessor field or append it to the two-ID contradiction field.
+
+### Safety
+
+- Selecting a claim never edits authored fields or starts Brain, storage,
+  provider, network, LLM, knowledge-index, event-bus, or mutation work.
+- Superseded, stale, duplicate, and over-two contradiction selections are
+  refused locally without changing form values.
+
+### Verification
+
+- The package-aware full local suite contains 1,443 passing automated tests.
+- Focused desktop coverage contains 84 passing tests for audit-state rendering,
+  uncertainty labels, current-record preference, exact-ID handoff, duplicate and
+  two-ID limits, field preservation, and stale-selection guards.
+
 ## [0.3.84] - 2026-08-21
 
 ### Added

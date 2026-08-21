@@ -39,6 +39,8 @@ The MVP may present only current Brain/CognitiveEngine capabilities:
   IDs, and separate handoffs to manual assessment, claim, and comparison fields;
 - a source-filtered read-only authored-assessment selector that distinguishes
   current/superseded state and offers explicit current-ID handoffs;
+- a selected-run read-only authored-claim selector that exposes audit state,
+  epistemic state, confidence, bounded text, exact ID, and guarded handoffs;
 - read-only accepted-content restoration status captured during startup, with
   only availability and aggregate restored document/paragraph counts;
 - explicit recording and read-only viewing of a selected attached-source chunk
@@ -230,6 +232,13 @@ first current record is selected for convenience without editing any field.
 Only a current same-source assessment can be explicitly copied into the manual
 predecessor field or appended once to comparison assessment IDs. Comparison
 source membership, stale state, duplicates, and the 50-ID limit fail locally.
+The authored-claim selector reads only the claims already present in the selected
+loaded run. Labels show `current` or `superseded`, epistemic state, categorical
+confidence, bounded user text, and exact ID, and prefer the first current record
+without editing any manual field. Separate explicit handoffs accept only a
+current claim and either replace the predecessor field or append once to the
+contradiction field. Stale state, duplicates, and the exact two-ID bound fail
+locally without a Brain request, persistence operation, provider, or mutation.
 `Preview & save assessment` also accepts an optional predecessor assessment ID.
 The preview shows the exact link; confirmation sends the captured value, and
 the runtime revalidates that it is an unsuperseded assessment from the same run
