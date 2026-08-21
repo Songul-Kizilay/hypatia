@@ -48,6 +48,12 @@ source-candidate, contradiction-suggestion, and export-preview presentation
 state. A compact line beneath the selector shows status and complete source,
 evidence, and claim counts from the same loaded snapshot; it opens no additional
 read or provider path.
+Accepted sources from that snapshot populate a read-only selector labelled with
+bounded title text and exact document ID. Selection alone edits nothing. The
+explicit assessment handoff replaces only the single-source document field; the
+comparison handoff appends the exact ID once without exceeding five entries.
+Stale cross-run selections are cleared, and neither handoff calls Brain,
+persistence, a provider, the network, or any mutation boundary.
 For an attached source, `Save evidence` records one explicitly entered chunk ID
 and note; `View evidence` displays the persisted bounded excerpt and locator.
 Neither action extracts, ranks, or interprets evidence automatically.

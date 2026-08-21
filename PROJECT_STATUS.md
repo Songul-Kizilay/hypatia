@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.81 (Genesis)`
+`v0.3.82 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.81`** is the current executable package and GitHub
+- **Runtime release `v0.3.82`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -103,6 +103,11 @@ with optional OpenAI-compatible LLM conversation support.
   stores its question, collecting status, source provenance, safe failures,
   and timestamps in a versioned atomic JSON snapshot. Downloaded page content
   and the in-memory knowledge index are not duplicated in that snapshot.
+- The selected run exposes accepted sources from its already loaded immutable
+  snapshot in a read-only title-and-exact-ID selector. Selection alone changes
+  no manual field; separate assessment and comparison handoff buttons copy only
+  the exact persisted ID, reject stale cross-run choices, and start no Brain,
+  storage, provider, network, or mutation operation.
 - A separate schema-v1 accepted-source content store validates exact
   document provenance, UTF-8 byte count, SHA-256, timestamps, duplicate IDs and
   URLs, and bounded per-record/total/file sizes before atomically replacing its
@@ -464,7 +469,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,425 automated tests pass through package-aware discovery.
+- 1,430 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -499,7 +504,8 @@ changed.
 
 ## Next Milestone
 
-Add a read-only accepted-source selector for the selected research run, labelled
-with source title and exact document ID. It must use only the already loaded run
-snapshot, copy the exact ID into existing manual source fields only after an
-explicit selection, and start no fetch, provider, or mutation automatically.
+Add a read-only evidence selector for the accepted source currently chosen in
+the selected research run. It must label each persisted record with a bounded
+excerpt and exact evidence ID, use only the already loaded immutable run
+snapshot, copy an ID into existing manual evidence fields only through explicit
+handoff actions, and start no Brain, store, provider, network, or mutation work.

@@ -2,6 +2,29 @@
 
 All notable project changes are recorded here.
 
+## [0.3.82] - 2026-08-21
+
+### Added
+
+- The selected research run now exposes its accepted sources in a read-only
+  desktop selector labelled with bounded title text and the exact document ID.
+- Separate `Use for assessment` and `Add to comparison` actions copy only the
+  selected exact ID into the corresponding existing manual field.
+
+### Safety
+
+- Merely selecting or refreshing a run never overwrites either manual source
+  field and starts no Brain, store, provider, network, or mutation operation.
+- Accepted-source choices are tied to one exact loaded run snapshot. Stale
+  cross-run choices are cleared and refused, duplicate comparison IDs are not
+  added, and the existing five-source comparison limit is preserved.
+
+### Verification
+
+- The package-aware full local suite contains 1,430 passing automated tests.
+- Focused desktop coverage verifies snapshot-only rendering, exact-ID handoff,
+  manual-field isolation, duplicate prevention, and stale-run rejection.
+
 ## [0.3.81] - 2026-08-21
 
 ### Added

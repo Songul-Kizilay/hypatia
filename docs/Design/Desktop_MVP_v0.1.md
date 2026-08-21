@@ -33,6 +33,8 @@ The MVP may present only current Brain/CognitiveEngine capabilities:
   explicitly selected run;
 - a compact selected-run status and complete source/evidence/claim count summary
   derived only from the selector's already loaded immutable snapshot;
+- a read-only accepted-source selector from that same run snapshot, with
+  explicit exact-ID handoffs to the manual assessment and comparison fields;
 - read-only accepted-content restoration status captured during startup, with
   only availability and aggregate restored document/paragraph counts;
 - explicit recording and read-only viewing of a selected attached-source chunk
@@ -205,6 +207,12 @@ convenience, but the preview remains separately user initiated. It renders only
 persistent source provenance and evidence already selected for that source; it
 does not access the network or live index, invoke an LLM, write memory or graph
 state, persist a decision, or calculate trust and quality scores.
+The accepted-source selector is populated only from the currently selected
+loaded `ResearchRun`. Its title-and-ID labels are read-only: changing the choice
+does not touch authored form values. `Use for assessment` copies one exact ID to
+the single-source field, while `Add to comparison` appends it once to the
+ordered comparison field without exceeding five IDs. Both are presentation-only
+handoffs and reject a source snapshot belonging to another run.
 `Preview & save assessment` also accepts an optional predecessor assessment ID.
 The preview shows the exact link; confirmation sends the captured value, and
 the runtime revalidates that it is an unsuperseded assessment from the same run
