@@ -2,6 +2,31 @@
 
 All notable project changes are recorded here.
 
+## [0.3.86] - 2026-08-21
+
+### Added
+
+- The selected desktop research run now exposes its persisted user-reviewed
+  claim contradictions from the already loaded immutable run snapshot.
+- Contradiction labels retain the exact claim pair, bounded authored note,
+  timezone-aware recorded time, and exact contradiction ID.
+- A separate explicit action can copy one recorded exact pair into the manual
+  contradiction field while preserving the authored note field.
+
+### Safety
+
+- Selecting or handing off a persisted contradiction never starts Brain,
+  storage, provider, network, LLM, knowledge-index, event-bus, or mutation work.
+- Stale and invalid selections are cleared or refused locally without changing
+  either manual contradiction field.
+
+### Verification
+
+- The package-aware full local suite contains 1,447 passing automated tests.
+- Focused desktop coverage contains 88 passing tests for immutable-snapshot
+  rendering, exact pair/time/ID labels, bounded notes, field preservation,
+  explicit pair handoff, invalid selection, and stale-run guards.
+
 ## [0.3.85] - 2026-08-21
 
 ### Added

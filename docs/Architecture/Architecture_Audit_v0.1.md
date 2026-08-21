@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.85` in the current release candidate) are the
+- **Runtime releases** (`v0.3.86` in the current release candidate) are the
   executable package and GitHub release line. They are the source-backed
   implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
@@ -244,6 +244,11 @@ categorical confidence, bounded text, and exact ID; the first current record is
 preferred without changing form values. Separate predecessor and contradiction
 handoffs accept only current records and locally reject stale, duplicate, or
 over-two choices without opening any runtime or mutation boundary.
+Persisted user-reviewed claim contradictions in the same run snapshot populate
+a separate read-only selector. Each label retains the exact claim pair, bounded
+authored note, timezone-aware recorded time, and exact contradiction ID. An
+explicit handoff replaces only the manual pair field while preserving the note;
+stale or invalid state fails locally without opening a runtime boundary.
 The ordered manual comparison is also the read boundary for append-only authored
 comparison notes. A collecting run accepts a note only after an exact no-write
 preview and separate confirmation. Evidence and current assessment IDs must
@@ -398,7 +403,7 @@ Not implemented:
 
 The current local verification baseline is:
 
-- package-aware `python -m unittest`: 1,443 tests passed. Explicit `tests.*`
+- package-aware `python -m unittest`: 1,447 tests passed. Explicit `tests.*`
   module names ensure nested test directories are included without shadowing
   source packages.
 - `python -m black --check src tests`: passed.

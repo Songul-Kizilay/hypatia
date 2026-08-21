@@ -41,6 +41,8 @@ The MVP may present only current Brain/CognitiveEngine capabilities:
   current/superseded state and offers explicit current-ID handoffs;
 - a selected-run read-only authored-claim selector that exposes audit state,
   epistemic state, confidence, bounded text, exact ID, and guarded handoffs;
+- a selected-run read-only persisted-contradiction selector with exact claim
+  pair, bounded authored note, recorded time, ID, and explicit pair handoff;
 - read-only accepted-content restoration status captured during startup, with
   only availability and aggregate restored document/paragraph counts;
 - explicit recording and read-only viewing of a selected attached-source chunk
@@ -239,6 +241,12 @@ without editing any manual field. Separate explicit handoffs accept only a
 current claim and either replace the predecessor field or append once to the
 contradiction field. Stale state, duplicates, and the exact two-ID bound fail
 locally without a Brain request, persistence operation, provider, or mutation.
+The persisted-contradiction selector reads only `claim_contradictions` already
+present in that loaded run. Labels show both exact claim IDs, bounded one-line
+authored note, timezone-aware recorded time, and exact contradiction ID. Selection
+edits nothing. A separate explicit handoff replaces only the two-ID manual field,
+preserves the manual note, and rejects stale or invalid selection state locally
+without Brain, storage, provider, network, LLM, or mutation work.
 `Preview & save assessment` also accepts an optional predecessor assessment ID.
 The preview shows the exact link; confirmation sends the captured value, and
 the runtime revalidates that it is an unsuperseded assessment from the same run

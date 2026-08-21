@@ -73,6 +73,12 @@ separate predecessor and contradiction handoffs accept only current records.
 Stale state, duplicates, and the exact two-ID contradiction bound are checked
 locally without Brain, persistence, provider, network, LLM, event-bus, or
 mutation work.
+Persisted user-reviewed contradictions in that run populate another read-only
+selector. Labels retain the exact claim pair, bounded authored note,
+timezone-aware recorded time, and exact contradiction ID. Selection edits
+nothing; an explicit handoff replaces only the manual pair field and preserves
+the manual note. Stale or invalid selection state is refused locally without
+Brain, persistence, provider, network, LLM, event-bus, or mutation work.
 For an attached source, `Save evidence` records one explicitly entered chunk ID
 and note; `View evidence` displays the persisted bounded excerpt and locator.
 Neither action extracts, ranks, or interprets evidence automatically.
