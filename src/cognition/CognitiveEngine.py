@@ -1908,6 +1908,24 @@ class CognitiveEngine:
             )
 
         index = runtime.current()
+        if runtime.is_stopped():
+            return self._response_composer.semantic_recall_status(
+                request,
+                runtime_state="stopped",
+                indexed_memory_records=None,
+                embedding_dimension=None,
+                last_rebuild_error=runtime.last_rebuild_error(),
+                last_update_error=runtime.last_update_error(),
+            )
+        if runtime.is_rebuilding():
+            return self._response_composer.semantic_recall_status(
+                request,
+                runtime_state="refreshing" if index is not None else "initializing",
+                indexed_memory_records=index.count() if index is not None else None,
+                embedding_dimension=index.dimension if index is not None else None,
+                last_rebuild_error=runtime.last_rebuild_error(),
+                last_update_error=runtime.last_update_error(),
+            )
         if index is None:
             last_rebuild_error = runtime.last_rebuild_error()
             return self._response_composer.semantic_recall_status(
@@ -1938,22 +1956,25 @@ class CognitiveEngine:
                 request,
                 "Semantic recall runtime is disabled.",
             )
-        try:
-            index = runtime.refresh(self._memory_manager)
-        except Exception:
+        start_result = runtime.start_refresh(self._memory_manager)
+        if start_result == "started":
+            return self._response_composer.semantic_recall_retry_started(
+                request,
+                already_running=False,
+            )
+        if start_result == "already_running":
+            return self._response_composer.semantic_recall_retry_started(
+                request,
+                already_running=True,
+            )
+        if start_result == "stopped":
             return self._response_composer.semantic_recall_retry_failure(
                 request,
-                (
-                    "Semantic recall retry failed. The last complete index remains "
-                    "available."
-                    if runtime.current() is not None
-                    else "Semantic recall retry failed. Runtime remains unavailable."
-                ),
+                "Semantic recall runtime is stopped.",
             )
-        return self._response_composer.semantic_recall_retry_success(
+        return self._response_composer.semantic_recall_retry_failure(
             request,
-            indexed_memory_records=index.count(),
-            embedding_dimension=index.dimension,
+            "Semantic recall retry could not be started.",
         )
 
     @staticmethod

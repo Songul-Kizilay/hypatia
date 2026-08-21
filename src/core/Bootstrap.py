@@ -337,13 +337,6 @@ class Bootstrap:
         memory_manager.load()
         semantic_memory_index_runtime = self._semantic_memory_index_runtime
         if semantic_memory_index_runtime is not None:
-            try:
-                semantic_memory_index_runtime.refresh(memory_manager)
-            except Exception:
-                # Semantic retrieval is explicitly optional. Keep the primary
-                # application available and expose only the runtime's safe
-                # diagnostic through its explicit status command.
-                logger.warning("Semantic Memory Runtime Unavailable")
             semantic_memory_index_runtime.attach(event_bus)
         session_rename_service = SessionRenameTransactionService(
             session_manager=session_manager,
@@ -447,6 +440,11 @@ class Bootstrap:
 
         self.container = container
 
+        if semantic_memory_index_runtime is not None:
+            start_result = semantic_memory_index_runtime.start_refresh(memory_manager)
+            if start_result == "failed":
+                logger.warning("Semantic Memory Runtime Unavailable")
+
         logger.info("Configuration Loaded")
         logger.info("Logger Initialized")
         logger.info("Dependency Container Ready")
@@ -544,6 +542,9 @@ class Bootstrap:
     def shutdown(self) -> None:
         logger = self.container.resolve(Logger)
         event_bus = self.container.resolve(EventBus)
+
+        if self._semantic_memory_index_runtime is not None:
+            self._semantic_memory_index_runtime.shutdown()
 
         event_bus.emit(
             "system.shutdown.started",

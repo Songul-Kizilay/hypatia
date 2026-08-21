@@ -82,6 +82,12 @@ Hypatia currently runs as a local-first CLI. The initial security boundary is:
   each provider request is capped to the smaller of its request timeout and the
   remaining rebuild duration, and expiry prevents partial cache/index
   publication;
+- semantic startup and explicit retry use one daemon single-flight worker;
+  queries fall back lexically while it runs, one dirty snapshot can be
+  coalesced, a second dirty attempt publishes no stale index, and shutdown
+  rejects new work and suppresses in-flight runtime publication. Cancellation
+  is observed between bounded provider calls and before derived-cache
+  replacement rather than forcefully terminating an active HTTP request;
 - semantic embeddings are opt-in and restricted to the local Ollama endpoint
   policy enforced at bootstrap.
 

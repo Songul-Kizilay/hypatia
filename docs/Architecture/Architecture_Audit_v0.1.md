@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.67` in the current release candidate) are the
+- **Runtime releases** (`v0.3.68` in the current release candidate) are the
   executable package and GitHub release line. They are the source-backed
   implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
@@ -317,7 +317,7 @@ Not implemented:
 
 The current local verification baseline is:
 
-- package-aware `python -m unittest`: 1,324 tests passed. Explicit `tests.*`
+- package-aware `python -m unittest`: 1,334 tests passed. Explicit `tests.*`
   module names ensure nested test directories are included without shadowing
   source packages.
 - `python -m black --check src tests`: passed.
@@ -334,12 +334,12 @@ verifies local session-state initialization. This is the Linux executable
 boundary; other distributions, CPU architectures, installers, and signing are
 not implied by that result.
 
-The opt-in semantic runtime was also verified on 15 August 2026 against the
-local Ollama service using `embeddinggemma`: Hypatia's adapter received a
-768-dimensional vector, and an ephemeral Bootstrap instance indexed a new
-conversation and returned it through the named semantic-recall path. Temporary
-memory/session files were used, so this verification did not change project
-data.
+The v0.3.68 opt-in semantic runtime was also verified on 21 August 2026 against
+the local Ollama service using `embeddinggemma:latest`: Bootstrap published the
+primary container before the cold provider call completed, the background
+worker built one 768-dimensional record, and an ephemeral instance returned it
+through the named semantic-recall path. Temporary memory/session files were
+used, so this verification did not change project data.
 
 The published v0.3.9 local chat runtime was also exercised on 15 August 2026
 against `llama3.2:latest`. An ephemeral Bootstrap instance completed a Turkish
@@ -360,11 +360,30 @@ memory/session files and leaving project data unchanged.
 4. Existing deterministic keyword selection must remain an available fallback
    until semantic retrieval has independently verified relevance, ties, bounds,
    and failure behavior.
-5. Full rebuilds now share a bounded deadline, but optional startup rebuilding
-   remains synchronous and can delay the primary application for up to that
-   duration before degraded mode becomes available. The next boundary is lazy
-   or background initialization with single-flight retry, safe observable state,
-   and deterministic shutdown.
+5. Full startup and retry rebuilds are now background single-flight work, but
+   an incremental add or update after the index becomes ready still calls the
+   embedding provider on the synchronous memory-event path. The next boundary
+   is bounded background incremental maintenance that cannot delay primary
+   memory completion and still preserves deterministic ordering and shutdown.
+
+## Completed Increment: Background Semantic Initialization
+
+Optional semantic rebuilding no longer holds the primary startup path.
+
+- Bootstrap attaches and registers the optional runtime, publishes its primary
+  dependency container, and then schedules one daemon rebuild. Conversation,
+  sessions, lexical recall, and primary memory are immediately available.
+- Startup and explicit retry share a single-flight boundary. Duplicate retry
+  requests report the active job instead of creating a second provider stream.
+- Status distinguishes initializing, refreshing, ready, unavailable, disabled,
+  and stopped. Semantic queries use lexical fallback throughout a rebuild,
+  including when an older complete index is retained.
+- A memory event during rebuilding marks the snapshot dirty and permits one
+  coalesced retry from a fresh snapshot. A second dirty attempt records only the
+  generic safe failure and publishes no stale or partial index.
+- Shutdown rejects new work and signals cancellation. The builder checks that
+  signal after bounded provider calls and before derived-cache replacement;
+  runtime publication is suppressed after shutdown.
 
 ## Completed Increment: Shared Semantic Rebuild Deadline
 
@@ -391,21 +410,22 @@ Every full semantic rebuild now has one aggregate monotonic time boundary.
 An optional semantic rebuild can now fail without making the primary
 application unavailable.
 
-- Bootstrap catches the semantic refresh boundary, publishes its normal
-  dependency container, registers and attaches the unavailable runtime, and
-  emits only a generic warning. Conversation, sessions, lexical recall, and
-  primary memory remain available.
+- Bootstrap publishes its normal dependency container, registers and attaches
+  the optional runtime, and schedules the refresh boundary in the background.
+  Conversation, sessions, lexical recall, and primary memory remain available
+  before the rebuild succeeds or fails.
 - The runtime separately records a safe full-rebuild diagnostic. Failed initial
   builds retain no partial index; failed later builds retain the last complete
   index. A complete successful rebuild clears both rebuild and incremental
   diagnostics before publication.
-- `semantic recall status` distinguishes disabled, initializing, unavailable,
-  and ready states. It reports separate safe rebuild and incremental-update
-  fields without exposing provider, transport, cache, source, or budget details.
-- Only the exact `semantic recall retry` request starts another complete bounded
-  rebuild. It is not triggered by ordinary chat, recall, status, or memory
-  events; success publishes a complete replacement and failure leaves primary
-  memory plus the last complete index unchanged.
+- `semantic recall status` distinguishes disabled, initializing, refreshing,
+  unavailable, ready, and stopped states. It reports separate safe rebuild and
+  incremental-update fields without exposing provider, transport, cache,
+  source, or budget details.
+- Only the exact `semantic recall retry` request schedules another complete
+  bounded rebuild. It is not triggered by ordinary chat, recall, or status;
+  success publishes a complete replacement and failure leaves primary memory
+  plus the last complete index unchanged.
 
 ## Completed Increment: Cold-Start Semantic Rebuild Budget
 

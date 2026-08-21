@@ -5,6 +5,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from threading import Event as ThreadEvent
 from unittest.mock import patch
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
@@ -38,6 +39,24 @@ class RecordingEmbeddingProvider:
         self.timeouts.append(timeout_seconds)
         if self.error is not None:
             raise self.error
+        return self._embedding
+
+
+class BlockingEmbeddingProvider:
+    def __init__(self, embedding: Embedding) -> None:
+        self._embedding = embedding
+        self.entered = ThreadEvent()
+        self.release = ThreadEvent()
+
+    def embed(
+        self,
+        source_text: str,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> Embedding:
+        self.entered.set()
+        if not self.release.wait(2):
+            raise RuntimeError("Test embedding release timed out.")
         return self._embedding
 
 
@@ -91,6 +110,7 @@ class BootstrapSemanticMemoryRuntimeTests(unittest.TestCase):
             )
             bootstrap.initialize()
             runtime = bootstrap.container.resolve(SemanticMemoryIndexRuntime)
+            self.assertTrue(runtime.wait_for_idle(1))
 
         construct_provider.assert_called_once_with(
             endpoint="http://localhost:11434/api/embed",
@@ -104,6 +124,72 @@ class BootstrapSemanticMemoryRuntimeTests(unittest.TestCase):
         self.assertLessEqual(provider.timeouts[0], 120)
         assert runtime.current() is not None
         self.assertEqual(runtime.current().count(), 1)
+
+    def test_enabled_process_runtime_returns_while_index_initializes(self) -> None:
+        provider = BlockingEmbeddingProvider(Embedding((1, 0)))
+
+        with (
+            tempfile.TemporaryDirectory() as temporary_directory,
+            patch.dict(
+                os.environ,
+                {"HYPATIA_SEMANTIC_MEMORY_ENABLED": "true"},
+                clear=True,
+            ),
+            patch("core.Bootstrap.OllamaEmbeddingProvider", return_value=provider),
+        ):
+            temporary_path = Path(temporary_directory)
+            memory_path = temporary_path / "memory.json"
+            JsonFileMemoryStore(memory_path).save(
+                [MemoryRecord(memory_id="memory-1", content="Persistent fact")]
+            )
+            bootstrap = Bootstrap.from_process_environment(
+                memory_path,
+                temporary_path / "sessions.json",
+            )
+
+            bootstrap.initialize()
+            runtime = bootstrap.container.resolve(SemanticMemoryIndexRuntime)
+            engine = bootstrap.container.resolve(CognitiveEngine)
+
+            self.assertTrue(provider.entered.wait(1))
+            self.assertTrue(runtime.is_rebuilding())
+            status = engine.process(BrainRequest(message="semantic recall status"))
+            self.assertIn("Runtime: initializing", status.message)
+            provider.release.set()
+            self.assertTrue(runtime.wait_for_idle(1))
+            assert runtime.current() is not None
+            self.assertEqual(runtime.current().count(), 1)
+
+    def test_shutdown_suppresses_in_flight_index_publication(self) -> None:
+        provider = BlockingEmbeddingProvider(Embedding((1, 0)))
+
+        with (
+            tempfile.TemporaryDirectory() as temporary_directory,
+            patch.dict(
+                os.environ,
+                {"HYPATIA_SEMANTIC_MEMORY_ENABLED": "true"},
+                clear=True,
+            ),
+            patch("core.Bootstrap.OllamaEmbeddingProvider", return_value=provider),
+        ):
+            temporary_path = Path(temporary_directory)
+            memory_path = temporary_path / "memory.json"
+            JsonFileMemoryStore(memory_path).save(
+                [MemoryRecord(memory_id="memory-1", content="Persistent fact")]
+            )
+            bootstrap = Bootstrap.from_process_environment(
+                memory_path,
+                temporary_path / "sessions.json",
+            )
+            bootstrap.initialize()
+            runtime = bootstrap.container.resolve(SemanticMemoryIndexRuntime)
+
+            self.assertTrue(provider.entered.wait(1))
+            bootstrap.shutdown()
+            self.assertTrue(runtime.is_stopped())
+            provider.release.set()
+            self.assertTrue(runtime.wait_for_idle(1))
+            self.assertIsNone(runtime.current())
 
     def test_enabled_runtime_passes_configured_timeout_to_local_transport(self) -> None:
         provider = RecordingEmbeddingProvider(Embedding((1, 0)))
@@ -190,6 +276,7 @@ class BootstrapSemanticMemoryRuntimeTests(unittest.TestCase):
             )
             bootstrap.initialize()
             runtime = bootstrap.container.resolve(SemanticMemoryIndexRuntime)
+            self.assertTrue(runtime.wait_for_idle(1))
             engine = bootstrap.container.resolve(CognitiveEngine)
             status = engine.process(BrainRequest(message="semantic recall status"))
 
@@ -223,6 +310,7 @@ class BootstrapSemanticMemoryRuntimeTests(unittest.TestCase):
             )
             bootstrap.initialize()
             runtime = bootstrap.container.resolve(SemanticMemoryIndexRuntime)
+            self.assertTrue(runtime.wait_for_idle(1))
             engine = bootstrap.container.resolve(CognitiveEngine)
 
             engine.process(BrainRequest(message="Hello Hypatia"))
@@ -260,10 +348,18 @@ class BootstrapSemanticMemoryRuntimeTests(unittest.TestCase):
                 memory_path, session_path
             )
             first_bootstrap.initialize()
+            first_runtime = first_bootstrap.container.resolve(
+                SemanticMemoryIndexRuntime
+            )
+            self.assertTrue(first_runtime.wait_for_idle(1))
             second_bootstrap = Bootstrap.from_process_environment(
                 memory_path, session_path
             )
             second_bootstrap.initialize()
+            second_runtime = second_bootstrap.container.resolve(
+                SemanticMemoryIndexRuntime
+            )
+            self.assertTrue(second_runtime.wait_for_idle(1))
 
             self.assertTrue((temporary_path / "semantic_embeddings.json").exists())
 
@@ -297,11 +393,13 @@ class BootstrapSemanticMemoryRuntimeTests(unittest.TestCase):
             )
             bootstrap.initialize()
             runtime = bootstrap.container.resolve(SemanticMemoryIndexRuntime)
+            self.assertTrue(runtime.wait_for_idle(1))
             engine = bootstrap.container.resolve(CognitiveEngine)
             conversation = engine.process(BrainRequest(message="Hello Hypatia"))
             status = engine.process(BrainRequest(message="semantic recall status"))
             provider.error = None
             retry = engine.process(BrainRequest(message="semantic recall retry"))
+            self.assertTrue(runtime.wait_for_idle(1))
             second_conversation = engine.process(
                 BrainRequest(message="Hello again Hypatia")
             )

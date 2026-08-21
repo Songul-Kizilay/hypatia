@@ -58,6 +58,21 @@ class StubEmbeddingProvider:
         return self._embeddings_by_text[source_text]
 
 
+class CancellingEmbeddingProvider:
+    def __init__(self, embedding: Embedding) -> None:
+        self.embedding = embedding
+        self.cancelled = False
+
+    def embed(
+        self,
+        source_text: str,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> Embedding:
+        self.cancelled = True
+        return self.embedding
+
+
 class FailingEmbeddingCache:
     def __init__(self) -> None:
         self.get_calls = 0
@@ -518,6 +533,22 @@ class SemanticMemoryIndexBuilderTests(unittest.TestCase):
             runtime.last_rebuild_error(),
             "Semantic index rebuild failed.",
         )
+
+    def test_cancelled_build_skips_cache_replacement_and_index_publication(
+        self,
+    ) -> None:
+        memory_manager = MemoryManager()
+        memory_manager.add("First fact")
+        provider = CancellingEmbeddingProvider(Embedding((1, 0)))
+        cache = RecordingEmbeddingCache()
+
+        with self.assertRaisesRegex(MemoryError, "rebuild cancelled"):
+            SemanticMemoryIndexBuilder(provider, cache).build(
+                memory_manager,
+                cancelled=lambda: provider.cancelled,
+            )
+
+        self.assertEqual(cache.replacements, [])
 
 
 if __name__ == "__main__":

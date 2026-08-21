@@ -63,15 +63,21 @@ class SemanticMemoryIndexBuilder:
         self._max_rebuild_seconds = float(max_rebuild_seconds)
         self._clock = clock
 
-    def build(self, memory_manager: MemoryManager) -> InMemorySemanticMemoryIndex:
+    def build(
+        self,
+        memory_manager: MemoryManager,
+        *,
+        cancelled: Callable[[], bool] | None = None,
+    ) -> InMemorySemanticMemoryIndex:
         """Embed current active records into a new index in memory-record order."""
         deadline = self._clock() + self._max_rebuild_seconds
         records = memory_manager.all()
+        self._ensure_rebuild_available(deadline, cancelled)
         validate_semantic_memory_index_population(len(records))
         for record in records:
             self._validate_source_text(record.content)
         cached_embeddings = self._cached_embeddings(records)
-        self._ensure_rebuild_time_available(deadline)
+        self._ensure_rebuild_available(deadline, cancelled)
         provider_call_count = sum(embedding is None for embedding in cached_embeddings)
         if provider_call_count > self._max_rebuild_provider_calls:
             raise MemoryError("Semantic index rebuild provider-call budget exceeded.")
@@ -83,14 +89,17 @@ class SemanticMemoryIndexBuilder:
             cached_embeddings,
             strict=True,
         ):
-            self._ensure_rebuild_time_available(deadline)
+            self._ensure_rebuild_available(deadline, cancelled)
             embedding = cached_embedding
             if embedding is None:
                 embedding = self._embedding_provider.embed(
                     record.content,
-                    timeout_seconds=self._remaining_rebuild_seconds(deadline),
+                    timeout_seconds=self._remaining_rebuild_seconds(
+                        deadline,
+                        cancelled,
+                    ),
                 )
-                self._ensure_rebuild_time_available(deadline)
+                self._ensure_rebuild_available(deadline, cancelled)
             if not cache_entries:
                 validate_semantic_memory_index_population(
                     len(records),
@@ -98,19 +107,34 @@ class SemanticMemoryIndexBuilder:
                 )
             index.upsert(record.memory_id, embedding)
             cache_entries.append((record.memory_id, record.content, embedding))
-        self._ensure_rebuild_time_available(deadline)
+        self._ensure_rebuild_available(deadline, cancelled)
         self._replace_cache(tuple(cache_entries))
         return index
 
-    def _remaining_rebuild_seconds(self, deadline: float) -> float:
+    def _remaining_rebuild_seconds(
+        self,
+        deadline: float,
+        cancelled: Callable[[], bool] | None,
+    ) -> float:
+        self._raise_if_cancelled(cancelled)
         remaining = deadline - self._clock()
         if remaining <= 0:
             raise MemoryError("Semantic index rebuild time budget exceeded.")
         return remaining
 
-    def _ensure_rebuild_time_available(self, deadline: float) -> None:
+    def _ensure_rebuild_available(
+        self,
+        deadline: float,
+        cancelled: Callable[[], bool] | None,
+    ) -> None:
+        self._raise_if_cancelled(cancelled)
         if self._clock() > deadline:
             raise MemoryError("Semantic index rebuild time budget exceeded.")
+
+    @staticmethod
+    def _raise_if_cancelled(cancelled: Callable[[], bool] | None) -> None:
+        if cancelled is not None and cancelled():
+            raise MemoryError("Semantic index rebuild cancelled.")
 
     def embed(self, source_text: str) -> Embedding:
         """Create one query embedding through the configured provider."""
