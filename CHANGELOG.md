@@ -2,6 +2,32 @@
 
 All notable project changes are recorded here.
 
+## [0.3.83] - 2026-08-21
+
+### Added
+
+- The accepted source currently selected in the desktop now exposes only its
+  persisted evidence from the already loaded research-run snapshot.
+- Evidence labels show a bounded single-line excerpt and the exact evidence ID.
+- Separate explicit handoffs append the exact ID to the manual assessment,
+  claim, or comparison evidence field.
+
+### Safety
+
+- Selecting a source or evidence record edits no manual field and starts no
+  Brain, store, provider, network, LLM, knowledge-index, or mutation operation.
+- Assessment handoff requires the same accepted-source ID. Comparison handoff
+  requires that source in the manual comparison, while claim and comparison
+  limits remain 20 and 100 evidence IDs. Duplicate and stale cross-run/source
+  selections cannot overwrite authored fields.
+
+### Verification
+
+- The package-aware full local suite contains 1,435 passing automated tests.
+- Focused desktop coverage contains 76 passing tests for source filtering,
+  exact-ID handoff, ownership guards, duplicate prevention, limits, and stale
+  selection rejection.
+
 ## [0.3.82] - 2026-08-21
 
 ### Added
