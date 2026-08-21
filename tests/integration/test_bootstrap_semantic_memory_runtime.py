@@ -314,6 +314,7 @@ class BootstrapSemanticMemoryRuntimeTests(unittest.TestCase):
             engine = bootstrap.container.resolve(CognitiveEngine)
 
             engine.process(BrainRequest(message="Hello Hypatia"))
+            self.assertTrue(runtime.wait_for_idle(1))
             response = engine.process(BrainRequest(message="semantic recall greeting"))
 
         assert runtime.current() is not None
@@ -403,6 +404,7 @@ class BootstrapSemanticMemoryRuntimeTests(unittest.TestCase):
             second_conversation = engine.process(
                 BrainRequest(message="Hello again Hypatia")
             )
+            self.assertTrue(runtime.wait_for_idle(1))
 
         self.assertTrue(conversation.success)
         self.assertIn("Runtime: unavailable", status.message)

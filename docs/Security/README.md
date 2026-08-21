@@ -88,6 +88,10 @@ Hypatia currently runs as a local-first CLI. The initial security boundary is:
   rejects new work and suppresses in-flight runtime publication. Cancellation
   is observed between bounded provider calls and before derived-cache
   replacement rather than forcefully terminating an active HTTP request;
+- incremental semantic maintenance shares that worker, retains at most 20,000
+  pending IDs, coalesces repeated record events, rejects superseded embeddings,
+  preserves per-record failure diagnostics, and never rolls back or delays an
+  already-persisted primary-memory mutation;
 - semantic embeddings are opt-in and restricted to the local Ollama endpoint
   policy enforced at bootstrap.
 

@@ -93,6 +93,9 @@ To create the world's most capable personal AI research companion.
 - Single-flight background semantic initialization and explicit retry, with
   observable safe states, lexical fallback during rebuilds, one dirty-snapshot
   retry, and shutdown-aware publication
+- A bounded single-worker semantic update queue that keeps primary memory writes
+  independent of Ollama latency, coalesces repeated record changes, and rejects
+  stale in-flight results
 - An opt-in, provider-scoped semantic-embedding cache with bounded UTF-8
   snapshots, entry/identifier/source/vector limits, deterministic ordering, and
   atomic rollback-safe replacement
@@ -471,10 +474,13 @@ replacement index. A cold, slow, or unavailable local provider therefore does
 not hold the primary startup path; semantic retrieval reports `initializing`
 and uses deterministic lexical fallback until a complete index is ready. If
 the first refresh fails, the runtime reports a safe unavailable state. Local
-memory add, update, delete, and expiry events update an available derived index
-on a best-effort basis. An embedding failure never undoes an already-completed
-primary-memory operation. The vectors remain in RAM and are recreated from
-local memory on the next successful rebuild.
+memory add, update, delete, and expiry events enqueue best-effort derived-index
+maintenance on the same single daemon worker. A primary-memory operation does
+not wait for its embedding. Up to 20,000 distinct pending IDs are retained;
+repeated events for one ID are coalesced and a later update or delete prevents
+an older in-flight result from being published. An embedding failure never
+undoes an already-completed primary-memory operation. The vectors remain in RAM
+and are recreated from local memory on the next successful rebuild.
 
 Only one full rebuild can run at a time. A memory event during rebuilding marks
 the captured snapshot dirty and allows one coalesced rebuild attempt with a new
@@ -530,7 +536,8 @@ fallback`.
 
 Use `semantic recall status` to inspect the optional runtime without generating
 an embedding or changing memory. It reports whether the runtime is disabled,
-initializing, refreshing, unavailable, ready, or stopped. A ready runtime, and
+initializing, refreshing, updating, unavailable, ready, or stopped. A ready
+runtime, and
 a refreshing runtime with a previous complete index, also report indexed-record
 count and embedding dimension. Separate safe rebuild and incremental-update
 diagnostics never expose provider, endpoint, model, cache, source-text, budget,

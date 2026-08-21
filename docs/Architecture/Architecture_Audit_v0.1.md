@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.68` in the current release candidate) are the
+- **Runtime releases** (`v0.3.69` in the current release candidate) are the
   executable package and GitHub release line. They are the source-backed
   implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
@@ -317,7 +317,7 @@ Not implemented:
 
 The current local verification baseline is:
 
-- package-aware `python -m unittest`: 1,334 tests passed. Explicit `tests.*`
+- package-aware `python -m unittest`: 1,341 tests passed. Explicit `tests.*`
   module names ensure nested test directories are included without shadowing
   source packages.
 - `python -m black --check src tests`: passed.
@@ -360,11 +360,26 @@ memory/session files and leaving project data unchanged.
 4. Existing deterministic keyword selection must remain an available fallback
    until semantic retrieval has independently verified relevance, ties, bounds,
    and failure behavior.
-5. Full startup and retry rebuilds are now background single-flight work, but
-   an incremental add or update after the index becomes ready still calls the
-   embedding provider on the synchronous memory-event path. The next boundary
-   is bounded background incremental maintenance that cannot delay primary
-   memory completion and still preserves deterministic ordering and shutdown.
+5. Semantic index construction and maintenance are now background work, but an
+   explicit semantic query or LLM conversation can still wait on a provider
+   from the Tkinter UI thread. The next availability boundary is bounded desktop
+   request execution with main-thread-only rendering and deterministic close.
+
+## Completed Increment: Background Semantic Incremental Maintenance
+
+- Full rebuilds and incremental events share one daemon worker, preventing
+  concurrent provider/cache streams and keeping primary-memory EventBus
+  publication independent of embedding latency.
+- The queue retains at most 20,000 distinct pending IDs. Repeated operations
+  move the latest event to deterministic queue order; one in-flight generation
+  is discarded when a later update or delete supersedes it.
+- A requested full rebuild waits behind the active provider call, discards
+  redundant queued events, and rebuilds from current primary memory.
+- Status exposes `updating`; semantic queries use lexical fallback while the
+  worker is busy. Failed IDs retain a safe diagnostic until specifically
+  reconciled or cleared by a complete rebuild.
+- Shutdown clears queued generations and prevents an in-flight incremental
+  embedding from reaching the live index.
 
 ## Completed Increment: Background Semantic Initialization
 

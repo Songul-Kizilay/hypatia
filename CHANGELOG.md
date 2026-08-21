@@ -2,6 +2,32 @@
 
 All notable project changes are recorded here.
 
+## [0.3.69] - 2026-08-21
+
+### Changed
+
+- Semantic add, update, delete, and expiry maintenance now uses the same daemon
+  single-worker boundary as full rebuilds. A successful primary-memory write
+  returns without waiting for the local embedding provider.
+- Pending incremental work is bounded to 20,000 memory IDs and deterministically
+  coalesces repeated events so the last operation for one record wins.
+- `semantic recall status` reports `updating` while incremental work is active;
+  semantic queries use lexical fallback until the worker is idle.
+
+### Safety
+
+- Per-record generations reject an embedding result superseded by a later
+  update or delete. A queued full rebuild runs after any in-flight incremental
+  provider call and replaces queued updates from one fresh memory snapshot.
+- Failed or rejected record IDs retain the generic incremental diagnostic until
+  that record is successfully reconciled or a complete rebuild succeeds.
+  Shutdown clears queued work and suppresses in-flight publication.
+
+### Verification
+
+- The package-aware full local suite contains 1,341 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass across 311 source files.
+
 ## [0.3.68] - 2026-08-21
 
 ### Changed

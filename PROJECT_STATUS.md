@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.68 (Genesis)`
+`v0.3.69 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.68`** is the current executable package and GitHub
+- **Runtime release `v0.3.69`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -262,8 +262,11 @@ with optional OpenAI-compatible LLM conversation support.
   Shutdown rejects new work and suppresses in-flight index publication. The
   exact `semantic recall retry` command schedules the same bounded background
   rebuild and a duplicate request reuses the active job. Once an index is ready,
-  memory lifecycle events apply best-effort incremental updates. An embedding
-  failure never reverses a completed primary-memory write. Semantic results are
+  memory lifecycle events enqueue best-effort incremental work on that same
+  daemon worker, bounded to 20,000 pending IDs. Repeated events coalesce by ID,
+  stale in-flight results are rejected, and primary-memory completion never
+  waits for the provider. An embedding failure never reverses a completed
+  primary-memory write. Semantic results are
   used only by the explicit `semantic recall <query>` request path with
   deterministic lexical fallback. The runtime retains separate safe full
   rebuild and incremental-update diagnostics without exposing provider details.
@@ -271,7 +274,7 @@ with optional OpenAI-compatible LLM conversation support.
   current-session semantic and lexical candidates exist. Hybrid responses use
   rank scores; semantic-only responses retain cosine-similarity scores.
 - A read-only `semantic recall status` diagnostic. It reports the optional
-  runtime's disabled, initializing, refreshing, unavailable, ready, or stopped
+  runtime's disabled, initializing, refreshing, updating, unavailable, ready, or stopped
   state, index size and dimension when available, and separate safe rebuild and
   incremental-update
   diagnostics; it does not generate an embedding or change conversation
@@ -371,7 +374,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 1,334 automated tests pass through package-aware discovery.
+- 1,341 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -398,9 +401,9 @@ so this check did not alter the project's persisted data.
 
 ## Next Milestone
 
-Move best-effort incremental semantic embedding out of the synchronous
-memory-event path. Startup and explicit full rebuilds are now non-blocking, but
-an add or update after the index becomes ready can still wait for the local
-embedding provider. A later increment needs a bounded single-worker queue with
-deterministic coalescing, safe stale-event handling, observable failure state,
-and shutdown behavior that never delays or reverses primary-memory completion.
+Move explicit provider-backed desktop commands off the Tkinter UI thread.
+Semantic indexing no longer delays primary memory, but an explicit semantic
+query or LLM conversation can still keep the desktop event loop waiting for its
+bounded local provider call. A later increment needs one bounded UI request
+worker, disabled/re-enabled controls, main-thread-only rendering, and
+deterministic close behavior.
