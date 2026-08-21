@@ -84,6 +84,9 @@ To create the world's most capable personal AI research companion.
 - A local, derived semantic-memory index core with validated embeddings and
   deterministic cosine ranking, available through the explicit semantic-recall
   request flow
+- An opt-in, provider-scoped semantic-embedding cache with bounded UTF-8
+  snapshots, entry/identifier/source/vector limits, deterministic ordering, and
+  atomic rollback-safe replacement
 - Deterministic Planner task generation
 - Knowledge Foundation: `.txt` and `.md` document loading, paragraph parsing, in-memory chunk indexing, and case-insensitive search
 - KnowledgeEngine orchestration for the full document-to-search pipeline

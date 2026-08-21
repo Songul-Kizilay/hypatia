@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.61` in the current release candidate) are the
+- **Runtime releases** (`v0.3.62` in the current release candidate) are the
   executable package and GitHub release line. They are the source-backed
   implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
@@ -242,7 +242,9 @@ Implemented memory capabilities:
   and a maintained relevance rationale for every retained candidate.
 - An opt-in, model-scoped local embedding cache that is atomically replaced
   after a successful rebuild. It verifies a SHA-256 source-content fingerprint
-  before reuse and does not alter primary memory persistence.
+  before reuse and does not alter primary memory persistence. Its schema-v1
+  snapshot is bounded by physical UTF-8 size, entry and field counts, and
+  per-vector and aggregate-vector limits while retaining provider isolation.
 - Source attribution carried from loaded documents through paragraph chunks to
   ordered knowledge-search citations. This is a local explainability boundary,
   not an automatic RAG or prompt-augmentation feature.
@@ -308,7 +310,7 @@ Not implemented:
 
 The current local verification baseline is:
 
-- package-aware `python -m unittest`: 1,287 tests passed. Explicit `tests.*`
+- package-aware `python -m unittest`: 1,296 tests passed. Explicit `tests.*`
   module names ensure nested test directories are included without shadowing
   source packages.
 - `python -m black --check src tests`: passed.
@@ -351,9 +353,27 @@ memory/session files and leaving project data unchanged.
 4. Existing deterministic keyword selection must remain an available fallback
    until semantic retrieval has independently verified relevance, ties, bounds,
    and failure behavior.
-5. The optional schema-v1 semantic embedding cache has no physical-file,
-   entry-count, memory-ID/provider-key, or embedding-vector bounds. Those limits
-   are required before opt-in semantic caching is used for long-lived memory.
+5. Persisted semantic-cache input is bounded, but the general `Embedding` value
+   and derived in-memory semantic index do not yet share global dimension,
+   entry-count, or aggregate-value limits. Provider output and fresh-index
+   construction need those live-memory limits before broader semantic use.
+
+## Completed Increment: Semantic Embedding Cache Bounds
+
+The optional provider-scoped schema-v1 cache now has explicit resource and
+save-time integrity limits without changing primary memory persistence.
+
+- Complete UTF-8 snapshots are capped at 64 MiB; reads consume at most one
+  detection byte beyond that limit from the opened descriptor before decoding.
+- Snapshots are capped at 20,000 ordered entries, 1,024-character provider keys
+  and memory IDs, 1,000,000-character source values, 16,384 values per vector,
+  and 4,000,000 aggregate vector values.
+- Collection, field, and vector limits are enforced before parsing, hashing, or
+  serialization. One provider's entries must retain a consistent dimension;
+  valid foreign-provider snapshots remain isolated without entry parsing.
+- Atomic writes count exact UTF-8 bytes. Invalid, oversized, or failed updates
+  preserve both the prior file and current in-memory cache and clean temporary
+  files while deterministic entry ordering remains unchanged.
 
 ## Completed Increment: General Memory Snapshot Bounds
 

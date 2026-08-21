@@ -54,6 +54,12 @@ Hypatia currently runs as a local-first CLI. The initial security boundary is:
   entries of aggregate metadata, 100,000 tags, 256 characters per tag, and 64
   MiB of UTF-8 JSON; invalid or excessive candidates fail before atomic
   publication and preserve the prior snapshot;
+- optional provider-scoped semantic-embedding cache snapshots are limited to
+  20,000 ordered entries, 1,024-character provider keys and memory IDs,
+  1,000,000-character source values, 16,384 values per embedding, 4,000,000
+  aggregate vector values, and 64 MiB of UTF-8 JSON; descriptor-bounded reads
+  and exact-byte atomic writes preserve provider isolation and the prior cache
+  after invalid, oversized, or failed updates;
 - semantic embeddings are opt-in and restricted to the local Ollama endpoint
   policy enforced at bootstrap.
 
