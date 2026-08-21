@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.86 (Genesis)`
+`v0.3.87 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.86`** is the current executable package and GitHub
+- **Runtime release `v0.3.87`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -129,6 +129,11 @@ with optional OpenAI-compatible LLM conversation support.
   recorded time, and exact contradiction ID. A separate pair handoff replaces
   only the manual claim-ID field; selection, stale-state refusal, and handoff do
   not edit the note or start runtime work.
+- Persisted source-comparison notes for the selected run are shown from the same
+  snapshot with bounded authored text, recorded time, exact note ID, and a full
+  read-only source/evidence/assessment reference summary. Three isolated handoffs
+  replace only their matching manual field; selection and stale-state refusal
+  preserve all authored fields and start no runtime work.
 - A separate schema-v1 accepted-source content store validates exact
   document provenance, UTF-8 byte count, SHA-256, timestamps, duplicate IDs and
   URLs, and bounded per-record/total/file sizes before atomically replacing its
@@ -490,7 +495,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,447 automated tests pass through package-aware discovery.
+- 1,451 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -525,9 +530,8 @@ changed.
 
 ## Next Milestone
 
-Add a read-only persisted comparison-note selector for the selected research run.
-It must show bounded authored text, exact source/evidence/assessment references,
-recorded time, and exact note ID from only the already loaded immutable snapshot.
-Separate explicit handoffs may populate the manual comparison reference fields
-without starting Brain, storage, provider, network, LLM, knowledge-index, or
-mutation work.
+Reorganize the dense Research workspace into presentation-only workflow sections
+for run overview, sources/evidence, authored analysis, and review/export. Every
+existing field, confirmation boundary, keyboard path, accessible theme, and exact
+runtime action must remain available without changing Brain, controllers,
+storage, providers, network, LLM, knowledge-index, or mutation contracts.

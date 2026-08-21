@@ -284,6 +284,11 @@ Each label retains its exact claim pair, bounded authored note, recorded time,
 and exact contradiction ID. Selection edits nothing. `Use selected pair` copies
 only the two claim IDs into the manual contradiction field, preserves the manual
 note, and rejects stale or invalid run-bound presentation state locally.
+Persisted source-comparison notes for the run also appear in a read-only selector.
+The label shows bounded authored text, recorded time, and exact note ID, while a
+separate summary keeps every exact source, evidence, and assessment reference
+visible. Three explicit buttons copy only the chosen reference type to its manual
+field; they preserve the comparison text and all other fields.
 `Find sources` sends the selected collecting run's question to Crossref and
 connects its fixed endpoint and same-origin redirects only to an address from
 their own public-DNS validation while TLS verifies `api.crossref.org`. It
