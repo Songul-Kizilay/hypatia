@@ -112,7 +112,23 @@ class UrllibOllamaEmbeddingTransport:
             raise ValueError("Embedding transport timeout must be a positive number.")
         self._timeout_seconds = float(timeout_seconds)
 
-    def __call__(self, endpoint: str, payload: dict[str, object]) -> object:
+    def __call__(
+        self,
+        endpoint: str,
+        payload: dict[str, object],
+        *,
+        timeout_seconds: float | None = None,
+    ) -> object:
+        if timeout_seconds is not None and (
+            isinstance(timeout_seconds, bool)
+            or not isinstance(timeout_seconds, (int, float))
+            or not isfinite(timeout_seconds)
+            or timeout_seconds <= 0
+        ):
+            raise ValueError("Embedding request timeout must be a positive number.")
+        effective_timeout = self._timeout_seconds
+        if timeout_seconds is not None:
+            effective_timeout = min(effective_timeout, float(timeout_seconds))
         request = Request(
             endpoint,
             data=_encode_request_body(payload),
@@ -121,6 +137,6 @@ class UrllibOllamaEmbeddingTransport:
         )
         with _open_without_redirects(
             request,
-            timeout=self._timeout_seconds,
+            timeout=effective_timeout,
         ) as response:
             return cast(object, json.loads(_read_response_body(response)))

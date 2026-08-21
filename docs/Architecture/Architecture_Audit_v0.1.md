@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.66` in the current release candidate) are the
+- **Runtime releases** (`v0.3.67` in the current release candidate) are the
   executable package and GitHub release line. They are the source-backed
   implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
@@ -317,7 +317,7 @@ Not implemented:
 
 The current local verification baseline is:
 
-- package-aware `python -m unittest`: 1,317 tests passed. Explicit `tests.*`
+- package-aware `python -m unittest`: 1,324 tests passed. Explicit `tests.*`
   module names ensure nested test directories are included without shadowing
   source packages.
 - `python -m black --check src tests`: passed.
@@ -360,10 +360,31 @@ memory/session files and leaving project data unchanged.
 4. Existing deterministic keyword selection must remain an available fallback
    until semantic retrieval has independently verified relevance, ties, bounds,
    and failure behavior.
-5. Cold rebuild provider calls and individual local HTTP requests are bounded,
-   but the permitted sequence can still occupy startup or an explicit retry for
-   too long. The next boundary is one aggregate rebuild deadline or cancellation
-   policy that retains the last complete index and deterministic cache behavior.
+5. Full rebuilds now share a bounded deadline, but optional startup rebuilding
+   remains synchronous and can delay the primary application for up to that
+   duration before degraded mode becomes available. The next boundary is lazy
+   or background initialization with single-flight retry, safe observable state,
+   and deterministic shutdown.
+
+## Completed Increment: Shared Semantic Rebuild Deadline
+
+Every full semantic rebuild now has one aggregate monotonic time boundary.
+
+- The default shared deadline is 120 seconds. The process environment accepts a
+  positive finite override no greater than 3,600 seconds.
+- The deadline begins before record, source, and provider-scoped cache
+  preflight. Cache work that consumes the budget prevents all provider work and
+  cache replacement.
+- Every cache miss receives only the time remaining in the shared rebuild. The
+  local Ollama transport selects the shorter of that value and its configured
+  per-request timeout; a sequential call cannot renew the original allowance.
+- Expiry before or after a provider call rejects the incomplete build before
+  cache replacement or runtime publication. An initial build remains safely
+  unavailable; a later rebuild or explicit retry preserves the last complete
+  index and generic safe diagnostic.
+- Exact-deadline completion remains deterministic, while invalid, non-finite,
+  non-positive, and greater-than-3,600-second configuration is rejected before
+  provider construction.
 
 ## Completed Increment: Degraded Semantic Startup and Explicit Retry
 

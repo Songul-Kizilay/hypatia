@@ -2,6 +2,33 @@
 
 All notable project changes are recorded here.
 
+## [0.3.67] - 2026-08-21
+
+### Changed
+
+- Full semantic-index rebuilds now share one monotonic 120-second deadline by
+  default. `HYPATIA_SEMANTIC_MEMORY_REBUILD_TIMEOUT_SECONDS` accepts a positive
+  finite override through 3,600 seconds.
+- Each missing embedding receives only the time remaining in the shared rebuild
+  budget. The Ollama transport uses the shorter of that remainder and its
+  configured per-request timeout, so a rebuild cannot renew the full request
+  timeout for every sequential cache miss.
+
+### Safety
+
+- The shared deadline begins before memory, source, and cache preflight work.
+  Expiry before or after a provider call rejects the incomplete build before
+  cache replacement or runtime publication.
+- A cache-preflight overrun skips all provider work. A failed startup remains
+  semantically unavailable, while a failed later rebuild or explicit retry
+  preserves the last complete index and exposes only the existing safe rebuild
+  diagnostic.
+
+### Verification
+
+- The package-aware full local suite contains 1,324 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass across 311 source files.
+
 ## [0.3.66] - 2026-08-21
 
 ### Changed

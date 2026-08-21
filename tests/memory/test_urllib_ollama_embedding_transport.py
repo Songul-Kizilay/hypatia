@@ -94,6 +94,32 @@ class UrllibOllamaEmbeddingTransportTests(unittest.TestCase):
 
         self.assertEqual(timeouts, [7.5])
 
+    def test_call_timeout_can_only_shorten_the_configured_timeout(self) -> None:
+        timeouts: list[float] = []
+
+        def fake_open(request: Request, *, timeout: float) -> FakeResponse:
+            timeouts.append(timeout)
+            return FakeResponse()
+
+        transport = UrllibOllamaEmbeddingTransport(timeout_seconds=7.5)
+
+        with patch(
+            "memory.UrllibOllamaEmbeddingTransport._open_without_redirects",
+            side_effect=fake_open,
+        ):
+            transport(
+                "http://localhost:11434/api/embed",
+                {"model": "embeddinggemma", "input": "first"},
+                timeout_seconds=2.5,
+            )
+            transport(
+                "http://localhost:11434/api/embed",
+                {"model": "embeddinggemma", "input": "second"},
+                timeout_seconds=10,
+            )
+
+        self.assertEqual(timeouts, [2.5, 7.5])
+
     def test_redirect_handler_never_follows_a_local_embedding_redirect(self) -> None:
         request = Request(
             "http://localhost:11434/api/embed",
@@ -193,6 +219,20 @@ class UrllibOllamaEmbeddingTransportTests(unittest.TestCase):
             with self.subTest(timeout=timeout):
                 with self.assertRaisesRegex(ValueError, "positive number"):
                     UrllibOllamaEmbeddingTransport(timeout_seconds=timeout)  # type: ignore[arg-type]
+
+        transport = UrllibOllamaEmbeddingTransport()
+        with patch(
+            "memory.UrllibOllamaEmbeddingTransport._open_without_redirects",
+            side_effect=AssertionError("Invalid timeout must skip network."),
+        ):
+            for timeout in (True, 0, -1, float("inf"), "30"):
+                with self.subTest(call_timeout=timeout):
+                    with self.assertRaisesRegex(ValueError, "positive number"):
+                        transport(
+                            "http://localhost:11434/api/embed",
+                            {"model": "embeddinggemma", "input": "source"},
+                            timeout_seconds=timeout,  # type: ignore[arg-type]
+                        )
 
 
 if __name__ == "__main__":

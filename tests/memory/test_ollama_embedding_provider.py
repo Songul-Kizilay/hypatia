@@ -19,7 +19,12 @@ class OllamaEmbeddingProviderTests(unittest.TestCase):
     def test_sends_exact_source_and_returns_validated_embedding(self) -> None:
         calls: list[tuple[str, dict[str, object]]] = []
 
-        def transport(endpoint: str, payload: dict[str, object]) -> object:
+        def transport(
+            endpoint: str,
+            payload: dict[str, object],
+            *,
+            timeout_seconds: float | None = None,
+        ) -> object:
             calls.append((endpoint, payload))
             return {"embeddings": [[1, -2.5]]}
 
@@ -56,7 +61,7 @@ class OllamaEmbeddingProviderTests(unittest.TestCase):
                 provider = OllamaEmbeddingProvider(
                     endpoint="http://localhost:11434/api/embed",
                     model="embeddinggemma",
-                    transport=lambda *_, response=response: response,
+                    transport=lambda *_, response=response, **__: response,
                 )
                 with self.assertRaisesRegex(MemoryError, "response invalid"):
                     provider.embed("source")
@@ -67,7 +72,9 @@ class OllamaEmbeddingProviderTests(unittest.TestCase):
                 provider = OllamaEmbeddingProvider(
                     endpoint="http://localhost:11434/api/embed",
                     model="embeddinggemma",
-                    transport=lambda *_, error=error: (_ for _ in ()).throw(error),
+                    transport=lambda *_, error=error, **__: (_ for _ in ()).throw(
+                        error
+                    ),
                 )
                 expected = (
                     "transport failed"
@@ -83,7 +90,7 @@ class OllamaEmbeddingProviderTests(unittest.TestCase):
         provider = OllamaEmbeddingProvider(
             endpoint="http://localhost:11434/api/embed",
             model="embeddinggemma",
-            transport=lambda *_: {"embeddings": [[1, 0, 0]]},
+            transport=lambda *_, **__: {"embeddings": [[1, 0, 0]]},
         )
 
         with (
@@ -101,7 +108,12 @@ class OllamaEmbeddingProviderTests(unittest.TestCase):
     def test_source_text_bound_preserves_exact_input_and_skips_transport(self) -> None:
         calls: list[dict[str, object]] = []
 
-        def transport(_: str, payload: dict[str, object]) -> object:
+        def transport(
+            endpoint: str,
+            payload: dict[str, object],
+            *,
+            timeout_seconds: float | None = None,
+        ) -> object:
             calls.append(payload)
             return {"embeddings": [[1, 0]]}
 
@@ -125,6 +137,35 @@ class OllamaEmbeddingProviderTests(unittest.TestCase):
             calls,
             [{"model": "embeddinggemma", "input": "  abc"}],
         )
+
+    def test_forwards_a_valid_call_timeout_and_rejects_invalid_values(self) -> None:
+        timeouts: list[float | None] = []
+
+        def transport(
+            endpoint: str,
+            payload: dict[str, object],
+            *,
+            timeout_seconds: float | None = None,
+        ) -> object:
+            timeouts.append(timeout_seconds)
+            return {"embeddings": [[1, 0]]}
+
+        provider = OllamaEmbeddingProvider(
+            endpoint="http://localhost:11434/api/embed",
+            model="embeddinggemma",
+            transport=transport,
+        )
+
+        self.assertEqual(
+            provider.embed("source", timeout_seconds=2.5),
+            Embedding((1, 0)),
+        )
+        for timeout in (True, 0, -1, float("inf"), "2"):
+            with self.subTest(timeout=timeout):
+                with self.assertRaisesRegex(MemoryError, "timeout invalid"):
+                    provider.embed("source", timeout_seconds=timeout)  # type: ignore[arg-type]
+
+        self.assertEqual(timeouts, [2.5])
 
 
 if __name__ == "__main__":

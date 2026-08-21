@@ -27,7 +27,12 @@ class ToggleEmbeddingProvider:
         self.should_crash = False
         self.sources: list[str] = []
 
-    def embed(self, source_text: str) -> Embedding:
+    def embed(
+        self,
+        source_text: str,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> Embedding:
         self.sources.append(source_text)
         if self.should_crash:
             raise RuntimeError("Unexpected provider failure.")

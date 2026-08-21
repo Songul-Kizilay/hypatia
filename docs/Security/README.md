@@ -77,6 +77,11 @@ Hypatia currently runs as a local-first CLI. The initial security boundary is:
   the optional semantic runtime; primary Bootstrap remains available, status
   exposes only a generic rebuild diagnostic, and only the exact explicit retry
   command can start another bounded full rebuild;
+- every full semantic rebuild has one shared 120-second monotonic deadline by
+  default, configurable only to a positive finite value through 3,600 seconds;
+  each provider request is capped to the smaller of its request timeout and the
+  remaining rebuild duration, and expiry prevents partial cache/index
+  publication;
 - semantic embeddings are opt-in and restricted to the local Ollama endpoint
   policy enforced at bootstrap.
 

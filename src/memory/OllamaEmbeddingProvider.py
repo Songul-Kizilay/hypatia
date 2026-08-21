@@ -3,14 +3,24 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
-from typing import cast
+from math import isfinite
+from typing import Protocol, cast
 
 from core.Exceptions import MemoryError
 from memory.Embedding import MAX_EMBEDDING_DIMENSION, Embedding
 from memory.EmbeddingProvider import validate_embedding_source_text
 
-OllamaEmbeddingTransport = Callable[[str, dict[str, object]], object]
+
+class OllamaEmbeddingTransport(Protocol):
+    """Transport one request with an optional stricter call timeout."""
+
+    def __call__(
+        self,
+        endpoint: str,
+        payload: dict[str, object],
+        *,
+        timeout_seconds: float | None = None,
+    ) -> object: ...
 
 
 class OllamaEmbeddingProvider:
@@ -26,17 +36,37 @@ class OllamaEmbeddingProvider:
         self._model = model
         self._transport = transport
 
-    def embed(self, source_text: str) -> Embedding:
+    def embed(
+        self,
+        source_text: str,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> Embedding:
         """Request exactly one embedding for the exact supplied source text."""
         try:
             validate_embedding_source_text(source_text)
         except ValueError as error:
             raise MemoryError("Embedding source text invalid.") from error
+        if timeout_seconds is not None and (
+            isinstance(timeout_seconds, bool)
+            or not isinstance(timeout_seconds, (int, float))
+            or not isfinite(timeout_seconds)
+            or timeout_seconds <= 0
+        ):
+            raise MemoryError("Embedding timeout invalid.")
+        payload: dict[str, object] = {
+            "model": self._model,
+            "input": source_text,
+        }
         try:
-            response = self._transport(
-                self._endpoint,
-                {"model": self._model, "input": source_text},
-            )
+            if timeout_seconds is None:
+                response = self._transport(self._endpoint, payload)
+            else:
+                response = self._transport(
+                    self._endpoint,
+                    payload,
+                    timeout_seconds=float(timeout_seconds),
+                )
         except OSError as error:
             raise MemoryError("Embedding transport failed.") from error
         except json.JSONDecodeError as error:

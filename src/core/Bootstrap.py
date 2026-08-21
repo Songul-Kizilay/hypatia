@@ -36,7 +36,9 @@ from memory.RankedKeywordLearnedMemorySelector import (
 )
 from memory.SemanticMemoryIndexBuilder import (
     DEFAULT_SEMANTIC_REBUILD_PROVIDER_CALLS,
+    DEFAULT_SEMANTIC_REBUILD_TIMEOUT_SECONDS,
     MAX_SEMANTIC_REBUILD_PROVIDER_CALLS,
+    MAX_SEMANTIC_REBUILD_TIMEOUT_SECONDS,
     SemanticMemoryIndexBuilder,
 )
 from memory.SemanticMemoryIndexRuntime import SemanticMemoryIndexRuntime
@@ -234,6 +236,7 @@ class Bootstrap:
         max_rebuild_provider_calls = (
             Bootstrap._load_process_semantic_rebuild_provider_calls()
         )
+        max_rebuild_seconds = Bootstrap._load_process_semantic_rebuild_timeout_seconds()
 
         provider = OllamaEmbeddingProvider(
             endpoint=endpoint,
@@ -251,6 +254,7 @@ class Bootstrap:
                 provider,
                 embedding_cache,
                 max_rebuild_provider_calls=max_rebuild_provider_calls,
+                max_rebuild_seconds=max_rebuild_seconds,
             )
         )
 
@@ -292,6 +296,29 @@ class Bootstrap:
                 f"{MAX_SEMANTIC_REBUILD_PROVIDER_CALLS}."
             )
         return budget
+
+    @staticmethod
+    def _load_process_semantic_rebuild_timeout_seconds() -> float:
+        raw_timeout = os.environ.get("HYPATIA_SEMANTIC_MEMORY_REBUILD_TIMEOUT_SECONDS")
+        if raw_timeout is None:
+            return DEFAULT_SEMANTIC_REBUILD_TIMEOUT_SECONDS
+        try:
+            timeout_seconds = float(raw_timeout)
+        except ValueError as error:
+            raise ValueError(
+                "HYPATIA_SEMANTIC_MEMORY_REBUILD_TIMEOUT_SECONDS must be a "
+                "positive finite number."
+            ) from error
+        if (
+            not isfinite(timeout_seconds)
+            or timeout_seconds <= 0
+            or timeout_seconds > MAX_SEMANTIC_REBUILD_TIMEOUT_SECONDS
+        ):
+            raise ValueError(
+                "HYPATIA_SEMANTIC_MEMORY_REBUILD_TIMEOUT_SECONDS must be greater "
+                f"than 0 and no greater than {MAX_SEMANTIC_REBUILD_TIMEOUT_SECONDS:g}."
+            )
+        return timeout_seconds
 
     def initialize(self) -> None:
         config = Config()

@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.66 (Genesis)`
+`v0.3.67 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.66`** is the current executable package and GitHub
+- **Runtime release `v0.3.67`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -242,15 +242,21 @@ with optional OpenAI-compatible LLM conversation support.
   work and allow 256 provider calls by default; an ASCII whole-number process
   setting can select 0 through 20,000, where zero is cache-only. An excessive
   miss count fails before the first provider call, cache replacement, or
-  semantic-runtime publication. Embedding source text is capped at 1,000,000
-  characters and is preflighted across rebuild, incremental, and query paths.
+  semantic-runtime publication. Every full rebuild also shares a monotonic
+  120-second deadline by default, configurable from greater than zero through
+  3,600 seconds. The deadline starts before record/source/cache preflight, and
+  each provider call receives the shorter of its request timeout and remaining
+  rebuild duration. Expiry preserves the last complete index and prevents
+  partial cache/runtime publication. Embedding source text is capped at
+  1,000,000 characters and is preflighted across rebuild, incremental, and
+  query paths.
   An explicit Ollama `/api/embed` adapter is available without third-party
   dependencies, rejects HTTP redirects, sends at most 8 MiB of exact compact
   UTF-8 JSON, rejects invalid or excessive bodies before opening the network
   request, and reads at most 1 MiB before parsing an embedding response. Opt-in
-  Bootstrap wiring builds and registers a
-  replacement index at startup. If the initial rebuild fails, primary Bootstrap
-  remains available, the runtime is registered and attached, and semantic
+  Bootstrap wiring builds and registers a replacement index at startup. If the
+  initial rebuild fails, primary Bootstrap remains available, the runtime is
+  registered and attached, and semantic
   retrieval safely reports unavailable. The exact `semantic recall retry`
   command deliberately retries one complete bounded rebuild; no ordinary chat,
   recall, status, or memory event triggers a full retry. Once an index is ready,
@@ -362,7 +368,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 Last verified in the local development environment:
 
-- 1,317 automated tests pass through package-aware discovery.
+- 1,324 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -389,8 +395,9 @@ so this check did not alter the project's persisted data.
 
 ## Next Milestone
 
-Define an aggregate semantic-rebuild time boundary. The provider-call count and
-each local HTTP request are bounded, but a sequence of permitted slow requests
-can still keep startup or an explicit retry occupied for too long. A complete
-rebuild needs one shared deadline or cancellation policy while preserving the
-last complete index, deterministic cache handling, and explicit-only retry.
+Move optional semantic startup rebuilding out of the primary synchronous
+startup path. The shared deadline bounds work to 120 seconds by default, but an
+opted-in unavailable or cold provider can still delay the primary application
+for that duration before degraded mode becomes available. A later increment
+needs lazy or background initialization with single-flight retry, observable
+safe state, and deterministic shutdown behavior.
