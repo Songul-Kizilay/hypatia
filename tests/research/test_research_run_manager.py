@@ -74,6 +74,7 @@ class ResearchRunManagerTests(unittest.TestCase):
             assessment_id_factory=assessment_ids.__next__,
             comparison_note_id_factory=lambda: "comparison-note-1",
             claim_id_factory=claim_ids.__next__,
+            claim_contradiction_id_factory=lambda: "contradiction-1",
         )
 
     def _prepare_comparison_material(
@@ -1607,6 +1608,166 @@ class ResearchRunManagerTests(unittest.TestCase):
                 ResearchEpistemicState.UNKNOWN,
                 ResearchClaimConfidence.UNASSESSED,
                 original.claim_id,
+            )
+
+    def test_claim_contradiction_preview_record_and_duplicate_guard_are_atomic(
+        self,
+    ) -> None:
+        run = self.manager.create("Compare claims")
+        evidence = []
+        claims = []
+        for number in (1, 2):
+            self.manager.add_source(
+                run.run_id,
+                ResearchSource(
+                    f"https://example.com/{number}",
+                    f"Source {number}",
+                    f"Evidence {number}.",
+                    "text/plain",
+                    self.start,
+                ),
+                f"document-{number}",
+            )
+            evidence_record = self.manager.add_evidence(
+                run.run_id,
+                Chunk(
+                    f"document-{number}",
+                    0,
+                    f"Evidence {number}.",
+                    chunk_id=f"contradiction-chunk-{number}",
+                ),
+                f"Contradiction evidence {number}.",
+            ).evidence[-1]
+            evidence.append(evidence_record)
+            claim = self.manager.record_claim(
+                run.run_id,
+                [evidence_record.evidence_id],
+                f"Claim {number}.",
+                ResearchEpistemicState.LIKELY,
+                ResearchClaimConfidence.MEDIUM,
+            ).claims[-1]
+            claims.append(claim)
+        saves_before_preview = len(self.store.saved)
+
+        empty_history = self.manager.preview_claim_contradictions(run.run_id)
+        preview = self.manager.preview_claim_contradiction_write(
+            run.run_id,
+            [claims[1].claim_id, claims[0].claim_id],
+            "  The conclusions conflict under the same conditions.  ",
+        )
+
+        self.assertEqual(empty_history.contradictions, ())
+        self.assertEqual(len(self.store.saved), saves_before_preview)
+        self.assertTrue(preview.allowed)
+        self.assertEqual(preview.claims, (claims[1], claims[0]))
+        self.assertEqual(
+            tuple(record.evidence_id for record in preview.evidence),
+            (evidence[1].evidence_id, evidence[0].evidence_id),
+        )
+        self.assertEqual(
+            preview.note,
+            "The conclusions conflict under the same conditions.",
+        )
+
+        updated = self.manager.record_claim_contradiction(
+            run.run_id,
+            [claims[1].claim_id, claims[0].claim_id],
+            "The conclusions conflict under the same conditions.",
+        )
+        contradiction = updated.claim_contradictions[-1]
+
+        self.assertEqual(contradiction.contradiction_id, "contradiction-1")
+        self.assertEqual(
+            contradiction.claim_ids,
+            (claims[1].claim_id, claims[0].claim_id),
+        )
+        self.assertEqual(
+            contradiction.evidence_ids,
+            (evidence[1].evidence_id, evidence[0].evidence_id),
+        )
+        self.assertEqual(
+            self.manager.preview_claim_contradictions(run.run_id).contradictions,
+            (contradiction,),
+        )
+        duplicate_preview = self.manager.preview_claim_contradiction_write(
+            run.run_id,
+            [claims[0].claim_id, claims[1].claim_id],
+            "Duplicate relationship.",
+        )
+        self.assertFalse(duplicate_preview.allowed)
+        self.assertIn("already exists", duplicate_preview.reason)
+        before_duplicate = self.manager.get(run.run_id)
+        saves_before_duplicate = len(self.store.saved)
+        with self.assertRaisesRegex(ResearchError, "already exists"):
+            self.manager.record_claim_contradiction(
+                run.run_id,
+                [claims[0].claim_id, claims[1].claim_id],
+                "Duplicate relationship.",
+            )
+        self.assertEqual(self.manager.get(run.run_id), before_duplicate)
+        self.assertEqual(len(self.store.saved), saves_before_duplicate)
+
+    def test_claim_contradiction_rejects_unknown_closed_and_failed_save(self) -> None:
+        run = self.manager.create("Compare claims")
+        self.manager.add_source(
+            run.run_id,
+            ResearchSource(
+                "https://example.com/source",
+                "Source",
+                "Evidence.",
+                "text/plain",
+                self.start,
+            ),
+            "document-1",
+        )
+        evidence = self.manager.add_evidence(
+            run.run_id,
+            Chunk("document-1", 0, "Evidence.", chunk_id="contradiction-chunk"),
+            "Relevant.",
+        ).evidence[-1]
+        first = self.manager.record_claim(
+            run.run_id,
+            [evidence.evidence_id],
+            "Claim one.",
+            ResearchEpistemicState.UNKNOWN,
+        ).claims[-1]
+        second = self.manager.record_claim(
+            run.run_id,
+            [evidence.evidence_id],
+            "Claim two.",
+            ResearchEpistemicState.UNKNOWN,
+        ).claims[-1]
+        before = self.manager.get(run.run_id)
+        with self.assertRaisesRegex(ResearchError, "requires claims from this run"):
+            self.manager.preview_claim_contradiction_write(
+                run.run_id,
+                [first.claim_id, "claim-missing"],
+                "Unknown claim.",
+            )
+        self.assertEqual(self.manager.get(run.run_id), before)
+
+        self.store.error = ResearchError("Store unavailable.")
+        with self.assertRaisesRegex(ResearchError, "Store unavailable"):
+            self.manager.record_claim_contradiction(
+                run.run_id,
+                [first.claim_id, second.claim_id],
+                "The claims conflict.",
+            )
+        self.assertEqual(self.manager.get(run.run_id), before)
+        self.store.error = None
+        self.manager.transition_status(run.run_id, ResearchRunStatus.COMPLETED)
+        closed_preview = self.manager.preview_claim_contradiction_write(
+            run.run_id,
+            [first.claim_id, second.claim_id],
+            "Too late.",
+        )
+        self.assertFalse(closed_preview.allowed)
+        self.assertIn("closed", closed_preview.reason)
+        with self.assertRaisesRegex(ResearchError, "closed"):
+            self.manager.record_claim_contradiction(
+                run.run_id,
+                [first.claim_id, second.claim_id],
+                "Too late.",
             )
 
     def test_claim_write_rejects_invalid_inputs_before_mutation(self) -> None:

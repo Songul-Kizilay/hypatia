@@ -2,6 +2,40 @@
 
 All notable project changes are recorded here.
 
+## [0.3.77] - 2026-08-21
+
+### Added
+
+- A collecting research run can preview and append one explicit user-reviewed
+  contradiction relationship between exactly two persisted claims.
+- Each append-only relationship stores the selected claim order, the exact
+  de-duplicated evidence union derived from both claims, a required
+  user-authored note, its own ID, and a timezone-aware audit timestamp.
+- Brain, the desktop Research tab, read-only history, committed responses, and
+  deterministic Markdown exports expose the persisted relationship.
+
+### Changed
+
+- Research-run schema v9 persists claim contradictions while loading v1-v8
+  snapshots with an empty contradiction collection and rewriting them only
+  during a later successful atomic save.
+- A reversed claim pair is treated as the same relationship, so the same two
+  claims cannot receive duplicate contradiction records.
+
+### Safety
+
+- Preview is read-only. Recording requires a separate desktop confirmation and
+  final runtime revalidation of the open run, both claims, their evidence, the
+  duplicate-pair guard, and atomic persistence.
+- Hypatia does not detect contradictions automatically, choose claims or
+  evidence, decide truth, rewrite either claim, or grant external source text
+  instruction authority.
+
+### Verification
+
+- The package-aware full local suite contains 1,403 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass across 326 source files.
+
 ## [0.3.76] - 2026-08-21
 
 ### Added

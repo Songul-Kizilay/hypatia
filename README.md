@@ -148,6 +148,11 @@ To create the world's most capable personal AI research companion.
   `low`, `medium`, or `high`). Exact evidence and ordered source provenance are
   persisted through a preview-confirm-record boundary. Corrections append a
   supersession link; Hypatia does not extract claims or calculate truth
+- Explicit user-reviewed contradiction relationships between exactly two
+  persisted claims. A preview displays both claims and their exact combined
+  evidence before confirmation; the append-only record keeps the claim IDs,
+  derived evidence IDs, and the user's own note. Reversed duplicate pairs are
+  rejected, and Hypatia performs no automatic detection or truth decision
 - A read-only manual comparison preview for two to five explicitly selected
   sources accepted into the same run. It preserves selection order and shows
   provenance, user-selected evidence, and current user-authored assessments
@@ -160,7 +165,8 @@ To create the world's most capable personal AI research companion.
   reference before atomic persistence, and remains readable after restart
 - A deterministic Markdown export preview for one terminal research run. It
   uses only the immutable persisted audit snapshot, includes provenance,
-  evidence, assessment history, comparison notes, and failures, and exposes a
+  evidence, assessment history, claims, user-reviewed claim contradictions,
+  comparison notes, and failures, and exposes a
   full-content SHA-256 while bounding the desktop display. A separate confirmed
   save revalidates the exact preview and atomically creates a new `.md` file
   without replacing an existing destination. A read-only verification action
@@ -284,6 +290,13 @@ exact accepted sources from the cited evidence, then asks for confirmation and
 revalidates before an atomic append. An optional predecessor claim ID creates a
 single backward correction link without changing the old record. No LLM,
 automatic claim extraction, evidence selection, or truth score is involved.
+`View contradictions` shows only relationships already recorded for the
+selected run. `Preview & save contradiction` requires exactly two
+comma-separated claim IDs plus the user's own explanation. Hypatia resolves the
+persisted claims and their exact combined evidence, shows a no-write preview,
+asks for confirmation, and revalidates before atomic append. The relationship
+is symmetric for duplicate detection, remains readable after restart, and does
+not change either claim or decide which one is true.
 `Compare sources` accepts two to five comma-separated document IDs from the
 selected research run. It shows the sources in the entered order with persisted
 provenance, explicitly recorded evidence, and only current user-authored
@@ -324,7 +337,7 @@ The `Final status` control previews `completed`, `failed`, or `cancelled` before
 asking for separate confirmation. Completion requires at least one accepted
 source and one evidence record, while failure requires a recorded failure. A
 closed run is permanent and cannot accept
-more sources, evidence, assessments, or failure records; Hypatia rejects a closed-run source
+ more sources, evidence, assessments, claims, claim contradictions, or failure records; Hypatia rejects a closed-run source
 request before opening the network connection.
 `Ask sources` deliberately invokes the existing `ask knowledge` local-RAG path
 only when its button is selected. It provides the configured runtime with up to

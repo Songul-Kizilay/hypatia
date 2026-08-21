@@ -36,6 +36,9 @@ The MVP may present only current Brain/CognitiveEngine capabilities:
   as bounded research evidence;
 - preview-and-confirm recording of user-authored source assessments that cite
   only explicitly entered evidence IDs from the selected accepted source;
+- preview-and-confirm recording of one user-reviewed contradiction relationship
+  between exactly two persisted claims, with the claims' exact combined
+  evidence and the user's own note displayed before confirmation;
 - read-only side-by-side comparison of two to five explicitly selected accepted
   sources, using persisted provenance, user-selected evidence, and only current
   user-authored assessments without an automatic verdict or score;
@@ -266,6 +269,7 @@ confirmation is an additional guard, not a replacement for runtime validation.
 | Delete session | Request runtime preview | Submit runtime delete only after user confirms | Session ID, memory-record count, and irreversible-result warning. |
 | Add knowledge relation | Request runtime relation preview | Submit apply only after user confirms | Source and target IDs, `related_to`, persistence status. |
 | Remove knowledge relation | Request runtime removal preview | Submit remove only after user confirms | Source and target IDs, relation type, persistence status. |
+| Add claim contradiction | Request runtime write preview | Submit record only after user confirms | Run ID, both claim IDs and texts, their exact combined evidence IDs, the user's note, and a warning that Hypatia does not decide truth. |
 
 If a preview fails, the underlying state changes, or the runtime rejects the
 final action, the dialog closes with the returned failure state and no
@@ -282,7 +286,9 @@ optimistic local update is retained.
    provider exception details.
 4. Do not automatically call `ask knowledge`, semantic recall, or any mutation
    from ordinary chat text; each remains an explicit user-selected flow.
-5. Keep standard copy/paste and keyboard navigation local. If a future
+5. Do not automatically propose or record claim contradictions; the user must
+   explicitly supply both persisted claim IDs and their own note.
+6. Keep standard copy/paste and keyboard navigation local. If a future
    framework includes a web view, its content-security and navigation policy
    requires a separate security review.
 

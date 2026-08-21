@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.76 (Genesis)`
+`v0.3.77 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.76`** is the current executable package and GitHub
+- **Runtime release `v0.3.77`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -171,6 +171,14 @@ with optional OpenAI-compatible LLM conversation support.
   missing, already-superseded, cross-run, closed-run, and mismatched-provenance
   writes fail before publication. The desktop uses a separate preview and
   confirmation before final revalidation and atomic persistence.
+- A collecting run can preview and append one explicit user-reviewed
+  contradiction relationship between exactly two persisted claims. The record
+  keeps the selected claim order, the exact de-duplicated union of both claims'
+  evidence IDs, the user's required note, its own ID, and audit timestamp.
+  Reversed pairs count as duplicates. History remains readable after closure,
+  while Hypatia performs no automatic contradiction detection, claim or
+  evidence selection, truth decision, claim rewrite, provider call, or change
+  to external source instruction authority.
 - A separate manual comparison preview accepts an ordered list of two to five
   unique accepted-source document IDs from one exact run. For each source it
   renders persisted provenance, only explicitly recorded evidence, and only
@@ -186,10 +194,11 @@ with optional OpenAI-compatible LLM conversation support.
   exact selected source order after restart. It displays at most 20 notes and
   reports the complete count. Hypatia generates no note text, verdict, score,
   or reference selection.
-- Research-run schema v8 remains backward compatible with v1-v7 snapshots.
+- Research-run schema v9 remains backward compatible with v1-v8 snapshots.
   Legacy runs load with absent evidence, discovery, or assessment collections
   represented as empty, v4 assessments load with no supersession link, and
-  v1-v5 runs load with no comparison notes, and v1-v7 runs load with no claims.
+  v1-v5 runs load with no comparison notes, v1-v7 runs load with no claims, and
+  v1-v8 runs load with no claim-contradiction relationships.
   Every v1-v6 source receives the
   fixed external-data taint and no instruction authority, while every legacy
   assessment receives `unassessed` information trust.
@@ -198,7 +207,7 @@ with optional OpenAI-compatible LLM conversation support.
 - One terminal run can be explicitly previewed as deterministic Markdown using
   only its immutable persisted audit snapshot. The bounded view includes source
   provenance, evidence, authored assessment history, evidence-linked claims,
-  comparison notes, and safe
+  user-reviewed claim contradictions, comparison notes, and safe
   failures; it reports the complete character count and full-content SHA-256.
   Authored and remote text is escaped as literal quoted material, and a safe
   suggested basename cannot contain a path. Hidden directional controls are
@@ -223,8 +232,9 @@ with optional OpenAI-compatible LLM conversation support.
   it. Completion requires at least one accepted source and evidence record;
   failure requires a recorded failure; cancellation can honestly close an
   empty run. Closed runs cannot be
-  reopened, retargeted, or receive further source, evidence, assessment, or failure
-  mutations. Closed-run source requests stop before network access.
+  reopened, retargeted, or receive further source, evidence, assessment, claim,
+  claim-contradiction, or failure mutations. Closed-run source requests stop
+  before network access.
 - The Windows desktop entry point persists its own local runtime state beneath
   `%LOCALAPPDATA%\Hypatia` by default, avoiding writes beside an installed
   executable. A documented absolute-path override supports deliberate local
@@ -412,7 +422,7 @@ with optional OpenAI-compatible LLM conversation support.
 - General web discovery, automatic or unattended candidate acceptance,
   multi-source research
   planning/synthesis,
-  contradiction detection, evidence ranking, automatic RAG augmentation, or
+  automatic contradiction detection, evidence ranking, automatic RAG augmentation, or
   cross-document semantic relation extraction.
 - Agent execution, tool gateway, browser/OS control, voice, vision, robotics,
   and smart-home integrations.
@@ -433,7 +443,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,388 automated tests pass through package-aware discovery.
+- 1,403 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -460,7 +470,8 @@ so this check did not alter the project's persisted data.
 
 ## Next Milestone
 
-Add explicit user-reviewed contradiction relationships between persisted
-claims. Any future detector must only propose candidates with cited evidence;
-it must not silently rewrite claims, decide truth, or weaken the fixed
+Add a read-only, explicitly requested contradiction-candidate proposal
+boundary. Every candidate must cite exact persisted claim and evidence IDs,
+remain separate from the manual recording flow, and never rewrite a claim,
+decide truth, record a relationship automatically, or weaken the fixed
 no-instruction-authority boundary for external source text.

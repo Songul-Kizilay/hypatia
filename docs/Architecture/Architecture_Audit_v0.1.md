@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.76` in the current release candidate) are the
+- **Runtime releases** (`v0.3.77` in the current release candidate) are the
   executable package and GitHub release line. They are the source-backed
   implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
@@ -156,13 +156,14 @@ reconstructing at most 20,000 paragraphs in the empty knowledge index. Orphans,
 identity/metadata mismatches, conflicting provenance, or partial indexing fail
 closed without changing either snapshot. The knowledge index remains in memory
 and uses case-insensitive lexical matching.
-Research-run schema v8 loads v1-v7 snapshots with absent evidence, discovery,
+Research-run schema v9 loads v1-v8 snapshots with absent evidence, discovery,
 assessment, or comparison-note collections represented as empty and v4
 assessments represented with no supersession link, rewriting a legacy snapshot
 only on a subsequent successful mutation. Legacy sources receive the fixed
 `external_untrusted_data` taint and instruction authority `none`; legacy
-assessments receive `unassessed` information trust, and v1-v7 runs receive an
-empty claim collection. Its complete UTF-8 file is
+assessments receive `unassessed` information trust, v1-v7 runs receive an
+empty claim collection, and v1-v8 runs receive an empty claim-contradiction
+collection. Its complete UTF-8 file is
 capped at 64 MiB before JSON decoding or atomic publication, and all nested list entries
 share one aggregate 20,000-item parsing and serialization budget. The
 source-discovery boundary keeps
@@ -195,6 +196,14 @@ confidence. Preview and history are read-only; recording revalidates every
 reference and atomically appends. Corrections point backward through one
 single-successor supersession link while preserving the original. No claim,
 evidence reference, numeric probability, or truth decision is generated.
+One separate claim-contradiction boundary accepts exactly two distinct
+persisted claim IDs and the user's required note. Its read-only preview resolves
+both immutable claims and the exact ordered de-duplicated union of their
+evidence. A confirmed record revalidates the open run, references, evidence,
+and unordered duplicate-pair guard under the manager lock before atomic append.
+History remains readable after closure. The boundary does not detect or propose
+contradictions, select claims or evidence, decide truth, rewrite claims, invoke
+a provider or LLM, or grant external source text instruction authority.
 The ordered manual comparison is also the read boundary for append-only authored
 comparison notes. A collecting run accepts a note only after an exact no-write
 preview and separate confirmation. Evidence and current assessment IDs must
@@ -349,12 +358,12 @@ Not implemented:
 
 The current local verification baseline is:
 
-- package-aware `python -m unittest`: 1,388 tests passed. Explicit `tests.*`
+- package-aware `python -m unittest`: 1,403 tests passed. Explicit `tests.*`
   module names ensure nested test directories are included without shadowing
   source packages.
 - `python -m black --check src tests`: passed.
 - `python -m ruff check src tests`: passed.
-- `python -m mypy src tests`: passed with no issues in 322 files.
+- `python -m mypy src tests`: passed with no issues in 326 source files.
 - `git diff --check`: passed.
 
 These checks verify the current local worktree; they do not create a release,

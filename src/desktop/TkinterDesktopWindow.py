@@ -205,6 +205,8 @@ class TkinterDesktopWindow:
             value=ResearchClaimConfidence.UNASSESSED.value
         )
         self._research_claim_supersedes_id = tk.StringVar()
+        self._research_claim_contradiction_ids = tk.StringVar()
+        self._research_claim_contradiction_note = tk.StringVar()
         self._research_target_status = tk.StringVar(value="completed")
         self._relation_source_id = tk.StringVar()
         self._relation_target_id = tk.StringVar()
@@ -968,8 +970,38 @@ class TkinterDesktopWindow:
             text="Preview & save claim",
             command=self._preview_and_record_research_claim,
         ).grid(row=18, column=2, columnspan=2, sticky="ew", pady=(8, 0))
-        ttk.Label(research_frame, text="Final status").grid(
+        ttk.Label(research_frame, text="Contradicting claim IDs (exactly two)").grid(
             row=19,
+            column=0,
+            sticky="w",
+            pady=(8, 0),
+        )
+        ttk.Entry(
+            research_frame,
+            textvariable=self._research_claim_contradiction_ids,
+        ).grid(row=19, column=1, columnspan=2, sticky="ew", padx=(8, 8), pady=(8, 0))
+        ttk.Button(
+            research_frame,
+            text="View contradictions",
+            command=self._preview_research_claim_contradictions,
+        ).grid(row=19, column=3, sticky="ew", pady=(8, 0))
+        ttk.Label(research_frame, text="User contradiction note").grid(
+            row=20,
+            column=0,
+            sticky="w",
+            pady=(8, 0),
+        )
+        ttk.Entry(
+            research_frame,
+            textvariable=self._research_claim_contradiction_note,
+        ).grid(row=20, column=1, columnspan=2, sticky="ew", padx=(8, 8), pady=(8, 0))
+        ttk.Button(
+            research_frame,
+            text="Preview & save contradiction",
+            command=self._preview_and_record_research_claim_contradiction,
+        ).grid(row=20, column=3, sticky="ew", pady=(8, 0))
+        ttk.Label(research_frame, text="Final status").grid(
+            row=21,
             column=0,
             sticky="w",
             pady=(8, 0),
@@ -979,37 +1011,37 @@ class TkinterDesktopWindow:
             textvariable=self._research_target_status,
             values=("completed", "failed", "cancelled"),
             state="readonly",
-        ).grid(row=19, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
+        ).grid(row=21, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
         ttk.Button(
             research_frame,
             text="Preview status",
             command=self._preview_and_update_research_status,
-        ).grid(row=19, column=2, sticky="ew", pady=(8, 0))
+        ).grid(row=21, column=2, sticky="ew", pady=(8, 0))
         ttk.Button(
             research_frame,
             text="Export preview",
             command=self._preview_research_run_markdown_export,
-        ).grid(row=19, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ).grid(row=21, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
         ttk.Button(
             research_frame,
             text="Verify export",
             command=self._verify_research_run_markdown_export,
-        ).grid(row=20, column=2, sticky="ew", pady=(8, 0))
+        ).grid(row=22, column=2, sticky="ew", pady=(8, 0))
         ttk.Button(
             research_frame,
             text="Save export",
             command=self._save_research_run_markdown_export,
-        ).grid(row=20, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ).grid(row=22, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
         ttk.Button(
             research_frame,
             text="Evidence integrity",
             command=self._show_research_evidence_integrity,
-        ).grid(row=20, column=0, sticky="ew", pady=(8, 0))
+        ).grid(row=22, column=0, sticky="ew", pady=(8, 0))
         ttk.Button(
             research_frame,
             text="Research data status",
             command=self._show_research_content_status,
-        ).grid(row=20, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
+        ).grid(row=22, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
 
         relation_frame = ttk.LabelFrame(
             knowledge_tab,
@@ -1767,6 +1799,50 @@ class TkinterDesktopWindow:
             self._status.set("research claim: not saved")
             return
         response = self._controller.record_research_claim(*values)
+        self._append_response(response)
+
+    def _preview_research_claim_contradictions(self) -> None:
+        """Show only persisted user-reviewed contradiction relationships."""
+        try:
+            response = self._controller.preview_research_claim_contradictions(
+                self._research_run_id.get()
+            )
+        except ValueError as error:
+            self._status.set(str(error))
+            return
+        self._append_response(response)
+
+    def _preview_and_record_research_claim_contradiction(self) -> None:
+        """Preview, confirm, and revalidate one claim contradiction."""
+        values = (
+            self._research_run_id.get(),
+            self._research_claim_contradiction_ids.get(),
+            self._research_claim_contradiction_note.get(),
+        )
+        try:
+            preview_response = (
+                self._controller.preview_research_claim_contradiction_write(*values)
+            )
+        except ValueError as error:
+            self._status.set(str(error))
+            return
+        self._append_response(preview_response)
+        preview = preview_response.research_claim_contradiction_write_preview
+        if not preview_response.success or preview is None or not preview.allowed:
+            return
+        if not messagebox.askyesno(
+            "Save user-reviewed claim contradiction?",
+            (
+                f"{preview_response.message}\n\n"
+                "This appends your contradiction note and the exact two claim and "
+                "evidence references to the research audit record. Hypatia does not "
+                "decide which claim is true or rewrite either claim. Continue?"
+            ),
+            parent=self._root,
+        ):
+            self._status.set("research claim contradiction: not saved")
+            return
+        response = self._controller.record_research_claim_contradiction(*values)
         self._append_response(response)
 
     def _record_research_evidence(self) -> None:

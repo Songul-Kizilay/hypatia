@@ -223,6 +223,15 @@ class CognitiveEngine:
         if self._is_research_claim_record_request(request):
             return self._process_research_claim_record(request)
 
+        if self._is_research_claim_contradiction_preview_request(request):
+            return self._process_research_claim_contradiction_preview(request)
+
+        if self._is_research_claim_contradiction_write_preview_request(request):
+            return self._process_research_claim_contradiction_write_preview(request)
+
+        if self._is_research_claim_contradiction_record_request(request):
+            return self._process_research_claim_contradiction_record(request)
+
         if self._is_research_source_comparison_preview_request(request):
             return self._process_research_source_comparison_preview(request)
 
@@ -489,6 +498,30 @@ class CognitiveEngine:
     def _is_research_claim_record_request(request: BrainRequest) -> bool:
         """Recognize one separately confirmed authored claim write."""
         return request.metadata.get("intent") == "research_claim_record"
+
+    @staticmethod
+    def _is_research_claim_contradiction_preview_request(
+        request: BrainRequest,
+    ) -> bool:
+        """Recognize one explicit read-only claim-contradiction request."""
+        return request.metadata.get("intent") == "research_claim_contradiction_preview"
+
+    @staticmethod
+    def _is_research_claim_contradiction_write_preview_request(
+        request: BrainRequest,
+    ) -> bool:
+        """Recognize one no-write claim-contradiction preview."""
+        return (
+            request.metadata.get("intent")
+            == "research_claim_contradiction_write_preview"
+        )
+
+    @staticmethod
+    def _is_research_claim_contradiction_record_request(
+        request: BrainRequest,
+    ) -> bool:
+        """Recognize one separately confirmed claim-contradiction write."""
+        return request.metadata.get("intent") == "research_claim_contradiction_record"
 
     @staticmethod
     def _is_research_source_comparison_preview_request(
@@ -910,6 +943,115 @@ class CognitiveEngine:
             confidence,
             supersedes_claim_id,
         )
+
+    def _process_research_claim_contradiction_preview(
+        self,
+        request: BrainRequest,
+    ) -> BrainResponse:
+        """Read persisted contradiction history without providers or mutation."""
+        run_id = request.metadata.get("research_run_id")
+        failure = self._response_composer.research_claim_contradiction_preview_failure
+        if not isinstance(run_id, str) or not run_id.strip():
+            return failure(request, "A research run ID is required.")
+        if self._research_run_manager is None:
+            return failure(request, "Research run persistence is unavailable.")
+        try:
+            preview = self._research_run_manager.preview_claim_contradictions(run_id)
+        except ResearchError:
+            return failure(request, "Research run was not found.")
+        return self._response_composer.research_claim_contradiction_preview_success(
+            request,
+            preview,
+        )
+
+    def _process_research_claim_contradiction_write_preview(
+        self,
+        request: BrainRequest,
+    ) -> BrainResponse:
+        """Preview exact authored relationship metadata without mutation."""
+        return self._process_research_claim_contradiction_write(
+            request,
+            preview_only=True,
+        )
+
+    def _process_research_claim_contradiction_record(
+        self,
+        request: BrainRequest,
+    ) -> BrainResponse:
+        """Revalidate and commit one separately confirmed contradiction."""
+        return self._process_research_claim_contradiction_write(
+            request,
+            preview_only=False,
+        )
+
+    def _process_research_claim_contradiction_write(
+        self,
+        request: BrainRequest,
+        *,
+        preview_only: bool,
+    ) -> BrainResponse:
+        intent = (
+            "research_claim_contradiction_write_preview"
+            if preview_only
+            else "research_claim_contradiction_record"
+        )
+        failure = self._response_composer.research_claim_contradiction_write_failure
+        values = self._research_claim_contradiction_write_values(request)
+        if values is None:
+            return failure(
+                request,
+                "A run ID, exactly two distinct claim IDs, and a user-authored "
+                "contradiction note are required.",
+                intent=intent,
+            )
+        if self._research_run_manager is None:
+            return failure(
+                request,
+                "Research run persistence is unavailable.",
+                intent=intent,
+            )
+        try:
+            if preview_only:
+                preview = self._research_run_manager.preview_claim_contradiction_write(
+                    *values
+                )
+                compose_preview = (
+                    self._response_composer.research_claim_contradiction_write_preview_success
+                )
+                return compose_preview(request, preview)
+            run = self._research_run_manager.record_claim_contradiction(*values)
+        except ResearchError:
+            return failure(
+                request,
+                "Research claim contradiction could not be validated or saved.",
+                intent=intent,
+            )
+        return self._response_composer.research_claim_contradiction_record_success(
+            request,
+            run,
+        )
+
+    @staticmethod
+    def _research_claim_contradiction_write_values(
+        request: BrainRequest,
+    ) -> tuple[str, list[str], str] | None:
+        run_id = request.metadata.get("research_run_id")
+        claim_ids = request.metadata.get("research_claim_contradiction_claim_ids")
+        note = request.metadata.get("research_claim_contradiction_note")
+        if (
+            not isinstance(run_id, str)
+            or not run_id.strip()
+            or not isinstance(claim_ids, list)
+            or len(claim_ids) != 2
+            or not all(
+                isinstance(claim_id, str) and claim_id.strip() for claim_id in claim_ids
+            )
+            or len({claim_id.strip() for claim_id in claim_ids}) != 2
+            or not isinstance(note, str)
+            or not note.strip()
+        ):
+            return None
+        return run_id, claim_ids, note
 
     def _process_research_source_comparison_preview(
         self,

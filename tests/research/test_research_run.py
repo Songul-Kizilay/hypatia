@@ -7,6 +7,9 @@ from datetime import UTC, datetime
 
 from core.Exceptions import ResearchError
 from research.ResearchClaimConfidence import ResearchClaimConfidence
+from research.ResearchClaimContradictionRecord import (
+    ResearchClaimContradictionRecord,
+)
 from research.ResearchClaimRecord import ResearchClaimRecord
 from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
@@ -521,6 +524,132 @@ class ResearchRunTests(unittest.TestCase):
                 now,
                 evidence=(evidence,),
                 claims=(original, correction, competing),
+            )
+
+    def test_claim_contradictions_require_exact_claim_evidence_and_unique_pair(
+        self,
+    ) -> None:
+        now = datetime(2026, 8, 21, 21, 0, tzinfo=UTC)
+        sources = tuple(
+            ResearchSourceRecord(
+                f"document-{number}",
+                f"https://example.com/{number}",
+                f"Source {number}",
+                "text/plain",
+                now,
+                now,
+            )
+            for number in (1, 2)
+        )
+        evidence = tuple(
+            ResearchEvidenceRecord(
+                f"evidence-{number}",
+                f"document-{number}",
+                f"chunk-{number}",
+                0,
+                f"Evidence {number}.",
+                False,
+                str(number) * 64,
+                "Relevant.",
+                now,
+            )
+            for number in (1, 2)
+        )
+        claims = tuple(
+            ResearchClaimRecord(
+                f"claim-{number}",
+                f"Claim {number}.",
+                ResearchEpistemicState.LIKELY,
+                ResearchClaimConfidence.MEDIUM,
+                (f"document-{number}",),
+                (f"evidence-{number}",),
+                now,
+            )
+            for number in (1, 2)
+        )
+        contradiction = ResearchClaimContradictionRecord(
+            "contradiction-1",
+            ("claim-1", "claim-2"),
+            ("evidence-1", "evidence-2"),
+            "The conclusions conflict.",
+            now,
+        )
+
+        run = ResearchRun(
+            "run-1",
+            "Question",
+            ResearchRunStatus.COLLECTING,
+            sources,
+            (),
+            now,
+            now,
+            evidence=evidence,
+            claims=claims,
+            claim_contradictions=(contradiction,),
+        )
+
+        self.assertEqual(run.claim_contradictions, (contradiction,))
+        invalid_relationships = (
+            ResearchClaimContradictionRecord(
+                "contradiction-2",
+                ("claim-2", "claim-1"),
+                ("evidence-1", "evidence-2"),
+                "Mismatched evidence order.",
+                now,
+            ),
+            ResearchClaimContradictionRecord(
+                "contradiction-3",
+                ("claim-1", "claim-missing"),
+                ("evidence-1", "evidence-2"),
+                "Unknown claim.",
+                now,
+            ),
+        )
+        with self.assertRaisesRegex(ResearchError, "evidence must match"):
+            ResearchRun(
+                "run-1",
+                "Question",
+                ResearchRunStatus.COLLECTING,
+                sources,
+                (),
+                now,
+                now,
+                evidence=evidence,
+                claims=claims,
+                claim_contradictions=(invalid_relationships[0],),
+            )
+        with self.assertRaisesRegex(ResearchError, "persisted claims"):
+            ResearchRun(
+                "run-1",
+                "Question",
+                ResearchRunStatus.COLLECTING,
+                sources,
+                (),
+                now,
+                now,
+                evidence=evidence,
+                claims=claims,
+                claim_contradictions=(invalid_relationships[1],),
+            )
+        duplicate = ResearchClaimContradictionRecord(
+            "contradiction-4",
+            ("claim-2", "claim-1"),
+            ("evidence-2", "evidence-1"),
+            "Same pair again.",
+            now,
+        )
+        with self.assertRaisesRegex(ResearchError, "duplicate.*pair"):
+            ResearchRun(
+                "run-1",
+                "Question",
+                ResearchRunStatus.COLLECTING,
+                sources,
+                (),
+                now,
+                now,
+                evidence=evidence,
+                claims=claims,
+                claim_contradictions=(contradiction, duplicate),
             )
 
 

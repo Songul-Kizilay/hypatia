@@ -76,9 +76,18 @@ record action revalidates and atomically appends the note. The comparison view
 shows up to 20 notes for the exact entered source order after restart and reports
 the complete count. The desktop never composes the note, chooses references, or
 generates a winner or score.
+`View contradictions` reads only persisted user-reviewed relationships for the
+selected run and remains available after closure. `Preview & save
+contradiction` requires exactly two distinct claim IDs and the user's own note,
+then displays both persisted claims and their exact combined evidence before
+confirmation. The separate record action revalidates the open run, references,
+evidence, and unordered duplicate-pair guard before atomic append. It does not
+detect contradictions, choose claims or evidence, decide truth, rewrite either
+claim, invoke a provider or LLM, or change source instruction authority.
 `Export preview` is available for an explicitly selected terminal run. It
-renders persisted provenance, evidence, authored assessments, comparison notes,
-and failures as bounded Markdown, together with the immutable snapshot time,
+ renders persisted provenance, evidence, authored assessments, claims,
+ user-reviewed claim contradictions, comparison notes, and failures as bounded
+ Markdown, together with the immutable snapshot time,
 full character count, omitted count, safe suggested filename, and full-content
 SHA-256. It accepts no destination path and writes no file. `Save export` then
 requires that exact displayed preview, opens a new-file chooser, and separately

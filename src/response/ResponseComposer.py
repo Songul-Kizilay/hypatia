@@ -21,6 +21,12 @@ from knowledge.KnowledgeRelationRevocationPreview import (
 )
 from memory.MemoryRecord import MemoryRecord
 from planner.Plan import Plan
+from research.ResearchClaimContradictionPreview import (
+    ResearchClaimContradictionPreview,
+)
+from research.ResearchClaimContradictionWritePreview import (
+    ResearchClaimContradictionWritePreview,
+)
 from research.ResearchClaimPreview import ResearchClaimPreview
 from research.ResearchClaimWritePreview import ResearchClaimWritePreview
 from research.ResearchEvidenceIntegrityStatus import ResearchEvidenceIntegrityStatus
@@ -1520,6 +1526,130 @@ class ResponseComposer:
         intent: str,
     ) -> BrainResponse:
         """Report invalid claim preview or record input safely."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent=intent,
+            memory_count=0,
+            success=False,
+        )
+
+    def research_claim_contradiction_preview_success(
+        self,
+        request: BrainRequest,
+        preview: ResearchClaimContradictionPreview,
+    ) -> BrainResponse:
+        """Render persisted user-reviewed contradiction history without inference."""
+        claims_by_id = {claim.claim_id: claim for claim in preview.claims}
+        lines = [
+            "Research claim contradiction history:",
+            f"Run: {preview.run_id}",
+            f"Question: {preview.question}",
+            f"Run status: {preview.run_status.value}",
+            f"Recorded contradictions: {len(preview.contradictions)}",
+            f"Reason: {preview.reason}",
+        ]
+        for contradiction in preview.contradictions:
+            first_claim = claims_by_id[contradiction.claim_ids[0]]
+            second_claim = claims_by_id[contradiction.claim_ids[1]]
+            lines.extend(
+                (
+                    f"- Contradiction: {contradiction.contradiction_id}",
+                    f"  first claim: {first_claim.claim_id} — {first_claim.text}",
+                    f"  second claim: {second_claim.claim_id} — {second_claim.text}",
+                    f"  evidence IDs: {', '.join(contradiction.evidence_ids)}",
+                    f"  user note: {contradiction.note}",
+                    f"  recorded: {contradiction.recorded_at.isoformat()}",
+                )
+            )
+        lines.append(
+            "Status: persisted user-reviewed relationships only; no automatic "
+            "detection, truth decision, claim rewrite, or instruction authority"
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_claim_contradiction_preview",
+            memory_count=0,
+            research_claim_contradiction_preview=preview,
+        )
+
+    def research_claim_contradiction_preview_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Report an invalid contradiction-history request safely."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="research_claim_contradiction_preview",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_claim_contradiction_write_preview_success(
+        self,
+        request: BrainRequest,
+        preview: ResearchClaimContradictionWritePreview,
+    ) -> BrainResponse:
+        """Render exact relationship inputs before separate confirmation."""
+        first_claim, second_claim = preview.claims
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Research claim contradiction preview:",
+                    f"Run: {preview.run_id}",
+                    f"Run status: {preview.run_status.value}",
+                    f"First claim: {first_claim.claim_id} — {first_claim.text}",
+                    f"Second claim: {second_claim.claim_id} — {second_claim.text}",
+                    "Evidence IDs: "
+                    + ", ".join(record.evidence_id for record in preview.evidence),
+                    f"User note: {preview.note}",
+                    f"Allowed: {'yes' if preview.allowed else 'no'}",
+                    f"Reason: {preview.reason}",
+                    "Status: user-reviewed relationship only; Hypatia does not "
+                    "decide which claim is true",
+                )
+            ),
+            request_id=request.request_id,
+            intent="research_claim_contradiction_write_preview",
+            memory_count=0,
+            success=preview.allowed,
+            research_claim_contradiction_write_preview=preview,
+        )
+
+    def research_claim_contradiction_record_success(
+        self,
+        request: BrainRequest,
+        run: ResearchRun,
+    ) -> BrainResponse:
+        """Render one contradiction only after the audit snapshot commits."""
+        contradiction = run.claim_contradictions[-1]
+        return BrainResponse(
+            message=(
+                "Research claim contradiction recorded:\n"
+                f"ID: {contradiction.contradiction_id}\n"
+                f"Claim IDs: {', '.join(contradiction.claim_ids)}\n"
+                f"Evidence IDs: {', '.join(contradiction.evidence_ids)}\n"
+                f"User note: {contradiction.note}\n"
+                "Status: committed user-reviewed relationship; no automatic truth "
+                "decision or claim rewrite"
+            ),
+            request_id=request.request_id,
+            intent="research_claim_contradiction_record",
+            memory_count=0,
+            research_runs=[run],
+        )
+
+    def research_claim_contradiction_write_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+        *,
+        intent: str,
+    ) -> BrainResponse:
+        """Report invalid contradiction preview or record input safely."""
         return BrainResponse(
             message=message,
             request_id=request.request_id,

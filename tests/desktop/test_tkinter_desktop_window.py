@@ -31,7 +31,14 @@ from knowledge.Document import DocumentType
 from knowledge.KnowledgeCitation import KnowledgeCitation
 from knowledge.KnowledgeDocumentReference import KnowledgeDocumentReference
 from research.ResearchClaimConfidence import ResearchClaimConfidence
+from research.ResearchClaimContradictionPreview import (
+    ResearchClaimContradictionPreview,
+)
+from research.ResearchClaimContradictionWritePreview import (
+    ResearchClaimContradictionWritePreview,
+)
 from research.ResearchClaimPreview import ResearchClaimPreview
+from research.ResearchClaimRecord import ResearchClaimRecord
 from research.ResearchClaimWritePreview import ResearchClaimWritePreview
 from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
@@ -1101,6 +1108,117 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
                 else:
                     confirm.assert_called_once()
 
+    def test_claim_contradiction_history_preview_uses_selected_run(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchSourceLoadController()
+        responses: list[BrainResponse] = []
+        window._controller = controller
+        window._research_run_id = RecordingInput("run-123")
+        window._status = RecordingStatus()
+        window._append_response = responses.append
+
+        window._preview_research_claim_contradictions()
+
+        self.assertEqual(controller.claim_contradiction_previews, ["run-123"])
+        self.assertEqual(
+            responses,
+            [controller.claim_contradiction_preview_response],
+        )
+
+    def test_allowed_claim_contradiction_requires_confirmation_before_record(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchSourceLoadController()
+        responses: list[BrainResponse] = []
+        values = (
+            "run-123",
+            "claim-1, claim-2",
+            "The conclusions conflict under the same conditions.",
+        )
+        window._root = object()
+        window._controller = controller
+        window._research_run_id = RecordingInput(values[0])
+        window._research_claim_contradiction_ids = RecordingInput(values[1])
+        window._research_claim_contradiction_note = RecordingInput(values[2])
+        window._status = RecordingStatus()
+        window._append_response = responses.append
+
+        with patch(
+            "desktop.TkinterDesktopWindow.messagebox.askyesno",
+            return_value=True,
+        ) as confirm:
+            window._preview_and_record_research_claim_contradiction()
+
+        self.assertEqual(controller.claim_contradiction_write_previews, [values])
+        self.assertEqual(controller.claim_contradiction_records, [values])
+        self.assertEqual(
+            responses,
+            [
+                controller.claim_contradiction_write_preview_response,
+                controller.claim_contradiction_record_response,
+            ],
+        )
+        confirm.assert_called_once()
+
+    def test_declined_or_blocked_claim_contradiction_never_records(self) -> None:
+        for blocked in (False, True):
+            with self.subTest(blocked=blocked):
+                window: Any = object.__new__(TkinterDesktopWindow)
+                controller = RecordingResearchSourceLoadController()
+                if blocked:
+                    preview_response = (
+                        controller.claim_contradiction_write_preview_response
+                    )
+                    preview = (
+                        preview_response.research_claim_contradiction_write_preview
+                    )
+                    assert preview is not None
+                    controller.claim_contradiction_write_preview_response = (
+                        BrainResponse(
+                            message="Contradiction preview blocked.",
+                            request_id="contradiction-preview-blocked",
+                            intent="research_claim_contradiction_write_preview",
+                            memory_count=0,
+                            success=False,
+                            research_claim_contradiction_write_preview=(
+                                ResearchClaimContradictionWritePreview(
+                                    run_id=preview.run_id,
+                                    run_status=ResearchRunStatus.CANCELLED,
+                                    claims=preview.claims,
+                                    evidence=preview.evidence,
+                                    note=preview.note,
+                                    allowed=False,
+                                    reason=(
+                                        "A closed run cannot accept claim "
+                                        "contradictions."
+                                    ),
+                                )
+                            ),
+                        )
+                    )
+                window._root = object()
+                window._controller = controller
+                window._research_run_id = RecordingInput("run-123")
+                window._research_claim_contradiction_ids = RecordingInput(
+                    "claim-1, claim-2"
+                )
+                window._research_claim_contradiction_note = RecordingInput("Note.")
+                window._status = RecordingStatus()
+                window._append_response = lambda _response: None
+
+                with patch(
+                    "desktop.TkinterDesktopWindow.messagebox.askyesno",
+                    return_value=False,
+                ) as confirm:
+                    window._preview_and_record_research_claim_contradiction()
+
+                self.assertEqual(controller.claim_contradiction_records, [])
+                if blocked:
+                    confirm.assert_not_called()
+                else:
+                    confirm.assert_called_once()
+
     def test_allowed_research_status_preview_requires_confirmation_before_update(
         self,
     ) -> None:
@@ -1323,6 +1441,9 @@ class RecordingResearchSourceLoadController:
         self.claim_previews: list[str] = []
         self.claim_write_previews: list[tuple[str, str, str, str, str, str]] = []
         self.claim_records: list[tuple[str, str, str, str, str, str]] = []
+        self.claim_contradiction_previews: list[str] = []
+        self.claim_contradiction_write_previews: list[tuple[str, str, str]] = []
+        self.claim_contradiction_records: list[tuple[str, str, str]] = []
         self.response = BrainResponse(
             message="Loaded.",
             request_id="research-source-load",
@@ -1638,6 +1759,63 @@ class RecordingResearchSourceLoadController:
             intent="research_claim_record",
             memory_count=0,
         )
+        contradiction_claims = (
+            ResearchClaimRecord(
+                "claim-1",
+                "The outcome improves.",
+                ResearchEpistemicState.LIKELY,
+                ResearchClaimConfidence.MEDIUM,
+                (accepted_source.document_id,),
+                (assessment_evidence.evidence_id,),
+                now,
+            ),
+            ResearchClaimRecord(
+                "claim-2",
+                "The outcome does not improve.",
+                ResearchEpistemicState.LIKELY,
+                ResearchClaimConfidence.MEDIUM,
+                (second_source.document_id,),
+                (second_evidence.evidence_id,),
+                now,
+            ),
+        )
+        contradiction_history = ResearchClaimContradictionPreview(
+            run_id=run.run_id,
+            question=run.question,
+            run_status=run.status,
+            claims=contradiction_claims,
+            contradictions=(),
+            reason="No contradictions recorded.",
+        )
+        self.claim_contradiction_preview_response = BrainResponse(
+            message="Claim contradiction history.",
+            request_id="research-claim-contradiction-preview",
+            intent="research_claim_contradiction_preview",
+            memory_count=0,
+            research_claim_contradiction_preview=contradiction_history,
+        )
+        contradiction_write_preview = ResearchClaimContradictionWritePreview(
+            run_id=run.run_id,
+            run_status=run.status,
+            claims=contradiction_claims,
+            evidence=(assessment_evidence, second_evidence),
+            note="The conclusions conflict under the same conditions.",
+            allowed=True,
+            reason=("Research claim contradiction can be recorded after confirmation."),
+        )
+        self.claim_contradiction_write_preview_response = BrainResponse(
+            message="Claim contradiction preview allowed.",
+            request_id="research-claim-contradiction-write-preview",
+            intent="research_claim_contradiction_write_preview",
+            memory_count=0,
+            research_claim_contradiction_write_preview=(contradiction_write_preview),
+        )
+        self.claim_contradiction_record_response = BrainResponse(
+            message="Claim contradiction recorded.",
+            request_id="research-claim-contradiction-record",
+            intent="research_claim_contradiction_record",
+            memory_count=0,
+        )
         status_preview = ResearchRunStatusTransitionPreview(
             run_id="run-123",
             current_status=ResearchRunStatus.COLLECTING,
@@ -1801,6 +1979,32 @@ class RecordingResearchSourceLoadController:
         )
         self.claim_records.append(values)
         return self.claim_record_response
+
+    def preview_research_claim_contradictions(self, run_id: str) -> BrainResponse:
+        if not run_id.strip():
+            raise ValueError("A research run ID cannot be empty.")
+        self.claim_contradiction_previews.append(run_id)
+        return self.claim_contradiction_preview_response
+
+    def preview_research_claim_contradiction_write(
+        self,
+        run_id: str,
+        claim_ids: str,
+        note: str,
+    ) -> BrainResponse:
+        values = (run_id, claim_ids, note)
+        self.claim_contradiction_write_previews.append(values)
+        return self.claim_contradiction_write_preview_response
+
+    def record_research_claim_contradiction(
+        self,
+        run_id: str,
+        claim_ids: str,
+        note: str,
+    ) -> BrainResponse:
+        values = (run_id, claim_ids, note)
+        self.claim_contradiction_records.append(values)
+        return self.claim_contradiction_record_response
 
     def preview_research_source_comparison(
         self,

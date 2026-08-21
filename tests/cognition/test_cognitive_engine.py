@@ -7590,6 +7590,7 @@ class CognitiveEngineTests(unittest.TestCase):
             id_factory=lambda: "run-123",
             evidence_id_factory=lambda: "evidence-123",
             claim_id_factory=claim_ids.__next__,
+            claim_contradiction_id_factory=lambda: "contradiction-123",
         )
         run = manager.create("Evaluate a claim")
         source = ResearchSource(
@@ -7693,6 +7694,85 @@ class CognitiveEngineTests(unittest.TestCase):
             correction.epistemic_state,
             ResearchEpistemicState.CONTRADICTED,
         )
+        contradiction_history = engine.process(
+            BrainRequest(
+                "View contradictions",
+                metadata={
+                    "intent": "research_claim_contradiction_preview",
+                    "research_run_id": run.run_id,
+                },
+            )
+        )
+        contradiction_metadata = {
+            "research_run_id": run.run_id,
+            "research_claim_contradiction_claim_ids": [
+                claim.claim_id,
+                correction.claim_id,
+            ],
+            "research_claim_contradiction_note": (
+                "The corrected claim conflicts with the original conclusion."
+            ),
+        }
+        saves_before_contradiction = store.save_calls
+        contradiction_preview = engine.process(
+            BrainRequest(
+                "Preview contradiction",
+                metadata={
+                    "intent": "research_claim_contradiction_write_preview",
+                    **contradiction_metadata,
+                },
+            )
+        )
+
+        self.assertTrue(contradiction_history.success)
+        contradiction_history_value = (
+            contradiction_history.research_claim_contradiction_preview
+        )
+        self.assertIsNotNone(contradiction_history_value)
+        assert contradiction_history_value is not None
+        self.assertEqual(contradiction_history_value.contradictions, ())
+        self.assertTrue(contradiction_preview.success)
+        contradiction_decision = (
+            contradiction_preview.research_claim_contradiction_write_preview
+        )
+        self.assertIsNotNone(contradiction_decision)
+        assert contradiction_decision is not None
+        self.assertEqual(contradiction_decision.claims, (claim, correction))
+        self.assertEqual(store.save_calls, saves_before_contradiction)
+
+        contradiction_recorded = engine.process(
+            BrainRequest(
+                "Record contradiction",
+                metadata={
+                    "intent": "research_claim_contradiction_record",
+                    **contradiction_metadata,
+                },
+            )
+        )
+
+        self.assertTrue(contradiction_recorded.success)
+        contradiction = contradiction_recorded.research_runs[0].claim_contradictions[-1]
+        self.assertEqual(contradiction.contradiction_id, "contradiction-123")
+        self.assertEqual(
+            contradiction.claim_ids,
+            (claim.claim_id, correction.claim_id),
+        )
+        self.assertEqual(contradiction.evidence_ids, (evidence.evidence_id,))
+        self.assertEqual(store.save_calls, saves_before_contradiction + 1)
+        duplicate_preview = engine.process(
+            BrainRequest(
+                "Duplicate contradiction",
+                metadata={
+                    "intent": "research_claim_contradiction_write_preview",
+                    **contradiction_metadata,
+                    "research_claim_contradiction_claim_ids": [
+                        correction.claim_id,
+                        claim.claim_id,
+                    ],
+                },
+            )
+        )
+        self.assertFalse(duplicate_preview.success)
         self.assertEqual(llm_provider.calls, [])
 
         invalid = engine.process(
@@ -7707,6 +7787,22 @@ class CognitiveEngineTests(unittest.TestCase):
         )
         self.assertFalse(invalid.success)
         self.assertEqual(len(manager.get(run.run_id).claims), 2)
+        invalid_contradiction = engine.process(
+            BrainRequest(
+                "Invalid contradiction",
+                metadata={
+                    "intent": "research_claim_contradiction_record",
+                    "research_run_id": run.run_id,
+                    "research_claim_contradiction_claim_ids": [claim.claim_id],
+                    "research_claim_contradiction_note": "Note.",
+                },
+            )
+        )
+        self.assertFalse(invalid_contradiction.success)
+        self.assertEqual(
+            len(manager.get(run.run_id).claim_contradictions),
+            1,
+        )
 
     def test_authored_source_assessment_previews_then_commits_without_providers(
         self,
