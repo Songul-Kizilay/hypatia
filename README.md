@@ -250,10 +250,11 @@ URL preserved. The explicit request runs on the desktop's single daemon worker
 so the Tkinter event loop stays responsive; it does not search for sources,
 call an LLM, or write conversation memory.
 `Start research` creates a local audit record for one question. `Research runs`
-lists those records, and entering the selected run ID before `Load source`
-attaches accepted source provenance to it. The run keeps timestamps and safe
-failure records, but does not duplicate downloaded page text or make web
-research autonomous.
+fills a read-only selector with each question, status, and exact ID. Choosing a
+run only changes the local workspace selection and starts no research action;
+later explicit actions use that ID. The run keeps timestamps and safe failure
+records, but does not duplicate downloaded page text or make web research
+autonomous.
 `Find sources` sends the selected collecting run's question to Crossref and
 connects its fixed endpoint and same-origin redirects only to an address from
 their own public-DNS validation while TLS verifies `api.crossref.org`. It

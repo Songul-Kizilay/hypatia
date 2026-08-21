@@ -40,6 +40,12 @@ discovery, and candidate, then asks for confirmation before a separate request
 revalidates and uses the existing guarded loader. Changing the run ID makes old
 candidate selections unusable; stale or unlisted choices stop before network
 access.
+`Research runs` fills a read-only selector from the local persisted catalog.
+Labels include the question, current status, and exact ID; creating a run selects
+it immediately. A valid selection is preserved across refresh, while an empty
+catalog clears it. Switching runs starts no runtime action and clears only stale
+source-candidate, contradiction-suggestion, and export-preview presentation
+state.
 For an attached source, `Save evidence` records one explicitly entered chunk ID
 and note; `View evidence` displays the persisted bounded excerpt and locator.
 Neither action extracts, ranks, or interprets evidence automatically.

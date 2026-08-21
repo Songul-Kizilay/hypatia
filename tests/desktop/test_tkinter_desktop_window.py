@@ -361,6 +361,9 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._controller = controller
         window._research_question = RecordingInput("Compare local models")
         window._research_run_id = run_id
+        window._research_run_choice = RecordingVariable("")
+        window._research_run_selector = RecordingCandidateSelector()
+        window._research_runs = ()
         window._research_candidate = RecordingVariable("old candidate")
         window._research_candidate_selector = RecordingCandidateSelector(
             selected_index=0
@@ -381,6 +384,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         )
         window._research_claim_contradiction_proposal_run_id = "old-run"
         window._research_claim_contradiction_proposals = ()
+        window._research_markdown_export_preview = object()
         window._status = RecordingStatus()
         window._append_response = responses.append
 
@@ -390,6 +394,12 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         self.assertEqual(run_id.value, "run-123")
         self.assertEqual(window._research_candidates, ())
         self.assertEqual(window._research_candidate_run_id, "")
+        self.assertEqual(
+            window._research_run_selector.values,
+            ("Compare local models [collecting] — run-123",),
+        )
+        self.assertEqual(window._research_run_selector.current(), 0)
+        self.assertIsNone(window._research_markdown_export_preview)
         self.assertEqual(responses, [controller.create_response])
 
     def test_research_run_catalog_is_requested_without_network_fetch(self) -> None:
@@ -398,12 +408,108 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         responses: list[BrainResponse] = []
         window._controller = controller
         window._append_response = responses.append
+        window._research_run_id = RecordingVariable("")
+        window._research_run_choice = RecordingVariable("")
+        window._research_run_selector = RecordingCandidateSelector()
+        window._research_runs = ()
+        window._research_candidate = RecordingVariable("")
+        window._research_candidate_selector = RecordingCandidateSelector()
+        window._research_candidates = ()
+        window._research_candidate_run_id = ""
+        window._research_candidate_discovery_id = ""
+        window._research_claim_contradiction_proposal = RecordingVariable("")
+        window._research_claim_contradiction_proposal_selector = (
+            RecordingCandidateSelector()
+        )
+        window._research_claim_contradiction_proposal_run_id = ""
+        window._research_claim_contradiction_proposals = ()
+        window._research_markdown_export_preview = None
+        window._status = RecordingStatus()
 
         window._show_research_runs()
 
         self.assertEqual(controller.list_calls, 1)
         self.assertEqual(controller.sources, [])
         self.assertEqual(responses, [controller.list_response])
+        self.assertEqual(window._research_run_id.value, "run-123")
+        self.assertEqual(
+            window._research_run_selector.values,
+            ("Compare local models [collecting] — run-123",),
+        )
+        self.assertEqual(
+            window._status.values,
+            ["research run selected: run-123; no action started"],
+        )
+
+    def test_empty_research_run_catalog_clears_only_run_bound_presentations(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        window._research_run_id = RecordingVariable("old-run")
+        window._research_run_choice = RecordingVariable("Old run")
+        window._research_run_selector = RecordingCandidateSelector(selected_index=0)
+        window._research_runs = ()
+        window._research_candidate = RecordingVariable("Old candidate")
+        window._research_candidate_selector = RecordingCandidateSelector(
+            selected_index=0
+        )
+        window._research_candidates = ()
+        window._research_candidate_run_id = "old-run"
+        window._research_candidate_discovery_id = "discovery-1"
+        window._research_claim_contradiction_proposal = RecordingVariable(
+            "Old proposal"
+        )
+        window._research_claim_contradiction_proposal_selector = (
+            RecordingCandidateSelector(selected_index=0)
+        )
+        window._research_claim_contradiction_proposal_run_id = "old-run"
+        window._research_claim_contradiction_proposals = ()
+        window._research_markdown_export_preview = object()
+
+        window._render_research_run_selector(())
+
+        self.assertEqual(window._research_run_id.value, "")
+        self.assertEqual(window._research_run_choice.value, "")
+        self.assertEqual(window._research_candidate_run_id, "")
+        self.assertEqual(window._research_claim_contradiction_proposal_run_id, "")
+        self.assertIsNone(window._research_markdown_export_preview)
+
+    def test_selecting_another_catalogued_run_starts_no_runtime_action(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        now = datetime(2026, 8, 21, tzinfo=UTC)
+        first_run = ResearchRun(
+            "run-1",
+            "First question",
+            ResearchRunStatus.COLLECTING,
+            (),
+            (),
+            now,
+            now,
+        )
+        second_run = ResearchRun(
+            "run-2",
+            "Second question",
+            ResearchRunStatus.COMPLETED,
+            (),
+            (),
+            now,
+            now,
+        )
+        clears: list[bool] = []
+        window._research_run_id = RecordingVariable("run-1")
+        window._research_run_selector = RecordingCandidateSelector(selected_index=1)
+        window._research_runs = (first_run, second_run)
+        window._status = RecordingStatus()
+        window._clear_research_run_dependent_presentations = lambda: clears.append(True)
+
+        window._select_research_run()
+
+        self.assertEqual(window._research_run_id.value, "run-2")
+        self.assertEqual(clears, [True])
+        self.assertEqual(
+            window._status.values,
+            ["research run selected: run-2; no action started"],
+        )
 
     def test_research_markdown_export_preview_uses_selected_run_only(self) -> None:
         window: Any = object.__new__(TkinterDesktopWindow)
