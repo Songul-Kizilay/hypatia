@@ -28,6 +28,7 @@ if source_response_dir not in response.__path__:
 
 from brain.BrainRequest import BrainRequest
 from cognition.CognitiveEngine import CognitiveEngine as ProductionCognitiveEngine
+from core.CancellationSignal import CancellationSignal
 from core.Exceptions import (
     KnowledgeError,
     MemoryError,
@@ -270,15 +271,19 @@ class RecordingResearchSourceFetcher:
         self,
         source: ResearchSource | None = None,
         error: ResearchError | None = None,
+        cancellation_signal: CancellationSignal | None = None,
     ) -> None:
         self.calls: list[str] = []
         self.source = source
         self.error = error
+        self.cancellation_signal = cancellation_signal
 
     def fetch(self, url: str) -> ResearchSource:
         self.calls.append(url)
         if self.error is not None:
             raise self.error
+        if self.cancellation_signal is not None:
+            self.cancellation_signal.cancel()
         assert self.source is not None
         return self.source
 
@@ -292,10 +297,12 @@ class RecordingResearchSourceDiscoveryProvider:
         self,
         candidates: list[ResearchSourceCandidate] | None = None,
         error: ResearchError | None = None,
+        cancellation_signal: CancellationSignal | None = None,
     ) -> None:
         self.calls: list[tuple[str, int]] = []
         self.candidates = list(candidates or [])
         self.error = error
+        self.cancellation_signal = cancellation_signal
 
     def discover(
         self,
@@ -306,6 +313,8 @@ class RecordingResearchSourceDiscoveryProvider:
         self.calls.append((query, limit))
         if self.error is not None:
             raise self.error
+        if self.cancellation_signal is not None:
+            self.cancellation_signal.cancel()
         return list(self.candidates)
 
 
@@ -5790,6 +5799,88 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertIn("candidates only", response.message)
         self.assertEqual(store.runs, [updated])
 
+    def test_discovery_cancellation_after_provider_return_persists_nothing(
+        self,
+    ) -> None:
+        store = ToggleResearchRunStore()
+        manager = ResearchRunManager(store, id_factory=lambda: "run-123")
+        run = manager.create("Question")
+        cancellation_signal = CancellationSignal()
+        candidate = ResearchSourceCandidate(
+            "https://example.com/source",
+            "Source",
+            "Summary",
+        )
+        provider = RecordingResearchSourceDiscoveryProvider(
+            [candidate],
+            cancellation_signal=cancellation_signal,
+        )
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            research_run_manager=manager,
+            research_source_discovery_provider=provider,
+        )
+        save_calls_before = store.save_calls
+
+        response = engine.process(
+            BrainRequest(
+                message="Discover candidate research sources",
+                metadata={
+                    "intent": "research_source_discover",
+                    "research_run_id": run.run_id,
+                },
+                cancellation_token=cancellation_signal,
+            )
+        )
+
+        self.assertFalse(response.success)
+        self.assertEqual(response.message, "Research source discovery was cancelled.")
+        self.assertEqual(provider.calls, [(run.question, 5)])
+        self.assertEqual(manager.get(run.run_id), run)
+        self.assertEqual(manager.get(run.run_id).discoveries, ())
+        self.assertEqual(manager.get(run.run_id).failures, ())
+        self.assertEqual(store.save_calls, save_calls_before)
+
+    def test_pre_cancelled_discovery_never_calls_the_provider(self) -> None:
+        manager = ResearchRunManager(id_factory=lambda: "run-123")
+        run = manager.create("Question")
+        provider = RecordingResearchSourceDiscoveryProvider()
+        cancellation_signal = CancellationSignal()
+        cancellation_signal.cancel()
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            research_run_manager=manager,
+            research_source_discovery_provider=provider,
+        )
+
+        response = engine.process(
+            BrainRequest(
+                message="Discover candidate research sources",
+                metadata={
+                    "intent": "research_source_discover",
+                    "research_run_id": run.run_id,
+                },
+                cancellation_token=cancellation_signal,
+            )
+        )
+
+        self.assertFalse(response.success)
+        self.assertEqual(response.message, "Research source discovery was cancelled.")
+        self.assertEqual(provider.calls, [])
+        self.assertEqual(manager.get(run.run_id), run)
+
     def test_discovery_failure_records_only_a_safe_reason(self) -> None:
         store = ToggleResearchRunStore()
         manager = ResearchRunManager(store, id_factory=lambda: "run-123")
@@ -6007,6 +6098,60 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(
             self.knowledge_engine.search("second")[0].document_id, document.document_id
         )
+
+    def test_source_load_cancellation_after_fetch_mutates_no_local_state(self) -> None:
+        store = ToggleResearchRunStore()
+        manager = ResearchRunManager(store, id_factory=lambda: "run-123")
+        run = manager.create("Question")
+        content_store = ToggleResearchSourceContentStore()
+        cancellation_signal = CancellationSignal()
+        source = ResearchSource(
+            url="https://example.com/research",
+            title="Example research",
+            content="Fetched but not accepted.",
+            content_type="text/plain",
+            fetched_at=datetime(2026, 8, 20, 12, 30, tzinfo=UTC),
+        )
+        fetcher = RecordingResearchSourceFetcher(
+            source=source,
+            cancellation_signal=cancellation_signal,
+        )
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            research_source_fetcher=fetcher,
+            research_run_manager=manager,
+            research_source_content_store=content_store,
+        )
+        documents_before = self.knowledge_engine.documents()
+        save_calls_before = store.save_calls
+
+        response = engine.process(
+            BrainRequest(
+                message="Load selected internet research source",
+                metadata={
+                    "intent": "research_source_load",
+                    "research_url": source.url,
+                    "research_run_id": run.run_id,
+                },
+                cancellation_token=cancellation_signal,
+            )
+        )
+
+        self.assertFalse(response.success)
+        self.assertEqual(response.message, "Research source loading was cancelled.")
+        self.assertEqual(fetcher.calls, [source.url])
+        self.assertEqual(self.knowledge_engine.documents(), documents_before)
+        self.assertEqual(manager.get(run.run_id), run)
+        self.assertEqual(manager.get(run.run_id).sources, ())
+        self.assertEqual(manager.get(run.run_id).failures, ())
+        self.assertEqual(store.save_calls, save_calls_before)
+        self.assertEqual(content_store.save_calls, 0)
 
     def test_candidate_preview_is_read_only_and_accept_uses_guarded_loader(
         self,

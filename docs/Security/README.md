@@ -99,7 +99,10 @@ Hypatia currently runs as a local-first CLI. The initial security boundary is:
   generic message without exposing provider or transport detail. An explicit
   cancellation request keeps the single-flight reservation until active
   timeout-bounded I/O returns and then discards its value or error; it does not
-  forcefully terminate a thread or provider transport;
+  forcefully terminate a thread or provider transport. Research discovery and
+  explicit HTTPS source loading also propagate a one-way cancellation signal;
+  when observed after network return, no discovery, failure audit, knowledge
+  document, accepted-source record, or content snapshot is written;
 - explicit local-RAG requests place a code-owned instruction in the system role,
   separate the explicit user question from retrieved text, and mark every
   retrieved excerpt as untrusted data with no instruction authority. That path

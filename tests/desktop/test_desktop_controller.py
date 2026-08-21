@@ -14,6 +14,7 @@ if str(SRC_DIR) not in sys.path:
 
 from brain.BrainRequest import BrainRequest
 from brain.BrainResponse import BrainResponse
+from core.CancellationSignal import CancellationSignal
 from desktop.DesktopController import DesktopController
 from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
@@ -236,8 +237,10 @@ class DesktopControllerTests(unittest.TestCase):
         self.assertEqual(self.brain.requests, [])
 
     def test_load_research_source_uses_a_structured_explicit_request(self) -> None:
+        cancellation_signal = CancellationSignal()
         response = self.controller.load_research_source(
-            "  https://example.com/research  "
+            "  https://example.com/research  ",
+            cancellation_token=cancellation_signal,
         )
 
         self.assertIs(response, self.response)
@@ -254,6 +257,7 @@ class DesktopControllerTests(unittest.TestCase):
                 "research_url": "https://example.com/research",
             },
         )
+        self.assertIs(request.cancellation_token, cancellation_signal)
 
     def test_create_research_run_uses_a_structured_explicit_request(self) -> None:
         response = self.controller.create_research_run("  Compare local models  ")
@@ -414,7 +418,11 @@ class DesktopControllerTests(unittest.TestCase):
     def test_discover_research_sources_uses_a_structured_explicit_request(
         self,
     ) -> None:
-        response = self.controller.discover_research_sources("  run-123  ")
+        cancellation_signal = CancellationSignal()
+        response = self.controller.discover_research_sources(
+            "  run-123  ",
+            cancellation_token=cancellation_signal,
+        )
 
         self.assertIs(response, self.response)
         request = self.brain.requests[-1]
@@ -429,6 +437,7 @@ class DesktopControllerTests(unittest.TestCase):
                 "research_run_id": "run-123",
             },
         )
+        self.assertIs(request.cancellation_token, cancellation_signal)
 
     def test_discover_research_sources_rejects_empty_run_id_locally(self) -> None:
         with self.assertRaisesRegex(ValueError, "run ID cannot be empty"):
@@ -440,9 +449,13 @@ class DesktopControllerTests(unittest.TestCase):
         self,
     ) -> None:
         values = (" run-123 ", " discovery-1 ", " https://example.com/paper ")
+        cancellation_signal = CancellationSignal()
 
         self.controller.preview_research_source_candidate_acceptance(*values)
-        self.controller.accept_research_source_candidate(*values)
+        self.controller.accept_research_source_candidate(
+            *values,
+            cancellation_token=cancellation_signal,
+        )
 
         expected = {
             "research_run_id": "run-123",
@@ -460,6 +473,8 @@ class DesktopControllerTests(unittest.TestCase):
             second.metadata,
             {"intent": "research_source_candidate_accept", **expected},
         )
+        self.assertIsNone(first.cancellation_token)
+        self.assertIs(second.cancellation_token, cancellation_signal)
 
     def test_candidate_requests_reject_empty_identifiers_locally(self) -> None:
         for values in (

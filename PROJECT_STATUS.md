@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.72 (Genesis)`
+`v0.3.73 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.72`** is the current executable package and GitHub
+- **Runtime release `v0.3.73`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -46,6 +46,10 @@ with optional OpenAI-compatible LLM conversation support.
   fabricated percentage. A dedicated cancellation request leaves ordinary
   controls disabled until active bounded I/O returns, then discards its value
   or error instead of presenting it. It does not claim to kill a provider call.
+  Research discovery and explicit HTTPS source-loading requests additionally
+  propagate a thread-safe cooperative signal. They stop before audit,
+  knowledge-index, or persistence mutation when cancellation is observed after
+  network return. Other provider paths remain presentation-only cancellation.
   The worker owns no provider or duplicate state.
 - Local desktop text-size controls bounded from 10 through 20 points and an
   explicit high-contrast palette. They alter only presentation and do not
@@ -398,7 +402,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,357 automated tests pass through package-aware discovery.
+- 1,362 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -425,8 +429,7 @@ so this check did not alter the project's persisted data.
 
 ## Next Milestone
 
-Add an explicit cancellation token only to genuinely multi-stage service paths
-that can stop safely between stages. Active provider transports remain bounded
-by their own timeouts rather than forceful thread termination. Preserve source
-provenance so future trust or taint metadata can be added without granting
-retrieved text instruction authority.
+Add explicit, user-visible source trust or taint metadata to persisted research
+provenance without converting it into an automatic truth score. Retrieved text
+must continue to have no instruction authority, and trust annotations must
+remain authored, explainable, and reversible.

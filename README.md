@@ -168,7 +168,9 @@ To create the world's most capable personal AI research companion.
   duplicate submissions, preserves newly typed composer text, reports elapsed
   seconds without a fake percentage, and discards late results after close or
   an explicit cancellation request. Cancellation keeps other actions disabled
-  until active timeout-bounded provider I/O returns; it does not kill that call
+  until active timeout-bounded provider I/O returns; it does not kill that call.
+  Crossref discovery and explicit HTTPS source loading additionally stop at
+  safe post-network checkpoints before audit, indexing, or persistence changes
 
 Roadmap modules listed above are product direction, not a claim that every module is
 already implemented.

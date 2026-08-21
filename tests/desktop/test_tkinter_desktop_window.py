@@ -15,6 +15,7 @@ if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
 from brain.BrainResponse import BrainResponse
+from core.CancellationSignal import CancellationToken
 from desktop.DesktopRequestRunner import DesktopRequestCompletion
 from desktop.TkinterDesktopWindow import (
     TkinterDesktopWindow,
@@ -256,6 +257,8 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             controller.sources,
             [("https://example.com/research", "run-123")],
         )
+        self.assertEqual(len(controller.source_cancellation_tokens), 1)
+        self.assertIsNotNone(controller.source_cancellation_tokens[0])
         self.assertEqual(responses, [controller.response])
 
     def test_empty_url_stays_local_and_is_shown_as_status(self) -> None:
@@ -496,6 +499,8 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._poll_requests()
 
         self.assertEqual(controller.discovery_calls, ["run-123"])
+        self.assertEqual(len(controller.discovery_cancellation_tokens), 1)
+        self.assertIsNotNone(controller.discovery_cancellation_tokens[0])
         self.assertEqual(controller.sources, [])
         self.assertEqual(responses, [controller.discovery_response])
         self.assertEqual(window._research_candidates, controller.candidates)
@@ -1032,6 +1037,8 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         expected = ("run-123", "discovery-1", controller.candidates[0].url)
         self.assertEqual(controller.candidate_previews, [expected])
         self.assertEqual(controller.candidate_accepts, [expected])
+        self.assertEqual(len(controller.candidate_cancellation_tokens), 1)
+        self.assertIsNotNone(controller.candidate_cancellation_tokens[0])
         self.assertEqual(
             responses,
             [
@@ -1125,10 +1132,12 @@ class RecordingResearchContentStatusController:
 class RecordingResearchSourceLoadController:
     def __init__(self) -> None:
         self.sources: list[tuple[str, str]] = []
+        self.source_cancellation_tokens: list[CancellationToken | None] = []
         self.questions: list[str] = []
         self.list_calls = 0
         self.export_previews: list[str] = []
         self.discovery_calls: list[str] = []
+        self.discovery_cancellation_tokens: list[CancellationToken | None] = []
         self.export_saves: list[tuple[ResearchRunMarkdownExportPreview, str]] = []
         self.export_verifications: list[tuple[str, str]] = []
         self.evidence_calls: list[tuple[str, str, str]] = []
@@ -1137,6 +1146,7 @@ class RecordingResearchSourceLoadController:
         self.status_updates: list[tuple[str, str]] = []
         self.candidate_previews: list[tuple[str, str, str]] = []
         self.candidate_accepts: list[tuple[str, str, str]] = []
+        self.candidate_cancellation_tokens: list[CancellationToken | None] = []
         self.assessment_previews: list[tuple[str, str]] = []
         self.comparison_previews: list[tuple[str, str]] = []
         self.comparison_note_previews: list[tuple[str, str, str, str, str]] = []
@@ -1443,11 +1453,16 @@ class RecordingResearchSourceLoadController:
         )
 
     def load_research_source(
-        self, url: str, research_run_id: str = ""
+        self,
+        url: str,
+        research_run_id: str = "",
+        *,
+        cancellation_token: CancellationToken | None = None,
     ) -> BrainResponse:
         if not url.strip():
             raise ValueError("A research source URL cannot be empty.")
         self.sources.append((url, research_run_id))
+        self.source_cancellation_tokens.append(cancellation_token)
         return self.response
 
     def create_research_run(self, question: str) -> BrainResponse:
@@ -1488,10 +1503,16 @@ class RecordingResearchSourceLoadController:
         self.export_verifications.append((run_id, source_path))
         return self.export_verification_response
 
-    def discover_research_sources(self, run_id: str) -> BrainResponse:
+    def discover_research_sources(
+        self,
+        run_id: str,
+        *,
+        cancellation_token: CancellationToken | None = None,
+    ) -> BrainResponse:
         if not run_id.strip():
             raise ValueError("A research run ID cannot be empty.")
         self.discovery_calls.append(run_id)
+        self.discovery_cancellation_tokens.append(cancellation_token)
         return self.discovery_response
 
     def record_research_evidence(
@@ -1624,9 +1645,15 @@ class RecordingResearchSourceLoadController:
         return self.candidate_preview_response
 
     def accept_research_source_candidate(
-        self, run_id: str, discovery_id: str, candidate_url: str
+        self,
+        run_id: str,
+        discovery_id: str,
+        candidate_url: str,
+        *,
+        cancellation_token: CancellationToken | None = None,
     ) -> BrainResponse:
         self.candidate_accepts.append((run_id, discovery_id, candidate_url))
+        self.candidate_cancellation_tokens.append(cancellation_token)
         return self.candidate_accept_response
 
 
@@ -1679,7 +1706,10 @@ class ImmediateRequestRunner:
     def start(
         self,
         action: Callable[[], object],
+        *,
+        cancel_callback: Callable[[], None] | None = None,
     ) -> Literal["started", "busy", "stopped", "failed"]:
+        del cancel_callback
         if self.stopped:
             return "stopped"
         try:

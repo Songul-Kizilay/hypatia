@@ -1172,8 +1172,18 @@ class CognitiveEngine:
             )
 
         provider = self._research_source_discovery_provider
+        if self._request_cancelled(request):
+            return self._response_composer.research_source_discovery_failure(
+                request,
+                "Research source discovery was cancelled.",
+            )
         try:
             candidates = provider.discover(run.question, limit=5)
+            if self._request_cancelled(request):
+                return self._response_composer.research_source_discovery_failure(
+                    request,
+                    "Research source discovery was cancelled.",
+                )
             if (
                 not isinstance(candidates, list)
                 or len(candidates) > 5
@@ -1185,7 +1195,17 @@ class CognitiveEngine:
                 raise ResearchError(
                     "Research source discovery provider returned invalid candidates."
                 )
+            if self._request_cancelled(request):
+                return self._response_composer.research_source_discovery_failure(
+                    request,
+                    "Research source discovery was cancelled.",
+                )
         except ResearchError:
+            if self._request_cancelled(request):
+                return self._response_composer.research_source_discovery_failure(
+                    request,
+                    "Research source discovery was cancelled.",
+                )
             try:
                 self._research_run_manager.record_failure(
                     normalized_run_id,
@@ -1358,13 +1378,38 @@ class CognitiveEngine:
                     "Research run is closed and cannot accept new sources.",
                     intent=response_intent,
                 )
+        if self._request_cancelled(request):
+            return self._response_composer.research_source_load_failure(
+                request,
+                "Research source loading was cancelled.",
+                intent=response_intent,
+            )
         try:
             source = self._research_source_fetcher.fetch(url.strip())
+            if self._request_cancelled(request):
+                return self._response_composer.research_source_load_failure(
+                    request,
+                    "Research source loading was cancelled.",
+                    intent=response_intent,
+                )
+            source_document = source.to_document()
+            if self._request_cancelled(request):
+                return self._response_composer.research_source_load_failure(
+                    request,
+                    "Research source loading was cancelled.",
+                    intent=response_intent,
+                )
             document = self._knowledge_engine.add_document(
-                source.to_document(),
+                source_document,
                 stable_chunk_ids=bool(run_id),
             )
         except (ResearchError, KnowledgeError) as error:
+            if isinstance(error, ResearchError) and self._request_cancelled(request):
+                return self._response_composer.research_source_load_failure(
+                    request,
+                    "Research source loading was cancelled.",
+                    intent=response_intent,
+                )
             if run_id and self._research_run_manager is not None:
                 audit_reason = (
                     "Research source acquisition failed."
@@ -1487,6 +1532,11 @@ class CognitiveEngine:
             run=run,
             intent=response_intent,
         )
+
+    @staticmethod
+    def _request_cancelled(request: BrainRequest) -> bool:
+        token = request.cancellation_token
+        return token is not None and token.is_cancelled()
 
     def _process_knowledge_load(self, request: BrainRequest) -> BrainResponse:
         """Load one user-selected local source without LLM or memory side effects."""

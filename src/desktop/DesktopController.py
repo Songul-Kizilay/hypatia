@@ -6,6 +6,7 @@ from typing import Protocol
 
 from brain.BrainRequest import BrainRequest
 from brain.BrainResponse import BrainResponse
+from core.CancellationSignal import CancellationToken
 from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
 )
@@ -229,7 +230,12 @@ class DesktopController:
             )
         )
 
-    def discover_research_sources(self, research_run_id: str) -> BrainResponse:
+    def discover_research_sources(
+        self,
+        research_run_id: str,
+        *,
+        cancellation_token: CancellationToken | None = None,
+    ) -> BrainResponse:
         """Discover candidate metadata for one run without loading content."""
         normalized_run_id = research_run_id.strip()
         if not normalized_run_id:
@@ -242,6 +248,7 @@ class DesktopController:
                     "intent": "research_source_discover",
                     "research_run_id": normalized_run_id,
                 },
+                cancellation_token=cancellation_token,
             )
         )
 
@@ -557,6 +564,8 @@ class DesktopController:
         self,
         url: str,
         research_run_id: str = "",
+        *,
+        cancellation_token: CancellationToken | None = None,
     ) -> BrainResponse:
         """Load one explicit HTTPS source, optionally attaching it to a run."""
         normalized_url = url.strip()
@@ -574,6 +583,7 @@ class DesktopController:
                 message="Load selected internet research source",
                 source="desktop",
                 metadata=metadata,
+                cancellation_token=cancellation_token,
             )
         )
 
@@ -597,6 +607,8 @@ class DesktopController:
         research_run_id: str,
         discovery_id: str,
         candidate_url: str,
+        *,
+        cancellation_token: CancellationToken | None = None,
     ) -> BrainResponse:
         """Accept one confirmed candidate through the guarded source loader."""
         return self._research_candidate_request(
@@ -605,6 +617,7 @@ class DesktopController:
             research_run_id,
             discovery_id,
             candidate_url,
+            cancellation_token=cancellation_token,
         )
 
     def _research_candidate_request(
@@ -614,6 +627,8 @@ class DesktopController:
         research_run_id: str,
         discovery_id: str,
         candidate_url: str,
+        *,
+        cancellation_token: CancellationToken | None = None,
     ) -> BrainResponse:
         normalized_run_id = research_run_id.strip()
         normalized_discovery_id = discovery_id.strip()
@@ -634,6 +649,7 @@ class DesktopController:
                     "research_discovery_id": normalized_discovery_id,
                     "research_url": normalized_url,
                 },
+                cancellation_token=cancellation_token,
             )
         )
 

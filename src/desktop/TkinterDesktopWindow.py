@@ -11,6 +11,7 @@ from typing import Protocol
 
 from brain.BrainResponse import BrainResponse
 from brain.SessionSummary import SessionSummary
+from core.CancellationSignal import CancellationSignal
 from desktop.DesktopController import DesktopController
 from desktop.DesktopRequestRunner import DesktopRequestRunner
 from knowledge.KnowledgeCitation import KnowledgeCitation
@@ -187,12 +188,19 @@ class TkinterDesktopWindow:
         action: Callable[[], BrainResponse],
         on_success: Callable[[BrainResponse], None],
         label: str,
+        *,
+        cancellation_signal: CancellationSignal | None = None,
     ) -> None:
         """Start one long action without blocking or queueing the Tk event loop."""
         if self._closing:
             self._status.set("Hypatia is closing.")
             return
-        start_result = self._request_runner.start(action)
+        start_result = self._request_runner.start(
+            action,
+            cancel_callback=(
+                cancellation_signal.cancel if cancellation_signal is not None else None
+            ),
+        )
         if start_result == "started":
             self._request_completion_handler = on_success
             self._request_label = label
@@ -1047,10 +1055,16 @@ class TkinterDesktopWindow:
         """Fetch only the HTTPS source explicitly entered by the user."""
         url = self._research_url.get()
         run_id = self._research_run_id.get()
+        cancellation_signal = CancellationSignal()
         self._start_request(
-            lambda: self._controller.load_research_source(url, run_id),
+            lambda: self._controller.load_research_source(
+                url,
+                run_id,
+                cancellation_token=cancellation_signal,
+            ),
             self._complete_research_source_load,
             "research source load",
+            cancellation_signal=cancellation_signal,
         )
 
     def _complete_research_source_load(self, response: BrainResponse) -> None:
@@ -1159,10 +1173,15 @@ class TkinterDesktopWindow:
     def _discover_research_sources(self) -> None:
         """Discover and display metadata candidates for the selected run."""
         run_id = self._research_run_id.get()
+        cancellation_signal = CancellationSignal()
         self._start_request(
-            lambda: self._controller.discover_research_sources(run_id),
+            lambda: self._controller.discover_research_sources(
+                run_id,
+                cancellation_token=cancellation_signal,
+            ),
             self._complete_research_source_discovery,
             "research source discovery",
+            cancellation_signal=cancellation_signal,
         )
 
     def _complete_research_source_discovery(self, response: BrainResponse) -> None:
@@ -1262,14 +1281,17 @@ class TkinterDesktopWindow:
         ):
             self._status.set("research candidate: not loaded")
             return
+        cancellation_signal = CancellationSignal()
         self._start_request(
             lambda: self._controller.accept_research_source_candidate(
                 run_id,
                 discovery_id,
                 candidate.url,
+                cancellation_token=cancellation_signal,
             ),
             self._complete_research_source_load,
             "research candidate load",
+            cancellation_signal=cancellation_signal,
         )
 
     def _capture_accepted_research_source(self, response: BrainResponse) -> None:

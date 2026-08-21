@@ -2,6 +2,40 @@
 
 All notable project changes are recorded here.
 
+## [0.3.73] - 2026-08-21
+
+### Added
+
+- A thread-safe, one-way cancellation signal can travel with an in-process
+  `BrainRequest` without appearing in its representation or equality contract.
+- Desktop Crossref discovery, explicit HTTPS source loading, and confirmed
+  candidate loading now attach that signal to their existing Brain request.
+
+### Changed
+
+- Research discovery checks cancellation before provider access, after the
+  bounded network call returns, after provider-contract validation, and before
+  discovery persistence.
+- Research source loading checks cancellation before acquisition, after the
+  bounded fetch returns, and immediately before knowledge indexing begins.
+
+### Safety
+
+- A cancelled network result creates no discovery, failure audit, knowledge
+  document, accepted-source record, or content-store write. A provider call
+  already in progress is still bounded by its timeout and is never forcefully
+  terminated.
+- Desktop result suppression remains valid even if an optional cooperative
+  callback fails. Closing the window signals cooperative cancellation and
+  continues to discard late presentation results.
+- Other LLM and desktop actions retain presentation-only cancellation; this
+  release does not claim that every provider path can stop between stages.
+
+### Verification
+
+- The package-aware full local suite contains 1,362 passing automated tests.
+- Black, Ruff, MyPy, and whitespace validation pass across 315 source files.
+
 ## [0.3.72] - 2026-08-21
 
 ### Added

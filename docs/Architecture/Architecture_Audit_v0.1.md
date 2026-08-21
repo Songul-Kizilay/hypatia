@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.72` in the current release candidate) are the
+- **Runtime releases** (`v0.3.73` in the current release candidate) are the
   executable package and GitHub release line. They are the source-backed
   implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
@@ -80,8 +80,11 @@ and close discards late presentation results. The status line reports elapsed
 seconds without a fabricated completion percentage. An explicit cancellation
 request discards the eventual completion but retains the single-flight boundary
 until active timeout-bounded I/O returns; it does not terminate the worker or
-provider transport. The worker delegates to the same controller and Brain
-boundaries and owns no duplicate state.
+provider transport. Crossref discovery and explicit HTTPS source loading carry
+a thread-safe cancellation signal through Brain and check it after network
+return and before audit, knowledge-index, or persistence mutation. Other
+provider paths remain presentation-only cancellation. The worker delegates to
+the same controller and Brain boundaries and owns no duplicate state.
 Its explicit research-source action delegates one user-entered HTTPS URL to the
 Brain-owned bounded fetcher and never runs implicitly. The default fetcher
 tries only the ordered public addresses from its own validation, once each and
@@ -330,12 +333,12 @@ Not implemented:
 
 The current local verification baseline is:
 
-- package-aware `python -m unittest`: 1,357 tests passed. Explicit `tests.*`
+- package-aware `python -m unittest`: 1,362 tests passed. Explicit `tests.*`
   module names ensure nested test directories are included without shadowing
   source packages.
 - `python -m black --check src tests`: passed.
 - `python -m ruff check src tests`: passed.
-- `python -m mypy src tests`: passed with no issues in 313 files.
+- `python -m mypy src tests`: passed with no issues in 315 files.
 - `git diff --check`: passed.
 
 These checks verify the current local worktree; they do not create a release,
