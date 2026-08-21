@@ -135,6 +135,10 @@ To create the world's most capable personal AI research companion.
 - An append-only user-authored source-assessment record with explicit evidence
   IDs, a read-only confirmation preview, final revalidation, and atomic local
   persistence; no evidence or score is selected automatically
+- An explicit user-authored information-trust label (`unassessed`, `low`,
+  `medium`, or `high`) on each source assessment. Accepted external sources
+  remain tainted as untrusted data with instruction authority fixed to `none`,
+  regardless of the selected information-trust label
 - An optional append-only assessment supersession link that preserves the old
   record, accepts only one active same-source predecessor, and shows current
   versus superseded history without rewriting an assessment
@@ -247,13 +251,16 @@ fills the document ID field, but the preview remains a separate action. It
 performs no network, LLM, memory, graph, knowledge-index, or persistence
 operation and does not claim that the source is trustworthy, relevant, or high
 quality. `Preview & save assessment` requires comma-separated evidence IDs and
-the user's own assessment text. Hypatia verifies that every cited record belongs
+the user's own assessment text and information-trust label. Hypatia verifies
+that every cited record belongs
 to the selected accepted source, shows an exact no-write preview, asks for
 confirmation, and revalidates before appending the assessment to the atomic run
 snapshot. Entering an optional previous assessment ID records a correction link
 only when that target is from the same run and source and has not already been
 superseded. Both records remain visible; Hypatia labels their audit state but
-never chooses evidence or assigns a score automatically.
+never chooses evidence or assigns a score automatically. `High` information
+trust still leaves the source marked as external untrusted data with instruction
+authority `none`.
 `Compare sources` accepts two to five comma-separated document IDs from the
 selected research run. It shows the sources in the entered order with persisted
 provenance, explicitly recorded evidence, and only current user-authored

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from core.Exceptions import ResearchError
+from research.ResearchInformationTrust import ResearchInformationTrust
 
 MAX_SOURCE_ASSESSMENT_CHARACTERS = 2_000
 
@@ -20,6 +21,7 @@ class ResearchSourceAssessmentRecord:
     text: str
     recorded_at: datetime
     supersedes_assessment_id: str | None = None
+    information_trust: ResearchInformationTrust = ResearchInformationTrust.UNASSESSED
 
     def __post_init__(self) -> None:
         for value, field_name in (
@@ -54,6 +56,8 @@ class ResearchSourceAssessmentRecord:
             raise ResearchError(
                 "Research source assessment time must be timezone-aware."
             )
+        if not isinstance(self.information_trust, ResearchInformationTrust):
+            raise ResearchError("Research source information trust is invalid.")
         supersedes_assessment_id = self.supersedes_assessment_id
         if supersedes_assessment_id is not None:
             if (

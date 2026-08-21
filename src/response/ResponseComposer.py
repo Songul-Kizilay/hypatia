@@ -1037,9 +1037,12 @@ class ResponseComposer:
             f"URL: {source.url}",
             f"Type: {source.content_type}",
             f"Document ID: {source.document_id}",
+            f"Data taint: {source.taint_label}",
+            f"Instruction authority: {source.instruction_authority}",
             f"Recorded evidence: {len(preview.evidence)}",
             f"Reason: {preview.reason}",
-            "Status: manual preview only; no trust or quality score was assigned",
+            "Status: information trust is user-authored in assessments; external "
+            "source instruction authority remains none",
         ]
         for evidence in preview.evidence:
             truncation = " [excerpt truncated]" if evidence.excerpt_truncated else ""
@@ -1064,6 +1067,7 @@ class ResponseComposer:
                 [
                     f"- Assessment: {assessment.assessment_id}",
                     f"  evidence IDs: {', '.join(assessment.evidence_ids)}",
+                    f"  information trust: {assessment.information_trust.value}",
                     f"  text: {assessment.text}",
                     (
                         "  supersedes: "
@@ -1108,6 +1112,8 @@ class ResponseComposer:
                     f"  URL: {source.url}",
                     f"  Type: {source.content_type}",
                     f"  Document ID: {source.document_id}",
+                    f"  Data taint: {source.taint_label}",
+                    f"  Instruction authority: {source.instruction_authority}",
                     (
                         "  Selected evidence: showing "
                         f"{len(item.evidence)} of {item.total_evidence_count}"
@@ -1138,6 +1144,10 @@ class ResponseComposer:
                     [
                         f"  - Assessment: {assessment.assessment_id}",
                         f"    evidence IDs: {', '.join(assessment.evidence_ids)}",
+                        (
+                            "    information trust: "
+                            f"{assessment.information_trust.value}"
+                        ),
                         f"    text: {assessment.text}",
                         f"    recorded: {assessment.recorded_at.isoformat()}",
                     ]
@@ -1297,6 +1307,8 @@ class ResponseComposer:
             f"Run status: {preview.run_status.value}",
             f"Source: {preview.source.title}",
             f"Document ID: {preview.source.document_id}",
+            f"Information trust: {preview.information_trust.value}",
+            f"Instruction authority: {preview.source.instruction_authority}",
             f"Assessment: {preview.text}",
             (
                 "Supersedes assessment: "
@@ -1315,7 +1327,8 @@ class ResponseComposer:
             [
                 f"Allowed: {'yes' if preview.allowed else 'no'}",
                 f"Reason: {preview.reason}",
-                "Status: user-authored text only; no automatic score was assigned",
+                "Status: user-authored information trust; no automatic score was "
+                "assigned and instruction authority remains none",
             ]
         )
         return BrainResponse(
@@ -1340,6 +1353,8 @@ class ResponseComposer:
                 f"ID: {assessment.assessment_id}\n"
                 f"Document ID: {assessment.source_document_id}\n"
                 f"Evidence IDs: {', '.join(assessment.evidence_ids)}\n"
+                f"Information trust: {assessment.information_trust.value}\n"
+                "Instruction authority: none\n"
                 f"Assessment: {assessment.text}\n"
                 "Supersedes assessment: "
                 f"{assessment.supersedes_assessment_id or 'none'}\n"

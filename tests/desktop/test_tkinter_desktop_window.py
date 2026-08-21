@@ -831,6 +831,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             "evidence-123",
             "Corrected assessment.",
             "assessment-original",
+            "high",
         )
         window._root = object()
         window._controller = controller
@@ -839,6 +840,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_assessment_evidence_ids = RecordingInput(values[2])
         window._research_assessment_text = RecordingInput(values[3])
         window._research_assessment_supersedes_id = RecordingInput(values[4])
+        window._research_information_trust = RecordingInput(values[5])
         window._status = RecordingStatus()
         window._append_response = responses.append
 
@@ -897,6 +899,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
                 )
                 window._research_assessment_text = RecordingInput("Assessment.")
                 window._research_assessment_supersedes_id = RecordingInput("")
+                window._research_information_trust = RecordingInput("medium")
                 window._status = RecordingStatus()
                 window._append_response = lambda _response: None
 
@@ -922,6 +925,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_assessment_evidence_ids = RecordingInput("")
         window._research_assessment_text = RecordingInput("Assessment.")
         window._research_assessment_supersedes_id = RecordingInput("")
+        window._research_information_trust = RecordingInput("unassessed")
         window._status = status
         window._append_response = lambda _response: self.fail("must not append")
 
@@ -1151,8 +1155,8 @@ class RecordingResearchSourceLoadController:
         self.comparison_previews: list[tuple[str, str]] = []
         self.comparison_note_previews: list[tuple[str, str, str, str, str]] = []
         self.comparison_note_records: list[tuple[str, str, str, str, str]] = []
-        self.assessment_write_previews: list[tuple[str, str, str, str, str]] = []
-        self.assessment_records: list[tuple[str, str, str, str, str]] = []
+        self.assessment_write_previews: list[tuple[str, str, str, str, str, str]] = []
+        self.assessment_records: list[tuple[str, str, str, str, str, str]] = []
         self.response = BrainResponse(
             message="Loaded.",
             request_id="research-source-load",
@@ -1567,6 +1571,7 @@ class RecordingResearchSourceLoadController:
         evidence_ids: str,
         text: str,
         supersedes_assessment_id: str = "",
+        information_trust: str = "unassessed",
     ) -> BrainResponse:
         if not evidence_ids.strip():
             raise ValueError("Research assessment evidence IDs cannot be empty.")
@@ -1576,6 +1581,7 @@ class RecordingResearchSourceLoadController:
             evidence_ids,
             text,
             supersedes_assessment_id,
+            information_trust,
         )
         self.assessment_write_previews.append(values)
         return self.assessment_write_preview_response
@@ -1611,6 +1617,7 @@ class RecordingResearchSourceLoadController:
         evidence_ids: str,
         text: str,
         supersedes_assessment_id: str = "",
+        information_trust: str = "unassessed",
     ) -> BrainResponse:
         values = (
             run_id,
@@ -1618,6 +1625,7 @@ class RecordingResearchSourceLoadController:
             evidence_ids,
             text,
             supersedes_assessment_id,
+            information_trust,
         )
         self.assessment_records.append(values)
         return self.assessment_record_response

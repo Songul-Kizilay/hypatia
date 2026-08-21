@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.73 (Genesis)`
+`v0.3.74 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.73`** is the current executable package and GitHub
+- **Runtime release `v0.3.74`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -144,6 +144,16 @@ with optional OpenAI-compatible LLM conversation support.
   original remains immutable; read-only history labels current and superseded
   records. Missing, cross-source, already-superseded, and closed-run targets are
   rejected again at final recording time.
+- Each authored assessment can carry one explicit information-trust label:
+  `unassessed`, `low`, `medium`, or `high`. The desktop, source history,
+  comparison view, committed response, and deterministic export show that
+  label. A correction can replace the current label without changing the
+  immutable predecessor. Hypatia never calculates the label or treats it as an
+  automatic truth score.
+- Every accepted external source carries the fixed taint label
+  `external_untrusted_data` and fixed instruction authority `none`. Information
+  trust and instruction authority are separate: even a user-authored `high`
+  label cannot grant source text permission to issue instructions or use tools.
 - A separate manual comparison preview accepts an ordered list of two to five
   unique accepted-source document IDs from one exact run. For each source it
   renders persisted provenance, only explicitly recorded evidence, and only
@@ -159,10 +169,12 @@ with optional OpenAI-compatible LLM conversation support.
   exact selected source order after restart. It displays at most 20 notes and
   reports the complete count. Hypatia generates no note text, verdict, score,
   or reference selection.
-- Research-run schema v6 remains backward compatible with v1-v5 snapshots.
+- Research-run schema v7 remains backward compatible with v1-v6 snapshots.
   Legacy runs load with absent evidence, discovery, or assessment collections
   represented as empty, v4 assessments load with no supersession link, and
-  v1-v5 runs load with no comparison notes.
+  v1-v5 runs load with no comparison notes. Every v1-v6 source receives the
+  fixed external-data taint and no instruction authority, while every legacy
+  assessment receives `unassessed` information trust.
   They are rewritten only after a later successful mutation; no eager or
   partial migration occurs.
 - One terminal run can be explicitly previewed as deterministic Markdown using
@@ -386,7 +398,7 @@ with optional OpenAI-compatible LLM conversation support.
 - Agent execution, tool gateway, browser/OS control, voice, vision, robotics,
   and smart-home integrations.
 - Encryption at rest, cloud synchronization, multi-process storage locking,
-  and persistence schema migration.
+  and automated repair or unattended migration tooling.
 
 ## Current Local Hardware Baseline
 
@@ -402,7 +414,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,362 automated tests pass through package-aware discovery.
+- 1,366 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -429,7 +441,7 @@ so this check did not alter the project's persisted data.
 
 ## Next Milestone
 
-Add explicit, user-visible source trust or taint metadata to persisted research
-provenance without converting it into an automatic truth score. Retrieved text
-must continue to have no instruction authority, and trust annotations must
-remain authored, explainable, and reversible.
+Add claim-level epistemic states and confidence annotations that remain
+user-authored, evidence-linked, and reversible. They must not become automatic
+truth scores or weaken the fixed no-instruction-authority boundary for external
+source text.

@@ -8,6 +8,9 @@ from datetime import datetime
 from core.Exceptions import ResearchError
 from research.ResearchSource import ResearchSource
 
+EXTERNAL_SOURCE_TAINT_LABEL = "external_untrusted_data"
+EXTERNAL_SOURCE_INSTRUCTION_AUTHORITY = "none"
+
 
 @dataclass(frozen=True, slots=True)
 class ResearchSourceRecord:
@@ -19,6 +22,8 @@ class ResearchSourceRecord:
     content_type: str
     fetched_at: datetime
     added_at: datetime
+    taint_label: str = EXTERNAL_SOURCE_TAINT_LABEL
+    instruction_authority: str = EXTERNAL_SOURCE_INSTRUCTION_AUTHORITY
 
     def __post_init__(self) -> None:
         for value, field_name in (
@@ -35,6 +40,12 @@ class ResearchSourceRecord:
         ):
             if not isinstance(timestamp, datetime) or timestamp.utcoffset() is None:
                 raise ResearchError(f"{field_name} must be timezone-aware.")
+        if self.taint_label != EXTERNAL_SOURCE_TAINT_LABEL:
+            raise ResearchError("External research source taint label is invalid.")
+        if self.instruction_authority != EXTERNAL_SOURCE_INSTRUCTION_AUTHORITY:
+            raise ResearchError(
+                "External research source instruction authority must be none."
+            )
         object.__setattr__(self, "document_id", self.document_id.strip())
         object.__setattr__(self, "url", self.url.strip())
         object.__setattr__(self, "title", self.title.strip())

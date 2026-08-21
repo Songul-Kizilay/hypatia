@@ -15,6 +15,7 @@ from core.CancellationSignal import CancellationSignal
 from desktop.DesktopController import DesktopController
 from desktop.DesktopRequestRunner import DesktopRequestRunner
 from knowledge.KnowledgeCitation import KnowledgeCitation
+from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
 )
@@ -157,6 +158,9 @@ class TkinterDesktopWindow:
         self._research_assessment_evidence_ids = tk.StringVar()
         self._research_assessment_text = tk.StringVar()
         self._research_assessment_supersedes_id = tk.StringVar()
+        self._research_information_trust = tk.StringVar(
+            value=ResearchInformationTrust.UNASSESSED.value
+        )
         self._research_target_status = tk.StringVar(value="completed")
         self._relation_source_id = tk.StringVar()
         self._relation_target_id = tk.StringVar()
@@ -754,8 +758,20 @@ class TkinterDesktopWindow:
             text="Preview & save assessment",
             command=self._preview_and_record_research_source_assessment,
         ).grid(row=12, column=3, sticky="ew", pady=(8, 0))
-        ttk.Label(research_frame, text="Supersedes assessment ID (optional)").grid(
+        ttk.Label(research_frame, text="Information trust (user-authored)").grid(
             row=13,
+            column=0,
+            sticky="w",
+            pady=(8, 0),
+        )
+        ttk.Combobox(
+            research_frame,
+            textvariable=self._research_information_trust,
+            values=tuple(value.value for value in ResearchInformationTrust),
+            state="readonly",
+        ).grid(row=13, column=1, columnspan=3, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ttk.Label(research_frame, text="Supersedes assessment ID (optional)").grid(
+            row=14,
             column=0,
             sticky="w",
             pady=(8, 0),
@@ -764,7 +780,7 @@ class TkinterDesktopWindow:
             research_frame,
             textvariable=self._research_assessment_supersedes_id,
         ).grid(
-            row=13,
+            row=14,
             column=1,
             columnspan=3,
             sticky="ew",
@@ -772,7 +788,7 @@ class TkinterDesktopWindow:
             pady=(8, 0),
         )
         ttk.Label(research_frame, text="Final status").grid(
-            row=14,
+            row=15,
             column=0,
             sticky="w",
             pady=(8, 0),
@@ -782,32 +798,32 @@ class TkinterDesktopWindow:
             textvariable=self._research_target_status,
             values=("completed", "failed", "cancelled"),
             state="readonly",
-        ).grid(row=14, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
+        ).grid(row=15, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
         ttk.Button(
             research_frame,
             text="Preview status",
             command=self._preview_and_update_research_status,
-        ).grid(row=14, column=2, sticky="ew", pady=(8, 0))
+        ).grid(row=15, column=2, sticky="ew", pady=(8, 0))
         ttk.Button(
             research_frame,
             text="Export preview",
             command=self._preview_research_run_markdown_export,
-        ).grid(row=14, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ).grid(row=15, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
         ttk.Button(
             research_frame,
             text="Verify export",
             command=self._verify_research_run_markdown_export,
-        ).grid(row=15, column=2, sticky="ew", pady=(8, 0))
+        ).grid(row=16, column=2, sticky="ew", pady=(8, 0))
         ttk.Button(
             research_frame,
             text="Save export",
             command=self._save_research_run_markdown_export,
-        ).grid(row=15, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ).grid(row=16, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
         ttk.Button(
             research_frame,
             text="Evidence integrity",
             command=self._show_research_evidence_integrity,
-        ).grid(row=15, column=0, columnspan=2, sticky="ew", pady=(8, 0))
+        ).grid(row=16, column=0, columnspan=2, sticky="ew", pady=(8, 0))
 
         relation_frame = ttk.LabelFrame(
             container,
@@ -1373,6 +1389,7 @@ class TkinterDesktopWindow:
             self._research_assessment_evidence_ids.get(),
             self._research_assessment_text.get(),
             self._research_assessment_supersedes_id.get(),
+            self._research_information_trust.get(),
         )
         try:
             preview_response = (
@@ -1390,7 +1407,9 @@ class TkinterDesktopWindow:
             (
                 f"{preview_response.message}\n\n"
                 "This appends your text, the listed evidence IDs, and any exact "
-                "supersession link to the research audit record. Continue?"
+                "supersession link plus your information-trust label to the "
+                "research audit record. External source instruction authority "
+                "remains none. Continue?"
             ),
             parent=self._root,
         ):

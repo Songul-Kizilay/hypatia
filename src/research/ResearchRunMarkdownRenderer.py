@@ -73,6 +73,11 @@ def render_research_run_markdown(run: ResearchRun) -> str:
                 f"- **Document ID:** {_inline(source.document_id)}",
                 f"- **URL:** {_inline(source.url)}",
                 f"- **Content type:** {_inline(source.content_type)}",
+                f"- **Data taint:** {_inline(source.taint_label)}",
+                (
+                    "- **Instruction authority:** "
+                    f"{_inline(source.instruction_authority)}"
+                ),
                 f"- **Fetched:** {source.fetched_at.isoformat()}",
                 f"- **Accepted:** {source.added_at.isoformat()}",
                 "",
@@ -120,6 +125,10 @@ def render_research_run_markdown(run: ResearchRun) -> str:
                     "",
                     f"- **Assessment ID:** {_inline(assessment_record.assessment_id)}",
                     f"- **Audit state:** {audit_state}",
+                    (
+                        "- **Information trust:** "
+                        f"{assessment_record.information_trust.value}"
+                    ),
                     "- **Evidence IDs:** "
                     + ", ".join(
                         _inline(value) for value in assessment_record.evidence_ids

@@ -14,6 +14,7 @@ from unittest.mock import patch
 from core.Exceptions import ResearchError
 from knowledge.Chunk import Chunk
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
+from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRun import ResearchRun
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchRunMarkdownExportPreview import (
@@ -1212,11 +1213,14 @@ class ResearchRunManagerTests(unittest.TestCase):
             "document-1",
             [evidence.evidence_id],
             "  The source supports the claim.  ",
+            information_trust="high",
         )
 
         self.assertTrue(preview.allowed)
         self.assertEqual(preview.evidence, (evidence,))
         self.assertEqual(preview.text, "The source supports the claim.")
+        self.assertEqual(preview.information_trust, ResearchInformationTrust.HIGH)
+        self.assertEqual(preview.source.instruction_authority, "none")
         self.assertEqual(len(self.store.saved), saves_before)
 
         updated = self.manager.record_source_assessment(
@@ -1224,6 +1228,7 @@ class ResearchRunManagerTests(unittest.TestCase):
             "document-1",
             [evidence.evidence_id],
             "The source supports the claim.",
+            information_trust=ResearchInformationTrust.HIGH,
         )
 
         self.assertEqual(len(updated.assessments), 1)
@@ -1231,6 +1236,10 @@ class ResearchRunManagerTests(unittest.TestCase):
         self.assertEqual(assessment.assessment_id, "assessment-1")
         self.assertEqual(assessment.source_document_id, "document-1")
         self.assertEqual(assessment.evidence_ids, (evidence.evidence_id,))
+        self.assertEqual(
+            assessment.information_trust,
+            ResearchInformationTrust.HIGH,
+        )
         self.assertEqual(self.store.runs, [updated])
         history = self.manager.preview_source_assessment(run.run_id, "document-1")
         self.assertEqual(history.assessments, (assessment,))
@@ -1260,6 +1269,7 @@ class ResearchRunManagerTests(unittest.TestCase):
             "document-1",
             [evidence.evidence_id],
             "Original assessment.",
+            information_trust=ResearchInformationTrust.HIGH,
         ).assessments[-1]
         saves_before = len(self.store.saved)
 
@@ -1269,10 +1279,12 @@ class ResearchRunManagerTests(unittest.TestCase):
             [evidence.evidence_id],
             "Corrected assessment.",
             original.assessment_id,
+            ResearchInformationTrust.LOW,
         )
 
         self.assertTrue(preview.allowed)
         self.assertEqual(preview.supersedes_assessment, original)
+        self.assertEqual(preview.information_trust, ResearchInformationTrust.LOW)
         self.assertEqual(len(self.store.saved), saves_before)
 
         updated = self.manager.record_source_assessment(
@@ -1281,6 +1293,7 @@ class ResearchRunManagerTests(unittest.TestCase):
             [evidence.evidence_id],
             "Corrected assessment.",
             original.assessment_id,
+            ResearchInformationTrust.LOW,
         )
 
         self.assertEqual(len(updated.assessments), 2)
@@ -1289,6 +1302,10 @@ class ResearchRunManagerTests(unittest.TestCase):
             original.assessment_id,
         )
         self.assertEqual(updated.assessments[0], original)
+        self.assertEqual(
+            updated.assessments[-1].information_trust,
+            ResearchInformationTrust.LOW,
+        )
         history = self.manager.preview_source_assessment(run.run_id, "document-1")
         self.assertEqual(history.assessments, updated.assessments)
 
@@ -1300,6 +1317,39 @@ class ResearchRunManagerTests(unittest.TestCase):
                 "Competing correction.",
                 original.assessment_id,
             )
+
+    def test_invalid_information_trust_is_rejected_before_mutation(self) -> None:
+        run = self.manager.create("Question")
+        self.manager.add_source(
+            run.run_id,
+            ResearchSource(
+                "https://example.com/source",
+                "Source",
+                "Evidence.",
+                "text/plain",
+                self.start,
+            ),
+            "document-1",
+        )
+        evidence = self.manager.add_evidence(
+            run.run_id,
+            Chunk("document-1", 0, "Evidence.", chunk_id="chunk-1"),
+            "Relevant.",
+        ).evidence[-1]
+        before = self.manager.get(run.run_id)
+        saves_before = len(self.store.saved)
+
+        with self.assertRaisesRegex(ResearchError, "information trust"):
+            self.manager.preview_source_assessment_write(
+                run.run_id,
+                "document-1",
+                [evidence.evidence_id],
+                "Assessment.",
+                information_trust="trusted",
+            )
+
+        self.assertEqual(self.manager.get(run.run_id), before)
+        self.assertEqual(len(self.store.saved), saves_before)
 
     def test_authored_assessment_correction_rejects_missing_or_cross_source_target(
         self,

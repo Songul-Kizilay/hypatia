@@ -12,6 +12,7 @@ from typing import Any, Protocol
 from core.Exceptions import ResearchError
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchFailureRecord import ResearchFailureRecord
+from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRun import ResearchRun
 from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
@@ -20,7 +21,11 @@ from research.ResearchSourceComparisonNoteRecord import (
     ResearchSourceComparisonNoteRecord,
 )
 from research.ResearchSourceDiscoveryRecord import ResearchSourceDiscoveryRecord
-from research.ResearchSourceRecord import ResearchSourceRecord
+from research.ResearchSourceRecord import (
+    EXTERNAL_SOURCE_INSTRUCTION_AUTHORITY,
+    EXTERNAL_SOURCE_TAINT_LABEL,
+    ResearchSourceRecord,
+)
 
 MAX_RESEARCH_RUN_STORE_BYTES = 64 * 1024 * 1024
 MAX_RESEARCH_RUN_STORE_COLLECTION_ITEMS = 20_000
@@ -69,8 +74,8 @@ class _CollectionBudget:
 class JsonFileResearchRunStore:
     """Load and atomically replace a strict versioned research-run document."""
 
-    _SCHEMA_VERSION = 6
-    _SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5, 6}
+    _SCHEMA_VERSION = 7
+    _SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5, 6, 7}
     _DOCUMENT_FIELDS = {"schema_version", "runs"}
     _RUN_FIELDS_V1 = {
         "run_id",
@@ -86,13 +91,18 @@ class JsonFileResearchRunStore:
     _RUN_FIELDS_V4 = _RUN_FIELDS_V3 | {"assessments"}
     _RUN_FIELDS_V5 = _RUN_FIELDS_V4
     _RUN_FIELDS_V6 = _RUN_FIELDS_V5 | {"comparison_notes"}
-    _SOURCE_FIELDS = {
+    _RUN_FIELDS_V7 = _RUN_FIELDS_V6
+    _SOURCE_FIELDS_V1_V6 = {
         "document_id",
         "url",
         "title",
         "content_type",
         "fetched_at",
         "added_at",
+    }
+    _SOURCE_FIELDS_V7 = _SOURCE_FIELDS_V1_V6 | {
+        "taint_label",
+        "instruction_authority",
     }
     _FAILURE_FIELDS = {"stage", "reason", "occurred_at"}
     _EVIDENCE_FIELDS = {
@@ -122,6 +132,7 @@ class JsonFileResearchRunStore:
         "recorded_at",
     }
     _ASSESSMENT_FIELDS_V5 = _ASSESSMENT_FIELDS_V4 | {"supersedes_assessment_id"}
+    _ASSESSMENT_FIELDS_V7 = _ASSESSMENT_FIELDS_V5 | {"information_trust"}
     _COMPARISON_NOTE_FIELDS = {
         "note_id",
         "source_document_ids",
@@ -228,6 +239,7 @@ class JsonFileResearchRunStore:
             4: self._RUN_FIELDS_V4,
             5: self._RUN_FIELDS_V5,
             6: self._RUN_FIELDS_V6,
+            7: self._RUN_FIELDS_V7,
         }[schema_version]
         if not isinstance(value, dict) or set(value) != expected_fields:
             raise ResearchError("Research run store contains an invalid run record.")
@@ -265,7 +277,9 @@ class JsonFileResearchRunStore:
             run_id=value["run_id"],
             question=value["question"],
             status=status,
-            sources=tuple(self._parse_source(item) for item in sources_data),
+            sources=tuple(
+                self._parse_source(item, schema_version) for item in sources_data
+            ),
             failures=tuple(self._parse_failure(item) for item in failures_data),
             created_at=self._parse_datetime(value["created_at"], "created_at"),
             updated_at=self._parse_datetime(value["updated_at"], "updated_at"),
@@ -283,8 +297,15 @@ class JsonFileResearchRunStore:
             ),
         )
 
-    def _parse_source(self, value: Any) -> ResearchSourceRecord:
-        if not isinstance(value, dict) or set(value) != self._SOURCE_FIELDS:
+    def _parse_source(
+        self,
+        value: Any,
+        schema_version: int,
+    ) -> ResearchSourceRecord:
+        expected_fields = (
+            self._SOURCE_FIELDS_V7 if schema_version >= 7 else self._SOURCE_FIELDS_V1_V6
+        )
+        if not isinstance(value, dict) or set(value) != expected_fields:
             raise ResearchError("Research run store contains an invalid source record.")
         return ResearchSourceRecord(
             document_id=value["document_id"],
@@ -293,6 +314,16 @@ class JsonFileResearchRunStore:
             content_type=value["content_type"],
             fetched_at=self._parse_datetime(value["fetched_at"], "fetched_at"),
             added_at=self._parse_datetime(value["added_at"], "added_at"),
+            taint_label=(
+                value["taint_label"]
+                if schema_version >= 7
+                else EXTERNAL_SOURCE_TAINT_LABEL
+            ),
+            instruction_authority=(
+                value["instruction_authority"]
+                if schema_version >= 7
+                else EXTERNAL_SOURCE_INSTRUCTION_AUTHORITY
+            ),
         )
 
     def _parse_failure(self, value: Any) -> ResearchFailureRecord:
@@ -370,11 +401,12 @@ class JsonFileResearchRunStore:
         schema_version: int,
         budget: _CollectionBudget,
     ) -> ResearchSourceAssessmentRecord:
-        expected_fields = (
-            self._ASSESSMENT_FIELDS_V4
-            if schema_version == 4
-            else self._ASSESSMENT_FIELDS_V5
-        )
+        if schema_version == 4:
+            expected_fields = self._ASSESSMENT_FIELDS_V4
+        elif schema_version < 7:
+            expected_fields = self._ASSESSMENT_FIELDS_V5
+        else:
+            expected_fields = self._ASSESSMENT_FIELDS_V7
         if not isinstance(value, dict) or set(value) != expected_fields:
             raise ResearchError(
                 "Research run store contains an invalid assessment record."
@@ -394,7 +426,21 @@ class JsonFileResearchRunStore:
             supersedes_assessment_id=(
                 None if schema_version == 4 else value["supersedes_assessment_id"]
             ),
+            information_trust=(
+                ResearchInformationTrust.UNASSESSED
+                if schema_version < 7
+                else self._parse_information_trust(value["information_trust"])
+            ),
         )
+
+    @staticmethod
+    def _parse_information_trust(value: Any) -> ResearchInformationTrust:
+        try:
+            return ResearchInformationTrust(value)
+        except (TypeError, ValueError) as error:
+            raise ResearchError(
+                "Research run store contains invalid source information trust."
+            ) from error
 
     def _parse_comparison_note(
         self,
@@ -457,6 +503,8 @@ class JsonFileResearchRunStore:
                     "content_type": source.content_type,
                     "fetched_at": source.fetched_at.isoformat(),
                     "added_at": source.added_at.isoformat(),
+                    "taint_label": source.taint_label,
+                    "instruction_authority": source.instruction_authority,
                 }
                 for source in run.sources
             ],
@@ -507,6 +555,7 @@ class JsonFileResearchRunStore:
                     "text": assessment.text,
                     "recorded_at": assessment.recorded_at.isoformat(),
                     "supersedes_assessment_id": (assessment.supersedes_assessment_id),
+                    "information_trust": assessment.information_trust.value,
                 }
                 for assessment in run.assessments
             ],
