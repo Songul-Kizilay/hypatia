@@ -2,6 +2,69 @@
 
 All notable project changes are recorded here.
 
+## [0.3.132] - 2026-08-23
+
+### Changed
+
+- The canonical source-acceptance transaction is extracted from
+  `CognitiveEngine._process_research_source_load` into
+  `ResearchSourceAcceptanceService`. The extraction is behavior-preserving: the
+  same indexing, content persistence, `add_source`, and layered rollback flow
+  runs, and every existing failure message is byte-identical. `CognitiveEngine`
+  shrinks by 73 net lines and now delegates instead of owning the transaction.
+  Exactly one acceptance implementation exists.
+
+### Added
+
+- `SOURCE_ACCEPT` capability and `SourceAcceptStepOperation`, fetching the one
+  authorized URL through the canonical fetcher and then running the extracted
+  acceptance transaction.
+- `ResearchSourceAcceptanceResult` reports `accepted` and
+  `transaction_attempted` as separate flags, and refuses to represent an
+  accepted source that was never attempted.
+- `AcceptsResearchSource` is the research-layer protocol for the transaction, so
+  research operations never import the cognition layer.
+- `ResearchPlanStepOperationResult.succeeded` distinguishes an operation that
+  genuinely ran from one that achieved its outcome, and
+  `ResearchPlanExecutionState.fail_step` can now record performed work on a
+  failed step.
+
+### Safety
+
+- A transaction that runs and does not accept is recorded as performed work on a
+  failed step, never rendered as a successful acceptance. The detail states that
+  no source was added to the run.
+- Authorization stays explicit. The URL comes only from the step's
+  `authorized_source_url`; discovery metadata alone never authorizes acceptance,
+  and instruction text remains inert. Tests assert zero fetches in both cases.
+- No second content channel exists. Content flows only through the canonical
+  knowledge engine and source-content store, and no page content enters the
+  execution context.
+- Cancellation before the fetch prevents all work; cancellation after the fetch
+  prevents every acceptance mutation, leaving knowledge, content, and run state
+  untouched.
+- Rollback guarantees are unchanged and now directly tested: content failure
+  rolls back indexing, `add_source` failure rolls back content and indexing, and
+  a failed content rollback is reported precisely rather than glossed over.
+- Duplicate sources remain deterministic, surfacing as an indexing error with no
+  partial state, exactly as before.
+- Accepted means accepted into the run's source set only. No evidence,
+  assessment, claim, trust, or conclusion follows, and tests assert those
+  collections stay empty.
+
+### Verification
+
+- The package-aware full local suite contains 1,790 passing automated tests.
+- Ten acceptance-service tests cover success, all rollback branches, duplicate
+  handling, unknown runs, indexing failure, and knowledge-only acceptance.
+- Eleven operation tests cover authorized-only acceptance, attempted-but-not-
+  accepted reporting, refusal of unauthorized and discovery-only sources,
+  cancellation before and after the fetch, audited fetch and indexing failures,
+  closed and unknown runs, and detail that never dumps content.
+- The composition suite now covers six capabilities and additionally proves the
+  existing source-load route and the `SOURCE_ACCEPT` operation share one
+  acceptance service instance, and that the legacy route still accepts a source.
+
 ## [0.3.131] - 2026-08-23
 
 ### Added

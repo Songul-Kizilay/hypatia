@@ -163,14 +163,23 @@ class ResearchPlanExecutionState:
         self,
         step_id: str,
         detail: str,
+        work_performed: bool = False,
+        operation: str = "",
     ) -> ResearchPlanExecutionState:
-        """Record one failed step and fail the plan without hiding progress."""
+        """Record one failed step and fail the plan without hiding progress.
+
+        ``work_performed`` lets a genuine attempt be recorded as work even
+        though the step did not succeed, so an attempted transaction is never
+        confused with an achieved outcome.
+        """
         self._require_running()
         self._require_step_status(step_id, ResearchPlanStepStatus.RUNNING)
         updated = self._replace_step(
             step_id,
             ResearchPlanStepStatus.FAILED,
             detail,
+            work_performed=work_performed,
+            operation=operation,
         )
         return replace(
             updated,

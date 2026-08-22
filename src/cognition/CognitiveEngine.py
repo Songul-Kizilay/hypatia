@@ -28,6 +28,9 @@ from cognition.ResearchPlanExecutionApplicationService import (
 from cognition.ResearchPlanPreviewApplicationService import (
     ResearchPlanPreviewApplicationService,
 )
+from cognition.ResearchSourceAcceptanceService import (
+    ResearchSourceAcceptanceService,
+)
 from core.Exceptions import (
     KnowledgeError,
     MemoryError,
@@ -94,13 +97,13 @@ from research.ResearchRun import ResearchRun
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSourceCandidate import ResearchSourceCandidate
-from research.ResearchSourceContentRecord import ResearchSourceContentRecord
 from research.ResearchSourceContentRestorationStatus import (
     ResearchSourceContentRestorationStatus,
 )
 from research.ResearchSourceContentStore import ResearchSourceContentStore
 from research.ResearchSourceDiscoveryProvider import ResearchSourceDiscoveryProvider
 from research.ResearchSourceFetcher import ResearchSourceFetcher
+from research.SourceAcceptStepOperation import SourceAcceptStepOperation
 from research.SourceDiscoveryStepOperation import SourceDiscoveryStepOperation
 from research.SourceFetchStepOperation import SourceFetchStepOperation
 from response.ResponseComposer import ResponseComposer
@@ -199,6 +202,11 @@ class CognitiveEngine:
         self._semantic_memory_index_runtime = semantic_memory_index_runtime
         self._chat_semantic_memory_enabled = chat_semantic_memory_enabled
         self._research_source_fetcher = research_source_fetcher
+        self._research_source_acceptance_service = ResearchSourceAcceptanceService(
+            knowledge_engine,
+            research_run_manager,
+            research_source_content_store,
+        )
         self._research_run_manager = research_run_manager
         self._research_source_discovery_provider = research_source_discovery_provider
         self._research_claim_contradiction_proposal_provider = (
@@ -254,6 +262,14 @@ class CognitiveEngine:
                     ResearchPlanStepCapability.SOURCE_FETCH,
                     SourceFetchStepOperation(
                         research_source_fetcher,
+                        research_run_manager,
+                    ),
+                )
+                operation_registry.register(
+                    ResearchPlanStepCapability.SOURCE_ACCEPT,
+                    SourceAcceptStepOperation(
+                        research_source_fetcher,
+                        self._research_source_acceptance_service,
                         research_run_manager,
                     ),
                 )
@@ -1780,17 +1796,7 @@ class CognitiveEngine:
                     "Research source loading was cancelled.",
                     intent=response_intent,
                 )
-            source_document = source.to_document()
-            if self._request_cancelled(request):
-                return self._response_composer.research_source_load_failure(
-                    request,
-                    "Research source loading was cancelled.",
-                    intent=response_intent,
-                )
-            document = self._knowledge_engine.add_document(
-                source_document,
-                stable_chunk_ids=bool(run_id),
-            )
+            result = self._research_source_acceptance_service.accept(source, run_id)
         except (ResearchError, KnowledgeError) as error:
             if isinstance(error, ResearchError) and self._request_cancelled(request):
                 return self._response_composer.research_source_load_failure(
@@ -1824,100 +1830,21 @@ class CognitiveEngine:
                 f"Research source could not be loaded: {error}",
                 intent=response_intent,
             )
-        run = None
-        if run_id and self._research_run_manager is not None:
-            content_snapshot: list[ResearchSourceContentRecord] | None = None
-            if self._research_source_content_store is not None:
-                try:
-                    content_snapshot = self._research_source_content_store.load()
-                    content_record = ResearchSourceContentRecord.from_source(
-                        source,
-                        document.document_id,
-                        datetime.now(UTC),
-                    )
-                    self._research_source_content_store.save(
-                        [*content_snapshot, content_record]
-                    )
-                except ResearchError:
-                    try:
-                        self._knowledge_engine.remove_document(document.document_id)
-                    except KnowledgeError:
-                        return self._response_composer.research_source_load_failure(
-                            request,
-                            (
-                                "Research source content failed and knowledge "
-                                "rollback failed."
-                            ),
-                            intent=response_intent,
-                        )
-                    return self._response_composer.research_source_load_failure(
-                        request,
-                        (
-                            "Research source content could not be saved; "
-                            "knowledge was rolled back."
-                        ),
-                        intent=response_intent,
-                    )
-            try:
-                run = self._research_run_manager.add_source(
-                    run_id,
-                    source,
-                    document.document_id,
-                )
-            except ResearchError:
-                content_rollback_failed = False
-                if (
-                    content_snapshot is not None
-                    and self._research_source_content_store is not None
-                ):
-                    try:
-                        self._research_source_content_store.save(content_snapshot)
-                    except ResearchError:
-                        content_rollback_failed = True
-                knowledge_rollback_failed = False
-                try:
-                    self._knowledge_engine.remove_document(document.document_id)
-                except KnowledgeError:
-                    knowledge_rollback_failed = True
-                if content_rollback_failed and knowledge_rollback_failed:
-                    message = (
-                        "Research source audit, content rollback, and knowledge "
-                        "rollback failed."
-                    )
-                elif content_rollback_failed:
-                    message = (
-                        "Research source audit failed and content rollback failed; "
-                        "knowledge was rolled back."
-                    )
-                elif knowledge_rollback_failed:
-                    message = (
-                        "Research source audit failed and knowledge rollback failed; "
-                        "content was rolled back."
-                    )
-                elif content_snapshot is not None:
-                    message = (
-                        "Research source audit could not be saved; content and "
-                        "knowledge were rolled back."
-                    )
-                else:
-                    message = (
-                        "Research source audit could not be saved; "
-                        "knowledge was rolled back."
-                    )
-                return self._response_composer.research_source_load_failure(
-                    request,
-                    message,
-                    intent=response_intent,
-                )
+        if not result.accepted:
+            return self._response_composer.research_source_load_failure(
+                request,
+                result.failure_reason,
+                intent=response_intent,
+            )
         loaded_document = next(
             reference
             for reference in self._knowledge_engine.documents()
-            if reference.document_id == document.document_id
+            if reference.document_id == result.document_id
         )
         return self._response_composer.research_source_load_success(
             request,
             loaded_document,
-            run=run,
+            run=result.run,
             intent=response_intent,
         )
 

@@ -238,6 +238,18 @@ class ResearchPlanExecutionApplicationService:
                 step_id,
                 result.detail,
             )
+        if not result.succeeded:
+            failed = running.fail_step(
+                step_id,
+                result.detail,
+                work_performed=True,
+                operation=operation.operation_name,
+            )
+            self._executions[plan_id] = failed
+            return self._response_composer.research_plan_execution_status(
+                request,
+                failed,
+            )
         completed = running.complete_step(
             step_id,
             result.detail,

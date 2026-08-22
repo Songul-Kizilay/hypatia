@@ -20,6 +20,9 @@ if str(SRC_DIR) not in sys.path:
 
 from brain.BrainRequest import BrainRequest
 from cognition.CognitiveEngine import CognitiveEngine
+from cognition.ResearchSourceAcceptanceService import (
+    ResearchSourceAcceptanceService,
+)
 from core.Exceptions import ResearchError
 from eventbus.EventBus import EventBus
 from knowledge.KnowledgeEngine import KnowledgeEngine
@@ -76,7 +79,7 @@ class StubSourceFetcher:
             title="Authorized source",
             content="Authorized source body text.",
             content_type="text/html",
-            fetched_at=datetime(2026, 8, 23, tzinfo=UTC),
+            fetched_at=datetime(2026, 8, 1, tzinfo=UTC),
         )
 
 
@@ -86,6 +89,7 @@ EXPECTED_OPERATIONS = {
     ResearchPlanStepCapability.EVIDENCE_INTEGRITY_CHECK: "evidence_integrity_check",
     ResearchPlanStepCapability.SOURCE_DISCOVERY: "source_discovery",
     ResearchPlanStepCapability.SOURCE_FETCH: "source_fetch",
+    ResearchPlanStepCapability.SOURCE_ACCEPT: "source_accept",
 }
 
 
@@ -452,6 +456,69 @@ class PlanExecutionCompositionTests(unittest.TestCase):
                     )
 
         self.assertEqual(self.run_manager.get(run.run_id).sources, ())
+
+    def test_source_accept_runs_through_the_engine_route(self) -> None:
+        run = self.run_manager.create("What evidence supports the claim?")
+        plan_id = self._start(
+            "source_accept",
+            run_id=run.run_id,
+            authorized_url="https://example.test/accepted",
+        )
+
+        response = self._advance(plan_id)
+
+        state = response.research_plan_execution
+        assert state is not None
+        self.assertEqual(state.status.value, "completed")
+        self.assertTrue(state.steps[0].work_performed)
+        self.assertEqual(state.steps[0].operation, "source_accept")
+        stored = self.run_manager.get(run.run_id)
+        self.assertEqual(len(stored.sources), 1)
+        self.assertEqual(stored.evidence, ())
+        self.assertEqual(stored.claims, ())
+        self.assertEqual(stored.assessments, ())
+
+    def test_source_accept_without_authorization_fails_the_step(self) -> None:
+        run = self.run_manager.create("What evidence supports the claim?")
+        plan_id = self._start("source_accept", run_id=run.run_id)
+
+        response = self._advance(plan_id)
+
+        state = response.research_plan_execution
+        assert state is not None
+        self.assertEqual(state.status.value, "failed")
+        self.assertFalse(state.steps[0].work_performed)
+        self.assertEqual(self.source_fetcher.urls, [])
+        self.assertEqual(self.run_manager.get(run.run_id).sources, ())
+
+    def test_existing_source_load_route_uses_the_extracted_service(self) -> None:
+        service = self.engine._research_source_acceptance_service
+        self.assertIsInstance(service, ResearchSourceAcceptanceService)
+
+        accept_operation = self._registry().resolve(
+            ResearchPlanStepCapability.SOURCE_ACCEPT
+        )
+        assert accept_operation is not None
+        self.assertIs(accept_operation._acceptance_service, service)
+
+    def test_existing_source_load_route_still_accepts_a_source(self) -> None:
+        run = self.run_manager.create("What evidence supports the claim?")
+
+        response = self.engine.process(
+            BrainRequest(
+                message="Load internet research source",
+                metadata={
+                    "intent": "research_source_load",
+                    "research_url": "https://example.test/legacy",
+                    "research_run_id": run.run_id,
+                },
+            )
+        )
+
+        self.assertTrue(response.success, response.message)
+        stored = self.run_manager.get(run.run_id)
+        self.assertEqual(len(stored.sources), 1)
+        self.assertEqual(stored.evidence, ())
 
 
 if __name__ == "__main__":

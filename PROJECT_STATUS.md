@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.131 (Genesis)`
+`v0.3.132 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.131`** is the current executable package and GitHub
+- **Runtime release `v0.3.132`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -32,6 +32,16 @@ with optional OpenAI-compatible LLM conversation support.
 ### Implemented
 
 - Application bootstrap, configuration, logging, and dependency injection.
+- The canonical source-acceptance transaction lives in one place. Extracted
+  behavior-preservingly from the source-load route into
+  `ResearchSourceAcceptanceService`, it is shared by that route and by the sixth
+  connected capability, `SOURCE_ACCEPT`; `CognitiveEngine` shrank and now
+  delegates. Acceptance requires an explicitly authorized URL, so discovery
+  metadata alone never authorizes it and instruction text stays inert. A
+  transaction that runs without accepting is recorded as performed work on a
+  failed step rather than rendered as success. Rollback guarantees are unchanged
+  and directly tested, no second content channel exists, and accepted means
+  accepted into the run's source set only.
 - The fifth connected research capability, `SOURCE_FETCH`, reuses the canonical
   source-fetch pipeline with every existing protection intact and adds no second
   HTTP path. A step may acquire only the one URL it explicitly authorizes through
@@ -780,7 +790,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,764 automated tests pass through package-aware discovery.
+- 1,790 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.

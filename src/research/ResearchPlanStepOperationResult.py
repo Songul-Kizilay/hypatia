@@ -15,14 +15,24 @@ class ResearchPlanStepOperationResult:
 
     ``performed`` is set only by an operation that actually executed. It is the
     single signal allowed to mark a step as backed by real research work.
+
+    ``succeeded`` is separate. An operation can genuinely run and still not
+    achieve its outcome, so a real attempt is never rendered as success.
     """
 
     performed: bool
     detail: str
+    succeeded: bool = True
 
     def __post_init__(self) -> None:
         if not isinstance(self.performed, bool):
             raise ResearchError("Research step operation flag must be boolean.")
+        if not isinstance(self.succeeded, bool):
+            raise ResearchError("Research step operation outcome must be boolean.")
+        if self.succeeded and not self.performed:
+            raise ResearchError(
+                "An operation that performed nothing cannot have succeeded."
+            )
         if not isinstance(self.detail, str) or not self.detail.strip():
             raise ResearchError("Research step operation detail cannot be empty.")
         detail = self.detail.strip()

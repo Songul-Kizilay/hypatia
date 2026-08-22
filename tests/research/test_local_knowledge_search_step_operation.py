@@ -73,6 +73,10 @@ class LocalKnowledgeSearchStepOperationTests(unittest.TestCase):
 
 
 class ResearchPlanStepOperationResultTests(unittest.TestCase):
+    def test_rejects_success_without_performed_work(self) -> None:
+        with self.assertRaises(ResearchError):
+            ResearchPlanStepOperationResult(performed=False, detail="none")
+
     def test_rejects_invalid_values(self) -> None:
         with self.assertRaises(ResearchError):
             ResearchPlanStepOperationResult(performed=True, detail="   ")
@@ -82,7 +86,11 @@ class ResearchPlanStepOperationResultTests(unittest.TestCase):
             ResearchPlanStepOperationResult(performed=True, detail="x" * 501)
 
     def test_normalizes_detail(self) -> None:
-        result = ResearchPlanStepOperationResult(performed=False, detail="  none  ")
+        result = ResearchPlanStepOperationResult(
+            performed=False,
+            detail="  none  ",
+            succeeded=False,
+        )
 
         self.assertEqual(result.detail, "none")
         self.assertFalse(result.performed)

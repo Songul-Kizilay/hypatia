@@ -325,6 +325,7 @@ class RecordingStepOperation:
         return ResearchPlanStepOperationResult(
             performed=self.performed,
             detail=self.detail,
+            succeeded=self.performed,
         )
 
 
