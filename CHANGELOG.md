@@ -2,6 +2,33 @@
 
 All notable project changes are recorded here.
 
+## [0.3.102] - 2026-08-22
+
+### Added
+
+- Sources & evidence now provides a third local accepted-source view: Without
+  current assessment.
+- The view derives stable source membership from the selected immutable run and
+  shares the same current-assessment definition as the Overview coverage line.
+
+### Safety
+
+- Superseded-only assessment history remains uncovered, repeated current
+  assessments count a source once, and malformed foreign assessment records
+  cannot hide an accepted source.
+- A visible or hidden active source keeps its exact identity and is restored by
+  All sources. Authored fields remain unchanged; invalid or stale state leaves
+  the prior view intact and no runtime or mutation boundary opens.
+
+### Verification
+
+- The package-aware full local suite contains 1,492 passing automated tests.
+- Focused desktop coverage contains 133 passing tests, including correction
+  chains, repeated current records, foreign/superseded-only history, stable
+  order, visible and hidden active identity, restoration, and no-match state.
+- Black, Ruff, and MyPy pass. A real Tk smoke confirms one read-only three-choice
+  selector in the existing 954-by-973-pixel requested window.
+
 ## [0.3.101] - 2026-08-22
 
 ### Added

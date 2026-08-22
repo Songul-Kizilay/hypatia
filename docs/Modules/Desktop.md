@@ -63,12 +63,13 @@ at least one current authored assessment and reports the accepted remainder.
 Superseded-only history does not count as current, malformed foreign references
 cannot inflate membership, and empty/invalid selections clear stale coverage
 without a quality, truth, completeness, or readiness inference.
-Sources & evidence exposes All sources and Without evidence views over that
-same snapshot. Source order is stable, visible/total membership is explicit,
-and one exact active source ID survives a hidden/no-match view and is restored
-when All sources returns. Source-bound evidence/assessment presentation clears
-while hidden, authored fields remain intact, and stale/invalid state is refused
-without another read or action.
+Sources & evidence exposes All sources, Without evidence, and Without current
+assessment views over that same snapshot. Current assessment membership excludes
+superseded-only history and malformed foreign records. Source order is stable,
+visible/total membership is explicit, and one exact active source ID survives a
+hidden/no-match view and is restored when All sources returns. Source-bound
+evidence/assessment presentation clears while hidden, authored fields remain
+intact, and stale/invalid state is refused without another read or action.
 Overview also renders one bounded metadata line from the selected immutable
 run: seconds-level timezone-aware creation/update times and only the aggregate
 safe-failure count. It cannot expose a failure stage/reason or retain stale

@@ -276,10 +276,11 @@ user-authored assessment and the accepted remainder. Superseded history does
 not count as current, source membership is deduplicated by exact ID, malformed
 foreign references are ignored, and the line makes no quality or readiness
 decision.
-Sources & evidence can then show either all accepted sources or only those
-without recorded evidence. This is a stable local exact-ID view: it preserves
-the active source even while hidden and restores that exact source when the all
-view returns, without changing authored fields or requesting data.
+Sources & evidence can then show all accepted sources, only those without
+recorded evidence, or only those without a current authored assessment. This is
+a stable local exact-ID view: superseded-only history remains uncovered, the
+active source is preserved even while hidden, and that exact source returns
+with the all view without changing authored fields or requesting data.
 
 The window uses the same Bootstrap and Brain as the terminal entry point. A
 clicked session only fills the selection field; choosing it remains explicit.

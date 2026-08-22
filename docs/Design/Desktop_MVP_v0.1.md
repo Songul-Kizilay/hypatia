@@ -65,9 +65,10 @@ The MVP may present only current Brain/CognitiveEngine capabilities:
 - a read-only selected-run assessment-coverage line with accepted sources,
   sources having a current authored assessment, and accepted sources without
   one, excluding superseded-only history and malformed foreign membership;
-- an All sources/Without evidence local accepted-source facet with stable order,
-  exact hidden-active preservation/restoration, explicit no-match, and no
-  authored-field or runtime side effect;
+- an All sources/Without evidence/Without current assessment local
+  accepted-source facet with stable order, exact hidden-active
+  preservation/restoration, superseded-only exclusion, explicit no-match, and
+  no authored-field or runtime side effect;
 - a bounded selected-run metadata line with timezone-aware created/updated
   timestamps and aggregate safe-failure count, without failure detail;
 - a read-only accepted-source selector from that same run snapshot, with
