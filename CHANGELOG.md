@@ -2,6 +2,36 @@
 
 All notable project changes are recorded here.
 
+## [0.3.113] - 2026-08-22
+
+### Changed
+
+- Existing claim-history, accepted-source comparison, and accepted-source
+  assessment previews now live behind the dedicated read-only
+  `ResearchAuthoredHistoryApplicationService` application boundary.
+- `CognitiveEngine` delegates those three routes at their original precedence
+  points. Its size falls from 3,157 to 3,054 lines without changing any Brain
+  request, response, message, persistence, provider, or UI contract.
+
+### Safety
+
+- The extracted service reads only existing persisted Research snapshots through
+  `ResearchRunManager`. It adds no mutation, schema, store, network, provider,
+  LLM, UI, or automatic-analysis behavior.
+- Missing or invalid identifiers, duplicate or out-of-bound comparison source
+  selections, unavailable persistence, unknown runs, and unaccepted sources
+  retain their exact bounded failure responses.
+
+### Verification
+
+- The package-aware full local suite contains 1,541 passing automated tests.
+- Focused cognition coverage contains 263 passing tests, including eight direct
+  service contract tests for exact recognition, validation, dependency absence,
+  domain failures, raw identifier delegation, and successful composition.
+- Black, Ruff, and MyPy pass for all 337 Python source and test files.
+- The pinned Windows onedir package builds and initializes its local session
+  snapshot in a fresh temporary data directory.
+
 ## [0.3.112] - 2026-08-22
 
 ### Changed
