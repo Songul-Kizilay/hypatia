@@ -20,14 +20,18 @@ if str(SRC_DIR) not in sys.path:
 
 from brain.BrainRequest import BrainRequest
 from cognition.CognitiveEngine import CognitiveEngine
+from core.Exceptions import ResearchError
 from eventbus.EventBus import EventBus
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from memory.MemoryManager import MemoryManager
 from planner.Planner import Planner
+from research.HttpResearchSourceFetcher import HttpResearchSourceFetcher
 from research.JsonFileResearchRunStore import JsonFileResearchRunStore
 from research.ResearchEvidenceIntegrityAuditor import (
     ResearchEvidenceIntegrityAuditor,
 )
+from research.ResearchPlanExecutionContext import ResearchPlanExecutionContext
+from research.ResearchPlanStep import ResearchPlanStep
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchSource import ResearchSource
@@ -59,11 +63,29 @@ class StubDiscoveryProvider:
         ]
 
 
+class StubSourceFetcher:
+    """Deterministic fetcher standing in for the real HTTPS pipeline."""
+
+    def __init__(self) -> None:
+        self.urls: list[str] = []
+
+    def fetch(self, url: str) -> ResearchSource:
+        self.urls.append(url)
+        return ResearchSource(
+            url=url,
+            title="Authorized source",
+            content="Authorized source body text.",
+            content_type="text/html",
+            fetched_at=datetime(2026, 8, 23, tzinfo=UTC),
+        )
+
+
 EXPECTED_OPERATIONS = {
     ResearchPlanStepCapability.LOCAL_KNOWLEDGE_SEARCH: "local_knowledge_search",
     ResearchPlanStepCapability.ACCEPTED_SOURCE_LISTING: "accepted_source_listing",
     ResearchPlanStepCapability.EVIDENCE_INTEGRITY_CHECK: "evidence_integrity_check",
     ResearchPlanStepCapability.SOURCE_DISCOVERY: "source_discovery",
+    ResearchPlanStepCapability.SOURCE_FETCH: "source_fetch",
 }
 
 
@@ -82,6 +104,7 @@ class PlanExecutionCompositionTests(unittest.TestCase):
             JsonFileResearchRunStore(root / "runs.json")
         )
         self.discovery_provider = StubDiscoveryProvider()
+        self.source_fetcher = StubSourceFetcher()
         self.engine = CognitiveEngine(
             self.knowledge_engine,
             self.memory_manager,
@@ -99,6 +122,7 @@ class PlanExecutionCompositionTests(unittest.TestCase):
                 self.knowledge_engine
             ),
             research_source_discovery_provider=self.discovery_provider,
+            research_source_fetcher=self.source_fetcher,
         )
 
     def tearDown(self) -> None:
@@ -107,11 +131,19 @@ class PlanExecutionCompositionTests(unittest.TestCase):
     def _registry(self):  # type: ignore[no-untyped-def]
         return self.engine._research_plan_execution_service._operation_registry
 
-    def _start(self, capability: str, run_id: str | None = None) -> str:
+    def _start(
+        self,
+        capability: str,
+        run_id: str | None = None,
+        authorized_url: str | None = None,
+    ) -> str:
+        draft: tuple[object, ...] = ("Authored instruction", (), capability)
+        if authorized_url is not None:
+            draft = (*draft, authorized_url)
         metadata: dict[str, object] = {
             "intent": "research_plan_execution_start",
             "research_plan_question": "What evidence supports the claim?",
-            "research_plan_steps": (("Authored instruction", (), capability),),
+            "research_plan_steps": (draft,),
         }
         if run_id is not None:
             metadata["research_run_id"] = run_id
@@ -332,6 +364,94 @@ class PlanExecutionCompositionTests(unittest.TestCase):
         registry = engine._research_plan_execution_service._operation_registry
 
         self.assertIsNone(registry.resolve(ResearchPlanStepCapability.SOURCE_DISCOVERY))
+
+    def test_source_fetch_runs_through_the_engine_route(self) -> None:
+        run = self.run_manager.create("What evidence supports the claim?")
+        plan_id = self._start(
+            "source_fetch",
+            run_id=run.run_id,
+            authorized_url="https://example.test/authorized",
+        )
+
+        response = self._advance(plan_id)
+
+        state = response.research_plan_execution
+        assert state is not None
+        self.assertEqual(state.status.value, "completed")
+        self.assertTrue(state.steps[0].work_performed)
+        self.assertEqual(state.steps[0].operation, "source_fetch")
+        self.assertEqual(self.source_fetcher.urls, ["https://example.test/authorized"])
+        self.assertIn("not accepted, not indexed, not evidence", state.steps[0].detail)
+
+    def test_source_fetch_accepts_nothing_through_the_engine_route(self) -> None:
+        run = self.run_manager.create("What evidence supports the claim?")
+        plan_id = self._start(
+            "source_fetch",
+            run_id=run.run_id,
+            authorized_url="https://example.test/authorized",
+        )
+
+        self._advance(plan_id)
+
+        stored = self.run_manager.get(run.run_id)
+        self.assertEqual(stored.sources, ())
+        self.assertEqual(stored.evidence, ())
+        self.assertEqual(stored.assessments, ())
+        self.assertEqual(stored.claims, ())
+        self.assertEqual(self.knowledge_engine.document_count(), 1)
+
+    def test_source_fetch_without_authorization_fails_the_step(self) -> None:
+        run = self.run_manager.create("What evidence supports the claim?")
+        plan_id = self._start("source_fetch", run_id=run.run_id)
+
+        response = self._advance(plan_id)
+
+        state = response.research_plan_execution
+        assert state is not None
+        self.assertEqual(state.status.value, "failed")
+        self.assertFalse(state.steps[0].work_performed)
+        self.assertEqual(self.source_fetcher.urls, [])
+
+    def test_real_pipeline_still_rejects_a_private_address(self) -> None:
+        engine = CognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            Planner(),
+            self.event_bus,
+            ResponseComposer(),
+            self.session_manager,
+            SessionRenameTransactionService(
+                session_manager=self.session_manager,
+                memory_manager=self.memory_manager,
+                event_bus=self.event_bus,
+            ),
+            research_run_manager=self.run_manager,
+            research_source_fetcher=HttpResearchSourceFetcher(),
+        )
+        run = self.run_manager.create("What evidence supports the claim?")
+        operation = engine._research_plan_execution_service._operation_registry.resolve(
+            ResearchPlanStepCapability.SOURCE_FETCH
+        )
+        assert operation is not None
+
+        for hostile_url in (
+            "http://example.test/insecure",
+            "https://127.0.0.1/private",
+            "https://user:pass@example.test/credentials",
+        ):
+            with self.subTest(url=hostile_url):
+                with self.assertRaises(ResearchError):
+                    operation.run(
+                        ResearchPlanStep(
+                            step_id="step-1",
+                            instruction="Fetch",
+                            capability=ResearchPlanStepCapability.SOURCE_FETCH,
+                            authorized_source_url=hostile_url,
+                        ),
+                        ResearchPlanExecutionContext(research_run_id=run.run_id),
+                    )
+
+        self.assertEqual(self.run_manager.get(run.run_id).sources, ())
 
 
 if __name__ == "__main__":

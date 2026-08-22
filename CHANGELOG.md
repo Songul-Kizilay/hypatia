@@ -2,6 +2,52 @@
 
 All notable project changes are recorded here.
 
+## [0.3.131] - 2026-08-23
+
+### Added
+
+- `SOURCE_FETCH` capability and `SourceFetchStepOperation`, reusing the canonical
+  `ResearchSourceFetcher` pipeline. No second HTTP path was added.
+- `ResearchPlanStep.authorized_source_url` is the one exact source a step may
+  acquire, bounded to 2,048 characters and rejecting embedded control
+  characters. Draft steps accept it as an optional fourth element.
+
+### Safety
+
+- The URL is never chosen by the operation. It comes only from the step's
+  explicit authorization: never inferred from instruction text, never taken from
+  a discovery result, never guessed from ranking. Tests assert zero network calls
+  when a URL appears only in instruction text or only in a discovery record.
+- Every existing protection stays in force through the reused pipeline: public
+  HTTPS only, credential rejection, port restrictions, DNS and IP validation,
+  public-address enforcement, redirect validation, TLS and hostname validation,
+  response-size, content-type, and encoding bounds. A composition test drives the
+  real `HttpResearchSourceFetcher` and confirms plain HTTP, a loopback address,
+  and embedded credentials are all still rejected.
+- The operation is acquisition-only. It performs no acceptance: nothing is
+  indexed, no accepted-source record is written, no content snapshot is stored,
+  and no evidence, assessment, or claim is created. Accepting a source remains a
+  separate explicit contract.
+- Because nothing is persisted, cancellation after bytes arrive leaves no partial
+  research state. Cancellation before the fetch prevents any network call.
+- A closed run, unknown run ID, or missing run binding is rejected before any
+  network call.
+- Blank content never becomes a successful fetch; the domain rejects it at
+  `ResearchSource` construction and the operation guards it again.
+- Fetched content is untrusted data with no instruction authority and is never
+  sent to a language model here. User-facing detail reports only the bounded URL,
+  content type, and character count, never source contents.
+
+### Verification
+
+- The package-aware full local suite contains 1,764 passing automated tests.
+- Fifteen new operation tests cover authorized-only fetching, refusal of
+  instruction-text and discovery URLs, cancellation before and after the fetch,
+  acceptance of nothing, audited pipeline rejection, blank-content refusal at
+  both layers, closed and unknown runs, content never appearing in detail,
+  bounded hostile URLs, and step-level URL validation.
+- The standing composition table now covers five capabilities.
+
 ## [0.3.130] - 2026-08-23
 
 ### Added

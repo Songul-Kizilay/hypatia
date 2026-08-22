@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.130 (Genesis)`
+`v0.3.131 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.130`** is the current executable package and GitHub
+- **Runtime release `v0.3.131`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -32,6 +32,15 @@ with optional OpenAI-compatible LLM conversation support.
 ### Implemented
 
 - Application bootstrap, configuration, logging, and dependency injection.
+- The fifth connected research capability, `SOURCE_FETCH`, reuses the canonical
+  source-fetch pipeline with every existing protection intact and adds no second
+  HTTP path. A step may acquire only the one URL it explicitly authorizes through
+  `authorized_source_url`; the URL is never inferred from instruction text nor
+  taken from a discovery result. The operation is acquisition-only: nothing is
+  indexed, accepted, stored as content, or turned into evidence, an assessment,
+  or a claim, so cancellation after bytes arrive leaves no partial state.
+  Fetched content stays untrusted, carries no instruction authority, is never
+  sent to a language model here, and never appears in user-facing detail.
 - The fourth connected research capability, `SOURCE_DISCOVERY`, reuses the
   existing discovery provider abstraction and run audit path rather than adding a
   second discovery engine. One step performs exactly one bounded query with no
@@ -771,7 +780,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,745 automated tests pass through package-aware discovery.
+- 1,764 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.

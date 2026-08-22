@@ -102,6 +102,7 @@ from research.ResearchSourceContentStore import ResearchSourceContentStore
 from research.ResearchSourceDiscoveryProvider import ResearchSourceDiscoveryProvider
 from research.ResearchSourceFetcher import ResearchSourceFetcher
 from research.SourceDiscoveryStepOperation import SourceDiscoveryStepOperation
+from research.SourceFetchStepOperation import SourceFetchStepOperation
 from response.ResponseComposer import ResponseComposer
 from session.SessionCreateService import SessionCreateService
 from session.SessionDeletePreviewService import SessionDeletePreviewService
@@ -245,6 +246,14 @@ class CognitiveEngine:
                     ResearchPlanStepCapability.SOURCE_DISCOVERY,
                     SourceDiscoveryStepOperation(
                         research_source_discovery_provider,
+                        research_run_manager,
+                    ),
+                )
+            if research_source_fetcher is not None:
+                operation_registry.register(
+                    ResearchPlanStepCapability.SOURCE_FETCH,
+                    SourceFetchStepOperation(
+                        research_source_fetcher,
                         research_run_manager,
                     ),
                 )

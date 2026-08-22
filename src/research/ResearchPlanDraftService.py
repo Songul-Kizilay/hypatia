@@ -12,7 +12,11 @@ from research.ResearchPlanDraftPreview import ResearchPlanDraftPreview
 from research.ResearchPlanStep import ResearchPlanStep
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 
-ResearchPlanStepDraft = tuple[str, tuple[str, ...]] | tuple[str, tuple[str, ...], str]
+ResearchPlanStepDraft = (
+    tuple[str, tuple[str, ...]]
+    | tuple[str, tuple[str, ...], str]
+    | tuple[str, tuple[str, ...], str, str]
+)
 
 
 class ResearchPlanDraftService:
@@ -53,17 +57,21 @@ class ResearchPlanDraftService:
             raise ResearchError("Research plan draft steps must be an immutable tuple.")
         steps: list[ResearchPlanStep] = []
         for index, draft in enumerate(step_drafts, start=1):
-            if not isinstance(draft, tuple) or len(draft) not in (2, 3):
+            if not isinstance(draft, tuple) or len(draft) not in (2, 3, 4):
                 raise ResearchError("Research plan draft step is invalid.")
             capability = ResearchPlanDraftService._capability(
-                draft[2] if len(draft) == 3 else None
+                draft[2] if len(draft) >= 3 else None
             )
+            authorized_source_url = draft[3] if len(draft) == 4 else ""
+            if not isinstance(authorized_source_url, str):
+                raise ResearchError("Research plan authorized source URL must be text.")
             steps.append(
                 ResearchPlanStep(
                     step_id=f"step-{index}",
                     instruction=draft[0],
                     selected_source_document_ids=draft[1],
                     capability=capability,
+                    authorized_source_url=authorized_source_url,
                 )
             )
         return tuple(steps)

@@ -17,6 +17,7 @@ class ResearchPlanStepCapability(StrEnum):
     ACCEPTED_SOURCE_LISTING = "accepted_source_listing"
     EVIDENCE_INTEGRITY_CHECK = "evidence_integrity_check"
     SOURCE_DISCOVERY = "source_discovery"
+    SOURCE_FETCH = "source_fetch"
 
     @property
     def executable(self) -> bool:
