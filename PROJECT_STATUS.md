@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.113 (Genesis)`
+`v0.3.114 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.113`** is the current executable package and GitHub
+- **Runtime release `v0.3.114`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -69,6 +69,13 @@ with optional OpenAI-compatible LLM conversation support.
   validation, route precedence, and exact Brain response contracts. The service
   reads existing manager snapshots and adds no mutation, provider, network,
   LLM, schema, store, or UI path.
+- The first user-authored Research planning domain contract is available as
+  immutable `ResearchPlan` and `ResearchPlanStep` values. A plan preserves one
+  bounded question and one to twenty explicit ordered steps. Each step preserves
+  one bounded authored instruction and zero to twenty exact user-selected source
+  document IDs; an empty selection never authorizes automatic source choice.
+  This domain-only foundation has no execution, run-lifecycle, Brain, UI,
+  persistence, provider, network, LLM, path, manager, or event-bus integration.
 - The Sources & evidence, Authored analysis, and Review & export workflow tabs
   repeat one read-only current-run banner with the selected question, status,
   and exact run ID. All three labels share one presentation value derived only
@@ -595,7 +602,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 - Automatic semantic augmentation of ordinary messages.
 - General web discovery, automatic or unattended candidate acceptance,
-  multi-source research
+  Research-plan execution/persistence/desktop creation, autonomous multi-source
   planning/synthesis,
   unattended/background contradiction review, automatic contradiction
   persistence or truth decisions, evidence ranking, automatic RAG augmentation, or
@@ -619,7 +626,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,541 automated tests pass through package-aware discovery.
+- 1,550 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -654,9 +661,9 @@ changed.
 
 ## Next Milestone
 
-Define the first bounded user-authored Research plan domain contract described
-by [`Architecture Audit v0.2`](docs/Architecture/Architecture_Audit_v0.2.md):
-explicit ordered steps with strict limits and validation, but no execution,
-provider, network, LLM, UI, persistence, schema migration, or automatic
-analysis. Keep planning data separate from the existing run lifecycle until its
-invariants and direct tests are stable.
+Add a pure no-write Research-plan draft/preview service over the stable domain
+contract. It must accept only explicit user-authored question, ordered steps,
+and source selections; return either one immutable plan preview or bounded
+validation failure; and remain outside Brain, UI, persistence, `ResearchRun`,
+provider, network, LLM, event-bus, and execution paths until its direct
+application tests are stable.
