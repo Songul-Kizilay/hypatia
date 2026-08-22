@@ -2,6 +2,35 @@
 
 All notable project changes are recorded here.
 
+## [0.3.94] - 2026-08-22
+
+### Added
+
+- Research Overview can sort the current loaded or filtered run view by newest
+  update, oldest update, newest creation, or question text.
+- One explicit current-sort line remains visible beside the read-only selector.
+  Equal timestamps and equal case-folded questions use ascending exact run IDs
+  as deterministic tie breaks.
+
+### Safety
+
+- Sorting reorders only the current presentation tuple. It does not change the
+  immutable loaded catalog, filter membership, active run, or authored fields,
+  and it opens no Brain, controller, storage, provider, network, LLM, index,
+  event-bus, or mutation boundary.
+- Refresh and filter application reuse the selected sort. Invalid local sort
+  state leaves the visible view untouched, and hidden active runs remain active
+  until the user explicitly chooses another visible run.
+
+### Verification
+
+- The package-aware full local suite contains 1,463 passing automated tests.
+- Focused desktop coverage contains 104 passing tests, including all four sort
+  modes, deterministic ties, filter-membership isolation, active-selection and
+  authored-field preservation, and invalid-state isolation.
+- Black, Ruff, and MyPy pass. A real Tk measurement confirms the read-only sort
+  selector in a 954-by-973-pixel requested window.
+
 ## [0.3.93] - 2026-08-22
 
 ### Added

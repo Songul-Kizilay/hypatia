@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 import unittest
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
 from unittest.mock import Mock, patch
@@ -22,6 +22,7 @@ from desktop.TkinterDesktopWindow import (
     _RESEARCH_ANALYSIS_TAB_TITLES,
     _RESEARCH_WORKFLOW_TAB_TITLES,
     DesktopTheme,
+    ResearchRunSort,
     TkinterDesktopWindow,
     _accessibility_palette,
     _format_citations,
@@ -486,6 +487,10 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_metadata = RecordingVariable("Old metadata")
         window._research_run_filter = RecordingVariable("old filter")
         window._research_run_filter_summary = RecordingVariable("old filter summary")
+        window._research_run_sort = RecordingVariable(
+            ResearchRunSort.UPDATED_NEWEST.value
+        )
+        window._research_run_sort_summary = RecordingVariable("")
         window._research_run_selector = RecordingCandidateSelector()
         window._research_runs = ()
         window._visible_research_runs = ()
@@ -551,6 +556,10 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_metadata = RecordingVariable("")
         window._research_run_filter = RecordingVariable("old filter")
         window._research_run_filter_summary = RecordingVariable("")
+        window._research_run_sort = RecordingVariable(
+            ResearchRunSort.UPDATED_NEWEST.value
+        )
+        window._research_run_sort_summary = RecordingVariable("")
         window._research_run_selector = RecordingCandidateSelector()
         window._research_runs = ()
         window._visible_research_runs = ()
@@ -662,6 +671,9 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         )
         window._research_run_filter = RecordingVariable("second")
         window._research_run_filter_summary = RecordingVariable("")
+        window._research_run_sort = RecordingVariable(
+            ResearchRunSort.UPDATED_NEWEST.value
+        )
         window._research_run_id = RecordingVariable("run-2")
         window._research_run_choice = RecordingVariable("Second question")
         window._research_run_selector = RecordingCandidateSelector()
@@ -703,6 +715,9 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         )
         window._research_run_filter = RecordingVariable("missing")
         window._research_run_filter_summary = RecordingVariable("")
+        window._research_run_sort = RecordingVariable(
+            ResearchRunSort.UPDATED_NEWEST.value
+        )
         window._research_run_id = RecordingVariable("run-1")
         window._research_run_choice = RecordingVariable("Only question")
         window._research_run_selector = RecordingCandidateSelector(0)
@@ -772,6 +787,154 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             ["Research run filter cannot exceed 200 characters."],
         )
 
+    def test_research_run_sort_modes_use_deterministic_run_id_ties(self) -> None:
+        base = datetime(2026, 8, 22, tzinfo=UTC)
+        tie_z = ResearchRun(
+            "run-z",
+            "alpha",
+            ResearchRunStatus.COLLECTING,
+            (),
+            (),
+            base,
+            base + timedelta(hours=2),
+        )
+        tie_a = ResearchRun(
+            "run-a",
+            "Alpha",
+            ResearchRunStatus.COMPLETED,
+            (),
+            (),
+            base + timedelta(hours=2),
+            base + timedelta(hours=2),
+        )
+        oldest = ResearchRun(
+            "run-m",
+            "Beta",
+            ResearchRunStatus.CANCELLED,
+            (),
+            (),
+            base + timedelta(hours=1),
+            base + timedelta(hours=1),
+        )
+        runs = (tie_z, oldest, tie_a)
+
+        self.assertEqual(
+            TkinterDesktopWindow._sort_research_runs(
+                runs,
+                ResearchRunSort.UPDATED_NEWEST,
+            ),
+            (tie_a, tie_z, oldest),
+        )
+        self.assertEqual(
+            TkinterDesktopWindow._sort_research_runs(
+                runs,
+                ResearchRunSort.UPDATED_OLDEST,
+            ),
+            (oldest, tie_a, tie_z),
+        )
+        self.assertEqual(
+            TkinterDesktopWindow._sort_research_runs(
+                runs,
+                ResearchRunSort.CREATED_NEWEST,
+            ),
+            (tie_a, oldest, tie_z),
+        )
+        self.assertEqual(
+            TkinterDesktopWindow._sort_research_runs(
+                runs,
+                ResearchRunSort.QUESTION,
+            ),
+            (tie_a, tie_z, oldest),
+        )
+
+    def test_local_sort_preserves_filter_membership_catalog_and_active_run(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        base = datetime(2026, 8, 22, tzinfo=UTC)
+        hidden = ResearchRun(
+            "run-hidden",
+            "Hidden",
+            ResearchRunStatus.COLLECTING,
+            (),
+            (),
+            base,
+            base,
+        )
+        second = ResearchRun(
+            "run-2",
+            "Zulu",
+            ResearchRunStatus.COLLECTING,
+            (),
+            (),
+            base,
+            base,
+        )
+        active = ResearchRun(
+            "run-1",
+            "Alpha",
+            ResearchRunStatus.COMPLETED,
+            (),
+            (),
+            base,
+            base,
+        )
+        full_catalog = (hidden, second, active)
+        visible_membership = (second, active)
+        window._research_run_sort = RecordingVariable(ResearchRunSort.QUESTION.value)
+        window._research_run_sort_summary = RecordingVariable("")
+        window._research_run_id = RecordingVariable("run-1")
+        window._research_run_choice = RecordingVariable("Alpha")
+        window._research_run_selector = RecordingCandidateSelector(1)
+        window._research_runs = full_catalog
+        window._visible_research_runs = visible_membership
+        window._research_assessment_text = RecordingVariable("authored")
+        window._status = RecordingStatus()
+
+        window._apply_research_run_sort()
+
+        self.assertIs(window._research_runs, full_catalog)
+        self.assertEqual(window._visible_research_runs, (active, second))
+        self.assertEqual(
+            window._research_run_selector.values,
+            (
+                "Alpha [completed] — run-1",
+                "Zulu [collecting] — run-2",
+            ),
+        )
+        self.assertEqual(window._research_run_selector.current(), 0)
+        self.assertEqual(window._research_run_id.value, "run-1")
+        self.assertEqual(window._research_assessment_text.value, "authored")
+        self.assertEqual(
+            window._research_run_sort_summary.value,
+            "Current sort: Question — A to Z.",
+        )
+        self.assertEqual(
+            window._status.values,
+            [
+                "research run sort: Question — A to Z; "
+                "2 visible; active run unchanged"
+            ],
+        )
+
+    def test_invalid_local_sort_leaves_visible_view_unchanged(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        window._research_run_sort = RecordingVariable("invalid")
+        window._research_run_sort_summary = RecordingVariable("Old sort")
+        window._research_run_selector = RecordingCandidateSelector(0)
+        window._research_run_selector.values = ("Existing",)
+        window._visible_research_runs = ()
+        window._status = RecordingStatus()
+
+        window._apply_research_run_sort()
+
+        self.assertEqual(window._research_run_selector.values, ("Existing",))
+        self.assertEqual(
+            window._research_run_sort_summary.value,
+            "Invalid sort; the visible research runs are unchanged.",
+        )
+        self.assertEqual(window._status.values, ["Research run sort is invalid."])
+
     def test_empty_research_run_catalog_clears_only_run_bound_presentations(
         self,
     ) -> None:
@@ -785,6 +948,10 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_metadata = RecordingVariable("Old metadata")
         window._research_run_filter = RecordingVariable("old filter")
         window._research_run_filter_summary = RecordingVariable("old filter summary")
+        window._research_run_sort = RecordingVariable(
+            ResearchRunSort.UPDATED_NEWEST.value
+        )
+        window._research_run_sort_summary = RecordingVariable("")
         window._research_run_selector = RecordingCandidateSelector(selected_index=0)
         window._research_runs = ()
         window._visible_research_runs = ()
