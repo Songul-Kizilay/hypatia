@@ -16,6 +16,7 @@ if str(SRC_DIR) not in sys.path:
 
 from brain.BrainResponse import BrainResponse
 from core.CancellationSignal import CancellationToken
+from desktop.DesktopController import DesktopController
 from desktop.DesktopRequestRunner import DesktopRequestCompletion
 from desktop.TkinterDesktopWindow import (
     _MAX_RESEARCH_RUN_FILTER_LENGTH,
@@ -154,9 +155,10 @@ class AccessibilityPreferenceTests(unittest.TestCase):
                 "Comparison",
                 "Assessment",
                 "Claims & contradictions",
+                "Plan draft",
             ),
         )
-        self.assertEqual(len(set(_RESEARCH_ANALYSIS_TAB_TITLES)), 4)
+        self.assertEqual(len(set(_RESEARCH_ANALYSIS_TAB_TITLES)), 5)
 
     def test_selected_research_context_keeps_exact_run_id_and_bounds_question(
         self,
@@ -776,6 +778,9 @@ class AccessibilityPreferenceTests(unittest.TestCase):
         window._session_list = RecordingWidget()
         window._transcript = RecordingWidget()
         window._composer = RecordingWidget()
+        window._research_plan_instructions = RecordingWidget()
+        window._research_plan_source_ids = RecordingWidget()
+        window._research_plan_preview = RecordingWidget()
 
         window._apply_accessibility_preferences()
 
@@ -785,10 +790,80 @@ class AccessibilityPreferenceTests(unittest.TestCase):
             window._session_list.configurations["font"], ("TkDefaultFont", 18)
         )
         self.assertEqual(window._composer.configurations["foreground"], "#FFFFFF")
+        self.assertEqual(
+            window._research_plan_preview.configurations["background"],
+            "#000000",
+        )
+        self.assertEqual(
+            window._research_plan_instructions.configurations["font"],
+            ("TkDefaultFont", 18),
+        )
         self.assertIn("TButton", window._style.configurations)
         self.assertIn("TEntry", window._style.mappings)
         self.assertIn("TCombobox", window._style.configurations)
         self.assertIn("TNotebook.Tab", window._style.mappings)
+
+
+class ResearchPlanDesktopPreviewTests(unittest.TestCase):
+    def test_editor_sends_exact_fields_and_shows_complete_runtime_rejection(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = Mock(spec=DesktopController)
+        response = BrainResponse(
+            message=(
+                "Research plan draft rejected:\n"
+                "Reason: Research plan step instruction cannot be empty.\n"
+                "No plan was written or executed."
+            ),
+            request_id="plan-preview-1",
+            intent="research_plan_draft_preview",
+            memory_count=0,
+            success=False,
+        )
+        controller.preview_research_plan_draft.return_value = response
+        instruction_editor = Mock()
+        instruction_editor.get.return_value = "Review evidence.\n"
+        source_editor = Mock()
+        source_editor.get.return_value = "document-2, document-1\n"
+        preview_output = Mock()
+        appended: list[BrainResponse] = []
+        request_labels: list[str] = []
+        window._controller = controller
+        window._research_question = RecordingInput("Compare findings.")
+        window._research_plan_instructions = instruction_editor
+        window._research_plan_source_ids = source_editor
+        window._research_plan_preview = preview_output
+        window._append_response = appended.append
+
+        def start_request(
+            action: Callable[[], BrainResponse],
+            on_success: Callable[[BrainResponse], None],
+            label: str,
+        ) -> None:
+            request_labels.append(label)
+            on_success(action())
+
+        window._start_request = start_request
+
+        window._preview_research_plan_draft()
+
+        controller.preview_research_plan_draft.assert_called_once_with(
+            "Compare findings.",
+            "Review evidence.\n",
+            "document-2, document-1\n",
+        )
+        self.assertEqual(request_labels, ["research plan preview"])
+        instruction_editor.get.assert_called_once_with("1.0", "end-1c")
+        source_editor.get.assert_called_once_with("1.0", "end-1c")
+        preview_output.delete.assert_called_once_with("1.0", "end")
+        preview_output.insert.assert_called_once_with("end", response.message)
+        preview_output.see.assert_called_once_with("1.0")
+        self.assertEqual(
+            [call.kwargs["state"] for call in preview_output.configure.call_args_list],
+            ["normal", "disabled"],
+        )
+        self.assertEqual(appended, [response])
 
 
 class SessionPresentationTests(unittest.TestCase):

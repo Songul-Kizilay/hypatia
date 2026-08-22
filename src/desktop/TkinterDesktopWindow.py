@@ -70,6 +70,7 @@ _RESEARCH_ANALYSIS_TAB_TITLES = (
     "Comparison",
     "Assessment",
     "Claims & contradictions",
+    "Plan draft",
 )
 
 
@@ -1282,6 +1283,10 @@ class TkinterDesktopWindow:
             self._research_analysis_tabs,
             padding=8,
         )
+        research_plan_frame = ttk.Frame(
+            self._research_analysis_tabs,
+            padding=8,
+        )
         self._research_analysis_tabs.add(
             research_saved_records_frame,
             text=_RESEARCH_ANALYSIS_TAB_TITLES[0],
@@ -1298,13 +1303,99 @@ class TkinterDesktopWindow:
             research_claims_frame,
             text=_RESEARCH_ANALYSIS_TAB_TITLES[3],
         )
+        self._research_analysis_tabs.add(
+            research_plan_frame,
+            text=_RESEARCH_ANALYSIS_TAB_TITLES[4],
+        )
         for analysis_section in (
             research_saved_records_frame,
             research_comparison_frame,
             research_assessment_frame,
             research_claims_frame,
+            research_plan_frame,
         ):
             analysis_section.columnconfigure(1, weight=1)
+        research_plan_frame.columnconfigure(0, weight=1)
+        research_plan_frame.columnconfigure(1, weight=1)
+        research_plan_frame.rowconfigure(3, weight=1)
+        research_plan_frame.rowconfigure(6, weight=1)
+        ttk.Label(
+            research_plan_frame,
+            text=(
+                "Draft only: write one ordered instruction per line. On the same "
+                "line in Sources, enter optional exact document IDs separated by "
+                "commas. Preview never saves or executes the plan."
+            ),
+            style="Hint.TLabel",
+            wraplength=1100,
+            justify="left",
+        ).grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 8))
+        ttk.Label(research_plan_frame, text="Question").grid(
+            row=1,
+            column=0,
+            columnspan=2,
+            sticky="w",
+        )
+        ttk.Entry(
+            research_plan_frame,
+            textvariable=self._research_question,
+        ).grid(row=2, column=0, columnspan=2, sticky="ew", pady=(4, 8))
+        instruction_frame = ttk.LabelFrame(
+            research_plan_frame,
+            text="Ordered instructions — one step per line",
+            padding=6,
+        )
+        instruction_frame.grid(row=3, column=0, sticky="nsew", padx=(0, 4))
+        instruction_frame.columnconfigure(0, weight=1)
+        instruction_frame.rowconfigure(0, weight=1)
+        self._research_plan_instructions = scrolledtext.ScrolledText(
+            instruction_frame,
+            height=9,
+            wrap=tk.WORD,
+        )
+        self._research_plan_instructions.grid(row=0, column=0, sticky="nsew")
+        source_frame = ttk.LabelFrame(
+            research_plan_frame,
+            text="Sources — matching line; comma-separated exact IDs",
+            padding=6,
+        )
+        source_frame.grid(row=3, column=1, sticky="nsew", padx=(4, 0))
+        source_frame.columnconfigure(0, weight=1)
+        source_frame.rowconfigure(0, weight=1)
+        self._research_plan_source_ids = scrolledtext.ScrolledText(
+            source_frame,
+            height=9,
+            wrap=tk.WORD,
+        )
+        self._research_plan_source_ids.grid(row=0, column=0, sticky="nsew")
+        ttk.Button(
+            research_plan_frame,
+            text="Preview plan — no write",
+            command=self._preview_research_plan_draft,
+        ).grid(row=4, column=1, sticky="e", pady=(8, 8))
+        ttk.Label(research_plan_frame, text="Complete preview or rejection").grid(
+            row=5,
+            column=0,
+            columnspan=2,
+            sticky="w",
+        )
+        self._research_plan_preview = scrolledtext.ScrolledText(
+            research_plan_frame,
+            height=8,
+            wrap=tk.WORD,
+        )
+        self._research_plan_preview.grid(
+            row=6,
+            column=0,
+            columnspan=2,
+            sticky="nsew",
+            pady=(4, 0),
+        )
+        self._research_plan_preview.insert(
+            tk.END,
+            "No plan preview yet. Enter the authored draft and choose Preview plan.",
+        )
+        self._research_plan_preview.configure(state=tk.DISABLED)
         authored_claim_frame = ttk.LabelFrame(
             research_saved_records_frame,
             text="Recorded claims and contradictions",
@@ -2157,7 +2248,17 @@ class TkinterDesktopWindow:
             selectforeground=palette.foreground,
             font=font,
         )
-        for widget in (self._transcript, self._composer):
+        text_widgets = [self._transcript, self._composer]
+        text_widgets.extend(
+            widget
+            for widget in (
+                getattr(self, "_research_plan_instructions", None),
+                getattr(self, "_research_plan_source_ids", None),
+                getattr(self, "_research_plan_preview", None),
+            )
+            if widget is not None
+        )
+        for widget in text_widgets:
             widget.configure(
                 background=palette.field_background,
                 foreground=palette.foreground,
@@ -2284,6 +2385,33 @@ class TkinterDesktopWindow:
         self._append_response(response)
         if response.success and response.research_runs:
             self._render_research_run_selector(response.research_runs)
+
+    def _preview_research_plan_draft(self) -> None:
+        """Send only the explicit no-write plan-preview request."""
+        question = self._research_question.get()
+        instruction_lines = self._research_plan_instructions.get("1.0", "end-1c")
+        source_id_lines = self._research_plan_source_ids.get("1.0", "end-1c")
+        self._start_request(
+            lambda: self._controller.preview_research_plan_draft(
+                question,
+                instruction_lines,
+                source_id_lines,
+            ),
+            self._complete_research_plan_draft_preview,
+            "research plan preview",
+        )
+
+    def _complete_research_plan_draft_preview(
+        self,
+        response: BrainResponse,
+    ) -> None:
+        """Show the complete ready or rejected runtime preview without confirmation."""
+        self._research_plan_preview.configure(state=tk.NORMAL)
+        self._research_plan_preview.delete("1.0", tk.END)
+        self._research_plan_preview.insert(tk.END, response.message)
+        self._research_plan_preview.see("1.0")
+        self._research_plan_preview.configure(state=tk.DISABLED)
+        self._append_response(response)
 
     def _show_research_runs(self) -> None:
         """Render the current persisted run catalog without network access."""

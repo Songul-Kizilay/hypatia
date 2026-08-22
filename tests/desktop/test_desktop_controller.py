@@ -282,6 +282,65 @@ class DesktopControllerTests(unittest.TestCase):
 
         self.assertEqual(self.brain.requests, [])
 
+    def test_research_plan_draft_preview_uses_exact_ordered_structured_request(
+        self,
+    ) -> None:
+        response = self.controller.preview_research_plan_draft(
+            "  Compare findings.  ",
+            "  Review evidence.  \nRecord gaps.",
+            " document-2, document-1 \n",
+        )
+
+        self.assertIs(response, self.response)
+        self.assertEqual(len(self.brain.requests), 1)
+        request = self.brain.requests[0]
+        self.assertIsInstance(request, BrainRequest)
+        assert isinstance(request, BrainRequest)
+        self.assertEqual(request.message, "Preview explicit authored research plan")
+        self.assertEqual(request.source, "desktop")
+        self.assertEqual(
+            request.metadata,
+            {
+                "intent": "research_plan_draft_preview",
+                "research_plan_question": "Compare findings.",
+                "research_plan_steps": (
+                    ("Review evidence.", ("document-2", "document-1")),
+                    ("Record gaps.", ()),
+                ),
+            },
+        )
+
+    def test_research_plan_draft_preserves_misaligned_rows_for_runtime_rejection(
+        self,
+    ) -> None:
+        self.controller.preview_research_plan_draft(
+            "Question",
+            "Review evidence.",
+            "\ndocument-2, document-2",
+        )
+
+        request = self.brain.requests[0]
+        assert isinstance(request, BrainRequest)
+        self.assertEqual(
+            request.metadata["research_plan_steps"],
+            (
+                ("Review evidence.", ()),
+                ("", ("document-2", "document-2")),
+            ),
+        )
+
+    def test_research_plan_draft_rejects_non_text_fields_without_brain_call(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(ValueError, "fields must be text"):
+            self.controller.preview_research_plan_draft(
+                "Question",
+                cast(str, None),
+                "",
+            )
+
+        self.assertEqual(self.brain.requests, [])
+
     def test_list_research_runs_uses_a_structured_read_only_request(self) -> None:
         response = self.controller.list_research_runs()
 
