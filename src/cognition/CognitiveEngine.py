@@ -18,6 +18,9 @@ from cognition.ResearchAuthoredHistoryApplicationService import (
 from cognition.ResearchOverviewApplicationService import (
     ResearchOverviewApplicationService,
 )
+from cognition.ResearchPlanPreviewApplicationService import (
+    ResearchPlanPreviewApplicationService,
+)
 from core.Exceptions import (
     KnowledgeError,
     MemoryError,
@@ -70,6 +73,7 @@ from research.ResearchClaimContradictionProposalProvider import (
 )
 from research.ResearchClaimRecord import ResearchClaimRecord
 from research.ResearchEvidenceIntegrityAuditor import ResearchEvidenceIntegrityAuditor
+from research.ResearchPlanDraftService import ResearchPlanDraftService
 from research.ResearchRun import ResearchRun
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchRunStatus import ResearchRunStatus
@@ -135,6 +139,7 @@ class CognitiveEngine:
         research_evidence_integrity_auditor: (
             ResearchEvidenceIntegrityAuditor | None
         ) = None,
+        research_plan_draft_service: ResearchPlanDraftService | None = None,
     ) -> None:
         if llm_history_max_turns is not None and (
             isinstance(llm_history_max_turns, bool) or llm_history_max_turns <= 0
@@ -192,6 +197,10 @@ class CognitiveEngine:
                 research_run_manager,
             )
         )
+        self._research_plan_preview_service = ResearchPlanPreviewApplicationService(
+            response_composer,
+            research_plan_draft_service,
+        )
         self._hybrid_semantic_memory_ranker = HybridSemanticMemoryRanker()
         self._router = BrainRouter()
 
@@ -231,6 +240,9 @@ class CognitiveEngine:
 
         if self._research_overview_service.is_run_list_request(request):
             return self._research_overview_service.process_run_list(request)
+
+        if self._research_plan_preview_service.is_draft_preview_request(request):
+            return self._research_plan_preview_service.process_draft_preview(request)
 
         if self._is_research_run_markdown_export_verify_request(request):
             return self._process_research_run_markdown_export_verify(request)
