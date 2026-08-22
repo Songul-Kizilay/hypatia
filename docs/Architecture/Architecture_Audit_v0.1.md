@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.96` in the current release candidate) are the
+- **Runtime releases** (`v0.3.97` in the current release candidate) are the
   executable package and GitHub release line. They are the source-backed
   implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
@@ -260,6 +260,11 @@ bounded text predicate before the deterministic sort. It reports visible/total
 membership with the selected facet; clearing text retains that status choice.
 No-match preserves hidden active state and authored fields, and invalid facet
 state leaves the prior view untouched without opening a runtime boundary.
+One separate catalog summary derives complete All, Collecting, Completed,
+Failed, and Cancelled counts only from the full immutable loaded run tuple.
+Text/status filtering and sorting cannot change those totals; an empty tuple
+produces explicit zeroes for every lifecycle. It opens no read, controller,
+provider, persistence, event-bus, or mutation boundary.
 The selected immutable run supplies one additional Overview metadata line.
 Created/updated timestamps use seconds-level ISO-8601 text with their timezone
 offset, and only the complete `failures` tuple length is shown. No stage/reason,

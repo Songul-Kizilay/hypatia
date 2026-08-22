@@ -44,6 +44,10 @@ The catalog also has an explicit All/Collecting/Completed/Failed/Cancelled
 status view. It composes with bounded text matching and current sort, reports
 visible/total membership, and preserves hidden active and authored state. An
 invalid status leaves the prior view untouched and starts no runtime action.
+One adjacent read-only catalog summary reports complete All, Collecting,
+Completed, Failed, and Cancelled counts from the full immutable loaded tuple.
+Filtering and sorting cannot change those totals; an empty catalog replaces
+stale values with explicit zeroes and no additional read or action occurs.
 Overview also renders one bounded metadata line from the selected immutable
 run: seconds-level timezone-aware creation/update times and only the aggregate
 safe-failure count. It cannot expose a failure stage/reason or retain stale

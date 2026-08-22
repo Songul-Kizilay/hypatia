@@ -489,6 +489,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_filter = RecordingVariable("old filter")
         window._research_run_filter_summary = RecordingVariable("old filter summary")
         window._research_run_status_filter = RecordingVariable("old status")
+        window._research_run_catalog_summary = RecordingVariable("old catalog")
         window._research_run_sort = RecordingVariable(
             ResearchRunSort.UPDATED_NEWEST.value
         )
@@ -537,6 +538,11 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         )
         self.assertEqual(window._research_run_selector.current(), 0)
         self.assertEqual(
+            window._research_run_catalog_summary.value,
+            "Loaded catalog: All 1 · Collecting 1 · Completed 0 · "
+            "Failed 0 · Cancelled 0",
+        )
+        self.assertEqual(
             window._research_run_summary.value,
             "Status: collecting · Sources: 0 · Evidence: 0 · Claims: 0",
         )
@@ -564,6 +570,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_status_filter = RecordingVariable(
             ResearchRunStatusFacet.ALL.value
         )
+        window._research_run_catalog_summary = RecordingVariable("")
         window._research_run_sort_summary = RecordingVariable("")
         window._research_run_selector = RecordingCandidateSelector()
         window._research_runs = ()
@@ -593,6 +600,11 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         self.assertEqual(controller.sources, [])
         self.assertEqual(responses, [controller.list_response])
         self.assertEqual(window._research_run_id.value, "run-123")
+        self.assertEqual(
+            window._research_run_catalog_summary.value,
+            "Loaded catalog: All 1 · Collecting 1 · Completed 0 · "
+            "Failed 0 · Cancelled 0",
+        )
         self.assertEqual(
             window._research_run_selector.values,
             ("Compare local models [collecting] — run-123",),
@@ -828,6 +840,44 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
                     (run,),
                 )
 
+    def test_research_run_catalog_summary_counts_every_lifecycle(self) -> None:
+        now = datetime(2026, 8, 22, tzinfo=UTC)
+        runs = tuple(
+            ResearchRun(
+                f"run-{index}",
+                f"Question {index}",
+                status,
+                (),
+                (),
+                now,
+                now,
+            )
+            for index, status in enumerate(
+                (
+                    ResearchRunStatus.COMPLETED,
+                    ResearchRunStatus.COLLECTING,
+                    ResearchRunStatus.FAILED,
+                    ResearchRunStatus.CANCELLED,
+                    ResearchRunStatus.COLLECTING,
+                )
+            )
+        )
+
+        self.assertEqual(
+            TkinterDesktopWindow._research_run_catalog_summary_text(runs),
+            "Loaded catalog: All 5 · Collecting 2 · Completed 1 · "
+            "Failed 1 · Cancelled 1",
+        )
+
+    def test_empty_research_run_catalog_summary_has_complete_zero_counts(
+        self,
+    ) -> None:
+        self.assertEqual(
+            TkinterDesktopWindow._research_run_catalog_summary_text(()),
+            "Loaded catalog: All 0 · Collecting 0 · Completed 0 · "
+            "Failed 0 · Cancelled 0",
+        )
+
     def test_status_filter_composes_with_text_sort_and_clear(self) -> None:
         window: Any = object.__new__(TkinterDesktopWindow)
         now = datetime(2026, 8, 22, tzinfo=UTC)
@@ -864,6 +914,9 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_status_filter = RecordingVariable(
             ResearchRunStatusFacet.COMPLETED.value
         )
+        window._research_run_catalog_summary = RecordingVariable(
+            "Loaded catalog: immutable"
+        )
         window._research_run_sort = RecordingVariable(ResearchRunSort.QUESTION.value)
         window._research_run_id = RecordingVariable("run-1")
         window._research_run_choice = RecordingVariable("Alpha plan")
@@ -880,6 +933,10 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         self.assertEqual(window._research_run_selector.current(), 0)
         self.assertEqual(window._research_run_id.value, "run-1")
         self.assertEqual(window._research_assessment_text.value, "authored")
+        self.assertEqual(
+            window._research_run_catalog_summary.value,
+            "Loaded catalog: immutable",
+        )
         self.assertEqual(
             window._research_run_filter_summary.value,
             "1 of 3 loaded research runs match (Completed).",
@@ -898,6 +955,10 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         )
         self.assertEqual(window._research_run_selector.current(), 0)
         self.assertEqual(window._research_assessment_text.value, "authored")
+        self.assertEqual(
+            window._research_run_catalog_summary.value,
+            "Loaded catalog: immutable",
+        )
         self.assertEqual(
             window._research_run_filter_summary.value,
             "2 of 3 loaded research runs match (Completed).",
@@ -1284,6 +1345,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_filter = RecordingVariable("old filter")
         window._research_run_filter_summary = RecordingVariable("old filter summary")
         window._research_run_status_filter = RecordingVariable("old status")
+        window._research_run_catalog_summary = RecordingVariable("old catalog")
         window._research_run_sort = RecordingVariable(
             ResearchRunSort.UPDATED_NEWEST.value
         )
@@ -1339,6 +1401,11 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         self.assertEqual(
             window._research_run_metadata.value,
             "Run metadata unavailable: no research runs are available.",
+        )
+        self.assertEqual(
+            window._research_run_catalog_summary.value,
+            "Loaded catalog: All 0 · Collecting 0 · Completed 0 · "
+            "Failed 0 · Cancelled 0",
         )
         self.assertEqual(window._research_candidate_run_id, "")
         self.assertEqual(window._research_claim_contradiction_proposal_run_id, "")
