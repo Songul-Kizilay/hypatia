@@ -261,6 +261,9 @@ Beside those view controls, one compact catalog line always reports complete
 all/collecting/completed/failed/cancelled counts from the full loaded snapshot.
 Filtering and sorting do not change those totals, and an empty catalog shows
 zero for every lifecycle without requesting data.
+`Reset view` clears both local filters, returns to newest-update ordering,
+re-shows the complete catalog, and reselects the loaded active run. It never
+changes the run itself or user-authored research fields and starts no request.
 Overview also shows the selected run's seconds-level timezone-aware creation
 and update timestamps plus the complete safe-failure count. It never displays
 failure stage or reason text and performs no additional read.

@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.97 (Genesis)`
+`v0.3.98 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.97`** is the current executable package and GitHub
+- **Runtime release `v0.3.98`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -82,6 +82,10 @@ with optional OpenAI-compatible LLM conversation support.
   and Cancelled catalog counts from the full immutable loaded tuple. Those
   counts remain unchanged by text/status filtering and sorting, show explicit
   zeroes for an empty catalog, and open no runtime or mutation boundary.
+- One `Reset view` action clears both local filters, restores Updated-newest
+  sorting, re-shows the complete loaded catalog, and reselects a loaded active
+  row. It preserves exact active identity, authored fields, and catalog totals;
+  empty/stale-active state is explicit and no runtime or mutation starts.
 - The selected run's immutable creation/update times and complete safe-failure
   count appear in Overview as a bounded metadata line. Timestamps retain their
   timezone offset at seconds precision; failure stage/reason text is never
@@ -541,7 +545,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,452 automated tests pass through package-aware discovery.
+- 1,476 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -576,7 +580,7 @@ changed.
 
 ## Next Milestone
 
-Add one presentation-only `Reset view` action that clears text and status
-filtering, restores the default updated-newest sort, re-shows the full catalog
-and active row, preserves authored fields, and opens no runtime or mutation
-boundary.
+Add one read-only selected-run evidence-coverage summary with accepted sources,
+sources represented by evidence, and accepted sources without evidence. It must
+derive only from the immutable selected snapshot, make no quality/readiness
+inference, and open no runtime or mutation boundary.

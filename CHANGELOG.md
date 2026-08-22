@@ -2,6 +2,32 @@
 
 All notable project changes are recorded here.
 
+## [0.3.98] - 2026-08-22
+
+### Added
+
+- Research Overview now provides one explicit `Reset view` action for the
+  local run-catalog controls.
+- Reset clears the bounded text and status filters, restores Updated-newest
+  sorting, re-shows the complete catalog, and reselects a loaded active run.
+
+### Safety
+
+- Reset changes presentation state only. It preserves the immutable loaded
+  catalog, exact active run identity, authored assessment/claim fields, and the
+  complete catalog summary and opens no runtime or mutation boundary.
+- Empty catalogs and stale active IDs are explicit. Neither case selects a
+  different row, and invalid local filter/sort state can be safely recovered.
+
+### Verification
+
+- The package-aware full local suite contains 1,476 passing automated tests.
+- Focused desktop coverage contains 117 passing tests, including hidden active
+  restoration, default sort, authored-field preservation, empty catalogs,
+  stale active identity, and controller isolation.
+- Black, Ruff, and MyPy pass. A real Tk smoke confirms the action in the
+  existing 1080p-safe desktop layout.
+
 ## [0.3.97] - 2026-08-22
 
 ### Added
