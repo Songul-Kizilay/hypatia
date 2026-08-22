@@ -147,7 +147,7 @@ guide, while the repository now also contains a tested cognitive, memory,
 session, semantic-retrieval, and local-knowledge foundation. This vision
 document does not define the runtime boundary; consult
 [`PROJECT_STATUS.md`](../../PROJECT_STATUS.md) and the
-[Architecture Audit v0.1](../Architecture/Architecture_Audit_v0.1.md) for the
+[Architecture Audit v0.2](../Architecture/Architecture_Audit_v0.2.md) for the
 current verified implementation state.
 
 ---

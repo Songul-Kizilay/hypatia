@@ -32,7 +32,7 @@
 This document series describes the **target architecture**, not a claim that
 all listed modules are already executable. For the source-backed current
 baseline, implemented modules, validation results, and the bounded next
-increment, see [Architecture Audit v0.1](Architecture_Audit_v0.1.md) and the
+increment, see [Architecture Audit v0.2](Architecture_Audit_v0.2.md) and the
 repository-level [project status](../../PROJECT_STATUS.md).
 
 ---
@@ -239,7 +239,8 @@ docs/Architecture/
 | 35 | News Intelligence |
 | 36 | Travel Intelligence |
 | 37 | Culinary Intelligence |
-| Audit | [Architecture Audit v0.1](Architecture_Audit_v0.1.md) |
+| Current audit | [Architecture Audit v0.2](Architecture_Audit_v0.2.md) |
+| Baseline audit | [Architecture Audit v0.1](Architecture_Audit_v0.1.md) |
 | Historical release readiness | [v0.2.0 sonrası durum](Release_Readiness_v0.2.0.md) |
 
 ---
@@ -381,7 +382,7 @@ Distributed Intelligence
 
 This table tracks the intended architecture. It is deliberately not an
 implementation claim: the current executable state and verified release line
-are recorded in [Architecture Audit v0.1](Architecture_Audit_v0.1.md) and
+are recorded in [Architecture Audit v0.2](Architecture_Audit_v0.2.md) and
 [`PROJECT_STATUS.md`](../../PROJECT_STATUS.md).
 
 | Component | Status |
