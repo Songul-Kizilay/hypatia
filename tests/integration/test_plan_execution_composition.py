@@ -25,6 +25,9 @@ from knowledge.KnowledgeEngine import KnowledgeEngine
 from memory.MemoryManager import MemoryManager
 from planner.Planner import Planner
 from research.JsonFileResearchRunStore import JsonFileResearchRunStore
+from research.ResearchEvidenceIntegrityAuditor import (
+    ResearchEvidenceIntegrityAuditor,
+)
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchSource import ResearchSource
@@ -35,6 +38,7 @@ from session.SessionRenameTransactionService import SessionRenameTransactionServ
 EXPECTED_OPERATIONS = {
     ResearchPlanStepCapability.LOCAL_KNOWLEDGE_SEARCH: "local_knowledge_search",
     ResearchPlanStepCapability.ACCEPTED_SOURCE_LISTING: "accepted_source_listing",
+    ResearchPlanStepCapability.EVIDENCE_INTEGRITY_CHECK: "evidence_integrity_check",
 }
 
 
@@ -65,6 +69,9 @@ class PlanExecutionCompositionTests(unittest.TestCase):
                 event_bus=self.event_bus,
             ),
             research_run_manager=self.run_manager,
+            research_evidence_integrity_auditor=ResearchEvidenceIntegrityAuditor(
+                self.knowledge_engine
+            ),
         )
 
     def tearDown(self) -> None:
@@ -202,6 +209,55 @@ class PlanExecutionCompositionTests(unittest.TestCase):
         self._advance(plan_id)
 
         self.assertEqual(len(self.memory_manager.all()), before)
+
+    def test_evidence_integrity_check_runs_through_the_engine_route(self) -> None:
+        run = self.run_manager.create("What evidence supports the claim?")
+        plan_id = self._start("evidence_integrity_check", run_id=run.run_id)
+
+        response = self._advance(plan_id)
+
+        state = response.research_plan_execution
+        assert state is not None
+        self.assertEqual(state.status.value, "completed")
+        self.assertTrue(state.steps[0].work_performed)
+        self.assertEqual(state.steps[0].operation, "evidence_integrity_check")
+        self.assertIn("Evidence integrity audit ran", state.steps[0].detail)
+        self.assertIn("does not establish truth", state.steps[0].detail)
+
+    def test_evidence_integrity_check_without_a_run_fails_the_step(self) -> None:
+        plan_id = self._start("evidence_integrity_check")
+
+        response = self._advance(plan_id)
+
+        state = response.research_plan_execution
+        assert state is not None
+        self.assertEqual(state.status.value, "failed")
+        self.assertFalse(state.steps[0].work_performed)
+        self.assertEqual(state.steps_with_research_work, 0)
+
+    def test_integrity_capability_is_unregistered_without_an_auditor(self) -> None:
+        engine = CognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            Planner(),
+            self.event_bus,
+            ResponseComposer(),
+            self.session_manager,
+            SessionRenameTransactionService(
+                session_manager=self.session_manager,
+                memory_manager=self.memory_manager,
+                event_bus=self.event_bus,
+            ),
+            research_run_manager=self.run_manager,
+        )
+        registry = engine._research_plan_execution_service._operation_registry
+
+        self.assertIsNone(
+            registry.resolve(ResearchPlanStepCapability.EVIDENCE_INTEGRITY_CHECK)
+        )
+        self.assertIsNotNone(
+            registry.resolve(ResearchPlanStepCapability.ACCEPTED_SOURCE_LISTING)
+        )
 
 
 if __name__ == "__main__":

@@ -15,6 +15,7 @@ class ResearchPlanStepCapability(StrEnum):
     NONE = "none"
     LOCAL_KNOWLEDGE_SEARCH = "local_knowledge_search"
     ACCEPTED_SOURCE_LISTING = "accepted_source_listing"
+    EVIDENCE_INTEGRITY_CHECK = "evidence_integrity_check"
 
     @property
     def executable(self) -> bool:

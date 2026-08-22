@@ -67,6 +67,9 @@ from memory.SessionMemoryPolicy import SessionMemoryPolicy
 from research.AcceptedSourceListingStepOperation import (
     AcceptedSourceListingStepOperation,
 )
+from research.EvidenceIntegrityCheckStepOperation import (
+    EvidenceIntegrityCheckStepOperation,
+)
 from research.LocalKnowledgeSearchStepOperation import (
     LocalKnowledgeSearchStepOperation,
 )
@@ -228,6 +231,14 @@ class CognitiveEngine:
                 ResearchPlanStepCapability.ACCEPTED_SOURCE_LISTING,
                 AcceptedSourceListingStepOperation(research_run_manager),
             )
+            if research_evidence_integrity_auditor is not None:
+                operation_registry.register(
+                    ResearchPlanStepCapability.EVIDENCE_INTEGRITY_CHECK,
+                    EvidenceIntegrityCheckStepOperation(
+                        research_evidence_integrity_auditor,
+                        research_run_manager,
+                    ),
+                )
         self._research_plan_execution_service = ResearchPlanExecutionApplicationService(
             response_composer,
             operation_registry=operation_registry,

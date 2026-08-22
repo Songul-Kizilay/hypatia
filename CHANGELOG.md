@@ -2,6 +2,45 @@
 
 All notable project changes are recorded here.
 
+## [0.3.129] - 2026-08-23
+
+### Added
+
+- `EVIDENCE_INTEGRITY_CHECK` capability and `EvidenceIntegrityCheckStepOperation`,
+  running the existing `ResearchEvidenceIntegrityAuditor` against the bound run
+  through constructor-injected collaborators.
+
+### Safety
+
+- The check is local, read-only, and deterministic: no network, no LLM, no
+  persistence mutation, and no event emitted. Repeated runs return an identical
+  result, and the run is byte-identical afterwards.
+- Only the bound run is audited, never the whole catalog.
+- A completed check proves only that the integrity operation ran and returned
+  its result. Every rendered detail states that it does not establish truth,
+  verify a claim, or make a source trustworthy. Matched, missing, and changed
+  counts describe structural and provenance consistency only.
+- Zero evidence records still complete the audit, reporting that no evidence
+  records were available to inspect.
+- An `unavailable` audit is reported as a performed operation with an explicit
+  state and no fabricated counts.
+- An unknown run ID or a missing run binding fails the step safely with
+  `work_performed` left false.
+- The capability is registered only when both a run manager and an integrity
+  auditor exist; otherwise it stays unregistered and a declaring step blocks.
+- Detail stays within the bounded 500-character operation limit.
+
+### Verification
+
+- The package-aware full local suite contains 1,728 passing automated tests.
+- Ten new operation tests cover the stable name, zero-evidence completion,
+  reconciliation counts, single-run scoping, unavailable reporting, unknown-run
+  and missing-binding failure, absence of mutation, bounded detail, and
+  determinism.
+- The standing composition table now covers three capabilities, with new route
+  tests proving the check runs through real `CognitiveEngine` wiring, fails
+  safely without a run, and stays unregistered without an auditor.
+
 ## [0.3.128] - 2026-08-23
 
 ### Added

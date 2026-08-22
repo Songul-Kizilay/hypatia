@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.128 (Genesis)`
+`v0.3.129 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.128`** is the current executable package and GitHub
+- **Runtime release `v0.3.129`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -32,6 +32,14 @@ with optional OpenAI-compatible LLM conversation support.
 ### Implemented
 
 - Application bootstrap, configuration, logging, and dependency injection.
+- The third connected research capability, `EVIDENCE_INTEGRITY_CHECK`, runs the
+  existing `ResearchEvidenceIntegrityAuditor` against the bound run. It is local,
+  read-only, and deterministic, with no network, LLM, mutation, or event. A
+  completed check proves only that the integrity operation ran and returned its
+  result; every detail states that it does not establish truth, verify a claim,
+  or make a source trustworthy. Zero evidence records still complete the audit,
+  an unavailable audit reports no fabricated counts, and unknown or unbound runs
+  fail safely without claiming work.
 - Research-plan execution passes one small explicit `ResearchPlanExecutionContext`
   through the application-service boundary. Collaborators stay
   constructor-injected at composition time, so an operation never reaches a
@@ -753,7 +761,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,715 automated tests pass through package-aware discovery.
+- 1,728 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
