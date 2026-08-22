@@ -2,6 +2,33 @@
 
 All notable project changes are recorded here.
 
+## [0.3.105] - 2026-08-22
+
+### Added
+
+- Sources & evidence now shows one compact read-only record summary for the
+  selected accepted source: exact evidence count, authored assessment-history
+  count, and current authored-assessment count.
+
+### Safety
+
+- The summary derives only from the already loaded immutable run and selected
+  exact source ID. Correction records remain visible in history while only
+  non-superseded records count as current; foreign malformed records cannot
+  inflate the selected source.
+- Hidden, empty, or invalid source presentation clears the summary instead of
+  retaining stale data. The summary infers no quality or trust and opens no
+  controller, provider, persistence, network, or mutation boundary.
+
+### Verification
+
+- The package-aware full local suite contains 1,501 passing automated tests.
+- Focused desktop coverage contains 142 passing tests, including exact
+  evidence/history/current counts, correction history, foreign-record
+  isolation, zero records, and hidden-source clearing/restoration.
+- Black, Ruff, and MyPy pass. A real Tk smoke confirms one bound selected-source
+  summary label in the existing desktop layout.
+
 ## [0.3.104] - 2026-08-22
 
 ### Added

@@ -75,6 +75,10 @@ The MVP may present only current Brain/CognitiveEngine capabilities:
 - one explicit `Show active source` recovery action that restores All sources,
   exact active identity, and source-bound read-only records while preserving
   authored fields and refusing empty/stale/unknown state;
+- one compact read-only selected-source record summary with exact evidence,
+  assessment-history, and current-assessment counts from the immutable run;
+  correction history remains distinct from current state, and hidden/invalid
+  source presentation clears the summary without quality/trust inference;
 - a bounded selected-run metadata line with timezone-aware created/updated
   timestamps and aggregate safe-failure count, without failure detail;
 - a read-only accepted-source selector from that same run snapshot, with

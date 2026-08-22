@@ -289,6 +289,11 @@ If a coverage view hides the active source, `Show active source` restores All
 sources and that exact row, including its read-only evidence and assessment
 records. Empty, stale, or unknown state is refused without changing authored
 fields or requesting data.
+The selected row also has a compact read-only record summary: exact evidence,
+assessment-history, and current-assessment counts from the same immutable run.
+Superseded assessments remain in history but not the current count; hidden or
+invalid source state clears the summary, with no quality/trust conclusion or
+additional request.
 
 The window uses the same Bootstrap and Brain as the terminal entry point. A
 clicked session only fills the selection field; choosing it remains explicit.
