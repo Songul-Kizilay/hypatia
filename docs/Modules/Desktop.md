@@ -25,6 +25,11 @@ Overview presents one additional `Workflow snapshot` with complete source,
 evidence, assessment, comparison-note, claim, and contradiction counts plus the
 existing status. It reports records only and does not classify readiness, infer
 truth, recommend a conclusion, hide controls, or start an action.
+The run selector also has a bounded local filter over the already loaded
+immutable catalog. It matches case-insensitive question text, exact status, or
+exact ID and reports visible/total counts. No-match or overlong input does not
+change the active run, authored fields, or run-bound views; `Clear` restores the
+complete loaded catalog without another read.
 Users can choose a local text size between 10 and 20 points and select Eye
 comfort, Light, or High contrast without affecting runtime state. Eye comfort
 is the default; it uses softened dark surfaces while preserving explicit focus,

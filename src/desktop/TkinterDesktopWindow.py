@@ -47,6 +47,7 @@ _DEFAULT_FONT_SIZE = 12
 _MINIMUM_FONT_SIZE = 10
 _MAXIMUM_FONT_SIZE = 20
 _REQUEST_POLL_INTERVAL_MS = 50
+_MAX_RESEARCH_RUN_FILTER_LENGTH = 200
 _RESEARCH_WORKFLOW_TAB_TITLES = (
     "1  Overview",
     "2  Sources & evidence",
@@ -222,6 +223,10 @@ class TkinterDesktopWindow:
         self._research_run_progress = tk.StringVar(
             value="Progress unavailable until a research run is selected."
         )
+        self._research_run_filter = tk.StringVar()
+        self._research_run_filter_summary = tk.StringVar(
+            value="All loaded research runs are shown."
+        )
         self._research_workflow_snapshot = tk.StringVar(
             value="Select or create a research run to see stage records."
         )
@@ -265,6 +270,7 @@ class TkinterDesktopWindow:
         self._session_summaries: list[SessionSummary] = []
         self._research_candidates: tuple[ResearchSourceCandidate, ...] = ()
         self._research_runs: tuple[ResearchRun, ...] = ()
+        self._visible_research_runs: tuple[ResearchRun, ...] = ()
         self._research_sources: tuple[ResearchSourceRecord, ...] = ()
         self._research_source_run_id = ""
         self._research_evidence_records: tuple[ResearchEvidenceRecord, ...] = ()
@@ -836,6 +842,34 @@ class TkinterDesktopWindow:
             textvariable=self._research_run_summary,
             style="Hint.TLabel",
         ).grid(row=1, column=0, sticky="w", pady=(4, 0))
+        research_run_filter_frame = ttk.Frame(research_run_frame)
+        research_run_filter_frame.grid(row=2, column=0, sticky="ew", pady=(8, 0))
+        research_run_filter_frame.columnconfigure(1, weight=1)
+        ttk.Label(research_run_filter_frame, text="Filter loaded runs").grid(
+            row=0,
+            column=0,
+            sticky="w",
+            padx=(0, 8),
+        )
+        ttk.Entry(
+            research_run_filter_frame,
+            textvariable=self._research_run_filter,
+        ).grid(row=0, column=1, sticky="ew")
+        ttk.Button(
+            research_run_filter_frame,
+            text="Filter",
+            command=self._apply_research_run_filter,
+        ).grid(row=0, column=2, sticky="ew", padx=(8, 0))
+        ttk.Button(
+            research_run_filter_frame,
+            text="Clear",
+            command=self._clear_research_run_filter,
+        ).grid(row=0, column=3, sticky="ew", padx=(8, 0))
+        ttk.Label(
+            research_run_filter_frame,
+            textvariable=self._research_run_filter_summary,
+            style="Hint.TLabel",
+        ).grid(row=1, column=1, columnspan=3, sticky="w", pady=(4, 0))
         research_workflow_snapshot_frame = ttk.LabelFrame(
             research_overview_frame,
             text="Workflow snapshot",
@@ -2019,6 +2053,13 @@ class TkinterDesktopWindow:
         normalized_runs = tuple(runs)
         selected_run_id = self._research_run_id.get().strip()
         self._research_runs = normalized_runs
+        self._visible_research_runs = normalized_runs
+        self._research_run_filter.set("")
+        self._research_run_filter_summary.set(
+            "No research runs are available."
+            if not normalized_runs
+            else f"All {len(normalized_runs)} loaded research runs are shown."
+        )
         labels = tuple(self._research_run_label(run) for run in normalized_runs)
         self._research_run_selector.configure(values=labels)
         if not normalized_runs:
@@ -2047,6 +2088,79 @@ class TkinterDesktopWindow:
         self._research_run_selector.current(selected_index)
         self._select_research_run()
 
+    def _apply_research_run_filter(self) -> None:
+        """Filter only the loaded catalog without changing the active run."""
+        query = self._research_run_filter.get().strip()
+        if len(query) > _MAX_RESEARCH_RUN_FILTER_LENGTH:
+            self._research_run_filter_summary.set(
+                "Filter is too long; the loaded catalog is unchanged."
+            )
+            self._status.set(
+                f"Research run filter cannot exceed "
+                f"{_MAX_RESEARCH_RUN_FILTER_LENGTH} characters."
+            )
+            return
+        visible_runs = self._filter_research_runs(self._research_runs, query)
+        self._visible_research_runs = visible_runs
+        self._research_run_selector.configure(
+            values=tuple(self._research_run_label(run) for run in visible_runs)
+        )
+        selected_run_id = self._research_run_id.get().strip()
+        selected_index = next(
+            (
+                index
+                for index, run in enumerate(visible_runs)
+                if run.run_id == selected_run_id
+            ),
+            None,
+        )
+        if selected_index is None:
+            self._research_run_choice.set("")
+        else:
+            self._research_run_selector.current(selected_index)
+        total_count = len(self._research_runs)
+        visible_count = len(visible_runs)
+        if total_count == 0:
+            self._research_run_filter_summary.set("No research runs are available.")
+        elif not query:
+            self._research_run_filter_summary.set(
+                f"All {total_count} loaded research runs are shown."
+            )
+        elif visible_runs:
+            self._research_run_filter_summary.set(
+                f"{visible_count} of {total_count} loaded research runs match."
+            )
+        else:
+            self._research_run_filter_summary.set(
+                "No loaded research runs match; the active run is unchanged."
+            )
+        self._status.set(
+            f"research run filter: {visible_count} of {total_count} shown; "
+            "active run unchanged"
+        )
+
+    def _clear_research_run_filter(self) -> None:
+        """Restore the complete loaded catalog without opening a read path."""
+        self._research_run_filter.set("")
+        self._apply_research_run_filter()
+
+    @staticmethod
+    def _filter_research_runs(
+        runs: tuple[ResearchRun, ...],
+        query: str,
+    ) -> tuple[ResearchRun, ...]:
+        """Match bounded question text, exact status, or exact run ID locally."""
+        normalized_query = query.strip().casefold()
+        if not normalized_query:
+            return runs
+        return tuple(
+            run
+            for run in runs
+            if normalized_query in run.question.casefold()
+            or normalized_query == run.status.value.casefold()
+            or normalized_query == run.run_id.casefold()
+        )
+
     @staticmethod
     def _research_run_label(run: ResearchRun) -> str:
         question = run.question
@@ -2062,7 +2176,7 @@ class TkinterDesktopWindow:
     def _select_research_run(self, _event: object | None = None) -> None:
         """Select one catalogued run without starting any research action."""
         selected_index = self._research_run_selector.current()
-        if not 0 <= selected_index < len(self._research_runs):
+        if not 0 <= selected_index < len(self._visible_research_runs):
             self._clear_research_sources()
             self._clear_research_claims()
             self._clear_research_persisted_contradictions()
@@ -2079,7 +2193,7 @@ class TkinterDesktopWindow:
             )
             self._status.set("Refresh and select a research run first.")
             return
-        selected_run = self._research_runs[selected_index]
+        selected_run = self._visible_research_runs[selected_index]
         previous_run_id = self._research_run_id.get().strip()
         self._research_run_id.set(selected_run.run_id)
         if previous_run_id != selected_run.run_id:

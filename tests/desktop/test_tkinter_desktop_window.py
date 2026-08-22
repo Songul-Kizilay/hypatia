@@ -18,6 +18,7 @@ from brain.BrainResponse import BrainResponse
 from core.CancellationSignal import CancellationToken
 from desktop.DesktopRequestRunner import DesktopRequestCompletion
 from desktop.TkinterDesktopWindow import (
+    _MAX_RESEARCH_RUN_FILTER_LENGTH,
     _RESEARCH_ANALYSIS_TAB_TITLES,
     _RESEARCH_WORKFLOW_TAB_TITLES,
     DesktopTheme,
@@ -451,8 +452,11 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_context = RecordingVariable("Old context")
         window._research_run_progress = RecordingVariable("Old progress")
         window._research_workflow_snapshot = RecordingVariable("Old workflow")
+        window._research_run_filter = RecordingVariable("old filter")
+        window._research_run_filter_summary = RecordingVariable("old filter summary")
         window._research_run_selector = RecordingCandidateSelector()
         window._research_runs = ()
+        window._visible_research_runs = ()
         window._research_source_choice = RecordingVariable("old source")
         window._research_source_selector = RecordingCandidateSelector(selected_index=0)
         window._research_sources = ()
@@ -512,8 +516,11 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_context = RecordingVariable("")
         window._research_run_progress = RecordingVariable("")
         window._research_workflow_snapshot = RecordingVariable("")
+        window._research_run_filter = RecordingVariable("old filter")
+        window._research_run_filter_summary = RecordingVariable("")
         window._research_run_selector = RecordingCandidateSelector()
         window._research_runs = ()
+        window._visible_research_runs = ()
         window._research_source_choice = RecordingVariable("")
         window._research_source_selector = RecordingCandidateSelector()
         window._research_sources = ()
@@ -552,6 +559,186 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             "Status: collecting · Sources: 0 · Evidence: 0 · Claims: 0",
         )
 
+    def test_research_run_filter_matches_question_status_or_exact_id_only(
+        self,
+    ) -> None:
+        now = datetime(2026, 8, 22, tzinfo=UTC)
+        first_run = ResearchRun(
+            "run-alpha-123",
+            "Compare local models",
+            ResearchRunStatus.COLLECTING,
+            (),
+            (),
+            now,
+            now,
+        )
+        second_run = ResearchRun(
+            "run-beta-456",
+            "Review evidence quality",
+            ResearchRunStatus.COMPLETED,
+            (),
+            (),
+            now,
+            now,
+        )
+        runs = (first_run, second_run)
+
+        self.assertEqual(
+            TkinterDesktopWindow._filter_research_runs(runs, "LOCAL"),
+            (first_run,),
+        )
+        self.assertEqual(
+            TkinterDesktopWindow._filter_research_runs(runs, "completed"),
+            (second_run,),
+        )
+        self.assertEqual(
+            TkinterDesktopWindow._filter_research_runs(runs, "RUN-BETA-456"),
+            (second_run,),
+        )
+        self.assertEqual(
+            TkinterDesktopWindow._filter_research_runs(runs, "beta-456"),
+            (),
+        )
+        self.assertIs(
+            TkinterDesktopWindow._filter_research_runs(runs, "  "),
+            runs,
+        )
+
+    def test_local_research_run_filter_preserves_visible_active_selection(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        now = datetime(2026, 8, 22, tzinfo=UTC)
+        first_run = ResearchRun(
+            "run-1",
+            "First question",
+            ResearchRunStatus.COLLECTING,
+            (),
+            (),
+            now,
+            now,
+        )
+        second_run = ResearchRun(
+            "run-2",
+            "Second question",
+            ResearchRunStatus.COMPLETED,
+            (),
+            (),
+            now,
+            now,
+        )
+        window._research_run_filter = RecordingVariable("second")
+        window._research_run_filter_summary = RecordingVariable("")
+        window._research_run_id = RecordingVariable("run-2")
+        window._research_run_choice = RecordingVariable("Second question")
+        window._research_run_selector = RecordingCandidateSelector()
+        window._research_runs = (first_run, second_run)
+        window._visible_research_runs = (first_run, second_run)
+        window._status = RecordingStatus()
+
+        window._apply_research_run_filter()
+
+        self.assertEqual(window._visible_research_runs, (second_run,))
+        self.assertEqual(
+            window._research_run_selector.values,
+            ("Second question [completed] — run-2",),
+        )
+        self.assertEqual(window._research_run_selector.current(), 0)
+        self.assertEqual(window._research_run_id.value, "run-2")
+        self.assertEqual(
+            window._research_run_filter_summary.value,
+            "1 of 2 loaded research runs match.",
+        )
+        self.assertEqual(
+            window._status.values,
+            ["research run filter: 1 of 2 shown; active run unchanged"],
+        )
+
+    def test_no_match_filter_keeps_active_run_and_authored_fields_unchanged(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        now = datetime(2026, 8, 22, tzinfo=UTC)
+        run = ResearchRun(
+            "run-1",
+            "Only question",
+            ResearchRunStatus.COLLECTING,
+            (),
+            (),
+            now,
+            now,
+        )
+        window._research_run_filter = RecordingVariable("missing")
+        window._research_run_filter_summary = RecordingVariable("")
+        window._research_run_id = RecordingVariable("run-1")
+        window._research_run_choice = RecordingVariable("Only question")
+        window._research_run_selector = RecordingCandidateSelector(0)
+        window._research_runs = (run,)
+        window._visible_research_runs = (run,)
+        window._research_assessment_text = RecordingVariable("authored assessment")
+        window._research_claim_text = RecordingVariable("authored claim")
+        window._status = RecordingStatus()
+
+        window._apply_research_run_filter()
+
+        self.assertEqual(window._visible_research_runs, ())
+        self.assertEqual(window._research_run_selector.values, ())
+        self.assertEqual(window._research_run_choice.value, "")
+        self.assertEqual(window._research_run_id.value, "run-1")
+        self.assertEqual(
+            window._research_run_filter_summary.value,
+            "No loaded research runs match; the active run is unchanged.",
+        )
+        self.assertEqual(
+            window._research_assessment_text.value,
+            "authored assessment",
+        )
+        self.assertEqual(window._research_claim_text.value, "authored claim")
+
+        window._clear_research_run_filter()
+
+        self.assertEqual(window._research_run_filter.value, "")
+        self.assertEqual(window._visible_research_runs, (run,))
+        self.assertEqual(
+            window._research_run_selector.values,
+            ("Only question [collecting] — run-1",),
+        )
+        self.assertEqual(window._research_run_selector.current(), 0)
+        self.assertEqual(window._research_run_id.value, "run-1")
+        self.assertEqual(
+            window._research_run_filter_summary.value,
+            "All 1 loaded research runs are shown.",
+        )
+        self.assertEqual(
+            window._research_assessment_text.value,
+            "authored assessment",
+        )
+        self.assertEqual(window._research_claim_text.value, "authored claim")
+
+    def test_overlong_research_run_filter_leaves_loaded_view_unchanged(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        window._research_run_filter = RecordingVariable(
+            "x" * (_MAX_RESEARCH_RUN_FILTER_LENGTH + 1)
+        )
+        window._research_run_filter_summary = RecordingVariable("Old summary")
+        window._research_run_selector = RecordingCandidateSelector(0)
+        window._research_run_selector.values = ("Existing run",)
+        window._research_runs = ()
+        window._visible_research_runs = ()
+        window._status = RecordingStatus()
+
+        window._apply_research_run_filter()
+
+        self.assertEqual(window._research_run_selector.values, ("Existing run",))
+        self.assertEqual(
+            window._research_run_filter_summary.value,
+            "Filter is too long; the loaded catalog is unchanged.",
+        )
+        self.assertEqual(
+            window._status.values,
+            ["Research run filter cannot exceed 200 characters."],
+        )
+
     def test_empty_research_run_catalog_clears_only_run_bound_presentations(
         self,
     ) -> None:
@@ -562,8 +749,11 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_context = RecordingVariable("Old context")
         window._research_run_progress = RecordingVariable("Old progress")
         window._research_workflow_snapshot = RecordingVariable("Old workflow")
+        window._research_run_filter = RecordingVariable("old filter")
+        window._research_run_filter_summary = RecordingVariable("old filter summary")
         window._research_run_selector = RecordingCandidateSelector(selected_index=0)
         window._research_runs = ()
+        window._visible_research_runs = ()
         window._research_source_choice = RecordingVariable("Old source")
         window._research_source_selector = RecordingCandidateSelector(selected_index=0)
         window._research_sources = ()
@@ -642,6 +832,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_workflow_snapshot = RecordingVariable("")
         window._research_run_selector = RecordingCandidateSelector(selected_index=1)
         window._research_runs = (first_run, second_run)
+        window._visible_research_runs = (first_run, second_run)
         window._research_source_choice = RecordingVariable("")
         window._research_source_selector = RecordingCandidateSelector()
         window._research_sources = ()
@@ -682,6 +873,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window: Any = object.__new__(TkinterDesktopWindow)
         window._research_run_selector = RecordingCandidateSelector(selected_index=-1)
         window._research_runs = ()
+        window._visible_research_runs = ()
         window._research_source_choice = RecordingVariable("Old source")
         window._research_source_selector = RecordingCandidateSelector(selected_index=0)
         window._research_sources = ()
@@ -751,6 +943,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_workflow_snapshot = RecordingVariable("")
         window._research_run_selector = RecordingCandidateSelector(selected_index=0)
         window._research_runs = (run,)
+        window._visible_research_runs = (run,)
         window._research_source_choice = RecordingVariable("")
         window._research_source_selector = RecordingCandidateSelector()
         window._research_sources = ()
@@ -968,6 +1161,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         )
         window._research_run_id = RecordingVariable("run-123")
         window._research_runs = (run,)
+        window._visible_research_runs = (run,)
         window._research_source_run_id = "run-123"
         window._research_sources = (first_source, second_source)
         window._research_source_selector = RecordingCandidateSelector(selected_index=1)
@@ -1153,6 +1347,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         )
         window._research_run_id = RecordingVariable("run-123")
         window._research_runs = (run,)
+        window._visible_research_runs = (run,)
         window._research_source_run_id = "run-123"
         window._research_sources = (source,)
         window._research_source_selector = RecordingCandidateSelector(selected_index=0)
@@ -1381,6 +1576,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_workflow_snapshot = RecordingVariable("")
         window._research_run_selector = RecordingCandidateSelector(selected_index=0)
         window._research_runs = (run,)
+        window._visible_research_runs = (run,)
         window._research_source_choice = RecordingVariable("")
         window._research_source_selector = RecordingCandidateSelector()
         window._research_sources = ()
@@ -1605,6 +1801,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_workflow_snapshot = RecordingVariable("")
         window._research_run_selector = RecordingCandidateSelector(selected_index=0)
         window._research_runs = (run,)
+        window._visible_research_runs = (run,)
         window._research_source_choice = RecordingVariable("")
         window._research_source_selector = RecordingCandidateSelector()
         window._research_sources = ()
@@ -1785,6 +1982,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_workflow_snapshot = RecordingVariable("")
         window._research_run_selector = RecordingCandidateSelector(selected_index=0)
         window._research_runs = (run,)
+        window._visible_research_runs = (run,)
         window._research_source_choice = RecordingVariable("")
         window._research_source_selector = RecordingCandidateSelector()
         window._research_sources = ()

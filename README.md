@@ -241,6 +241,10 @@ Overview also shows a compact workflow snapshot with complete source/evidence,
 assessment/comparison-note/claim/contradiction counts and the current review
 status. It reports existing records only; it does not decide readiness, truth,
 or a research conclusion.
+The already loaded run catalog can be filtered locally by bounded question
+text, exact status, or exact run ID. Filtering does not request or change data;
+no-match keeps the active run and authored fields intact, and `Clear` restores
+the full immutable catalog.
 
 The window uses the same Bootstrap and Brain as the terminal entry point. A
 clicked session only fills the selection field; choosing it remains explicit.
@@ -282,6 +286,10 @@ the current status without another read. Later explicit actions use the
 selected ID. The run
 keeps timestamps and safe failure records, but does not duplicate downloaded
 page text or make web research autonomous.
+`Filter` narrows only that already loaded selector by a case-insensitive
+question fragment, exact status, or exact ID, with a 200-character bound.
+No-match does not change the active run or authored fields; `Clear` restores the
+complete loaded catalog without another read.
 Accepted sources from that same loaded snapshot appear by bounded title and
 exact document ID. Choosing a source does not edit the form or start an action;
 `Use for assessment` copies only its exact ID into the single-source field, and
