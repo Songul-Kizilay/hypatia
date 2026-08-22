@@ -45,6 +45,8 @@ The MVP may present only current Brain/CognitiveEngine capabilities:
 - a bounded local filter over the already loaded immutable run catalog, with
   question/exact-status/exact-ID matching, result counts, explicit no-match,
   active-selection preservation, and clear restoration;
+- a bounded selected-run metadata line with timezone-aware created/updated
+  timestamps and aggregate safe-failure count, without failure detail;
 - a read-only accepted-source selector from that same run snapshot, with
   explicit exact-ID handoffs to the manual assessment and comparison fields;
 - a source-filtered read-only evidence selector with bounded excerpts, exact

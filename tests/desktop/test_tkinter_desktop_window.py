@@ -54,6 +54,7 @@ from research.ResearchClaimRecord import ResearchClaimRecord
 from research.ResearchClaimWritePreview import ResearchClaimWritePreview
 from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
+from research.ResearchFailureRecord import ResearchFailureRecord
 from research.ResearchRun import ResearchRun
 from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
@@ -190,6 +191,36 @@ class AccessibilityPreferenceTests(unittest.TestCase):
             "Claims: 4 · Contradictions: 1 | "
             "Review & export — Status: collecting",
         )
+
+    def test_research_run_metadata_is_timezone_aware_and_hides_failure_detail(
+        self,
+    ) -> None:
+        created = datetime(2026, 8, 22, 8, 1, 2, 345678, tzinfo=UTC)
+        updated = datetime(2026, 8, 22, 9, 3, 4, 987654, tzinfo=UTC)
+        failure = ResearchFailureRecord(
+            "source_fetch",
+            "Safe detail that must not be presented here.",
+            updated,
+        )
+        run = ResearchRun(
+            "run-metadata",
+            "Inspect metadata",
+            ResearchRunStatus.COLLECTING,
+            (),
+            (failure,),
+            created,
+            updated,
+        )
+
+        metadata = TkinterDesktopWindow._research_run_metadata_text(run)
+
+        self.assertEqual(
+            metadata,
+            "Run metadata — Created: 2026-08-22T08:01:02+00:00 · "
+            "Updated: 2026-08-22T09:03:04+00:00 · Safe failures: 1",
+        )
+        self.assertNotIn(failure.stage, metadata)
+        self.assertNotIn(failure.reason, metadata)
 
     def test_window_applies_text_size_and_high_contrast_to_text_controls(self) -> None:
         window: Any = object.__new__(TkinterDesktopWindow)
@@ -452,6 +483,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_context = RecordingVariable("Old context")
         window._research_run_progress = RecordingVariable("Old progress")
         window._research_workflow_snapshot = RecordingVariable("Old workflow")
+        window._research_run_metadata = RecordingVariable("Old metadata")
         window._research_run_filter = RecordingVariable("old filter")
         window._research_run_filter_summary = RecordingVariable("old filter summary")
         window._research_run_selector = RecordingCandidateSelector()
@@ -516,6 +548,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_context = RecordingVariable("")
         window._research_run_progress = RecordingVariable("")
         window._research_workflow_snapshot = RecordingVariable("")
+        window._research_run_metadata = RecordingVariable("")
         window._research_run_filter = RecordingVariable("old filter")
         window._research_run_filter_summary = RecordingVariable("")
         window._research_run_selector = RecordingCandidateSelector()
@@ -749,6 +782,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_context = RecordingVariable("Old context")
         window._research_run_progress = RecordingVariable("Old progress")
         window._research_workflow_snapshot = RecordingVariable("Old workflow")
+        window._research_run_metadata = RecordingVariable("Old metadata")
         window._research_run_filter = RecordingVariable("old filter")
         window._research_run_filter_summary = RecordingVariable("old filter summary")
         window._research_run_selector = RecordingCandidateSelector(selected_index=0)
@@ -799,6 +833,10 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             window._research_workflow_snapshot.value,
             "No research runs are available to summarize.",
         )
+        self.assertEqual(
+            window._research_run_metadata.value,
+            "Run metadata unavailable: no research runs are available.",
+        )
         self.assertEqual(window._research_candidate_run_id, "")
         self.assertEqual(window._research_claim_contradiction_proposal_run_id, "")
         self.assertIsNone(window._research_markdown_export_preview)
@@ -830,6 +868,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_context = RecordingVariable("")
         window._research_run_progress = RecordingVariable("")
         window._research_workflow_snapshot = RecordingVariable("")
+        window._research_run_metadata = RecordingVariable("")
         window._research_run_selector = RecordingCandidateSelector(selected_index=1)
         window._research_runs = (first_run, second_run)
         window._visible_research_runs = (first_run, second_run)
@@ -865,6 +904,11 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             "Review & export — Status: completed",
         )
         self.assertEqual(
+            window._research_run_metadata.value,
+            "Run metadata — Created: 2026-08-21T00:00:00+00:00 · "
+            "Updated: 2026-08-21T00:00:00+00:00 · Safe failures: 0",
+        )
+        self.assertEqual(
             window._status.values,
             ["research run selected: run-2; no action started"],
         )
@@ -883,6 +927,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_context = RecordingVariable("Old context")
         window._research_run_progress = RecordingVariable("Old progress")
         window._research_workflow_snapshot = RecordingVariable("Old workflow")
+        window._research_run_metadata = RecordingVariable("Old metadata")
         window._status = RecordingStatus()
 
         window._select_research_run()
@@ -902,6 +947,10 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         self.assertEqual(
             window._research_workflow_snapshot.value,
             "Refresh and select a research run to see stage records.",
+        )
+        self.assertEqual(
+            window._research_run_metadata.value,
+            "Run metadata unavailable until a research run is selected.",
         )
         self.assertEqual(
             window._status.values,
@@ -941,6 +990,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_context = RecordingVariable("")
         window._research_run_progress = RecordingVariable("")
         window._research_workflow_snapshot = RecordingVariable("")
+        window._research_run_metadata = RecordingVariable("")
         window._research_run_selector = RecordingCandidateSelector(selected_index=0)
         window._research_runs = (run,)
         window._visible_research_runs = (run,)
@@ -1574,6 +1624,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_context = RecordingVariable("")
         window._research_run_progress = RecordingVariable("")
         window._research_workflow_snapshot = RecordingVariable("")
+        window._research_run_metadata = RecordingVariable("")
         window._research_run_selector = RecordingCandidateSelector(selected_index=0)
         window._research_runs = (run,)
         window._visible_research_runs = (run,)
@@ -1799,6 +1850,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_context = RecordingVariable("")
         window._research_run_progress = RecordingVariable("")
         window._research_workflow_snapshot = RecordingVariable("")
+        window._research_run_metadata = RecordingVariable("")
         window._research_run_selector = RecordingCandidateSelector(selected_index=0)
         window._research_runs = (run,)
         window._visible_research_runs = (run,)
@@ -1980,6 +2032,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_context = RecordingVariable("")
         window._research_run_progress = RecordingVariable("")
         window._research_workflow_snapshot = RecordingVariable("")
+        window._research_run_metadata = RecordingVariable("")
         window._research_run_selector = RecordingCandidateSelector(selected_index=0)
         window._research_runs = (run,)
         window._visible_research_runs = (run,)
