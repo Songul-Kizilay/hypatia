@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.116 (Genesis)`
+`v0.3.117 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.116`** is the current executable package and GitHub
+- **Runtime release `v0.3.117`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -89,7 +89,16 @@ with optional OpenAI-compatible LLM conversation support.
   steps and selected source IDs or one bounded rejection reason, and explicitly
   states that no write or execution occurred. Routing changes no memory,
   knowledge document, event, `ResearchRun`, provider, network, or LLM state.
-  There is no plain-message heuristic or desktop binding yet.
+  There is no plain-message heuristic; the desktop can reach this route only
+  through the explicit structured adapter described below.
+- The Research workspace now includes one bounded `Plan draft` authored-analysis
+  editor. It shares the visible authored question, accepts one ordered
+  instruction per line, and accepts optional comma-separated exact source
+  document IDs on the matching line. The adapter issues only the existing
+  structured preview intent and shows the complete ready or rejected message in
+  a read-only result area. It adds no confirmation, persistence, `ResearchRun`
+  mutation, provider, network, LLM, event-bus, automatic source selection, or
+  execution path; the four-step 1080p workflow remains unchanged.
 - The Sources & evidence, Authored analysis, and Review & export workflow tabs
   repeat one read-only current-run banner with the selected question, status,
   and exact run ID. All three labels share one presentation value derived only
@@ -616,7 +625,7 @@ with optional OpenAI-compatible LLM conversation support.
 
 - Automatic semantic augmentation of ordinary messages.
 - General web discovery, automatic or unattended candidate acceptance,
-  Research-plan execution/persistence/desktop creation, autonomous multi-source
+  Research-plan execution/persistence, autonomous multi-source
   planning/synthesis,
   unattended/background contradiction review, automatic contradiction
   persistence or truth decisions, evidence ranking, automatic RAG augmentation, or
@@ -640,7 +649,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,564 automated tests pass through package-aware discovery.
+- 1,568 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -675,10 +684,9 @@ changed.
 
 ## Next Milestone
 
-Add one bounded no-write desktop editor for the explicit Research-plan draft
-preview. It should collect the authored question, ordered instructions, and
-exact source document IDs; issue only the existing structured intent; show the
-complete preview/rejection; and make no persistence, `ResearchRun` mutation,
-provider, network, LLM, event-bus, automatic source selection, confirmation, or
-execution claim. Preserve the current 1080p workflow layout and accessibility
-themes with focused adapter tests.
+Define one bounded local Research-plan snapshot store behind the immutable plan
+domain. The store should use a versioned schema, exact UTF-8 bounds, deterministic
+ordering, and atomic replacement with rollback-safe failure behavior. Keep this
+increment free of Brain, desktop, `ResearchRun`, provider, network, LLM,
+event-bus, confirmation, automatic source selection, and execution integration
+until direct persistence tests establish the boundary.

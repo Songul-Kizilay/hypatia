@@ -2,6 +2,44 @@
 
 All notable project changes are recorded here.
 
+## [0.3.117] - 2026-08-22
+
+### Added
+
+- The Research workspace now exposes a dedicated `Plan draft` authored-analysis
+  tab without changing the established four-step workflow or its 1080p height.
+- The editor shares the explicit authored question, collects one ordered
+  instruction per line, and binds optional comma-separated exact source document
+  IDs from the matching line.
+- `DesktopController.preview_research_plan_draft` converts only those visible
+  fields into the existing structured `research_plan_draft_preview` request. The
+  editor shows the complete ready or rejected Brain message in its own read-only
+  result area and in the ordinary transcript.
+
+### Safety
+
+- Empty, duplicate, excessive, or misaligned authored rows are not silently
+  repaired into a different plan. They remain visible to the existing bounded
+  domain validation and return a no-write rejection.
+- The desktop adds no confirmation, persistence, `ResearchRun` mutation,
+  provider, network, LLM, event-bus, tool, automatic source selection, or plan
+  execution path. Changing tabs and editing fields remain presentation-only.
+- The new instruction, source, and result text controls follow the selected Eye
+  comfort, Light, or High contrast palette and the existing 10-to-20-point text
+  setting.
+
+### Verification
+
+- The package-aware full local suite contains 1,568 passing automated tests.
+- Four new focused tests lock exact structured metadata and order, preservation
+  of invalid row alignment for runtime rejection, non-text rejection before
+  Brain, and complete desktop rejection rendering without confirmation.
+- Black, Ruff, and MyPy pass for all 346 Python source and test files.
+- The pinned Windows onedir package builds and initializes its local session
+  snapshot in a fresh temporary data directory. A direct 1920-by-1080 Tkinter
+  smoke check maps both aligned editors and the complete preview area, exercises
+  ready and rejected Brain responses, and observes no temporary-data change.
+
 ## [0.3.116] - 2026-08-22
 
 ### Added

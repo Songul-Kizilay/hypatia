@@ -100,6 +100,13 @@ To create the world's most capable personal AI research companion.
   snapshots, entry/identifier/source/vector limits, deterministic ordering, and
   atomic rollback-safe replacement
 - Deterministic Planner task generation
+- A bounded no-write Research-plan draft editor in the desktop's authored-
+  analysis area. It collects the explicit question, one ordered instruction per
+  line, and optional comma-separated exact source document IDs on the matching
+  line; sends only the existing structured preview intent; and displays the
+  complete ready or rejected result without confirmation, persistence,
+  `ResearchRun` mutation, provider/network/LLM access, automatic source choice,
+  or execution
 - Knowledge Foundation: `.txt` and `.md` document loading, paragraph parsing, in-memory chunk indexing, and case-insensitive search
 - KnowledgeEngine orchestration for the full document-to-search pipeline
 - A full automated test suite and shared code-quality standards
@@ -226,9 +233,9 @@ presentation only and are not persisted between launches.
 
 Research is arranged as a left-to-right workflow: `1 Overview`, `2 Sources &
 evidence`, `3 Authored analysis`, and `4 Review & export`. Authored analysis has
-separate `Saved records`, `Comparison`, `Assessment`, and `Claims &
-contradictions` views so all controls remain available without one screen-height
-form. Switching either set of tabs changes presentation only: it does not call
+separate `Saved records`, `Comparison`, `Assessment`, `Claims & contradictions`,
+and no-write `Plan draft` views so all controls remain available without one
+screen-height form. Switching either set of tabs changes presentation only: it does not call
 Brain, start a provider request, save data, or change a selected run or field.
 The Sources & evidence, Authored analysis, and Review & export tabs each repeat
 the selected question, status, and exact run ID in one read-only `Current
@@ -514,10 +521,10 @@ To rename a session, select it, enter a new session ID, and use `Preview rename`
 Hypatia shows the existing runtime preview first and only sends the
 transactional rename command after confirmation; on success it refreshes the
 session list from Brain.
-It does not yet include voice, PDF import, multi-source research synthesis,
-general web search, browser tools, automatic retrieval, automatic candidate
-acceptance, or automatic knowledge mutations; those remain separate,
-test-first increments.
+It does not yet include voice, PDF import, Research-plan persistence or
+execution, multi-source research synthesis, general web search, browser tools,
+automatic retrieval, automatic candidate acceptance, or automatic knowledge
+mutations; those remain separate, test-first increments.
 
 ### Windows desktop package
 

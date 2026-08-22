@@ -153,6 +153,48 @@ class DesktopController:
             )
         )
 
+    def preview_research_plan_draft(
+        self,
+        question: str,
+        instruction_lines: str,
+        source_id_lines: str,
+    ) -> BrainResponse:
+        """Preview one explicit ordered plan without saving or executing it."""
+        if not all(
+            isinstance(value, str)
+            for value in (question, instruction_lines, source_id_lines)
+        ):
+            raise ValueError("Research plan draft fields must be text.")
+        instructions = instruction_lines.splitlines()
+        source_rows = source_id_lines.splitlines()
+        row_count = max(len(instructions), len(source_rows))
+        steps = tuple(
+            (
+                instructions[index].strip() if index < len(instructions) else "",
+                tuple(
+                    source_id.strip()
+                    for source_id in (
+                        source_rows[index].split(",")
+                        if index < len(source_rows)
+                        else ()
+                    )
+                    if source_id.strip()
+                ),
+            )
+            for index in range(row_count)
+        )
+        return self._brain.process(
+            BrainRequest(
+                message="Preview explicit authored research plan",
+                source="desktop",
+                metadata={
+                    "intent": "research_plan_draft_preview",
+                    "research_plan_question": question.strip(),
+                    "research_plan_steps": steps,
+                },
+            )
+        )
+
     def list_research_runs(self) -> BrainResponse:
         """List persistent research runs without fetching a network source."""
         return self._brain.process(
