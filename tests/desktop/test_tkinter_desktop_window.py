@@ -24,6 +24,7 @@ from desktop.TkinterDesktopWindow import (
     DesktopTheme,
     ResearchRunSort,
     ResearchRunStatusFacet,
+    ResearchSourceCoverageFacet,
     TkinterDesktopWindow,
     _accessibility_palette,
     _format_citations,
@@ -614,6 +615,14 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             "Evidence coverage — Accepted sources: 0 · With evidence: 0 · "
             "Without evidence: 0",
         )
+        self.assertEqual(
+            window._research_source_coverage_filter.value,
+            ResearchSourceCoverageFacet.ALL.value,
+        )
+        self.assertEqual(
+            window._research_source_coverage_summary.value,
+            "No accepted sources are available.",
+        )
         self.assertIsNone(window._research_markdown_export_preview)
         self.assertEqual(responses, [controller.create_response])
 
@@ -690,6 +699,14 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             window._research_evidence_coverage.value,
             "Evidence coverage — Accepted sources: 0 · With evidence: 0 · "
             "Without evidence: 0",
+        )
+        self.assertEqual(
+            window._research_source_coverage_filter.value,
+            ResearchSourceCoverageFacet.ALL.value,
+        )
+        self.assertEqual(
+            window._research_source_coverage_summary.value,
+            "No accepted sources are available.",
         )
 
     def test_research_run_filter_matches_question_status_or_exact_id_only(
@@ -1662,6 +1679,16 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             "Loaded catalog: All 0 · Collecting 0 · Completed 0 · "
             "Failed 0 · Cancelled 0",
         )
+        self.assertEqual(window._research_source_catalog, ())
+        self.assertEqual(window._active_research_source_document_id, "")
+        self.assertEqual(
+            window._research_source_coverage_filter.value,
+            ResearchSourceCoverageFacet.ALL.value,
+        )
+        self.assertEqual(
+            window._research_source_coverage_summary.value,
+            "No accepted sources are available.",
+        )
         self.assertEqual(window._research_candidate_run_id, "")
         self.assertEqual(window._research_claim_contradiction_proposal_run_id, "")
         self.assertIsNone(window._research_markdown_export_preview)
@@ -1867,6 +1894,294 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         self.assertEqual(
             window._status.values,
             ["research run selected: run-123; no action started"],
+        )
+
+    def test_source_coverage_facet_deduplicates_evidence_and_keeps_order(
+        self,
+    ) -> None:
+        first = _research_source_record("document-1", "First")
+        second = _research_source_record("document-2", "Second")
+        third = _research_source_record("document-3", "Third")
+        sources = (first, second, third)
+        evidence = (
+            _research_evidence_record("evidence-1", "document-1", "One"),
+            _research_evidence_record("evidence-2", "document-1", "Two"),
+            _research_evidence_record("evidence-3", "foreign", "Foreign"),
+        )
+
+        self.assertIs(
+            TkinterDesktopWindow._filter_research_sources_by_coverage(
+                sources,
+                evidence,
+                ResearchSourceCoverageFacet.ALL,
+            ),
+            sources,
+        )
+        self.assertEqual(
+            TkinterDesktopWindow._filter_research_sources_by_coverage(
+                sources,
+                evidence,
+                ResearchSourceCoverageFacet.WITHOUT_EVIDENCE,
+            ),
+            (second, third),
+        )
+
+    def test_source_coverage_view_keeps_visible_active_source_and_fields(
+        self,
+    ) -> None:
+        now = datetime(2026, 8, 22, tzinfo=UTC)
+        represented = _research_source_record("document-1", "Represented")
+        active = _research_source_record("document-2", "Active uncovered")
+        other = _research_source_record("document-3", "Other uncovered")
+        sources = (represented, active, other)
+        run = ResearchRun(
+            "run-123",
+            "Inspect uncovered sources",
+            ResearchRunStatus.COLLECTING,
+            sources,
+            (),
+            now,
+            now,
+            evidence=(
+                _research_evidence_record(
+                    "evidence-1",
+                    represented.document_id,
+                    "Recorded",
+                ),
+            ),
+        )
+        window: Any = object.__new__(TkinterDesktopWindow)
+        window._controller = Mock()
+        window._research_run_id = RecordingVariable(run.run_id)
+        window._research_runs = (run,)
+        window._research_source_run_id = run.run_id
+        window._research_sources = sources
+        window._research_source_selector = RecordingCandidateSelector(selected_index=1)
+        window._research_source_choice = RecordingVariable(
+            "Active uncovered — document-2"
+        )
+        _configure_research_evidence_selector(window)
+        window._research_source_coverage_filter.set(
+            ResearchSourceCoverageFacet.WITHOUT_EVIDENCE.value
+        )
+        window._research_source_document_id = RecordingVariable("manual-source")
+        window._research_comparison_document_ids = RecordingVariable("manual-list")
+        window._research_assessment_text = RecordingVariable("authored assessment")
+        window._status = RecordingStatus()
+
+        window._apply_research_source_coverage_filter()
+
+        self.assertIs(window._research_source_catalog, sources)
+        self.assertEqual(window._research_sources, (active, other))
+        self.assertEqual(window._active_research_source_document_id, "document-2")
+        self.assertEqual(window._research_source_selector.current(), 0)
+        self.assertEqual(
+            window._research_source_selector.values,
+            (
+                "Active uncovered — document-2",
+                "Other uncovered — document-3",
+            ),
+        )
+        self.assertEqual(
+            window._research_source_coverage_summary.value,
+            "2 of 3 accepted sources have no recorded evidence.",
+        )
+        self.assertEqual(window._research_source_document_id.value, "manual-source")
+        self.assertEqual(
+            window._research_comparison_document_ids.value,
+            "manual-list",
+        )
+        self.assertEqual(
+            window._research_assessment_text.value,
+            "authored assessment",
+        )
+        self.assertEqual(
+            window._status.values,
+            [
+                "accepted source view: Without evidence; 2 of 3 shown; "
+                "active source unchanged"
+            ],
+        )
+        window._controller.assert_not_called()
+
+    def test_source_coverage_view_hides_and_restores_exact_active_source(
+        self,
+    ) -> None:
+        now = datetime(2026, 8, 22, tzinfo=UTC)
+        active = _research_source_record("document-1", "Active represented")
+        uncovered = _research_source_record("document-2", "Uncovered")
+        evidence = _research_evidence_record(
+            "evidence-1",
+            active.document_id,
+            "Recorded evidence",
+        )
+        run = ResearchRun(
+            "run-123",
+            "Switch source coverage",
+            ResearchRunStatus.COLLECTING,
+            (active, uncovered),
+            (),
+            now,
+            now,
+            evidence=(evidence,),
+        )
+        window: Any = object.__new__(TkinterDesktopWindow)
+        window._research_run_id = RecordingVariable(run.run_id)
+        window._research_runs = (run,)
+        window._research_source_run_id = run.run_id
+        window._research_sources = run.sources
+        window._research_source_selector = RecordingCandidateSelector(selected_index=0)
+        window._research_source_choice = RecordingVariable(
+            "Active represented — document-1"
+        )
+        _configure_research_evidence_selector(window)
+        window._render_research_evidence_selector(run, active)
+        window._research_assessment_text = RecordingVariable("authored")
+        window._status = RecordingStatus()
+
+        window._research_source_coverage_filter.set(
+            ResearchSourceCoverageFacet.WITHOUT_EVIDENCE.value
+        )
+        window._apply_research_source_coverage_filter()
+
+        self.assertEqual(window._research_sources, (uncovered,))
+        self.assertEqual(window._active_research_source_document_id, "document-1")
+        self.assertEqual(window._research_source_choice.value, "")
+        self.assertEqual(window._research_evidence_records, ())
+        self.assertEqual(window._research_assessment_text.value, "authored")
+
+        window._research_source_coverage_filter.set(
+            ResearchSourceCoverageFacet.ALL.value
+        )
+        window._apply_research_source_coverage_filter()
+
+        self.assertEqual(window._research_sources, run.sources)
+        self.assertEqual(window._research_source_selector.current(), 0)
+        self.assertEqual(window._active_research_source_document_id, "document-1")
+        self.assertEqual(window._research_evidence_records, (evidence,))
+        self.assertEqual(window._research_assessment_text.value, "authored")
+        self.assertEqual(
+            window._research_source_coverage_summary.value,
+            "All 2 accepted sources are shown.",
+        )
+        self.assertEqual(
+            window._status.values,
+            [
+                "accepted source view: Without evidence; 1 of 2 shown; "
+                "active source unchanged; active source hidden",
+                "accepted source view: All sources; 2 of 2 shown; "
+                "active source unchanged",
+            ],
+        )
+
+    def test_source_coverage_no_match_preserves_hidden_active_identity(
+        self,
+    ) -> None:
+        now = datetime(2026, 8, 22, tzinfo=UTC)
+        active = _research_source_record("document-1", "Active")
+        run = ResearchRun(
+            "run-123",
+            "Inspect complete source coverage",
+            ResearchRunStatus.COLLECTING,
+            (active,),
+            (),
+            now,
+            now,
+            evidence=(
+                _research_evidence_record(
+                    "evidence-1",
+                    active.document_id,
+                    "Recorded",
+                ),
+            ),
+        )
+        window: Any = object.__new__(TkinterDesktopWindow)
+        window._research_run_id = RecordingVariable(run.run_id)
+        window._research_runs = (run,)
+        window._research_source_run_id = run.run_id
+        window._research_sources = run.sources
+        window._research_source_selector = RecordingCandidateSelector(selected_index=0)
+        window._research_source_choice = RecordingVariable("Active — document-1")
+        _configure_research_evidence_selector(window)
+        window._research_source_coverage_filter.set(
+            ResearchSourceCoverageFacet.WITHOUT_EVIDENCE.value
+        )
+        window._research_claim_text = RecordingVariable("authored claim")
+        window._status = RecordingStatus()
+
+        window._apply_research_source_coverage_filter()
+
+        self.assertEqual(window._research_sources, ())
+        self.assertEqual(window._research_source_selector.values, ())
+        self.assertEqual(window._active_research_source_document_id, "document-1")
+        self.assertEqual(window._research_claim_text.value, "authored claim")
+        self.assertEqual(
+            window._research_source_coverage_summary.value,
+            "All 1 accepted sources have recorded evidence; "
+            "no sources match this view.",
+        )
+
+    def test_invalid_source_coverage_view_leaves_current_sources_unchanged(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        source = _research_source_record("document-1", "Existing")
+        window._research_source_coverage_filter = RecordingVariable("invalid")
+        window._research_source_coverage_summary = RecordingVariable("Old summary")
+        window._research_source_selector = RecordingCandidateSelector(selected_index=0)
+        window._research_source_selector.values = ("Existing — document-1",)
+        window._research_sources = (source,)
+        window._status = RecordingStatus()
+
+        window._apply_research_source_coverage_filter()
+
+        self.assertEqual(window._research_sources, (source,))
+        self.assertEqual(
+            window._research_source_selector.values,
+            ("Existing — document-1",),
+        )
+        self.assertEqual(
+            window._research_source_coverage_summary.value,
+            "Source view is invalid; accepted sources are unchanged.",
+        )
+        self.assertEqual(
+            window._status.values,
+            ["Accepted-source coverage view is invalid."],
+        )
+
+    def test_stale_source_coverage_snapshot_leaves_view_and_fields_unchanged(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        source = _research_source_record("document-1", "Existing")
+        window._research_source_coverage_filter = RecordingVariable(
+            ResearchSourceCoverageFacet.WITHOUT_EVIDENCE.value
+        )
+        window._research_source_coverage_summary = RecordingVariable("Old summary")
+        window._research_source_run_id = "run-stale"
+        window._research_source_catalog = (source,)
+        window._research_sources = (source,)
+        window._research_runs = ()
+        window._research_source_selector = RecordingCandidateSelector(selected_index=0)
+        window._research_source_selector.values = ("Existing — document-1",)
+        window._research_assessment_text = RecordingVariable("authored")
+        window._status = RecordingStatus()
+
+        window._apply_research_source_coverage_filter()
+
+        self.assertEqual(window._research_sources, (source,))
+        self.assertEqual(
+            window._research_source_selector.values,
+            ("Existing — document-1",),
+        )
+        self.assertEqual(window._research_assessment_text.value, "authored")
+        self.assertEqual(
+            window._research_source_coverage_summary.value,
+            "Accepted-source snapshot is stale; refresh research runs.",
+        )
+        self.assertEqual(
+            window._status.values,
+            ["Accepted-source snapshot is stale."],
         )
 
     def test_explicit_accepted_source_assessment_handoff_copies_exact_id(self) -> None:
@@ -2080,6 +2395,10 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         self.assertEqual(window._research_assessment_evidence_ids.value, "manual-a")
         self.assertEqual(window._research_claim_evidence_ids.value, "manual-c")
         self.assertEqual(window._research_comparison_evidence_ids.value, "manual-x")
+        self.assertEqual(
+            window._active_research_source_document_id,
+            "document-2",
+        )
         self.assertEqual(
             window._status.values,
             ["accepted source selected: document-2; no action started"],
@@ -4950,6 +5269,7 @@ class RecordingResearchSourceLoadController:
 
 
 def _configure_research_evidence_selector(window: Any) -> None:
+    _configure_research_source_coverage(window)
     window._research_evidence_choice = RecordingVariable("")
     window._research_evidence_selector = RecordingCandidateSelector()
     window._research_evidence_records = ()
@@ -4957,6 +5277,25 @@ def _configure_research_evidence_selector(window: Any) -> None:
     window._research_evidence_source_document_id = ""
     _configure_research_assessment_selector(window)
     _configure_research_claim_selector(window)
+
+
+def _configure_research_source_coverage(window: Any) -> None:
+    sources = getattr(window, "_research_sources", ())
+    window._research_source_catalog = sources
+    window._research_source_coverage_filter = RecordingVariable(
+        ResearchSourceCoverageFacet.ALL.value
+    )
+    window._research_source_coverage_summary = RecordingVariable("")
+    selected_index = (
+        window._research_source_selector.current()
+        if hasattr(window, "_research_source_selector")
+        else -1
+    )
+    window._active_research_source_document_id = (
+        sources[selected_index].document_id
+        if 0 <= selected_index < len(sources)
+        else ""
+    )
 
 
 def _configure_research_assessment_selector(window: Any) -> None:
@@ -5053,6 +5392,7 @@ def _configure_selected_research_evidence(
     window._research_source_choice = RecordingVariable(
         f"{source.title} — {source.document_id}"
     )
+    _configure_research_source_coverage(window)
     window._research_evidence_records = (record,)
     window._research_evidence_run_id = "run-123"
     window._research_evidence_source_document_id = source.document_id
@@ -5078,6 +5418,7 @@ def _configure_selected_research_assessments(
     window._research_source_choice = RecordingVariable(
         f"{source.title} — {source.document_id}"
     )
+    _configure_research_source_coverage(window)
     _configure_research_evidence_selector(window)
     window._research_assessment_records = records
     window._research_current_assessment_ids = current_ids

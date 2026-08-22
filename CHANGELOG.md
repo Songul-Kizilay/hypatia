@@ -2,6 +2,33 @@
 
 All notable project changes are recorded here.
 
+## [0.3.100] - 2026-08-22
+
+### Added
+
+- Sources & evidence now provides an explicit local accepted-source view with
+  All sources and Without evidence choices.
+- The view derives stable membership from the selected immutable run, reports
+  visible/total counts, and preserves a visible or hidden active source ID.
+
+### Safety
+
+- Repeated evidence for one source does not affect membership, and malformed
+  foreign evidence cannot hide an accepted source. Hidden active sources are
+  restored exactly when All sources is selected again.
+- View changes preserve run/source identity and authored fields and open no
+  Brain, controller, storage, provider, network, LLM, index, event-bus, or
+  mutation boundary. Invalid or stale local state leaves the prior view intact.
+
+### Verification
+
+- The package-aware full local suite contains 1,485 passing automated tests.
+- Focused desktop coverage contains 126 passing tests, including stable order,
+  repeated/foreign evidence, visible and hidden active identity, restoration,
+  no-match, empty catalog, invalid facet, and stale-snapshot isolation.
+- Black, Ruff, and MyPy pass. A real Tk smoke confirms one read-only two-choice
+  selector in the existing 954-by-973-pixel requested window.
+
 ## [0.3.99] - 2026-08-22
 
 ### Added

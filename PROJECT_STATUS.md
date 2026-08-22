@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.99 (Genesis)`
+`v0.3.100 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.99`** is the current executable package and GitHub
+- **Runtime release `v0.3.100`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -90,6 +90,10 @@ with optional OpenAI-compatible LLM conversation support.
   more evidence records, and accepted sources without evidence for the selected
   immutable run. Repeated evidence counts a source once, no score/readiness is
   inferred, stale selection is cleared, and no runtime or mutation starts.
+- Sources & evidence can locally show All sources or only accepted sources
+  Without evidence. Stable exact-ID membership preserves a visible or hidden
+  active source and authored fields; switching back restores the exact source.
+  Invalid/stale local state changes nothing and no runtime or mutation starts.
 - The selected run's immutable creation/update times and complete safe-failure
   count appear in Overview as a bounded metadata line. Timestamps retain their
   timezone offset at seconds precision; failure stage/reason text is never
@@ -549,7 +553,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,479 automated tests pass through package-aware discovery.
+- 1,485 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -584,7 +588,7 @@ changed.
 
 ## Next Milestone
 
-Add one local accepted-source coverage facet with All and Without evidence
-choices in Sources & evidence. It must derive only from the selected immutable
-run, preserve exact source/run identity and authored fields, expose no quality
-inference, and open no runtime or mutation boundary.
+Add one read-only selected-run assessment-coverage summary with accepted
+sources, sources having a current authored assessment, and accepted sources
+without a current assessment. Superseded-only history must not count as current;
+the summary must infer no quality and open no runtime or mutation boundary.
