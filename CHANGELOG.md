@@ -2,6 +2,33 @@
 
 All notable project changes are recorded here.
 
+## [0.3.106] - 2026-08-22
+
+### Added
+
+- The selected-source record summary now keeps a normalized bounded source
+  title, exact source document ID, and exact immutable research-run ID visible
+  beside the evidence and assessment counts.
+
+### Safety
+
+- Summary binding requires the complete selected source record to match one
+  canonical source in the selected immutable run. A changed or foreign record
+  is refused rather than presenting counts under misleading provenance.
+- Untrusted title whitespace is normalized and display length is bounded while
+  both identity fields remain exact. Hidden/invalid state still clears the
+  summary, no quality or trust is inferred, and no runtime or mutation boundary
+  opens.
+
+### Verification
+
+- The package-aware full local suite contains 1,503 passing automated tests.
+- Focused desktop coverage contains 144 passing tests, including exact source/
+  run provenance, canonical-record refusal, whitespace normalization, title
+  bounds, record counts, correction history, and hidden-source restoration.
+- Black, Ruff, and MyPy pass. A real Tk smoke confirms one wrapped provenance/
+  record-summary label in the existing desktop window.
+
 ## [0.3.105] - 2026-08-22
 
 ### Added
