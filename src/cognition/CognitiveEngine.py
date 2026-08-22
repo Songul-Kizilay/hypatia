@@ -101,6 +101,7 @@ from research.ResearchSourceContentRestorationStatus import (
 from research.ResearchSourceContentStore import ResearchSourceContentStore
 from research.ResearchSourceDiscoveryProvider import ResearchSourceDiscoveryProvider
 from research.ResearchSourceFetcher import ResearchSourceFetcher
+from research.SourceDiscoveryStepOperation import SourceDiscoveryStepOperation
 from response.ResponseComposer import ResponseComposer
 from session.SessionCreateService import SessionCreateService
 from session.SessionDeletePreviewService import SessionDeletePreviewService
@@ -236,6 +237,14 @@ class CognitiveEngine:
                     ResearchPlanStepCapability.EVIDENCE_INTEGRITY_CHECK,
                     EvidenceIntegrityCheckStepOperation(
                         research_evidence_integrity_auditor,
+                        research_run_manager,
+                    ),
+                )
+            if research_source_discovery_provider is not None:
+                operation_registry.register(
+                    ResearchPlanStepCapability.SOURCE_DISCOVERY,
+                    SourceDiscoveryStepOperation(
+                        research_source_discovery_provider,
                         research_run_manager,
                     ),
                 )

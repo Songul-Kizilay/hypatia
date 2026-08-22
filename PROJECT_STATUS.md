@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.129 (Genesis)`
+`v0.3.130 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.129`** is the current executable package and GitHub
+- **Runtime release `v0.3.130`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -32,6 +32,16 @@ with optional OpenAI-compatible LLM conversation support.
 ### Implemented
 
 - Application bootstrap, configuration, logging, and dependency injection.
+- The fourth connected research capability, `SOURCE_DISCOVERY`, reuses the
+  existing discovery provider abstraction and run audit path rather than adding a
+  second discovery engine. One step performs exactly one bounded query with no
+  retry, crawling, or link following, and cooperative cancellation is checked
+  before the query and again before the audit write. Provider results are
+  validated for type and count, failures are recorded in the run audit and
+  re-raised, and no substitute provider is ever used. Candidates persist only as
+  an unaccepted provenance-preserving record: nothing is accepted, fetched, or
+  turned into evidence or a claim, and zero candidates is a performed discovery
+  rather than a failure.
 - The third connected research capability, `EVIDENCE_INTEGRITY_CHECK`, runs the
   existing `ResearchEvidenceIntegrityAuditor` against the bound run. It is local,
   read-only, and deterministic, with no network, LLM, mutation, or event. A
@@ -761,7 +771,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,728 automated tests pass through package-aware discovery.
+- 1,745 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.

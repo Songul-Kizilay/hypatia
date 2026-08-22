@@ -2,6 +2,52 @@
 
 All notable project changes are recorded here.
 
+## [0.3.130] - 2026-08-23
+
+### Added
+
+- `SOURCE_DISCOVERY` capability and `SourceDiscoveryStepOperation`, reusing the
+  existing `ResearchSourceDiscoveryProvider` abstraction and the
+  `ResearchRunManager` discovery audit path. No second discovery engine exists.
+- `ResearchPlanExecutionContext.cancellation_token` carries the request's
+  cooperative cancellation signal as per-execution state. The application
+  service forwards the current request's token on every advance.
+
+### Safety
+
+- One step performs exactly one bounded provider query: no retry, no crawling,
+  no link following, and no unbounded concurrency. A test asserts the provider
+  is contacted exactly once even when it fails.
+- Cancellation is checked before the query and again before the audit write.
+  Cancelling first prevents provider contact entirely; cancelling during the
+  query prevents the discovery record from being written.
+- A closed run, an unknown run ID, and a missing run binding are all rejected
+  before the provider is contacted.
+- Provider results are validated for type and count. An oversized or malformed
+  result is rejected and no discovery record is written.
+- Provider failure records a `source_discovery` failure in the run audit and
+  re-raises, so the step fails honestly rather than reporting partial success.
+  No substitute provider is ever used; when no provider is configured the
+  capability stays unregistered and a declaring step blocks.
+- Candidates are persisted only as an unaccepted, provenance-preserving audit
+  record. Nothing is accepted, fetched, turned into evidence, or turned into a
+  claim. Every detail states that candidates are not accepted sources, not
+  evidence, not trusted, and not a conclusion, and a composition test asserts
+  that sources, evidence, claims, and assessments all remain empty afterwards.
+- Zero candidates is a performed discovery, not a failure.
+
+### Verification
+
+- The package-aware full local suite contains 1,745 passing automated tests.
+- Fourteen new operation tests cover the stable name, unaccepted candidate
+  recording, zero-candidate completion, bounded query parameters, single-query
+  behavior, failure auditing, oversized and malformed result rejection,
+  cancellation before and after the query, closed and unknown runs, limit
+  validation, and bounded detail.
+- The standing composition table now covers four capabilities, with route tests
+  proving discovery runs through real `CognitiveEngine` wiring, accepts nothing,
+  and stays unregistered without a provider.
+
 ## [0.3.129] - 2026-08-23
 
 ### Added

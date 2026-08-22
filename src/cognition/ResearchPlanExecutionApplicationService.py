@@ -215,9 +215,13 @@ class ResearchPlanExecutionApplicationService:
                 str(error),
             )
         try:
+            stored = self._contexts.get(plan_id, ResearchPlanExecutionContext())
             result = operation.run(
                 step,
-                self._contexts.get(plan_id, ResearchPlanExecutionContext()),
+                ResearchPlanExecutionContext(
+                    research_run_id=stored.research_run_id,
+                    cancellation_token=request.cancellation_token,
+                ),
             )
         except ResearchError as error:
             failed = running.fail_step(step_id, str(error))

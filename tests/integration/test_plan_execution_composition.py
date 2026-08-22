@@ -31,14 +31,39 @@ from research.ResearchEvidenceIntegrityAuditor import (
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchSource import ResearchSource
+from research.ResearchSourceCandidate import ResearchSourceCandidate
 from response.ResponseComposer import ResponseComposer
 from session.SessionManager import SessionManager
 from session.SessionRenameTransactionService import SessionRenameTransactionService
+
+
+class StubDiscoveryProvider:
+    """Deterministic discovery provider standing in for a network provider."""
+
+    def __init__(self) -> None:
+        self.queries: list[str] = []
+
+    @property
+    def provider_name(self) -> str:
+        return "stub_discovery"
+
+    def discover(self, query: str, *, limit: int) -> list[ResearchSourceCandidate]:
+        del limit
+        self.queries.append(query)
+        return [
+            ResearchSourceCandidate(
+                url="https://example.test/candidate",
+                title="A candidate",
+                snippet="A bounded snippet.",
+            )
+        ]
+
 
 EXPECTED_OPERATIONS = {
     ResearchPlanStepCapability.LOCAL_KNOWLEDGE_SEARCH: "local_knowledge_search",
     ResearchPlanStepCapability.ACCEPTED_SOURCE_LISTING: "accepted_source_listing",
     ResearchPlanStepCapability.EVIDENCE_INTEGRITY_CHECK: "evidence_integrity_check",
+    ResearchPlanStepCapability.SOURCE_DISCOVERY: "source_discovery",
 }
 
 
@@ -56,6 +81,7 @@ class PlanExecutionCompositionTests(unittest.TestCase):
         self.run_manager = ResearchRunManager(
             JsonFileResearchRunStore(root / "runs.json")
         )
+        self.discovery_provider = StubDiscoveryProvider()
         self.engine = CognitiveEngine(
             self.knowledge_engine,
             self.memory_manager,
@@ -72,6 +98,7 @@ class PlanExecutionCompositionTests(unittest.TestCase):
             research_evidence_integrity_auditor=ResearchEvidenceIntegrityAuditor(
                 self.knowledge_engine
             ),
+            research_source_discovery_provider=self.discovery_provider,
         )
 
     def tearDown(self) -> None:
@@ -258,6 +285,53 @@ class PlanExecutionCompositionTests(unittest.TestCase):
         self.assertIsNotNone(
             registry.resolve(ResearchPlanStepCapability.ACCEPTED_SOURCE_LISTING)
         )
+
+    def test_source_discovery_runs_through_the_engine_route(self) -> None:
+        run = self.run_manager.create("What evidence supports the claim?")
+        plan_id = self._start("source_discovery", run_id=run.run_id)
+
+        response = self._advance(plan_id)
+
+        state = response.research_plan_execution
+        assert state is not None
+        self.assertEqual(state.status.value, "completed")
+        self.assertTrue(state.steps[0].work_performed)
+        self.assertEqual(state.steps[0].operation, "source_discovery")
+        self.assertIn("returned 1 candidate(s)", state.steps[0].detail)
+        self.assertIn("not accepted sources", state.steps[0].detail)
+        self.assertEqual(self.discovery_provider.queries, [run.question])
+
+    def test_discovery_accepts_nothing_and_creates_no_evidence(self) -> None:
+        run = self.run_manager.create("What evidence supports the claim?")
+        plan_id = self._start("source_discovery", run_id=run.run_id)
+
+        self._advance(plan_id)
+
+        stored = self.run_manager.get(run.run_id)
+        self.assertEqual(len(stored.discoveries), 1)
+        self.assertEqual(stored.sources, ())
+        self.assertEqual(stored.evidence, ())
+        self.assertEqual(stored.claims, ())
+        self.assertEqual(stored.assessments, ())
+
+    def test_discovery_capability_is_unregistered_without_a_provider(self) -> None:
+        engine = CognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            Planner(),
+            self.event_bus,
+            ResponseComposer(),
+            self.session_manager,
+            SessionRenameTransactionService(
+                session_manager=self.session_manager,
+                memory_manager=self.memory_manager,
+                event_bus=self.event_bus,
+            ),
+            research_run_manager=self.run_manager,
+        )
+        registry = engine._research_plan_execution_service._operation_registry
+
+        self.assertIsNone(registry.resolve(ResearchPlanStepCapability.SOURCE_DISCOVERY))
 
 
 if __name__ == "__main__":
