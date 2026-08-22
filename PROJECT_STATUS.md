@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.92 (Genesis)`
+`v0.3.93 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.92`** is the current executable package and GitHub
+- **Runtime release `v0.3.93`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -64,6 +64,10 @@ with optional OpenAI-compatible LLM conversation support.
   matches. The full immutable catalog remains intact, no-match/overlong states
   are explicit, clearing restores all rows, and the active run plus authored
   fields change only after an explicit visible selection.
+- The selected run's immutable creation/update times and complete safe-failure
+  count appear in Overview as a bounded metadata line. Timestamps retain their
+  timezone offset at seconds precision; failure stage/reason text is never
+  exposed. Empty or invalid selection cannot retain stale metadata.
 - The Research tab has a read-only persisted-run selector labelled with the
   question, status, and exact ID. Refresh preserves a valid selection, creation
   selects the new run, and switching clears only stale candidate/export views.
@@ -554,8 +558,8 @@ changed.
 
 ## Next Milestone
 
-Add a presentation-only selected-run metadata line on Research Overview with
-the immutable created/updated timestamps and complete safe-failure count. It
-must use only the selected catalog snapshot, use bounded timezone-aware text,
-show non-stale empty/invalid guidance, expose no failure detail, and open no
-runtime or mutation boundary.
+Add a presentation-only local sort for the current loaded/filtered research-run
+view, including updated-newest, updated-oldest, created-newest, and question
+order. Sorting must preserve the immutable catalog/filter membership and active
+selection, use deterministic run-ID tie breaks, expose an explicit current sort,
+and open no runtime or mutation boundary.

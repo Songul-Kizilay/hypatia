@@ -245,6 +245,9 @@ The already loaded run catalog can be filtered locally by bounded question
 text, exact status, or exact run ID. Filtering does not request or change data;
 no-match keeps the active run and authored fields intact, and `Clear` restores
 the full immutable catalog.
+Overview also shows the selected run's seconds-level timezone-aware creation
+and update timestamps plus the complete safe-failure count. It never displays
+failure stage or reason text and performs no additional read.
 
 The window uses the same Bootstrap and Brain as the terminal entry point. A
 clicked session only fills the selection field; choosing it remains explicit.
@@ -290,6 +293,9 @@ page text or make web research autonomous.
 question fragment, exact status, or exact ID, with a 200-character bound.
 No-match does not change the active run or authored fields; `Clear` restores the
 complete loaded catalog without another read.
+The selected run's Overview metadata line shows its immutable created/updated
+times with timezone offsets and only the aggregate safe-failure count. It never
+shows failure details or opens another runtime path.
 Accepted sources from that same loaded snapshot appear by bounded title and
 exact document ID. Choosing a source does not edit the form or start an action;
 `Use for assessment` copies only its exact ID into the single-source field, and

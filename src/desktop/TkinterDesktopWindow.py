@@ -230,6 +230,9 @@ class TkinterDesktopWindow:
         self._research_workflow_snapshot = tk.StringVar(
             value="Select or create a research run to see stage records."
         )
+        self._research_run_metadata = tk.StringVar(
+            value="Run metadata unavailable until a research run is selected."
+        )
         self._research_source_choice = tk.StringVar()
         self._research_evidence_choice = tk.StringVar()
         self._research_assessment_choice = tk.StringVar()
@@ -891,6 +894,12 @@ class TkinterDesktopWindow:
             justify="left",
             wraplength=820,
         ).grid(row=0, column=0, sticky="ew")
+        ttk.Label(
+            research_workflow_snapshot_frame,
+            textvariable=self._research_run_metadata,
+            style="Hint.TLabel",
+            anchor="w",
+        ).grid(row=1, column=0, sticky="ew", pady=(4, 0))
         ttk.Label(
             research_sources_frame,
             text=(
@@ -2075,6 +2084,9 @@ class TkinterDesktopWindow:
             self._research_workflow_snapshot.set(
                 "No research runs are available to summarize."
             )
+            self._research_run_metadata.set(
+                "Run metadata unavailable: no research runs are available."
+            )
             self._clear_research_run_dependent_presentations()
             return
         selected_index = next(
@@ -2191,6 +2203,9 @@ class TkinterDesktopWindow:
             self._research_workflow_snapshot.set(
                 "Refresh and select a research run to see stage records."
             )
+            self._research_run_metadata.set(
+                "Run metadata unavailable until a research run is selected."
+            )
             self._status.set("Refresh and select a research run first.")
             return
         selected_run = self._visible_research_runs[selected_index]
@@ -2208,6 +2223,7 @@ class TkinterDesktopWindow:
         self._research_workflow_snapshot.set(
             self._research_workflow_snapshot_text(selected_run)
         )
+        self._research_run_metadata.set(self._research_run_metadata_text(selected_run))
         self._status.set(
             f"research run selected: {selected_run.run_id}; no action started"
         )
@@ -2239,6 +2255,16 @@ class TkinterDesktopWindow:
             f"Claims: {len(run.claims)} · "
             f"Contradictions: {len(run.claim_contradictions)} | "
             f"Review & export — Status: {run.status.value}"
+        )
+
+    @staticmethod
+    def _research_run_metadata_text(run: ResearchRun) -> str:
+        """Expose bounded audit timing and a count without failure details."""
+        created = run.created_at.isoformat(timespec="seconds")
+        updated = run.updated_at.isoformat(timespec="seconds")
+        return (
+            f"Run metadata — Created: {created} · Updated: {updated} · "
+            f"Safe failures: {len(run.failures)}"
         )
 
     def _render_research_claim_selector(self, run: ResearchRun) -> None:

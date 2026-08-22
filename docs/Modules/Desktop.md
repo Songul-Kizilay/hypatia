@@ -30,6 +30,10 @@ immutable catalog. It matches case-insensitive question text, exact status, or
 exact ID and reports visible/total counts. No-match or overlong input does not
 change the active run, authored fields, or run-bound views; `Clear` restores the
 complete loaded catalog without another read.
+Overview also renders one bounded metadata line from the selected immutable
+run: seconds-level timezone-aware creation/update times and only the aggregate
+safe-failure count. It cannot expose a failure stage/reason or retain stale
+metadata after empty/invalid selection, and it opens no read or mutation path.
 Users can choose a local text size between 10 and 20 points and select Eye
 comfort, Light, or High contrast without affecting runtime state. Eye comfort
 is the default; it uses softened dark surfaces while preserving explicit focus,

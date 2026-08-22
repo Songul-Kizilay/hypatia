@@ -2,6 +2,33 @@
 
 All notable project changes are recorded here.
 
+## [0.3.93] - 2026-08-22
+
+### Added
+
+- Research Overview now shows the selected run's immutable creation and update
+  timestamps as seconds-level timezone-aware ISO-8601 text.
+- The same metadata line reports the complete count of persisted safe failures.
+  Empty and invalid selection states replace stale metadata with guidance.
+
+### Safety
+
+- Metadata is derived only from the already selected immutable `ResearchRun`
+  snapshot. Failure stage/reason details are never presented, and no Brain,
+  controller, storage, provider, network, LLM, index, event-bus, or mutation
+  boundary is opened.
+- Filtering and hidden/no-match active-run behavior remain presentation-only;
+  all authored fields and existing run-bound views are preserved.
+
+### Verification
+
+- The package-aware full local suite contains 1,460 passing automated tests.
+- Focused desktop coverage contains 101 passing tests, including timezone-aware
+  bounded formatting, exact failure count, failure-detail hiding, and selected,
+  empty, and invalid metadata states.
+- Black, Ruff, and MyPy pass. A real Tk measurement confirms one metadata label
+  in a 954-by-973-pixel requested window.
+
 ## [0.3.92] - 2026-08-22
 
 ### Added
