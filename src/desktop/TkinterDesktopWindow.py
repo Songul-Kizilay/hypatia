@@ -85,6 +85,15 @@ class DesktopTheme(StrEnum):
     HIGH_CONTRAST = "high_contrast"
 
 
+class ResearchRunSort(StrEnum):
+    """User-facing deterministic orders for the loaded run presentation."""
+
+    UPDATED_NEWEST = "Updated — newest first"
+    UPDATED_OLDEST = "Updated — oldest first"
+    CREATED_NEWEST = "Created — newest first"
+    QUESTION = "Question — A to Z"
+
+
 def _accessibility_palette(
     theme: DesktopTheme | str = DesktopTheme.EYE_COMFORT,
 ) -> AccessibilityPalette:
@@ -226,6 +235,12 @@ class TkinterDesktopWindow:
         self._research_run_filter = tk.StringVar()
         self._research_run_filter_summary = tk.StringVar(
             value="All loaded research runs are shown."
+        )
+        self._research_run_sort = tk.StringVar(
+            value=ResearchRunSort.UPDATED_NEWEST.value
+        )
+        self._research_run_sort_summary = tk.StringVar(
+            value=f"Current sort: {ResearchRunSort.UPDATED_NEWEST.value}."
         )
         self._research_workflow_snapshot = tk.StringVar(
             value="Select or create a research run to see stage records."
@@ -873,6 +888,35 @@ class TkinterDesktopWindow:
             textvariable=self._research_run_filter_summary,
             style="Hint.TLabel",
         ).grid(row=1, column=1, columnspan=3, sticky="w", pady=(4, 0))
+        ttk.Label(research_run_filter_frame, text="Sort visible runs").grid(
+            row=2,
+            column=0,
+            sticky="w",
+            padx=(0, 8),
+            pady=(8, 0),
+        )
+        self._research_run_sort_selector = ttk.Combobox(
+            research_run_filter_frame,
+            textvariable=self._research_run_sort,
+            values=tuple(mode.value for mode in ResearchRunSort),
+            state="readonly",
+        )
+        self._research_run_sort_selector.grid(
+            row=2,
+            column=1,
+            columnspan=3,
+            sticky="ew",
+            pady=(8, 0),
+        )
+        self._research_run_sort_selector.bind(
+            "<<ComboboxSelected>>",
+            self._apply_research_run_sort,
+        )
+        ttk.Label(
+            research_run_filter_frame,
+            textvariable=self._research_run_sort_summary,
+            style="Hint.TLabel",
+        ).grid(row=3, column=1, columnspan=3, sticky="w", pady=(4, 0))
         research_workflow_snapshot_frame = ttk.LabelFrame(
             research_overview_frame,
             text="Workflow snapshot",
@@ -2062,14 +2106,17 @@ class TkinterDesktopWindow:
         normalized_runs = tuple(runs)
         selected_run_id = self._research_run_id.get().strip()
         self._research_runs = normalized_runs
-        self._visible_research_runs = normalized_runs
+        sort_mode = self._current_research_run_sort()
+        visible_runs = self._sort_research_runs(normalized_runs, sort_mode)
+        self._visible_research_runs = visible_runs
         self._research_run_filter.set("")
         self._research_run_filter_summary.set(
             "No research runs are available."
             if not normalized_runs
             else f"All {len(normalized_runs)} loaded research runs are shown."
         )
-        labels = tuple(self._research_run_label(run) for run in normalized_runs)
+        self._research_run_sort_summary.set(f"Current sort: {sort_mode.value}.")
+        labels = tuple(self._research_run_label(run) for run in visible_runs)
         self._research_run_selector.configure(values=labels)
         if not normalized_runs:
             self._research_run_choice.set("")
@@ -2092,7 +2139,7 @@ class TkinterDesktopWindow:
         selected_index = next(
             (
                 index
-                for index, run in enumerate(normalized_runs)
+                for index, run in enumerate(visible_runs)
                 if run.run_id == selected_run_id
             ),
             0,
@@ -2112,24 +2159,12 @@ class TkinterDesktopWindow:
                 f"{_MAX_RESEARCH_RUN_FILTER_LENGTH} characters."
             )
             return
-        visible_runs = self._filter_research_runs(self._research_runs, query)
-        self._visible_research_runs = visible_runs
-        self._research_run_selector.configure(
-            values=tuple(self._research_run_label(run) for run in visible_runs)
+        matching_runs = self._filter_research_runs(self._research_runs, query)
+        visible_runs = self._sort_research_runs(
+            matching_runs,
+            self._current_research_run_sort(),
         )
-        selected_run_id = self._research_run_id.get().strip()
-        selected_index = next(
-            (
-                index
-                for index, run in enumerate(visible_runs)
-                if run.run_id == selected_run_id
-            ),
-            None,
-        )
-        if selected_index is None:
-            self._research_run_choice.set("")
-        else:
-            self._research_run_selector.current(selected_index)
+        self._render_visible_research_runs(visible_runs)
         total_count = len(self._research_runs)
         visible_count = len(visible_runs)
         if total_count == 0:
@@ -2156,6 +2191,59 @@ class TkinterDesktopWindow:
         self._research_run_filter.set("")
         self._apply_research_run_filter()
 
+    def _apply_research_run_sort(self, _event: object | None = None) -> None:
+        """Reorder only the current visible membership without a runtime call."""
+        try:
+            sort_mode = ResearchRunSort(self._research_run_sort.get())
+        except ValueError:
+            self._research_run_sort_summary.set(
+                "Invalid sort; the visible research runs are unchanged."
+            )
+            self._status.set("Research run sort is invalid.")
+            return
+        visible_runs = self._sort_research_runs(
+            self._visible_research_runs,
+            sort_mode,
+        )
+        self._render_visible_research_runs(visible_runs)
+        self._research_run_sort_summary.set(f"Current sort: {sort_mode.value}.")
+        self._status.set(
+            f"research run sort: {sort_mode.value}; "
+            f"{len(visible_runs)} visible; active run unchanged"
+        )
+
+    def _render_visible_research_runs(
+        self,
+        visible_runs: tuple[ResearchRun, ...],
+    ) -> None:
+        """Render one local view while preserving any visible active run."""
+        self._visible_research_runs = visible_runs
+        self._research_run_selector.configure(
+            values=tuple(self._research_run_label(run) for run in visible_runs)
+        )
+        selected_run_id = self._research_run_id.get().strip()
+        selected_index = next(
+            (
+                index
+                for index, run in enumerate(visible_runs)
+                if run.run_id == selected_run_id
+            ),
+            None,
+        )
+        if selected_index is None:
+            self._research_run_choice.set("")
+        else:
+            self._research_run_selector.current(selected_index)
+
+    def _current_research_run_sort(self) -> ResearchRunSort:
+        """Return one valid sort, restoring the safe default if state is invalid."""
+        try:
+            return ResearchRunSort(self._research_run_sort.get())
+        except ValueError:
+            default = ResearchRunSort.UPDATED_NEWEST
+            self._research_run_sort.set(default.value)
+            return default
+
     @staticmethod
     def _filter_research_runs(
         runs: tuple[ResearchRun, ...],
@@ -2171,6 +2259,36 @@ class TkinterDesktopWindow:
             if normalized_query in run.question.casefold()
             or normalized_query == run.status.value.casefold()
             or normalized_query == run.run_id.casefold()
+        )
+
+    @staticmethod
+    def _sort_research_runs(
+        runs: tuple[ResearchRun, ...],
+        mode: ResearchRunSort,
+    ) -> tuple[ResearchRun, ...]:
+        """Sort one presentation tuple with deterministic ascending ID ties."""
+        id_ordered = tuple(
+            sorted(runs, key=lambda run: (run.run_id.casefold(), run.run_id))
+        )
+        if mode is ResearchRunSort.UPDATED_NEWEST:
+            return tuple(
+                sorted(id_ordered, key=lambda run: run.updated_at, reverse=True)
+            )
+        if mode is ResearchRunSort.UPDATED_OLDEST:
+            return tuple(sorted(id_ordered, key=lambda run: run.updated_at))
+        if mode is ResearchRunSort.CREATED_NEWEST:
+            return tuple(
+                sorted(id_ordered, key=lambda run: run.created_at, reverse=True)
+            )
+        return tuple(
+            sorted(
+                id_ordered,
+                key=lambda run: (
+                    run.question.casefold(),
+                    run.run_id.casefold(),
+                    run.run_id,
+                ),
+            )
         )
 
     @staticmethod

@@ -45,6 +45,9 @@ The MVP may present only current Brain/CognitiveEngine capabilities:
 - a bounded local filter over the already loaded immutable run catalog, with
   question/exact-status/exact-ID matching, result counts, explicit no-match,
   active-selection preservation, and clear restoration;
+- four explicit deterministic local orders for the current loaded or filtered
+  run view, with current-sort feedback, ascending run-ID ties, and immutable
+  catalog/filter/active-selection preservation;
 - a bounded selected-run metadata line with timezone-aware created/updated
   timestamps and aggregate safe-failure count, without failure detail;
 - a read-only accepted-source selector from that same run snapshot, with

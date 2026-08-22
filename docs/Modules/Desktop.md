@@ -30,6 +30,11 @@ immutable catalog. It matches case-insensitive question text, exact status, or
 exact ID and reports visible/total counts. No-match or overlong input does not
 change the active run, authored fields, or run-bound views; `Clear` restores the
 complete loaded catalog without another read.
+The same loaded or filtered view has four explicit local sort choices: updated
+newest, updated oldest, created newest, and question A-to-Z. The interface shows
+the current sort and uses deterministic ascending run-ID ties. Sorting preserves
+the immutable catalog, filter membership, active run, and authored fields and
+starts no controller, provider, storage, or mutation action.
 Overview also renders one bounded metadata line from the selected immutable
 run: seconds-level timezone-aware creation/update times and only the aggregate
 safe-failure count. It cannot expose a failure stage/reason or retain stale

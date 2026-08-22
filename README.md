@@ -245,6 +245,11 @@ The already loaded run catalog can be filtered locally by bounded question
 text, exact status, or exact run ID. Filtering does not request or change data;
 no-match keeps the active run and authored fields intact, and `Clear` restores
 the full immutable catalog.
+The current loaded or filtered view can also be sorted locally by newest
+update, oldest update, newest creation, or question. The current order remains
+visible, deterministic run-ID ties are stable, and sorting preserves the full
+catalog, filter membership, active run, and authored fields without requesting
+or changing data.
 Overview also shows the selected run's seconds-level timezone-aware creation
 and update timestamps plus the complete safe-failure count. It never displays
 failure stage or reason text and performs no additional read.

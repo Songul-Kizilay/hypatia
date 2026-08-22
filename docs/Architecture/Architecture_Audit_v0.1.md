@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.93` in the current release candidate) are the
+- **Runtime releases** (`v0.3.94` in the current release candidate) are the
   executable package and GitHub release line. They are the source-backed
   implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
@@ -245,6 +245,11 @@ One 200-character presentation filter matches a case-insensitive question
 substring, exact status, or exact run ID. Filtering opens no read path and does
 not change an active hidden/no-match run or authored fields; clearing restores
 the complete view. Overlong input leaves the prior visible tuple untouched.
+That visible tuple has four presentation-only orders: update time newest or
+oldest, creation time newest, and case-insensitive question order. The chosen
+order is explicit; equal primary keys use deterministic ascending exact run-ID
+ties. Sorting never changes the immutable catalog, current filter membership,
+active run, or authored fields and opens no runtime boundary.
 The selected immutable run supplies one additional Overview metadata line.
 Created/updated timestamps use seconds-level ISO-8601 text with their timezone
 offset, and only the complete `failures` tuple length is shown. No stage/reason,
