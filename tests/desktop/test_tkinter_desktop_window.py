@@ -622,6 +622,103 @@ class AccessibilityPreferenceTests(unittest.TestCase):
         self.assertEqual(title, f"{'T' * 76} ...")
         self.assertEqual(len(title), 80)
 
+    def test_selected_source_details_show_safe_timezone_aware_provenance(
+        self,
+    ) -> None:
+        fetched = datetime(2026, 8, 21, 10, 11, 12, 345678, tzinfo=UTC)
+        accepted = datetime(2026, 8, 21, 13, 14, 15, 987654, tzinfo=UTC)
+        source = ResearchSourceRecord(
+            "document-1",
+            "https://secret.example/source-path",
+            "  Accepted\nsource  ",
+            "Text/Plain",
+            fetched,
+            accepted,
+        )
+        run = Mock(spec=ResearchRun)
+        run.run_id = "run-123"
+        run.sources = (source,)
+
+        details = TkinterDesktopWindow._research_source_details_text(run, source)
+
+        self.assertEqual(
+            details,
+            "Title: Accepted source\n"
+            "Document ID: document-1\n"
+            "Run ID: run-123\n"
+            "Content type: text/plain\n"
+            "Fetched: 2026-08-21T10:11:12+00:00\n"
+            "Accepted: 2026-08-21T13:14:15+00:00",
+        )
+        self.assertNotIn(source.url, details or "")
+
+    def test_selected_source_details_reject_noncanonical_record(self) -> None:
+        accepted = _research_source_record("document-1", "Accepted")
+        changed_copy = _research_source_record("document-1", "Changed title")
+        run = Mock(spec=ResearchRun)
+        run.run_id = "run-123"
+        run.sources = (accepted,)
+
+        self.assertIsNone(
+            TkinterDesktopWindow._research_source_details_text(run, changed_copy)
+        )
+
+    def test_show_selected_source_details_is_read_only_and_local(self) -> None:
+        source = _research_source_record("document-1", "Accepted")
+        now = datetime(2026, 8, 21, tzinfo=UTC)
+        run = ResearchRun(
+            "run-123",
+            "Inspect safe provenance",
+            ResearchRunStatus.COLLECTING,
+            (source,),
+            (),
+            now,
+            now,
+        )
+        window: Any = object.__new__(TkinterDesktopWindow)
+        window._root = object()
+        window._controller = Mock()
+        window._research_run_id = RecordingVariable(run.run_id)
+        window._research_source_run_id = run.run_id
+        window._research_runs = (run,)
+        window._research_sources = (source,)
+        window._research_source_selector = RecordingCandidateSelector(selected_index=0)
+        window._research_assessment_text = RecordingVariable("authored")
+        window._status = RecordingStatus()
+        expected = window._research_source_details_text(run, source)
+
+        with patch("desktop.TkinterDesktopWindow.messagebox.showinfo") as show_details:
+            window._show_selected_research_source_details()
+
+        show_details.assert_called_once_with(
+            "Selected source details",
+            expected,
+            parent=window._root,
+        )
+        self.assertEqual(window._research_assessment_text.value, "authored")
+        self.assertEqual(
+            window._status.values,
+            ["accepted source details shown: document-1; no action started"],
+        )
+        window._controller.assert_not_called()
+
+    def test_show_selected_source_details_without_selection_opens_nothing(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        window._research_run_id = RecordingVariable("run-123")
+        window._research_source_run_id = "run-123"
+        window._research_runs = ()
+        window._research_sources = ()
+        window._research_source_selector = RecordingCandidateSelector()
+        window._status = RecordingStatus()
+
+        with patch("desktop.TkinterDesktopWindow.messagebox.showinfo") as show_details:
+            window._show_selected_research_source_details()
+
+        show_details.assert_not_called()
+        self.assertEqual(window._status.values, ["Select an accepted source first."])
+
     def test_research_run_metadata_is_timezone_aware_and_hides_failure_detail(
         self,
     ) -> None:
