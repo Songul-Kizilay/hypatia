@@ -2,6 +2,44 @@
 
 All notable project changes are recorded here.
 
+## [0.3.111] - 2026-08-22
+
+### Changed
+
+- Research catalog filtering, status facets, deterministic ordering, run
+  progress/coverage/metadata, and canonical selected-source presentation now
+  live in one immutable `ResearchWorkspaceReadModel` outside Tkinter.
+- `TkinterDesktopWindow` delegates those existing values through frozen run and
+  source read views. Its size falls from 4,631 to 4,437 lines while adding the
+  requested startup sizing, without changing
+  any visible text, command, field, provider, persistence, or runtime contract.
+- The desktop now requests a 1,920-by-1,080-pixel initial client area, centers
+  that size on larger displays, and clamps both dimensions to smaller screens.
+  The window remains resizable and retains a screen-safe bounded minimum.
+
+### Safety
+
+- The read model accepts only already loaded immutable snapshots and imports no
+  Tkinter, Brain, controller, manager, provider, path, network, or store boundary.
+- Exact canonical source membership, external-data taint, instruction authority
+  `none`, current/superseded assessment handling, unique evidence membership,
+  deterministic ties, and URL/content exclusion remain unchanged.
+- Initial sizing is presentation-only and opens no runtime boundary. Invalid
+  screen dimensions are rejected by the pure sizing helper.
+
+### Verification
+
+- The package-aware full local suite contains 1,522 passing automated tests.
+- Focused desktop coverage contains 163 passing tests, including direct frozen
+  read-model coverage for empty catalogs, exact filtering, deterministic ties,
+  duplicate evidence, hidden source membership, superseded/foreign records,
+  canonical-source refusal, safe URL-free details, exact 1,920-by-1,080 sizing,
+  smaller-screen fitting, and invalid-dimension refusal.
+- Black, Ruff, and MyPy pass for all 333 Python source and test files.
+- A real Tk check reports `1920x1080+0+0` on the current 1,920-by-1,080
+  display. The pinned Windows onedir package builds and initializes its local
+  session snapshot in a fresh temporary data directory.
+
 ## [0.3.110] - 2026-08-22
 
 ### Added

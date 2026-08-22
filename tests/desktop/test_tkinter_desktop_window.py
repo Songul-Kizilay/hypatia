@@ -28,6 +28,7 @@ from desktop.TkinterDesktopWindow import (
     TkinterDesktopWindow,
     _accessibility_palette,
     _format_citations,
+    _initial_window_size,
     _next_font_size,
     _preview_and_confirm_knowledge_relation,
     _preview_and_confirm_knowledge_relation_removal,
@@ -89,6 +90,22 @@ from research.ResearchSourceRecord import ResearchSourceRecord
 
 
 class AccessibilityPreferenceTests(unittest.TestCase):
+    def test_initial_window_prefers_1920_by_1080(self) -> None:
+        self.assertEqual(_initial_window_size(1920, 1080), (1920, 1080))
+        self.assertEqual(_initial_window_size(2560, 1440), (1920, 1080))
+
+    def test_initial_window_fits_smaller_screen(self) -> None:
+        self.assertEqual(_initial_window_size(1366, 768), (1366, 768))
+
+    def test_initial_window_rejects_invalid_screen_dimensions(self) -> None:
+        for dimensions in ((0, 1080), (1920, 0), (True, 1080), (1920, False)):
+            with self.subTest(dimensions=dimensions):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "Screen dimensions must be positive integers",
+                ):
+                    _initial_window_size(*dimensions)
+
     def test_text_size_adjustments_remain_within_a_readable_range(self) -> None:
         self.assertEqual(_next_font_size(12, 1), 13)
         self.assertEqual(_next_font_size(10, -1), 10)
