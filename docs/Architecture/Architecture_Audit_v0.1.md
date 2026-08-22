@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.90` in the current release candidate) are the
+- **Runtime releases** (`v0.3.91` in the current release candidate) are the
   executable package and GitHub release line. They are the source-backed
   implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
@@ -235,6 +235,11 @@ The same three banners share one progress value with complete source, evidence,
 and claim counts from that immutable run. The Overview summary retains its
 existing status-prefixed form; later tabs add no second read path. Empty and
 invalid selections replace stale counts with explicit unavailable guidance.
+Research Overview also binds one workflow snapshot to that immutable run. It
+reports complete source, evidence, assessment, comparison-note, claim, and
+contradiction collection lengths plus the existing status. It does not classify
+readiness, infer truth, recommend a conclusion, hide controls, or open another
+runtime boundary; empty and invalid selections replace stale stage records.
 The same already loaded immutable run object supplies a compact status and
 complete source/evidence/claim count summary. No additional manager or Brain
 read is opened, and empty or invalid selections cannot retain stale counts.

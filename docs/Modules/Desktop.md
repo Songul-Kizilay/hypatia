@@ -21,6 +21,10 @@ selection replaces stale context and starts no runtime action.
 Each banner also repeats complete source, evidence, and claim counts from that
 snapshot. All three labels share one presentation value; empty or invalid
 selection clears stale progress without another read or action.
+Overview presents one additional `Workflow snapshot` with complete source,
+evidence, assessment, comparison-note, claim, and contradiction counts plus the
+existing status. It reports records only and does not classify readiness, infer
+truth, recommend a conclusion, hide controls, or start an action.
 Users can choose a local text size between 10 and 20 points and select Eye
 comfort, Light, or High contrast without affecting runtime state. Eye comfort
 is the default; it uses softened dark surfaces while preserving explicit focus,

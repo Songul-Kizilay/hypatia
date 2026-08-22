@@ -222,6 +222,9 @@ class TkinterDesktopWindow:
         self._research_run_progress = tk.StringVar(
             value="Progress unavailable until a research run is selected."
         )
+        self._research_workflow_snapshot = tk.StringVar(
+            value="Select or create a research run to see stage records."
+        )
         self._research_source_choice = tk.StringVar()
         self._research_evidence_choice = tk.StringVar()
         self._research_assessment_choice = tk.StringVar()
@@ -833,6 +836,27 @@ class TkinterDesktopWindow:
             textvariable=self._research_run_summary,
             style="Hint.TLabel",
         ).grid(row=1, column=0, sticky="w", pady=(4, 0))
+        research_workflow_snapshot_frame = ttk.LabelFrame(
+            research_overview_frame,
+            text="Workflow snapshot",
+            padding=(8, 6),
+        )
+        research_workflow_snapshot_frame.grid(
+            row=3,
+            column=0,
+            columnspan=4,
+            sticky="ew",
+            pady=(10, 0),
+        )
+        research_workflow_snapshot_frame.columnconfigure(0, weight=1)
+        ttk.Label(
+            research_workflow_snapshot_frame,
+            textvariable=self._research_workflow_snapshot,
+            style="Hint.TLabel",
+            anchor="w",
+            justify="left",
+            wraplength=820,
+        ).grid(row=0, column=0, sticky="ew")
         ttk.Label(
             research_sources_frame,
             text=(
@@ -2007,6 +2031,9 @@ class TkinterDesktopWindow:
             self._research_run_progress.set(
                 "Progress unavailable: no research runs available."
             )
+            self._research_workflow_snapshot.set(
+                "No research runs are available to summarize."
+            )
             self._clear_research_run_dependent_presentations()
             return
         selected_index = next(
@@ -2047,6 +2074,9 @@ class TkinterDesktopWindow:
             self._research_run_progress.set(
                 "Progress unavailable until a research run is selected."
             )
+            self._research_workflow_snapshot.set(
+                "Refresh and select a research run to see stage records."
+            )
             self._status.set("Refresh and select a research run first.")
             return
         selected_run = self._research_runs[selected_index]
@@ -2061,6 +2091,9 @@ class TkinterDesktopWindow:
         self._research_run_summary.set(self._research_run_summary_text(selected_run))
         self._research_run_context.set(self._research_run_context_text(selected_run))
         self._research_run_progress.set(self._research_run_progress_text(selected_run))
+        self._research_workflow_snapshot.set(
+            self._research_workflow_snapshot_text(selected_run)
+        )
         self._status.set(
             f"research run selected: {selected_run.run_id}; no action started"
         )
@@ -2079,6 +2112,19 @@ class TkinterDesktopWindow:
         return (
             f"Sources: {len(run.sources)} · "
             f"Evidence: {len(run.evidence)} · Claims: {len(run.claims)}"
+        )
+
+    @staticmethod
+    def _research_workflow_snapshot_text(run: ResearchRun) -> str:
+        """Describe existing stage records without inferring readiness or truth."""
+        return (
+            f"Sources & evidence — Sources: {len(run.sources)} · "
+            f"Evidence: {len(run.evidence)} | Authored analysis — "
+            f"Assessments: {len(run.assessments)} · "
+            f"Comparison notes: {len(run.comparison_notes)} · "
+            f"Claims: {len(run.claims)} · "
+            f"Contradictions: {len(run.claim_contradictions)} | "
+            f"Review & export — Status: {run.status.value}"
         )
 
     def _render_research_claim_selector(self, run: ResearchRun) -> None:

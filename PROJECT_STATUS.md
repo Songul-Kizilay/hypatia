@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.90 (Genesis)`
+`v0.3.91 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.90`** is the current executable package and GitHub
+- **Runtime release `v0.3.91`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -55,6 +55,10 @@ with optional OpenAI-compatible LLM conversation support.
   claim counts from that immutable snapshot. Empty and invalid selections clear
   stale progress. The Overview summary remains unchanged, and no additional
   read, provider, persistence, or mutation path exists.
+- Research Overview adds a bounded workflow snapshot for the selected run. It
+  reports complete sources/evidence, assessments/comparison notes/claims/
+  contradictions, and the existing review status from the immutable object.
+  It makes no readiness, truth, or conclusion inference and starts no action.
 - The Research tab has a read-only persisted-run selector labelled with the
   question, status, and exact ID. Refresh preserves a valid selection, creation
   selects the new run, and switching clears only stale candidate/export views.
@@ -545,8 +549,8 @@ changed.
 
 ## Next Milestone
 
-Add a compact presentation-only workflow-readiness overview for the selected
-run. It should summarize which of the existing Sources, Authored analysis, and
-Review stages already contain records, using only complete counts from the
-immutable snapshot. It must not infer truth, recommend a research conclusion,
-change status, hide controls, or open any runtime or mutation boundary.
+Add a presentation-only local filter for the already loaded research-run
+catalog so a user can find runs by bounded question text, status, or exact ID.
+Filtering must open no Brain/storage/provider request, preserve the immutable
+catalog and any still-visible selected run, give an explicit no-match state,
+and leave all authored fields and mutation contracts unchanged.

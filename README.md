@@ -237,6 +237,10 @@ empty or invalid selection shows guidance instead of keeping stale identity.
 The same banner also shows complete source, evidence, and claim counts so users
 can see the selected run's progress without returning to Overview. These counts
 come from the same snapshot and never start another read or action.
+Overview also shows a compact workflow snapshot with complete source/evidence,
+assessment/comparison-note/claim/contradiction counts and the current review
+status. It reports existing records only; it does not decide readiness, truth,
+or a research conclusion.
 
 The window uses the same Bootstrap and Brain as the terminal entry point. A
 clicked session only fills the selection field; choosing it remains explicit.
@@ -273,7 +277,9 @@ run only changes the local workspace selection and starts no research action;
 the selector also shows complete source, evidence, and claim counts from that
 already loaded snapshot. The three later workflow tabs repeat that exact
 identity and the complete source/evidence/claim counts without another read.
-Later explicit actions use the selected ID. The run
+Overview additionally summarizes every existing workflow record category and
+the current status without another read. Later explicit actions use the
+selected ID. The run
 keeps timestamps and safe failure records, but does not duplicate downloaded
 page text or make web research autonomous.
 Accepted sources from that same loaded snapshot appear by bounded title and
