@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.112 (Genesis)`
+`v0.3.113 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.112`** is the current executable package and GitHub
+- **Runtime release `v0.3.113`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -63,6 +63,12 @@ with optional OpenAI-compatible LLM conversation support.
   retain their original routing precedence and exact Brain response contracts,
   while `CognitiveEngine` no longer owns their validation and composition flow.
   The service adds no write, provider, network, LLM, schema, or UI path.
+- The existing authored-history read family is isolated behind
+  `ResearchAuthoredHistoryApplicationService`. Claim history, accepted-source
+  comparison, and accepted-source assessment previews retain their original
+  validation, route precedence, and exact Brain response contracts. The service
+  reads existing manager snapshots and adds no mutation, provider, network,
+  LLM, schema, store, or UI path.
 - The Sources & evidence, Authored analysis, and Review & export workflow tabs
   repeat one read-only current-run banner with the selected question, status,
   and exact run ID. All three labels share one presentation value derived only
@@ -613,7 +619,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,533 automated tests pass through package-aware discovery.
+- 1,541 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -648,8 +654,9 @@ changed.
 
 ## Next Milestone
 
-Extract one bounded authored-history read family from `CognitiveEngine`, starting
-with existing claim, comparison, and assessment previews. Preserve every Brain
-request/response contract and route position; add no UI, persistence, schema,
-provider, network, LLM, mutation, or automatic-analysis behavior. Lock the new
-application service with direct tests before changing engine delegation.
+Define the first bounded user-authored Research plan domain contract described
+by [`Architecture Audit v0.2`](docs/Architecture/Architecture_Audit_v0.2.md):
+explicit ordered steps with strict limits and validation, but no execution,
+provider, network, LLM, UI, persistence, schema migration, or automatic
+analysis. Keep planning data separate from the existing run lifecycle until its
+invariants and direct tests are stable.
