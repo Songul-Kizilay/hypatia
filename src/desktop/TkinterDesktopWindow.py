@@ -219,6 +219,9 @@ class TkinterDesktopWindow:
         self._research_run_context = tk.StringVar(
             value="No research run selected. Return to Overview to choose one."
         )
+        self._research_run_progress = tk.StringVar(
+            value="Progress unavailable until a research run is selected."
+        )
         self._research_source_choice = tk.StringVar()
         self._research_evidence_choice = tk.StringVar()
         self._research_assessment_choice = tk.StringVar()
@@ -756,6 +759,12 @@ class TkinterDesktopWindow:
                 style="Hint.TLabel",
                 anchor="w",
             ).grid(row=0, column=0, sticky="ew")
+            ttk.Label(
+                selected_run_frame,
+                textvariable=self._research_run_progress,
+                style="Hint.TLabel",
+                anchor="w",
+            ).grid(row=1, column=0, sticky="ew", pady=(4, 0))
         ttk.Label(
             research_overview_frame,
             text=(
@@ -1995,6 +2004,9 @@ class TkinterDesktopWindow:
             self._research_run_context.set(
                 "No research runs available. Return to Overview to start one."
             )
+            self._research_run_progress.set(
+                "Progress unavailable: no research runs available."
+            )
             self._clear_research_run_dependent_presentations()
             return
         selected_index = next(
@@ -2032,6 +2044,9 @@ class TkinterDesktopWindow:
             self._research_run_context.set(
                 "No research run selected. Return to Overview to refresh or choose one."
             )
+            self._research_run_progress.set(
+                "Progress unavailable until a research run is selected."
+            )
             self._status.set("Refresh and select a research run first.")
             return
         selected_run = self._research_runs[selected_index]
@@ -2045,6 +2060,7 @@ class TkinterDesktopWindow:
         self._render_research_persisted_comparison_note_selector(selected_run)
         self._research_run_summary.set(self._research_run_summary_text(selected_run))
         self._research_run_context.set(self._research_run_context_text(selected_run))
+        self._research_run_progress.set(self._research_run_progress_text(selected_run))
         self._status.set(
             f"research run selected: {selected_run.run_id}; no action started"
         )
@@ -2053,7 +2069,15 @@ class TkinterDesktopWindow:
     def _research_run_summary_text(run: ResearchRun) -> str:
         """Summarize bounded catalog counts without opening another read path."""
         return (
-            f"Status: {run.status.value} · Sources: {len(run.sources)} · "
+            f"Status: {run.status.value} · "
+            f"{TkinterDesktopWindow._research_run_progress_text(run)}"
+        )
+
+    @staticmethod
+    def _research_run_progress_text(run: ResearchRun) -> str:
+        """Show complete selected-snapshot counts in each later workflow tab."""
+        return (
+            f"Sources: {len(run.sources)} · "
             f"Evidence: {len(run.evidence)} · Claims: {len(run.claims)}"
         )
 

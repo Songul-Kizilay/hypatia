@@ -18,6 +18,9 @@ Sources/evidence, authored analysis, and review/export each show the same
 read-only `Current research run` banner with bounded question, status, and exact
 ID. It uses only the already selected immutable snapshot; empty or invalid
 selection replaces stale context and starts no runtime action.
+Each banner also repeats complete source, evidence, and claim counts from that
+snapshot. All three labels share one presentation value; empty or invalid
+selection clears stale progress without another read or action.
 Users can choose a local text size between 10 and 20 points and select Eye
 comfort, Light, or High contrast without affecting runtime state. Eye comfort
 is the default; it uses softened dark surfaces while preserving explicit focus,
@@ -57,7 +60,8 @@ source-candidate, contradiction-suggestion, and export-preview presentation
 state. A compact line beneath the selector shows status and complete source,
 evidence, and claim counts from the same loaded snapshot; it opens no additional
 read or provider path. The later workflow tabs repeat the same exact selected
-identity through their shared current-run banner without another read.
+identity and complete source/evidence/claim counts through their shared current-
+run banner without another read.
 Accepted sources from that snapshot populate a read-only selector labelled with
 bounded title text and exact document ID. Selection alone edits nothing. The
 explicit assessment handoff replaces only the single-source document field; the

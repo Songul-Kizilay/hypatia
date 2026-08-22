@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.89 (Genesis)`
+`v0.3.90 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.89`** is the current executable package and GitHub
+- **Runtime release `v0.3.90`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -51,6 +51,10 @@ with optional OpenAI-compatible LLM conversation support.
   and exact run ID. All three labels share one presentation value derived only
   from the already loaded immutable run snapshot. Empty or invalid selections
   show guidance instead of stale identity; no runtime request or mutation starts.
+- The same three current-run banners also share complete source, evidence, and
+  claim counts from that immutable snapshot. Empty and invalid selections clear
+  stale progress. The Overview summary remains unchanged, and no additional
+  read, provider, persistence, or mutation path exists.
 - The Research tab has a read-only persisted-run selector labelled with the
   question, status, and exact ID. Refresh preserves a valid selection, creation
   selects the new run, and switching clears only stale candidate/export views.
@@ -541,8 +545,8 @@ changed.
 
 ## Next Milestone
 
-Add a compact presentation-only progress line to the current-run banner so the
-same Sources, Authored analysis, and Review tabs also expose complete source,
-evidence, and claim counts without returning to Overview. It must reuse the
-already selected immutable snapshot, retain the exact run identity, remain
-bounded on 1080p, and open no runtime or mutation boundary.
+Add a compact presentation-only workflow-readiness overview for the selected
+run. It should summarize which of the existing Sources, Authored analysis, and
+Review stages already contain records, using only complete counts from the
+immutable snapshot. It must not infer truth, recommend a research conclusion,
+change status, hide controls, or open any runtime or mutation boundary.
