@@ -136,6 +136,7 @@ class ResearchPlanExecutionState:
         step_id: str,
         detail: str = "",
         work_performed: bool = False,
+        operation: str = "",
     ) -> ResearchPlanExecutionState:
         """Record one finished step and complete the plan only when all finished.
 
@@ -150,6 +151,7 @@ class ResearchPlanExecutionState:
             ResearchPlanStepStatus.COMPLETED,
             detail,
             work_performed=work_performed,
+            operation=operation,
         )
         if all(
             step.status is ResearchPlanStepStatus.COMPLETED for step in updated.steps
@@ -216,6 +218,7 @@ class ResearchPlanExecutionState:
                     ResearchPlanStepStatus.CANCELLED,
                     detail,
                     step.work_performed,
+                    step.operation,
                 )
             )
             for step in self.steps
@@ -225,6 +228,18 @@ class ResearchPlanExecutionState:
             status=ResearchPlanExecutionStatus.CANCELLED,
             steps=steps,
             detail=detail,
+        )
+
+    def snapshot(self) -> tuple[tuple[str, str, str, bool], ...]:
+        """Return a deterministic inspectable tuple of the current state.
+
+        Each entry is (step_id, status, operation, work_performed). This is a
+        minimal inspection aid for ephemeral state; it is not persistence and
+        cannot be used to resume an execution.
+        """
+        return tuple(
+            (step.step_id, step.status.value, step.operation, step.work_performed)
+            for step in self.steps
         )
 
     def _count(self, status: ResearchPlanStepStatus) -> int:
@@ -255,11 +270,12 @@ class ResearchPlanExecutionState:
         status: ResearchPlanStepStatus,
         detail: str = "",
         work_performed: bool = False,
+        operation: str = "",
     ) -> ResearchPlanExecutionState:
         normalized = self._normalized(step_id)
         steps = tuple(
             (
-                step.with_status(status, detail, work_performed)
+                step.with_status(status, detail, work_performed, operation)
                 if step.step_id == normalized
                 else step
             )

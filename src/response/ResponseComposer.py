@@ -901,7 +901,10 @@ class ResponseComposer:
         ]
         for index, step in enumerate(state.steps, start=1):
             detail = f" | {step.detail}" if step.detail else ""
-            lines.append(f"{index}. {step.step_id}: {step.status.value}{detail}")
+            operation = f" | operation: {step.operation}" if step.operation else ""
+            lines.append(
+                f"{index}. {step.step_id}: {step.status.value}{operation}{detail}"
+            )
         if state.detail:
             lines.append(f"Detail: {state.detail}")
         lines.append(f"Research operations performed: {state.steps_with_research_work}")
@@ -909,7 +912,9 @@ class ResponseComposer:
             lines.append("No research work has run; this reports execution state only.")
         lines.extend(
             (
-                "Source discovery, fetching, evidence, and claims: not performed",
+                "A completed operation means the operation ran; it is not "
+                "evidence and not a verified claim.",
+                "Evidence, assessment, and claims: not established here",
                 "Persistent writes: not used",
                 "Execution state: in-memory only, lost when Hypatia exits",
             )

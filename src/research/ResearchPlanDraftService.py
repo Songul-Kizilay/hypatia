@@ -10,8 +10,9 @@ from core.Exceptions import ResearchError
 from research.ResearchPlan import ResearchPlan
 from research.ResearchPlanDraftPreview import ResearchPlanDraftPreview
 from research.ResearchPlanStep import ResearchPlanStep
+from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 
-ResearchPlanStepDraft = tuple[str, tuple[str, ...]]
+ResearchPlanStepDraft = tuple[str, tuple[str, ...]] | tuple[str, tuple[str, ...], str]
 
 
 class ResearchPlanDraftService:
@@ -52,14 +53,31 @@ class ResearchPlanDraftService:
             raise ResearchError("Research plan draft steps must be an immutable tuple.")
         steps: list[ResearchPlanStep] = []
         for index, draft in enumerate(step_drafts, start=1):
-            if not isinstance(draft, tuple) or len(draft) != 2:
+            if not isinstance(draft, tuple) or len(draft) not in (2, 3):
                 raise ResearchError("Research plan draft step is invalid.")
-            instruction, source_ids = draft
+            capability = ResearchPlanDraftService._capability(
+                draft[2] if len(draft) == 3 else None
+            )
             steps.append(
                 ResearchPlanStep(
                     step_id=f"step-{index}",
-                    instruction=instruction,
-                    selected_source_document_ids=source_ids,
+                    instruction=draft[0],
+                    selected_source_document_ids=draft[1],
+                    capability=capability,
                 )
             )
         return tuple(steps)
+
+    @staticmethod
+    def _capability(value: object) -> ResearchPlanStepCapability:
+        """Resolve one explicit capability name without guessing from text."""
+        if value is None:
+            return ResearchPlanStepCapability.NONE
+        if not isinstance(value, str):
+            raise ResearchError("Research plan step capability must be text.")
+        try:
+            return ResearchPlanStepCapability(value)
+        except ValueError as error:
+            raise ResearchError(
+                "Research plan step capability is not recognized."
+            ) from error

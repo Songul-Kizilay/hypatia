@@ -18,6 +18,7 @@ class ResearchPlanStepState:
     status: ResearchPlanStepStatus = ResearchPlanStepStatus.PENDING
     detail: str = ""
     work_performed: bool = False
+    operation: str = ""
 
     def __post_init__(self) -> None:
         if not isinstance(self.step_id, str) or not self.step_id.strip():
@@ -28,19 +29,27 @@ class ResearchPlanStepState:
             raise ResearchError("Research plan step state detail must be text.")
         if not isinstance(self.work_performed, bool):
             raise ResearchError("Research plan step work flag must be boolean.")
+        if not isinstance(self.operation, str):
+            raise ResearchError("Research plan step operation must be text.")
         if self.work_performed and self.status is ResearchPlanStepStatus.PENDING:
             raise ResearchError("A pending research plan step performed no work.")
+        if self.work_performed and not self.operation.strip():
+            raise ResearchError(
+                "Performed research work must record its operation name."
+            )
         detail = self.detail.strip()
         if len(detail) > MAX_RESEARCH_PLAN_STEP_DETAIL_CHARACTERS:
             raise ResearchError("Research plan step state detail is too long.")
         object.__setattr__(self, "step_id", self.step_id.strip())
         object.__setattr__(self, "detail", detail)
+        object.__setattr__(self, "operation", self.operation.strip())
 
     def with_status(
         self,
         status: ResearchPlanStepStatus,
         detail: str = "",
         work_performed: bool = False,
+        operation: str = "",
     ) -> ResearchPlanStepState:
         """Return a new state carrying the requested status, detail, and origin.
 
@@ -53,4 +62,5 @@ class ResearchPlanStepState:
             status=status,
             detail=detail,
             work_performed=work_performed,
+            operation=operation,
         )

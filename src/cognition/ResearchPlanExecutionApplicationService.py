@@ -9,9 +9,14 @@ actually executed may mark a step as backed by real work; when no operation is
 connected, or an operation reports that it performed nothing, the step is
 blocked with a bounded reason instead of being reported as completed research.
 
-Stage 3 connects one existing capability: the deterministic local knowledge
-search. Source discovery, source fetching, evidence extraction, assessment, and
-claims remain unconnected, and no network or LLM call is made here.
+Operation selection is an explicit table lookup on the step's declared typed
+capability, never a heuristic over authored instruction text. A step declaring no
+capability, or a capability with no registered operation, is blocked rather than
+routed to something else.
+
+A completed operation proves only that the operation ran. It is not evidence and
+it is not a verified claim; evidence and claims still go through the existing
+research evidence pipeline, which remains unconnected here.
 
 State lives here, not in CognitiveEngine, and is lost when the process exits.
 That loss is reported explicitly rather than presented as a finished or
@@ -31,7 +36,7 @@ from research.ResearchPlanDraftService import (
     ResearchPlanStepDraft,
 )
 from research.ResearchPlanExecutionState import ResearchPlanExecutionState
-from research.ResearchPlanStepOperation import ResearchPlanStepOperation
+from research.ResearchPlanOperationRegistry import ResearchPlanOperationRegistry
 from response.ResponseComposer import ResponseComposer
 
 RESEARCH_PLAN_EXECUTION_START_INTENT = "research_plan_execution_start"
@@ -50,7 +55,7 @@ class ResearchPlanExecutionApplicationService:
         response_composer: ResponseComposer,
         draft_service: ResearchPlanDraftService | None = None,
         *,
-        step_operation: ResearchPlanStepOperation | None = None,
+        operation_registry: ResearchPlanOperationRegistry | None = None,
         max_active_executions: int = MAX_ACTIVE_RESEARCH_PLAN_EXECUTIONS,
     ) -> None:
         if (
@@ -63,7 +68,7 @@ class ResearchPlanExecutionApplicationService:
             )
         self._response_composer = response_composer
         self._draft_service = draft_service or ResearchPlanDraftService()
-        self._step_operation = step_operation
+        self._operation_registry = operation_registry or ResearchPlanOperationRegistry()
         self._max_active_executions = max_active_executions
         self._executions: dict[str, ResearchPlanExecutionState] = {}
         self._plans: dict[str, ResearchPlan] = {}
@@ -165,18 +170,30 @@ class ResearchPlanExecutionApplicationService:
                 request,
                 "Research plan execution has no pending step to advance.",
             )
-        if self._step_operation is None:
+        step = next(
+            candidate for candidate in plan.steps if candidate.step_id == step_id
+        )
+        if not step.capability.executable:
             return self._blocked(
                 request,
                 plan_id,
                 state,
                 step_id,
-                "No research operation is connected; nothing was performed.",
+                ("Step declares no executable capability; " "nothing was performed."),
+            )
+        operation = self._operation_registry.resolve(step.capability)
+        if operation is None:
+            return self._blocked(
+                request,
+                plan_id,
+                state,
+                step_id,
+                (
+                    f"Capability '{step.capability.value}' has no registered "
+                    "operation; nothing was performed."
+                ),
             )
 
-        step = next(
-            candidate for candidate in plan.steps if candidate.step_id == step_id
-        )
         try:
             running = state.start_step(step_id)
         except ResearchError as error:
@@ -185,7 +202,7 @@ class ResearchPlanExecutionApplicationService:
                 str(error),
             )
         try:
-            result = self._step_operation.run(step)
+            result = operation.run(step)
         except ResearchError as error:
             failed = running.fail_step(step_id, str(error))
             self._executions[plan_id] = failed
@@ -205,6 +222,7 @@ class ResearchPlanExecutionApplicationService:
             step_id,
             result.detail,
             work_performed=True,
+            operation=operation.operation_name,
         )
         self._executions[plan_id] = completed
         return self._response_composer.research_plan_execution_status(

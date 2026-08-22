@@ -64,6 +64,9 @@ from memory.NoOpLearnedMemoryCandidateExtractor import (
 from memory.SemanticMemoryIndexRuntime import SemanticMemoryIndexRuntime
 from memory.SemanticMemoryMatch import SemanticMemoryMatch
 from memory.SessionMemoryPolicy import SessionMemoryPolicy
+from research.LocalKnowledgeSearchStepOperation import (
+    LocalKnowledgeSearchStepOperation,
+)
 from research.ResearchClaimContradictionCandidate import (
     ResearchClaimContradictionCandidate,
 )
@@ -77,6 +80,10 @@ from research.ResearchClaimContradictionProposalProvider import (
 from research.ResearchClaimRecord import ResearchClaimRecord
 from research.ResearchEvidenceIntegrityAuditor import ResearchEvidenceIntegrityAuditor
 from research.ResearchPlanDraftService import ResearchPlanDraftService
+from research.ResearchPlanOperationRegistry import (
+    ResearchPlanOperationRegistry,
+)
+from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 from research.ResearchRun import ResearchRun
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchRunStatus import ResearchRunStatus
@@ -207,7 +214,14 @@ class CognitiveEngine:
             response_composer,
         )
         self._research_plan_execution_service = ResearchPlanExecutionApplicationService(
-            response_composer
+            response_composer,
+            operation_registry=ResearchPlanOperationRegistry(
+                {
+                    ResearchPlanStepCapability.LOCAL_KNOWLEDGE_SEARCH: (
+                        LocalKnowledgeSearchStepOperation(knowledge_engine)
+                    ),
+                }
+            ),
         )
         self._research_plan_preview_service = ResearchPlanPreviewApplicationService(
             response_composer,

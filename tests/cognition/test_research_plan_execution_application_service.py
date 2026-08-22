@@ -21,6 +21,8 @@ from cognition.ResearchPlanExecutionApplicationService import (
 from core.Exceptions import ResearchError
 from research.ResearchPlanDraftService import ResearchPlanDraftService
 from research.ResearchPlanExecutionStatus import ResearchPlanExecutionStatus
+from research.ResearchPlanOperationRegistry import ResearchPlanOperationRegistry
+from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 from research.ResearchPlanStepOperationResult import (
     ResearchPlanStepOperationResult,
 )
@@ -102,7 +104,11 @@ class ResearchPlanExecutionApplicationServiceTests(unittest.TestCase):
         self.assertIn("Research operations performed: 0", response.message)
         self.assertIn("No research work has run", response.message)
         self.assertIn(
-            "Source discovery, fetching, evidence, and claims: not performed",
+            "it is not evidence and not a verified claim",
+            response.message,
+        )
+        self.assertIn(
+            "Evidence, assessment, and claims: not established here",
             response.message,
         )
         self.assertIn("Persistent writes: not used", response.message)
@@ -183,7 +189,12 @@ class ResearchPlanExecutionApplicationServiceTests(unittest.TestCase):
         advanced = (
             self.service._executions[plan_id]
             .start_step("step-1")
-            .complete_step("step-1", "verified source", work_performed=True)
+            .complete_step(
+                "step-1",
+                "verified source",
+                work_performed=True,
+                operation="recording",
+            )
         )
         self.service._executions[plan_id] = advanced
 
@@ -324,23 +335,33 @@ class FailingStepOperation(RecordingStepOperation):
 
 class ResearchPlanExecutionAdvanceTests(unittest.TestCase):
     def _service(self, operation=None):  # type: ignore[no-untyped-def]
+        registry = ResearchPlanOperationRegistry()
+        if operation is not None:
+            registry.register(
+                ResearchPlanStepCapability.LOCAL_KNOWLEDGE_SEARCH,
+                operation,
+            )
         return ResearchPlanExecutionApplicationService(
             ResponseComposer(),
             ResearchPlanDraftService(
                 clock=lambda: datetime(2026, 8, 23, tzinfo=UTC),
                 id_factory=lambda: "plan-advance",
             ),
-            step_operation=operation,
+            operation_registry=registry,
         )
 
-    def _started(self, service):  # type: ignore[no-untyped-def]
-        response = service.process_start(start_request())
+    def _started(self, service, capability="local_knowledge_search"):  # type: ignore[no-untyped-def]
+        steps = tuple(
+            (instruction, sources, capability) for instruction, sources in STEPS
+        )
+        response = service.process_start(start_request(plan_steps=steps))
         assert response.research_plan_execution is not None
         return response.research_plan_execution.plan_id
 
-    def test_advance_without_a_connected_operation_blocks_the_step(self) -> None:
-        service = self._service(None)
-        plan_id = self._started(service)
+    def test_step_without_a_declared_capability_is_blocked(self) -> None:
+        operation = RecordingStepOperation()
+        service = self._service(operation)
+        plan_id = self._started(service, capability=None)
 
         response = service.process_advance(
             plan_request(RESEARCH_PLAN_EXECUTION_ADVANCE_INTENT, plan_id)
@@ -352,8 +373,48 @@ class ResearchPlanExecutionAdvanceTests(unittest.TestCase):
         self.assertIs(state.steps[0].status, ResearchPlanStepStatus.BLOCKED)
         self.assertEqual(state.completed_steps, 0)
         self.assertFalse(state.performed_research_work)
-        self.assertIn("No research operation is connected", response.message)
+        self.assertEqual(operation.steps, [])
+        self.assertIn("declares no executable capability", response.message)
         self.assertIn("Research operations performed: 0", response.message)
+
+    def test_unregistered_capability_is_blocked_without_fallback(self) -> None:
+        service = self._service(None)
+        plan_id = self._started(service)
+
+        response = service.process_advance(
+            plan_request(RESEARCH_PLAN_EXECUTION_ADVANCE_INTENT, plan_id)
+        )
+
+        state = response.research_plan_execution
+        assert state is not None
+        self.assertIs(state.status, ResearchPlanExecutionStatus.BLOCKED)
+        self.assertEqual(state.completed_steps, 0)
+        self.assertFalse(state.performed_research_work)
+        self.assertIn("has no registered operation", response.message)
+
+    def test_instruction_text_never_selects_a_capability(self) -> None:
+        operation = RecordingStepOperation()
+        service = self._service(operation)
+        response = service.process_start(
+            start_request(
+                plan_steps=(
+                    ("Run a local knowledge search for Saturn", ()),
+                    ("search knowledge base", ()),
+                )
+            )
+        )
+        assert response.research_plan_execution is not None
+        plan_id = response.research_plan_execution.plan_id
+
+        advanced = service.process_advance(
+            plan_request(RESEARCH_PLAN_EXECUTION_ADVANCE_INTENT, plan_id)
+        )
+
+        state = advanced.research_plan_execution
+        assert state is not None
+        self.assertIs(state.status, ResearchPlanExecutionStatus.BLOCKED)
+        self.assertEqual(operation.steps, [])
+        self.assertIn("declares no executable capability", advanced.message)
 
     def test_advance_runs_the_connected_operation_once_for_one_step(self) -> None:
         operation = RecordingStepOperation()
@@ -370,6 +431,7 @@ class ResearchPlanExecutionAdvanceTests(unittest.TestCase):
         self.assertIs(state.steps[0].status, ResearchPlanStepStatus.COMPLETED)
         self.assertTrue(state.steps[0].work_performed)
         self.assertEqual(state.steps[0].detail, "operation ran")
+        self.assertEqual(state.steps[0].operation, "recording")
         self.assertIs(state.steps[1].status, ResearchPlanStepStatus.PENDING)
         self.assertEqual(state.steps_with_research_work, 1)
         self.assertIn("Research operations performed: 1", response.message)

@@ -2,6 +2,57 @@
 
 All notable project changes are recorded here.
 
+## [0.3.127] - 2026-08-23
+
+### Added
+
+- `ResearchPlanStepCapability` is the explicit typed authorization a plan step
+  may declare, defaulting to `none`. `ResearchPlanStep.capability` keeps that
+  authorization separate from the authored instruction text.
+- `ResearchPlanOperationRegistry` binds each executable capability to exactly one
+  operation. Selection is a table lookup, never a heuristic over instruction
+  text, and `CognitiveEngine` registers the local knowledge search explicitly
+  rather than growing conditional routing.
+- `ResearchPlanStepState.operation` records which operation ran, so a completed
+  step can always answer which operation was selected and what produced it.
+- `ResearchPlanDraftService` accepts an optional explicit capability name as a
+  third draft element. Two-element drafts remain valid and declare no capability.
+- `ResearchPlanExecutionState.snapshot()` returns a minimal deterministic
+  inspection tuple of step id, status, operation, and work flag.
+
+### Fixed
+
+- The 0.3.126 engine wiring for the local knowledge search silently did not
+  apply, so the advance route reached no operation. The registry is now wired and
+  covered by a test that drives the route through `CognitiveEngine`.
+
+### Safety
+
+- A step declaring no capability, or declaring a capability with no registered
+  operation, is blocked with a bounded reason. Neither falls back to another
+  operation.
+- Instruction wording never selects a capability. A step whose instruction says
+  "run a local knowledge search" still blocks unless the capability is declared.
+- Recorded work now requires a recorded operation name: constructing a step state
+  with `work_performed` true and no operation is rejected.
+- Rendering states that a completed operation means the operation ran, and that
+  it is neither evidence nor a verified claim. Evidence, assessment, and claims
+  are not established by execution and remain in the existing research pipeline.
+- Registering the `none` capability, registering a capability twice, or passing a
+  non-capability value is rejected.
+- The snapshot is an inspection aid only. It is not persistence and cannot resume
+  an execution.
+
+### Verification
+
+- The package-aware full local suite contains 1,699 passing automated tests.
+- Fifteen new tests cover capability defaults and validation, registry
+  resolution, rejection of `none` and duplicate registration, blocking for
+  undeclared and unregistered capabilities, instruction text never selecting a
+  capability, recorded operation identity, draft capability parsing and
+  rejection, and deterministic snapshots.
+- Black, Ruff, and MyPy pass for all 372 Python source and test files.
+
 ## [0.3.126] - 2026-08-23
 
 ### Added

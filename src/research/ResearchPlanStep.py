@@ -1,10 +1,16 @@
-"""One bounded user-authored step in an inert Research plan."""
+"""One bounded user-authored step in an inert Research plan.
+
+The authored instruction is descriptive text for a human reader. It never
+selects an executable capability. ``capability`` is the separate explicit
+authorization, defaulting to none so an unauthorized step cannot run anything.
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 from core.Exceptions import ResearchError
+from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 
 MAX_RESEARCH_PLAN_STEP_ID_CHARACTERS = 200
 MAX_RESEARCH_PLAN_STEP_INSTRUCTION_CHARACTERS = 2_000
@@ -19,6 +25,7 @@ class ResearchPlanStep:
     step_id: str
     instruction: str
     selected_source_document_ids: tuple[str, ...] = ()
+    capability: ResearchPlanStepCapability = ResearchPlanStepCapability.NONE
 
     def __post_init__(self) -> None:
         step_id = self._normalize_bounded_text(
@@ -31,6 +38,8 @@ class ResearchPlanStep:
             "Research plan step instruction",
             MAX_RESEARCH_PLAN_STEP_INSTRUCTION_CHARACTERS,
         )
+        if not isinstance(self.capability, ResearchPlanStepCapability):
+            raise ResearchError("Research plan step capability is invalid.")
         source_ids = self.selected_source_document_ids
         if not isinstance(source_ids, tuple):
             raise ResearchError(
