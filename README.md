@@ -672,6 +672,39 @@ supplying every current learned memory in its existing order. That path is
 unbounded unless `HYPATIA_LEARNED_MEMORY_CONTEXT_LIMIT` is also set, so it is no
 longer the default.
 
+---
+
+## Semantic memory in ordinary chat
+
+Semantic retrieval during ordinary conversation is opt-in and off by default:
+
+```text
+HYPATIA_CHAT_SEMANTIC_MEMORY_ENABLED=true
+```
+
+It has no effect unless the semantic-memory runtime is also enabled through
+`HYPATIA_SEMANTIC_MEMORY_ENABLED=true`. With the flag absent, ordinary chat is
+byte-for-byte the deterministic bounded ranked-keyword path described above and
+issues no embedding call.
+
+When enabled, one user turn performs at most one semantic query against the
+already built index. Hypatia does not build a second index, store, or cache, and
+never starts an index rebuild from the conversation path. Candidates are fused
+with the deterministic keyword selection through the existing
+`HybridSemanticMemoryRanker`, deduplicated by learned-memory identity, and
+bounded by `HYPATIA_LEARNED_MEMORY_CONTEXT_LIMIT` or 8 when that is unset.
+
+Only the current value for a learned-memory key can enter the context. A
+semantic hit on a superseded record is rejected, so a correction is never
+resurrected.
+
+If the semantic runtime is absent, rebuilding, stopped, or its embedding
+provider fails, Hypatia falls back to the deterministic bounded path and the
+conversation still succeeds. A failed query emits one bounded
+`brain.chat_semantic_memory.query_failed` event carrying only the request ID and
+the cause class name. Explicit lexical recall and explicit semantic recall are
+unchanged.
+
 All numeric learned-memory limits must be non-negative integers. Invalid values
 or a selector value other than the exact lowercase `keyword`, `ranked`, or
 `none` cause startup configuration to fail clearly instead of silently changing

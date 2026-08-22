@@ -9,6 +9,7 @@ from brain.BrainContext import BrainContext
 from brain.BrainRequest import BrainRequest
 from brain.BrainResponse import BrainResponse
 from brain.BrainRouter import BrainRouter
+from cognition.LearnedMemoryContextService import LearnedMemoryContextService
 from cognition.LLMConversationHistoryBuilder import (
     build_llm_conversation_history,
 )
@@ -47,10 +48,6 @@ from memory.LearnedMemoryCandidatePersistence import (
 )
 from memory.LearnedMemoryContext import (
     build_learned_memory_augmented_prompt,
-    load_bounded_learned_memory_context,
-    load_current_selected_bounded_learned_memory_context,
-    load_current_selected_learned_memory_context,
-    load_learned_memory_context,
 )
 from memory.LearnedMemorySelector import LearnedMemorySelector
 from memory.MemoryManager import MemoryManager
@@ -124,6 +121,7 @@ class CognitiveEngine:
         learned_memory_context_limit: int | None = None,
         learned_memory_selector: LearnedMemorySelector | None = None,
         semantic_memory_index_runtime: SemanticMemoryIndexRuntime | None = None,
+        chat_semantic_memory_enabled: bool = False,
         research_source_fetcher: ResearchSourceFetcher | None = None,
         research_run_manager: ResearchRunManager | None = None,
         research_source_discovery_provider: (
@@ -178,6 +176,7 @@ class CognitiveEngine:
         self._learned_memory_context_limit = learned_memory_context_limit
         self._learned_memory_selector = learned_memory_selector
         self._semantic_memory_index_runtime = semantic_memory_index_runtime
+        self._chat_semantic_memory_enabled = chat_semantic_memory_enabled
         self._research_source_fetcher = research_source_fetcher
         self._research_run_manager = research_run_manager
         self._research_source_discovery_provider = research_source_discovery_provider
@@ -2496,33 +2495,9 @@ class CognitiveEngine:
                     session_id,
                     max_turns=self._llm_history_max_turns,
                 )
-                if self._learned_memory_selector is not None:
-                    if self._learned_memory_context_limit is None:
-                        learned_memory_context = (
-                            load_current_selected_learned_memory_context(
-                                memory_manager=self._memory_manager,
-                                source_text=request.message,
-                                selector=self._learned_memory_selector,
-                            )
-                        )
-                    else:
-                        learned_memory_context = (
-                            load_current_selected_bounded_learned_memory_context(
-                                memory_manager=self._memory_manager,
-                                source_text=request.message,
-                                selector=self._learned_memory_selector,
-                                limit=self._learned_memory_context_limit,
-                            )
-                        )
-                elif self._learned_memory_context_limit is None:
-                    learned_memory_context = load_learned_memory_context(
-                        self._memory_manager
-                    )
-                else:
-                    learned_memory_context = load_bounded_learned_memory_context(
-                        self._memory_manager,
-                        self._learned_memory_context_limit,
-                    )
+                learned_memory_context = self._learned_memory_context_service(
+                    request
+                ).build(self._memory_manager, request.message)
                 provider_prompt = build_learned_memory_augmented_prompt(
                     user_message=request.message,
                     learned_memory_context=learned_memory_context,
@@ -2586,6 +2561,37 @@ class CognitiveEngine:
             source="brain",
         )
         return response
+
+    def _learned_memory_context_service(
+        self,
+        request: BrainRequest,
+    ) -> LearnedMemoryContextService:
+        """Build the per-turn context service for the current configuration."""
+        semantic_runtime = (
+            self._semantic_memory_index_runtime
+            if self._chat_semantic_memory_enabled
+            else None
+        )
+        return LearnedMemoryContextService(
+            selector=self._learned_memory_selector,
+            context_limit=self._learned_memory_context_limit,
+            semantic_runtime=semantic_runtime,
+            on_semantic_failure=(
+                lambda cause: self._emit_chat_semantic_memory_failure(request, cause)
+            ),
+        )
+
+    def _emit_chat_semantic_memory_failure(
+        self,
+        request: BrainRequest,
+        cause: str,
+    ) -> None:
+        """Report a bounded semantic-query failure without exposing content."""
+        self._event_bus.emit(
+            "brain.chat_semantic_memory.query_failed",
+            {"request_id": request.request_id, "cause": cause},
+            source="brain",
+        )
 
     def _emit_learned_memory_extraction_failure(
         self,

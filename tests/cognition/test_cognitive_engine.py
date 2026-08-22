@@ -697,11 +697,11 @@ class CognitiveEngineTests(unittest.TestCase):
 
         with (
             patch(
-                "cognition.CognitiveEngine.load_learned_memory_context",
+                "cognition.LearnedMemoryContextService.load_learned_memory_context",
                 wraps=load_learned_memory_context,
             ) as load_context,
             patch(
-                "cognition.CognitiveEngine.load_bounded_learned_memory_context",
+                "cognition.LearnedMemoryContextService.load_bounded_learned_memory_context",
                 wraps=load_bounded_learned_memory_context,
             ) as load_bounded_context,
             patch(
@@ -756,10 +756,10 @@ class CognitiveEngineTests(unittest.TestCase):
 
         with (
             patch(
-                "cognition.CognitiveEngine.load_learned_memory_context",
+                "cognition.LearnedMemoryContextService.load_learned_memory_context",
             ) as load_context,
             patch(
-                "cognition.CognitiveEngine.load_bounded_learned_memory_context",
+                "cognition.LearnedMemoryContextService.load_bounded_learned_memory_context",
                 return_value=bounded_context,
             ) as load_bounded_context,
             patch(
@@ -810,17 +810,17 @@ class CognitiveEngineTests(unittest.TestCase):
 
         with (
             patch(
-                "cognition.CognitiveEngine.load_learned_memory_context",
+                "cognition.LearnedMemoryContextService.load_learned_memory_context",
             ) as load_context,
             patch(
-                "cognition.CognitiveEngine.load_bounded_learned_memory_context",
+                "cognition.LearnedMemoryContextService.load_bounded_learned_memory_context",
             ) as load_bounded_context,
             patch(
-                "cognition.CognitiveEngine.load_current_selected_learned_memory_context",
+                "cognition.LearnedMemoryContextService.load_current_selected_learned_memory_context",
                 return_value=selected_context,
             ) as load_selected_context,
             patch(
-                "cognition.CognitiveEngine."
+                "cognition.LearnedMemoryContextService."
                 "load_current_selected_bounded_learned_memory_context",
             ) as load_selected_bounded_context,
             patch(
@@ -874,16 +874,16 @@ class CognitiveEngineTests(unittest.TestCase):
 
         with (
             patch(
-                "cognition.CognitiveEngine.load_learned_memory_context",
+                "cognition.LearnedMemoryContextService.load_learned_memory_context",
             ) as load_context,
             patch(
-                "cognition.CognitiveEngine.load_bounded_learned_memory_context",
+                "cognition.LearnedMemoryContextService.load_bounded_learned_memory_context",
             ) as load_bounded_context,
             patch(
-                "cognition.CognitiveEngine.load_current_selected_learned_memory_context",
+                "cognition.LearnedMemoryContextService.load_current_selected_learned_memory_context",
             ) as load_selected_context,
             patch(
-                "cognition.CognitiveEngine."
+                "cognition.LearnedMemoryContextService."
                 "load_current_selected_bounded_learned_memory_context",
                 return_value=selected_context,
             ) as load_selected_bounded_context,
@@ -929,10 +929,10 @@ class CognitiveEngineTests(unittest.TestCase):
 
         with (
             patch(
-                "cognition.CognitiveEngine.load_learned_memory_context",
+                "cognition.LearnedMemoryContextService.load_learned_memory_context",
             ) as load_context,
             patch(
-                "cognition.CognitiveEngine.load_bounded_learned_memory_context",
+                "cognition.LearnedMemoryContextService.load_bounded_learned_memory_context",
                 return_value="",
             ) as load_bounded_context,
         ):
@@ -961,10 +961,10 @@ class CognitiveEngineTests(unittest.TestCase):
 
         with (
             patch(
-                "cognition.CognitiveEngine.load_learned_memory_context",
+                "cognition.LearnedMemoryContextService.load_learned_memory_context",
             ) as load_context,
             patch(
-                "cognition.CognitiveEngine.load_bounded_learned_memory_context",
+                "cognition.LearnedMemoryContextService.load_bounded_learned_memory_context",
                 side_effect=ValueError("Learned memory limit must be non-negative."),
             ) as load_bounded_context,
             self.assertRaisesRegex(

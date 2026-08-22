@@ -92,6 +92,7 @@ class Bootstrap:
         learned_memory_context_limit: int | None = None,
         learned_memory_selector: LearnedMemorySelector | None = None,
         semantic_memory_index_runtime: SemanticMemoryIndexRuntime | None = None,
+        chat_semantic_memory_enabled: bool = False,
         research_source_fetcher: ResearchSourceFetcher | None = None,
         research_source_discovery_provider: (
             ResearchSourceDiscoveryProvider | None
@@ -115,6 +116,7 @@ class Bootstrap:
         self._learned_memory_context_limit = learned_memory_context_limit
         self._learned_memory_selector = learned_memory_selector
         self._semantic_memory_index_runtime = semantic_memory_index_runtime
+        self._chat_semantic_memory_enabled = chat_semantic_memory_enabled
         self._research_source_fetcher = research_source_fetcher
         self._research_source_discovery_provider = research_source_discovery_provider
         self._research_claim_contradiction_proposal_provider = (
@@ -136,6 +138,7 @@ class Bootstrap:
         llm_history_max_turns = load_llm_process_history_max_turns()
         learned_memory_context_limit = cls._load_process_learned_memory_context_limit()
         learned_memory_selector = cls._load_process_learned_memory_selector()
+        chat_semantic_memory_enabled = cls._load_process_chat_semantic_memory_enabled()
         semantic_memory_index_runtime = cls._load_process_semantic_memory_index_runtime(
             cls._semantic_embedding_cache_path(memory_path)
         )
@@ -158,6 +161,7 @@ class Bootstrap:
             learned_memory_context_limit=learned_memory_context_limit,
             learned_memory_selector=learned_memory_selector,
             semantic_memory_index_runtime=semantic_memory_index_runtime,
+            chat_semantic_memory_enabled=chat_semantic_memory_enabled,
             research_source_discovery_provider=research_source_discovery_provider,
         )
 
@@ -230,6 +234,11 @@ class Bootstrap:
                 "non-negative integer."
             )
         return int(raw_limit)
+
+    @staticmethod
+    def _load_process_chat_semantic_memory_enabled() -> bool:
+        """Keep semantic chat retrieval opt-in and off by default."""
+        return os.environ.get("HYPATIA_CHAT_SEMANTIC_MEMORY_ENABLED") == "true"
 
     @staticmethod
     def _load_process_semantic_memory_index_runtime(
@@ -437,6 +446,7 @@ class Bootstrap:
             learned_memory_context_limit=self._learned_memory_context_limit,
             learned_memory_selector=self._learned_memory_selector,
             semantic_memory_index_runtime=semantic_memory_index_runtime,
+            chat_semantic_memory_enabled=self._chat_semantic_memory_enabled,
             research_source_fetcher=research_source_fetcher,
             research_run_manager=research_run_manager,
             research_source_discovery_provider=(

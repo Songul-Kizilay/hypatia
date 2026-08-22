@@ -2,6 +2,52 @@
 
 All notable project changes are recorded here.
 
+## [0.3.121] - 2026-08-23
+
+### Added
+
+- Optional semantic relevance in ordinary chat behind
+  `HYPATIA_CHAT_SEMANTIC_MEMORY_ENABLED=true`, off by default and inert unless
+  the semantic-memory runtime is also enabled. A semantically related question
+  can now recover a durable memory whose wording differs from the message.
+- `LearnedMemoryContextService` owns learned-memory context selection for one
+  user turn. `CognitiveEngine` delegates to it instead of branching inline over
+  selector and limit combinations.
+- One bounded `brain.chat_semantic_memory.query_failed` event reports a failed
+  semantic query, carrying only the request ID and the cause class name.
+
+### Safety
+
+- With the flag absent, ordinary chat delegates to the existing deterministic
+  loaders unchanged and issues no semantic query or embedding call.
+- One user turn performs at most one semantic query. The conversation path never
+  starts an index rebuild.
+- No second semantic index, store, or cache exists. The service reuses
+  `SemanticMemoryIndexRuntime` and `HybridSemanticMemoryRanker`.
+- A semantic hit on a superseded learned-memory record is rejected, so latest-wins
+  correction behavior is preserved and stale values are never resurrected.
+- Absent, rebuilding, stopped, or failing semantic retrieval falls back to the
+  deterministic bounded path and the conversation still succeeds.
+- The fused context is deduplicated by learned-memory identity and bounded by
+  `HYPATIA_LEARNED_MEMORY_CONTEXT_LIMIT` or 8 when that is unset.
+- Retrieval performs no memory write. Explicit lexical recall and explicit
+  semantic recall are unchanged. No persisted schema, `LLMProvider`, or
+  `LearnedMemorySelector` contract changed.
+
+### Verification
+
+- The package-aware full local suite contains 1,611 passing automated tests.
+- Twenty-one new tests cover disabled-path equivalence, semantic recovery of
+  differently worded memories, exclusion of unrelated memories, the fused bound,
+  keyword/semantic deduplication, rejection of superseded records, empty-result
+  and provider-failure fallback, exactly one query per turn, absence of rebuilds
+  from the conversation path, no memory write on retrieval, unchanged explicit
+  semantic recall, and fusion against a reloaded persistent store.
+- A local harness measured the fusion overhead at roughly 0.4 ms per turn over
+  the lexical path with 200 learned memories and 16 semantic candidates,
+  excluding the embedding call itself.
+- Black, Ruff, and MyPy pass for all 352 Python source and test files.
+
 ## [0.3.120] - 2026-08-23
 
 ### Verification

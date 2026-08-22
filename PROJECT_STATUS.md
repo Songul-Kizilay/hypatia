@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.120 (Genesis)`
+`v0.3.121 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.120`** is the current executable package and GitHub
+- **Runtime release `v0.3.121`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -32,6 +32,24 @@ with optional OpenAI-compatible LLM conversation support.
 ### Implemented
 
 - Application bootstrap, configuration, logging, and dependency injection.
+- Learned-memory context selection for one conversation turn is owned by
+  `LearnedMemoryContextService`. `CognitiveEngine` delegates instead of branching
+  inline over selector and limit combinations.
+- Optional semantic relevance in ordinary chat is available behind
+  `HYPATIA_CHAT_SEMANTIC_MEMORY_ENABLED=true`. It is off by default and inert
+  unless the semantic-memory runtime is also enabled. With the flag absent,
+  ordinary chat delegates to the existing deterministic loaders unchanged and
+  issues no embedding call. When enabled, one turn performs at most one semantic
+  query against the already built index, never starts a rebuild from the
+  conversation path, and creates no second index, store, or cache. Candidates are
+  fused with the deterministic keyword selection through the existing
+  `HybridSemanticMemoryRanker`, deduplicated by learned-memory identity, and
+  bounded. A semantic hit on a superseded record is rejected, so corrections are
+  never resurrected. Absent, rebuilding, stopped, or failing semantic retrieval
+  falls back to the deterministic bounded path, the conversation still succeeds,
+  and one bounded `brain.chat_semantic_memory.query_failed` event reports the
+  cause class name only. Retrieval performs no memory write, and explicit lexical
+  and semantic recall are unchanged.
 - Ordinary chat defaults to bounded, request-relevant learned memory. With
   `HYPATIA_LEARNED_MEMORY_SELECTOR` absent, Bootstrap builds the existing
   deterministic ranked keyword selector bounded to 8 memories, so only learned
@@ -670,7 +688,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,590 automated tests pass through package-aware discovery.
+- 1,611 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
