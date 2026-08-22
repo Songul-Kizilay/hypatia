@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.91 (Genesis)`
+`v0.3.92 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.91`** is the current executable package and GitHub
+- **Runtime release `v0.3.92`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -59,6 +59,11 @@ with optional OpenAI-compatible LLM conversation support.
   reports complete sources/evidence, assessments/comparison notes/claims/
   contradictions, and the existing review status from the immutable object.
   It makes no readiness, truth, or conclusion inference and starts no action.
+- The already loaded research-run catalog has a 200-character local filter.
+  Question text matches case-insensitively; status and run ID require exact
+  matches. The full immutable catalog remains intact, no-match/overlong states
+  are explicit, clearing restores all rows, and the active run plus authored
+  fields change only after an explicit visible selection.
 - The Research tab has a read-only persisted-run selector labelled with the
   question, status, and exact ID. Refresh preserves a valid selection, creation
   selects the new run, and switching clears only stale candidate/export views.
@@ -549,8 +554,8 @@ changed.
 
 ## Next Milestone
 
-Add a presentation-only local filter for the already loaded research-run
-catalog so a user can find runs by bounded question text, status, or exact ID.
-Filtering must open no Brain/storage/provider request, preserve the immutable
-catalog and any still-visible selected run, give an explicit no-match state,
-and leave all authored fields and mutation contracts unchanged.
+Add a presentation-only selected-run metadata line on Research Overview with
+the immutable created/updated timestamps and complete safe-failure count. It
+must use only the selected catalog snapshot, use bounded timezone-aware text,
+show non-stale empty/invalid guidance, expose no failure detail, and open no
+runtime or mutation boundary.

@@ -2,6 +2,34 @@
 
 All notable project changes are recorded here.
 
+## [0.3.92] - 2026-08-22
+
+### Added
+
+- Research Overview can filter the already loaded run catalog by case-
+  insensitive bounded question text, exact status, or exact run ID.
+- A persistent local result summary reports matching/total counts, an explicit
+  no-match state, or an overlong-filter refusal; `Clear` restores the full
+  loaded catalog.
+
+### Safety
+
+- Filtering is presentation-only and capped at 200 characters. It never opens
+  a Brain, controller, storage, provider, network, LLM, index, event-bus, or
+  mutation boundary and never modifies the immutable full catalog.
+- A still-visible active run remains selected. A hidden or no-match active run
+  remains active until the user explicitly chooses another visible run; all
+  authored fields and run-bound presentations remain unchanged.
+
+### Verification
+
+- The package-aware full local suite contains 1,459 passing automated tests.
+- Focused desktop coverage contains 100 passing tests for question/status/exact-
+  ID matching, partial-ID refusal, visible selection preservation, no-match
+  field preservation, clear restoration, and overlong input isolation.
+- Black, Ruff, and MyPy pass. A real Tk measurement confirms one filter field
+  and its Filter/Clear controls in a 954-by-973-pixel requested window.
+
 ## [0.3.91] - 2026-08-22
 
 ### Added

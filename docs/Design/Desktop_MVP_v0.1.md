@@ -42,6 +42,9 @@ The MVP may present only current Brain/CognitiveEngine capabilities:
 - a bounded Overview workflow snapshot with all existing source/evidence and
   authored-analysis record counts plus the current run status, without an
   inferred readiness or conclusion;
+- a bounded local filter over the already loaded immutable run catalog, with
+  question/exact-status/exact-ID matching, result counts, explicit no-match,
+  active-selection preservation, and clear restoration;
 - a read-only accepted-source selector from that same run snapshot, with
   explicit exact-ID handoffs to the manual assessment and comparison fields;
 - a source-filtered read-only evidence selector with bounded excerpts, exact
