@@ -2067,6 +2067,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             TkinterDesktopWindow._filter_research_sources_by_coverage(
                 sources,
                 evidence,
+                (),
                 ResearchSourceCoverageFacet.ALL,
             ),
             sources,
@@ -2075,9 +2076,260 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             TkinterDesktopWindow._filter_research_sources_by_coverage(
                 sources,
                 evidence,
+                (),
                 ResearchSourceCoverageFacet.WITHOUT_EVIDENCE,
             ),
             (second, third),
+        )
+
+    def test_source_coverage_facet_uses_only_current_assessment_membership(
+        self,
+    ) -> None:
+        first = _research_source_record("document-1", "Corrected")
+        second = _research_source_record("document-2", "Repeated current")
+        third = _research_source_record("document-3", "Superseded only")
+        fourth = _research_source_record("document-4", "No assessment")
+        sources = (first, second, third, fourth)
+        original = _research_assessment_record(
+            "assessment-1", "document-1", "evidence-1", "Original"
+        )
+        correction = _research_assessment_record(
+            "assessment-2",
+            "document-1",
+            "evidence-1",
+            "Correction",
+            supersedes_assessment_id=original.assessment_id,
+        )
+        repeated_current = (
+            _research_assessment_record(
+                "assessment-3", "document-2", "evidence-2", "Current one"
+            ),
+            _research_assessment_record(
+                "assessment-4", "document-2", "evidence-2", "Current two"
+            ),
+        )
+        superseded_only = _research_assessment_record(
+            "assessment-5", "document-3", "evidence-3", "Old"
+        )
+        malformed_foreign_correction = _research_assessment_record(
+            "assessment-6",
+            "foreign",
+            "evidence-foreign",
+            "Foreign",
+            supersedes_assessment_id=superseded_only.assessment_id,
+        )
+
+        self.assertEqual(
+            TkinterDesktopWindow._filter_research_sources_by_coverage(
+                sources,
+                (),
+                (
+                    original,
+                    correction,
+                    *repeated_current,
+                    superseded_only,
+                    malformed_foreign_correction,
+                ),
+                ResearchSourceCoverageFacet.WITHOUT_CURRENT_ASSESSMENT,
+            ),
+            (third, fourth),
+        )
+
+    def test_without_current_assessment_view_keeps_visible_active_and_fields(
+        self,
+    ) -> None:
+        now = datetime(2026, 8, 22, tzinfo=UTC)
+        assessed = _research_source_record("document-1", "Assessed")
+        active = _research_source_record("document-2", "Active unassessed")
+        other = _research_source_record("document-3", "Other unassessed")
+        evidence = _research_evidence_record(
+            "evidence-1", assessed.document_id, "Recorded"
+        )
+        assessment = _research_assessment_record(
+            "assessment-1",
+            assessed.document_id,
+            evidence.evidence_id,
+            "Current assessment",
+        )
+        run = ResearchRun(
+            "run-123",
+            "Inspect unassessed sources",
+            ResearchRunStatus.COLLECTING,
+            (assessed, active, other),
+            (),
+            now,
+            now,
+            evidence=(evidence,),
+            assessments=(assessment,),
+        )
+        window: Any = object.__new__(TkinterDesktopWindow)
+        window._controller = Mock()
+        window._research_run_id = RecordingVariable(run.run_id)
+        window._research_runs = (run,)
+        window._research_source_run_id = run.run_id
+        window._research_sources = run.sources
+        window._research_source_selector = RecordingCandidateSelector(selected_index=1)
+        window._research_source_choice = RecordingVariable(
+            "Active unassessed — document-2"
+        )
+        _configure_research_evidence_selector(window)
+        window._research_source_coverage_filter.set(
+            ResearchSourceCoverageFacet.WITHOUT_CURRENT_ASSESSMENT.value
+        )
+        window._research_source_document_id = RecordingVariable("manual-source")
+        window._research_comparison_document_ids = RecordingVariable("manual-list")
+        window._research_assessment_text = RecordingVariable("authored assessment")
+        window._status = RecordingStatus()
+
+        window._apply_research_source_coverage_filter()
+
+        self.assertIs(window._research_source_catalog, run.sources)
+        self.assertEqual(window._research_sources, (active, other))
+        self.assertEqual(window._active_research_source_document_id, "document-2")
+        self.assertEqual(window._research_source_selector.current(), 0)
+        self.assertEqual(
+            window._research_source_selector.values,
+            (
+                "Active unassessed — document-2",
+                "Other unassessed — document-3",
+            ),
+        )
+        self.assertEqual(
+            window._research_source_coverage_summary.value,
+            "2 of 3 accepted sources have no current authored assessment.",
+        )
+        self.assertEqual(window._research_source_document_id.value, "manual-source")
+        self.assertEqual(window._research_comparison_document_ids.value, "manual-list")
+        self.assertEqual(window._research_assessment_text.value, "authored assessment")
+        self.assertEqual(
+            window._status.values,
+            [
+                "accepted source view: Without current assessment; 2 of 3 shown; "
+                "active source unchanged"
+            ],
+        )
+        window._controller.assert_not_called()
+
+    def test_without_current_assessment_view_hides_and_restores_active_source(
+        self,
+    ) -> None:
+        now = datetime(2026, 8, 22, tzinfo=UTC)
+        active = _research_source_record("document-1", "Active assessed")
+        uncovered = _research_source_record("document-2", "Unassessed")
+        evidence = _research_evidence_record(
+            "evidence-1", active.document_id, "Recorded evidence"
+        )
+        assessment = _research_assessment_record(
+            "assessment-1",
+            active.document_id,
+            evidence.evidence_id,
+            "Current assessment",
+        )
+        run = ResearchRun(
+            "run-123",
+            "Switch assessment coverage",
+            ResearchRunStatus.COLLECTING,
+            (active, uncovered),
+            (),
+            now,
+            now,
+            evidence=(evidence,),
+            assessments=(assessment,),
+        )
+        window: Any = object.__new__(TkinterDesktopWindow)
+        window._research_run_id = RecordingVariable(run.run_id)
+        window._research_runs = (run,)
+        window._research_source_run_id = run.run_id
+        window._research_sources = run.sources
+        window._research_source_selector = RecordingCandidateSelector(selected_index=0)
+        window._research_source_choice = RecordingVariable(
+            "Active assessed — document-1"
+        )
+        _configure_research_evidence_selector(window)
+        window._render_research_evidence_selector(run, active)
+        window._render_research_assessment_selector(run, active)
+        window._research_assessment_text = RecordingVariable("authored")
+        window._status = RecordingStatus()
+
+        window._research_source_coverage_filter.set(
+            ResearchSourceCoverageFacet.WITHOUT_CURRENT_ASSESSMENT.value
+        )
+        window._apply_research_source_coverage_filter()
+
+        self.assertEqual(window._research_sources, (uncovered,))
+        self.assertEqual(window._active_research_source_document_id, "document-1")
+        self.assertEqual(window._research_source_choice.value, "")
+        self.assertEqual(window._research_evidence_records, ())
+        self.assertEqual(window._research_assessment_records, ())
+        self.assertEqual(window._research_assessment_text.value, "authored")
+
+        window._research_source_coverage_filter.set(
+            ResearchSourceCoverageFacet.ALL.value
+        )
+        window._apply_research_source_coverage_filter()
+
+        self.assertEqual(window._research_sources, run.sources)
+        self.assertEqual(window._research_source_selector.current(), 0)
+        self.assertEqual(window._active_research_source_document_id, "document-1")
+        self.assertEqual(window._research_evidence_records, (evidence,))
+        self.assertEqual(window._research_assessment_records, (assessment,))
+        self.assertEqual(window._research_assessment_text.value, "authored")
+        self.assertEqual(
+            window._status.values,
+            [
+                "accepted source view: Without current assessment; 1 of 2 shown; "
+                "active source unchanged; active source hidden",
+                "accepted source view: All sources; 2 of 2 shown; "
+                "active source unchanged",
+            ],
+        )
+
+    def test_without_current_assessment_view_reports_no_match(self) -> None:
+        now = datetime(2026, 8, 22, tzinfo=UTC)
+        source = _research_source_record("document-1", "Assessed")
+        evidence = _research_evidence_record(
+            "evidence-1", source.document_id, "Recorded"
+        )
+        assessment = _research_assessment_record(
+            "assessment-1",
+            source.document_id,
+            evidence.evidence_id,
+            "Current assessment",
+        )
+        run = ResearchRun(
+            "run-123",
+            "Inspect complete assessment coverage",
+            ResearchRunStatus.COLLECTING,
+            (source,),
+            (),
+            now,
+            now,
+            evidence=(evidence,),
+            assessments=(assessment,),
+        )
+        window: Any = object.__new__(TkinterDesktopWindow)
+        window._research_run_id = RecordingVariable(run.run_id)
+        window._research_runs = (run,)
+        window._research_source_run_id = run.run_id
+        window._research_sources = run.sources
+        window._research_source_selector = RecordingCandidateSelector(selected_index=0)
+        window._research_source_choice = RecordingVariable("Assessed — document-1")
+        _configure_research_evidence_selector(window)
+        window._research_source_coverage_filter.set(
+            ResearchSourceCoverageFacet.WITHOUT_CURRENT_ASSESSMENT.value
+        )
+        window._research_claim_text = RecordingVariable("authored claim")
+        window._status = RecordingStatus()
+
+        window._apply_research_source_coverage_filter()
+
+        self.assertEqual(window._research_sources, ())
+        self.assertEqual(window._active_research_source_document_id, "document-1")
+        self.assertEqual(window._research_claim_text.value, "authored claim")
+        self.assertEqual(
+            window._research_source_coverage_summary.value,
+            "All 1 accepted sources have a current authored assessment; "
+            "no sources match this view.",
         )
 
     def test_source_coverage_view_keeps_visible_active_source_and_fields(

@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.101` in the current release candidate) are the
+- **Runtime releases** (`v0.3.102` in the current release candidate) are the
   executable package and GitHub release line. They are the source-backed
   implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
@@ -282,12 +282,15 @@ with accepted source IDs. Each accepted source counts once; superseded-only and
 malformed foreign histories cannot inflate coverage. The UI reports counts
 only, clears empty/invalid state, infers no quality/readiness, and opens no new
 runtime or mutation path.
-Sources & evidence adds one All sources/Without evidence local facet over that
-same immutable run. It retains stable source order and one exact active source
-ID independently of visible membership. Hiding clears only source-bound
-evidence/assessment presentation; returning to All restores the exact source.
-Authored fields remain untouched, and invalid/stale state leaves the view intact
-without a controller, storage, provider, network, or mutation call.
+Sources & evidence adds All sources, Without evidence, and Without current
+assessment local views over that same immutable run. The last view reuses the
+current-assessment derivation above, so superseded-only and malformed foreign
+history cannot hide accepted sources. Stable source order and one exact active
+source ID survive visible, hidden, and no-match membership. Hiding clears only
+source-bound evidence/assessment presentation; returning to All restores the
+exact source. Authored fields remain untouched, and invalid/stale state leaves
+the view intact without a controller, storage, provider, network, or mutation
+call.
 The selected immutable run supplies one additional Overview metadata line.
 Created/updated timestamps use seconds-level ISO-8601 text with their timezone
 offset, and only the complete `failures` tuple length is shown. No stage/reason,
@@ -483,7 +486,7 @@ Not implemented:
 
 The current local verification baseline is:
 
-- package-aware `python -m unittest`: 1,488 tests passed. Explicit `tests.*`
+- package-aware `python -m unittest`: 1,492 tests passed. Explicit `tests.*`
   module names ensure nested test directories are included without shadowing
   source packages.
 - `python -m black --check src tests`: passed.

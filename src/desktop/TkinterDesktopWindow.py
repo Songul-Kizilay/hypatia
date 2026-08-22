@@ -110,6 +110,7 @@ class ResearchSourceCoverageFacet(StrEnum):
 
     ALL = "All sources"
     WITHOUT_EVIDENCE = "Without evidence"
+    WITHOUT_CURRENT_ASSESSMENT = "Without current assessment"
 
 
 def _accessibility_palette(
@@ -2673,23 +2674,38 @@ class TkinterDesktopWindow:
     @staticmethod
     def _research_assessment_coverage_text(run: ResearchRun) -> str:
         """Count accepted sources with a current authored assessment."""
-        accepted_source_ids = {source.document_id for source in run.sources}
-        superseded_assessment_ids = {
-            record.supersedes_assessment_id
-            for record in run.assessments
-            if record.supersedes_assessment_id is not None
-        }
-        current_assessment_source_ids = {
-            record.source_document_id
-            for record in run.assessments
-            if record.assessment_id not in superseded_assessment_ids
-        } & accepted_source_ids
+        accepted_source_ids = frozenset(source.document_id for source in run.sources)
+        current_assessment_source_ids = (
+            TkinterDesktopWindow._current_research_assessment_source_ids(
+                run.sources,
+                run.assessments,
+            )
+        )
         accepted_count = len(accepted_source_ids)
         current_count = len(current_assessment_source_ids)
         return (
             f"Assessment coverage — Accepted sources: {accepted_count} · "
             f"With current assessment: {current_count} · "
             f"Without current assessment: {accepted_count - current_count}"
+        )
+
+    @staticmethod
+    def _current_research_assessment_source_ids(
+        sources: tuple[ResearchSourceRecord, ...],
+        assessments: tuple[ResearchSourceAssessmentRecord, ...],
+    ) -> frozenset[str]:
+        """Return accepted source IDs represented by current assessments."""
+        accepted_source_ids = frozenset(source.document_id for source in sources)
+        superseded_assessment_ids = {
+            record.supersedes_assessment_id
+            for record in assessments
+            if record.supersedes_assessment_id is not None
+        }
+        return frozenset(
+            record.source_document_id
+            for record in assessments
+            if record.assessment_id not in superseded_assessment_ids
+            and record.source_document_id in accepted_source_ids
         )
 
     @staticmethod
@@ -3049,6 +3065,7 @@ class TkinterDesktopWindow:
         visible_sources = self._filter_research_sources_by_coverage(
             self._research_source_catalog,
             selected_run.evidence,
+            selected_run.assessments,
             facet,
         )
         self._render_visible_research_sources(selected_run, visible_sources)
@@ -3058,15 +3075,25 @@ class TkinterDesktopWindow:
             summary = "No accepted sources are available."
         elif facet is ResearchSourceCoverageFacet.ALL:
             summary = f"All {total_count} accepted sources are shown."
-        elif visible_sources:
+        elif facet is ResearchSourceCoverageFacet.WITHOUT_EVIDENCE and visible_sources:
             summary = (
                 f"{visible_count} of {total_count} accepted sources have no "
                 "recorded evidence."
             )
-        else:
+        elif facet is ResearchSourceCoverageFacet.WITHOUT_EVIDENCE:
             summary = (
                 f"All {total_count} accepted sources have recorded evidence; "
                 "no sources match this view."
+            )
+        elif visible_sources:
+            summary = (
+                f"{visible_count} of {total_count} accepted sources have no "
+                "current authored assessment."
+            )
+        else:
+            summary = (
+                f"All {total_count} accepted sources have a current authored "
+                "assessment; no sources match this view."
             )
         self._research_source_coverage_summary.set(summary)
         active_hidden = bool(self._active_research_source_document_id) and all(
@@ -3113,12 +3140,23 @@ class TkinterDesktopWindow:
     def _filter_research_sources_by_coverage(
         sources: tuple[ResearchSourceRecord, ...],
         evidence: tuple[ResearchEvidenceRecord, ...],
+        assessments: tuple[ResearchSourceAssessmentRecord, ...],
         facet: ResearchSourceCoverageFacet,
     ) -> tuple[ResearchSourceRecord, ...]:
         """Return stable source membership for one exact local coverage facet."""
         if facet is ResearchSourceCoverageFacet.ALL:
             return sources
-        represented_source_ids = {record.source_document_id for record in evidence}
+        if facet is ResearchSourceCoverageFacet.WITHOUT_EVIDENCE:
+            represented_source_ids = frozenset(
+                record.source_document_id for record in evidence
+            )
+        else:
+            represented_source_ids = (
+                TkinterDesktopWindow._current_research_assessment_source_ids(
+                    sources,
+                    assessments,
+                )
+            )
         return tuple(
             source
             for source in sources
