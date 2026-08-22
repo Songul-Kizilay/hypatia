@@ -1162,6 +1162,8 @@ class TkinterDesktopWindow:
             textvariable=self._research_selected_source_summary,
             style="Hint.TLabel",
             anchor="w",
+            justify="left",
+            wraplength=850,
         ).grid(row=3, column=0, columnspan=4, sticky="ew", pady=(8, 0))
         ttk.Label(accepted_source_frame, text="Recorded evidence").grid(
             row=4,
@@ -3294,14 +3296,24 @@ class TkinterDesktopWindow:
         run: ResearchRun,
         source: ResearchSourceRecord,
     ) -> str:
-        """Summarize exact immutable records for one accepted source only."""
+        """Summarize exact immutable identity and records for one source."""
+        canonical_source = next(
+            (candidate for candidate in run.sources if candidate == source),
+            None,
+        )
+        if canonical_source is None:
+            return (
+                "Selected-source records unavailable until an accepted source "
+                "is selected."
+            )
         evidence_count = sum(
-            record.source_document_id == source.document_id for record in run.evidence
+            record.source_document_id == canonical_source.document_id
+            for record in run.evidence
         )
         assessment_records = tuple(
             record
             for record in run.assessments
-            if record.source_document_id == source.document_id
+            if record.source_document_id == canonical_source.document_id
         )
         superseded_ids = {
             record.supersedes_assessment_id
@@ -3311,19 +3323,28 @@ class TkinterDesktopWindow:
         current_assessment_count = sum(
             record.assessment_id not in superseded_ids for record in assessment_records
         )
+        title = TkinterDesktopWindow._bounded_research_source_title(canonical_source)
         return (
-            "Selected-source records — "
+            f"Selected source — {title} · "
+            f"Source ID: {canonical_source.document_id} · "
+            f"Run ID: {run.run_id} | Records — "
             f"Evidence: {evidence_count} · "
             f"Assessment history: {len(assessment_records)} · "
             f"Current assessments: {current_assessment_count}"
         )
 
     @staticmethod
-    def _research_source_label(source: ResearchSourceRecord) -> str:
-        """Keep the exact document ID visible beside a bounded source title."""
-        title = source.title
+    def _bounded_research_source_title(source: ResearchSourceRecord) -> str:
+        """Normalize and bound untrusted title text for compact presentation."""
+        title = " ".join(source.title.split())
         if len(title) > 80:
             title = f"{title[:77]}..."
+        return title
+
+    @staticmethod
+    def _research_source_label(source: ResearchSourceRecord) -> str:
+        """Keep the exact document ID visible beside a bounded source title."""
+        title = TkinterDesktopWindow._bounded_research_source_title(source)
         return f"{title} — {source.document_id}"
 
     def _selected_research_source(self) -> ResearchSourceRecord | None:

@@ -79,6 +79,9 @@ The MVP may present only current Brain/CognitiveEngine capabilities:
   assessment-history, and current-assessment counts from the immutable run;
   correction history remains distinct from current state, and hidden/invalid
   source presentation clears the summary without quality/trust inference;
+- normalized bounded source title plus exact source and immutable run IDs in
+  that same summary, guarded by complete canonical source-record membership so
+  changed or foreign provenance is refused;
 - a bounded selected-run metadata line with timezone-aware created/updated
   timestamps and aggregate safe-failure count, without failure detail;
 - a read-only accepted-source selector from that same run snapshot, with

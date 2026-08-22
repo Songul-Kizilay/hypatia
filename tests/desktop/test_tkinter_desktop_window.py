@@ -382,6 +382,8 @@ class AccessibilityPreferenceTests(unittest.TestCase):
             supersedes_assessment_id=original.assessment_id,
         )
         run = Mock(spec=ResearchRun)
+        run.run_id = "run-123"
+        run.sources = (source,)
         run.evidence = (
             _research_evidence_record("evidence-1", source.document_id, "First"),
             _research_evidence_record("evidence-2", source.document_id, "Second"),
@@ -400,21 +402,58 @@ class AccessibilityPreferenceTests(unittest.TestCase):
 
         self.assertEqual(
             TkinterDesktopWindow._research_selected_source_summary_text(run, source),
-            "Selected-source records — Evidence: 2 · Assessment history: 2 · "
+            "Selected source — Accepted · Source ID: document-1 · "
+            "Run ID: run-123 | Records — Evidence: 2 · Assessment history: 2 · "
             "Current assessments: 1",
         )
 
     def test_selected_source_summary_reports_complete_zero_counts(self) -> None:
-        source = _research_source_record("document-1", "Accepted")
+        source = _research_source_record(
+            "document-1",
+            "  Accepted\nsource\t title  ",
+        )
         run = Mock(spec=ResearchRun)
+        run.run_id = "run-123"
+        run.sources = (source,)
         run.evidence = ()
         run.assessments = ()
 
         self.assertEqual(
             TkinterDesktopWindow._research_selected_source_summary_text(run, source),
-            "Selected-source records — Evidence: 0 · Assessment history: 0 · "
+            "Selected source — Accepted source title · Source ID: document-1 · "
+            "Run ID: run-123 | Records — Evidence: 0 · Assessment history: 0 · "
             "Current assessments: 0",
         )
+
+    def test_selected_source_summary_rejects_noncanonical_source_record(
+        self,
+    ) -> None:
+        accepted = _research_source_record("document-1", "Accepted")
+        changed_copy = _research_source_record("document-1", "Changed title")
+        run = Mock(spec=ResearchRun)
+        run.run_id = "run-123"
+        run.sources = (accepted,)
+        run.evidence = ()
+        run.assessments = ()
+
+        self.assertEqual(
+            TkinterDesktopWindow._research_selected_source_summary_text(
+                run,
+                changed_copy,
+            ),
+            "Selected-source records unavailable until an accepted source is selected.",
+        )
+
+    def test_selected_source_title_is_normalized_and_bounded(self) -> None:
+        source = _research_source_record(
+            "document-1",
+            f"  {'T' * 76}\nmore title text  ",
+        )
+
+        title = TkinterDesktopWindow._bounded_research_source_title(source)
+
+        self.assertEqual(title, f"{'T' * 76} ...")
+        self.assertEqual(len(title), 80)
 
     def test_research_run_metadata_is_timezone_aware_and_hides_failure_detail(
         self,
@@ -2317,7 +2356,8 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         self.assertEqual(window._research_assessment_records, (assessment,))
         self.assertEqual(
             window._research_selected_source_summary.value,
-            "Selected-source records — Evidence: 1 · Assessment history: 1 · "
+            "Selected source — Covered active · Source ID: document-1 · "
+            "Run ID: run-123 | Records — Evidence: 1 · Assessment history: 1 · "
             "Current assessments: 1",
         )
         self.assertEqual(

@@ -294,6 +294,10 @@ assessment-history, and current-assessment counts from the same immutable run.
 Superseded assessments remain in history but not the current count; hidden or
 invalid source state clears the summary, with no quality/trust conclusion or
 additional request.
+The same line includes a normalized bounded source title, exact source document
+ID, and exact research-run ID. The complete source record must match canonical
+run membership, so changed or foreign provenance cannot be paired with those
+counts.
 
 The window uses the same Bootstrap and Brain as the terminal entry point. A
 clicked session only fills the selection field; choosing it remains explicit.

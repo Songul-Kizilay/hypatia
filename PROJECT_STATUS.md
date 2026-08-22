@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.105 (Genesis)`
+`v0.3.106 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.105`** is the current executable package and GitHub
+- **Runtime release `v0.3.106`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -115,6 +115,10 @@ with optional OpenAI-compatible LLM conversation support.
   as current; foreign records do not count. Hidden or invalid source state
   clears the summary, no quality/trust conclusion is inferred, and no runtime
   or mutation boundary opens.
+- That summary also presents the normalized bounded source title, exact source
+  document ID, and exact immutable run ID. The complete source record must match
+  canonical run membership before any counts are displayed, preventing changed
+  or foreign provenance from being paired with the run's records.
 - The selected run's immutable creation/update times and complete safe-failure
   count appear in Overview as a bounded metadata line. Timestamps retain their
   timezone offset at seconds precision; failure stage/reason text is never
@@ -574,7 +578,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,501 automated tests pass through package-aware discovery.
+- 1,503 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -609,7 +613,7 @@ changed.
 
 ## Next Milestone
 
-Add one compact read-only selected-source provenance summary that keeps the
-exact accepted-source title/ID and immutable run identity visible beside the
-record counts. It must clear on hidden/invalid state, infer no quality, and open
-no runtime or mutation boundary.
+Expose the selected external source's persisted safety boundary beside its
+provenance: untrusted-data taint and instruction authority `none`. It must use
+only the canonical immutable source record, remain read-only, and open no
+runtime or mutation boundary.

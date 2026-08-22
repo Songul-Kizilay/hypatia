@@ -85,6 +85,10 @@ assessment-history, and current-assessment counts from the same immutable run.
 Superseded assessments remain in history but do not count as current, foreign
 records cannot count, and hidden/invalid source presentation clears the summary.
 It makes no quality/trust conclusion and opens no runtime or mutation path.
+The same wrapped line includes a normalized bounded source title, exact source
+document ID, and exact immutable run ID. It presents them only when the complete
+source record equals canonical run membership, preventing changed or foreign
+provenance from borrowing the selected run's record counts.
 Overview also renders one bounded metadata line from the selected immutable
 run: seconds-level timezone-aware creation/update times and only the aggregate
 safe-failure count. It cannot expose a failure stage/reason or retain stale
