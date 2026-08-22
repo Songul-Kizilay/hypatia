@@ -281,6 +281,10 @@ recorded evidence, or only those without a current authored assessment. This is
 a stable local exact-ID view: superseded-only history remains uncovered, the
 active source is preserved even while hidden, and that exact source returns
 with the all view without changing authored fields or requesting data.
+One adjacent read-only catalog summary always shows the complete All, Without
+evidence, and Without current assessment counts from the selected run. These
+totals do not change when the local source view changes and make no quality or
+readiness decision.
 
 The window uses the same Bootstrap and Brain as the terminal entry point. A
 clicked session only fills the selection field; choosing it remains explicit.
