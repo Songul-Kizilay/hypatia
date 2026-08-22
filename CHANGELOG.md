@@ -2,6 +2,39 @@
 
 All notable project changes are recorded here.
 
+## [0.3.115] - 2026-08-22
+
+### Added
+
+- `ResearchPlanDraftService` converts only an explicit authored question and an
+  immutable ordered tuple of `(instruction, selected source IDs)` drafts into
+  the stable `ResearchPlan` domain contract.
+- Valid drafts receive deterministic plan-local `step-1` through `step-20`
+  identities plus an injected or local plan identity and creation time.
+- `ResearchPlanDraftPreview` returns either one complete immutable plan ready
+  for a future explicit confirmation or one bounded validation reason with no
+  partial plan.
+
+### Safety
+
+- Invalid question, step shape, instruction, source selection, generated plan
+  identity, or creation time is converted from `ResearchError` into a no-write
+  rejected preview. Unexpected programming or factory errors are not hidden.
+- The service has no Brain, response, manager, store, `ResearchRun`, desktop,
+  provider, network, LLM, path, event-bus, or execution integration. It does not
+  persist a draft or authorize automatic source selection.
+
+### Verification
+
+- The package-aware full local suite contains 1,558 passing automated tests.
+- Eight direct tests cover exact ordered construction, normalized plan-local
+  step identities, empty source selections, input immutability, structural and
+  domain failures, invalid generated values, and exclusive ready/rejected
+  preview invariants.
+- Black, Ruff, and MyPy pass for all 343 Python source and test files.
+- The pinned Windows onedir package builds and initializes its local session
+  snapshot in a fresh temporary data directory.
+
 ## [0.3.114] - 2026-08-22
 
 ### Added
