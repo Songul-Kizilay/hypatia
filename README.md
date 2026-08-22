@@ -629,6 +629,21 @@ runtime is configured and this exact process-environment value is set:
 HYPATIA_LEARNING_ENABLED=true
 ```
 
+When the configured provider exposes the optional `generate_json(...)`
+capability, extraction requests one bounded structured response: a trusted
+system instruction, a 512-token bound, and an exact JSON response schema that
+mirrors the learned-memory parser. Providers exposing only `generate` keep their
+previous plain call. The parser remains the final authority in both cases, so a
+declared schema never bypasses validation; reasoning preambles and
+Markdown-fenced payloads are still rejected.
+
+When extraction fails, Hypatia emits one bounded
+`brain.learned_memory.extraction_failed` event carrying only the request ID and
+the cause class name. It never carries the user message, source text, candidate
+values, or the raw model response. Ordinary chat still succeeds and the
+conversation record is still persisted. No event is emitted for successful or
+no-op extraction.
+
 The following optional settings control which learned memories are supplied to
 the LLM as additional context:
 

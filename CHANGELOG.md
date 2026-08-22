@@ -2,6 +2,55 @@
 
 All notable project changes are recorded here.
 
+## [0.3.118] - 2026-08-23
+
+### Added
+
+- `LLMLearnedMemoryCandidateExtractor` now detects providers that expose the
+  optional `generate_json(...)` capability through a local runtime-checkable
+  Protocol, matching the pattern already used by
+  `LLMResearchClaimContradictionProposalProvider`.
+- When that capability is present, extraction requests a bounded structured
+  response: a trusted system instruction, `max_tokens=512`, and an exact JSON
+  response schema whose allowed `kind` values, required fields, and
+  `additionalProperties: false` constraints mirror the existing parser.
+- The learned-memory prompt boundary now also owns
+  `LEARNED_MEMORY_EXTRACTION_SYSTEM_INSTRUCTION`, `EXTRACTION_MAX_TOKENS`, and
+  `build_learned_memory_candidate_response_schema()`, which returns a fresh
+  dictionary per call so no caller can mutate shared schema state.
+- Ordinary chat now emits one bounded `brain.learned_memory.extraction_failed`
+  event when learned-memory extraction fails, replacing a fully silent swallow.
+
+### Safety
+
+- The existing parser remains the final authority. A declared schema never
+  bypasses validation, so reasoning preambles and Markdown-fenced payloads are
+  still rejected.
+- The failure event payload carries only `request_id` and the cause class name.
+  It never carries the user message, source text, candidate values, or the raw
+  model response.
+- No event is emitted for successful or no-op extraction, so the established
+  exact conversation event order is unchanged.
+- Chat still succeeds when extraction fails, and the conversation record is
+  still persisted.
+- `TypeError` from an incompatible provider `generate_json` signature keeps
+  propagating instead of being normalized into an extraction failure.
+- Providers exposing only `generate` keep their exact previous call, with no
+  system instruction and empty history.
+- The persisted memory schema, the global `LLMProvider` Protocol, semantic chat
+  retrieval, and the learned-memory retrieval defaults are all unchanged.
+
+### Verification
+
+- The package-aware full local suite contains 1,580 passing automated tests.
+- Twelve new focused tests lock structured-capability routing and exact
+  arguments, unchanged `generate`-only fallback, `LLMError` normalization with
+  preserved cause, `TypeError` propagation, parser rejection of reasoning and
+  fenced output, schema freshness and parser agreement, bounded failure-event
+  payload, `unknown` cause categorization, and absence of the event on both
+  successful and no-op extraction.
+- Black, Ruff, and MyPy pass for all 347 Python source and test files.
+
 ## [0.3.117] - 2026-08-22
 
 ### Added

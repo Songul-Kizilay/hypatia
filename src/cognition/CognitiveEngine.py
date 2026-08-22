@@ -2540,8 +2540,9 @@ class CognitiveEngine:
                     batch = self._learned_memory_candidate_extractor.extract(
                         request.message
                     )
-                except LearnedMemoryCandidateExtractionError:
+                except LearnedMemoryCandidateExtractionError as error:
                     batch = None
+                    self._emit_learned_memory_extraction_failure(request, error)
                 if batch is not None:
                     persist_learned_memory_candidate_batch(
                         self._memory_manager,
@@ -2585,6 +2586,22 @@ class CognitiveEngine:
             source="brain",
         )
         return response
+
+    def _emit_learned_memory_extraction_failure(
+        self,
+        request: BrainRequest,
+        error: LearnedMemoryCandidateExtractionError,
+    ) -> None:
+        """Report a bounded extraction failure without exposing any content."""
+        cause = error.__cause__
+        self._event_bus.emit(
+            "brain.learned_memory.extraction_failed",
+            {
+                "request_id": request.request_id,
+                "cause": type(cause).__name__ if cause is not None else "unknown",
+            },
+            source="brain",
+        )
 
     def _resolve_session_id(self, request: BrainRequest) -> str:
         value = request.metadata.get("session_id")

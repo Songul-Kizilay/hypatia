@@ -1095,6 +1095,145 @@ class CognitiveEngineTests(unittest.TestCase):
         )
         self.assertEqual(load_learned_memories(self.memory_manager), ())
 
+    def test_learning_failure_emits_one_bounded_diagnostic_event(self) -> None:
+        llm_provider = RecordingLLMProvider("The conversation succeeded.")
+        cause = LLMError("provider unavailable")
+        extraction_error = LearnedMemoryCandidateExtractionError(
+            "Learned memory candidate extraction failed."
+        )
+        extraction_error.__cause__ = cause
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+            learned_memory_candidate_extractor=FailingCandidateExtractor(
+                extraction_error
+            ),
+        )
+        failures: list[Event] = []
+        self.event_bus.subscribe(
+            "brain.learned_memory.extraction_failed",
+            failures.append,
+        )
+        message = "  My favorite planet is Saturn.  "
+
+        response = engine.process(
+            BrainRequest(message=message, request_id="request-987")
+        )
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.message, "The conversation succeeded.")
+        self.assertEqual(len(failures), 1)
+        event = failures[0]
+        self.assertEqual(event.source, "brain")
+        self.assertEqual(
+            event.payload,
+            {"request_id": "request-987", "cause": "LLMError"},
+        )
+        encoded_payload = repr(event.payload)
+        self.assertNotIn(message, encoded_payload)
+        self.assertNotIn("Saturn", encoded_payload)
+        self.assertNotIn("provider unavailable", encoded_payload)
+
+    def test_learning_failure_without_cause_reports_unknown_category(self) -> None:
+        llm_provider = RecordingLLMProvider("The conversation succeeded.")
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+            learned_memory_candidate_extractor=FailingCandidateExtractor(
+                LearnedMemoryCandidateExtractionError("failed")
+            ),
+        )
+        failures: list[Event] = []
+        self.event_bus.subscribe(
+            "brain.learned_memory.extraction_failed",
+            failures.append,
+        )
+
+        response = engine.process(
+            BrainRequest(message="exact message", request_id="request-654")
+        )
+
+        self.assertTrue(response.success)
+        self.assertEqual(len(failures), 1)
+        self.assertEqual(
+            failures[0].payload,
+            {"request_id": "request-654", "cause": "unknown"},
+        )
+
+    def test_successful_extraction_emits_no_failure_event(self) -> None:
+        llm_provider = RecordingLLMProvider("I will remember that.")
+        batch = LearnedMemoryCandidateBatch(
+            source_text="My favorite planet is Saturn.",
+            candidates=(
+                LearnedMemoryCandidate(
+                    memory=LearnedMemory(
+                        kind="preference",
+                        key="favorite_planet",
+                        value="Saturn",
+                    ),
+                    source_text="My favorite planet is Saturn.",
+                ),
+            ),
+        )
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+            learned_memory_candidate_extractor=RecordingCandidateExtractor(batch),
+        )
+        events: list[str] = []
+        self.event_bus.subscribe("*", lambda event: events.append(event.name))
+
+        response = engine.process(BrainRequest(message="My favorite planet is Saturn."))
+
+        self.assertTrue(response.success)
+        self.assertNotIn("brain.learned_memory.extraction_failed", events)
+
+    def test_no_op_extraction_emits_no_failure_event(self) -> None:
+        llm_provider = RecordingLLMProvider("The conversation succeeded.")
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+        )
+        events: list[str] = []
+        self.event_bus.subscribe("*", lambda event: events.append(event.name))
+
+        response = engine.process(BrainRequest(message="exact message"))
+
+        self.assertTrue(response.success)
+        self.assertEqual(
+            events,
+            [
+                "brain.request.received",
+                "brain.intent.detected",
+                "memory.record.added",
+                "brain.response.ready",
+            ],
+        )
+
     def test_unrelated_extraction_error_escapes_unchanged(self) -> None:
         llm_provider = RecordingLLMProvider("The conversation succeeded.")
         unexpected_error = RuntimeError("unexpected")

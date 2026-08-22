@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.117 (Genesis)`
+`v0.3.118 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.117`** is the current executable package and GitHub
+- **Runtime release `v0.3.118`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -32,6 +32,18 @@ with optional OpenAI-compatible LLM conversation support.
 ### Implemented
 
 - Application bootstrap, configuration, logging, and dependency injection.
+- Learned-memory candidate extraction detects providers exposing the optional
+  `generate_json(...)` capability through a local runtime-checkable Protocol and
+  then requests one bounded structured response with a trusted system
+  instruction, a 512-token bound, and an exact JSON response schema mirroring the
+  existing parser. Providers exposing only `generate` keep their previous plain
+  call. The parser stays the final authority, so reasoning preambles and
+  Markdown-fenced payloads remain rejected. Extraction failure now emits one
+  bounded `brain.learned_memory.extraction_failed` event carrying only the
+  request ID and cause class name; ordinary chat still succeeds and no event is
+  emitted for successful or no-op extraction. The persisted memory schema, the
+  global `LLMProvider` Protocol, and the learned-memory retrieval defaults are
+  unchanged.
 - An initial local Tkinter desktop shell for text conversation, explicit
   session selection, a refreshable read-only session overview, and
   semantic-runtime status. It also provides selected-session details, recent
@@ -649,7 +661,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,568 automated tests pass through package-aware discovery.
+- 1,580 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
