@@ -12,6 +12,7 @@ zero-result search, so a step never implies evidence that was not located.
 from __future__ import annotations
 
 from knowledge.KnowledgeEngine import KnowledgeEngine
+from research.ResearchPlanExecutionContext import ResearchPlanExecutionContext
 from research.ResearchPlanStep import ResearchPlanStep
 from research.ResearchPlanStepOperationResult import ResearchPlanStepOperationResult
 
@@ -28,8 +29,13 @@ class LocalKnowledgeSearchStepOperation:
     def operation_name(self) -> str:
         return "local_knowledge_search"
 
-    def run(self, step: ResearchPlanStep) -> ResearchPlanStepOperationResult:
+    def run(
+        self,
+        step: ResearchPlanStep,
+        context: ResearchPlanExecutionContext,
+    ) -> ResearchPlanStepOperationResult:
         """Run one bounded local search and report its exact outcome."""
+        del context
         chunks = self._knowledge_engine.search(step.instruction)
         document_ids = tuple(dict.fromkeys(chunk.document_id for chunk in chunks))
         reported = document_ids[:MAX_REPORTED_KNOWLEDGE_DOCUMENTS]

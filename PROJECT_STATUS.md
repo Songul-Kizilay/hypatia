@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.127 (Genesis)`
+`v0.3.128 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.127`** is the current executable package and GitHub
+- **Runtime release `v0.3.128`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -32,6 +32,17 @@ with optional OpenAI-compatible LLM conversation support.
 ### Implemented
 
 - Application bootstrap, configuration, logging, and dependency injection.
+- Research-plan execution passes one small explicit `ResearchPlanExecutionContext`
+  through the application-service boundary. Collaborators stay
+  constructor-injected at composition time, so an operation never reaches a
+  global, locator, container, `CognitiveEngine`, or unrelated store. The second
+  connected capability, `ACCEPTED_SOURCE_LISTING`, reads accepted sources from
+  canonical `ResearchRunManager` state without network, LLM, or mutation. Zero
+  accepted sources is a performed listing rather than a failure; the detail states
+  that no source content was read and no evidence was established; reported
+  identifiers are capped; and unknown or unbound runs fail safely without claiming
+  work. Every registered capability is covered by a composition-level test proving
+  it is reachable through the real `CognitiveEngine` wiring.
 - Research-plan execution selects operations through explicit typed capability
   registration. A step declares a `ResearchPlanStepCapability` separately from its
   authored instruction text, and `ResearchPlanOperationRegistry` binds each
@@ -742,7 +753,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,699 automated tests pass through package-aware discovery.
+- 1,715 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.

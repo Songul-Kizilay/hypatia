@@ -25,7 +25,8 @@ class StubOperation:
     def operation_name(self) -> str:
         return self._name
 
-    def run(self, step: ResearchPlanStep) -> ResearchPlanStepOperationResult:
+    def run(self, step, context) -> ResearchPlanStepOperationResult:  # type: ignore[no-untyped-def]
+        del step, context
         return ResearchPlanStepOperationResult(performed=True, detail="ran")
 
 

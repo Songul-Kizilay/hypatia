@@ -35,6 +35,7 @@ from research.ResearchPlanDraftService import (
     ResearchPlanDraftService,
     ResearchPlanStepDraft,
 )
+from research.ResearchPlanExecutionContext import ResearchPlanExecutionContext
 from research.ResearchPlanExecutionState import ResearchPlanExecutionState
 from research.ResearchPlanOperationRegistry import ResearchPlanOperationRegistry
 from response.ResponseComposer import ResponseComposer
@@ -72,6 +73,7 @@ class ResearchPlanExecutionApplicationService:
         self._max_active_executions = max_active_executions
         self._executions: dict[str, ResearchPlanExecutionState] = {}
         self._plans: dict[str, ResearchPlan] = {}
+        self._contexts: dict[str, ResearchPlanExecutionContext] = {}
 
     @staticmethod
     def is_start_request(request: BrainRequest) -> bool:
@@ -116,9 +118,20 @@ class ResearchPlanExecutionApplicationService:
                 "Research plan execution capacity is full in this process.",
             )
 
+        try:
+            context = ResearchPlanExecutionContext(
+                research_run_id=self._optional_run_id(request)
+            )
+        except ResearchError as error:
+            return self._response_composer.research_plan_execution_rejected(
+                request,
+                str(error),
+            )
+
         state = ResearchPlanExecutionState.prepare(plan).start()
         self._executions[plan.plan_id] = state
         self._plans[plan.plan_id] = plan
+        self._contexts[plan.plan_id] = context
         return self._response_composer.research_plan_execution_status(request, state)
 
     def process_status(self, request: BrainRequest) -> BrainResponse:
@@ -202,7 +215,10 @@ class ResearchPlanExecutionApplicationService:
                 str(error),
             )
         try:
-            result = operation.run(step)
+            result = operation.run(
+                step,
+                self._contexts.get(plan_id, ResearchPlanExecutionContext()),
+            )
         except ResearchError as error:
             failed = running.fail_step(step_id, str(error))
             self._executions[plan_id] = failed
@@ -245,6 +261,16 @@ class ResearchPlanExecutionApplicationService:
             request,
             blocked,
         )
+
+    @staticmethod
+    def _optional_run_id(request: BrainRequest) -> str | None:
+        """Read the optional explicit research run binding for this execution."""
+        value = request.metadata.get("research_run_id")
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ResearchError("Research execution run ID must be text.")
+        return value
 
     @staticmethod
     def _normalized_plan_id(request: BrainRequest) -> str:

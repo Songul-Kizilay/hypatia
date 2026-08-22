@@ -319,7 +319,8 @@ class RecordingStepOperation:
     def operation_name(self) -> str:
         return "recording"
 
-    def run(self, step) -> ResearchPlanStepOperationResult:  # type: ignore[no-untyped-def]
+    def run(self, step, context) -> ResearchPlanStepOperationResult:  # type: ignore[no-untyped-def]
+        del context
         self.steps.append(step.step_id)
         return ResearchPlanStepOperationResult(
             performed=self.performed,
@@ -328,7 +329,8 @@ class RecordingStepOperation:
 
 
 class FailingStepOperation(RecordingStepOperation):
-    def run(self, step) -> ResearchPlanStepOperationResult:  # type: ignore[no-untyped-def]
+    def run(self, step, context) -> ResearchPlanStepOperationResult:  # type: ignore[no-untyped-def]
+        del context
         self.steps.append(step.step_id)
         raise ResearchError("Research operation failed.")
 

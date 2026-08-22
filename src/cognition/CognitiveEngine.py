@@ -64,6 +64,9 @@ from memory.NoOpLearnedMemoryCandidateExtractor import (
 from memory.SemanticMemoryIndexRuntime import SemanticMemoryIndexRuntime
 from memory.SemanticMemoryMatch import SemanticMemoryMatch
 from memory.SessionMemoryPolicy import SessionMemoryPolicy
+from research.AcceptedSourceListingStepOperation import (
+    AcceptedSourceListingStepOperation,
+)
 from research.LocalKnowledgeSearchStepOperation import (
     LocalKnowledgeSearchStepOperation,
 )
@@ -213,15 +216,21 @@ class CognitiveEngine:
             memory_manager,
             response_composer,
         )
+        operation_registry = ResearchPlanOperationRegistry(
+            {
+                ResearchPlanStepCapability.LOCAL_KNOWLEDGE_SEARCH: (
+                    LocalKnowledgeSearchStepOperation(knowledge_engine)
+                ),
+            }
+        )
+        if research_run_manager is not None:
+            operation_registry.register(
+                ResearchPlanStepCapability.ACCEPTED_SOURCE_LISTING,
+                AcceptedSourceListingStepOperation(research_run_manager),
+            )
         self._research_plan_execution_service = ResearchPlanExecutionApplicationService(
             response_composer,
-            operation_registry=ResearchPlanOperationRegistry(
-                {
-                    ResearchPlanStepCapability.LOCAL_KNOWLEDGE_SEARCH: (
-                        LocalKnowledgeSearchStepOperation(knowledge_engine)
-                    ),
-                }
-            ),
+            operation_registry=operation_registry,
         )
         self._research_plan_preview_service = ResearchPlanPreviewApplicationService(
             response_composer,

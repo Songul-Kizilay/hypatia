@@ -2,6 +2,50 @@
 
 All notable project changes are recorded here.
 
+## [0.3.128] - 2026-08-23
+
+### Added
+
+- `ResearchPlanExecutionContext` is the smallest explicit typed context for one
+  execution, currently one optional bounded `research_run_id`. It is passed
+  through the application-service boundary to an operation.
+- `ResearchPlanStepOperation.run` now receives that context. Collaborators stay
+  constructor-injected at composition time, so an operation never reaches a
+  global, service locator, dependency container, `CognitiveEngine`, or an
+  unrelated store.
+- `ACCEPTED_SOURCE_LISTING` capability and `AcceptedSourceListingStepOperation`,
+  reading accepted sources from the canonical `ResearchRunManager` state.
+- The start request accepts an optional explicit `research_run_id` binding.
+
+### Safety
+
+- Listing is read-only: no network, no LLM, no persistence mutation, and no
+  event emitted. A test asserts the run is byte-identical afterwards.
+- Zero accepted sources is a successfully performed listing, not a failure.
+- The detail states explicitly that no source content was read and no evidence
+  was established. Listing establishes neither evidence, nor trustworthiness,
+  nor a verified claim; those remain in the existing research pipeline.
+- Reported document identifiers are capped at three with a remainder count, so a
+  large accepted-source catalog is never dumped into step detail.
+- An unknown or stale run ID, and a missing run binding, fail the step safely
+  with `work_performed` left false.
+- The capability is registered only when a run manager exists. Without one it
+  stays unregistered and a declaring step blocks rather than failing obscurely.
+- Capability authorization stays separate from execution context: the step
+  declares what it may run, the context describes what it runs against.
+
+### Verification
+
+- The package-aware full local suite contains 1,715 passing automated tests.
+- Sixteen new tests cover the stable operation name, zero-source listing,
+  identifier-only reporting, bounded large catalogs, unknown-run and
+  missing-binding failure, absence of mutation, and context validation.
+- A new composition-level suite proves every registered capability is actually
+  reachable through the real `CognitiveEngine` wiring, covering the 0.3.126
+  bug class where a capability worked in a directly constructed service while
+  production wiring silently lacked it. This check is now required for every
+  newly connected capability.
+
 ## [0.3.127] - 2026-08-23
 
 ### Added

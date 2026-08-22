@@ -14,6 +14,7 @@ from knowledge.KnowledgeEngine import KnowledgeEngine
 from research.LocalKnowledgeSearchStepOperation import (
     LocalKnowledgeSearchStepOperation,
 )
+from research.ResearchPlanExecutionContext import ResearchPlanExecutionContext
 from research.ResearchPlanStep import ResearchPlanStep
 from research.ResearchPlanStepOperationResult import (
     ResearchPlanStepOperationResult,
@@ -41,7 +42,8 @@ class LocalKnowledgeSearchStepOperationTests(unittest.TestCase):
 
     def test_matching_instruction_reports_real_findings(self) -> None:
         result = self.operation.run(
-            ResearchPlanStep(step_id="step-1", instruction="Saturn")
+            ResearchPlanStep(step_id="step-1", instruction="Saturn"),
+            ResearchPlanExecutionContext(),
         )
 
         self.assertTrue(result.performed)
@@ -53,7 +55,8 @@ class LocalKnowledgeSearchStepOperationTests(unittest.TestCase):
             ResearchPlanStep(
                 step_id="step-1",
                 instruction="quantum chromodynamics lattice",
-            )
+            ),
+            ResearchPlanExecutionContext(),
         )
 
         self.assertTrue(result.performed)
@@ -62,7 +65,8 @@ class LocalKnowledgeSearchStepOperationTests(unittest.TestCase):
 
     def test_detail_stays_bounded(self) -> None:
         result = self.operation.run(
-            ResearchPlanStep(step_id="step-1", instruction="Saturn")
+            ResearchPlanStep(step_id="step-1", instruction="Saturn"),
+            ResearchPlanExecutionContext(),
         )
 
         self.assertLessEqual(len(result.detail), 500)
