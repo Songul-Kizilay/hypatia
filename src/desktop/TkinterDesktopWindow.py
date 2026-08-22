@@ -250,6 +250,12 @@ class TkinterDesktopWindow:
         self._research_run_status_filter = tk.StringVar(
             value=ResearchRunStatusFacet.ALL.value
         )
+        self._research_run_catalog_summary = tk.StringVar(
+            value=(
+                "Loaded catalog: All 0 · Collecting 0 · Completed 0 · "
+                "Failed 0 · Cancelled 0"
+            )
+        )
         self._research_run_sort = tk.StringVar(
             value=ResearchRunSort.UPDATED_NEWEST.value
         )
@@ -931,8 +937,21 @@ class TkinterDesktopWindow:
             "<<ComboboxSelected>>",
             self._apply_research_run_status_filter,
         )
-        ttk.Label(research_run_filter_frame, text="Sort visible runs").grid(
+        ttk.Label(research_run_filter_frame, text="Catalog").grid(
             row=3,
+            column=0,
+            sticky="w",
+            padx=(0, 8),
+            pady=(8, 0),
+        )
+        ttk.Label(
+            research_run_filter_frame,
+            textvariable=self._research_run_catalog_summary,
+            style="Hint.TLabel",
+            anchor="w",
+        ).grid(row=3, column=1, columnspan=3, sticky="ew", pady=(8, 0))
+        ttk.Label(research_run_filter_frame, text="Sort visible runs").grid(
+            row=4,
             column=0,
             sticky="w",
             padx=(0, 8),
@@ -945,7 +964,7 @@ class TkinterDesktopWindow:
             state="readonly",
         )
         self._research_run_sort_selector.grid(
-            row=3,
+            row=4,
             column=1,
             columnspan=3,
             sticky="ew",
@@ -959,7 +978,7 @@ class TkinterDesktopWindow:
             research_run_filter_frame,
             textvariable=self._research_run_sort_summary,
             style="Hint.TLabel",
-        ).grid(row=4, column=1, columnspan=3, sticky="w", pady=(4, 0))
+        ).grid(row=5, column=1, columnspan=3, sticky="w", pady=(4, 0))
         research_workflow_snapshot_frame = ttk.LabelFrame(
             research_overview_frame,
             text="Workflow snapshot",
@@ -2154,6 +2173,9 @@ class TkinterDesktopWindow:
         self._visible_research_runs = visible_runs
         self._research_run_filter.set("")
         self._research_run_status_filter.set(ResearchRunStatusFacet.ALL.value)
+        self._research_run_catalog_summary.set(
+            self._research_run_catalog_summary_text(normalized_runs)
+        )
         self._research_run_filter_summary.set(
             "No research runs are available."
             if not normalized_runs
@@ -2353,6 +2375,17 @@ class TkinterDesktopWindow:
         if facet is ResearchRunStatusFacet.ALL:
             return None
         return ResearchRunStatus(facet.value.casefold())
+
+    @staticmethod
+    def _research_run_catalog_summary_text(
+        runs: tuple[ResearchRun, ...],
+    ) -> str:
+        """Summarize complete immutable catalog membership by lifecycle."""
+        status_counts = " · ".join(
+            f"{status.value.title()} " f"{sum(run.status is status for run in runs)}"
+            for status in ResearchRunStatus
+        )
+        return f"Loaded catalog: All {len(runs)} · {status_counts}"
 
     @staticmethod
     def _filter_research_runs(

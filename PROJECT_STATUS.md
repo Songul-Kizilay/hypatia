@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.96 (Genesis)`
+`v0.3.97 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.96`** is the current executable package and GitHub
+- **Runtime release `v0.3.97`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -78,6 +78,10 @@ with optional OpenAI-compatible LLM conversation support.
   status view. It composes with bounded text matching and deterministic sort,
   reports visible/total counts with the selected status, and preserves active
   selection and authored fields without a runtime or mutation boundary.
+- Research Overview also shows complete All, Collecting, Completed, Failed,
+  and Cancelled catalog counts from the full immutable loaded tuple. Those
+  counts remain unchanged by text/status filtering and sorting, show explicit
+  zeroes for an empty catalog, and open no runtime or mutation boundary.
 - The selected run's immutable creation/update times and complete safe-failure
   count appear in Overview as a bounded metadata line. Timestamps retain their
   timezone offset at seconds precision; failure stage/reason text is never
@@ -572,7 +576,7 @@ changed.
 
 ## Next Milestone
 
-Add one compact presentation-only catalog summary with complete All,
-Collecting, Completed, Failed, and Cancelled counts from the immutable loaded
-run tuple. It must remain truthful under text/status filtering, preserve the
-active run and authored fields, and open no runtime or mutation boundary.
+Add one presentation-only `Reset view` action that clears text and status
+filtering, restores the default updated-newest sort, re-shows the full catalog
+and active row, preserves authored fields, and opens no runtime or mutation
+boundary.

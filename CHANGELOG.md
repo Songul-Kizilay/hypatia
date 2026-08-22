@@ -2,6 +2,32 @@
 
 All notable project changes are recorded here.
 
+## [0.3.97] - 2026-08-22
+
+### Added
+
+- Research Overview now shows one compact complete catalog summary with All,
+  Collecting, Completed, Failed, and Cancelled counts.
+- Counts are derived from the full already loaded run tuple and remain truthful
+  while text filtering, status filtering, or local sorting changes the view.
+
+### Safety
+
+- The summary is presentation-only. It preserves the immutable catalog, active
+  run, visible selection, and authored fields and opens no Brain, controller,
+  storage, provider, network, LLM, index, event-bus, or mutation boundary.
+- Empty catalogs show explicit zero counts for every lifecycle instead of stale
+  values. Filtering changes neither the summary nor its source tuple.
+
+### Verification
+
+- The package-aware full local suite contains 1,473 passing automated tests.
+- Focused desktop coverage contains 114 passing tests, including every
+  lifecycle, repeated lifecycle membership, the empty catalog, and
+  text/status-filter invariance.
+- Black, Ruff, and MyPy pass. A real Tk smoke confirms the read-only catalog
+  summary in the existing 1080p-safe desktop layout.
+
 ## [0.3.96] - 2026-08-22
 
 ### Added

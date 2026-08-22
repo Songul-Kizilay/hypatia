@@ -53,6 +53,9 @@ The MVP may present only current Brain/CognitiveEngine capabilities:
 - an All/Collecting/Completed/Failed/Cancelled local status facet that composes
   with bounded text and deterministic sort while preserving active/authored
   state and reporting visible/total membership;
+- a compact complete All/Collecting/Completed/Failed/Cancelled catalog summary
+  derived only from the immutable loaded tuple, invariant under filtering and
+  sorting, with explicit zeroes for an empty catalog;
 - a bounded selected-run metadata line with timezone-aware created/updated
   timestamps and aggregate safe-failure count, without failure detail;
 - a read-only accepted-source selector from that same run snapshot, with

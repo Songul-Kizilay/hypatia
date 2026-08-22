@@ -257,6 +257,10 @@ data.
 An explicit status choice can show all, collecting, completed, failed, or
 cancelled runs. It combines locally with the bounded text filter and current
 sort, reports visible/total counts, and never requests or changes data.
+Beside those view controls, one compact catalog line always reports complete
+all/collecting/completed/failed/cancelled counts from the full loaded snapshot.
+Filtering and sorting do not change those totals, and an empty catalog shows
+zero for every lifecycle without requesting data.
 Overview also shows the selected run's seconds-level timezone-aware creation
 and update timestamps plus the complete safe-failure count. It never displays
 failure stage or reason text and performs no additional read.
