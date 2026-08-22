@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.110 (Genesis)`
+`v0.3.111 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.110`** is the current executable package and GitHub
+- **Runtime release `v0.3.111`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -40,12 +40,23 @@ with optional OpenAI-compatible LLM conversation support.
   compact grouped controls, explanatory empty states, and a conversation-first
   opening view. It is a thin adapter over the existing Brain and does not create
   a second store, provider, or network channel.
+- The desktop requests a 1,920-by-1,080-pixel initial client area, centers that
+  size on larger displays, and clamps it to smaller screens without disabling
+  ordinary resizing. The screen-safe minimum is bounded by the available
+  dimensions; this sizing is presentation-only and opens no runtime path.
 - The dense Research workspace is organized into four ordered presentation-only
   workflow tabs for run overview, sources/evidence, authored analysis, and
   review/export. Authored analysis is further divided into saved records,
   comparison, assessment, and claims/contradictions. The layout retains all 59
   existing command bindings and 41 field bindings, changes no runtime contract,
   and fits within the measured 1080p desktop height.
+- The Research workspace's loaded-catalog filtering, status facets,
+  deterministic sorting, selected-run summaries, evidence/assessment coverage,
+  metadata, and canonical selected-source presentation are projected by one
+  frozen, Tkinter-independent `ResearchWorkspaceReadModel`. The adapter keeps
+  compatibility delegates but no longer owns those calculations. The read
+  model imports no Brain, controller, manager, provider, persistence, path,
+  network, or widget boundary and changes no visible string or runtime action.
 - The Sources & evidence, Authored analysis, and Review & export workflow tabs
   repeat one read-only current-run banner with the selected question, status,
   and exact run ID. All three labels share one presentation value derived only
@@ -596,7 +607,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,510 automated tests pass through package-aware discovery.
+- 1,522 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -631,10 +642,9 @@ changed.
 
 ## Next Milestone
 
-Implement the bounded Research Workspace Read Model v0.1 selected by
+Select one cohesive read-only Research command family for an application-service
+extraction from `CognitiveEngine`, as sequenced by
 [`Architecture Audit v0.2`](docs/Architecture/Architecture_Audit_v0.2.md).
-Extract pure catalog filtering, ordering, progress, coverage, and canonical
-selected-source projections from `TkinterDesktopWindow` behind immutable,
-Tkinter-independent values. Preserve every existing UI/runtime contract and
-exclude new features, providers, persistence, network behavior, and automatic
-analysis from this slice.
+Preserve every Brain request/response contract and keep the first slice free of
+new UI, persistence, schema, provider, network, LLM, or automatic-analysis
+behavior. Add the service behind focused tests before changing delegation.

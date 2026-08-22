@@ -15,6 +15,12 @@ from brain.SessionSummary import SessionSummary
 from core.CancellationSignal import CancellationSignal
 from desktop.DesktopController import DesktopController
 from desktop.DesktopRequestRunner import DesktopRequestRunner
+from desktop.ResearchWorkspaceReadModel import (
+    ResearchRunSort,
+    ResearchRunStatusFacet,
+    ResearchSourceCoverageFacet,
+    ResearchWorkspaceReadModel,
+)
 from knowledge.KnowledgeCitation import KnowledgeCitation
 from research.ResearchClaimConfidence import ResearchClaimConfidence
 from research.ResearchClaimContradictionCandidate import (
@@ -47,6 +53,10 @@ from research.ResearchSourceRecord import ResearchSourceRecord
 _DEFAULT_FONT_SIZE = 12
 _MINIMUM_FONT_SIZE = 10
 _MAXIMUM_FONT_SIZE = 20
+_DEFAULT_WINDOW_WIDTH = 1920
+_DEFAULT_WINDOW_HEIGHT = 1080
+_MINIMUM_WINDOW_WIDTH = 760
+_MINIMUM_WINDOW_HEIGHT = 520
 _REQUEST_POLL_INTERVAL_MS = 50
 _MAX_RESEARCH_RUN_FILTER_LENGTH = 200
 _RESEARCH_WORKFLOW_TAB_TITLES = (
@@ -84,33 +94,6 @@ class DesktopTheme(StrEnum):
     EYE_COMFORT = "eye_comfort"
     LIGHT = "light"
     HIGH_CONTRAST = "high_contrast"
-
-
-class ResearchRunSort(StrEnum):
-    """User-facing deterministic orders for the loaded run presentation."""
-
-    UPDATED_NEWEST = "Updated — newest first"
-    UPDATED_OLDEST = "Updated — oldest first"
-    CREATED_NEWEST = "Created — newest first"
-    QUESTION = "Question — A to Z"
-
-
-class ResearchRunStatusFacet(StrEnum):
-    """User-facing local status views for the loaded run catalog."""
-
-    ALL = "All statuses"
-    COLLECTING = "Collecting"
-    COMPLETED = "Completed"
-    FAILED = "Failed"
-    CANCELLED = "Cancelled"
-
-
-class ResearchSourceCoverageFacet(StrEnum):
-    """User-facing local coverage views for accepted research sources."""
-
-    ALL = "All sources"
-    WITHOUT_EVIDENCE = "Without evidence"
-    WITHOUT_CURRENT_ASSESSMENT = "Without current assessment"
 
 
 def _accessibility_palette(
@@ -161,6 +144,26 @@ def _accessibility_palette(
 def _next_font_size(current_size: int, adjustment: int) -> int:
     """Bound an explicit user-selected text-size adjustment."""
     return max(_MINIMUM_FONT_SIZE, min(_MAXIMUM_FONT_SIZE, current_size + adjustment))
+
+
+def _initial_window_size(
+    screen_width: int,
+    screen_height: int,
+) -> tuple[int, int]:
+    """Prefer 1920x1080 while fitting smaller screens without overflow."""
+    if (
+        isinstance(screen_width, bool)
+        or not isinstance(screen_width, int)
+        or screen_width <= 0
+        or isinstance(screen_height, bool)
+        or not isinstance(screen_height, int)
+        or screen_height <= 0
+    ):
+        raise ValueError("Screen dimensions must be positive integers.")
+    return (
+        min(_DEFAULT_WINDOW_WIDTH, screen_width),
+        min(_DEFAULT_WINDOW_HEIGHT, screen_height),
+    )
 
 
 class KnowledgeRelationProcessor(Protocol):
@@ -382,7 +385,19 @@ class TkinterDesktopWindow:
             self._style.theme_use("clam")
 
         self._root.title("Hypatia")
-        self._root.minsize(760, 520)
+        screen_width = self._root.winfo_screenwidth()
+        screen_height = self._root.winfo_screenheight()
+        window_width, window_height = _initial_window_size(
+            screen_width,
+            screen_height,
+        )
+        window_x = max((screen_width - window_width) // 2, 0)
+        window_y = max((screen_height - window_height) // 2, 0)
+        self._root.geometry(f"{window_width}x{window_height}+{window_x}+{window_y}")
+        self._root.minsize(
+            min(_MINIMUM_WINDOW_WIDTH, window_width),
+            min(_MINIMUM_WINDOW_HEIGHT, window_height),
+        )
         self._build_layout()
         self._apply_accessibility_preferences()
         self._root.protocol("WM_DELETE_WINDOW", self._close)
@@ -2538,81 +2553,41 @@ class TkinterDesktopWindow:
     def _research_run_catalog_summary_text(
         runs: tuple[ResearchRun, ...],
     ) -> str:
-        """Summarize complete immutable catalog membership by lifecycle."""
-        status_counts = " · ".join(
-            f"{status.value.title()} " f"{sum(run.status is status for run in runs)}"
-            for status in ResearchRunStatus
-        )
-        return f"Loaded catalog: All {len(runs)} · {status_counts}"
+        """Delegate immutable catalog projection outside the Tkinter adapter."""
+        return ResearchWorkspaceReadModel(runs).catalog_summary_text()
 
     @staticmethod
     def _filter_research_runs(
         runs: tuple[ResearchRun, ...],
         query: str,
     ) -> tuple[ResearchRun, ...]:
-        """Match bounded question text, exact status, or exact run ID locally."""
-        normalized_query = query.strip().casefold()
-        if not normalized_query:
-            return runs
-        return tuple(
-            run
-            for run in runs
-            if normalized_query in run.question.casefold()
-            or normalized_query == run.status.value.casefold()
-            or normalized_query == run.run_id.casefold()
-        )
+        """Delegate local matching outside the Tkinter adapter."""
+        return ResearchWorkspaceReadModel(runs).filter_runs(query)
 
     @staticmethod
     def _filter_research_runs_by_status(
         runs: tuple[ResearchRun, ...],
         status_filter: ResearchRunStatus | None,
     ) -> tuple[ResearchRun, ...]:
-        """Restrict one already loaded tuple to an exact lifecycle status."""
-        if status_filter is None:
-            return runs
-        return tuple(run for run in runs if run.status is status_filter)
+        """Delegate exact lifecycle filtering outside the Tkinter adapter."""
+        return ResearchWorkspaceReadModel(runs).filter_runs_by_status(status_filter)
 
     @staticmethod
     def _sort_research_runs(
         runs: tuple[ResearchRun, ...],
         mode: ResearchRunSort,
     ) -> tuple[ResearchRun, ...]:
-        """Sort one presentation tuple with deterministic ascending ID ties."""
-        id_ordered = tuple(
-            sorted(runs, key=lambda run: (run.run_id.casefold(), run.run_id))
-        )
-        if mode is ResearchRunSort.UPDATED_NEWEST:
-            return tuple(
-                sorted(id_ordered, key=lambda run: run.updated_at, reverse=True)
-            )
-        if mode is ResearchRunSort.UPDATED_OLDEST:
-            return tuple(sorted(id_ordered, key=lambda run: run.updated_at))
-        if mode is ResearchRunSort.CREATED_NEWEST:
-            return tuple(
-                sorted(id_ordered, key=lambda run: run.created_at, reverse=True)
-            )
-        return tuple(
-            sorted(
-                id_ordered,
-                key=lambda run: (
-                    run.question.casefold(),
-                    run.run_id.casefold(),
-                    run.run_id,
-                ),
-            )
-        )
+        """Delegate deterministic ordering outside the Tkinter adapter."""
+        return ResearchWorkspaceReadModel(runs).sort_runs(mode)
 
     @staticmethod
     def _research_run_label(run: ResearchRun) -> str:
-        question = run.question
-        if len(question) > 80:
-            question = f"{question[:77]}..."
-        return f"{question} [{run.status.value}] — {run.run_id}"
+        return ResearchWorkspaceReadModel.run_label(run)
 
     @staticmethod
     def _research_run_context_text(run: ResearchRun) -> str:
         """Identify the exact immutable run snapshot used by later tabs."""
-        return f"Working on: {TkinterDesktopWindow._research_run_label(run)}"
+        return ResearchWorkspaceReadModel.run_context_text(run)
 
     def _select_research_run(self, _event: object | None = None) -> None:
         """Select one catalogued run without starting any research action."""
@@ -2652,113 +2627,58 @@ class TkinterDesktopWindow:
         self._render_research_claim_selector(selected_run)
         self._render_research_persisted_contradiction_selector(selected_run)
         self._render_research_persisted_comparison_note_selector(selected_run)
-        self._research_run_summary.set(self._research_run_summary_text(selected_run))
-        self._research_run_context.set(self._research_run_context_text(selected_run))
-        self._research_run_progress.set(self._research_run_progress_text(selected_run))
-        self._research_workflow_snapshot.set(
-            self._research_workflow_snapshot_text(selected_run)
-        )
-        self._research_evidence_coverage.set(
-            self._research_evidence_coverage_text(selected_run)
-        )
-        self._research_assessment_coverage.set(
-            self._research_assessment_coverage_text(selected_run)
-        )
-        self._research_run_metadata.set(self._research_run_metadata_text(selected_run))
+        read_view = ResearchWorkspaceReadModel.run_view(selected_run)
+        self._research_run_summary.set(read_view.summary)
+        self._research_run_context.set(read_view.context)
+        self._research_run_progress.set(read_view.progress)
+        self._research_workflow_snapshot.set(read_view.workflow_snapshot)
+        self._research_evidence_coverage.set(read_view.evidence_coverage)
+        self._research_assessment_coverage.set(read_view.assessment_coverage)
+        self._research_run_metadata.set(read_view.metadata)
         self._status.set(
             f"research run selected: {selected_run.run_id}; no action started"
         )
 
     @staticmethod
     def _research_run_summary_text(run: ResearchRun) -> str:
-        """Summarize bounded catalog counts without opening another read path."""
-        return (
-            f"Status: {run.status.value} · "
-            f"{TkinterDesktopWindow._research_run_progress_text(run)}"
-        )
+        """Delegate the selected-run summary outside the Tkinter adapter."""
+        return ResearchWorkspaceReadModel.run_summary_text(run)
 
     @staticmethod
     def _research_run_progress_text(run: ResearchRun) -> str:
-        """Show complete selected-snapshot counts in each later workflow tab."""
-        return (
-            f"Sources: {len(run.sources)} · "
-            f"Evidence: {len(run.evidence)} · Claims: {len(run.claims)}"
-        )
+        """Delegate complete selected-snapshot counts outside Tkinter."""
+        return ResearchWorkspaceReadModel.run_progress_text(run)
 
     @staticmethod
     def _research_workflow_snapshot_text(run: ResearchRun) -> str:
-        """Describe existing stage records without inferring readiness or truth."""
-        return (
-            f"Sources & evidence — Sources: {len(run.sources)} · "
-            f"Evidence: {len(run.evidence)} | Authored analysis — "
-            f"Assessments: {len(run.assessments)} · "
-            f"Comparison notes: {len(run.comparison_notes)} · "
-            f"Claims: {len(run.claims)} · "
-            f"Contradictions: {len(run.claim_contradictions)} | "
-            f"Review & export — Status: {run.status.value}"
-        )
+        """Delegate the existing-stage projection outside Tkinter."""
+        return ResearchWorkspaceReadModel.workflow_snapshot_text(run)
 
     @staticmethod
     def _research_evidence_coverage_text(run: ResearchRun) -> str:
-        """Count accepted sources represented by evidence without inference."""
-        accepted_source_ids = {source.document_id for source in run.sources}
-        represented_source_ids = {
-            record.source_document_id for record in run.evidence
-        } & accepted_source_ids
-        accepted_count = len(accepted_source_ids)
-        represented_count = len(represented_source_ids)
-        return (
-            f"Evidence coverage — Accepted sources: {accepted_count} · "
-            f"With evidence: {represented_count} · "
-            f"Without evidence: {accepted_count - represented_count}"
-        )
+        """Delegate evidence coverage projection outside Tkinter."""
+        return ResearchWorkspaceReadModel.evidence_coverage_text(run)
 
     @staticmethod
     def _research_assessment_coverage_text(run: ResearchRun) -> str:
-        """Count accepted sources with a current authored assessment."""
-        accepted_source_ids = frozenset(source.document_id for source in run.sources)
-        current_assessment_source_ids = (
-            TkinterDesktopWindow._current_research_assessment_source_ids(
-                run.sources,
-                run.assessments,
-            )
-        )
-        accepted_count = len(accepted_source_ids)
-        current_count = len(current_assessment_source_ids)
-        return (
-            f"Assessment coverage — Accepted sources: {accepted_count} · "
-            f"With current assessment: {current_count} · "
-            f"Without current assessment: {accepted_count - current_count}"
-        )
+        """Delegate assessment coverage projection outside Tkinter."""
+        return ResearchWorkspaceReadModel.assessment_coverage_text(run)
 
     @staticmethod
     def _current_research_assessment_source_ids(
         sources: tuple[ResearchSourceRecord, ...],
         assessments: tuple[ResearchSourceAssessmentRecord, ...],
     ) -> frozenset[str]:
-        """Return accepted source IDs represented by current assessments."""
-        accepted_source_ids = frozenset(source.document_id for source in sources)
-        superseded_assessment_ids = {
-            record.supersedes_assessment_id
-            for record in assessments
-            if record.supersedes_assessment_id is not None
-        }
-        return frozenset(
-            record.source_document_id
-            for record in assessments
-            if record.assessment_id not in superseded_assessment_ids
-            and record.source_document_id in accepted_source_ids
+        """Delegate current-assessment membership outside Tkinter."""
+        return ResearchWorkspaceReadModel.current_assessment_source_ids(
+            sources,
+            assessments,
         )
 
     @staticmethod
     def _research_run_metadata_text(run: ResearchRun) -> str:
-        """Expose bounded audit timing and a count without failure details."""
-        created = run.created_at.isoformat(timespec="seconds")
-        updated = run.updated_at.isoformat(timespec="seconds")
-        return (
-            f"Run metadata — Created: {created} · Updated: {updated} · "
-            f"Safe failures: {len(run.failures)}"
-        )
+        """Delegate safe run metadata projection outside Tkinter."""
+        return ResearchWorkspaceReadModel.run_metadata_text(run)
 
     def _render_research_claim_selector(self, run: ResearchRun) -> None:
         """Render authored claims from the already loaded exact run snapshot."""
@@ -3250,158 +3170,44 @@ class TkinterDesktopWindow:
         assessments: tuple[ResearchSourceAssessmentRecord, ...],
         facet: ResearchSourceCoverageFacet,
     ) -> tuple[ResearchSourceRecord, ...]:
-        """Return stable source membership for one exact local coverage facet."""
-        if facet is ResearchSourceCoverageFacet.ALL:
-            return sources
-        if facet is ResearchSourceCoverageFacet.WITHOUT_EVIDENCE:
-            represented_source_ids = frozenset(
-                record.source_document_id for record in evidence
-            )
-        else:
-            represented_source_ids = (
-                TkinterDesktopWindow._current_research_assessment_source_ids(
-                    sources,
-                    assessments,
-                )
-            )
-        return tuple(
-            source
-            for source in sources
-            if source.document_id not in represented_source_ids
+        """Delegate source coverage membership outside Tkinter."""
+        return ResearchWorkspaceReadModel.filter_sources_by_coverage(
+            sources,
+            evidence,
+            assessments,
+            facet,
         )
 
     @staticmethod
     def _research_source_catalog_summary_text(run: ResearchRun) -> str:
-        """Summarize complete source coverage independent of the local view."""
-        without_evidence_count = len(
-            TkinterDesktopWindow._filter_research_sources_by_coverage(
-                run.sources,
-                run.evidence,
-                run.assessments,
-                ResearchSourceCoverageFacet.WITHOUT_EVIDENCE,
-            )
-        )
-        without_current_assessment_count = len(
-            TkinterDesktopWindow._filter_research_sources_by_coverage(
-                run.sources,
-                run.evidence,
-                run.assessments,
-                ResearchSourceCoverageFacet.WITHOUT_CURRENT_ASSESSMENT,
-            )
-        )
-        return (
-            f"Accepted-source coverage — All: {len(run.sources)} · "
-            f"Without evidence: {without_evidence_count} · "
-            "Without current assessment: "
-            f"{without_current_assessment_count}"
-        )
+        """Delegate complete source coverage outside Tkinter."""
+        return ResearchWorkspaceReadModel.source_catalog_summary_text(run)
 
     @staticmethod
     def _research_selected_source_summary_text(
         run: ResearchRun,
         source: ResearchSourceRecord,
     ) -> str:
-        """Summarize exact immutable identity and records for one source."""
-        canonical_source = next(
-            (candidate for candidate in run.sources if candidate == source),
-            None,
-        )
-        if canonical_source is None:
-            return (
-                "Selected-source records unavailable until an accepted source "
-                "is selected."
-            )
-        source_evidence_ids = frozenset(
-            record.evidence_id
-            for record in run.evidence
-            if record.source_document_id == canonical_source.document_id
-        )
-        assessment_records = tuple(
-            record
-            for record in run.assessments
-            if record.source_document_id == canonical_source.document_id
-        )
-        superseded_ids = {
-            record.supersedes_assessment_id
-            for record in run.assessments
-            if record.supersedes_assessment_id is not None
-        }
-        current_assessment_records = tuple(
-            record
-            for record in assessment_records
-            if record.assessment_id not in superseded_ids
-        )
-        current_assessment_evidence_ids = frozenset(
-            evidence_id
-            for record in current_assessment_records
-            for evidence_id in record.evidence_ids
-            if evidence_id in source_evidence_ids
-        )
-        information_trust_counts = {
-            trust: sum(
-                record.information_trust is trust
-                for record in current_assessment_records
-            )
-            for trust in ResearchInformationTrust
-        }
-        title = TkinterDesktopWindow._bounded_research_source_title(canonical_source)
-        return (
-            f"Selected source — {title} · "
-            f"Source ID: {canonical_source.document_id} · "
-            f"Run ID: {run.run_id}\nSafety boundary — "
-            f"Data taint: {canonical_source.taint_label} · "
-            "Instruction authority: "
-            f"{canonical_source.instruction_authority}\nRecords — "
-            f"Evidence: {len(source_evidence_ids)} · "
-            f"Assessments: {len(assessment_records)} history / "
-            f"{len(current_assessment_records)} current · "
-            "Evidence cited by current: "
-            f"{len(current_assessment_evidence_ids)} of {len(source_evidence_ids)}\n"
-            "Current information trust — "
-            "Unassessed: "
-            f"{information_trust_counts[ResearchInformationTrust.UNASSESSED]} · "
-            f"Low: {information_trust_counts[ResearchInformationTrust.LOW]} · "
-            f"Medium: {information_trust_counts[ResearchInformationTrust.MEDIUM]} · "
-            f"High: {information_trust_counts[ResearchInformationTrust.HIGH]}"
-        )
+        """Delegate canonical selected-source projection outside Tkinter."""
+        return ResearchWorkspaceReadModel.source_view(run, source).summary
 
     @staticmethod
     def _bounded_research_source_title(source: ResearchSourceRecord) -> str:
-        """Normalize and bound untrusted title text for compact presentation."""
-        title = " ".join(source.title.split())
-        if len(title) > 80:
-            title = f"{title[:77]}..."
-        return title
+        """Delegate untrusted-title normalization outside Tkinter."""
+        return ResearchWorkspaceReadModel.bounded_source_title(source)
 
     @staticmethod
     def _research_source_details_text(
         run: ResearchRun,
         source: ResearchSourceRecord,
     ) -> str | None:
-        """Render safe provenance fields only for one canonical source record."""
-        canonical_source = next(
-            (candidate for candidate in run.sources if candidate == source),
-            None,
-        )
-        if canonical_source is None:
-            return None
-        title = TkinterDesktopWindow._bounded_research_source_title(canonical_source)
-        fetched = canonical_source.fetched_at.isoformat(timespec="seconds")
-        accepted = canonical_source.added_at.isoformat(timespec="seconds")
-        return (
-            f"Title: {title}\n"
-            f"Document ID: {canonical_source.document_id}\n"
-            f"Run ID: {run.run_id}\n"
-            f"Content type: {canonical_source.content_type}\n"
-            f"Fetched: {fetched}\n"
-            f"Accepted: {accepted}"
-        )
+        """Delegate safe canonical provenance projection outside Tkinter."""
+        return ResearchWorkspaceReadModel.source_details_text(run, source)
 
     @staticmethod
     def _research_source_label(source: ResearchSourceRecord) -> str:
-        """Keep the exact document ID visible beside a bounded source title."""
-        title = TkinterDesktopWindow._bounded_research_source_title(source)
-        return f"{title} — {source.document_id}"
+        """Delegate bounded source identity projection outside Tkinter."""
+        return ResearchWorkspaceReadModel.source_label(source)
 
     def _selected_research_source(self) -> ResearchSourceRecord | None:
         """Return only a source tied to the currently selected loaded run."""
