@@ -2,6 +2,44 @@
 
 All notable project changes are recorded here.
 
+## [0.3.119] - 2026-08-23
+
+### Changed
+
+- Ordinary chat now defaults to bounded, request-relevant learned memory. When
+  `HYPATIA_LEARNED_MEMORY_SELECTOR` is absent, Bootstrap builds the existing
+  deterministic `RankedKeywordLearnedMemorySelector` bounded to 8 memories
+  instead of supplying every current learned memory unbounded.
+- `HYPATIA_RANKED_LEARNED_MEMORY_SELECTOR_LIMIT` now also overrides that bound in
+  the default case.
+
+### Added
+
+- `HYPATIA_LEARNED_MEMORY_SELECTOR=none` explicitly restores the earlier
+  unbounded no-selector behavior for callers that depended on it.
+- `DEFAULT_LEARNED_MEMORY_SELECTOR_LIMIT` names the default bound in one place.
+
+### Safety
+
+- Only the Bootstrap composition default changed. `CognitiveEngine` keeps its
+  explicit-injection contract, so a directly constructed engine behaves exactly
+  as before.
+- Learned-memory correction and supersession are unchanged; the latest value for
+  a key still wins and stale values stay out of the prompt.
+- Explicit recall and semantic recall commands are unchanged.
+- No persisted schema, provider, network, or retrieval-mechanism change. No
+  vector database was introduced.
+
+### Verification
+
+- The package-aware full local suite contains 1,587 passing automated tests.
+- Seven new integration tests lock relevant inclusion, unrelated exclusion, the
+  bound under overflow, correction supersession, plain conversation with no
+  learned memory, unchanged explicit recall, and the `none` escape hatch.
+- Three existing bootstrap tests now pin the legacy unbounded path behind the
+  explicit `none` value rather than absent configuration.
+- Black, Ruff, and MyPy pass for all 348 Python source and test files.
+
 ## [0.3.118] - 2026-08-23
 
 ### Added

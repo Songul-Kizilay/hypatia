@@ -649,21 +649,33 @@ the LLM as additional context:
 
 ```text
 HYPATIA_LEARNED_MEMORY_CONTEXT_LIMIT=<non-negative integer>
-HYPATIA_LEARNED_MEMORY_SELECTOR=keyword|ranked
+HYPATIA_LEARNED_MEMORY_SELECTOR=keyword|ranked|none
 HYPATIA_RANKED_LEARNED_MEMORY_SELECTOR_LIMIT=<non-negative integer>
 ```
 
 `HYPATIA_LEARNED_MEMORY_CONTEXT_LIMIT` limits the final learned-memory context.
-With no selector configured, Hypatia keeps its existing current-memory order.
+
+With no selector configured, Hypatia defaults to the deterministic `ranked`
+selector bounded to 8 learned memories. Ordinary chat therefore supplies only
+memories whose keys or values share a token with the current user message, and
+never more than 8 of them. `HYPATIA_RANKED_LEARNED_MEMORY_SELECTOR_LIMIT`
+overrides that bound in the default case as well.
+
 `keyword` selects matching memories deterministically; `ranked` orders relevant
 memories by deterministic keyword relevance. The ranked selector limit is
 applied first, then the final context limit is applied. A ranked limit of `0`
-therefore selects no learned memories. The ranked selector limit is ignored
-unless `HYPATIA_LEARNED_MEMORY_SELECTOR=ranked`.
+therefore selects no learned memories. The ranked selector limit is ignored when
+`HYPATIA_LEARNED_MEMORY_SELECTOR=keyword`.
+
+`none` disables request-specific selection and restores the earlier behavior of
+supplying every current learned memory in its existing order. That path is
+unbounded unless `HYPATIA_LEARNED_MEMORY_CONTEXT_LIMIT` is also set, so it is no
+longer the default.
 
 All numeric learned-memory limits must be non-negative integers. Invalid values
-or a selector value other than the exact lowercase `keyword` or `ranked` cause
-startup configuration to fail clearly instead of silently changing context.
+or a selector value other than the exact lowercase `keyword`, `ranked`, or
+`none` cause startup configuration to fail clearly instead of silently changing
+context.
 
 The semantic-memory index is currently a tested, in-memory building block. An
 explicit Ollama `/api/embed` adapter is available for a local Ollama service,

@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.118 (Genesis)`
+`v0.3.119 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.118`** is the current executable package and GitHub
+- **Runtime release `v0.3.119`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -32,6 +32,15 @@ with optional OpenAI-compatible LLM conversation support.
 ### Implemented
 
 - Application bootstrap, configuration, logging, and dependency injection.
+- Ordinary chat defaults to bounded, request-relevant learned memory. With
+  `HYPATIA_LEARNED_MEMORY_SELECTOR` absent, Bootstrap builds the existing
+  deterministic ranked keyword selector bounded to 8 memories, so only learned
+  memories sharing a token with the current user message reach the prompt.
+  `HYPATIA_RANKED_LEARNED_MEMORY_SELECTOR_LIMIT` overrides that bound, and the
+  explicit `none` value restores the earlier unbounded no-selector behavior.
+  Only the composition default changed; `CognitiveEngine` keeps its
+  explicit-injection contract, and correction, supersession, explicit recall, and
+  semantic recall are unchanged.
 - Learned-memory candidate extraction detects providers exposing the optional
   `generate_json(...)` capability through a local runtime-checkable Protocol and
   then requests one bounded structured response with a trusted system
@@ -661,7 +670,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,580 automated tests pass through package-aware discovery.
+- 1,587 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.

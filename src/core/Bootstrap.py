@@ -71,6 +71,8 @@ from session.JsonFileSessionStore import JsonFileSessionStore
 from session.SessionManager import SessionManager
 from session.SessionRenameTransactionService import SessionRenameTransactionService
 
+DEFAULT_LEARNED_MEMORY_SELECTOR_LIMIT = 8
+
 
 class Bootstrap:
     def __init__(
@@ -192,6 +194,10 @@ class Bootstrap:
     def _load_process_learned_memory_selector() -> LearnedMemorySelector | None:
         raw_selector = os.environ.get("HYPATIA_LEARNED_MEMORY_SELECTOR")
         if raw_selector is None:
+            return RankedKeywordLearnedMemorySelector(
+                limit=Bootstrap._resolve_ranked_learned_memory_selector_limit()
+            )
+        if raw_selector == "none":
             return None
         if raw_selector == "keyword":
             return KeywordLearnedMemorySelector()
@@ -200,8 +206,18 @@ class Bootstrap:
                 limit=Bootstrap._load_process_ranked_learned_memory_selector_limit()
             )
         raise ValueError(
-            "HYPATIA_LEARNED_MEMORY_SELECTOR must be 'keyword' or 'ranked'."
+            "HYPATIA_LEARNED_MEMORY_SELECTOR must be 'keyword', 'ranked', or 'none'."
         )
+
+    @staticmethod
+    def _resolve_ranked_learned_memory_selector_limit() -> int:
+        """Bound the default learned-memory context without discarding config."""
+        configured_limit = (
+            Bootstrap._load_process_ranked_learned_memory_selector_limit()
+        )
+        if configured_limit is None:
+            return DEFAULT_LEARNED_MEMORY_SELECTOR_LIMIT
+        return configured_limit
 
     @staticmethod
     def _load_process_ranked_learned_memory_selector_limit() -> int | None:
