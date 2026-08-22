@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.123 (Genesis)`
+`v0.3.124 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.123`** is the current executable package and GitHub
+- **Runtime release `v0.3.124`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -32,6 +32,16 @@ with optional OpenAI-compatible LLM conversation support.
 ### Implemented
 
 - Application bootstrap, configuration, logging, and dependency injection.
+- Research-plan execution has a pure immutable state machine as its first stage.
+  `ResearchPlanExecutionStatus` and `ResearchPlanStepStatus` follow the existing
+  `ResearchRunStatus` convention with an explicit terminal property, and
+  `ResearchPlanExecutionState` exposes prepare, start, start_step, complete_step,
+  fail_step, block_step, and cancel. Steps run in exact authored order, only one
+  step may run at a time, and a plan reaches completed only when every step
+  completed, so partial or failed work can never present itself as finished.
+  Failure and cancellation preserve already-completed steps. This stage is
+  domain-only: no network, LLM, provider, persistence, event-bus, `ResearchRun`,
+  Brain, or desktop integration, and no user-reachable route can start execution.
 - A read-only learned-memory audit reports deterministic bounded health metrics
   through the exact structured `learned_memory_audit` Brain intent: active and
   superseded counts, superseded share, distinct identities, identities with
@@ -698,7 +708,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,630 automated tests pass through package-aware discovery.
+- 1,654 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.

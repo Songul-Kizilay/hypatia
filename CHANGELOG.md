@@ -2,6 +2,49 @@
 
 All notable project changes are recorded here.
 
+## [0.3.124] - 2026-08-23
+
+### Added
+
+- Stage 1 of research-plan execution: a pure immutable state machine. New
+  `ResearchPlanExecutionStatus` (ready, running, completed, failed, cancelled,
+  blocked) and `ResearchPlanStepStatus` (pending, running, completed, failed,
+  cancelled, blocked) follow the existing `ResearchRunStatus` convention with an
+  explicit `terminal` property.
+- `ResearchPlanStepState` carries one step identity, its bounded status, and one
+  bounded 500-character detail. `ResearchPlanExecutionState` tracks the whole
+  plan and exposes `prepare`, `start`, `start_step`, `complete_step`,
+  `fail_step`, `block_step`, and `cancel`.
+
+### Safety
+
+- Every transition returns a new immutable state and never mutates its input.
+- A plan reaches completed only when every step reached completed. Constructing a
+  completed state with unfinished steps is rejected, so partial or failed work
+  can never present itself as finished.
+- Steps run in exact authored order, and only one step may run at a time. Both
+  are enforced at construction and at transition.
+- Failure and cancellation preserve already-completed steps rather than rewriting
+  history. Cancellation touches only unfinished steps.
+- Blocked is deliberately non-terminal and carries a bounded reason for review.
+- Terminal states reject all further transitions. Unknown step IDs, invalid
+  statuses, duplicate step IDs, empty step tuples, and over-long details are
+  rejected with one bounded `ResearchError`.
+- Stage 1 is domain-only: no network, LLM, provider, persistence, event-bus,
+  `ResearchRun`, Brain, or desktop integration, and no schema change. Execution
+  cannot yet be started by any user-reachable route.
+
+### Verification
+
+- The package-aware full local suite contains 1,654 passing automated tests.
+- Twenty-four new tests cover terminal-status membership, inert preparation,
+  authored ordering, single-running-step enforcement, full success, fabricated
+  completion rejection, failure preserving progress, terminal immutability,
+  blocking and cancelling a blocked plan, cancellation preserving finished steps,
+  non-mutation of prior states, unknown steps, transitions outside a running
+  plan, and bounded detail.
+- Black, Ruff, and MyPy pass for all 363 Python source and test files.
+
 ## [0.3.123] - 2026-08-23
 
 ### Added

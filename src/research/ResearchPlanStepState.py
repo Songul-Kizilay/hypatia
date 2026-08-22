@@ -1,0 +1,40 @@
+"""Immutable execution state for one research-plan step."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, replace
+
+from core.Exceptions import ResearchError
+from research.ResearchPlanStepStatus import ResearchPlanStepStatus
+
+MAX_RESEARCH_PLAN_STEP_DETAIL_CHARACTERS = 500
+
+
+@dataclass(frozen=True, slots=True)
+class ResearchPlanStepState:
+    """Keep one step identity, its bounded status, and one bounded detail."""
+
+    step_id: str
+    status: ResearchPlanStepStatus = ResearchPlanStepStatus.PENDING
+    detail: str = ""
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.step_id, str) or not self.step_id.strip():
+            raise ResearchError("Research plan step state ID cannot be empty.")
+        if not isinstance(self.status, ResearchPlanStepStatus):
+            raise ResearchError("Research plan step state status is invalid.")
+        if not isinstance(self.detail, str):
+            raise ResearchError("Research plan step state detail must be text.")
+        detail = self.detail.strip()
+        if len(detail) > MAX_RESEARCH_PLAN_STEP_DETAIL_CHARACTERS:
+            raise ResearchError("Research plan step state detail is too long.")
+        object.__setattr__(self, "step_id", self.step_id.strip())
+        object.__setattr__(self, "detail", detail)
+
+    def with_status(
+        self,
+        status: ResearchPlanStepStatus,
+        detail: str = "",
+    ) -> ResearchPlanStepState:
+        """Return a new state carrying the requested status and detail."""
+        return replace(self, status=status, detail=detail)
