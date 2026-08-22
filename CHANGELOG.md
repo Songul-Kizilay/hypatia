@@ -2,6 +2,38 @@
 
 All notable project changes are recorded here.
 
+## [0.3.114] - 2026-08-22
+
+### Added
+
+- `ResearchPlan` provides the first immutable user-authored Research planning
+  contract: one bounded question, one to twenty explicitly ordered steps, and a
+  timezone-aware creation time.
+- Each immutable `ResearchPlanStep` keeps one bounded authored instruction and
+  zero to twenty exact user-selected source document IDs. An empty tuple means
+  no source was selected for that step; it grants no automatic source choice.
+- Plans expose only the deduplicated first-selected source order derived from
+  their steps. They contain no execution status, provider instruction, or run
+  lifecycle state.
+
+### Safety
+
+- Plan, step, instruction, and source identifiers are normalized and bounded;
+  duplicate step IDs and duplicate per-step source selections are rejected.
+- The domain-only slice imports no Brain, manager, store, provider, network,
+  LLM, desktop, path, event bus, or execution boundary. It does not alter the
+  existing `ResearchRun` schema or persistence format.
+
+### Verification
+
+- The package-aware full local suite contains 1,550 passing automated tests.
+- Nine direct domain tests cover normalization, immutable ordered steps, explicit
+  empty source selection, first-selection order, strict character/count limits,
+  duplicate refusal, typed tuples, and timezone-aware creation.
+- Black, Ruff, and MyPy pass for all 340 Python source and test files.
+- The pinned Windows onedir package builds and initializes its local session
+  snapshot in a fresh temporary data directory.
+
 ## [0.3.113] - 2026-08-22
 
 ### Changed
