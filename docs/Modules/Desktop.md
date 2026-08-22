@@ -80,6 +80,11 @@ exact active source ID before restoring All sources and that row. It rehydrates
 only source-bound read-only evidence/assessment selectors; authored fields and
 catalog totals remain unchanged. Empty, stale, or unknown state is refused
 without a controller, persistence, provider, or mutation call.
+One adjacent selected-source record summary reports the exact evidence,
+assessment-history, and current-assessment counts from the same immutable run.
+Superseded assessments remain in history but do not count as current, foreign
+records cannot count, and hidden/invalid source presentation clears the summary.
+It makes no quality/trust conclusion and opens no runtime or mutation path.
 Overview also renders one bounded metadata line from the selected immutable
 run: seconds-level timezone-aware creation/update times and only the aggregate
 safe-failure count. It cannot expose a failure stage/reason or retain stale

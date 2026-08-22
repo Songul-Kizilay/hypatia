@@ -364,6 +364,58 @@ class AccessibilityPreferenceTests(unittest.TestCase):
             "With current assessment: 0 · Without current assessment: 1",
         )
 
+    def test_selected_source_summary_counts_exact_records_and_corrections(
+        self,
+    ) -> None:
+        source = _research_source_record("document-1", "Accepted")
+        original = _research_assessment_record(
+            "assessment-1",
+            source.document_id,
+            "evidence-1",
+            "Original assessment",
+        )
+        correction = _research_assessment_record(
+            "assessment-2",
+            source.document_id,
+            "evidence-1",
+            "Corrected assessment",
+            supersedes_assessment_id=original.assessment_id,
+        )
+        run = Mock(spec=ResearchRun)
+        run.evidence = (
+            _research_evidence_record("evidence-1", source.document_id, "First"),
+            _research_evidence_record("evidence-2", source.document_id, "Second"),
+            _research_evidence_record("evidence-3", "foreign", "Foreign"),
+        )
+        run.assessments = (
+            original,
+            correction,
+            _research_assessment_record(
+                "assessment-foreign",
+                "foreign",
+                "evidence-3",
+                "Foreign assessment",
+            ),
+        )
+
+        self.assertEqual(
+            TkinterDesktopWindow._research_selected_source_summary_text(run, source),
+            "Selected-source records — Evidence: 2 · Assessment history: 2 · "
+            "Current assessments: 1",
+        )
+
+    def test_selected_source_summary_reports_complete_zero_counts(self) -> None:
+        source = _research_source_record("document-1", "Accepted")
+        run = Mock(spec=ResearchRun)
+        run.evidence = ()
+        run.assessments = ()
+
+        self.assertEqual(
+            TkinterDesktopWindow._research_selected_source_summary_text(run, source),
+            "Selected-source records — Evidence: 0 · Assessment history: 0 · "
+            "Current assessments: 0",
+        )
+
     def test_research_run_metadata_is_timezone_aware_and_hides_failure_detail(
         self,
     ) -> None:
@@ -2242,6 +2294,10 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         )
         window._apply_research_source_coverage_filter()
         self.assertEqual(window._research_source_choice.value, "")
+        self.assertEqual(
+            window._research_selected_source_summary.value,
+            "Selected-source records unavailable in the current source view.",
+        )
 
         window._show_active_research_source()
 
@@ -2259,6 +2315,11 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         self.assertEqual(window._active_research_source_document_id, "document-1")
         self.assertEqual(window._research_evidence_records, (evidence,))
         self.assertEqual(window._research_assessment_records, (assessment,))
+        self.assertEqual(
+            window._research_selected_source_summary.value,
+            "Selected-source records — Evidence: 1 · Assessment history: 1 · "
+            "Current assessments: 1",
+        )
         self.assertEqual(
             window._research_source_coverage_summary.value,
             "All 2 accepted sources are shown.",
@@ -6037,6 +6098,9 @@ def _configure_research_source_coverage(window: Any) -> None:
     window._research_source_catalog_summary = RecordingVariable(
         "Accepted-source coverage — All: 0 · Without evidence: 0 · "
         "Without current assessment: 0"
+    )
+    window._research_selected_source_summary = RecordingVariable(
+        "Selected-source records unavailable until an accepted source is selected."
     )
     selected_index = (
         window._research_source_selector.current()

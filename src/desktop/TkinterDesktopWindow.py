@@ -295,6 +295,12 @@ class TkinterDesktopWindow:
                 "Without current assessment: 0"
             )
         )
+        self._research_selected_source_summary = tk.StringVar(
+            value=(
+                "Selected-source records unavailable until an accepted source "
+                "is selected."
+            )
+        )
         self._research_evidence_choice = tk.StringVar()
         self._research_assessment_choice = tk.StringVar()
         self._research_claim_choice = tk.StringVar()
@@ -1151,8 +1157,14 @@ class TkinterDesktopWindow:
             text="Show active source",
             command=self._show_active_research_source,
         ).grid(row=2, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ttk.Label(
+            accepted_source_frame,
+            textvariable=self._research_selected_source_summary,
+            style="Hint.TLabel",
+            anchor="w",
+        ).grid(row=3, column=0, columnspan=4, sticky="ew", pady=(8, 0))
         ttk.Label(accepted_source_frame, text="Recorded evidence").grid(
-            row=3,
+            row=4,
             column=0,
             sticky="w",
             padx=(0, 8),
@@ -1165,7 +1177,7 @@ class TkinterDesktopWindow:
             state="readonly",
         )
         self._research_evidence_selector.grid(
-            row=3,
+            row=4,
             column=1,
             columnspan=3,
             sticky="ew",
@@ -1175,19 +1187,19 @@ class TkinterDesktopWindow:
             accepted_source_frame,
             text="Use in assessment",
             command=self._add_selected_research_evidence_to_assessment,
-        ).grid(row=4, column=1, sticky="ew", pady=(8, 0))
+        ).grid(row=5, column=1, sticky="ew", pady=(8, 0))
         ttk.Button(
             accepted_source_frame,
             text="Use in claim",
             command=self._add_selected_research_evidence_to_claim,
-        ).grid(row=4, column=2, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ).grid(row=5, column=2, sticky="ew", padx=(8, 0), pady=(8, 0))
         ttk.Button(
             accepted_source_frame,
             text="Add to comparison",
             command=self._add_selected_research_evidence_to_comparison,
-        ).grid(row=4, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ).grid(row=5, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
         ttk.Label(accepted_source_frame, text="Authored assessments").grid(
-            row=5,
+            row=6,
             column=0,
             sticky="w",
             padx=(0, 8),
@@ -1200,7 +1212,7 @@ class TkinterDesktopWindow:
             state="readonly",
         )
         self._research_assessment_selector.grid(
-            row=5,
+            row=6,
             column=1,
             columnspan=3,
             sticky="ew",
@@ -1210,12 +1222,12 @@ class TkinterDesktopWindow:
             accepted_source_frame,
             text="Use as correction target",
             command=self._use_selected_research_assessment_as_correction_target,
-        ).grid(row=6, column=2, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ).grid(row=7, column=2, sticky="ew", padx=(8, 0), pady=(8, 0))
         ttk.Button(
             accepted_source_frame,
             text="Add to comparison",
             command=self._add_selected_research_assessment_to_comparison,
-        ).grid(row=6, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ).grid(row=7, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
         ttk.Label(
             research_analysis_frame,
             text=(
@@ -3210,11 +3222,17 @@ class TkinterDesktopWindow:
         )
         if selected_index is None:
             self._research_source_choice.set("")
+            self._research_selected_source_summary.set(
+                "Selected-source records unavailable in the current source view."
+            )
             self._clear_research_evidence()
             self._clear_research_assessments()
             return
         self._research_source_selector.current(selected_index)
         selected_source = visible_sources[selected_index]
+        self._research_selected_source_summary.set(
+            self._research_selected_source_summary_text(run, selected_source)
+        )
         self._render_research_evidence_selector(run, selected_source)
         self._render_research_assessment_selector(run, selected_source)
 
@@ -3272,6 +3290,35 @@ class TkinterDesktopWindow:
         )
 
     @staticmethod
+    def _research_selected_source_summary_text(
+        run: ResearchRun,
+        source: ResearchSourceRecord,
+    ) -> str:
+        """Summarize exact immutable records for one accepted source only."""
+        evidence_count = sum(
+            record.source_document_id == source.document_id for record in run.evidence
+        )
+        assessment_records = tuple(
+            record
+            for record in run.assessments
+            if record.source_document_id == source.document_id
+        )
+        superseded_ids = {
+            record.supersedes_assessment_id
+            for record in run.assessments
+            if record.supersedes_assessment_id is not None
+        }
+        current_assessment_count = sum(
+            record.assessment_id not in superseded_ids for record in assessment_records
+        )
+        return (
+            "Selected-source records — "
+            f"Evidence: {evidence_count} · "
+            f"Assessment history: {len(assessment_records)} · "
+            f"Current assessments: {current_assessment_count}"
+        )
+
+    @staticmethod
     def _research_source_label(source: ResearchSourceRecord) -> str:
         """Keep the exact document ID visible beside a bounded source title."""
         title = source.title
@@ -3306,6 +3353,9 @@ class TkinterDesktopWindow:
             self._status.set("Select an accepted source first.")
             return
         self._active_research_source_document_id = source.document_id
+        self._research_selected_source_summary.set(
+            self._research_selected_source_summary_text(selected_run, source)
+        )
         self._render_research_evidence_selector(selected_run, source)
         self._render_research_assessment_selector(selected_run, source)
         self._status.set(
@@ -3616,6 +3666,9 @@ class TkinterDesktopWindow:
         self._research_source_catalog_summary.set(
             "Accepted-source coverage — All: 0 · Without evidence: 0 · "
             "Without current assessment: 0"
+        )
+        self._research_selected_source_summary.set(
+            "Selected-source records unavailable until an accepted source is selected."
         )
         self._research_source_choice.set("")
         self._research_source_selector.configure(values=())
