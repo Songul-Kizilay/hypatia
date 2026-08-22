@@ -2,6 +2,36 @@
 
 All notable project changes are recorded here.
 
+## [0.3.112] - 2026-08-22
+
+### Changed
+
+- Research-run listing, one-run evidence listing, accepted-content restoration
+  status, and evidence-integrity status now live behind the dedicated read-only
+  `ResearchOverviewApplicationService` application boundary.
+- `CognitiveEngine` delegates those four existing routes at their original
+  precedence points. Its size falls from 3,243 to 3,157 lines without changing
+  any Brain request, response, message, persistence, provider, or UI contract.
+
+### Safety
+
+- The extracted service only composes already supported read results. It adds no
+  mutation, schema, persistence, network, provider, LLM, UI, or automatic-
+  analysis behavior.
+- Missing persistence and audit dependencies, invalid or missing run IDs,
+  unknown runs, and `ResearchError` audit failures retain their exact bounded
+  failure or unavailable responses.
+
+### Verification
+
+- The package-aware full local suite contains 1,533 passing automated tests.
+- Focused cognition coverage contains 255 passing tests, including 11 direct
+  service contract tests for recognition, exact delegation, validation,
+  dependency absence, successful snapshots, and safe audit degradation.
+- Black, Ruff, and MyPy pass for all 335 Python source and test files.
+- The pinned Windows onedir package builds and initializes its local session
+  snapshot in a fresh temporary data directory.
+
 ## [0.3.111] - 2026-08-22
 
 ### Changed
