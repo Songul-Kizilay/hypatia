@@ -93,6 +93,11 @@ It also shows canonical persisted data taint `external_untrusted_data` and
 instruction authority `none`. These fields remain separate from user-authored
 information trust—even `high` cannot grant command authority—and rendering them
 starts no controller, storage, provider, network, or mutation action.
+The fourth structured line reports complete Unassessed, Low, Medium, and High
+counts for only non-superseded assessments of that exact source. Superseded
+records remain in the history count, malformed foreign records do not
+contribute, and the distribution is authored-label inventory rather than a
+Hypatia-generated verdict.
 Overview also renders one bounded metadata line from the selected immutable
 run: seconds-level timezone-aware creation/update times and only the aggregate
 safe-failure count. It cannot expose a failure stage/reason or retain stale

@@ -3320,20 +3320,35 @@ class TkinterDesktopWindow:
             for record in run.assessments
             if record.supersedes_assessment_id is not None
         }
-        current_assessment_count = sum(
-            record.assessment_id not in superseded_ids for record in assessment_records
+        current_assessment_records = tuple(
+            record
+            for record in assessment_records
+            if record.assessment_id not in superseded_ids
         )
+        information_trust_counts = {
+            trust: sum(
+                record.information_trust is trust
+                for record in current_assessment_records
+            )
+            for trust in ResearchInformationTrust
+        }
         title = TkinterDesktopWindow._bounded_research_source_title(canonical_source)
         return (
             f"Selected source — {title} · "
             f"Source ID: {canonical_source.document_id} · "
-            f"Run ID: {run.run_id} | Safety boundary — "
+            f"Run ID: {run.run_id}\nSafety boundary — "
             f"Data taint: {canonical_source.taint_label} · "
             "Instruction authority: "
-            f"{canonical_source.instruction_authority} | Records — "
+            f"{canonical_source.instruction_authority}\nRecords — "
             f"Evidence: {evidence_count} · "
             f"Assessment history: {len(assessment_records)} · "
-            f"Current assessments: {current_assessment_count}"
+            f"Current assessments: {len(current_assessment_records)}\n"
+            "Current information trust — "
+            "Unassessed: "
+            f"{information_trust_counts[ResearchInformationTrust.UNASSESSED]} · "
+            f"Low: {information_trust_counts[ResearchInformationTrust.LOW]} · "
+            f"Medium: {information_trust_counts[ResearchInformationTrust.MEDIUM]} · "
+            f"High: {information_trust_counts[ResearchInformationTrust.HIGH]}"
         )
 
     @staticmethod
