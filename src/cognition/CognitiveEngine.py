@@ -268,6 +268,9 @@ class CognitiveEngine:
         if self._research_plan_execution_service.is_cancel_request(request):
             return self._research_plan_execution_service.process_cancel(request)
 
+        if self._research_plan_execution_service.is_advance_request(request):
+            return self._research_plan_execution_service.process_advance(request)
+
         if self._is_research_run_markdown_export_verify_request(request):
             return self._process_research_run_markdown_export_verify(request)
 

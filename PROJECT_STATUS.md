@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.125 (Genesis)`
+`v0.3.126 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.125`** is the current executable package and GitHub
+- **Runtime release `v0.3.126`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -32,6 +32,17 @@ with optional OpenAI-compatible LLM conversation support.
 ### Implemented
 
 - Application bootstrap, configuration, logging, and dependency injection.
+- Research-plan execution connects its first real capability in stage three. A
+  `ResearchPlanStepOperation` boundary runs one bounded operation per advance
+  request, and `LocalKnowledgeSearchStepOperation` performs the existing
+  deterministic local knowledge search for an authored step instruction. Only an
+  operation that actually executed can mark a step as backed by real work; with
+  no operation connected, or one reporting that it performed nothing, the step is
+  blocked with a bounded reason rather than reported as completed research. A
+  failing operation fails the step and plan without claiming work, and a
+  zero-result search is reported honestly as a search that matched nothing.
+  Source discovery, fetching, evidence, assessment, and claims remain
+  unconnected, and no network, LLM, or persistence path is used.
 - Research-plan execution has an ephemeral coordination layer as its second
   stage. `ResearchPlanExecutionApplicationService` owns per-process execution
   state behind exact structured start, status, and cancel Brain intents;
@@ -721,7 +732,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,671 automated tests pass through package-aware discovery.
+- 1,684 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.

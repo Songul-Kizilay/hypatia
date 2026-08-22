@@ -1,14 +1,17 @@
 """Ephemeral coordination for one explicitly started research-plan execution.
 
-Stage 2 of research-plan execution. This service owns execution state for the
-current process only. It performs no research work: no source discovery, no
-source fetch, no evidence extraction, no assessment, no claim, no network, no
-LLM, and no persistence.
+Stages 2 and 3 of research-plan execution. This service owns execution state for
+the current process only and performs no persistence.
 
-Because no research operation runs yet, no step can be reported as completed
-research. Starting a plan records that execution began; it does not advance any
-step. Stage 3 connects real research operations one at a time, and only those
-operations may mark a step as backed by real work.
+Starting a plan records that execution began and advances no step. Advancing a
+step runs exactly one connected research operation. Only an operation that
+actually executed may mark a step as backed by real work; when no operation is
+connected, or an operation reports that it performed nothing, the step is
+blocked with a bounded reason instead of being reported as completed research.
+
+Stage 3 connects one existing capability: the deterministic local knowledge
+search. Source discovery, source fetching, evidence extraction, assessment, and
+claims remain unconnected, and no network or LLM call is made here.
 
 State lives here, not in CognitiveEngine, and is lost when the process exits.
 That loss is reported explicitly rather than presented as a finished or
@@ -22,16 +25,19 @@ from typing import cast
 from brain.BrainRequest import BrainRequest
 from brain.BrainResponse import BrainResponse
 from core.Exceptions import ResearchError
+from research.ResearchPlan import ResearchPlan
 from research.ResearchPlanDraftService import (
     ResearchPlanDraftService,
     ResearchPlanStepDraft,
 )
 from research.ResearchPlanExecutionState import ResearchPlanExecutionState
+from research.ResearchPlanStepOperation import ResearchPlanStepOperation
 from response.ResponseComposer import ResponseComposer
 
 RESEARCH_PLAN_EXECUTION_START_INTENT = "research_plan_execution_start"
 RESEARCH_PLAN_EXECUTION_STATUS_INTENT = "research_plan_execution_status"
 RESEARCH_PLAN_EXECUTION_CANCEL_INTENT = "research_plan_execution_cancel"
+RESEARCH_PLAN_EXECUTION_ADVANCE_INTENT = "research_plan_execution_advance"
 
 MAX_ACTIVE_RESEARCH_PLAN_EXECUTIONS = 20
 
@@ -44,6 +50,7 @@ class ResearchPlanExecutionApplicationService:
         response_composer: ResponseComposer,
         draft_service: ResearchPlanDraftService | None = None,
         *,
+        step_operation: ResearchPlanStepOperation | None = None,
         max_active_executions: int = MAX_ACTIVE_RESEARCH_PLAN_EXECUTIONS,
     ) -> None:
         if (
@@ -56,8 +63,10 @@ class ResearchPlanExecutionApplicationService:
             )
         self._response_composer = response_composer
         self._draft_service = draft_service or ResearchPlanDraftService()
+        self._step_operation = step_operation
         self._max_active_executions = max_active_executions
         self._executions: dict[str, ResearchPlanExecutionState] = {}
+        self._plans: dict[str, ResearchPlan] = {}
 
     @staticmethod
     def is_start_request(request: BrainRequest) -> bool:
@@ -70,6 +79,10 @@ class ResearchPlanExecutionApplicationService:
     @staticmethod
     def is_cancel_request(request: BrainRequest) -> bool:
         return request.metadata.get("intent") == RESEARCH_PLAN_EXECUTION_CANCEL_INTENT
+
+    @staticmethod
+    def is_advance_request(request: BrainRequest) -> bool:
+        return request.metadata.get("intent") == RESEARCH_PLAN_EXECUTION_ADVANCE_INTENT
 
     def process_start(self, request: BrainRequest) -> BrainResponse:
         """Start execution for one authored plan, or explain why it cannot."""
@@ -100,6 +113,7 @@ class ResearchPlanExecutionApplicationService:
 
         state = ResearchPlanExecutionState.prepare(plan).start()
         self._executions[plan.plan_id] = state
+        self._plans[plan.plan_id] = plan
         return self._response_composer.research_plan_execution_status(request, state)
 
     def process_status(self, request: BrainRequest) -> BrainResponse:
@@ -133,6 +147,85 @@ class ResearchPlanExecutionApplicationService:
         return self._response_composer.research_plan_execution_status(
             request,
             cancelled,
+        )
+
+    def process_advance(self, request: BrainRequest) -> BrainResponse:
+        """Run one real research operation for the next pending step."""
+        plan_id = self._normalized_plan_id(request)
+        state = self._executions.get(plan_id)
+        plan = self._plans.get(plan_id)
+        if state is None or plan is None:
+            return self._response_composer.research_plan_execution_missing(
+                request,
+                plan_id,
+            )
+        step_id = state.next_pending_step_id
+        if step_id is None:
+            return self._response_composer.research_plan_execution_rejected(
+                request,
+                "Research plan execution has no pending step to advance.",
+            )
+        if self._step_operation is None:
+            return self._blocked(
+                request,
+                plan_id,
+                state,
+                step_id,
+                "No research operation is connected; nothing was performed.",
+            )
+
+        step = next(
+            candidate for candidate in plan.steps if candidate.step_id == step_id
+        )
+        try:
+            running = state.start_step(step_id)
+        except ResearchError as error:
+            return self._response_composer.research_plan_execution_rejected(
+                request,
+                str(error),
+            )
+        try:
+            result = self._step_operation.run(step)
+        except ResearchError as error:
+            failed = running.fail_step(step_id, str(error))
+            self._executions[plan_id] = failed
+            return self._response_composer.research_plan_execution_status(
+                request,
+                failed,
+            )
+        if not result.performed:
+            return self._blocked(
+                request,
+                plan_id,
+                running,
+                step_id,
+                result.detail,
+            )
+        completed = running.complete_step(
+            step_id,
+            result.detail,
+            work_performed=True,
+        )
+        self._executions[plan_id] = completed
+        return self._response_composer.research_plan_execution_status(
+            request,
+            completed,
+        )
+
+    def _blocked(
+        self,
+        request: BrainRequest,
+        plan_id: str,
+        state: ResearchPlanExecutionState,
+        step_id: str,
+        detail: str,
+    ) -> BrainResponse:
+        """Block a step instead of implying work that never happened."""
+        blocked = state.block_step(step_id, detail)
+        self._executions[plan_id] = blocked
+        return self._response_composer.research_plan_execution_status(
+            request,
+            blocked,
         )
 
     @staticmethod

@@ -12,6 +12,7 @@ if str(SRC_DIR) not in sys.path:
 
 from brain.BrainRequest import BrainRequest
 from cognition.ResearchPlanExecutionApplicationService import (
+    RESEARCH_PLAN_EXECUTION_ADVANCE_INTENT,
     RESEARCH_PLAN_EXECUTION_CANCEL_INTENT,
     RESEARCH_PLAN_EXECUTION_START_INTENT,
     RESEARCH_PLAN_EXECUTION_STATUS_INTENT,
@@ -20,6 +21,9 @@ from cognition.ResearchPlanExecutionApplicationService import (
 from core.Exceptions import ResearchError
 from research.ResearchPlanDraftService import ResearchPlanDraftService
 from research.ResearchPlanExecutionStatus import ResearchPlanExecutionStatus
+from research.ResearchPlanStepOperationResult import (
+    ResearchPlanStepOperationResult,
+)
 from research.ResearchPlanStepStatus import ResearchPlanStepStatus
 from response.ResponseComposer import ResponseComposer
 
@@ -286,6 +290,154 @@ class ResearchPlanExecutionApplicationServiceTests(unittest.TestCase):
         restarted = ResearchPlanExecutionApplicationService(ResponseComposer())
         response = restarted.process_status(
             plan_request(RESEARCH_PLAN_EXECUTION_STATUS_INTENT, plan_id)
+        )
+
+        self.assertFalse(response.success)
+        self.assertIn("It is not resumed after a restart.", response.message)
+
+
+class RecordingStepOperation:
+    """Record every step handed to a connected research operation."""
+
+    def __init__(self, performed: bool = True, detail: str = "operation ran") -> None:
+        self.performed = performed
+        self.detail = detail
+        self.steps: list[str] = []
+
+    @property
+    def operation_name(self) -> str:
+        return "recording"
+
+    def run(self, step) -> ResearchPlanStepOperationResult:  # type: ignore[no-untyped-def]
+        self.steps.append(step.step_id)
+        return ResearchPlanStepOperationResult(
+            performed=self.performed,
+            detail=self.detail,
+        )
+
+
+class FailingStepOperation(RecordingStepOperation):
+    def run(self, step) -> ResearchPlanStepOperationResult:  # type: ignore[no-untyped-def]
+        self.steps.append(step.step_id)
+        raise ResearchError("Research operation failed.")
+
+
+class ResearchPlanExecutionAdvanceTests(unittest.TestCase):
+    def _service(self, operation=None):  # type: ignore[no-untyped-def]
+        return ResearchPlanExecutionApplicationService(
+            ResponseComposer(),
+            ResearchPlanDraftService(
+                clock=lambda: datetime(2026, 8, 23, tzinfo=UTC),
+                id_factory=lambda: "plan-advance",
+            ),
+            step_operation=operation,
+        )
+
+    def _started(self, service):  # type: ignore[no-untyped-def]
+        response = service.process_start(start_request())
+        assert response.research_plan_execution is not None
+        return response.research_plan_execution.plan_id
+
+    def test_advance_without_a_connected_operation_blocks_the_step(self) -> None:
+        service = self._service(None)
+        plan_id = self._started(service)
+
+        response = service.process_advance(
+            plan_request(RESEARCH_PLAN_EXECUTION_ADVANCE_INTENT, plan_id)
+        )
+
+        state = response.research_plan_execution
+        assert state is not None
+        self.assertIs(state.status, ResearchPlanExecutionStatus.BLOCKED)
+        self.assertIs(state.steps[0].status, ResearchPlanStepStatus.BLOCKED)
+        self.assertEqual(state.completed_steps, 0)
+        self.assertFalse(state.performed_research_work)
+        self.assertIn("No research operation is connected", response.message)
+        self.assertIn("Research operations performed: 0", response.message)
+
+    def test_advance_runs_the_connected_operation_once_for_one_step(self) -> None:
+        operation = RecordingStepOperation()
+        service = self._service(operation)
+        plan_id = self._started(service)
+
+        response = service.process_advance(
+            plan_request(RESEARCH_PLAN_EXECUTION_ADVANCE_INTENT, plan_id)
+        )
+
+        state = response.research_plan_execution
+        assert state is not None
+        self.assertEqual(operation.steps, ["step-1"])
+        self.assertIs(state.steps[0].status, ResearchPlanStepStatus.COMPLETED)
+        self.assertTrue(state.steps[0].work_performed)
+        self.assertEqual(state.steps[0].detail, "operation ran")
+        self.assertIs(state.steps[1].status, ResearchPlanStepStatus.PENDING)
+        self.assertEqual(state.steps_with_research_work, 1)
+        self.assertIn("Research operations performed: 1", response.message)
+        self.assertNotIn("No research work has run", response.message)
+
+    def test_operation_reporting_nothing_performed_blocks_the_step(self) -> None:
+        operation = RecordingStepOperation(performed=False, detail="nothing to do")
+        service = self._service(operation)
+        plan_id = self._started(service)
+
+        response = service.process_advance(
+            plan_request(RESEARCH_PLAN_EXECUTION_ADVANCE_INTENT, plan_id)
+        )
+
+        state = response.research_plan_execution
+        assert state is not None
+        self.assertIs(state.status, ResearchPlanExecutionStatus.BLOCKED)
+        self.assertEqual(state.completed_steps, 0)
+        self.assertFalse(state.performed_research_work)
+
+    def test_failing_operation_fails_the_step_and_the_plan(self) -> None:
+        service = self._service(FailingStepOperation())
+        plan_id = self._started(service)
+
+        response = service.process_advance(
+            plan_request(RESEARCH_PLAN_EXECUTION_ADVANCE_INTENT, plan_id)
+        )
+
+        state = response.research_plan_execution
+        assert state is not None
+        self.assertIs(state.status, ResearchPlanExecutionStatus.FAILED)
+        self.assertIs(state.steps[0].status, ResearchPlanStepStatus.FAILED)
+        self.assertFalse(state.steps[0].work_performed)
+        self.assertEqual(state.steps_with_research_work, 0)
+
+    def test_advancing_every_step_completes_the_plan(self) -> None:
+        operation = RecordingStepOperation()
+        service = self._service(operation)
+        plan_id = self._started(service)
+        advance = plan_request(RESEARCH_PLAN_EXECUTION_ADVANCE_INTENT, plan_id)
+
+        service.process_advance(advance)
+        response = service.process_advance(advance)
+
+        state = response.research_plan_execution
+        assert state is not None
+        self.assertIs(state.status, ResearchPlanExecutionStatus.COMPLETED)
+        self.assertEqual(state.completed_steps, 2)
+        self.assertEqual(state.steps_with_research_work, 2)
+        self.assertEqual(operation.steps, ["step-1", "step-2"])
+
+    def test_advance_beyond_the_last_step_is_rejected(self) -> None:
+        service = self._service(RecordingStepOperation())
+        plan_id = self._started(service)
+        advance = plan_request(RESEARCH_PLAN_EXECUTION_ADVANCE_INTENT, plan_id)
+        service.process_advance(advance)
+        service.process_advance(advance)
+
+        response = service.process_advance(advance)
+
+        self.assertFalse(response.success)
+        self.assertIn("no pending step to advance", response.message)
+
+    def test_advance_on_unknown_plan_reports_lost_state(self) -> None:
+        service = self._service(RecordingStepOperation())
+
+        response = service.process_advance(
+            plan_request(RESEARCH_PLAN_EXECUTION_ADVANCE_INTENT, "plan-missing")
         )
 
         self.assertFalse(response.success)

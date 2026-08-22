@@ -2,6 +2,47 @@
 
 All notable project changes are recorded here.
 
+## [0.3.126] - 2026-08-23
+
+### Added
+
+- Stage 3 of research-plan execution connects the first real research
+  capability. `ResearchPlanStepOperation` is the structural boundary for one
+  bounded operation, `ResearchPlanStepOperationResult` reports whether work
+  actually ran plus one bounded 500-character summary, and
+  `LocalKnowledgeSearchStepOperation` runs the existing deterministic local
+  knowledge search for an authored step instruction.
+- The exact structured `research_plan_execution_advance` Brain intent advances
+  the next pending step by running that one operation.
+
+### Safety
+
+- Only an operation that actually executed can mark a step as backed by real
+  work. When no operation is connected, or a connected operation reports that it
+  performed nothing, the step is blocked with a bounded reason instead of being
+  reported as completed research.
+- A failing operation fails the step and the plan, leaves `work_performed` false,
+  and preserves earlier completed steps.
+- One advance request runs at most one operation for one step, in authored
+  order. Advancing past the last pending step is rejected.
+- A zero-result search is reported honestly as a performed search that matched
+  nothing, so a step never implies evidence that was not located.
+- The connected operation reads only already loaded local knowledge. Source
+  discovery, source fetching, evidence extraction, assessment, and claims remain
+  unconnected, and no network, LLM, or persistence path is used.
+- Reported document identifiers are capped at three with an explicit remainder
+  count.
+
+### Verification
+
+- The package-aware full local suite contains 1,684 passing automated tests.
+- Thirteen new tests cover the stable operation name, real findings, honest
+  zero-result reporting, bounded detail, result validation, blocking when no
+  operation is connected, running one operation per step, blocking when an
+  operation performed nothing, failure handling, completing a plan across
+  advances, rejection past the last step, and advancing an unknown plan.
+- Black, Ruff, and MyPy pass for all 369 Python source and test files.
+
 ## [0.3.125] - 2026-08-23
 
 ### Added
