@@ -48,6 +48,8 @@ The MVP may present only current Brain/CognitiveEngine capabilities:
 - four explicit deterministic local orders for the current loaded or filtered
   run view, with current-sort feedback, ascending run-ID ties, and immutable
   catalog/filter/active-selection preservation;
+- an explicit local `Show active run` recovery action for a filtered-out active
+  row, with sort/authored-field preservation and stale-state refusal;
 - a bounded selected-run metadata line with timezone-aware created/updated
   timestamps and aggregate safe-failure count, without failure detail;
 - a read-only accepted-source selector from that same run snapshot, with

@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.94 (Genesis)`
+`v0.3.95 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.94`** is the current executable package and GitHub
+- **Runtime release `v0.3.95`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -69,6 +69,10 @@ with optional OpenAI-compatible LLM conversation support.
   The selected order is visible, deterministic run-ID ties are stable, and
   sorting preserves the immutable catalog, filter membership, active run, and
   authored fields without opening a runtime or mutation boundary.
+- When that local filter hides the active research run, `Show active run`
+  clears only the filter, preserves the current sort and authored fields, and
+  restores the exact active row in the selector. Empty, stale, or invalid local
+  state is refused without changing the prior view or opening a runtime path.
 - The selected run's immutable creation/update times and complete safe-failure
   count appear in Overview as a bounded metadata line. Timestamps retain their
   timezone offset at seconds precision; failure stage/reason text is never
@@ -563,7 +567,8 @@ changed.
 
 ## Next Milestone
 
-Add a presentation-only `Show active run` action for the case where a local
-filter hides the current research run. The action must clear only the local
-filter, preserve the selected sort and authored fields, restore the active run
-in the selector, and open no runtime or mutation boundary.
+Add a presentation-only status facet for the loaded research-run catalog, with
+an explicit All choice plus collecting, completed, failed, and cancelled views.
+It must compose deterministically with the bounded text filter and current sort,
+preserve the active run and authored fields, expose visible/total counts, and
+open no runtime or mutation boundary.

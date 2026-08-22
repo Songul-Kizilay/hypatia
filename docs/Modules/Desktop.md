@@ -35,6 +35,10 @@ newest, updated oldest, created newest, and question A-to-Z. The interface shows
 the current sort and uses deterministic ascending run-ID ties. Sorting preserves
 the immutable catalog, filter membership, active run, and authored fields and
 starts no controller, provider, storage, or mutation action.
+When filtering hides the active row, `Show active run` restores the complete
+locally sorted selector and exact active choice while preserving authored
+fields. Missing selection, stale catalog membership, or invalid sort leaves the
+existing view unchanged and starts no runtime action.
 Overview also renders one bounded metadata line from the selected immutable
 run: seconds-level timezone-aware creation/update times and only the aggregate
 safe-failure count. It cannot expose a failure stage/reason or retain stale
