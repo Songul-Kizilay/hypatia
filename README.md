@@ -267,6 +267,10 @@ changes the run itself or user-authored research fields and starts no request.
 Overview also shows the selected run's seconds-level timezone-aware creation
 and update timestamps plus the complete safe-failure count. It never displays
 failure stage or reason text and performs no additional read.
+The same immutable selected snapshot supplies an evidence-coverage line with
+accepted sources, sources represented by at least one evidence record, and
+accepted sources without evidence. Repeated evidence for one source counts once;
+the line makes no quality, completeness, or readiness decision.
 
 The window uses the same Bootstrap and Brain as the terminal entry point. A
 clicked session only fills the selection field; choosing it remains explicit.
