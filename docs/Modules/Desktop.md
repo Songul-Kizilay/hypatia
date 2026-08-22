@@ -58,6 +58,12 @@ immutable snapshot. It counts unique accepted source IDs represented by one or
 more evidence records and reports the accepted remainder. Repeated evidence is
 deduplicated, malformed foreign references cannot inflate counts, no quality or
 readiness is inferred, and empty/invalid selections clear stale coverage.
+Sources & evidence exposes All sources and Without evidence views over that
+same snapshot. Source order is stable, visible/total membership is explicit,
+and one exact active source ID survives a hidden/no-match view and is restored
+when All sources returns. Source-bound evidence/assessment presentation clears
+while hidden, authored fields remain intact, and stale/invalid state is refused
+without another read or action.
 Overview also renders one bounded metadata line from the selected immutable
 run: seconds-level timezone-aware creation/update times and only the aggregate
 safe-failure count. It cannot expose a failure stage/reason or retain stale

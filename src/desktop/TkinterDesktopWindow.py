@@ -105,6 +105,13 @@ class ResearchRunStatusFacet(StrEnum):
     CANCELLED = "Cancelled"
 
 
+class ResearchSourceCoverageFacet(StrEnum):
+    """User-facing local coverage views for accepted research sources."""
+
+    ALL = "All sources"
+    WITHOUT_EVIDENCE = "Without evidence"
+
+
 def _accessibility_palette(
     theme: DesktopTheme | str = DesktopTheme.EYE_COMFORT,
 ) -> AccessibilityPalette:
@@ -272,6 +279,12 @@ class TkinterDesktopWindow:
             value="Run metadata unavailable until a research run is selected."
         )
         self._research_source_choice = tk.StringVar()
+        self._research_source_coverage_filter = tk.StringVar(
+            value=ResearchSourceCoverageFacet.ALL.value
+        )
+        self._research_source_coverage_summary = tk.StringVar(
+            value="No accepted sources are available."
+        )
         self._research_evidence_choice = tk.StringVar()
         self._research_assessment_choice = tk.StringVar()
         self._research_claim_choice = tk.StringVar()
@@ -312,8 +325,10 @@ class TkinterDesktopWindow:
         self._research_candidates: tuple[ResearchSourceCandidate, ...] = ()
         self._research_runs: tuple[ResearchRun, ...] = ()
         self._visible_research_runs: tuple[ResearchRun, ...] = ()
+        self._research_source_catalog: tuple[ResearchSourceRecord, ...] = ()
         self._research_sources: tuple[ResearchSourceRecord, ...] = ()
         self._research_source_run_id = ""
+        self._active_research_source_document_id = ""
         self._research_evidence_records: tuple[ResearchEvidenceRecord, ...] = ()
         self._research_evidence_run_id = ""
         self._research_evidence_source_document_id = ""
@@ -1067,8 +1082,44 @@ class TkinterDesktopWindow:
             text="Add to comparison",
             command=self._add_selected_research_source_to_comparison,
         ).grid(row=0, column=3, sticky="ew", padx=(8, 0))
-        ttk.Label(accepted_source_frame, text="Recorded evidence").grid(
+        ttk.Label(accepted_source_frame, text="Source view").grid(
             row=1,
+            column=0,
+            sticky="w",
+            padx=(0, 8),
+            pady=(8, 0),
+        )
+        self._research_source_coverage_filter_selector = ttk.Combobox(
+            accepted_source_frame,
+            textvariable=self._research_source_coverage_filter,
+            values=tuple(facet.value for facet in ResearchSourceCoverageFacet),
+            state="readonly",
+        )
+        self._research_source_coverage_filter_selector.grid(
+            row=1,
+            column=1,
+            sticky="ew",
+            pady=(8, 0),
+        )
+        self._research_source_coverage_filter_selector.bind(
+            "<<ComboboxSelected>>",
+            self._apply_research_source_coverage_filter,
+        )
+        ttk.Label(
+            accepted_source_frame,
+            textvariable=self._research_source_coverage_summary,
+            style="Hint.TLabel",
+            anchor="w",
+        ).grid(
+            row=1,
+            column=2,
+            columnspan=2,
+            sticky="ew",
+            padx=(8, 0),
+            pady=(8, 0),
+        )
+        ttk.Label(accepted_source_frame, text="Recorded evidence").grid(
+            row=2,
             column=0,
             sticky="w",
             padx=(0, 8),
@@ -1081,7 +1132,7 @@ class TkinterDesktopWindow:
             state="readonly",
         )
         self._research_evidence_selector.grid(
-            row=1,
+            row=2,
             column=1,
             columnspan=3,
             sticky="ew",
@@ -1091,19 +1142,19 @@ class TkinterDesktopWindow:
             accepted_source_frame,
             text="Use in assessment",
             command=self._add_selected_research_evidence_to_assessment,
-        ).grid(row=2, column=1, sticky="ew", pady=(8, 0))
+        ).grid(row=3, column=1, sticky="ew", pady=(8, 0))
         ttk.Button(
             accepted_source_frame,
             text="Use in claim",
             command=self._add_selected_research_evidence_to_claim,
-        ).grid(row=2, column=2, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ).grid(row=3, column=2, sticky="ew", padx=(8, 0), pady=(8, 0))
         ttk.Button(
             accepted_source_frame,
             text="Add to comparison",
             command=self._add_selected_research_evidence_to_comparison,
-        ).grid(row=2, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ).grid(row=3, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
         ttk.Label(accepted_source_frame, text="Authored assessments").grid(
-            row=3,
+            row=4,
             column=0,
             sticky="w",
             padx=(0, 8),
@@ -1116,7 +1167,7 @@ class TkinterDesktopWindow:
             state="readonly",
         )
         self._research_assessment_selector.grid(
-            row=3,
+            row=4,
             column=1,
             columnspan=3,
             sticky="ew",
@@ -1126,12 +1177,12 @@ class TkinterDesktopWindow:
             accepted_source_frame,
             text="Use as correction target",
             command=self._use_selected_research_assessment_as_correction_target,
-        ).grid(row=4, column=2, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ).grid(row=5, column=2, sticky="ew", padx=(8, 0), pady=(8, 0))
         ttk.Button(
             accepted_source_frame,
             text="Add to comparison",
             command=self._add_selected_research_assessment_to_comparison,
-        ).grid(row=4, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ).grid(row=5, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
         ttk.Label(
             research_analysis_frame,
             text=(
@@ -2899,18 +2950,140 @@ class TkinterDesktopWindow:
 
     def _render_research_source_selector(self, run: ResearchRun) -> None:
         """Render accepted sources from the already loaded exact run snapshot."""
-        self._research_sources = run.sources
+        previous_run_id = self._research_source_run_id
+        active_source_id = (
+            self._active_research_source_document_id
+            if previous_run_id == run.run_id
+            else ""
+        )
+        self._research_source_catalog = run.sources
         self._research_source_run_id = run.run_id
-        labels = tuple(self._research_source_label(source) for source in run.sources)
-        self._research_source_selector.configure(values=labels)
+        self._research_source_coverage_filter.set(ResearchSourceCoverageFacet.ALL.value)
         if not run.sources:
+            self._active_research_source_document_id = ""
+            self._research_source_coverage_summary.set(
+                "No accepted sources are available."
+            )
+            self._render_visible_research_sources(run, ())
+            return
+        if active_source_id not in {source.document_id for source in run.sources}:
+            active_source_id = run.sources[0].document_id
+        self._active_research_source_document_id = active_source_id
+        self._research_source_coverage_summary.set(
+            f"All {len(run.sources)} accepted sources are shown."
+        )
+        self._render_visible_research_sources(run, run.sources)
+
+    def _apply_research_source_coverage_filter(
+        self,
+        _event: object | None = None,
+    ) -> None:
+        """Apply one local accepted-source coverage view without a runtime call."""
+        try:
+            facet = ResearchSourceCoverageFacet(
+                self._research_source_coverage_filter.get()
+            )
+        except ValueError:
+            self._research_source_coverage_summary.set(
+                "Source view is invalid; accepted sources are unchanged."
+            )
+            self._status.set("Accepted-source coverage view is invalid.")
+            return
+        selected_run = next(
+            (
+                run
+                for run in self._research_runs
+                if run.run_id == self._research_source_run_id
+            ),
+            None,
+        )
+        if (
+            selected_run is None
+            or selected_run.sources != self._research_source_catalog
+        ):
+            self._research_source_coverage_summary.set(
+                "Accepted-source snapshot is stale; refresh research runs."
+            )
+            self._status.set("Accepted-source snapshot is stale.")
+            return
+        visible_sources = self._filter_research_sources_by_coverage(
+            self._research_source_catalog,
+            selected_run.evidence,
+            facet,
+        )
+        self._render_visible_research_sources(selected_run, visible_sources)
+        total_count = len(self._research_source_catalog)
+        visible_count = len(visible_sources)
+        if total_count == 0:
+            summary = "No accepted sources are available."
+        elif facet is ResearchSourceCoverageFacet.ALL:
+            summary = f"All {total_count} accepted sources are shown."
+        elif visible_sources:
+            summary = (
+                f"{visible_count} of {total_count} accepted sources have no "
+                "recorded evidence."
+            )
+        else:
+            summary = (
+                f"All {total_count} accepted sources have recorded evidence; "
+                "no sources match this view."
+            )
+        self._research_source_coverage_summary.set(summary)
+        active_hidden = bool(self._active_research_source_document_id) and all(
+            source.document_id != self._active_research_source_document_id
+            for source in visible_sources
+        )
+        hidden_status = "; active source hidden" if active_hidden else ""
+        self._status.set(
+            f"accepted source view: {facet.value}; {visible_count} of "
+            f"{total_count} shown; active source unchanged{hidden_status}"
+        )
+
+    def _render_visible_research_sources(
+        self,
+        run: ResearchRun,
+        visible_sources: tuple[ResearchSourceRecord, ...],
+    ) -> None:
+        """Render one source view while retaining an exact hidden active ID."""
+        self._research_sources = visible_sources
+        self._research_source_selector.configure(
+            values=tuple(
+                self._research_source_label(source) for source in visible_sources
+            )
+        )
+        selected_index = next(
+            (
+                index
+                for index, source in enumerate(visible_sources)
+                if source.document_id == self._active_research_source_document_id
+            ),
+            None,
+        )
+        if selected_index is None:
             self._research_source_choice.set("")
             self._clear_research_evidence()
             self._clear_research_assessments()
             return
-        self._research_source_selector.current(0)
-        self._render_research_evidence_selector(run, run.sources[0])
-        self._render_research_assessment_selector(run, run.sources[0])
+        self._research_source_selector.current(selected_index)
+        selected_source = visible_sources[selected_index]
+        self._render_research_evidence_selector(run, selected_source)
+        self._render_research_assessment_selector(run, selected_source)
+
+    @staticmethod
+    def _filter_research_sources_by_coverage(
+        sources: tuple[ResearchSourceRecord, ...],
+        evidence: tuple[ResearchEvidenceRecord, ...],
+        facet: ResearchSourceCoverageFacet,
+    ) -> tuple[ResearchSourceRecord, ...]:
+        """Return stable source membership for one exact local coverage facet."""
+        if facet is ResearchSourceCoverageFacet.ALL:
+            return sources
+        represented_source_ids = {record.source_document_id for record in evidence}
+        return tuple(
+            source
+            for source in sources
+            if source.document_id not in represented_source_ids
+        )
 
     @staticmethod
     def _research_source_label(source: ResearchSourceRecord) -> str:
@@ -2946,6 +3119,7 @@ class TkinterDesktopWindow:
             self._clear_research_assessments()
             self._status.set("Select an accepted source first.")
             return
+        self._active_research_source_document_id = source.document_id
         self._render_research_evidence_selector(selected_run, source)
         self._render_research_assessment_selector(selected_run, source)
         self._status.set(
@@ -3247,8 +3421,12 @@ class TkinterDesktopWindow:
         """Discard the run-bound source presentation without editing form fields."""
         self._clear_research_evidence()
         self._clear_research_assessments()
+        self._research_source_catalog = ()
         self._research_sources = ()
         self._research_source_run_id = ""
+        self._active_research_source_document_id = ""
+        self._research_source_coverage_filter.set(ResearchSourceCoverageFacet.ALL.value)
+        self._research_source_coverage_summary.set("No accepted sources are available.")
         self._research_source_choice.set("")
         self._research_source_selector.configure(values=())
 
