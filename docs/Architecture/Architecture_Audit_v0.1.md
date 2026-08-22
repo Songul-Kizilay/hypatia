@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.88` in the current release candidate) are the
+- **Runtime releases** (`v0.3.89` in the current release candidate) are the
   executable package and GitHub release line. They are the source-backed
   implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
@@ -225,6 +225,12 @@ and claims/contradictions. This reparenting preserves the exact multisets of 59
 command and 41 field bindings from v0.3.87, starts no runtime action when tabs
 change, and reduces the measured requested window height to 973 pixels on the
 current 1080p desktop baseline.
+Sources/evidence, authored analysis, and review/export each repeat one
+presentation-only current-run banner. Its question, status, and exact run ID
+come exclusively from the already selected immutable run object; the three
+labels share one value and never open another manager, Brain, controller,
+provider, network, index, persistence, or mutation path. Empty and invalid
+selection states replace stale identity with bounded guidance.
 The same already loaded immutable run object supplies a compact status and
 complete source/evidence/claim count summary. No additional manager or Brain
 read is opened, and empty or invalid selections cannot retain stale counts.

@@ -216,6 +216,9 @@ class TkinterDesktopWindow:
         self._research_run_summary = tk.StringVar(
             value="Select or create a research run."
         )
+        self._research_run_context = tk.StringVar(
+            value="No research run selected. Return to Overview to choose one."
+        )
         self._research_source_choice = tk.StringVar()
         self._research_evidence_choice = tk.StringVar()
         self._research_assessment_choice = tk.StringVar()
@@ -729,6 +732,30 @@ class TkinterDesktopWindow:
             research_review_frame,
         ):
             section.columnconfigure(1, weight=1)
+        for section in (
+            research_sources_frame,
+            research_analysis_frame,
+            research_review_frame,
+        ):
+            selected_run_frame = ttk.LabelFrame(
+                section,
+                text="Current research run",
+                padding=(8, 6),
+            )
+            selected_run_frame.grid(
+                row=0,
+                column=0,
+                columnspan=4,
+                sticky="ew",
+                pady=(0, 8),
+            )
+            selected_run_frame.columnconfigure(0, weight=1)
+            ttk.Label(
+                selected_run_frame,
+                textvariable=self._research_run_context,
+                style="Hint.TLabel",
+                anchor="w",
+            ).grid(row=0, column=0, sticky="ew")
         ttk.Label(
             research_overview_frame,
             text=(
@@ -804,14 +831,14 @@ class TkinterDesktopWindow:
                 "references to later steps."
             ),
             style="Hint.TLabel",
-        ).grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 8))
+        ).grid(row=1, column=0, columnspan=4, sticky="w", pady=(0, 8))
         accepted_source_frame = ttk.LabelFrame(
             research_sources_frame,
             text="Selected run records",
             padding=8,
         )
         accepted_source_frame.grid(
-            row=1,
+            row=2,
             column=0,
             columnspan=4,
             sticky="ew",
@@ -916,11 +943,11 @@ class TkinterDesktopWindow:
                 "claims, and contradiction notes with explicit previews."
             ),
             style="Hint.TLabel",
-        ).grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 8))
-        research_analysis_frame.rowconfigure(1, weight=1)
+        ).grid(row=1, column=0, columnspan=4, sticky="w", pady=(0, 8))
+        research_analysis_frame.rowconfigure(2, weight=1)
         self._research_analysis_tabs = ttk.Notebook(research_analysis_frame)
         self._research_analysis_tabs.grid(
-            row=1,
+            row=2,
             column=0,
             columnspan=4,
             sticky="nsew",
@@ -1087,7 +1114,7 @@ class TkinterDesktopWindow:
             command=self._use_selected_persisted_comparison_note_assessments,
         ).grid(row=2, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
         ttk.Label(research_sources_frame, text="Source discovery").grid(
-            row=2,
+            row=3,
             column=0,
             sticky="w",
             pady=(8, 0),
@@ -1096,9 +1123,9 @@ class TkinterDesktopWindow:
             research_sources_frame,
             text="Find sources",
             command=self._discover_research_sources,
-        ).grid(row=2, column=3, sticky="ew", pady=(8, 0))
+        ).grid(row=3, column=3, sticky="ew", pady=(8, 0))
         ttk.Label(research_sources_frame, text="Candidates").grid(
-            row=3,
+            row=4,
             column=0,
             sticky="w",
             pady=(8, 0),
@@ -1110,7 +1137,7 @@ class TkinterDesktopWindow:
             state="readonly",
         )
         self._research_candidate_selector.grid(
-            row=3,
+            row=4,
             column=1,
             sticky="ew",
             padx=(8, 8),
@@ -1120,20 +1147,20 @@ class TkinterDesktopWindow:
             research_sources_frame,
             text="Use selected URL",
             command=self._use_selected_research_candidate,
-        ).grid(row=3, column=2, sticky="ew", pady=(8, 0))
+        ).grid(row=4, column=2, sticky="ew", pady=(8, 0))
         self._request_button(
             research_sources_frame,
             text="Preview & load",
             command=self._preview_and_accept_research_candidate,
-        ).grid(row=3, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ).grid(row=4, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
         ttk.Label(research_sources_frame, text="HTTPS URL").grid(
-            row=4,
+            row=5,
             column=0,
             sticky="w",
             pady=(8, 0),
         )
         ttk.Entry(research_sources_frame, textvariable=self._research_url).grid(
-            row=4,
+            row=5,
             column=1,
             columnspan=2,
             sticky="ew",
@@ -1144,9 +1171,9 @@ class TkinterDesktopWindow:
             research_sources_frame,
             text="Load source",
             command=self._load_research_source,
-        ).grid(row=4, column=3, sticky="ew", pady=(8, 0))
+        ).grid(row=5, column=3, sticky="ew", pady=(8, 0))
         ttk.Label(research_sources_frame, text="Source document ID").grid(
-            row=5,
+            row=6,
             column=0,
             sticky="w",
             pady=(8, 0),
@@ -1155,7 +1182,7 @@ class TkinterDesktopWindow:
             research_sources_frame,
             textvariable=self._research_source_document_id,
         ).grid(
-            row=5,
+            row=6,
             column=1,
             columnspan=2,
             sticky="ew",
@@ -1166,7 +1193,7 @@ class TkinterDesktopWindow:
             research_sources_frame,
             text="Preview assessment",
             command=self._preview_research_source_assessment,
-        ).grid(row=5, column=3, sticky="ew", pady=(8, 0))
+        ).grid(row=6, column=3, sticky="ew", pady=(8, 0))
         ttk.Label(research_comparison_frame, text="Comparison source IDs").grid(
             row=0,
             column=0,
@@ -1246,13 +1273,13 @@ class TkinterDesktopWindow:
             command=self._preview_and_record_research_source_comparison_note,
         ).grid(row=3, column=3, sticky="ew", pady=(8, 0))
         ttk.Label(research_sources_frame, text="Chunk ID").grid(
-            row=6,
+            row=7,
             column=0,
             sticky="w",
             pady=(8, 0),
         )
         ttk.Entry(research_sources_frame, textvariable=self._research_chunk_id).grid(
-            row=6,
+            row=7,
             column=1,
             columnspan=2,
             sticky="ew",
@@ -1263,9 +1290,9 @@ class TkinterDesktopWindow:
             research_sources_frame,
             text="View evidence",
             command=self._show_research_evidence,
-        ).grid(row=6, column=3, sticky="ew", pady=(8, 0))
+        ).grid(row=7, column=3, sticky="ew", pady=(8, 0))
         ttk.Label(research_sources_frame, text="Evidence note").grid(
-            row=7,
+            row=8,
             column=0,
             sticky="w",
             pady=(8, 0),
@@ -1274,7 +1301,7 @@ class TkinterDesktopWindow:
             research_sources_frame,
             textvariable=self._research_evidence_note,
         ).grid(
-            row=7,
+            row=8,
             column=1,
             columnspan=2,
             sticky="ew",
@@ -1285,7 +1312,7 @@ class TkinterDesktopWindow:
             research_sources_frame,
             text="Save evidence",
             command=self._record_research_evidence,
-        ).grid(row=7, column=3, sticky="ew", pady=(8, 0))
+        ).grid(row=8, column=3, sticky="ew", pady=(8, 0))
         ttk.Label(research_assessment_frame, text="Assessment evidence IDs").grid(
             row=0,
             column=0,
@@ -1504,9 +1531,9 @@ class TkinterDesktopWindow:
                 "or save the final Markdown export."
             ),
             style="Hint.TLabel",
-        ).grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 8))
+        ).grid(row=1, column=0, columnspan=4, sticky="w", pady=(0, 8))
         ttk.Label(research_review_frame, text="Final status").grid(
-            row=1,
+            row=2,
             column=0,
             sticky="w",
             pady=(8, 0),
@@ -1516,37 +1543,37 @@ class TkinterDesktopWindow:
             textvariable=self._research_target_status,
             values=("completed", "failed", "cancelled"),
             state="readonly",
-        ).grid(row=1, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
+        ).grid(row=2, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
         ttk.Button(
             research_review_frame,
             text="Preview status",
             command=self._preview_and_update_research_status,
-        ).grid(row=1, column=2, sticky="ew", pady=(8, 0))
+        ).grid(row=2, column=2, sticky="ew", pady=(8, 0))
         ttk.Button(
             research_review_frame,
             text="Export preview",
             command=self._preview_research_run_markdown_export,
-        ).grid(row=1, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ).grid(row=2, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
         ttk.Button(
             research_review_frame,
             text="Verify export",
             command=self._verify_research_run_markdown_export,
-        ).grid(row=2, column=2, sticky="ew", pady=(8, 0))
+        ).grid(row=3, column=2, sticky="ew", pady=(8, 0))
         ttk.Button(
             research_review_frame,
             text="Save export",
             command=self._save_research_run_markdown_export,
-        ).grid(row=2, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ).grid(row=3, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
         ttk.Button(
             research_review_frame,
             text="Evidence integrity",
             command=self._show_research_evidence_integrity,
-        ).grid(row=2, column=0, sticky="ew", pady=(8, 0))
+        ).grid(row=3, column=0, sticky="ew", pady=(8, 0))
         ttk.Button(
             research_review_frame,
             text="Research data status",
             command=self._show_research_content_status,
-        ).grid(row=2, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
+        ).grid(row=3, column=1, sticky="ew", padx=(8, 8), pady=(8, 0))
 
         relation_frame = ttk.LabelFrame(
             knowledge_tab,
@@ -1965,6 +1992,9 @@ class TkinterDesktopWindow:
             self._research_run_choice.set("")
             self._research_run_id.set("")
             self._research_run_summary.set("No research runs available.")
+            self._research_run_context.set(
+                "No research runs available. Return to Overview to start one."
+            )
             self._clear_research_run_dependent_presentations()
             return
         selected_index = next(
@@ -1985,6 +2015,11 @@ class TkinterDesktopWindow:
             question = f"{question[:77]}..."
         return f"{question} [{run.status.value}] — {run.run_id}"
 
+    @staticmethod
+    def _research_run_context_text(run: ResearchRun) -> str:
+        """Identify the exact immutable run snapshot used by later tabs."""
+        return f"Working on: {TkinterDesktopWindow._research_run_label(run)}"
+
     def _select_research_run(self, _event: object | None = None) -> None:
         """Select one catalogued run without starting any research action."""
         selected_index = self._research_run_selector.current()
@@ -1994,6 +2029,9 @@ class TkinterDesktopWindow:
             self._clear_research_persisted_contradictions()
             self._clear_research_persisted_comparison_notes()
             self._research_run_summary.set("Refresh and select a research run.")
+            self._research_run_context.set(
+                "No research run selected. Return to Overview to refresh or choose one."
+            )
             self._status.set("Refresh and select a research run first.")
             return
         selected_run = self._research_runs[selected_index]
@@ -2006,6 +2044,7 @@ class TkinterDesktopWindow:
         self._render_research_persisted_contradiction_selector(selected_run)
         self._render_research_persisted_comparison_note_selector(selected_run)
         self._research_run_summary.set(self._research_run_summary_text(selected_run))
+        self._research_run_context.set(self._research_run_context_text(selected_run))
         self._status.set(
             f"research run selected: {selected_run.run_id}; no action started"
         )

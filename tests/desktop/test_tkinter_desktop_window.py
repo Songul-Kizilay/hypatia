@@ -135,6 +135,27 @@ class AccessibilityPreferenceTests(unittest.TestCase):
         )
         self.assertEqual(len(set(_RESEARCH_ANALYSIS_TAB_TITLES)), 4)
 
+    def test_selected_research_context_keeps_exact_run_id_and_bounds_question(
+        self,
+    ) -> None:
+        now = datetime(2026, 8, 22, tzinfo=UTC)
+        run = ResearchRun(
+            "run-exact-123",
+            "Q" * 120,
+            ResearchRunStatus.COLLECTING,
+            (),
+            (),
+            now,
+            now,
+        )
+
+        context = TkinterDesktopWindow._research_run_context_text(run)
+
+        self.assertEqual(
+            context,
+            f"Working on: {'Q' * 77}... [collecting] — run-exact-123",
+        )
+
     def test_window_applies_text_size_and_high_contrast_to_text_controls(self) -> None:
         window: Any = object.__new__(TkinterDesktopWindow)
         window._font_size = 18
@@ -393,6 +414,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_id = run_id
         window._research_run_choice = RecordingVariable("")
         window._research_run_summary = RecordingVariable("Old summary")
+        window._research_run_context = RecordingVariable("Old context")
         window._research_run_selector = RecordingCandidateSelector()
         window._research_runs = ()
         window._research_source_choice = RecordingVariable("old source")
@@ -451,6 +473,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_id = RecordingVariable("")
         window._research_run_choice = RecordingVariable("")
         window._research_run_summary = RecordingVariable("")
+        window._research_run_context = RecordingVariable("")
         window._research_run_selector = RecordingCandidateSelector()
         window._research_runs = ()
         window._research_source_choice = RecordingVariable("")
@@ -498,6 +521,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_id = RecordingVariable("old-run")
         window._research_run_choice = RecordingVariable("Old run")
         window._research_run_summary = RecordingVariable("Old summary")
+        window._research_run_context = RecordingVariable("Old context")
         window._research_run_selector = RecordingCandidateSelector(selected_index=0)
         window._research_runs = ()
         window._research_source_choice = RecordingVariable("Old source")
@@ -533,6 +557,10 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             window._research_run_summary.value,
             "No research runs available.",
         )
+        self.assertEqual(
+            window._research_run_context.value,
+            "No research runs available. Return to Overview to start one.",
+        )
         self.assertEqual(window._research_candidate_run_id, "")
         self.assertEqual(window._research_claim_contradiction_proposal_run_id, "")
         self.assertIsNone(window._research_markdown_export_preview)
@@ -561,6 +589,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         clears: list[bool] = []
         window._research_run_id = RecordingVariable("run-1")
         window._research_run_summary = RecordingVariable("")
+        window._research_run_context = RecordingVariable("")
         window._research_run_selector = RecordingCandidateSelector(selected_index=1)
         window._research_runs = (first_run, second_run)
         window._research_source_choice = RecordingVariable("")
@@ -580,6 +609,10 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             "Status: completed · Sources: 0 · Evidence: 0 · Claims: 0",
         )
         self.assertEqual(
+            window._research_run_context.value,
+            "Working on: Second question [completed] — run-2",
+        )
+        self.assertEqual(
             window._status.values,
             ["research run selected: run-2; no action started"],
         )
@@ -594,6 +627,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_source_run_id = "old-run"
         _configure_research_evidence_selector(window)
         window._research_run_summary = RecordingVariable("Old summary")
+        window._research_run_context = RecordingVariable("Old context")
         window._status = RecordingStatus()
 
         window._select_research_run()
@@ -601,6 +635,10 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         self.assertEqual(
             window._research_run_summary.value,
             "Refresh and select a research run.",
+        )
+        self.assertEqual(
+            window._research_run_context.value,
+            "No research run selected. Return to Overview to refresh or choose one.",
         )
         self.assertEqual(
             window._status.values,
@@ -637,6 +675,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         )
         window._research_run_id = RecordingVariable("run-123")
         window._research_run_summary = RecordingVariable("")
+        window._research_run_context = RecordingVariable("")
         window._research_run_selector = RecordingCandidateSelector(selected_index=0)
         window._research_runs = (run,)
         window._research_source_choice = RecordingVariable("")
@@ -1264,6 +1303,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         )
         window._research_run_id = RecordingVariable("run-123")
         window._research_run_summary = RecordingVariable("")
+        window._research_run_context = RecordingVariable("")
         window._research_run_selector = RecordingCandidateSelector(selected_index=0)
         window._research_runs = (run,)
         window._research_source_choice = RecordingVariable("")
@@ -1485,6 +1525,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         )
         window._research_run_id = RecordingVariable("run-123")
         window._research_run_summary = RecordingVariable("")
+        window._research_run_context = RecordingVariable("")
         window._research_run_selector = RecordingCandidateSelector(selected_index=0)
         window._research_runs = (run,)
         window._research_source_choice = RecordingVariable("")
@@ -1662,6 +1703,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         )
         window._research_run_id = RecordingVariable("run-123")
         window._research_run_summary = RecordingVariable("")
+        window._research_run_context = RecordingVariable("")
         window._research_run_selector = RecordingCandidateSelector(selected_index=0)
         window._research_runs = (run,)
         window._research_source_choice = RecordingVariable("")
