@@ -12,6 +12,9 @@ from brain.BrainRouter import BrainRouter
 from cognition.LLMConversationHistoryBuilder import (
     build_llm_conversation_history,
 )
+from cognition.ResearchOverviewApplicationService import (
+    ResearchOverviewApplicationService,
+)
 from core.Exceptions import (
     KnowledgeError,
     MemoryError,
@@ -64,7 +67,6 @@ from research.ResearchClaimContradictionProposalProvider import (
 )
 from research.ResearchClaimRecord import ResearchClaimRecord
 from research.ResearchEvidenceIntegrityAuditor import ResearchEvidenceIntegrityAuditor
-from research.ResearchEvidenceIntegrityStatus import ResearchEvidenceIntegrityStatus
 from research.ResearchRun import ResearchRun
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchRunStatus import ResearchRunStatus
@@ -175,10 +177,12 @@ class CognitiveEngine:
             research_claim_contradiction_proposal_provider
         )
         self._research_source_content_store = research_source_content_store
-        self._research_source_content_restoration_status = (
-            research_source_content_restoration_status
+        self._research_overview_service = ResearchOverviewApplicationService(
+            response_composer,
+            research_run_manager,
+            research_source_content_restoration_status,
+            research_evidence_integrity_auditor,
         )
-        self._research_evidence_integrity_auditor = research_evidence_integrity_auditor
         self._hybrid_semantic_memory_ranker = HybridSemanticMemoryRanker()
         self._router = BrainRouter()
 
@@ -216,8 +220,8 @@ class CognitiveEngine:
         if self._is_research_run_create_request(request):
             return self._process_research_run_create(request)
 
-        if self._is_research_run_list_request(request):
-            return self._process_research_run_list(request)
+        if self._research_overview_service.is_run_list_request(request):
+            return self._research_overview_service.process_run_list(request)
 
         if self._is_research_run_markdown_export_verify_request(request):
             return self._process_research_run_markdown_export_verify(request)
@@ -231,8 +235,8 @@ class CognitiveEngine:
         if self._is_research_evidence_record_request(request):
             return self._process_research_evidence_record(request)
 
-        if self._is_research_evidence_list_request(request):
-            return self._process_research_evidence_list(request)
+        if self._research_overview_service.is_evidence_list_request(request):
+            return self._research_overview_service.process_evidence_list(request)
 
         if self._is_research_claim_preview_request(request):
             return self._process_research_claim_preview(request)
@@ -291,11 +295,12 @@ class CognitiveEngine:
         if self._is_research_source_load_request(request):
             return self._process_research_source_load(request)
 
-        if self._is_research_source_content_restoration_status_request(request):
-            return self._process_research_source_content_restoration_status(request)
+        research_overview = self._research_overview_service
+        if research_overview.is_source_content_restoration_status_request(request):
+            return research_overview.process_source_content_restoration_status(request)
 
-        if self._is_research_evidence_integrity_status_request(request):
-            return self._process_research_evidence_integrity_status(request)
+        if research_overview.is_evidence_integrity_status_request(request):
+            return research_overview.process_evidence_integrity_status(request)
 
         if self._is_knowledge_load_request(request):
             return self._process_knowledge_load(request)
@@ -476,11 +481,6 @@ class CognitiveEngine:
         return request.metadata.get("intent") == "research_run_create"
 
     @staticmethod
-    def _is_research_run_list_request(request: BrainRequest) -> bool:
-        """Recognize the explicit structured research-run catalog request."""
-        return request.metadata.get("intent") == "research_run_list"
-
-    @staticmethod
     def _is_research_run_markdown_export_preview_request(
         request: BrainRequest,
     ) -> bool:
@@ -501,11 +501,6 @@ class CognitiveEngine:
     def _is_research_evidence_record_request(request: BrainRequest) -> bool:
         """Recognize one explicit indexed-chunk evidence selection."""
         return request.metadata.get("intent") == "research_evidence_record"
-
-    @staticmethod
-    def _is_research_evidence_list_request(request: BrainRequest) -> bool:
-        """Recognize one explicit read-only research evidence catalog request."""
-        return request.metadata.get("intent") == "research_evidence_list"
 
     @staticmethod
     def _is_research_claim_preview_request(request: BrainRequest) -> bool:
@@ -609,61 +604,6 @@ class CognitiveEngine:
         """Recognize one explicit lifecycle transition mutation."""
         return request.metadata.get("intent") == "research_run_status_update"
 
-    @staticmethod
-    def _is_research_source_content_restoration_status_request(
-        request: BrainRequest,
-    ) -> bool:
-        """Recognize the bounded read-only accepted-content startup status."""
-        return (
-            request.metadata.get("intent")
-            == "research_source_content_restoration_status"
-            or request.message.casefold().strip() == "research content status"
-        )
-
-    def _process_research_source_content_restoration_status(
-        self,
-        request: BrainRequest,
-    ) -> BrainResponse:
-        """Return the captured startup aggregate without reading persistence."""
-        status = self._research_source_content_restoration_status
-        if status is None:
-            status = ResearchSourceContentRestorationStatus.unavailable()
-        return self._response_composer.research_source_content_restoration_status(
-            request,
-            status,
-        )
-
-    @staticmethod
-    def _is_research_evidence_integrity_status_request(
-        request: BrainRequest,
-    ) -> bool:
-        """Recognize the bounded read-only evidence integrity audit."""
-        return (
-            request.metadata.get("intent") == "research_evidence_integrity_status"
-            or request.message.casefold().strip() == "research evidence status"
-        )
-
-    def _process_research_evidence_integrity_status(
-        self,
-        request: BrainRequest,
-    ) -> BrainResponse:
-        """Audit in-memory runs and chunks without persistence or mutation."""
-        status = ResearchEvidenceIntegrityStatus.unavailable()
-        if (
-            self._research_run_manager is not None
-            and self._research_evidence_integrity_auditor is not None
-        ):
-            try:
-                status = self._research_evidence_integrity_auditor.audit(
-                    self._research_run_manager.list()
-                )
-            except ResearchError:
-                pass
-        return self._response_composer.research_evidence_integrity_status(
-            request,
-            status,
-        )
-
     def _process_research_run_create(self, request: BrainRequest) -> BrainResponse:
         question = request.metadata.get("research_question")
         if not isinstance(question, str) or not question.strip():
@@ -684,18 +624,6 @@ class CognitiveEngine:
                 "Research run could not be created.",
             )
         return self._response_composer.research_run_create_success(request, run)
-
-    def _process_research_run_list(self, request: BrainRequest) -> BrainResponse:
-        if self._research_run_manager is None:
-            return self._response_composer.research_run_failure(
-                request,
-                "Research run persistence is unavailable.",
-                intent="research_run_list",
-            )
-        return self._response_composer.research_run_list_success(
-            request,
-            self._research_run_manager.list(),
-        )
 
     def _process_research_run_markdown_export_preview(
         self,
@@ -835,27 +763,6 @@ class CognitiveEngine:
                 "Research evidence could not be saved.",
             )
         return self._response_composer.research_evidence_record_success(request, run)
-
-    def _process_research_evidence_list(self, request: BrainRequest) -> BrainResponse:
-        run_id = request.metadata.get("research_run_id")
-        if not isinstance(run_id, str) or not run_id.strip():
-            return self._response_composer.research_evidence_list_failure(
-                request,
-                "A research run ID is required.",
-            )
-        if self._research_run_manager is None:
-            return self._response_composer.research_evidence_list_failure(
-                request,
-                "Research run persistence is unavailable.",
-            )
-        try:
-            run = self._research_run_manager.get(run_id)
-        except ResearchError:
-            return self._response_composer.research_evidence_list_failure(
-                request,
-                "Research run was not found.",
-            )
-        return self._response_composer.research_evidence_list_success(request, run)
 
     def _process_research_claim_preview(self, request: BrainRequest) -> BrainResponse:
         """Read persisted claim history without providers or mutation."""
