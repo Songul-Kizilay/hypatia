@@ -887,7 +887,12 @@ class TkinterDesktopWindow:
             research_run_filter_frame,
             textvariable=self._research_run_filter_summary,
             style="Hint.TLabel",
-        ).grid(row=1, column=1, columnspan=3, sticky="w", pady=(4, 0))
+        ).grid(row=1, column=1, columnspan=2, sticky="w", pady=(4, 0))
+        ttk.Button(
+            research_run_filter_frame,
+            text="Show active run",
+            command=self._show_active_research_run,
+        ).grid(row=1, column=3, sticky="ew", padx=(8, 0), pady=(4, 0))
         ttk.Label(research_run_filter_frame, text="Sort visible runs").grid(
             row=2,
             column=0,
@@ -2190,6 +2195,43 @@ class TkinterDesktopWindow:
         """Restore the complete loaded catalog without opening a read path."""
         self._research_run_filter.set("")
         self._apply_research_run_filter()
+
+    def _show_active_research_run(self) -> None:
+        """Restore one filtered-out active run without opening a read path."""
+        selected_run_id = self._research_run_id.get().strip()
+        if not selected_run_id:
+            self._research_run_filter_summary.set("No active research run is selected.")
+            self._status.set("Select a research run before showing it.")
+            return
+        selected_run = next(
+            (run for run in self._research_runs if run.run_id == selected_run_id),
+            None,
+        )
+        if selected_run is None:
+            self._research_run_filter_summary.set(
+                "The active research run is not in the loaded catalog; refresh runs."
+            )
+            self._status.set("Active research run is not loaded.")
+            return
+        try:
+            sort_mode = ResearchRunSort(self._research_run_sort.get())
+        except ValueError:
+            self._research_run_filter_summary.set(
+                "Current sort is invalid; the active run was not shown."
+            )
+            self._status.set("Research run sort is invalid.")
+            return
+        visible_runs = self._sort_research_runs(self._research_runs, sort_mode)
+        self._research_run_filter.set("")
+        self._render_visible_research_runs(visible_runs)
+        self._research_run_choice.set(self._research_run_label(selected_run))
+        self._research_run_filter_summary.set(
+            f"All {len(self._research_runs)} loaded research runs are shown."
+        )
+        self._status.set(
+            f"active research run shown: {selected_run_id}; "
+            f"{len(self._research_runs)} loaded; sort preserved"
+        )
 
     def _apply_research_run_sort(self, _event: object | None = None) -> None:
         """Reorder only the current visible membership without a runtime call."""

@@ -2,6 +2,33 @@
 
 All notable project changes are recorded here.
 
+## [0.3.95] - 2026-08-22
+
+### Added
+
+- Research Overview now provides an explicit `Show active run` action when the
+  local filter hides the currently active research run.
+- The action restores the complete loaded view in the already selected order,
+  makes the active run visible in the selector, and reports the exact outcome.
+
+### Safety
+
+- Showing the active run clears only the presentation filter. It preserves the
+  selected sort, immutable loaded catalog, active run, and authored fields and
+  opens no Brain, controller, storage, provider, network, LLM, index, event-bus,
+  or mutation boundary.
+- Missing, stale, or invalid local selection/sort state leaves the prior filter
+  and visible tuple unchanged and replaces ambiguous behavior with guidance.
+
+### Verification
+
+- The package-aware full local suite contains 1,467 passing automated tests.
+- Focused desktop coverage contains 108 passing tests, including hidden active-
+  run restoration, sort and authored-field preservation, no-selection and
+  stale-catalog isolation, and invalid-sort refusal.
+- Black, Ruff, and MyPy pass. A real Tk smoke confirms one working action and
+  its empty state in a 954-by-973-pixel requested window.
+
 ## [0.3.94] - 2026-08-22
 
 ### Added
