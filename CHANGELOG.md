@@ -2,6 +2,32 @@
 
 All notable project changes are recorded here.
 
+## [0.3.91] - 2026-08-22
+
+### Added
+
+- Research Overview now includes one compact `Workflow snapshot` for the
+  selected run: complete source/evidence counts, authored assessment/comparison-
+  note/claim/contradiction counts, and the existing review status.
+- Empty and invalid selections replace stale stage records with direct guidance.
+
+### Safety
+
+- The snapshot reads only the already selected immutable `ResearchRun` object.
+  It does not infer readiness or truth, recommend a conclusion, change status,
+  hide controls, or open a Brain, controller, manager, provider, persistence,
+  network, LLM, index, event-bus, or mutation boundary.
+- Existing fields, commands, confirmations, schemas, and provider paths remain
+  unchanged.
+
+### Verification
+
+- The package-aware full local suite contains 1,455 passing automated tests.
+- Focused desktop coverage contains 96 passing tests, including every displayed
+  stage count/status plus selected, empty, and invalid snapshot states.
+- Black, Ruff, and MyPy pass. A real Tk measurement confirms one workflow-
+  snapshot label in a 954-by-973-pixel requested window.
+
 ## [0.3.90] - 2026-08-22
 
 ### Added
