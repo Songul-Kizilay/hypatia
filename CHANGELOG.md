@@ -2,6 +2,33 @@
 
 All notable project changes are recorded here.
 
+## [0.3.89] - 2026-08-22
+
+### Added
+
+- Sources & evidence, Authored analysis, and Review & export now show the same
+  read-only `Current research run` banner with the selected question, status,
+  and exact run ID.
+- Empty and invalid selections replace stale context with direct guidance to
+  return to Overview, refresh the catalog, or start a research run.
+
+### Safety
+
+- The banner is derived only from the already selected immutable `ResearchRun`
+  snapshot. It opens no Brain, controller, storage, provider, network, LLM,
+  knowledge-index, event-bus, or mutation boundary.
+- Existing fields, commands, tab navigation, confirmation boundaries, provider
+  paths, persistence schemas, and mutation contracts remain unchanged.
+
+### Verification
+
+- The package-aware full local suite contains 1,453 passing automated tests.
+- Focused desktop coverage contains 94 passing tests for exact run identity,
+  bounded long questions, selected/empty/invalid states, and existing workflow
+  behavior.
+- Black, Ruff, and MyPy pass, and a real Tk measurement confirms three bound
+  context labels in a 954-by-973-pixel requested window.
+
 ## [0.3.88] - 2026-08-22
 
 ### Changed
