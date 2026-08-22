@@ -2,6 +2,33 @@
 
 All notable project changes are recorded here.
 
+## [0.3.96] - 2026-08-22
+
+### Added
+
+- Research Overview now provides an explicit local status view with All,
+  Collecting, Completed, Failed, and Cancelled choices.
+- The status choice composes with the bounded text filter and current
+  deterministic sort. Visible/total feedback includes the selected status.
+
+### Safety
+
+- Status filtering reads only the immutable loaded run catalog. It preserves
+  the active run and authored fields and opens no Brain, controller, storage,
+  provider, network, LLM, index, event-bus, or mutation boundary.
+- Clearing the text filter preserves the status choice. `Show active run`
+  clears both presentation filters while preserving sort; invalid status state
+  leaves the prior visible tuple unchanged.
+
+### Verification
+
+- The package-aware full local suite contains 1,471 passing automated tests.
+- Focused desktop coverage contains 112 passing tests, including every exact
+  lifecycle, text/status/sort composition, status-preserving text clear,
+  no-match active/authored-field preservation, and invalid-state isolation.
+- Black, Ruff, and MyPy pass. A real Tk smoke confirms the read-only five-choice
+  status selector in a 954-by-973-pixel requested window.
+
 ## [0.3.95] - 2026-08-22
 
 ### Added

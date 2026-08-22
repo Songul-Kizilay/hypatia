@@ -36,9 +36,14 @@ the current sort and uses deterministic ascending run-ID ties. Sorting preserves
 the immutable catalog, filter membership, active run, and authored fields and
 starts no controller, provider, storage, or mutation action.
 When filtering hides the active row, `Show active run` restores the complete
-locally sorted selector and exact active choice while preserving authored
-fields. Missing selection, stale catalog membership, or invalid sort leaves the
-existing view unchanged and starts no runtime action.
+locally sorted selector and exact active choice by clearing only the text/status
+filters while preserving authored fields. Missing selection, stale catalog
+membership, or invalid sort leaves the existing view unchanged and starts no
+runtime action.
+The catalog also has an explicit All/Collecting/Completed/Failed/Cancelled
+status view. It composes with bounded text matching and current sort, reports
+visible/total membership, and preserves hidden active and authored state. An
+invalid status leaves the prior view untouched and starts no runtime action.
 Overview also renders one bounded metadata line from the selected immutable
 run: seconds-level timezone-aware creation/update times and only the aggregate
 safe-failure count. It cannot expose a failure stage/reason or retain stale

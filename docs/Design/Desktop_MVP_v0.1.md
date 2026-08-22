@@ -50,6 +50,9 @@ The MVP may present only current Brain/CognitiveEngine capabilities:
   catalog/filter/active-selection preservation;
 - an explicit local `Show active run` recovery action for a filtered-out active
   row, with sort/authored-field preservation and stale-state refusal;
+- an All/Collecting/Completed/Failed/Cancelled local status facet that composes
+  with bounded text and deterministic sort while preserving active/authored
+  state and reporting visible/total membership;
 - a bounded selected-run metadata line with timezone-aware created/updated
   timestamps and aggregate safe-failure count, without failure detail;
 - a read-only accepted-source selector from that same run snapshot, with

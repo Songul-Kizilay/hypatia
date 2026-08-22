@@ -34,6 +34,7 @@ from research.ResearchRun import ResearchRun
 from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
 )
+from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
 from research.ResearchSourceCandidate import ResearchSourceCandidate
 from research.ResearchSourceComparisonNoteRecord import (
@@ -92,6 +93,16 @@ class ResearchRunSort(StrEnum):
     UPDATED_OLDEST = "Updated — oldest first"
     CREATED_NEWEST = "Created — newest first"
     QUESTION = "Question — A to Z"
+
+
+class ResearchRunStatusFacet(StrEnum):
+    """User-facing local status views for the loaded run catalog."""
+
+    ALL = "All statuses"
+    COLLECTING = "Collecting"
+    COMPLETED = "Completed"
+    FAILED = "Failed"
+    CANCELLED = "Cancelled"
 
 
 def _accessibility_palette(
@@ -235,6 +246,9 @@ class TkinterDesktopWindow:
         self._research_run_filter = tk.StringVar()
         self._research_run_filter_summary = tk.StringVar(
             value="All loaded research runs are shown."
+        )
+        self._research_run_status_filter = tk.StringVar(
+            value=ResearchRunStatusFacet.ALL.value
         )
         self._research_run_sort = tk.StringVar(
             value=ResearchRunSort.UPDATED_NEWEST.value
@@ -893,8 +907,32 @@ class TkinterDesktopWindow:
             text="Show active run",
             command=self._show_active_research_run,
         ).grid(row=1, column=3, sticky="ew", padx=(8, 0), pady=(4, 0))
-        ttk.Label(research_run_filter_frame, text="Sort visible runs").grid(
+        ttk.Label(research_run_filter_frame, text="Status").grid(
             row=2,
+            column=0,
+            sticky="w",
+            padx=(0, 8),
+            pady=(8, 0),
+        )
+        self._research_run_status_filter_selector = ttk.Combobox(
+            research_run_filter_frame,
+            textvariable=self._research_run_status_filter,
+            values=tuple(facet.value for facet in ResearchRunStatusFacet),
+            state="readonly",
+        )
+        self._research_run_status_filter_selector.grid(
+            row=2,
+            column=1,
+            columnspan=3,
+            sticky="ew",
+            pady=(8, 0),
+        )
+        self._research_run_status_filter_selector.bind(
+            "<<ComboboxSelected>>",
+            self._apply_research_run_status_filter,
+        )
+        ttk.Label(research_run_filter_frame, text="Sort visible runs").grid(
+            row=3,
             column=0,
             sticky="w",
             padx=(0, 8),
@@ -907,7 +945,7 @@ class TkinterDesktopWindow:
             state="readonly",
         )
         self._research_run_sort_selector.grid(
-            row=2,
+            row=3,
             column=1,
             columnspan=3,
             sticky="ew",
@@ -921,7 +959,7 @@ class TkinterDesktopWindow:
             research_run_filter_frame,
             textvariable=self._research_run_sort_summary,
             style="Hint.TLabel",
-        ).grid(row=3, column=1, columnspan=3, sticky="w", pady=(4, 0))
+        ).grid(row=4, column=1, columnspan=3, sticky="w", pady=(4, 0))
         research_workflow_snapshot_frame = ttk.LabelFrame(
             research_overview_frame,
             text="Workflow snapshot",
@@ -2115,6 +2153,7 @@ class TkinterDesktopWindow:
         visible_runs = self._sort_research_runs(normalized_runs, sort_mode)
         self._visible_research_runs = visible_runs
         self._research_run_filter.set("")
+        self._research_run_status_filter.set(ResearchRunStatusFacet.ALL.value)
         self._research_run_filter_summary.set(
             "No research runs are available."
             if not normalized_runs
@@ -2164,7 +2203,19 @@ class TkinterDesktopWindow:
                 f"{_MAX_RESEARCH_RUN_FILTER_LENGTH} characters."
             )
             return
-        matching_runs = self._filter_research_runs(self._research_runs, query)
+        try:
+            status_filter = self._selected_research_run_status_filter()
+        except ValueError:
+            self._research_run_filter_summary.set(
+                "Status filter is invalid; the loaded view is unchanged."
+            )
+            self._status.set("Research run status filter is invalid.")
+            return
+        text_matching_runs = self._filter_research_runs(self._research_runs, query)
+        matching_runs = self._filter_research_runs_by_status(
+            text_matching_runs,
+            status_filter,
+        )
         visible_runs = self._sort_research_runs(
             matching_runs,
             self._current_research_run_sort(),
@@ -2174,17 +2225,19 @@ class TkinterDesktopWindow:
         visible_count = len(visible_runs)
         if total_count == 0:
             self._research_run_filter_summary.set("No research runs are available.")
-        elif not query:
+        elif not query and status_filter is None:
             self._research_run_filter_summary.set(
                 f"All {total_count} loaded research runs are shown."
             )
         elif visible_runs:
             self._research_run_filter_summary.set(
-                f"{visible_count} of {total_count} loaded research runs match."
+                f"{visible_count} of {total_count} loaded research runs match "
+                f"({self._research_run_status_filter.get()})."
             )
         else:
             self._research_run_filter_summary.set(
-                "No loaded research runs match; the active run is unchanged."
+                "No loaded research runs match the current filters; "
+                "the active run is unchanged."
             )
         self._status.set(
             f"research run filter: {visible_count} of {total_count} shown; "
@@ -2194,6 +2247,13 @@ class TkinterDesktopWindow:
     def _clear_research_run_filter(self) -> None:
         """Restore the complete loaded catalog without opening a read path."""
         self._research_run_filter.set("")
+        self._apply_research_run_filter()
+
+    def _apply_research_run_status_filter(
+        self,
+        _event: object | None = None,
+    ) -> None:
+        """Apply one local status facet through the combined filter pipeline."""
         self._apply_research_run_filter()
 
     def _show_active_research_run(self) -> None:
@@ -2223,6 +2283,7 @@ class TkinterDesktopWindow:
             return
         visible_runs = self._sort_research_runs(self._research_runs, sort_mode)
         self._research_run_filter.set("")
+        self._research_run_status_filter.set(ResearchRunStatusFacet.ALL.value)
         self._render_visible_research_runs(visible_runs)
         self._research_run_choice.set(self._research_run_label(selected_run))
         self._research_run_filter_summary.set(
@@ -2230,7 +2291,7 @@ class TkinterDesktopWindow:
         )
         self._status.set(
             f"active research run shown: {selected_run_id}; "
-            f"{len(self._research_runs)} loaded; sort preserved"
+            f"{len(self._research_runs)} loaded; filters cleared; sort preserved"
         )
 
     def _apply_research_run_sort(self, _event: object | None = None) -> None:
@@ -2286,6 +2347,13 @@ class TkinterDesktopWindow:
             self._research_run_sort.set(default.value)
             return default
 
+    def _selected_research_run_status_filter(self) -> ResearchRunStatus | None:
+        """Return the exact local status represented by the current facet."""
+        facet = ResearchRunStatusFacet(self._research_run_status_filter.get())
+        if facet is ResearchRunStatusFacet.ALL:
+            return None
+        return ResearchRunStatus(facet.value.casefold())
+
     @staticmethod
     def _filter_research_runs(
         runs: tuple[ResearchRun, ...],
@@ -2302,6 +2370,16 @@ class TkinterDesktopWindow:
             or normalized_query == run.status.value.casefold()
             or normalized_query == run.run_id.casefold()
         )
+
+    @staticmethod
+    def _filter_research_runs_by_status(
+        runs: tuple[ResearchRun, ...],
+        status_filter: ResearchRunStatus | None,
+    ) -> tuple[ResearchRun, ...]:
+        """Restrict one already loaded tuple to an exact lifecycle status."""
+        if status_filter is None:
+            return runs
+        return tuple(run for run in runs if run.status is status_filter)
 
     @staticmethod
     def _sort_research_runs(
