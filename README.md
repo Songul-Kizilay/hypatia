@@ -285,6 +285,10 @@ One adjacent read-only catalog summary always shows the complete All, Without
 evidence, and Without current assessment counts from the selected run. These
 totals do not change when the local source view changes and make no quality or
 readiness decision.
+If a coverage view hides the active source, `Show active source` restores All
+sources and that exact row, including its read-only evidence and assessment
+records. Empty, stale, or unknown state is refused without changing authored
+fields or requesting data.
 
 The window uses the same Bootstrap and Brain as the terminal entry point. A
 clicked session only fills the selection field; choosing it remains explicit.

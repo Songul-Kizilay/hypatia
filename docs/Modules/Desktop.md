@@ -75,6 +75,11 @@ Without evidence, and Without current assessment totals from that immutable
 snapshot. Exact-ID sets deduplicate repeated records, correction history uses
 only current assessments, malformed foreign membership is ignored, and facet
 changes cannot alter the totals or open another read or action.
+`Show active source` verifies the current run ID, run-bound source catalog, and
+exact active source ID before restoring All sources and that row. It rehydrates
+only source-bound read-only evidence/assessment selectors; authored fields and
+catalog totals remain unchanged. Empty, stale, or unknown state is refused
+without a controller, persistence, provider, or mutation call.
 Overview also renders one bounded metadata line from the selected immutable
 run: seconds-level timezone-aware creation/update times and only the aggregate
 safe-failure count. It cannot expose a failure stage/reason or retain stale
