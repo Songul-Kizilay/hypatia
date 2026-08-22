@@ -257,6 +257,113 @@ class AccessibilityPreferenceTests(unittest.TestCase):
             "Without evidence: 0",
         )
 
+    def test_research_assessment_coverage_counts_only_current_sources_once(
+        self,
+    ) -> None:
+        now = datetime(2026, 8, 22, tzinfo=UTC)
+        first_source = _research_source_record("document-1", "First")
+        second_source = _research_source_record("document-2", "Second")
+        third_source = _research_source_record("document-3", "Third")
+        first_evidence = _research_evidence_record(
+            "evidence-1", "document-1", "First evidence"
+        )
+        second_evidence = _research_evidence_record(
+            "evidence-2", "document-2", "Second evidence"
+        )
+        original = _research_assessment_record(
+            "assessment-1",
+            "document-1",
+            "evidence-1",
+            "Original assessment",
+        )
+        correction = _research_assessment_record(
+            "assessment-2",
+            "document-1",
+            "evidence-1",
+            "Corrected assessment",
+            supersedes_assessment_id=original.assessment_id,
+        )
+        second_assessment = _research_assessment_record(
+            "assessment-3",
+            "document-2",
+            "evidence-2",
+            "Second assessment",
+        )
+        repeated_current_source = _research_assessment_record(
+            "assessment-4",
+            "document-2",
+            "evidence-2",
+            "Another current assessment for the same source",
+        )
+        run = ResearchRun(
+            "run-assessment-coverage",
+            "Inspect assessment coverage",
+            ResearchRunStatus.COLLECTING,
+            (first_source, second_source, third_source),
+            (),
+            now,
+            now,
+            evidence=(first_evidence, second_evidence),
+            assessments=(
+                original,
+                correction,
+                second_assessment,
+                repeated_current_source,
+            ),
+        )
+
+        self.assertEqual(
+            TkinterDesktopWindow._research_assessment_coverage_text(run),
+            "Assessment coverage — Accepted sources: 3 · "
+            "With current assessment: 2 · Without current assessment: 1",
+        )
+
+    def test_empty_research_assessment_coverage_has_complete_zero_counts(
+        self,
+    ) -> None:
+        now = datetime(2026, 8, 22, tzinfo=UTC)
+        run = ResearchRun(
+            "run-empty-assessment-coverage",
+            "Inspect empty assessment coverage",
+            ResearchRunStatus.COLLECTING,
+            (),
+            (),
+            now,
+            now,
+        )
+
+        self.assertEqual(
+            TkinterDesktopWindow._research_assessment_coverage_text(run),
+            "Assessment coverage — Accepted sources: 0 · "
+            "With current assessment: 0 · Without current assessment: 0",
+        )
+
+    def test_research_assessment_coverage_ignores_superseded_only_and_foreign(
+        self,
+    ) -> None:
+        original = _research_assessment_record(
+            "assessment-1",
+            "document-1",
+            "evidence-1",
+            "Original assessment",
+        )
+        malformed_foreign_correction = _research_assessment_record(
+            "assessment-2",
+            "foreign",
+            "evidence-2",
+            "Foreign correction",
+            supersedes_assessment_id=original.assessment_id,
+        )
+        run = Mock(spec=ResearchRun)
+        run.sources = (_research_source_record("document-1", "Accepted"),)
+        run.assessments = (original, malformed_foreign_correction)
+
+        self.assertEqual(
+            TkinterDesktopWindow._research_assessment_coverage_text(run),
+            "Assessment coverage — Accepted sources: 1 · "
+            "With current assessment: 0 · Without current assessment: 1",
+        )
+
     def test_research_run_metadata_is_timezone_aware_and_hides_failure_detail(
         self,
     ) -> None:
@@ -549,6 +656,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_progress = RecordingVariable("Old progress")
         window._research_workflow_snapshot = RecordingVariable("Old workflow")
         window._research_evidence_coverage = RecordingVariable("Old coverage")
+        window._research_assessment_coverage = RecordingVariable("Old assessment")
         window._research_run_metadata = RecordingVariable("Old metadata")
         window._research_run_filter = RecordingVariable("old filter")
         window._research_run_filter_summary = RecordingVariable("old filter summary")
@@ -616,6 +724,11 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             "Without evidence: 0",
         )
         self.assertEqual(
+            window._research_assessment_coverage.value,
+            "Assessment coverage — Accepted sources: 0 · "
+            "With current assessment: 0 · Without current assessment: 0",
+        )
+        self.assertEqual(
             window._research_source_coverage_filter.value,
             ResearchSourceCoverageFacet.ALL.value,
         )
@@ -639,6 +752,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_progress = RecordingVariable("")
         window._research_workflow_snapshot = RecordingVariable("")
         window._research_evidence_coverage = RecordingVariable("")
+        window._research_assessment_coverage = RecordingVariable("")
         window._research_run_metadata = RecordingVariable("")
         window._research_run_filter = RecordingVariable("old filter")
         window._research_run_filter_summary = RecordingVariable("")
@@ -699,6 +813,11 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             window._research_evidence_coverage.value,
             "Evidence coverage — Accepted sources: 0 · With evidence: 0 · "
             "Without evidence: 0",
+        )
+        self.assertEqual(
+            window._research_assessment_coverage.value,
+            "Assessment coverage — Accepted sources: 0 · "
+            "With current assessment: 0 · Without current assessment: 0",
         )
         self.assertEqual(
             window._research_source_coverage_filter.value,
@@ -1609,6 +1728,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_progress = RecordingVariable("Old progress")
         window._research_workflow_snapshot = RecordingVariable("Old workflow")
         window._research_evidence_coverage = RecordingVariable("Old coverage")
+        window._research_assessment_coverage = RecordingVariable("Old assessment")
         window._research_run_metadata = RecordingVariable("Old metadata")
         window._research_run_filter = RecordingVariable("old filter")
         window._research_run_filter_summary = RecordingVariable("old filter summary")
@@ -1671,6 +1791,10 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             "Evidence coverage unavailable: no research runs available.",
         )
         self.assertEqual(
+            window._research_assessment_coverage.value,
+            "Assessment coverage unavailable: no research runs available.",
+        )
+        self.assertEqual(
             window._research_run_metadata.value,
             "Run metadata unavailable: no research runs are available.",
         )
@@ -1721,6 +1845,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_progress = RecordingVariable("")
         window._research_workflow_snapshot = RecordingVariable("")
         window._research_evidence_coverage = RecordingVariable("")
+        window._research_assessment_coverage = RecordingVariable("")
         window._research_run_metadata = RecordingVariable("")
         window._research_run_selector = RecordingCandidateSelector(selected_index=1)
         window._research_runs = (first_run, second_run)
@@ -1762,6 +1887,11 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             "Without evidence: 0",
         )
         self.assertEqual(
+            window._research_assessment_coverage.value,
+            "Assessment coverage — Accepted sources: 0 · "
+            "With current assessment: 0 · Without current assessment: 0",
+        )
+        self.assertEqual(
             window._research_run_metadata.value,
             "Run metadata — Created: 2026-08-21T00:00:00+00:00 · "
             "Updated: 2026-08-21T00:00:00+00:00 · Safe failures: 0",
@@ -1786,6 +1916,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_progress = RecordingVariable("Old progress")
         window._research_workflow_snapshot = RecordingVariable("Old workflow")
         window._research_evidence_coverage = RecordingVariable("Old coverage")
+        window._research_assessment_coverage = RecordingVariable("Old assessment")
         window._research_run_metadata = RecordingVariable("Old metadata")
         window._status = RecordingStatus()
 
@@ -1810,6 +1941,10 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         self.assertEqual(
             window._research_evidence_coverage.value,
             "Evidence coverage unavailable until a research run is selected.",
+        )
+        self.assertEqual(
+            window._research_assessment_coverage.value,
+            "Assessment coverage unavailable until a research run is selected.",
         )
         self.assertEqual(
             window._research_run_metadata.value,
@@ -1839,6 +1974,17 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             now,
             now,
         )
+        evidence = _research_evidence_record(
+            "evidence-1",
+            "document-1",
+            "First source evidence",
+        )
+        assessment = _research_assessment_record(
+            "assessment-1",
+            "document-1",
+            "evidence-1",
+            "First source assessment",
+        )
         run = ResearchRun(
             "run-123",
             "Compare accepted papers",
@@ -1847,6 +1993,8 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             (),
             now,
             now,
+            evidence=(evidence,),
+            assessments=(assessment,),
         )
         window._research_run_id = RecordingVariable("run-123")
         window._research_run_summary = RecordingVariable("")
@@ -1854,6 +2002,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_progress = RecordingVariable("")
         window._research_workflow_snapshot = RecordingVariable("")
         window._research_evidence_coverage = RecordingVariable("")
+        window._research_assessment_coverage = RecordingVariable("")
         window._research_run_metadata = RecordingVariable("")
         window._research_run_selector = RecordingCandidateSelector(selected_index=0)
         window._research_runs = (run,)
@@ -1888,8 +2037,13 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         )
         self.assertEqual(
             window._research_evidence_coverage.value,
-            "Evidence coverage — Accepted sources: 2 · With evidence: 0 · "
-            "Without evidence: 2",
+            "Evidence coverage — Accepted sources: 2 · With evidence: 1 · "
+            "Without evidence: 1",
+        )
+        self.assertEqual(
+            window._research_assessment_coverage.value,
+            "Assessment coverage — Accepted sources: 2 · "
+            "With current assessment: 1 · Without current assessment: 1",
         )
         self.assertEqual(
             window._status.values,
@@ -2786,6 +2940,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_progress = RecordingVariable("")
         window._research_workflow_snapshot = RecordingVariable("")
         window._research_evidence_coverage = RecordingVariable("")
+        window._research_assessment_coverage = RecordingVariable("")
         window._research_run_metadata = RecordingVariable("")
         window._research_run_selector = RecordingCandidateSelector(selected_index=0)
         window._research_runs = (run,)
@@ -3013,6 +3168,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_progress = RecordingVariable("")
         window._research_workflow_snapshot = RecordingVariable("")
         window._research_evidence_coverage = RecordingVariable("")
+        window._research_assessment_coverage = RecordingVariable("")
         window._research_run_metadata = RecordingVariable("")
         window._research_run_selector = RecordingCandidateSelector(selected_index=0)
         window._research_runs = (run,)
@@ -3196,6 +3352,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_progress = RecordingVariable("")
         window._research_workflow_snapshot = RecordingVariable("")
         window._research_evidence_coverage = RecordingVariable("")
+        window._research_assessment_coverage = RecordingVariable("")
         window._research_run_metadata = RecordingVariable("")
         window._research_run_selector = RecordingCandidateSelector(selected_index=0)
         window._research_runs = (run,)

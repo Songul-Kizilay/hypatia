@@ -271,6 +271,11 @@ The same immutable selected snapshot supplies an evidence-coverage line with
 accepted sources, sources represented by at least one evidence record, and
 accepted sources without evidence. Repeated evidence for one source counts once;
 the line makes no quality, completeness, or readiness decision.
+An adjacent assessment-coverage line reports accepted sources with a current
+user-authored assessment and the accepted remainder. Superseded history does
+not count as current, source membership is deduplicated by exact ID, malformed
+foreign references are ignored, and the line makes no quality or readiness
+decision.
 Sources & evidence can then show either all accepted sources or only those
 without recorded evidence. This is a stable local exact-ID view: it preserves
 the active source even while hidden and restores that exact source when the all

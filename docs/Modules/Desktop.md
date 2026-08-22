@@ -58,6 +58,11 @@ immutable snapshot. It counts unique accepted source IDs represented by one or
 more evidence records and reports the accepted remainder. Repeated evidence is
 deduplicated, malformed foreign references cannot inflate counts, no quality or
 readiness is inferred, and empty/invalid selections clear stale coverage.
+One adjacent assessment-coverage line counts unique accepted source IDs having
+at least one current authored assessment and reports the accepted remainder.
+Superseded-only history does not count as current, malformed foreign references
+cannot inflate membership, and empty/invalid selections clear stale coverage
+without a quality, truth, completeness, or readiness inference.
 Sources & evidence exposes All sources and Without evidence views over that
 same snapshot. Source order is stable, visible/total membership is explicit,
 and one exact active source ID survives a hidden/no-match view and is restored

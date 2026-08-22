@@ -275,6 +275,9 @@ class TkinterDesktopWindow:
         self._research_evidence_coverage = tk.StringVar(
             value=("Evidence coverage unavailable until a research run is selected.")
         )
+        self._research_assessment_coverage = tk.StringVar(
+            value=("Assessment coverage unavailable until a research run is selected.")
+        )
         self._research_run_metadata = tk.StringVar(
             value="Run metadata unavailable until a research run is selected."
         )
@@ -1031,10 +1034,16 @@ class TkinterDesktopWindow:
         ).grid(row=1, column=0, sticky="ew", pady=(4, 0))
         ttk.Label(
             research_workflow_snapshot_frame,
-            textvariable=self._research_run_metadata,
+            textvariable=self._research_assessment_coverage,
             style="Hint.TLabel",
             anchor="w",
         ).grid(row=2, column=0, sticky="ew", pady=(4, 0))
+        ttk.Label(
+            research_workflow_snapshot_frame,
+            textvariable=self._research_run_metadata,
+            style="Hint.TLabel",
+            anchor="w",
+        ).grid(row=3, column=0, sticky="ew", pady=(4, 0))
         ttk.Label(
             research_sources_frame,
             text=(
@@ -2265,6 +2274,9 @@ class TkinterDesktopWindow:
             self._research_evidence_coverage.set(
                 "Evidence coverage unavailable: no research runs available."
             )
+            self._research_assessment_coverage.set(
+                "Assessment coverage unavailable: no research runs available."
+            )
             self._research_run_metadata.set(
                 "Run metadata unavailable: no research runs are available."
             )
@@ -2580,6 +2592,9 @@ class TkinterDesktopWindow:
             self._research_evidence_coverage.set(
                 "Evidence coverage unavailable until a research run is selected."
             )
+            self._research_assessment_coverage.set(
+                "Assessment coverage unavailable until a research run is selected."
+            )
             self._research_run_metadata.set(
                 "Run metadata unavailable until a research run is selected."
             )
@@ -2602,6 +2617,9 @@ class TkinterDesktopWindow:
         )
         self._research_evidence_coverage.set(
             self._research_evidence_coverage_text(selected_run)
+        )
+        self._research_assessment_coverage.set(
+            self._research_assessment_coverage_text(selected_run)
         )
         self._research_run_metadata.set(self._research_run_metadata_text(selected_run))
         self._status.set(
@@ -2650,6 +2668,28 @@ class TkinterDesktopWindow:
             f"Evidence coverage — Accepted sources: {accepted_count} · "
             f"With evidence: {represented_count} · "
             f"Without evidence: {accepted_count - represented_count}"
+        )
+
+    @staticmethod
+    def _research_assessment_coverage_text(run: ResearchRun) -> str:
+        """Count accepted sources with a current authored assessment."""
+        accepted_source_ids = {source.document_id for source in run.sources}
+        superseded_assessment_ids = {
+            record.supersedes_assessment_id
+            for record in run.assessments
+            if record.supersedes_assessment_id is not None
+        }
+        current_assessment_source_ids = {
+            record.source_document_id
+            for record in run.assessments
+            if record.assessment_id not in superseded_assessment_ids
+        } & accepted_source_ids
+        accepted_count = len(accepted_source_ids)
+        current_count = len(current_assessment_source_ids)
+        return (
+            f"Assessment coverage — Accepted sources: {accepted_count} · "
+            f"With current assessment: {current_count} · "
+            f"Without current assessment: {accepted_count - current_count}"
         )
 
     @staticmethod
