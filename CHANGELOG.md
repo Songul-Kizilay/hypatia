@@ -2,6 +2,32 @@
 
 All notable project changes are recorded here.
 
+## [0.3.99] - 2026-08-22
+
+### Added
+
+- Research Overview now shows one read-only evidence-coverage summary for the
+  selected immutable run snapshot.
+- The summary reports complete accepted-source, represented-source, and
+  accepted-source-without-evidence counts without a score or readiness claim.
+
+### Safety
+
+- Multiple evidence records for one source count that source once. A malformed
+  foreign evidence reference cannot inflate represented membership.
+- Empty and invalid selections replace stale coverage with explicit guidance.
+  Selection opens no Brain, controller, storage, provider, network, LLM,
+  index, event-bus, or mutation boundary.
+
+### Verification
+
+- The package-aware full local suite contains 1,479 passing automated tests.
+- Focused desktop coverage contains 120 passing tests, including repeated
+  evidence for one source, empty coverage, malformed foreign references,
+  selection binding, empty catalogs, and invalid-selection clearing.
+- Black, Ruff, and MyPy pass. A real Tk smoke confirms one bound coverage label
+  in the existing 954-by-973-pixel requested window.
+
 ## [0.3.98] - 2026-08-22
 
 ### Added

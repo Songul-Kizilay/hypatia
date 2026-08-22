@@ -194,6 +194,68 @@ class AccessibilityPreferenceTests(unittest.TestCase):
             "Review & export — Status: collecting",
         )
 
+    def test_research_evidence_coverage_counts_each_source_once(self) -> None:
+        now = datetime(2026, 8, 22, tzinfo=UTC)
+        first_source = _research_source_record("document-1", "First")
+        second_source = _research_source_record("document-2", "Second")
+        third_source = _research_source_record("document-3", "Third")
+        run = ResearchRun(
+            "run-coverage",
+            "Inspect evidence coverage",
+            ResearchRunStatus.COLLECTING,
+            (first_source, second_source, third_source),
+            (),
+            now,
+            now,
+            evidence=(
+                _research_evidence_record("evidence-1", "document-1", "One"),
+                _research_evidence_record("evidence-2", "document-1", "Two"),
+                _research_evidence_record("evidence-3", "document-2", "Three"),
+            ),
+        )
+
+        self.assertEqual(
+            TkinterDesktopWindow._research_evidence_coverage_text(run),
+            "Evidence coverage — Accepted sources: 3 · With evidence: 2 · "
+            "Without evidence: 1",
+        )
+
+    def test_empty_research_evidence_coverage_has_complete_zero_counts(
+        self,
+    ) -> None:
+        now = datetime(2026, 8, 22, tzinfo=UTC)
+        run = ResearchRun(
+            "run-empty-coverage",
+            "Inspect empty coverage",
+            ResearchRunStatus.COLLECTING,
+            (),
+            (),
+            now,
+            now,
+        )
+
+        self.assertEqual(
+            TkinterDesktopWindow._research_evidence_coverage_text(run),
+            "Evidence coverage — Accepted sources: 0 · With evidence: 0 · "
+            "Without evidence: 0",
+        )
+
+    def test_research_evidence_coverage_ignores_foreign_malformed_record(
+        self,
+    ) -> None:
+        run = Mock(spec=ResearchRun)
+        run.sources = (_research_source_record("document-1", "Accepted"),)
+        run.evidence = (
+            _research_evidence_record("evidence-1", "document-1", "Accepted"),
+            _research_evidence_record("evidence-2", "foreign", "Foreign"),
+        )
+
+        self.assertEqual(
+            TkinterDesktopWindow._research_evidence_coverage_text(run),
+            "Evidence coverage — Accepted sources: 1 · With evidence: 1 · "
+            "Without evidence: 0",
+        )
+
     def test_research_run_metadata_is_timezone_aware_and_hides_failure_detail(
         self,
     ) -> None:
@@ -485,6 +547,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_context = RecordingVariable("Old context")
         window._research_run_progress = RecordingVariable("Old progress")
         window._research_workflow_snapshot = RecordingVariable("Old workflow")
+        window._research_evidence_coverage = RecordingVariable("Old coverage")
         window._research_run_metadata = RecordingVariable("Old metadata")
         window._research_run_filter = RecordingVariable("old filter")
         window._research_run_filter_summary = RecordingVariable("old filter summary")
@@ -546,6 +609,11 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             window._research_run_summary.value,
             "Status: collecting · Sources: 0 · Evidence: 0 · Claims: 0",
         )
+        self.assertEqual(
+            window._research_evidence_coverage.value,
+            "Evidence coverage — Accepted sources: 0 · With evidence: 0 · "
+            "Without evidence: 0",
+        )
         self.assertIsNone(window._research_markdown_export_preview)
         self.assertEqual(responses, [controller.create_response])
 
@@ -561,6 +629,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_context = RecordingVariable("")
         window._research_run_progress = RecordingVariable("")
         window._research_workflow_snapshot = RecordingVariable("")
+        window._research_evidence_coverage = RecordingVariable("")
         window._research_run_metadata = RecordingVariable("")
         window._research_run_filter = RecordingVariable("old filter")
         window._research_run_filter_summary = RecordingVariable("")
@@ -616,6 +685,11 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         self.assertEqual(
             window._research_run_summary.value,
             "Status: collecting · Sources: 0 · Evidence: 0 · Claims: 0",
+        )
+        self.assertEqual(
+            window._research_evidence_coverage.value,
+            "Evidence coverage — Accepted sources: 0 · With evidence: 0 · "
+            "Without evidence: 0",
         )
 
     def test_research_run_filter_matches_question_status_or_exact_id_only(
@@ -1517,6 +1591,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_context = RecordingVariable("Old context")
         window._research_run_progress = RecordingVariable("Old progress")
         window._research_workflow_snapshot = RecordingVariable("Old workflow")
+        window._research_evidence_coverage = RecordingVariable("Old coverage")
         window._research_run_metadata = RecordingVariable("Old metadata")
         window._research_run_filter = RecordingVariable("old filter")
         window._research_run_filter_summary = RecordingVariable("old filter summary")
@@ -1575,6 +1650,10 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             "No research runs are available to summarize.",
         )
         self.assertEqual(
+            window._research_evidence_coverage.value,
+            "Evidence coverage unavailable: no research runs available.",
+        )
+        self.assertEqual(
             window._research_run_metadata.value,
             "Run metadata unavailable: no research runs are available.",
         )
@@ -1614,6 +1693,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_context = RecordingVariable("")
         window._research_run_progress = RecordingVariable("")
         window._research_workflow_snapshot = RecordingVariable("")
+        window._research_evidence_coverage = RecordingVariable("")
         window._research_run_metadata = RecordingVariable("")
         window._research_run_selector = RecordingCandidateSelector(selected_index=1)
         window._research_runs = (first_run, second_run)
@@ -1650,6 +1730,11 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             "Review & export — Status: completed",
         )
         self.assertEqual(
+            window._research_evidence_coverage.value,
+            "Evidence coverage — Accepted sources: 0 · With evidence: 0 · "
+            "Without evidence: 0",
+        )
+        self.assertEqual(
             window._research_run_metadata.value,
             "Run metadata — Created: 2026-08-21T00:00:00+00:00 · "
             "Updated: 2026-08-21T00:00:00+00:00 · Safe failures: 0",
@@ -1673,6 +1758,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_context = RecordingVariable("Old context")
         window._research_run_progress = RecordingVariable("Old progress")
         window._research_workflow_snapshot = RecordingVariable("Old workflow")
+        window._research_evidence_coverage = RecordingVariable("Old coverage")
         window._research_run_metadata = RecordingVariable("Old metadata")
         window._status = RecordingStatus()
 
@@ -1693,6 +1779,10 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         self.assertEqual(
             window._research_workflow_snapshot.value,
             "Refresh and select a research run to see stage records.",
+        )
+        self.assertEqual(
+            window._research_evidence_coverage.value,
+            "Evidence coverage unavailable until a research run is selected.",
         )
         self.assertEqual(
             window._research_run_metadata.value,
@@ -1736,6 +1826,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_context = RecordingVariable("")
         window._research_run_progress = RecordingVariable("")
         window._research_workflow_snapshot = RecordingVariable("")
+        window._research_evidence_coverage = RecordingVariable("")
         window._research_run_metadata = RecordingVariable("")
         window._research_run_selector = RecordingCandidateSelector(selected_index=0)
         window._research_runs = (run,)
@@ -1767,6 +1858,11 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         self.assertEqual(
             window._research_comparison_document_ids.value,
             "manual-comparison",
+        )
+        self.assertEqual(
+            window._research_evidence_coverage.value,
+            "Evidence coverage — Accepted sources: 2 · With evidence: 0 · "
+            "Without evidence: 2",
         )
         self.assertEqual(
             window._status.values,
@@ -2370,6 +2466,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_context = RecordingVariable("")
         window._research_run_progress = RecordingVariable("")
         window._research_workflow_snapshot = RecordingVariable("")
+        window._research_evidence_coverage = RecordingVariable("")
         window._research_run_metadata = RecordingVariable("")
         window._research_run_selector = RecordingCandidateSelector(selected_index=0)
         window._research_runs = (run,)
@@ -2596,6 +2693,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_context = RecordingVariable("")
         window._research_run_progress = RecordingVariable("")
         window._research_workflow_snapshot = RecordingVariable("")
+        window._research_evidence_coverage = RecordingVariable("")
         window._research_run_metadata = RecordingVariable("")
         window._research_run_selector = RecordingCandidateSelector(selected_index=0)
         window._research_runs = (run,)
@@ -2778,6 +2876,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_context = RecordingVariable("")
         window._research_run_progress = RecordingVariable("")
         window._research_workflow_snapshot = RecordingVariable("")
+        window._research_evidence_coverage = RecordingVariable("")
         window._research_run_metadata = RecordingVariable("")
         window._research_run_selector = RecordingCandidateSelector(selected_index=0)
         window._research_runs = (run,)

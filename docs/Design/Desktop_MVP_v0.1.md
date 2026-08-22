@@ -59,6 +59,9 @@ The MVP may present only current Brain/CognitiveEngine capabilities:
 - one local `Reset view` action that clears text/status filters, restores
   Updated-newest sorting, re-shows the full catalog and loaded active row, and
   preserves exact active identity and authored fields;
+- a read-only selected-run evidence-coverage line with accepted sources,
+  sources represented by evidence, and accepted sources without evidence,
+  deduplicated by exact source ID and without quality/readiness inference;
 - a bounded selected-run metadata line with timezone-aware created/updated
   timestamps and aggregate safe-failure count, without failure detail;
 - a read-only accepted-source selector from that same run snapshot, with

@@ -53,6 +53,11 @@ text, All statuses, and Updated-newest sorting. It re-shows the full tuple and
 selects the active row only when that exact ID is loaded. Active identity,
 authored fields, and catalog totals remain unchanged, including empty and stale
 active states, and no controller or mutation action starts.
+Overview adds one read-only evidence-coverage line from the same selected
+immutable snapshot. It counts unique accepted source IDs represented by one or
+more evidence records and reports the accepted remainder. Repeated evidence is
+deduplicated, malformed foreign references cannot inflate counts, no quality or
+readiness is inferred, and empty/invalid selections clear stale coverage.
 Overview also renders one bounded metadata line from the selected immutable
 run: seconds-level timezone-aware creation/update times and only the aggregate
 safe-failure count. It cannot expose a failure stage/reason or retain stale
