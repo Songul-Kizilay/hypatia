@@ -310,6 +310,10 @@ The Records line also shows how many unique recorded evidence IDs are explicitly
 cited by current assessments versus all evidence for that source. Repeated
 citations count once, superseded/foreign/unknown IDs do not count, and no
 completeness or quality judgment is made.
+`Source details` opens a local read-only dialog for the exact selected source.
+It shows bounded title, exact source/run IDs, content type, and timezone-aware
+fetched/accepted times while deliberately excluding the source URL and content;
+it performs no provider, storage, network, or mutation action.
 
 The window uses the same Bootstrap and Brain as the terminal entry point. A
 clicked session only fills the selection field; choosing it remains explicit.

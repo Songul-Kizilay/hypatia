@@ -2,6 +2,33 @@
 
 All notable project changes are recorded here.
 
+## [0.3.110] - 2026-08-22
+
+### Added
+
+- Sources & evidence now provides one explicit `Source details` action for the
+  selected accepted source without adding another layout row.
+- The read-only dialog shows normalized bounded title, exact source/run IDs,
+  persisted content type, and timezone-aware fetched/accepted timestamps at
+  seconds precision.
+
+### Safety
+
+- Details require complete canonical source-record membership in the selected
+  immutable run. Changed, foreign, empty, or stale selection is refused.
+- The dialog deliberately excludes source URL and content, changes no authored
+  field, and opens no controller, provider, persistence, network, or mutation
+  boundary.
+
+### Verification
+
+- The package-aware full local suite contains 1,510 passing automated tests.
+- Focused desktop coverage contains 151 passing tests, including exact safe
+  fields, timezone precision, URL exclusion, canonical-record refusal,
+  no-selection refusal, field isolation, and zero controller calls.
+- Black, Ruff, and MyPy pass. A real Tk smoke confirms one `Source details`
+  button in the established 954-by-973-pixel requested window.
+
 ## [0.3.109] - 2026-08-22
 
 ### Added

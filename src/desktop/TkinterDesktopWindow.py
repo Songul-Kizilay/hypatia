@@ -1222,6 +1222,11 @@ class TkinterDesktopWindow:
         )
         ttk.Button(
             accepted_source_frame,
+            text="Source details",
+            command=self._show_selected_research_source_details,
+        ).grid(row=7, column=1, sticky="ew", pady=(8, 0))
+        ttk.Button(
+            accepted_source_frame,
             text="Use as correction target",
             command=self._use_selected_research_assessment_as_correction_target,
         ).grid(row=7, column=2, sticky="ew", padx=(8, 0), pady=(8, 0))
@@ -3369,6 +3374,30 @@ class TkinterDesktopWindow:
         return title
 
     @staticmethod
+    def _research_source_details_text(
+        run: ResearchRun,
+        source: ResearchSourceRecord,
+    ) -> str | None:
+        """Render safe provenance fields only for one canonical source record."""
+        canonical_source = next(
+            (candidate for candidate in run.sources if candidate == source),
+            None,
+        )
+        if canonical_source is None:
+            return None
+        title = TkinterDesktopWindow._bounded_research_source_title(canonical_source)
+        fetched = canonical_source.fetched_at.isoformat(timespec="seconds")
+        accepted = canonical_source.added_at.isoformat(timespec="seconds")
+        return (
+            f"Title: {title}\n"
+            f"Document ID: {canonical_source.document_id}\n"
+            f"Run ID: {run.run_id}\n"
+            f"Content type: {canonical_source.content_type}\n"
+            f"Fetched: {fetched}\n"
+            f"Accepted: {accepted}"
+        )
+
+    @staticmethod
     def _research_source_label(source: ResearchSourceRecord) -> str:
         """Keep the exact document ID visible beside a bounded source title."""
         title = TkinterDesktopWindow._bounded_research_source_title(source)
@@ -3383,6 +3412,35 @@ class TkinterDesktopWindow:
         if not 0 <= selected_index < len(self._research_sources):
             return None
         return self._research_sources[selected_index]
+
+    def _show_selected_research_source_details(self) -> None:
+        """Show safe local provenance without exposing URL or source content."""
+        source = self._selected_research_source()
+        selected_run = next(
+            (
+                run
+                for run in self._research_runs
+                if run.run_id == self._research_source_run_id
+            ),
+            None,
+        )
+        if source is None or selected_run is None:
+            self._status.set("Select an accepted source first.")
+            return
+        details = self._research_source_details_text(selected_run, source)
+        if details is None:
+            self._status.set(
+                "Selected accepted source is not part of the loaded research run."
+            )
+            return
+        messagebox.showinfo(
+            "Selected source details",
+            details,
+            parent=self._root,
+        )
+        self._status.set(
+            f"accepted source details shown: {source.document_id}; no action started"
+        )
 
     def _select_research_source(self, _event: object | None = None) -> None:
         """Select one accepted source without editing fields or starting work."""

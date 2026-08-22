@@ -102,6 +102,11 @@ The Records line reports unique valid evidence IDs cited by those current
 assessments beside the source's complete evidence count. Duplicate citations
 count once; superseded, foreign, and unknown references cannot contribute. This
 is a read-only audit inventory, not a completeness or quality conclusion.
+`Source details` uses the current exact run and complete canonical source record
+to show bounded title, exact source/run IDs, content type, and seconds-level
+timezone-aware fetched/accepted timestamps. It intentionally omits URL and
+content, preserves authored fields, and makes no controller, storage, provider,
+network, or mutation call.
 Overview also renders one bounded metadata line from the selected immutable
 run: seconds-level timezone-aware creation/update times and only the aggregate
 safe-failure count. It cannot expose a failure stage/reason or retain stale

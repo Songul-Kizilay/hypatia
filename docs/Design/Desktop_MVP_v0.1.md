@@ -91,6 +91,9 @@ The MVP may present only current Brain/CognitiveEngine capabilities:
 - unique recorded evidence cited by current exact-source assessments versus all
   source evidence, deduplicated and guarded against superseded, foreign, or
   unknown references without a completeness/quality inference;
+- an explicit local `Source details` dialog with canonical bounded title, exact
+  source/run IDs, content type, and timezone-aware fetched/accepted times while
+  excluding URL/content and preserving authored fields;
 - a bounded selected-run metadata line with timezone-aware created/updated
   timestamps and aggregate safe-failure count, without failure detail;
 - a read-only accepted-source selector from that same run snapshot, with
