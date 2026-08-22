@@ -2,6 +2,25 @@
 
 All notable project changes are recorded here.
 
+## [0.3.120] - 2026-08-23
+
+### Verification
+
+- Added an end-to-end regression proving the primary natural-memory product
+  behavior across a full runtime restart: a stated preference is extracted and
+  persisted to the local memory file, a second Bootstrap reading the same file
+  loads it, and the durable value reaches the provider prompt for a later
+  question without any explicit recall command.
+- The same suite asserts that an unrelated durable memory stays out of that
+  prompt, that a corrected value supersedes the stale one across the restart,
+  and that non-JSON extraction output leaves chat working while emitting exactly
+  one bounded failure event with a `ValueError` cause.
+- The tests assert the deterministic context and prompt boundary rather than any
+  model-specific generated wording, so they do not depend on a particular local
+  Ollama model.
+- The package-aware full local suite contains 1,590 passing automated tests.
+- Black, Ruff, and MyPy pass for all 349 Python source and test files.
+
 ## [0.3.119] - 2026-08-23
 
 ### Changed
