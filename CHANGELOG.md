@@ -2,6 +2,32 @@
 
 All notable project changes are recorded here.
 
+## [0.3.109] - 2026-08-22
+
+### Added
+
+- The selected-source summary now reports unique recorded evidence explicitly
+  cited by current assessments beside the source's complete evidence count.
+- The existing Records line keeps evidence, assessment history/current totals,
+  and current cited-evidence coverage together without adding window height.
+
+### Safety
+
+- Citation membership uses only non-superseded assessments for the exact source
+  and only evidence IDs present in that source's immutable evidence records.
+  Repeated IDs count once; superseded, foreign, or unknown IDs cannot contribute.
+- The count is an audit inventory, not a completeness or quality verdict. It
+  opens no controller, provider, persistence, network, or mutation boundary.
+
+### Verification
+
+- The package-aware full local suite contains 1,506 passing automated tests.
+- Focused desktop coverage contains 147 passing tests, including repeated
+  citations, corrections, foreign/unknown IDs, zero evidence, exact provenance,
+  safety separation, and hidden-source restoration.
+- Black, Ruff, and MyPy pass. A real Tk smoke confirms the four-line summary
+  preserves the established desktop window boundary.
+
 ## [0.3.108] - 2026-08-22
 
 ### Added

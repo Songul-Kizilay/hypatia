@@ -88,6 +88,9 @@ The MVP may present only current Brain/CognitiveEngine capabilities:
 - complete Unassessed/Low/Medium/High distribution for current exact-source
   assessments only, excluding superseded history and foreign records, displayed
   on a separate line without an inferred verdict;
+- unique recorded evidence cited by current exact-source assessments versus all
+  source evidence, deduplicated and guarded against superseded, foreign, or
+  unknown references without a completeness/quality inference;
 - a bounded selected-run metadata line with timezone-aware created/updated
   timestamps and aggregate safe-failure count, without failure detail;
 - a read-only accepted-source selector from that same run snapshot, with

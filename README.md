@@ -306,6 +306,10 @@ An adjacent fourth line counts current user-authored information-trust labels as
 Unassessed, Low, Medium, and High. Superseded corrections remain in history but
 not these current counts; foreign records cannot contribute, and the numbers do
 not constitute a Hypatia-generated verdict.
+The Records line also shows how many unique recorded evidence IDs are explicitly
+cited by current assessments versus all evidence for that source. Repeated
+citations count once, superseded/foreign/unknown IDs do not count, and no
+completeness or quality judgment is made.
 
 The window uses the same Bootstrap and Brain as the terminal entry point. A
 clicked session only fills the selection field; choosing it remains explicit.

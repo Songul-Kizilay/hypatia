@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.108 (Genesis)`
+`v0.3.109 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.108`** is the current executable package and GitHub
+- **Runtime release `v0.3.109`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -128,6 +128,10 @@ with optional OpenAI-compatible LLM conversation support.
   the exact source count; corrected history and foreign records cannot alter the
   distribution. Four explicit lines keep provenance, safety, records, and trust
   distinct without inferring a verdict or opening a runtime boundary.
+- The Records line also reports unique valid evidence IDs explicitly cited by
+  current assessments versus all evidence recorded for the selected source.
+  Repeated citations count once; superseded, foreign, and unknown IDs cannot
+  contribute. It is an audit inventory and makes no coverage-quality conclusion.
 - The selected run's immutable creation/update times and complete safe-failure
   count appear in Overview as a bounded metadata line. Timestamps retain their
   timezone offset at seconds precision; failure stage/reason text is never
@@ -587,7 +591,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,505 automated tests pass through package-aware discovery.
+- 1,506 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -622,7 +626,7 @@ changed.
 
 ## Next Milestone
 
-Add a read-only current-assessment evidence-coverage count for the selected
-source: unique explicitly cited evidence versus all recorded source evidence.
-It must exclude superseded history, infer no quality, and open no runtime or
+Add read-only selected-source provenance timing: timezone-aware fetched and
+accepted timestamps plus persisted content type. It must use only the canonical
+immutable source record, expose no URL or content, and open no runtime or
 mutation boundary.
