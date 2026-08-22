@@ -1030,6 +1030,182 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             ["Research run status filter is invalid."],
         )
 
+    def test_reset_research_run_view_restores_defaults_and_active_row(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        base = datetime(2026, 8, 22, tzinfo=UTC)
+        active = ResearchRun(
+            "run-1",
+            "Alpha",
+            ResearchRunStatus.COMPLETED,
+            (),
+            (),
+            base,
+            base,
+        )
+        newer = ResearchRun(
+            "run-2",
+            "Zulu",
+            ResearchRunStatus.COLLECTING,
+            (),
+            (),
+            base,
+            base + timedelta(hours=1),
+        )
+        full_catalog = (active, newer)
+        window._controller = Mock()
+        window._research_run_filter = RecordingVariable("zulu")
+        window._research_run_filter_summary = RecordingVariable("1 of 2 match")
+        window._research_run_status_filter = RecordingVariable(
+            ResearchRunStatusFacet.COLLECTING.value
+        )
+        window._research_run_catalog_summary = RecordingVariable(
+            "Loaded catalog: immutable"
+        )
+        window._research_run_sort = RecordingVariable(ResearchRunSort.QUESTION.value)
+        window._research_run_sort_summary = RecordingVariable("Old sort")
+        window._research_run_id = RecordingVariable("run-1")
+        window._research_run_choice = RecordingVariable("")
+        window._research_run_selector = RecordingCandidateSelector(0)
+        window._research_runs = full_catalog
+        window._visible_research_runs = (newer,)
+        window._research_assessment_text = RecordingVariable("authored assessment")
+        window._research_claim_text = RecordingVariable("authored claim")
+        window._status = RecordingStatus()
+
+        window._reset_research_run_view()
+
+        self.assertIs(window._research_runs, full_catalog)
+        self.assertEqual(window._research_run_filter.value, "")
+        self.assertEqual(
+            window._research_run_status_filter.value,
+            ResearchRunStatusFacet.ALL.value,
+        )
+        self.assertEqual(
+            window._research_run_sort.value,
+            ResearchRunSort.UPDATED_NEWEST.value,
+        )
+        self.assertEqual(window._visible_research_runs, (newer, active))
+        self.assertEqual(window._research_run_selector.current(), 1)
+        self.assertEqual(
+            window._research_run_choice.value,
+            "Alpha [completed] — run-1",
+        )
+        self.assertEqual(window._research_run_id.value, "run-1")
+        self.assertEqual(
+            window._research_run_filter_summary.value,
+            "All 2 loaded research runs are shown.",
+        )
+        self.assertEqual(
+            window._research_run_sort_summary.value,
+            "Current sort: Updated — newest first.",
+        )
+        self.assertEqual(
+            window._research_run_catalog_summary.value,
+            "Loaded catalog: immutable",
+        )
+        self.assertEqual(
+            window._research_assessment_text.value,
+            "authored assessment",
+        )
+        self.assertEqual(window._research_claim_text.value, "authored claim")
+        self.assertEqual(
+            window._status.values,
+            [
+                "research run view reset: 2 loaded; filters cleared; "
+                "default sort restored; active run shown: run-1"
+            ],
+        )
+        window._controller.assert_not_called()
+
+    def test_reset_empty_research_run_view_clears_invalid_local_state(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        window._research_run_filter = RecordingVariable("old")
+        window._research_run_filter_summary = RecordingVariable("Old summary")
+        window._research_run_status_filter = RecordingVariable("invalid")
+        window._research_run_sort = RecordingVariable("invalid")
+        window._research_run_sort_summary = RecordingVariable("Old sort")
+        window._research_run_id = RecordingVariable("")
+        window._research_run_choice = RecordingVariable("Old choice")
+        window._research_run_selector = RecordingCandidateSelector(0)
+        window._research_run_selector.values = ("Old row",)
+        window._research_runs = ()
+        window._visible_research_runs = ()
+        window._research_assessment_text = RecordingVariable("authored")
+        window._status = RecordingStatus()
+
+        window._reset_research_run_view()
+
+        self.assertEqual(window._research_run_filter.value, "")
+        self.assertEqual(
+            window._research_run_status_filter.value,
+            ResearchRunStatusFacet.ALL.value,
+        )
+        self.assertEqual(
+            window._research_run_sort.value,
+            ResearchRunSort.UPDATED_NEWEST.value,
+        )
+        self.assertEqual(window._research_run_selector.values, ())
+        self.assertEqual(window._research_run_choice.value, "")
+        self.assertEqual(
+            window._research_run_filter_summary.value,
+            "No research runs are available.",
+        )
+        self.assertEqual(
+            window._research_run_sort_summary.value,
+            "Current sort: Updated — newest first.",
+        )
+        self.assertEqual(window._research_assessment_text.value, "authored")
+        self.assertEqual(
+            window._status.values,
+            [
+                "research run view reset: 0 loaded; filters cleared; "
+                "default sort restored; no active run selected"
+            ],
+        )
+
+    def test_reset_view_preserves_stale_active_identity_without_selecting_row(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        now = datetime(2026, 8, 22, tzinfo=UTC)
+        loaded = ResearchRun(
+            "run-loaded",
+            "Loaded",
+            ResearchRunStatus.COLLECTING,
+            (),
+            (),
+            now,
+            now,
+        )
+        window._research_run_filter = RecordingVariable("missing")
+        window._research_run_filter_summary = RecordingVariable("Old summary")
+        window._research_run_status_filter = RecordingVariable(
+            ResearchRunStatusFacet.FAILED.value
+        )
+        window._research_run_sort = RecordingVariable(ResearchRunSort.QUESTION.value)
+        window._research_run_sort_summary = RecordingVariable("Old sort")
+        window._research_run_id = RecordingVariable("run-stale")
+        window._research_run_choice = RecordingVariable("Stale choice")
+        window._research_run_selector = RecordingCandidateSelector(0)
+        window._research_runs = (loaded,)
+        window._visible_research_runs = ()
+        window._research_claim_text = RecordingVariable("authored claim")
+        window._status = RecordingStatus()
+
+        window._reset_research_run_view()
+
+        self.assertEqual(window._visible_research_runs, (loaded,))
+        self.assertEqual(window._research_run_choice.value, "")
+        self.assertEqual(window._research_run_id.value, "run-stale")
+        self.assertEqual(window._research_claim_text.value, "authored claim")
+        self.assertEqual(
+            window._status.values,
+            [
+                "research run view reset: 1 loaded; filters cleared; "
+                "default sort restored; active run not loaded: run-stale"
+            ],
+        )
+
     def test_show_active_run_clears_local_filters_and_preserves_sort_and_fields(
         self,
     ) -> None:

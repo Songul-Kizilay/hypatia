@@ -48,6 +48,11 @@ One adjacent read-only catalog summary reports complete All, Collecting,
 Completed, Failed, and Cancelled counts from the full immutable loaded tuple.
 Filtering and sorting cannot change those totals; an empty catalog replaces
 stale values with explicit zeroes and no additional read or action occurs.
+`Reset view` restores all three local catalog controls in one action: blank
+text, All statuses, and Updated-newest sorting. It re-shows the full tuple and
+selects the active row only when that exact ID is loaded. Active identity,
+authored fields, and catalog totals remain unchanged, including empty and stale
+active states, and no controller or mutation action starts.
 Overview also renders one bounded metadata line from the selected immutable
 run: seconds-level timezone-aware creation/update times and only the aggregate
 safe-failure count. It cannot expose a failure stage/reason or retain stale

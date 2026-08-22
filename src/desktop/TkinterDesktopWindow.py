@@ -978,7 +978,12 @@ class TkinterDesktopWindow:
             research_run_filter_frame,
             textvariable=self._research_run_sort_summary,
             style="Hint.TLabel",
-        ).grid(row=5, column=1, columnspan=3, sticky="w", pady=(4, 0))
+        ).grid(row=5, column=1, columnspan=2, sticky="w", pady=(4, 0))
+        ttk.Button(
+            research_run_filter_frame,
+            text="Reset view",
+            command=self._reset_research_run_view,
+        ).grid(row=5, column=3, sticky="ew", padx=(8, 0), pady=(4, 0))
         research_workflow_snapshot_frame = ttk.LabelFrame(
             research_overview_frame,
             text="Workflow snapshot",
@@ -2270,6 +2275,41 @@ class TkinterDesktopWindow:
         """Restore the complete loaded catalog without opening a read path."""
         self._research_run_filter.set("")
         self._apply_research_run_filter()
+
+    def _reset_research_run_view(self) -> None:
+        """Restore every local catalog view control to its safe default."""
+        default_sort = ResearchRunSort.UPDATED_NEWEST
+        self._research_run_filter.set("")
+        self._research_run_status_filter.set(ResearchRunStatusFacet.ALL.value)
+        self._research_run_sort.set(default_sort.value)
+        visible_runs = self._sort_research_runs(self._research_runs, default_sort)
+        self._render_visible_research_runs(visible_runs)
+
+        selected_run_id = self._research_run_id.get().strip()
+        selected_run = next(
+            (run for run in self._research_runs if run.run_id == selected_run_id),
+            None,
+        )
+        if selected_run is not None:
+            self._research_run_choice.set(self._research_run_label(selected_run))
+
+        total_count = len(self._research_runs)
+        self._research_run_filter_summary.set(
+            "No research runs are available."
+            if total_count == 0
+            else f"All {total_count} loaded research runs are shown."
+        )
+        self._research_run_sort_summary.set(f"Current sort: {default_sort.value}.")
+        if selected_run is not None:
+            active_status = f"active run shown: {selected_run_id}"
+        elif selected_run_id:
+            active_status = f"active run not loaded: {selected_run_id}"
+        else:
+            active_status = "no active run selected"
+        self._status.set(
+            f"research run view reset: {total_count} loaded; filters cleared; "
+            f"default sort restored; {active_status}"
+        )
 
     def _apply_research_run_status_filter(
         self,
