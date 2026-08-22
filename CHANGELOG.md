@@ -2,6 +2,34 @@
 
 All notable project changes are recorded here.
 
+## [0.3.101] - 2026-08-22
+
+### Added
+
+- Research Overview now shows one read-only current-assessment coverage summary
+  for the selected immutable run snapshot.
+- The summary reports accepted sources, sources having a current authored
+  assessment, and accepted sources without a current assessment.
+
+### Safety
+
+- Superseded assessment history does not count as current, and multiple current
+  records for one accepted source count that source once. Malformed foreign
+  assessment references cannot inflate coverage.
+- Empty and invalid selections replace stale coverage with explicit guidance.
+  The summary infers no quality, truth, completeness, or readiness and opens no
+  Brain, controller, storage, provider, network, LLM, index, event-bus, or
+  mutation boundary.
+
+### Verification
+
+- The package-aware full local suite contains 1,488 passing automated tests.
+- Focused desktop coverage contains 129 passing tests, including correction
+  chains, source deduplication, superseded-only history, malformed foreign
+  references, empty runs, valid selection binding, and stale-state clearing.
+- Black, Ruff, and MyPy pass. A real Tk smoke confirms the additional bound
+  coverage label remains within the existing 954-by-973-pixel requested window.
+
 ## [0.3.100] - 2026-08-22
 
 ### Added
