@@ -29,6 +29,7 @@ from research.ResearchClaimPreview import ResearchClaimPreview
 from research.ResearchClaimWritePreview import ResearchClaimWritePreview
 from research.ResearchEvidenceIntegrityStatus import ResearchEvidenceIntegrityStatus
 from research.ResearchPlanDraftPreview import ResearchPlanDraftPreview
+from research.ResearchPlanExecutionState import ResearchPlanExecutionState
 from research.ResearchRun import ResearchRun
 from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
@@ -114,5 +115,6 @@ class BrainResponse:
     research_evidence_integrity_status: ResearchEvidenceIntegrityStatus | None = None
     research_plan_draft_preview: ResearchPlanDraftPreview | None = None
     learned_memory_audit: LearnedMemoryAuditReport | None = None
+    research_plan_execution: ResearchPlanExecutionState | None = None
     session_summaries: list[SessionSummary] = field(default_factory=list)
     session_delete_allowed: bool | None = None

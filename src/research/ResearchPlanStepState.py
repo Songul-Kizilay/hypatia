@@ -17,6 +17,7 @@ class ResearchPlanStepState:
     step_id: str
     status: ResearchPlanStepStatus = ResearchPlanStepStatus.PENDING
     detail: str = ""
+    work_performed: bool = False
 
     def __post_init__(self) -> None:
         if not isinstance(self.step_id, str) or not self.step_id.strip():
@@ -25,6 +26,10 @@ class ResearchPlanStepState:
             raise ResearchError("Research plan step state status is invalid.")
         if not isinstance(self.detail, str):
             raise ResearchError("Research plan step state detail must be text.")
+        if not isinstance(self.work_performed, bool):
+            raise ResearchError("Research plan step work flag must be boolean.")
+        if self.work_performed and self.status is ResearchPlanStepStatus.PENDING:
+            raise ResearchError("A pending research plan step performed no work.")
         detail = self.detail.strip()
         if len(detail) > MAX_RESEARCH_PLAN_STEP_DETAIL_CHARACTERS:
             raise ResearchError("Research plan step state detail is too long.")
@@ -35,6 +40,17 @@ class ResearchPlanStepState:
         self,
         status: ResearchPlanStepStatus,
         detail: str = "",
+        work_performed: bool = False,
     ) -> ResearchPlanStepState:
-        """Return a new state carrying the requested status and detail."""
-        return replace(self, status=status, detail=detail)
+        """Return a new state carrying the requested status, detail, and origin.
+
+        ``work_performed`` records whether a real research operation backed this
+        transition. It never becomes true on its own, so a state-machine advance
+        can never masquerade as completed research work.
+        """
+        return replace(
+            self,
+            status=status,
+            detail=detail,
+            work_performed=work_performed,
+        )

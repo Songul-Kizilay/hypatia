@@ -35,6 +35,7 @@ from research.ResearchClaimPreview import ResearchClaimPreview
 from research.ResearchClaimWritePreview import ResearchClaimWritePreview
 from research.ResearchEvidenceIntegrityStatus import ResearchEvidenceIntegrityStatus
 from research.ResearchPlanDraftPreview import ResearchPlanDraftPreview
+from research.ResearchPlanExecutionState import ResearchPlanExecutionState
 from research.ResearchRun import ResearchRun
 from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
@@ -881,6 +882,89 @@ class ResponseComposer:
             intent="learned_memory_audit",
             memory_count=report.active_memories,
             learned_memory_audit=report,
+        )
+
+    def research_plan_execution_status(
+        self,
+        request: BrainRequest,
+        state: ResearchPlanExecutionState,
+    ) -> BrainResponse:
+        """Render bounded execution state without implying performed research."""
+        lines = [
+            "Research plan execution:",
+            f"Plan ID: {state.plan_id}",
+            f"Status: {state.status.value}",
+            f"Steps: {len(state.steps)}",
+            f"Completed steps: {state.completed_steps}",
+            f"Pending steps: {state.pending_steps}",
+            f"Running step: {state.running_step_id or 'none'}",
+        ]
+        for index, step in enumerate(state.steps, start=1):
+            detail = f" | {step.detail}" if step.detail else ""
+            lines.append(f"{index}. {step.step_id}: {step.status.value}{detail}")
+        if state.detail:
+            lines.append(f"Detail: {state.detail}")
+        lines.append(f"Research operations performed: {state.steps_with_research_work}")
+        if not state.performed_research_work:
+            lines.append("No research work has run; this reports execution state only.")
+        lines.extend(
+            (
+                "Source discovery, fetching, evidence, and claims: not performed",
+                "Persistent writes: not used",
+                "Execution state: in-memory only, lost when Hypatia exits",
+            )
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_plan_execution",
+            memory_count=0,
+            research_plan_execution=state,
+        )
+
+    def research_plan_execution_missing(
+        self,
+        request: BrainRequest,
+        plan_id: str,
+    ) -> BrainResponse:
+        """Report absent ephemeral state without inventing a resumable run."""
+        message = "\n".join(
+            (
+                "Research plan execution not found:",
+                f"Plan ID: {plan_id}",
+                "This process holds no execution state for that plan.",
+                "Execution state is in-memory only and is lost when Hypatia exits.",
+                "It is not resumed after a restart.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="research_plan_execution",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_plan_execution_rejected(
+        self,
+        request: BrainRequest,
+        reason: str,
+    ) -> BrainResponse:
+        """Report one bounded refusal without starting or changing execution."""
+        message = "\n".join(
+            (
+                "Research plan execution rejected:",
+                f"Reason: {reason}",
+                "Execution: not started",
+                "Persistent writes: not used",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="research_plan_execution",
+            memory_count=0,
+            success=False,
         )
 
     def research_run_list_success(

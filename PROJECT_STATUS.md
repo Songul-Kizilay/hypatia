@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.124 (Genesis)`
+`v0.3.125 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.124`** is the current executable package and GitHub
+- **Runtime release `v0.3.125`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -32,6 +32,19 @@ with optional OpenAI-compatible LLM conversation support.
 ### Implemented
 
 - Application bootstrap, configuration, logging, and dependency injection.
+- Research-plan execution has an ephemeral coordination layer as its second
+  stage. `ResearchPlanExecutionApplicationService` owns per-process execution
+  state behind exact structured start, status, and cancel Brain intents;
+  `CognitiveEngine` only routes. No research work runs in this stage: starting a
+  plan records that execution began and advances no step, and source discovery,
+  fetching, evidence, assessment, and claims are not performed. A step records
+  whether a real operation backed it, so a bare state-machine advance is reported
+  as zero research operations rather than as completed research. State is
+  in-memory only, every status message says it is lost when Hypatia exits, and an
+  unknown plan is reported as absent rather than as a resumable run. Duplicate
+  starts are rejected deterministically, active executions are capped at 20,
+  terminal executions reject further transitions, and cancellation preserves
+  completed-step history.
 - Research-plan execution has a pure immutable state machine as its first stage.
   `ResearchPlanExecutionStatus` and `ResearchPlanStepStatus` follow the existing
   `ResearchRunStatus` convention with an explicit terminal property, and
@@ -708,7 +721,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,654 automated tests pass through package-aware discovery.
+- 1,671 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.

@@ -88,6 +88,16 @@ class ResearchPlanExecutionState:
         return self._count(ResearchPlanStepStatus.PENDING)
 
     @property
+    def steps_with_research_work(self) -> int:
+        """Count steps whose transition was backed by a real research operation."""
+        return sum(1 for step in self.steps if step.work_performed)
+
+    @property
+    def performed_research_work(self) -> bool:
+        """Report whether any real research operation ran for this execution."""
+        return self.steps_with_research_work > 0
+
+    @property
     def running_step_id(self) -> str | None:
         for step in self.steps:
             if step.status is ResearchPlanStepStatus.RUNNING:
@@ -125,14 +135,21 @@ class ResearchPlanExecutionState:
         self,
         step_id: str,
         detail: str = "",
+        work_performed: bool = False,
     ) -> ResearchPlanExecutionState:
-        """Record one finished step and complete the plan only when all finished."""
+        """Record one finished step and complete the plan only when all finished.
+
+        ``work_performed`` must be supplied by the caller that actually ran a
+        research operation. It defaults to false so that a bare state-machine
+        advance is never mistaken for performed research.
+        """
         self._require_running()
         self._require_step_status(step_id, ResearchPlanStepStatus.RUNNING)
         updated = self._replace_step(
             step_id,
             ResearchPlanStepStatus.COMPLETED,
             detail,
+            work_performed=work_performed,
         )
         if all(
             step.status is ResearchPlanStepStatus.COMPLETED for step in updated.steps
@@ -195,7 +212,11 @@ class ResearchPlanExecutionState:
             (
                 step
                 if step.status.terminal
-                else step.with_status(ResearchPlanStepStatus.CANCELLED, detail)
+                else step.with_status(
+                    ResearchPlanStepStatus.CANCELLED,
+                    detail,
+                    step.work_performed,
+                )
             )
             for step in self.steps
         )
@@ -233,10 +254,15 @@ class ResearchPlanExecutionState:
         step_id: str,
         status: ResearchPlanStepStatus,
         detail: str = "",
+        work_performed: bool = False,
     ) -> ResearchPlanExecutionState:
         normalized = self._normalized(step_id)
         steps = tuple(
-            step.with_status(status, detail) if step.step_id == normalized else step
+            (
+                step.with_status(status, detail, work_performed)
+                if step.step_id == normalized
+                else step
+            )
             for step in self.steps
         )
         return replace(self, steps=steps)

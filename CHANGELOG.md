@@ -2,6 +2,52 @@
 
 All notable project changes are recorded here.
 
+## [0.3.125] - 2026-08-23
+
+### Added
+
+- Stage 2 of research-plan execution: `ResearchPlanExecutionApplicationService`
+  owns ephemeral per-process execution state and exposes exact structured
+  `research_plan_execution_start`, `research_plan_execution_status`, and
+  `research_plan_execution_cancel` Brain intents.
+- `ResearchPlanStepState.work_performed` records whether a real research
+  operation backed a transition. `ResearchPlanExecutionState` adds
+  `steps_with_research_work` and `performed_research_work`.
+- `BrainResponse.research_plan_execution` carries the complete immutable state.
+
+### Safety
+
+- No research work runs in this stage. Starting a plan records that execution
+  began and advances no step. Source discovery, fetching, evidence, assessment,
+  and claims are not performed, and the rendered message says so.
+- `work_performed` defaults to false and never becomes true on its own, so a
+  bare state-machine advance can never be presented as completed research. A
+  step completed without a backing operation is reported with
+  `Research operations performed: 0` and an explicit no-research-ran line.
+- Execution state lives in the application service, never in `CognitiveEngine`,
+  which only routes.
+- State is in-memory and per-process. Every status message states that it is
+  lost when Hypatia exits, and an unknown plan reports absent state that is not
+  resumed after a restart rather than inventing a resumable run.
+- Duplicate start requests are rejected deterministically and leave existing
+  state untouched. Active executions are capped at 20 per process.
+- Terminal executions reject further transitions, and cancellation preserves
+  completed-step history including its work flag.
+- No persistence, schema change, second `ResearchRun` store, network call, or
+  LLM call. Execution routes write no memory record.
+
+### Verification
+
+- The package-aware full local suite contains 1,671 passing automated tests.
+- Seventeen new tests cover intent recognition, start without step advance,
+  absence of reported research work, the ephemeral-boundary message,
+  deterministic duplicate-start rejection, absent-state reporting, cancellation
+  of unfinished steps, preservation of completed history, a manual advance being
+  reported as no research, terminal rejection, invalid drafts leaving no state,
+  missing plan IDs, bounded capacity, fresh-process statelessness, engine
+  routing without owning state, and execution routes writing no memory.
+- Black, Ruff, and MyPy pass for all 365 Python source and test files.
+
 ## [0.3.124] - 2026-08-23
 
 ### Added

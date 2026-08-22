@@ -232,5 +232,100 @@ class LearnedMemoryAuditRouteTests(unittest.TestCase):
         self.assertIsNone(response.learned_memory_audit)
 
 
+class ResearchPlanExecutionRouteTests(unittest.TestCase):
+    """The engine must only route; execution state lives in the service."""
+
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        path = Path(self.temporary_directory.name) / "knowledge.md"
+        path.write_text("Hypatia\n\nKnowledge", encoding="utf-8")
+        self.event_bus = EventBus()
+        self.memory_manager = MemoryManager(self.event_bus)
+        self.knowledge_engine = KnowledgeEngine()
+        self.knowledge_engine.load(path)
+        self.session_manager = SessionManager(self.event_bus)
+        self.llm_provider = CountingLLMProvider()
+        self.engine = CognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            Planner(),
+            self.event_bus,
+            ResponseComposer(),
+            self.session_manager,
+            SessionRenameTransactionService(
+                session_manager=self.session_manager,
+                memory_manager=self.memory_manager,
+                event_bus=self.event_bus,
+            ),
+            llm_provider=self.llm_provider,
+        )
+
+    def tearDown(self) -> None:
+        self.temporary_directory.cleanup()
+
+    def test_engine_routes_start_status_and_cancel_without_owning_state(self) -> None:
+        started = self.engine.process(
+            BrainRequest(
+                message="Start research plan",
+                metadata={
+                    "intent": "research_plan_execution_start",
+                    "research_plan_question": "What evidence supports the claim?",
+                    "research_plan_steps": (("Collect sources", ()),),
+                },
+            )
+        )
+
+        self.assertTrue(started.success)
+        self.assertEqual(started.intent, "research_plan_execution")
+        assert started.research_plan_execution is not None
+        plan_id = started.research_plan_execution.plan_id
+        self.assertFalse(started.research_plan_execution.performed_research_work)
+        self.assertFalse(hasattr(self.engine, "_executions"))
+
+        status = self.engine.process(
+            BrainRequest(
+                message="Research plan execution",
+                metadata={
+                    "intent": "research_plan_execution_status",
+                    "research_plan_id": plan_id,
+                },
+            )
+        )
+        self.assertTrue(status.success)
+
+        cancelled = self.engine.process(
+            BrainRequest(
+                message="Research plan execution",
+                metadata={
+                    "intent": "research_plan_execution_cancel",
+                    "research_plan_id": plan_id,
+                },
+            )
+        )
+        self.assertTrue(cancelled.success)
+        assert cancelled.research_plan_execution is not None
+        self.assertEqual(
+            cancelled.research_plan_execution.status.value,
+            "cancelled",
+        )
+        self.assertEqual(self.llm_provider.calls, [])
+
+    def test_execution_routes_never_write_memory(self) -> None:
+        before = len(self.memory_manager.all())
+
+        self.engine.process(
+            BrainRequest(
+                message="Start research plan",
+                metadata={
+                    "intent": "research_plan_execution_start",
+                    "research_plan_question": "What evidence supports the claim?",
+                    "research_plan_steps": (("Collect sources", ()),),
+                },
+            )
+        )
+
+        self.assertEqual(len(self.memory_manager.all()), before)
+
+
 if __name__ == "__main__":
     unittest.main()

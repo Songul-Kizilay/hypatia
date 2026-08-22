@@ -22,6 +22,9 @@ from cognition.ResearchAuthoredHistoryApplicationService import (
 from cognition.ResearchOverviewApplicationService import (
     ResearchOverviewApplicationService,
 )
+from cognition.ResearchPlanExecutionApplicationService import (
+    ResearchPlanExecutionApplicationService,
+)
 from cognition.ResearchPlanPreviewApplicationService import (
     ResearchPlanPreviewApplicationService,
 )
@@ -203,6 +206,9 @@ class CognitiveEngine:
             memory_manager,
             response_composer,
         )
+        self._research_plan_execution_service = ResearchPlanExecutionApplicationService(
+            response_composer
+        )
         self._research_plan_preview_service = ResearchPlanPreviewApplicationService(
             response_composer,
             research_plan_draft_service,
@@ -252,6 +258,15 @@ class CognitiveEngine:
 
         if self._research_plan_preview_service.is_draft_preview_request(request):
             return self._research_plan_preview_service.process_draft_preview(request)
+
+        if self._research_plan_execution_service.is_start_request(request):
+            return self._research_plan_execution_service.process_start(request)
+
+        if self._research_plan_execution_service.is_status_request(request):
+            return self._research_plan_execution_service.process_status(request)
+
+        if self._research_plan_execution_service.is_cancel_request(request):
+            return self._research_plan_execution_service.process_cancel(request)
 
         if self._is_research_run_markdown_export_verify_request(request):
             return self._process_research_run_markdown_export_verify(request)
