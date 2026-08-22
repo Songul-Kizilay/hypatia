@@ -2,6 +2,27 @@
 
 All notable project changes are recorded here.
 
+## [0.3.123] - 2026-08-23
+
+### Added
+
+- `DesktopController.audit_learned_memory` issues the existing structured
+  `learned_memory_audit` intent as one read-only request, so the desktop adapter
+  can surface learned-memory health without new runtime behavior.
+
+### Safety
+
+- The adapter adds no persistence, provider, network, LLM, or mutation path. It
+  is a thin pass-through to the Brain route added in 0.3.122.
+- The Tkinter window is unchanged in this increment; the bounded report is
+  already fully rendered in the Brain response message.
+
+### Verification
+
+- The package-aware full local suite contains 1,630 passing automated tests.
+- One new test locks the exact structured message, source, and metadata.
+- Black, Ruff, and MyPy pass for all 357 Python source and test files.
+
 ## [0.3.122] - 2026-08-23
 
 ### Added

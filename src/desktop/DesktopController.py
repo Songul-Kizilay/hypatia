@@ -195,6 +195,16 @@ class DesktopController:
             )
         )
 
+    def audit_learned_memory(self) -> BrainResponse:
+        """Request the read-only learned-memory health report without writing."""
+        return self._brain.process(
+            BrainRequest(
+                message="Audit learned memory",
+                source="desktop",
+                metadata={"intent": "learned_memory_audit"},
+            )
+        )
+
     def list_research_runs(self) -> BrainResponse:
         """List persistent research runs without fetching a network source."""
         return self._brain.process(

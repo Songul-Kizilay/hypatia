@@ -341,6 +341,18 @@ class DesktopControllerTests(unittest.TestCase):
 
         self.assertEqual(self.brain.requests, [])
 
+    def test_audit_learned_memory_uses_a_structured_read_only_request(self) -> None:
+        response = self.controller.audit_learned_memory()
+
+        self.assertIs(response, self.response)
+        self.assertEqual(len(self.brain.requests), 1)
+        request = self.brain.requests[0]
+        self.assertIsInstance(request, BrainRequest)
+        assert isinstance(request, BrainRequest)
+        self.assertEqual(request.message, "Audit learned memory")
+        self.assertEqual(request.source, "desktop")
+        self.assertEqual(request.metadata, {"intent": "learned_memory_audit"})
+
     def test_list_research_runs_uses_a_structured_read_only_request(self) -> None:
         response = self.controller.list_research_runs()
 
