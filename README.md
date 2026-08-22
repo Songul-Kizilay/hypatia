@@ -251,8 +251,12 @@ visible, deterministic run-ID ties are stable, and sorting preserves the full
 catalog, filter membership, active run, and authored fields without requesting
 or changing data.
 If filtering hides the active run, `Show active run` clears only that local
-filter, preserves the selected order and authored fields, and restores the exact
-active row. Missing or invalid local state is refused without changing data.
+filtering state, preserves the selected order and authored fields, and restores
+the exact active row. Missing or invalid local state is refused without changing
+data.
+An explicit status choice can show all, collecting, completed, failed, or
+cancelled runs. It combines locally with the bounded text filter and current
+sort, reports visible/total counts, and never requests or changes data.
 Overview also shows the selected run's seconds-level timezone-aware creation
 and update timestamps plus the complete safe-failure count. It never displays
 failure stage or reason text and performs no additional read.

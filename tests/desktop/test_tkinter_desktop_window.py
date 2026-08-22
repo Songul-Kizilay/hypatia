@@ -23,6 +23,7 @@ from desktop.TkinterDesktopWindow import (
     _RESEARCH_WORKFLOW_TAB_TITLES,
     DesktopTheme,
     ResearchRunSort,
+    ResearchRunStatusFacet,
     TkinterDesktopWindow,
     _accessibility_palette,
     _format_citations,
@@ -487,6 +488,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_metadata = RecordingVariable("Old metadata")
         window._research_run_filter = RecordingVariable("old filter")
         window._research_run_filter_summary = RecordingVariable("old filter summary")
+        window._research_run_status_filter = RecordingVariable("old status")
         window._research_run_sort = RecordingVariable(
             ResearchRunSort.UPDATED_NEWEST.value
         )
@@ -558,6 +560,9 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_filter_summary = RecordingVariable("")
         window._research_run_sort = RecordingVariable(
             ResearchRunSort.UPDATED_NEWEST.value
+        )
+        window._research_run_status_filter = RecordingVariable(
+            ResearchRunStatusFacet.ALL.value
         )
         window._research_run_sort_summary = RecordingVariable("")
         window._research_run_selector = RecordingCandidateSelector()
@@ -674,6 +679,9 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_sort = RecordingVariable(
             ResearchRunSort.UPDATED_NEWEST.value
         )
+        window._research_run_status_filter = RecordingVariable(
+            ResearchRunStatusFacet.ALL.value
+        )
         window._research_run_id = RecordingVariable("run-2")
         window._research_run_choice = RecordingVariable("Second question")
         window._research_run_selector = RecordingCandidateSelector()
@@ -692,7 +700,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         self.assertEqual(window._research_run_id.value, "run-2")
         self.assertEqual(
             window._research_run_filter_summary.value,
-            "1 of 2 loaded research runs match.",
+            "1 of 2 loaded research runs match (All statuses).",
         )
         self.assertEqual(
             window._status.values,
@@ -718,6 +726,9 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_sort = RecordingVariable(
             ResearchRunSort.UPDATED_NEWEST.value
         )
+        window._research_run_status_filter = RecordingVariable(
+            ResearchRunStatusFacet.ALL.value
+        )
         window._research_run_id = RecordingVariable("run-1")
         window._research_run_choice = RecordingVariable("Only question")
         window._research_run_selector = RecordingCandidateSelector(0)
@@ -735,7 +746,8 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         self.assertEqual(window._research_run_id.value, "run-1")
         self.assertEqual(
             window._research_run_filter_summary.value,
-            "No loaded research runs match; the active run is unchanged.",
+            "No loaded research runs match the current filters; "
+            "the active run is unchanged.",
         )
         self.assertEqual(
             window._research_assessment_text.value,
@@ -787,7 +799,177 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             ["Research run filter cannot exceed 200 characters."],
         )
 
-    def test_show_active_run_clears_only_filter_and_preserves_sort_and_fields(
+    def test_research_run_status_filter_matches_each_exact_lifecycle(self) -> None:
+        now = datetime(2026, 8, 22, tzinfo=UTC)
+        runs = tuple(
+            ResearchRun(
+                f"run-{status.value}",
+                f"Question {status.value}",
+                status,
+                (),
+                (),
+                now,
+                now,
+            )
+            for status in ResearchRunStatus
+        )
+
+        self.assertIs(
+            TkinterDesktopWindow._filter_research_runs_by_status(runs, None),
+            runs,
+        )
+        for run in runs:
+            with self.subTest(status=run.status.value):
+                self.assertEqual(
+                    TkinterDesktopWindow._filter_research_runs_by_status(
+                        runs,
+                        run.status,
+                    ),
+                    (run,),
+                )
+
+    def test_status_filter_composes_with_text_sort_and_clear(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        now = datetime(2026, 8, 22, tzinfo=UTC)
+        completed_alpha = ResearchRun(
+            "run-1",
+            "Alpha plan",
+            ResearchRunStatus.COMPLETED,
+            (),
+            (),
+            now,
+            now,
+        )
+        completed_zulu = ResearchRun(
+            "run-2",
+            "Zulu review",
+            ResearchRunStatus.COMPLETED,
+            (),
+            (),
+            now,
+            now,
+        )
+        collecting_alpha = ResearchRun(
+            "run-3",
+            "Alpha draft",
+            ResearchRunStatus.COLLECTING,
+            (),
+            (),
+            now,
+            now,
+        )
+        full_catalog = (completed_zulu, collecting_alpha, completed_alpha)
+        window._research_run_filter = RecordingVariable("alpha")
+        window._research_run_filter_summary = RecordingVariable("")
+        window._research_run_status_filter = RecordingVariable(
+            ResearchRunStatusFacet.COMPLETED.value
+        )
+        window._research_run_sort = RecordingVariable(ResearchRunSort.QUESTION.value)
+        window._research_run_id = RecordingVariable("run-1")
+        window._research_run_choice = RecordingVariable("Alpha plan")
+        window._research_run_selector = RecordingCandidateSelector(0)
+        window._research_runs = full_catalog
+        window._visible_research_runs = full_catalog
+        window._research_assessment_text = RecordingVariable("authored")
+        window._status = RecordingStatus()
+
+        window._apply_research_run_status_filter()
+
+        self.assertIs(window._research_runs, full_catalog)
+        self.assertEqual(window._visible_research_runs, (completed_alpha,))
+        self.assertEqual(window._research_run_selector.current(), 0)
+        self.assertEqual(window._research_run_id.value, "run-1")
+        self.assertEqual(window._research_assessment_text.value, "authored")
+        self.assertEqual(
+            window._research_run_filter_summary.value,
+            "1 of 3 loaded research runs match (Completed).",
+        )
+
+        window._clear_research_run_filter()
+
+        self.assertEqual(window._research_run_filter.value, "")
+        self.assertEqual(
+            window._research_run_status_filter.value,
+            ResearchRunStatusFacet.COMPLETED.value,
+        )
+        self.assertEqual(
+            window._visible_research_runs,
+            (completed_alpha, completed_zulu),
+        )
+        self.assertEqual(window._research_run_selector.current(), 0)
+        self.assertEqual(window._research_assessment_text.value, "authored")
+        self.assertEqual(
+            window._research_run_filter_summary.value,
+            "2 of 3 loaded research runs match (Completed).",
+        )
+
+    def test_status_filter_no_match_preserves_hidden_active_run_and_fields(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        now = datetime(2026, 8, 22, tzinfo=UTC)
+        active = ResearchRun(
+            "run-1",
+            "Active",
+            ResearchRunStatus.COLLECTING,
+            (),
+            (),
+            now,
+            now,
+        )
+        window._research_run_filter = RecordingVariable("")
+        window._research_run_filter_summary = RecordingVariable("")
+        window._research_run_status_filter = RecordingVariable(
+            ResearchRunStatusFacet.FAILED.value
+        )
+        window._research_run_sort = RecordingVariable(
+            ResearchRunSort.UPDATED_NEWEST.value
+        )
+        window._research_run_id = RecordingVariable("run-1")
+        window._research_run_choice = RecordingVariable("Active")
+        window._research_run_selector = RecordingCandidateSelector(0)
+        window._research_runs = (active,)
+        window._visible_research_runs = (active,)
+        window._research_claim_text = RecordingVariable("authored claim")
+        window._status = RecordingStatus()
+
+        window._apply_research_run_status_filter()
+
+        self.assertEqual(window._visible_research_runs, ())
+        self.assertEqual(window._research_run_selector.values, ())
+        self.assertEqual(window._research_run_choice.value, "")
+        self.assertEqual(window._research_run_id.value, "run-1")
+        self.assertEqual(window._research_claim_text.value, "authored claim")
+        self.assertEqual(
+            window._research_run_filter_summary.value,
+            "No loaded research runs match the current filters; "
+            "the active run is unchanged.",
+        )
+
+    def test_invalid_status_filter_leaves_loaded_view_unchanged(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        window._research_run_filter = RecordingVariable("")
+        window._research_run_filter_summary = RecordingVariable("Old summary")
+        window._research_run_status_filter = RecordingVariable("invalid")
+        window._research_run_selector = RecordingCandidateSelector(0)
+        window._research_run_selector.values = ("Existing run",)
+        window._research_runs = ()
+        window._visible_research_runs = ()
+        window._status = RecordingStatus()
+
+        window._apply_research_run_status_filter()
+
+        self.assertEqual(window._research_run_selector.values, ("Existing run",))
+        self.assertEqual(
+            window._research_run_filter_summary.value,
+            "Status filter is invalid; the loaded view is unchanged.",
+        )
+        self.assertEqual(
+            window._status.values,
+            ["Research run status filter is invalid."],
+        )
+
+    def test_show_active_run_clears_local_filters_and_preserves_sort_and_fields(
         self,
     ) -> None:
         window: Any = object.__new__(TkinterDesktopWindow)
@@ -813,6 +995,9 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         full_catalog = (other, active)
         window._research_run_filter = RecordingVariable("zulu")
         window._research_run_filter_summary = RecordingVariable("1 of 2 match")
+        window._research_run_status_filter = RecordingVariable(
+            ResearchRunStatusFacet.COMPLETED.value
+        )
         window._research_run_sort = RecordingVariable(ResearchRunSort.QUESTION.value)
         window._research_run_id = RecordingVariable("run-1")
         window._research_run_choice = RecordingVariable("")
@@ -827,6 +1012,10 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
 
         self.assertIs(window._research_runs, full_catalog)
         self.assertEqual(window._research_run_filter.value, "")
+        self.assertEqual(
+            window._research_run_status_filter.value,
+            ResearchRunStatusFacet.ALL.value,
+        )
         self.assertEqual(
             window._research_run_sort.value, ResearchRunSort.QUESTION.value
         )
@@ -855,7 +1044,10 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         self.assertEqual(window._research_claim_text.value, "authored claim")
         self.assertEqual(
             window._status.values,
-            ["active research run shown: run-1; 2 loaded; sort preserved"],
+            [
+                "active research run shown: run-1; 2 loaded; "
+                "filters cleared; sort preserved"
+            ],
         )
 
     def test_show_active_run_without_selection_leaves_view_unchanged(self) -> None:
@@ -1091,6 +1283,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_metadata = RecordingVariable("Old metadata")
         window._research_run_filter = RecordingVariable("old filter")
         window._research_run_filter_summary = RecordingVariable("old filter summary")
+        window._research_run_status_filter = RecordingVariable("old status")
         window._research_run_sort = RecordingVariable(
             ResearchRunSort.UPDATED_NEWEST.value
         )
