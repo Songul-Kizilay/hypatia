@@ -27,6 +27,7 @@ from research.ResearchClaimContradictionWritePreview import (
 from research.ResearchClaimPreview import ResearchClaimPreview
 from research.ResearchClaimWritePreview import ResearchClaimWritePreview
 from research.ResearchEvidenceIntegrityStatus import ResearchEvidenceIntegrityStatus
+from research.ResearchPlanDraftPreview import ResearchPlanDraftPreview
 from research.ResearchRun import ResearchRun
 from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
@@ -110,5 +111,6 @@ class BrainResponse:
         ResearchSourceContentRestorationStatus | None
     ) = None
     research_evidence_integrity_status: ResearchEvidenceIntegrityStatus | None = None
+    research_plan_draft_preview: ResearchPlanDraftPreview | None = None
     session_summaries: list[SessionSummary] = field(default_factory=list)
     session_delete_allowed: bool | None = None

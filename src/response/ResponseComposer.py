@@ -33,6 +33,7 @@ from research.ResearchClaimContradictionWritePreview import (
 from research.ResearchClaimPreview import ResearchClaimPreview
 from research.ResearchClaimWritePreview import ResearchClaimWritePreview
 from research.ResearchEvidenceIntegrityStatus import ResearchEvidenceIntegrityStatus
+from research.ResearchPlanDraftPreview import ResearchPlanDraftPreview
 from research.ResearchRun import ResearchRun
 from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
@@ -781,6 +782,56 @@ class ResponseComposer:
             intent="research_evidence_integrity_status",
             memory_count=0,
             research_evidence_integrity_status=status,
+        )
+
+    def research_plan_draft_preview(
+        self,
+        request: BrainRequest,
+        preview: ResearchPlanDraftPreview,
+    ) -> BrainResponse:
+        """Render one inert authored plan or its bounded validation reason."""
+        plan = preview.plan
+        if not preview.allowed:
+            message = "\n".join(
+                (
+                    "Research plan draft rejected:",
+                    f"Reason: {preview.reason}",
+                    "Persistent writes: not used",
+                    "Execution: not started",
+                )
+            )
+        else:
+            assert plan is not None
+            lines = [
+                "Research plan draft preview:",
+                f"Question: {plan.question}",
+                f"Steps: {len(plan.steps)}",
+                f"Selected sources: {len(plan.selected_source_document_ids)}",
+            ]
+            for index, step in enumerate(plan.steps, start=1):
+                selected_sources = ", ".join(step.selected_source_document_ids)
+                lines.extend(
+                    (
+                        f"{index}. {step.instruction}",
+                        f"   Selected sources: {selected_sources or 'none'}",
+                    )
+                )
+            lines.extend(
+                (
+                    f"Plan ID: {plan.plan_id}",
+                    "Status: ready for explicit confirmation",
+                    "Persistent writes: not used",
+                    "Execution: not started",
+                )
+            )
+            message = "\n".join(lines)
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="research_plan_draft_preview",
+            memory_count=0,
+            success=preview.allowed,
+            research_plan_draft_preview=preview,
         )
 
     def research_run_list_success(

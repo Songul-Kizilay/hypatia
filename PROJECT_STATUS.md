@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.115 (Genesis)`
+`v0.3.116 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.115`** is the current executable package and GitHub
+- **Runtime release `v0.3.116`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -83,6 +83,13 @@ with optional OpenAI-compatible LLM conversation support.
   order identities but does not select sources, execute, persist, publish an
   event, access a manager/provider/network/LLM/path, or integrate with Brain,
   `ResearchRun`, or the desktop.
+- Exact structured `research_plan_draft_preview` requests now route through a
+  small Brain-facing application service. The structured response carries the
+  entire immutable ready/rejected preview; its message shows ordered authored
+  steps and selected source IDs or one bounded rejection reason, and explicitly
+  states that no write or execution occurred. Routing changes no memory,
+  knowledge document, event, `ResearchRun`, provider, network, or LLM state.
+  There is no plain-message heuristic or desktop binding yet.
 - The Sources & evidence, Authored analysis, and Review & export workflow tabs
   repeat one read-only current-run banner with the selected question, status,
   and exact run ID. All three labels share one presentation value derived only
@@ -633,7 +640,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,558 automated tests pass through package-aware discovery.
+- 1,564 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -668,9 +675,10 @@ changed.
 
 ## Next Milestone
 
-Add the explicit no-write Brain response contract for one Research-plan draft
-preview, then route only the structured `research_plan_draft_preview` intent
-through a small application service. Preserve the complete immutable preview or
-bounded rejection reason without persistence, `ResearchRun` mutation, provider,
-network, LLM, event-bus, execution, or desktop integration. Lock response and
-routing precedence with focused tests before any UI work.
+Add one bounded no-write desktop editor for the explicit Research-plan draft
+preview. It should collect the authored question, ordered instructions, and
+exact source document IDs; issue only the existing structured intent; show the
+complete preview/rejection; and make no persistence, `ResearchRun` mutation,
+provider, network, LLM, event-bus, automatic source selection, confirmation, or
+execution claim. Preserve the current 1080p workflow layout and accessibility
+themes with focused adapter tests.

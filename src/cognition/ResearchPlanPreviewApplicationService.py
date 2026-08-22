@@ -1,0 +1,40 @@
+"""Explicit Brain-facing boundary for no-write Research plan previews."""
+
+from __future__ import annotations
+
+from typing import cast
+
+from brain.BrainRequest import BrainRequest
+from brain.BrainResponse import BrainResponse
+from research.ResearchPlanDraftService import (
+    ResearchPlanDraftService,
+    ResearchPlanStepDraft,
+)
+from response.ResponseComposer import ResponseComposer
+
+
+class ResearchPlanPreviewApplicationService:
+    """Delegate one structured draft request without persistence or execution."""
+
+    def __init__(
+        self,
+        response_composer: ResponseComposer,
+        draft_service: ResearchPlanDraftService | None = None,
+    ) -> None:
+        self._response_composer = response_composer
+        self._draft_service = draft_service or ResearchPlanDraftService()
+
+    @staticmethod
+    def is_draft_preview_request(request: BrainRequest) -> bool:
+        """Recognize only the explicit structured plan-preview intent."""
+        return request.metadata.get("intent") == "research_plan_draft_preview"
+
+    def process_draft_preview(self, request: BrainRequest) -> BrainResponse:
+        """Compose the complete no-write preview or bounded rejection."""
+        question = cast(str, request.metadata.get("research_plan_question"))
+        step_drafts = cast(
+            tuple[ResearchPlanStepDraft, ...],
+            request.metadata.get("research_plan_steps"),
+        )
+        preview = self._draft_service.preview(question, step_drafts)
+        return self._response_composer.research_plan_draft_preview(request, preview)

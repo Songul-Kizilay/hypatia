@@ -2,6 +2,38 @@
 
 All notable project changes are recorded here.
 
+## [0.3.116] - 2026-08-22
+
+### Added
+
+- The explicit structured `research_plan_draft_preview` intent now reaches the
+  pure draft service through `ResearchPlanPreviewApplicationService`.
+- `BrainResponse` carries the complete `ResearchPlanDraftPreview`, while
+  `ResponseComposer` renders either all authored ordered steps and exact selected
+  source IDs or one bounded rejection reason.
+- Ready output states that explicit confirmation is still required, persistent
+  writes were not used, and execution was not started. Rejected output contains
+  no partial plan and makes the same no-write/no-execution guarantees.
+
+### Safety
+
+- The route accepts only exact structured metadata and has no plain-message
+  heuristic. It does not add persistence, `ResearchRun` mutation, provider,
+  network, LLM, event-bus, tool, automatic source selection, or execution work.
+- Direct cognition coverage proves that preview routing leaves memory, knowledge
+  documents, and published events unchanged. No desktop binding is added.
+
+### Verification
+
+- The package-aware full local suite contains 1,564 passing automated tests.
+- Focused ResponseComposer coverage contains 66 passing tests and focused
+  cognition coverage contains 267 passing tests. Six new tests lock exact ready
+  and rejected messages, structured-intent recognition, metadata delegation,
+  bounded missing-metadata behavior, and side-effect-free engine routing.
+- Black, Ruff, and MyPy pass for all 346 Python source and test files.
+- The pinned Windows onedir package builds and initializes its local session
+  snapshot in a fresh temporary data directory.
+
 ## [0.3.115] - 2026-08-22
 
 ### Added
