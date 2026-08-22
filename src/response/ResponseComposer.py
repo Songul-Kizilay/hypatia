@@ -19,6 +19,7 @@ from knowledge.KnowledgeRelationRevocation import KnowledgeRelationRevocation
 from knowledge.KnowledgeRelationRevocationPreview import (
     KnowledgeRelationRevocationPreview,
 )
+from memory.LearnedMemoryAuditReport import LearnedMemoryAuditReport
 from memory.MemoryRecord import MemoryRecord
 from planner.Plan import Plan
 from research.ResearchClaimContradictionPreview import (
@@ -832,6 +833,54 @@ class ResponseComposer:
             memory_count=0,
             success=preview.allowed,
             research_plan_draft_preview=preview,
+        )
+
+    def learned_memory_audit(
+        self,
+        request: BrainRequest,
+        report: LearnedMemoryAuditReport,
+    ) -> BrainResponse:
+        """Render bounded learned-memory health without any stored value."""
+        lines = [
+            "Learned memory audit:",
+            f"Total learned records: {report.total_learned_records}",
+            f"Active: {report.active_memories}",
+            f"Superseded: {report.superseded_memories}",
+            f"Superseded share: {report.superseded_ratio:.0%}",
+            f"Distinct identities: {report.identities}",
+            f"Identities with history: {report.identities_with_multiple_versions}",
+            f"Most versions for one identity: {report.max_versions_for_one_identity}",
+            f"Conflicting-history identities: {report.conflicting_history_identities}",
+            f"Duplicate value candidates: {report.duplicate_value_candidates}",
+        ]
+        if report.conflicting_history_samples:
+            lines.append("Conflicting history (sample):")
+            lines.extend(
+                f"- {sample.kind} | {sample.key} | versions: {sample.versions}"
+                for sample in report.conflicting_history_samples
+            )
+        if report.duplicate_value_candidate_samples:
+            lines.append("Duplicate value candidates (sample):")
+            lines.extend(
+                f"- {candidate.first_kind} | {candidate.first_key}"
+                f" <-> {candidate.second_kind} | {candidate.second_key}"
+                for candidate in report.duplicate_value_candidate_samples
+            )
+        if report.samples_truncated:
+            lines.append("Samples truncated: yes")
+        lines.extend(
+            (
+                "Candidates are for review only; no equivalence was decided.",
+                "Persistent writes: not used",
+                "Merges, deletions, and rewrites: not performed",
+            )
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="learned_memory_audit",
+            memory_count=report.active_memories,
+            learned_memory_audit=report,
         )
 
     def research_run_list_success(

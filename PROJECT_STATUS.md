@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.121 (Genesis)`
+`v0.3.122 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.121`** is the current executable package and GitHub
+- **Runtime release `v0.3.122`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -32,6 +32,16 @@ with optional OpenAI-compatible LLM conversation support.
 ### Implemented
 
 - Application bootstrap, configuration, logging, and dependency injection.
+- A read-only learned-memory audit reports deterministic bounded health metrics
+  through the exact structured `learned_memory_audit` Brain intent: active and
+  superseded counts, superseded share, distinct identities, identities with
+  history, maximum versions for one identity, conflicting-history identities, and
+  duplicate value candidates, with samples capped at 10 entries each. It never
+  deletes, merges, compacts, rewrites, or normalizes stored memories, issues no
+  LLM, semantic, or network call, reports kinds and keys without any stored
+  value, and never runs on an ordinary chat turn. Duplicate candidates come only
+  from exact value equality between active identities and are never treated as
+  proof of equivalent meaning.
 - Learned-memory context selection for one conversation turn is owned by
   `LearnedMemoryContextService`. `CognitiveEngine` delegates instead of branching
   inline over selector and limit combinations.
@@ -688,7 +698,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,611 automated tests pass through package-aware discovery.
+- 1,629 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.

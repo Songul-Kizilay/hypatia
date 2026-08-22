@@ -9,6 +9,9 @@ from brain.BrainContext import BrainContext
 from brain.BrainRequest import BrainRequest
 from brain.BrainResponse import BrainResponse
 from brain.BrainRouter import BrainRouter
+from cognition.LearnedMemoryAuditApplicationService import (
+    LearnedMemoryAuditApplicationService,
+)
 from cognition.LearnedMemoryContextService import LearnedMemoryContextService
 from cognition.LLMConversationHistoryBuilder import (
     build_llm_conversation_history,
@@ -196,6 +199,10 @@ class CognitiveEngine:
                 research_run_manager,
             )
         )
+        self._learned_memory_audit_service = LearnedMemoryAuditApplicationService(
+            memory_manager,
+            response_composer,
+        )
         self._research_plan_preview_service = ResearchPlanPreviewApplicationService(
             response_composer,
             research_plan_draft_service,
@@ -239,6 +246,9 @@ class CognitiveEngine:
 
         if self._research_overview_service.is_run_list_request(request):
             return self._research_overview_service.process_run_list(request)
+
+        if self._learned_memory_audit_service.is_audit_request(request):
+            return self._learned_memory_audit_service.process_audit(request)
 
         if self._research_plan_preview_service.is_draft_preview_request(request):
             return self._research_plan_preview_service.process_draft_preview(request)

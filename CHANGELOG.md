@@ -2,6 +2,51 @@
 
 All notable project changes are recorded here.
 
+## [0.3.122] - 2026-08-23
+
+### Added
+
+- A read-only learned-memory audit. `LearnedMemoryAuditor` computes deterministic
+  bounded metrics from learned-memory records: total records, active and
+  superseded counts, superseded share, distinct identities, identities with
+  history, maximum versions for one identity, conflicting-history identities, and
+  duplicate value candidates.
+- `LearnedMemoryAuditReport` carries those metrics plus bounded samples capped at
+  10 entries each, with an explicit `samples_truncated` flag.
+- `LearnedMemoryAuditApplicationService` exposes the audit through the exact
+  structured `learned_memory_audit` Brain intent, following the established
+  no-write preview routing pattern.
+- `BrainResponse.learned_memory_audit` carries the complete immutable report.
+
+### Safety
+
+- The audit is strictly read-only. It never deletes, merges, compacts, rewrites,
+  normalizes, or reorders stored memories, and performs no persistence mutation
+  or schema change.
+- Duplicate value candidates are derived only from exact value equality between
+  active identities. Equal text is never asserted to mean equivalent meaning, and
+  nothing is merged. The rendered message states that no equivalence was decided.
+- Superseded values never produce duplicate candidates, so historical records
+  cannot inflate review noise.
+- The rendered message reports kinds, keys, and counts only. It never includes a
+  stored learned-memory value.
+- The audit issues no LLM call, no semantic query, and no network request. It
+  runs only on an explicit structured request, never on an ordinary chat turn.
+- Repeated audits over unchanged records return identical reports and emit no
+  events.
+
+### Verification
+
+- The package-aware full local suite contains 1,629 passing automated tests.
+- Eighteen new tests cover the empty store, active-only stores, single and
+  repeated corrections, repeated identical values as history without conflict,
+  same-value-different-key candidates, superseded values excluded from
+  candidates, bounded truncated samples, determinism, input immutability,
+  exclusion of ordinary conversation records, absence of writes and events,
+  structured-intent recognition, value omission from the message, and absence of
+  LLM or semantic-runtime calls on the audit route.
+- Black, Ruff, and MyPy pass for all 357 Python source and test files.
+
 ## [0.3.121] - 2026-08-23
 
 ### Added
