@@ -37,6 +37,8 @@ The MVP may present only current Brain/CognitiveEngine capabilities:
 - one shared read-only current-run context value, repeated on the sources,
   authored-analysis, and review steps with bounded question, status, and exact
   run ID plus non-stale empty/invalid guidance;
+- one shared progress value on those same three steps with complete source,
+  evidence, and claim counts from the immutable selected snapshot;
 - a read-only accepted-source selector from that same run snapshot, with
   explicit exact-ID handoffs to the manual assessment and comparison fields;
 - a source-filtered read-only evidence selector with bounded excerpts, exact

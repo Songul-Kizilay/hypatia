@@ -2,6 +2,31 @@
 
 All notable project changes are recorded here.
 
+## [0.3.90] - 2026-08-22
+
+### Added
+
+- The shared current-run banner on Sources & evidence, Authored analysis, and
+  Review & export now includes complete source, evidence, and claim counts.
+- Empty or invalid run selections replace stale counts with explicit progress-
+  unavailable guidance.
+
+### Safety
+
+- Progress is calculated only from the already selected immutable `ResearchRun`
+  snapshot. It opens no Brain, controller, manager, storage, provider, network,
+  LLM, knowledge-index, event-bus, or mutation boundary.
+- The three tabs share one presentation value; all existing fields, commands,
+  confirmations, schemas, provider paths, and mutation contracts remain intact.
+
+### Verification
+
+- The package-aware full local suite contains 1,454 passing automated tests.
+- Focused desktop coverage contains 95 passing tests, including complete count
+  formatting and selected, empty, and invalid presentation states.
+- Black, Ruff, and MyPy pass. A real Tk measurement confirms three context and
+  three progress labels in a 954-by-973-pixel requested window.
+
 ## [0.3.89] - 2026-08-22
 
 ### Added

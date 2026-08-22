@@ -183,7 +183,8 @@ To create the world's most capable personal AI research companion.
   loading. Chat, Knowledge, Research, and Appearance use separate tabs; the
   Research workspace uses four ordered workflow tabs plus compact authored-
   analysis sub-tabs, and its three later steps repeat the selected question,
-  status, and exact run ID in a read-only current-run banner; the default
+  status, exact run ID, and complete source/evidence/claim counts in a read-only
+  current-run banner; the default
   eye-comfort palette, optional light/high-
   contrast themes, clear empty states, and grouped controls keep common tasks
   approachable. It delegates every action to the existing Brain runtime and adds
@@ -233,6 +234,9 @@ The Sources & evidence, Authored analysis, and Review & export tabs each repeat
 the selected question, status, and exact run ID in one read-only `Current
 research run` banner. It comes from the already loaded run snapshot, and an
 empty or invalid selection shows guidance instead of keeping stale identity.
+The same banner also shows complete source, evidence, and claim counts so users
+can see the selected run's progress without returning to Overview. These counts
+come from the same snapshot and never start another read or action.
 
 The window uses the same Bootstrap and Brain as the terminal entry point. A
 clicked session only fills the selection field; choosing it remains explicit.
@@ -268,7 +272,8 @@ fills a read-only selector with each question, status, and exact ID. Choosing a
 run only changes the local workspace selection and starts no research action;
 the selector also shows complete source, evidence, and claim counts from that
 already loaded snapshot. The three later workflow tabs repeat that exact
-identity without another read. Later explicit actions use the selected ID. The run
+identity and the complete source/evidence/claim counts without another read.
+Later explicit actions use the selected ID. The run
 keeps timestamps and safe failure records, but does not duplicate downloaded
 page text or make web research autonomous.
 Accepted sources from that same loaded snapshot appear by bounded title and
