@@ -3306,9 +3306,10 @@ class TkinterDesktopWindow:
                 "Selected-source records unavailable until an accepted source "
                 "is selected."
             )
-        evidence_count = sum(
-            record.source_document_id == canonical_source.document_id
+        source_evidence_ids = frozenset(
+            record.evidence_id
             for record in run.evidence
+            if record.source_document_id == canonical_source.document_id
         )
         assessment_records = tuple(
             record
@@ -3325,6 +3326,12 @@ class TkinterDesktopWindow:
             for record in assessment_records
             if record.assessment_id not in superseded_ids
         )
+        current_assessment_evidence_ids = frozenset(
+            evidence_id
+            for record in current_assessment_records
+            for evidence_id in record.evidence_ids
+            if evidence_id in source_evidence_ids
+        )
         information_trust_counts = {
             trust: sum(
                 record.information_trust is trust
@@ -3340,9 +3347,11 @@ class TkinterDesktopWindow:
             f"Data taint: {canonical_source.taint_label} · "
             "Instruction authority: "
             f"{canonical_source.instruction_authority}\nRecords — "
-            f"Evidence: {evidence_count} · "
-            f"Assessment history: {len(assessment_records)} · "
-            f"Current assessments: {len(current_assessment_records)}\n"
+            f"Evidence: {len(source_evidence_ids)} · "
+            f"Assessments: {len(assessment_records)} history / "
+            f"{len(current_assessment_records)} current · "
+            "Evidence cited by current: "
+            f"{len(current_assessment_evidence_ids)} of {len(source_evidence_ids)}\n"
             "Current information trust — "
             "Unassessed: "
             f"{information_trust_counts[ResearchInformationTrust.UNASSESSED]} · "

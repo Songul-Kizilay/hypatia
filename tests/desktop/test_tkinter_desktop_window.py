@@ -406,8 +406,8 @@ class AccessibilityPreferenceTests(unittest.TestCase):
             "Selected source — Accepted · Source ID: document-1 · "
             "Run ID: run-123\nSafety boundary — "
             "Data taint: external_untrusted_data · Instruction authority: none\n"
-            "Records — Evidence: 2 · Assessment history: 2 · "
-            "Current assessments: 1\nCurrent information trust — "
+            "Records — Evidence: 2 · Assessments: 2 history / 1 current · "
+            "Evidence cited by current: 1 of 2\nCurrent information trust — "
             "Unassessed: 1 · Low: 0 · Medium: 0 · High: 0",
         )
 
@@ -427,8 +427,8 @@ class AccessibilityPreferenceTests(unittest.TestCase):
             "Selected source — Accepted source title · Source ID: document-1 · "
             "Run ID: run-123\nSafety boundary — "
             "Data taint: external_untrusted_data · Instruction authority: none\n"
-            "Records — Evidence: 0 · Assessment history: 0 · "
-            "Current assessments: 0\nCurrent information trust — "
+            "Records — Evidence: 0 · Assessments: 0 history / 0 current · "
+            "Evidence cited by current: 0 of 0\nCurrent information trust — "
             "Unassessed: 0 · Low: 0 · Medium: 0 · High: 0",
         )
 
@@ -462,8 +462,9 @@ class AccessibilityPreferenceTests(unittest.TestCase):
 
         self.assertIn("Data taint: external_untrusted_data", summary)
         self.assertIn("Instruction authority: none", summary)
-        self.assertIn("Current assessments: 1", summary)
+        self.assertIn("Assessments: 1 history / 1 current", summary)
         self.assertIn("Unassessed: 0 · Low: 0 · Medium: 0 · High: 1", summary)
+        self.assertIn("Evidence cited by current: 1 of 1", summary)
         self.assertNotIn("Instruction authority: high", summary)
 
     def test_selected_source_summary_counts_only_current_information_trust(
@@ -515,8 +516,81 @@ class AccessibilityPreferenceTests(unittest.TestCase):
             source,
         )
 
-        self.assertIn("Assessment history: 3 · Current assessments: 2", summary)
+        self.assertIn("Assessments: 3 history / 2 current", summary)
         self.assertIn("Unassessed: 0 · Low: 1 · Medium: 1 · High: 0", summary)
+
+    def test_selected_source_summary_counts_unique_current_assessment_evidence(
+        self,
+    ) -> None:
+        source = _research_source_record("document-1", "Accepted")
+        evidence = tuple(
+            _research_evidence_record(
+                f"evidence-{index}",
+                source.document_id,
+                f"Evidence {index}",
+            )
+            for index in range(1, 4)
+        )
+        original = ResearchSourceAssessmentRecord(
+            assessment_id="assessment-1",
+            source_document_id=source.document_id,
+            evidence_ids=(evidence[0].evidence_id, evidence[1].evidence_id),
+            text="Original assessment",
+            recorded_at=datetime(2026, 8, 21, tzinfo=UTC),
+        )
+        correction = ResearchSourceAssessmentRecord(
+            assessment_id="assessment-2",
+            source_document_id=source.document_id,
+            evidence_ids=(evidence[1].evidence_id,),
+            text="Corrected assessment",
+            recorded_at=datetime(2026, 8, 21, tzinfo=UTC),
+            supersedes_assessment_id=original.assessment_id,
+        )
+        current = ResearchSourceAssessmentRecord(
+            assessment_id="assessment-3",
+            source_document_id=source.document_id,
+            evidence_ids=(evidence[1].evidence_id, evidence[2].evidence_id),
+            text="Independent assessment",
+            recorded_at=datetime(2026, 8, 21, tzinfo=UTC),
+        )
+        malformed_unknown = ResearchSourceAssessmentRecord(
+            assessment_id="assessment-4",
+            source_document_id=source.document_id,
+            evidence_ids=("evidence-unknown",),
+            text="Malformed unknown evidence reference",
+            recorded_at=datetime(2026, 8, 21, tzinfo=UTC),
+        )
+        foreign = _research_assessment_record(
+            "assessment-foreign",
+            "foreign",
+            "evidence-foreign",
+            "Foreign assessment",
+        )
+        run = Mock(spec=ResearchRun)
+        run.run_id = "run-123"
+        run.sources = (source,)
+        run.evidence = (
+            *evidence,
+            _research_evidence_record(
+                "evidence-foreign",
+                "foreign",
+                "Foreign evidence",
+            ),
+        )
+        run.assessments = (
+            original,
+            correction,
+            current,
+            malformed_unknown,
+            foreign,
+        )
+
+        summary = TkinterDesktopWindow._research_selected_source_summary_text(
+            run,
+            source,
+        )
+
+        self.assertIn("Evidence cited by current: 2 of 3", summary)
 
     def test_selected_source_summary_rejects_noncanonical_source_record(
         self,
@@ -2452,8 +2526,8 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             "Selected source — Covered active · Source ID: document-1 · "
             "Run ID: run-123\nSafety boundary — "
             "Data taint: external_untrusted_data · Instruction authority: none\n"
-            "Records — Evidence: 1 · Assessment history: 1 · "
-            "Current assessments: 1\nCurrent information trust — "
+            "Records — Evidence: 1 · Assessments: 1 history / 1 current · "
+            "Evidence cited by current: 1 of 1\nCurrent information trust — "
             "Unassessed: 1 · Low: 0 · Medium: 0 · High: 0",
         )
         self.assertEqual(

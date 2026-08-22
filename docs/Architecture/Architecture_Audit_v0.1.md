@@ -16,7 +16,7 @@ sprints; it does not declare vision-only modules complete.
 Hypatia uses three different labels that must not be compared as one version
 sequence:
 
-- **Runtime releases** (`v0.3.108` in the current release candidate) are the
+- **Runtime releases** (`v0.3.109` in the current release candidate) are the
   executable package and GitHub release line. They are the source-backed
   implementation baseline.
 - **Historical sprint labels** (including **Sprint 4.16.50**) identify bounded
@@ -320,6 +320,10 @@ It also derives complete Unassessed/Low/Medium/High counts from only the
 non-superseded assessments belonging to that exact source. Corrected history
 remains visible in the history total, foreign records cannot contribute, and
 the four-line provenance/safety/records/trust presentation makes no verdict.
+The Records line additionally derives unique current-assessment evidence IDs
+intersected with the exact source's immutable evidence set. Repeats count once,
+superseded and foreign assessments are excluded, unknown IDs are ignored
+defensively, and the result is inventory rather than a quality claim.
 The selected immutable run supplies one additional Overview metadata line.
 Created/updated timestamps use seconds-level ISO-8601 text with their timezone
 offset, and only the complete `failures` tuple length is shown. No stage/reason,
@@ -515,7 +519,7 @@ Not implemented:
 
 The current local verification baseline is:
 
-- package-aware `python -m unittest`: 1,505 tests passed. Explicit `tests.*`
+- package-aware `python -m unittest`: 1,506 tests passed. Explicit `tests.*`
   module names ensure nested test directories are included without shadowing
   source packages.
 - `python -m black --check src tests`: passed.

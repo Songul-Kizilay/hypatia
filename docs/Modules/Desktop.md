@@ -98,6 +98,10 @@ counts for only non-superseded assessments of that exact source. Superseded
 records remain in the history count, malformed foreign records do not
 contribute, and the distribution is authored-label inventory rather than a
 Hypatia-generated verdict.
+The Records line reports unique valid evidence IDs cited by those current
+assessments beside the source's complete evidence count. Duplicate citations
+count once; superseded, foreign, and unknown references cannot contribute. This
+is a read-only audit inventory, not a completeness or quality conclusion.
 Overview also renders one bounded metadata line from the selected immutable
 run: seconds-level timezone-aware creation/update times and only the aggregate
 safe-failure count. It cannot expose a failure stage/reason or retain stale
