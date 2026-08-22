@@ -70,6 +70,11 @@ visible/total membership is explicit, and one exact active source ID survives a
 hidden/no-match view and is restored when All sources returns. Source-bound
 evidence/assessment presentation clears while hidden, authored fields remain
 intact, and stale/invalid state is refused without another read or action.
+One adjacent accepted-source coverage catalog summary reports the complete All,
+Without evidence, and Without current assessment totals from that immutable
+snapshot. Exact-ID sets deduplicate repeated records, correction history uses
+only current assessments, malformed foreign membership is ignored, and facet
+changes cannot alter the totals or open another read or action.
 Overview also renders one bounded metadata line from the selected immutable
 run: seconds-level timezone-aware creation/update times and only the aggregate
 safe-failure count. It cannot expose a failure stage/reason or retain stale

@@ -2,6 +2,33 @@
 
 All notable project changes are recorded here.
 
+## [0.3.103] - 2026-08-22
+
+### Added
+
+- Sources & evidence now shows one compact read-only accepted-source coverage
+  catalog summary for the selected immutable run.
+- The summary reports complete All, Without evidence, and Without current
+  assessment counts independently of the active local source view.
+
+### Safety
+
+- Repeated evidence and current assessment records count one source once.
+  Correction chains exclude superseded history, while malformed foreign records
+  cannot inflate or hide accepted-source membership.
+- Source-view changes cannot alter the catalog totals, exact active identity, or
+  authored fields. Empty/invalid selection clears stale totals, no quality or
+  readiness is inferred, and no runtime or mutation boundary opens.
+
+### Verification
+
+- The package-aware full local suite contains 1,495 passing automated tests.
+- Focused desktop coverage contains 136 passing tests, including repeated and
+  foreign records, correction/superseded-only history, empty catalogs, selected
+  run binding, facet invariance, identity preservation, and field isolation.
+- Black, Ruff, and MyPy pass. A real Tk smoke confirms one bound summary label
+  in the existing 954-by-973-pixel requested window.
+
 ## [0.3.102] - 2026-08-22
 
 ### Added
