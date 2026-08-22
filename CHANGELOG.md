@@ -2,6 +2,33 @@
 
 All notable project changes are recorded here.
 
+## [0.3.104] - 2026-08-22
+
+### Added
+
+- Sources & evidence now provides one explicit `Show active source` recovery
+  action beside the accepted-source coverage catalog summary.
+- The action restores All sources and reselects the exact active source when a
+  local coverage view has hidden it.
+
+### Safety
+
+- Recovery requires the current run ID, loaded immutable run, source catalog,
+  and active source ID to agree exactly. Empty, stale, or unknown identity state
+  is refused without changing the prior view.
+- Restoring the source rehydrates only its read-only evidence and assessment
+  presentation. Catalog totals, authored fields, and persisted state remain
+  unchanged, and no runtime or mutation boundary opens.
+
+### Verification
+
+- The package-aware full local suite contains 1,499 passing automated tests.
+- Focused desktop coverage contains 140 passing tests, including hidden-source
+  restoration, exact identity and read-only record rehydration, empty/stale/
+  unknown state refusal, catalog-summary invariance, and field isolation.
+- Black, Ruff, and MyPy pass. A real Tk smoke confirms one recovery button in
+  the existing 954-by-973-pixel requested window.
+
 ## [0.3.103] - 2026-08-22
 
 ### Added

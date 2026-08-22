@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.103 (Genesis)`
+`v0.3.104 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.103`** is the current executable package and GitHub
+- **Runtime release `v0.3.104`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -105,6 +105,10 @@ with optional OpenAI-compatible LLM conversation support.
   counts. Those totals remain invariant while the local source view changes,
   deduplicate exact source membership, infer no quality, and open no runtime or
   mutation boundary.
+- One `Show active source` action restores All sources and the exact active row
+  when a coverage view hides it. Empty, stale, or unknown active state is
+  refused; source-bound read-only records are restored while catalog totals and
+  authored fields remain unchanged, with no runtime or mutation action.
 - The selected run's immutable creation/update times and complete safe-failure
   count appear in Overview as a bounded metadata line. Timestamps retain their
   timezone offset at seconds precision; failure stage/reason text is never
@@ -564,7 +568,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,495 automated tests pass through package-aware discovery.
+- 1,499 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -599,7 +603,7 @@ changed.
 
 ## Next Milestone
 
-Add one explicit local `Show active source` recovery action for a source hidden
-by the coverage view. It must restore All sources and the exact active row while
-preserving authored fields, refuse empty/stale state, and open no runtime or
-mutation boundary.
+Add one compact read-only selected-source record summary with complete evidence,
+assessment-history, and current-assessment counts from the immutable run. It
+must clear on hidden/invalid source state, infer no quality, and open no runtime
+or mutation boundary.

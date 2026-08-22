@@ -1142,10 +1142,15 @@ class TkinterDesktopWindow:
         ).grid(
             row=2,
             column=0,
-            columnspan=4,
+            columnspan=3,
             sticky="ew",
             pady=(8, 0),
         )
+        ttk.Button(
+            accepted_source_frame,
+            text="Show active source",
+            command=self._show_active_research_source,
+        ).grid(row=2, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
         ttk.Label(accepted_source_frame, text="Recorded evidence").grid(
             row=3,
             column=0,
@@ -3125,6 +3130,62 @@ class TkinterDesktopWindow:
         self._status.set(
             f"accepted source view: {facet.value}; {visible_count} of "
             f"{total_count} shown; active source unchanged{hidden_status}"
+        )
+
+    def _show_active_research_source(self) -> None:
+        """Restore one hidden active source without opening a read path."""
+        active_source_id = self._active_research_source_document_id
+        if not active_source_id:
+            self._research_source_coverage_summary.set(
+                "No active accepted source is selected."
+            )
+            self._status.set("Select an accepted source before showing it.")
+            return
+        selected_run = next(
+            (
+                run
+                for run in self._research_runs
+                if run.run_id == self._research_source_run_id
+            ),
+            None,
+        )
+        if (
+            self._research_run_id.get().strip() != self._research_source_run_id
+            or selected_run is None
+            or selected_run.sources != self._research_source_catalog
+        ):
+            self._research_source_coverage_summary.set(
+                "Accepted-source snapshot is stale; refresh research runs."
+            )
+            self._status.set("Accepted-source snapshot is stale.")
+            return
+        active_source = next(
+            (
+                source
+                for source in self._research_source_catalog
+                if source.document_id == active_source_id
+            ),
+            None,
+        )
+        if active_source is None:
+            self._research_source_coverage_summary.set(
+                "The active accepted source is not loaded; refresh research runs."
+            )
+            self._status.set("Active accepted source is not loaded.")
+            return
+        self._research_source_coverage_filter.set(ResearchSourceCoverageFacet.ALL.value)
+        self._render_visible_research_sources(
+            selected_run,
+            self._research_source_catalog,
+        )
+        self._research_source_choice.set(self._research_source_label(active_source))
+        total_count = len(self._research_source_catalog)
+        self._research_source_coverage_summary.set(
+            f"All {total_count} accepted sources are shown."
+        )
+        self._status.set(
+            f"active accepted source shown: {active_source_id}; "
+            f"{total_count} accepted sources; view restored to All sources"
         )
 
     def _render_visible_research_sources(
