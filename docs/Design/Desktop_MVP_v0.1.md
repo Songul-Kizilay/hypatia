@@ -85,6 +85,9 @@ The MVP may present only current Brain/CognitiveEngine capabilities:
 - canonical persisted source safety fields in that summary—data taint
   `external_untrusted_data` and instruction authority `none`—kept independent
   from all user-authored information-trust assessments;
+- complete Unassessed/Low/Medium/High distribution for current exact-source
+  assessments only, excluding superseded history and foreign records, displayed
+  on a separate line without an inferred verdict;
 - a bounded selected-run metadata line with timezone-aware created/updated
   timestamps and aggregate safe-failure count, without failure detail;
 - a read-only accepted-source selector from that same run snapshot, with

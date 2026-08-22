@@ -302,6 +302,10 @@ It also shows the persisted source safety boundary: external data remains
 tainted as `external_untrusted_data` with instruction authority `none`. Even a
 user-authored high information-trust assessment cannot grant that source command
 authority, and displaying the boundary performs no additional request.
+An adjacent fourth line counts current user-authored information-trust labels as
+Unassessed, Low, Medium, and High. Superseded corrections remain in history but
+not these current counts; foreign records cannot contribute, and the numbers do
+not constitute a Hypatia-generated verdict.
 
 The window uses the same Bootstrap and Brain as the terminal entry point. A
 clicked session only fills the selection field; choosing it remains explicit.

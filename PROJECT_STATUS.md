@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.107 (Genesis)`
+`v0.3.108 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.107`** is the current executable package and GitHub
+- **Runtime release `v0.3.108`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -123,6 +123,11 @@ with optional OpenAI-compatible LLM conversation support.
   taint `external_untrusted_data` and instruction authority `none`. User-authored
   information-trust labels cannot grant instructions or change this boundary;
   the presentation remains read-only and disappears with hidden/invalid state.
+- The same summary reports current user-authored information-trust distribution
+  across Unassessed, Low, Medium, and High. Only non-superseded assessments for
+  the exact source count; corrected history and foreign records cannot alter the
+  distribution. Four explicit lines keep provenance, safety, records, and trust
+  distinct without inferring a verdict or opening a runtime boundary.
 - The selected run's immutable creation/update times and complete safe-failure
   count appear in Overview as a bounded metadata line. Timestamps retain their
   timezone offset at seconds precision; failure stage/reason text is never
@@ -582,7 +587,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,504 automated tests pass through package-aware discovery.
+- 1,505 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
@@ -617,7 +622,7 @@ changed.
 
 ## Next Milestone
 
-Add a compact read-only distribution of current user-authored information-trust
-labels for the selected source: unassessed, low, medium, and high. It must
-exclude superseded history, keep instruction authority separate, infer no
-verdict, and open no runtime or mutation boundary.
+Add a read-only current-assessment evidence-coverage count for the selected
+source: unique explicitly cited evidence versus all recorded source evidence.
+It must exclude superseded history, infer no quality, and open no runtime or
+mutation boundary.

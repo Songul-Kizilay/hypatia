@@ -2,6 +2,33 @@
 
 All notable project changes are recorded here.
 
+## [0.3.108] - 2026-08-22
+
+### Added
+
+- The selected-source summary now reports the complete distribution of current
+  user-authored information-trust labels: Unassessed, Low, Medium, and High.
+- Provenance, persisted safety boundary, record totals, and current trust
+  distribution are separated into four explicit read-only lines for clarity.
+
+### Safety
+
+- Distribution membership includes only non-superseded assessments for the
+  exact selected source. Superseded history remains in the history total but
+  not the trust counts; foreign-source records cannot contribute.
+- Counts describe authored labels only. They infer no verdict or quality and
+  cannot change the source's independent instruction authority `none`; no
+  controller, provider, persistence, network, or mutation boundary opens.
+
+### Verification
+
+- The package-aware full local suite contains 1,505 passing automated tests.
+- Focused desktop coverage contains 146 passing tests, including all four trust
+  labels, corrected/superseded history, foreign-record isolation, zero counts,
+  safety-boundary separation, and hidden-source restoration.
+- Black, Ruff, and MyPy pass. A real Tk smoke confirms the structured four-line
+  summary preserves the established desktop window boundary.
+
 ## [0.3.107] - 2026-08-22
 
 ### Added

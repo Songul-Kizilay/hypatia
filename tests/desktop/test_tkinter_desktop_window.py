@@ -404,10 +404,11 @@ class AccessibilityPreferenceTests(unittest.TestCase):
         self.assertEqual(
             TkinterDesktopWindow._research_selected_source_summary_text(run, source),
             "Selected source — Accepted · Source ID: document-1 · "
-            "Run ID: run-123 | Safety boundary — "
-            "Data taint: external_untrusted_data · Instruction authority: none | "
+            "Run ID: run-123\nSafety boundary — "
+            "Data taint: external_untrusted_data · Instruction authority: none\n"
             "Records — Evidence: 2 · Assessment history: 2 · "
-            "Current assessments: 1",
+            "Current assessments: 1\nCurrent information trust — "
+            "Unassessed: 1 · Low: 0 · Medium: 0 · High: 0",
         )
 
     def test_selected_source_summary_reports_complete_zero_counts(self) -> None:
@@ -424,10 +425,11 @@ class AccessibilityPreferenceTests(unittest.TestCase):
         self.assertEqual(
             TkinterDesktopWindow._research_selected_source_summary_text(run, source),
             "Selected source — Accepted source title · Source ID: document-1 · "
-            "Run ID: run-123 | Safety boundary — "
-            "Data taint: external_untrusted_data · Instruction authority: none | "
+            "Run ID: run-123\nSafety boundary — "
+            "Data taint: external_untrusted_data · Instruction authority: none\n"
             "Records — Evidence: 0 · Assessment history: 0 · "
-            "Current assessments: 0",
+            "Current assessments: 0\nCurrent information trust — "
+            "Unassessed: 0 · Low: 0 · Medium: 0 · High: 0",
         )
 
     def test_selected_source_summary_keeps_none_authority_for_high_trust(
@@ -461,7 +463,60 @@ class AccessibilityPreferenceTests(unittest.TestCase):
         self.assertIn("Data taint: external_untrusted_data", summary)
         self.assertIn("Instruction authority: none", summary)
         self.assertIn("Current assessments: 1", summary)
+        self.assertIn("Unassessed: 0 · Low: 0 · Medium: 0 · High: 1", summary)
         self.assertNotIn("Instruction authority: high", summary)
+
+    def test_selected_source_summary_counts_only_current_information_trust(
+        self,
+    ) -> None:
+        source = _research_source_record("document-1", "Accepted")
+        evidence = _research_evidence_record(
+            "evidence-1",
+            source.document_id,
+            "Explicit evidence",
+        )
+        original = _research_assessment_record(
+            "assessment-1",
+            source.document_id,
+            evidence.evidence_id,
+            "Original high-trust assessment",
+            information_trust=ResearchInformationTrust.HIGH,
+        )
+        correction = _research_assessment_record(
+            "assessment-2",
+            source.document_id,
+            evidence.evidence_id,
+            "Corrected low-trust assessment",
+            supersedes_assessment_id=original.assessment_id,
+            information_trust=ResearchInformationTrust.LOW,
+        )
+        medium = _research_assessment_record(
+            "assessment-3",
+            source.document_id,
+            evidence.evidence_id,
+            "Independent medium-trust assessment",
+            information_trust=ResearchInformationTrust.MEDIUM,
+        )
+        foreign = _research_assessment_record(
+            "assessment-foreign",
+            "foreign",
+            "evidence-foreign",
+            "Foreign high-trust assessment",
+            information_trust=ResearchInformationTrust.HIGH,
+        )
+        run = Mock(spec=ResearchRun)
+        run.run_id = "run-123"
+        run.sources = (source,)
+        run.evidence = (evidence,)
+        run.assessments = (original, correction, medium, foreign)
+
+        summary = TkinterDesktopWindow._research_selected_source_summary_text(
+            run,
+            source,
+        )
+
+        self.assertIn("Assessment history: 3 · Current assessments: 2", summary)
+        self.assertIn("Unassessed: 0 · Low: 1 · Medium: 1 · High: 0", summary)
 
     def test_selected_source_summary_rejects_noncanonical_source_record(
         self,
@@ -2395,10 +2450,11 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         self.assertEqual(
             window._research_selected_source_summary.value,
             "Selected source — Covered active · Source ID: document-1 · "
-            "Run ID: run-123 | Safety boundary — "
-            "Data taint: external_untrusted_data · Instruction authority: none | "
+            "Run ID: run-123\nSafety boundary — "
+            "Data taint: external_untrusted_data · Instruction authority: none\n"
             "Records — Evidence: 1 · Assessment history: 1 · "
-            "Current assessments: 1",
+            "Current assessments: 1\nCurrent information trust — "
+            "Unassessed: 1 · Low: 0 · Medium: 0 · High: 0",
         )
         self.assertEqual(
             window._research_source_coverage_summary.value,
@@ -6348,6 +6404,7 @@ def _research_assessment_record(
     text: str,
     *,
     supersedes_assessment_id: str | None = None,
+    information_trust: ResearchInformationTrust = ResearchInformationTrust.UNASSESSED,
 ) -> ResearchSourceAssessmentRecord:
     return ResearchSourceAssessmentRecord(
         assessment_id=assessment_id,
@@ -6356,6 +6413,7 @@ def _research_assessment_record(
         text=text,
         recorded_at=datetime(2026, 8, 21, tzinfo=UTC),
         supersedes_assessment_id=supersedes_assessment_id,
+        information_trust=information_trust,
     )
 
 
