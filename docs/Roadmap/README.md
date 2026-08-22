@@ -5,7 +5,7 @@ commitments only after their scope and acceptance criteria are reviewed. These
 are product horizons, not the runtime-release sequence or historical sprint
 labels. For the executable current release and verified boundaries, see
 [`PROJECT_STATUS.md`](../../PROJECT_STATUS.md) and the
-[Architecture Audit v0.1](../Architecture/Architecture_Audit_v0.1.md).
+[Architecture Audit v0.2](../Architecture/Architecture_Audit_v0.2.md).
 
 | Version | Theme | Status |
 | --- | --- | --- |

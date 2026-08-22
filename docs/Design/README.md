@@ -12,5 +12,5 @@ and technology decisions for user-interface increments.
 Tkinter is selected through [ADR 0001](../Decisions/0001-tkinter-desktop-shell.md).
 The initial window provides only text chat, session selection, and semantic
 status through the existing Brain. The current executable boundary remains the
-[Architecture Audit v0.1](../Architecture/Architecture_Audit_v0.1.md) and
+[Architecture Audit v0.2](../Architecture/Architecture_Audit_v0.2.md) and
 [`PROJECT_STATUS.md`](../../PROJECT_STATUS.md).

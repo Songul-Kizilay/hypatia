@@ -631,7 +631,10 @@ changed.
 
 ## Next Milestone
 
-Create an Architecture Audit v0.2 checkpoint from the current repository after
-the selected-source observability sequence. Reconcile actual modules, test and
-release gates, desktop workflow boundaries, and intentionally unimplemented
-capabilities before selecting the next broader implementation slice.
+Implement the bounded Research Workspace Read Model v0.1 selected by
+[`Architecture Audit v0.2`](docs/Architecture/Architecture_Audit_v0.2.md).
+Extract pure catalog filtering, ordering, progress, coverage, and canonical
+selected-source projections from `TkinterDesktopWindow` behind immutable,
+Tkinter-independent values. Preserve every existing UI/runtime contract and
+exclude new features, providers, persistence, network behavior, and automatic
+analysis from this slice.
