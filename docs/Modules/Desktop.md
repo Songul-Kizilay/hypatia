@@ -89,6 +89,10 @@ The same wrapped line includes a normalized bounded source title, exact source
 document ID, and exact immutable run ID. It presents them only when the complete
 source record equals canonical run membership, preventing changed or foreign
 provenance from borrowing the selected run's record counts.
+It also shows canonical persisted data taint `external_untrusted_data` and
+instruction authority `none`. These fields remain separate from user-authored
+information trust—even `high` cannot grant command authority—and rendering them
+starts no controller, storage, provider, network, or mutation action.
 Overview also renders one bounded metadata line from the selected immutable
 run: seconds-level timezone-aware creation/update times and only the aggregate
 safe-failure count. It cannot expose a failure stage/reason or retain stale

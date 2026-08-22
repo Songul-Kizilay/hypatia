@@ -82,6 +82,9 @@ The MVP may present only current Brain/CognitiveEngine capabilities:
 - normalized bounded source title plus exact source and immutable run IDs in
   that same summary, guarded by complete canonical source-record membership so
   changed or foreign provenance is refused;
+- canonical persisted source safety fields in that summary—data taint
+  `external_untrusted_data` and instruction authority `none`—kept independent
+  from all user-authored information-trust assessments;
 - a bounded selected-run metadata line with timezone-aware created/updated
   timestamps and aggregate safe-failure count, without failure detail;
 - a read-only accepted-source selector from that same run snapshot, with

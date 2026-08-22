@@ -2,6 +2,33 @@
 
 All notable project changes are recorded here.
 
+## [0.3.107] - 2026-08-22
+
+### Added
+
+- The selected-source summary now exposes the canonical persisted safety
+  boundary beside provenance: data taint `external_untrusted_data` and
+  instruction authority `none`.
+
+### Safety
+
+- Safety text is derived only from the complete canonical source record already
+  bound to the immutable run; it makes no new trust, quality, or authority
+  decision and opens no controller, provider, persistence, network, or mutation
+  boundary.
+- A user-authored high information-trust assessment cannot alter or obscure the
+  source's untrusted-data taint or grant instruction authority. Hidden/invalid
+  state continues to clear the entire source summary.
+
+### Verification
+
+- The package-aware full local suite contains 1,504 passing automated tests.
+- Focused desktop coverage contains 145 passing tests, including canonical
+  safety-boundary presentation, high-information-trust isolation, exact
+  provenance/counts, canonical-record refusal, and hidden-source restoration.
+- Black, Ruff, and MyPy pass. A real Tk smoke confirms the wrapped safety line
+  preserves the established desktop window boundary.
+
 ## [0.3.106] - 2026-08-22
 
 ### Added
