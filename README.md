@@ -298,6 +298,10 @@ The same line includes a normalized bounded source title, exact source document
 ID, and exact research-run ID. The complete source record must match canonical
 run membership, so changed or foreign provenance cannot be paired with those
 counts.
+It also shows the persisted source safety boundary: external data remains
+tainted as `external_untrusted_data` with instruction authority `none`. Even a
+user-authored high information-trust assessment cannot grant that source command
+authority, and displaying the boundary performs no additional request.
 
 The window uses the same Bootstrap and Brain as the terminal entry point. A
 clicked session only fills the selection field; choosing it remains explicit.

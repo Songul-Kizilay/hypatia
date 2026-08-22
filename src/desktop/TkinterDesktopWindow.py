@@ -3327,7 +3327,10 @@ class TkinterDesktopWindow:
         return (
             f"Selected source — {title} · "
             f"Source ID: {canonical_source.document_id} · "
-            f"Run ID: {run.run_id} | Records — "
+            f"Run ID: {run.run_id} | Safety boundary — "
+            f"Data taint: {canonical_source.taint_label} · "
+            "Instruction authority: "
+            f"{canonical_source.instruction_authority} | Records — "
             f"Evidence: {evidence_count} · "
             f"Assessment history: {len(assessment_records)} · "
             f"Current assessments: {current_assessment_count}"
