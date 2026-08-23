@@ -2,6 +2,49 @@
 
 All notable project changes are recorded here.
 
+## [0.3.145] - 2026-08-23
+
+### Added
+
+- Bounded curiosity. `ResearchKnowledgeGapDetector` reads a research run and
+  reports seven bounded gap kinds; `ResearchCuriosityQuestionGenerator` turns
+  each gap into one ranked question; `CuriosityApplicationService` exposes
+  detect, preview, store, list, accept, and dismiss intents.
+- `JsonFileCuriosityQuestionStore` and `HYPATIA_CURIOSITY_ENABLED`, default off.
+- Five bounded `curiosity.*` events.
+
+### Safety
+
+- Curiosity notices and proposes; it never acts. No curiosity intent starts
+  research, drafts a plan, queues a background task, or spends a network or
+  model operation, and accepting a question records intent only. Tests assert
+  the run is unchanged after every intent.
+- Detection is pure reading of persisted state. A gap reports what our own
+  record is missing, never what is true: an unassessed source is not a bad
+  source and an unresolved claim is not a wrong claim.
+- Question generation is deterministic and template-driven rather than model
+  authored, so a proposal cannot smuggle in an assertion. Every generated
+  string is interrogative.
+- Ranking is a stated formula: declared gap severity dominates and recorded
+  claim confidence breaks ties. Gap and question identities are stable, so
+  re-detecting proposes the same thing rather than duplicating it, and storing
+  never reopens a question a human already decided.
+- Superseded claims and superseded assessments are excluded, so a replaced
+  record cannot resurface as a gap.
+- Event payloads carry identifiers, bounded kinds, counts, and integer ranks
+  only. Tests assert no claim text, question text, research question, or URL
+  appears in any payload.
+
+### Verification
+
+- The package-aware full local suite contains 2,045 passing automated tests.
+- Fifty-seven new tests cover each gap kind, severity ordering, bounded counts,
+  superseded records, identity stability, question generation and ranking,
+  preview-without-storing, persistence and restart, idempotent storing,
+  decision transitions, unknown runs and questions, bounded events, disabled
+  persistence, malformed and oversized stores, atomic write failure, and
+  production composition wiring.
+
 ## [0.3.144] - 2026-08-23
 
 ### Added

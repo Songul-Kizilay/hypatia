@@ -35,6 +35,8 @@ from research.ResearchClaimContradictionWritePreview import (
 )
 from research.ResearchClaimPreview import ResearchClaimPreview
 from research.ResearchClaimWritePreview import ResearchClaimWritePreview
+from research.ResearchCuriosityPreview import ResearchCuriosityPreview
+from research.ResearchCuriosityQuestion import ResearchCuriosityQuestion
 from research.ResearchEvidenceIntegrityStatus import ResearchEvidenceIntegrityStatus
 from research.ResearchPlanDraftPreview import ResearchPlanDraftPreview
 from research.ResearchPlanExecutionSnapshot import (
@@ -1052,6 +1054,148 @@ class ResponseComposer:
             request_id=request.request_id,
             intent="background_research_task",
             memory_count=0,
+        )
+
+    def curiosity_gaps(
+        self,
+        request: BrainRequest,
+        preview: ResearchCuriosityPreview,
+    ) -> BrainResponse:
+        """Report detected gaps, which are absences in our record, not findings."""
+        lines = [
+            "Knowledge gaps detected:",
+            f"Run ID: {preview.run_id}",
+            f"Gaps: {preview.gap_count}",
+        ]
+        lines.extend(f"- {gap.kind.value}: {gap.summary}" for gap in preview.gaps)
+        lines.append(
+            "A gap describes what our own record is missing, not what is true."
+        )
+        lines.append("Nothing was researched, proposed, or stored.")
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="curiosity",
+            memory_count=0,
+            research_curiosity=preview,
+        )
+
+    def curiosity_preview(
+        self,
+        request: BrainRequest,
+        preview: ResearchCuriosityPreview,
+    ) -> BrainResponse:
+        """Render ranked proposals and say plainly that none of them ran."""
+        lines = [
+            "Curiosity proposals:",
+            f"Run ID: {preview.run_id}",
+            f"Gaps: {preview.gap_count}",
+            f"Questions: {preview.question_count}",
+        ]
+        lines.extend(
+            f"- [{question.rank_score}] {question.text}"
+            for question in preview.questions
+        )
+        lines.append(
+            "Stored as proposals." if preview.stored else "Nothing was stored."
+        )
+        lines.append(
+            "A proposed question is a suggestion, not a plan: none of these "
+            "was researched, and none will run on its own."
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="curiosity",
+            memory_count=0,
+            research_curiosity=preview,
+        )
+
+    def curiosity_question_list(
+        self,
+        request: BrainRequest,
+        questions: tuple[ResearchCuriosityQuestion, ...],
+    ) -> BrainResponse:
+        """Render every stored proposal in rank order."""
+        lines = [f"Curiosity questions: {len(questions)}"]
+        lines.extend(
+            f"- {question.question_id} [{question.rank_score}] "
+            f"({question.status.value}): {question.text}"
+            for question in questions
+        )
+        lines.append("Listing proposals performs no research.")
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="curiosity",
+            memory_count=0,
+            curiosity_questions=questions,
+        )
+
+    def curiosity_question_decided(
+        self,
+        request: BrainRequest,
+        question: ResearchCuriosityQuestion,
+    ) -> BrainResponse:
+        """Record a ruling on one proposal without starting anything."""
+        message = "\n".join(
+            (
+                "Curiosity question decided:",
+                f"Question ID: {question.question_id}",
+                f"Status: {question.status.value}",
+                f"Rank: {question.rank_score}",
+                "Accepting a question records intent only; it starts no "
+                "research and queues no background task.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="curiosity",
+            memory_count=0,
+            curiosity_question=question,
+        )
+
+    def curiosity_question_missing(
+        self,
+        request: BrainRequest,
+        question_id: str,
+    ) -> BrainResponse:
+        """Report an unknown proposal without inventing one."""
+        message = "\n".join(
+            (
+                "Curiosity question not found:",
+                f"Question ID: {question_id}",
+                "No proposal with that identifier is stored.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="curiosity",
+            memory_count=0,
+            success=False,
+        )
+
+    def curiosity_rejected(
+        self,
+        request: BrainRequest,
+        reason: str,
+    ) -> BrainResponse:
+        """Report one bounded refusal without changing any proposal."""
+        message = "\n".join(
+            (
+                "Curiosity request rejected:",
+                f"Reason: {reason}",
+                "No proposal changed.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="curiosity",
+            memory_count=0,
+            success=False,
         )
 
     def research_autonomy_result(

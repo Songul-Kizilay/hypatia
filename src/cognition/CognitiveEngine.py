@@ -12,6 +12,9 @@ from brain.BrainRouter import BrainRouter
 from cognition.BackgroundResearchSchedulerApplicationService import (
     BackgroundResearchSchedulerApplicationService,
 )
+from cognition.CuriosityApplicationService import (
+    CuriosityApplicationService,
+)
 from cognition.LearnedMemoryAuditApplicationService import (
     LearnedMemoryAuditApplicationService,
 )
@@ -81,6 +84,7 @@ from research.ClaimContradictionStepOperation import (
     ClaimContradictionStepOperation,
 )
 from research.ClaimCreationStepOperation import ClaimCreationStepOperation
+from research.CuriosityQuestionStore import CuriosityQuestionStore
 from research.EvidenceIntegrityCheckStepOperation import (
     EvidenceIntegrityCheckStepOperation,
 )
@@ -174,6 +178,7 @@ class CognitiveEngine:
         research_run_manager: ResearchRunManager | None = None,
         research_execution_store: ResearchExecutionStore | None = None,
         background_task_store: BackgroundTaskStore | None = None,
+        curiosity_question_store: CuriosityQuestionStore | None = None,
         research_source_discovery_provider: (
             ResearchSourceDiscoveryProvider | None
         ) = None,
@@ -345,6 +350,14 @@ class CognitiveEngine:
                 event_bus=event_bus,
             )
         )
+        self._curiosity_service: CuriosityApplicationService | None = None
+        if research_run_manager is not None:
+            self._curiosity_service = CuriosityApplicationService(
+                research_run_manager,
+                response_composer,
+                question_store=curiosity_question_store,
+                event_bus=event_bus,
+            )
         self._research_plan_preview_service = ResearchPlanPreviewApplicationService(
             response_composer,
             research_plan_draft_service,
@@ -428,6 +441,9 @@ class CognitiveEngine:
 
         if scheduler.is_worker_cycle_request(request):
             return scheduler.process_worker_cycle(request)
+
+        if self._is_curiosity_request(request):
+            return self._process_curiosity(request)
 
         if self._is_research_run_markdown_export_verify_request(request):
             return self._process_research_run_markdown_export_verify(request)
@@ -3017,6 +3033,42 @@ class CognitiveEngine:
             recent_records,
             session,
         )
+
+    @staticmethod
+    def _is_curiosity_request(request: BrainRequest) -> bool:
+        """Return whether this request addresses the curiosity engine."""
+        service = CuriosityApplicationService
+        return (
+            service.is_gap_detect_request(request)
+            or service.is_question_preview_request(request)
+            or service.is_question_store_request(request)
+            or service.is_question_list_request(request)
+            or service.is_question_accept_request(request)
+            or service.is_question_dismiss_request(request)
+        )
+
+    def _process_curiosity(self, request: BrainRequest) -> BrainResponse:
+        """Route one curiosity intent, which never performs research."""
+        service = self._curiosity_service
+        if service is None:
+            return self._response_composer.curiosity_rejected(
+                request,
+                "Research run persistence is unavailable.",
+            )
+        try:
+            if service.is_gap_detect_request(request):
+                return service.process_gap_detect(request)
+            if service.is_question_preview_request(request):
+                return service.process_question_preview(request)
+            if service.is_question_store_request(request):
+                return service.process_question_store(request)
+            if service.is_question_list_request(request):
+                return service.process_question_list(request)
+            if service.is_question_accept_request(request):
+                return service.process_question_accept(request)
+            return service.process_question_dismiss(request)
+        except ResearchError as error:
+            return self._response_composer.curiosity_rejected(request, str(error))
 
     def _process_conversation_search(self, request: BrainRequest) -> BrainResponse:
         """Find matching normal conversation records in the resolved session."""

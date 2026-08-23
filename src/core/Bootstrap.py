@@ -54,6 +54,9 @@ from research.HttpResearchSourceFetcher import HttpResearchSourceFetcher
 from research.JsonFileBackgroundTaskStore import (
     JsonFileBackgroundTaskStore,
 )
+from research.JsonFileCuriosityQuestionStore import (
+    JsonFileCuriosityQuestionStore,
+)
 from research.JsonFileResearchExecutionStore import (
     JsonFileResearchExecutionStore,
 )
@@ -398,6 +401,7 @@ class Bootstrap:
         research_run_manager.load()
         research_execution_store = self._research_execution_store()
         background_task_store = self._background_task_store()
+        curiosity_question_store = self._curiosity_question_store()
         research_source_content_store = JsonFileResearchSourceContentStore(
             self._research_source_content_path
             or self._research_source_content_store_path(
@@ -459,6 +463,7 @@ class Bootstrap:
             research_run_manager=research_run_manager,
             research_execution_store=research_execution_store,
             background_task_store=background_task_store,
+            curiosity_question_store=curiosity_question_store,
             research_source_discovery_provider=(
                 self._research_source_discovery_provider
             ),
@@ -577,6 +582,21 @@ class Bootstrap:
         )
         return JsonFileBackgroundTaskStore(
             run_path.with_name("research_background_tasks.json")
+        )
+
+    def _curiosity_question_store(self) -> JsonFileCuriosityQuestionStore | None:
+        """Create the question store only when curiosity is opted in.
+
+        Default off, so an unset environment proposes nothing durable and
+        behaves exactly like a runtime without a curiosity engine.
+        """
+        if os.environ.get("HYPATIA_CURIOSITY_ENABLED") != "true":
+            return None
+        run_path = self._research_run_path or self._research_run_store_path(
+            self._memory_path
+        )
+        return JsonFileCuriosityQuestionStore(
+            run_path.with_name("research_curiosity_questions.json")
         )
 
     @staticmethod

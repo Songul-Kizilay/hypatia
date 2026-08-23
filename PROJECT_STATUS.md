@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.144 (Genesis)`
+`v0.3.145 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.144`** is the current executable package and GitHub
+- **Runtime release `v0.3.145`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -32,6 +32,13 @@ with optional OpenAI-compatible LLM conversation support.
 ### Implemented
 
 - Application bootstrap, configuration, logging, and dependency injection.
+- Bounded curiosity detects seven kinds of knowledge gap in a persisted
+  research run, turns each into one deterministically templated and ranked
+  question, and stops there. Behind `HYPATIA_CURIOSITY_ENABLED`, default off.
+  Nothing in the pipeline starts research, drafts a plan, or queues a task, and
+  accepting a proposal records intent only. Gaps describe what our record is
+  missing rather than what is true, and superseded claims and assessments are
+  excluded.
 - Background research scheduling queues approved executions behind
   `HYPATIA_BACKGROUND_RESEARCH_ENABLED`, default off. The scheduler owns
   queueing, pausing, retrying, and crash recovery only; every cycle drives the
@@ -904,7 +911,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,988 automated tests pass through package-aware discovery.
+- 2,045 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.

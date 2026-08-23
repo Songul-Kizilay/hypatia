@@ -29,6 +29,8 @@ from research.ResearchClaimContradictionWritePreview import (
 )
 from research.ResearchClaimPreview import ResearchClaimPreview
 from research.ResearchClaimWritePreview import ResearchClaimWritePreview
+from research.ResearchCuriosityPreview import ResearchCuriosityPreview
+from research.ResearchCuriosityQuestion import ResearchCuriosityQuestion
 from research.ResearchEvidenceIntegrityStatus import ResearchEvidenceIntegrityStatus
 from research.ResearchPlanDraftPreview import ResearchPlanDraftPreview
 from research.ResearchPlanExecutionState import ResearchPlanExecutionState
@@ -120,5 +122,8 @@ class BrainResponse:
     research_plan_execution: ResearchPlanExecutionState | None = None
     research_autonomy: ResearchAutonomyResult | None = None
     background_research_task: BackgroundResearchTask | None = None
+    research_curiosity: ResearchCuriosityPreview | None = None
+    curiosity_question: ResearchCuriosityQuestion | None = None
+    curiosity_questions: tuple[ResearchCuriosityQuestion, ...] = ()
     session_summaries: list[SessionSummary] = field(default_factory=list)
     session_delete_allowed: bool | None = None

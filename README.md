@@ -707,6 +707,37 @@ On restart, a task recorded as running becomes `interrupted`, since what it
 achieved is unknown, and it is not replayed. `interrupted`, `paused`, and
 `blocked` remain three different things.
 
+---
+
+## Curiosity
+
+Durable curiosity proposals are disabled by default. To persist them, set:
+
+```text
+HYPATIA_CURIOSITY_ENABLED=true
+```
+
+The value must be exactly lowercase `true`. Proposals are written to
+`research_curiosity_questions.json` beside the research-run store, in a separate
+versioned document.
+
+Curiosity reads a research run and reports where our own record is thin:
+a contradicted claim, an unresolved claim, a claim resting on a single source,
+a question with no accepted sources, a low-trust source, an unassessed source,
+or an accepted source nothing cites. A gap says what is missing from the record,
+never what is true.
+
+Each gap becomes exactly one question, generated from a fixed template rather
+than by a model, so a proposal can only ask about a claim or source the system
+already recorded. Ranking is a stated formula: gap severity dominates, recorded
+claim confidence breaks ties.
+
+Curiosity never acts. Detecting, previewing, storing, listing, accepting, and
+dismissing all leave the run untouched; none of them starts research, drafts a
+plan, queues a background task, or spends a network or model operation.
+Accepting a question records that a human thinks it worth pursuing — turning it
+into work stays a separate, explicit decision.
+
 The following optional settings control which learned memories are supplied to
 the LLM as additional context:
 
