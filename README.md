@@ -844,6 +844,36 @@ that judgement while presenting the change as bookkeeping.
 
 ---
 
+## Source reputation
+
+Reputation aggregates our own assessments by origin, across every run. Like
+calibration it needs no flag and writes nothing: it is recomputed from the
+assessments on every request, so revising one assessment revises the reputation
+and a reputation can never outlive the judgements behind it.
+
+Only authored assessments count. Nothing reads a model's opinion of a source or
+infers quality from a URL, and acceptance is not approval — a source is accepted
+because someone chose to read it, which says nothing about whether it was any
+good.
+
+There is no score. A single number would compress "we assessed three pages from
+this host, two low and one high" into something that looks precise, travels
+easily, and cannot be argued with. The counts stay separate so the reader can
+see the sample they are being asked to generalise from.
+
+Below three assessments the standing is `provisional` and says so. Two bad
+experiences is a coincidence, and calling it a reputation would let one unlucky
+pair of pages permanently colour how everything from that host is read.
+
+Nothing a reputation says gates anything. A low standing refuses no fetch,
+discounts no evidence, pre-assesses no new source, and changes no existing
+assessment. Whether a source is worth reading stays a judgement someone makes
+while looking at it. Reputation events deliberately carry no origin name, because
+a log line pairing a host with a low standing is exactly the artefact that gets
+quoted later without its sample size.
+
+---
+
 ## Ordinary chat never performs research
 
 Hypatia can chat, and Hypatia can research. They are different subsystems, and

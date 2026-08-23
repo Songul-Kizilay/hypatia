@@ -55,6 +55,9 @@ from cognition.ResearchPlanPreviewApplicationService import (
 from cognition.ResearchSourceAcceptanceService import (
     ResearchSourceAcceptanceService,
 )
+from cognition.SourceReputationApplicationService import (
+    SourceReputationApplicationService,
+)
 from core.Exceptions import (
     KnowledgeError,
     MemoryError,
@@ -405,6 +408,15 @@ class CognitiveEngine:
                 response_composer,
                 event_bus=event_bus,
             )
+        self._source_reputation_service: SourceReputationApplicationService | None = (
+            None
+        )
+        if research_run_manager is not None:
+            self._source_reputation_service = SourceReputationApplicationService(
+                research_run_manager,
+                response_composer,
+                event_bus=event_bus,
+            )
         self._research_plan_preview_service = ResearchPlanPreviewApplicationService(
             response_composer,
             research_plan_draft_service,
@@ -502,6 +514,9 @@ class CognitiveEngine:
 
         if CalibrationApplicationService.is_report_request(request):
             return self._process_calibration(request)
+
+        if SourceReputationApplicationService.is_report_request(request):
+            return self._process_source_reputation(request)
 
         if self._is_research_run_markdown_export_verify_request(request):
             return self._process_research_run_markdown_export_verify(request)
@@ -3114,6 +3129,22 @@ class CognitiveEngine:
             recent_records,
             session,
         )
+
+    def _process_source_reputation(self, request: BrainRequest) -> BrainResponse:
+        """Route the reputation intent, which reads and gates nothing."""
+        service = self._source_reputation_service
+        if service is None:
+            return self._response_composer.source_reputation_rejected(
+                request,
+                "Research run persistence is unavailable.",
+            )
+        try:
+            return service.process_report(request)
+        except ResearchError as error:
+            return self._response_composer.source_reputation_rejected(
+                request,
+                str(error),
+            )
 
     def _process_calibration(self, request: BrainRequest) -> BrainResponse:
         """Route the calibration intent, which reads and never writes."""

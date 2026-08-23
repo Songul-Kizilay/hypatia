@@ -2,6 +2,48 @@
 
 All notable project changes are recorded here.
 
+## [0.3.152] - 2026-08-23
+
+### Added
+
+- Source reputation. `SourceReputationLedger` aggregates authored assessments by
+  origin across every run, and `SourceReputation` reports the counts with a
+  bounded `SourceStanding` — unknown, provisional, mixed, consistently low, or
+  consistently trusted.
+- `SourceOrigin` normalises a URL host minimally: lowercase, no leading `www.`,
+  no port, and no public-suffix guessing, so subdomains stay separate.
+- `SourceReputationApplicationService` with a report intent for all origins or
+  one named origin, and one bounded `source_reputation.reported` event.
+
+### Safety
+
+- Reputation gates nothing. A low standing refuses no fetch, discounts no
+  evidence, pre-assesses no new source, and changes no assessment. Tests assert
+  a later source from a consistently-low origin is still accepted and still
+  arrives unassessed, and `SourceStanding.decides_anything` is asserted false
+  for every value rather than merely intended in a comment.
+- There is no store and no write path. The ledger is rebuilt from assessments on
+  every request, so revising an assessment revises the reputation; a test
+  asserts exactly that.
+- There is no score. Counts per trust label stay separate so the sample is
+  visible, rather than compressed into a number that looks precise and cannot be
+  argued with.
+- Below three assessments the standing is `provisional`. Two low assessments
+  produce provisional, not consistently low.
+- Only authored assessments count. Acceptance alone leaves the standing unknown,
+  and superseded assessments stop counting.
+- Event payloads carry counts and bounded standing categories but deliberately
+  never an origin name, since a log line pairing a host with a low standing gets
+  quoted later without its sample size.
+
+### Verification
+
+- The package-aware full local suite contains 2,292 passing automated tests.
+- Thirty-nine new tests cover origin normalisation, every standing rule and its
+  threshold, aggregation across runs, superseded assessments, acceptance without
+  judgement, ordering, single-origin lookup, the absence of gating, derivation
+  rather than storage, bounded events, and production composition wiring.
+
 ## [0.3.151] - 2026-08-23
 
 ### Added

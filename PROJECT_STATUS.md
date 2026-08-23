@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.151 (Genesis)`
+`v0.3.152 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.151`** is the current executable package and GitHub
+- **Runtime release `v0.3.152`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -32,6 +32,11 @@ with optional OpenAI-compatible LLM conversation support.
 ### Implemented
 
 - Application bootstrap, configuration, logging, and dependency injection.
+- Source reputation aggregates authored assessments by origin across runs and
+  reports counts with a bounded standing, never a score. It is derived on every
+  request with no store, so revising an assessment revises the reputation. Below
+  three assessments the standing is provisional, and no standing gates anything:
+  no fetch refused, no evidence discounted, no source pre-assessed.
 - Claim calibration compares each authored claim against the evidence structure
   behind it and reports overstatement, using stated ceiling rules rather than a
   hidden score. Nothing supports `fact`. It is derived on every request with no
@@ -940,7 +945,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 2,253 automated tests pass through package-aware discovery.
+- 2,292 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.

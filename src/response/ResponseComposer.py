@@ -76,6 +76,7 @@ from research.ResearchSourceComparisonPreview import ResearchSourceComparisonPre
 from research.ResearchSourceContentRestorationStatus import (
     ResearchSourceContentRestorationStatus,
 )
+from research.SourceReputation import SourceReputation
 from session.SessionDeleteExecutionResult import SessionDeleteExecutionResult
 from session.SessionDeletePolicy import SessionDeleteStatus
 from session.SessionRecord import SessionRecord
@@ -1374,6 +1375,61 @@ class ResponseComposer:
             message=message,
             request_id=request.request_id,
             intent="research_calibration",
+            memory_count=0,
+            success=False,
+        )
+
+    def source_reputation(
+        self,
+        request: BrainRequest,
+        reputations: tuple[SourceReputation, ...],
+    ) -> BrainResponse:
+        """Render our own assessment history per origin, gating nothing."""
+        lines = [
+            "Source reputation:",
+            f"Origins: {len(reputations)}",
+            "",
+        ]
+        for reputation in reputations:
+            lines.extend(f"  {line}" for line in reputation.lines())
+            lines.append("")
+        if not reputations:
+            lines.append("No accepted source matches, so there is nothing to report.")
+            lines.append("")
+        lines.extend(
+            (
+                "This counts our own assessments, not the publisher. A standing "
+                "of provisional means the sample is too small to generalise "
+                "from, and no standing gates anything: no fetch was refused, no "
+                "evidence discounted, no source pre-assessed, and no assessment "
+                "changed.",
+            )
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="source_reputation",
+            memory_count=0,
+            source_reputations=reputations,
+        )
+
+    def source_reputation_rejected(
+        self,
+        request: BrainRequest,
+        reason: str,
+    ) -> BrainResponse:
+        """Report one bounded refusal without changing any assessment."""
+        message = "\n".join(
+            (
+                "Source reputation request rejected:",
+                f"Reason: {reason}",
+                "No assessment changed.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="source_reputation",
             memory_count=0,
             success=False,
         )

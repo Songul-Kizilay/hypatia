@@ -66,6 +66,7 @@ from research.ResearchSourceComparisonPreview import ResearchSourceComparisonPre
 from research.ResearchSourceContentRestorationStatus import (
     ResearchSourceContentRestorationStatus,
 )
+from research.SourceReputation import SourceReputation
 
 
 @dataclass(frozen=True, slots=True)
@@ -136,5 +137,6 @@ class BrainResponse:
     research_reflections: tuple[ResearchReflectionReport, ...] = ()
     failure_lessons: tuple[ResearchFailureLesson, ...] = ()
     research_calibration: ResearchCalibrationReport | None = None
+    source_reputations: tuple[SourceReputation, ...] = ()
     session_summaries: list[SessionSummary] = field(default_factory=list)
     session_delete_allowed: bool | None = None
