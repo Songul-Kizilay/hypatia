@@ -14,6 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from core.Exceptions import ResearchError
+from research.ResearchEvidenceAuthorization import ResearchEvidenceAuthorization
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 
 MAX_RESEARCH_PLAN_STEP_ID_CHARACTERS = 200
@@ -32,6 +33,7 @@ class ResearchPlanStep:
     selected_source_document_ids: tuple[str, ...] = ()
     capability: ResearchPlanStepCapability = ResearchPlanStepCapability.NONE
     authorized_source_url: str = ""
+    evidence_authorization: ResearchEvidenceAuthorization | None = None
 
     def __post_init__(self) -> None:
         step_id = self._normalize_bounded_text(
@@ -46,6 +48,10 @@ class ResearchPlanStep:
         )
         if not isinstance(self.capability, ResearchPlanStepCapability):
             raise ResearchError("Research plan step capability is invalid.")
+        if self.evidence_authorization is not None and not isinstance(
+            self.evidence_authorization, ResearchEvidenceAuthorization
+        ):
+            raise ResearchError("Research plan evidence authorization is invalid.")
         if not isinstance(self.authorized_source_url, str):
             raise ResearchError("Research plan authorized source URL must be text.")
         authorized_source_url = self.authorized_source_url.strip()

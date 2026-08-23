@@ -90,6 +90,7 @@ EXPECTED_OPERATIONS = {
     ResearchPlanStepCapability.SOURCE_DISCOVERY: "source_discovery",
     ResearchPlanStepCapability.SOURCE_FETCH: "source_fetch",
     ResearchPlanStepCapability.SOURCE_ACCEPT: "source_accept",
+    ResearchPlanStepCapability.EVIDENCE_RECORDING: "evidence_recording",
 }
 
 
@@ -140,10 +141,13 @@ class PlanExecutionCompositionTests(unittest.TestCase):
         capability: str,
         run_id: str | None = None,
         authorized_url: str | None = None,
+        evidence: tuple[str, int, str] | None = None,
     ) -> str:
         draft: tuple[object, ...] = ("Authored instruction", (), capability)
-        if authorized_url is not None:
-            draft = (*draft, authorized_url)
+        if authorized_url is not None or evidence is not None:
+            draft = (*draft, authorized_url or "")
+        if evidence is not None:
+            draft = (*draft, evidence)
         metadata: dict[str, object] = {
             "intent": "research_plan_execution_start",
             "research_plan_question": "What evidence supports the claim?",
@@ -519,6 +523,82 @@ class PlanExecutionCompositionTests(unittest.TestCase):
         stored = self.run_manager.get(run.run_id)
         self.assertEqual(len(stored.sources), 1)
         self.assertEqual(stored.evidence, ())
+
+    def test_full_chain_accept_then_record_evidence(self) -> None:
+        run = self.run_manager.create("What evidence supports the claim?")
+
+        accept_plan = self._start(
+            "source_accept",
+            run_id=run.run_id,
+            authorized_url="https://example.test/chain",
+        )
+        accept_response = self._advance(accept_plan)
+        accept_state = accept_response.research_plan_execution
+        assert accept_state is not None
+        self.assertEqual(accept_state.status.value, "completed")
+
+        accepted = self.run_manager.get(run.run_id)
+        self.assertEqual(len(accepted.sources), 1)
+        document_id = accepted.sources[0].document_id
+
+        evidence_plan = self._start(
+            "evidence_recording",
+            run_id=run.run_id,
+            evidence=(document_id, 0, "Supports the question under review."),
+        )
+        evidence_response = self._advance(evidence_plan)
+
+        state = evidence_response.research_plan_execution
+        assert state is not None
+        self.assertEqual(state.status.value, "completed")
+        self.assertTrue(state.steps[0].work_performed)
+        self.assertEqual(state.steps[0].operation, "evidence_recording")
+
+        final = self.run_manager.get(run.run_id)
+        self.assertEqual(len(final.evidence), 1)
+        self.assertEqual(final.evidence[0].source_document_id, document_id)
+        self.assertEqual(final.claims, ())
+        self.assertEqual(final.assessments, ())
+
+    def test_fetched_but_unaccepted_source_cannot_record_evidence(self) -> None:
+        run = self.run_manager.create("What evidence supports the claim?")
+
+        fetch_plan = self._start(
+            "source_fetch",
+            run_id=run.run_id,
+            authorized_url="https://example.test/fetched-only",
+        )
+        self._advance(fetch_plan)
+        self.assertEqual(self.run_manager.get(run.run_id).sources, ())
+
+        document_ids = [
+            reference.document_id for reference in self.knowledge_engine.documents()
+        ]
+        evidence_plan = self._start(
+            "evidence_recording",
+            run_id=run.run_id,
+            evidence=(document_ids[0], 0, "Should not be recordable."),
+        )
+
+        response = self._advance(evidence_plan)
+
+        state = response.research_plan_execution
+        assert state is not None
+        self.assertEqual(state.status.value, "failed")
+        self.assertFalse(state.steps[0].work_performed)
+        self.assertEqual(self.run_manager.get(run.run_id).evidence, ())
+
+    def test_evidence_recording_without_authorization_fails_the_step(self) -> None:
+        run = self.run_manager.create("What evidence supports the claim?")
+        plan_id = self._start("evidence_recording", run_id=run.run_id)
+
+        response = self._advance(plan_id)
+
+        state = response.research_plan_execution
+        assert state is not None
+        self.assertEqual(state.status.value, "failed")
+        self.assertFalse(state.steps[0].work_performed)
+        self.assertEqual(self.run_manager.get(run.run_id).evidence, ())
 
 
 if __name__ == "__main__":

@@ -2,6 +2,50 @@
 
 All notable project changes are recorded here.
 
+## [0.3.133] - 2026-08-23
+
+### Added
+
+- `EVIDENCE_RECORDING` capability and `EvidenceRecordingStepOperation`, recording
+  one evidence entry through the existing `ResearchRunManager.add_evidence`
+  path. No second evidence domain exists.
+- `ResearchEvidenceAuthorization` groups one exact document ID, one exact chunk
+  index, and one authored note, so capability-specific authorization stays
+  cohesive instead of spreading across flat step fields. Draft steps accept it
+  as an optional fifth element.
+
+### Safety
+
+- Evidence text is never supplied by a caller. The operation resolves a real
+  `Chunk` by exact document ID and chunk index, and the existing evidence domain
+  computes the excerpt, chunk identity, and hash from that chunk. A caller may
+  authorize which chunk and what a human noted about it, never the excerpt, so
+  evidence cannot be fabricated.
+- No language model is involved at any point.
+- A fetched-but-unaccepted source cannot produce evidence: the run manager
+  independently requires the chunk's document to belong to an accepted source. A
+  composition test drives fetch-without-accept and confirms the recording fails.
+- An unknown document or chunk index is refused rather than guessed or
+  approximated to a nearby chunk.
+- Missing authorization, a closed run, an unknown run, a missing run binding, and
+  cancellation all record nothing.
+- Recording evidence establishes evidence only. It performs no assessment, forms
+  no claim, elevates no epistemic state, and makes no source trustworthy; tests
+  assert assessments, claims, and contradictions all stay empty.
+- Excerpt truncation is reported rather than hidden, and user-facing detail stays
+  within the bounded operation limit even with a maximum-length note.
+
+### Verification
+
+- The package-aware full local suite contains 1,805 passing automated tests.
+- Twelve new operation tests cover recording from an accepted chunk, provenance
+  computed from the real chunk, absence of assessment or claim, refusal for
+  unaccepted sources and unknown chunks, missing authorization, cancellation,
+  closed and unknown runs, bounded detail, and authorization validation.
+- The composition suite now covers seven capabilities and proves the full
+  production chain: `SOURCE_ACCEPT` then `EVIDENCE_RECORDING` through real
+  `CognitiveEngine` wiring, plus the fetched-but-unaccepted refusal.
+
 ## [0.3.132] - 2026-08-23
 
 ### Changed

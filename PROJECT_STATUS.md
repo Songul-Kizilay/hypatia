@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.132 (Genesis)`
+`v0.3.133 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.132`** is the current executable package and GitHub
+- **Runtime release `v0.3.133`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -32,6 +32,16 @@ with optional OpenAI-compatible LLM conversation support.
 ### Implemented
 
 - Application bootstrap, configuration, logging, and dependency injection.
+- The seventh connected research capability, `EVIDENCE_RECORDING`, records one
+  evidence entry through the existing evidence path. Evidence text is never
+  supplied by a caller: the operation resolves a real chunk by exact document ID
+  and chunk index, and the existing domain computes the excerpt, chunk identity,
+  and hash from it, so evidence cannot be fabricated and no language model is
+  involved. A fetched-but-unaccepted source cannot produce evidence, and unknown
+  chunks are refused rather than guessed. Recording establishes evidence only: no
+  assessment, no claim, no epistemic elevation, and no statement of source trust.
+  The full production chain from source acceptance to evidence recording is
+  covered by composition tests.
 - The canonical source-acceptance transaction lives in one place. Extracted
   behavior-preservingly from the source-load route into
   `ResearchSourceAcceptanceService`, it is shared by that route and by the sixth
@@ -790,7 +800,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,790 automated tests pass through package-aware discovery.
+- 1,805 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.

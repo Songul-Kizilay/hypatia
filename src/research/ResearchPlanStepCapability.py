@@ -19,6 +19,7 @@ class ResearchPlanStepCapability(StrEnum):
     SOURCE_DISCOVERY = "source_discovery"
     SOURCE_FETCH = "source_fetch"
     SOURCE_ACCEPT = "source_accept"
+    EVIDENCE_RECORDING = "evidence_recording"
 
     @property
     def executable(self) -> bool:

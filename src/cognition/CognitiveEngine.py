@@ -73,6 +73,9 @@ from research.AcceptedSourceListingStepOperation import (
 from research.EvidenceIntegrityCheckStepOperation import (
     EvidenceIntegrityCheckStepOperation,
 )
+from research.EvidenceRecordingStepOperation import (
+    EvidenceRecordingStepOperation,
+)
 from research.LocalKnowledgeSearchStepOperation import (
     LocalKnowledgeSearchStepOperation,
 )
@@ -240,6 +243,13 @@ class CognitiveEngine:
             operation_registry.register(
                 ResearchPlanStepCapability.ACCEPTED_SOURCE_LISTING,
                 AcceptedSourceListingStepOperation(research_run_manager),
+            )
+            operation_registry.register(
+                ResearchPlanStepCapability.EVIDENCE_RECORDING,
+                EvidenceRecordingStepOperation(
+                    knowledge_engine,
+                    research_run_manager,
+                ),
             )
             if research_evidence_integrity_auditor is not None:
                 operation_registry.register(
