@@ -17,6 +17,7 @@ from core.Exceptions import ResearchError
 from research.ResearchAssessmentAuthorization import (
     ResearchAssessmentAuthorization,
 )
+from research.ResearchClaimAuthorization import ResearchClaimAuthorization
 from research.ResearchEvidenceAuthorization import ResearchEvidenceAuthorization
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 
@@ -38,6 +39,7 @@ class ResearchPlanStep:
     authorized_source_url: str = ""
     evidence_authorization: ResearchEvidenceAuthorization | None = None
     assessment_authorization: ResearchAssessmentAuthorization | None = None
+    claim_authorization: ResearchClaimAuthorization | None = None
 
     def __post_init__(self) -> None:
         step_id = self._normalize_bounded_text(
@@ -60,6 +62,10 @@ class ResearchPlanStep:
             self.assessment_authorization, ResearchAssessmentAuthorization
         ):
             raise ResearchError("Research plan assessment authorization is invalid.")
+        if self.claim_authorization is not None and not isinstance(
+            self.claim_authorization, ResearchClaimAuthorization
+        ):
+            raise ResearchError("Research plan claim authorization is invalid.")
         if not isinstance(self.authorized_source_url, str):
             raise ResearchError("Research plan authorized source URL must be text.")
         authorized_source_url = self.authorized_source_url.strip()

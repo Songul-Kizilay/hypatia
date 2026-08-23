@@ -15,6 +15,7 @@ from dataclasses import dataclass
 
 from core.Exceptions import ResearchError
 from research.ResearchAssessmentAuthorization import ResearchAssessmentAuthorization
+from research.ResearchClaimAuthorization import ResearchClaimAuthorization
 from research.ResearchEvidenceAuthorization import ResearchEvidenceAuthorization
 
 MAX_LEGACY_DRAFT_TUPLE_LENGTH = 6
@@ -30,6 +31,7 @@ class ResearchPlanStepDraftInput:
     authorized_source_url: str = ""
     evidence_authorization: ResearchEvidenceAuthorization | None = None
     assessment_authorization: ResearchAssessmentAuthorization | None = None
+    claim_authorization: ResearchClaimAuthorization | None = None
 
     @classmethod
     def from_value(cls, value: object) -> ResearchPlanStepDraftInput:

@@ -70,6 +70,7 @@ from memory.SessionMemoryPolicy import SessionMemoryPolicy
 from research.AcceptedSourceListingStepOperation import (
     AcceptedSourceListingStepOperation,
 )
+from research.ClaimCreationStepOperation import ClaimCreationStepOperation
 from research.EvidenceIntegrityCheckStepOperation import (
     EvidenceIntegrityCheckStepOperation,
 )
@@ -257,6 +258,10 @@ class CognitiveEngine:
             operation_registry.register(
                 ResearchPlanStepCapability.SOURCE_ASSESSMENT,
                 SourceAssessmentStepOperation(research_run_manager),
+            )
+            operation_registry.register(
+                ResearchPlanStepCapability.CLAIM_CREATION,
+                ClaimCreationStepOperation(research_run_manager),
             )
             if research_evidence_integrity_auditor is not None:
                 operation_registry.register(

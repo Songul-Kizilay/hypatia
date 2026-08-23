@@ -68,6 +68,7 @@ class ResearchPlanDraftService:
                     authorized_source_url=normalized.authorized_source_url,
                     evidence_authorization=normalized.evidence_authorization,
                     assessment_authorization=normalized.assessment_authorization,
+                    claim_authorization=normalized.claim_authorization,
                 )
             )
         return tuple(steps)

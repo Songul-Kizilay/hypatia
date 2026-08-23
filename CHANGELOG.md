@@ -2,6 +2,55 @@
 
 All notable project changes are recorded here.
 
+## [0.3.135] - 2026-08-23
+
+### Added
+
+- `CLAIM_CREATION` capability and `ClaimCreationStepOperation`, recording one
+  authored claim through the existing `ResearchRunManager.record_claim` path. No
+  second claim implementation exists.
+- `ResearchClaimAuthorization` carries the exact evidence a claim rests on, the
+  authored claim text, an explicit epistemic state, an explicit categorical
+  confidence, and an optional superseded claim.
+- `ResearchPlanStepDraftInput` gains a named `claim_authorization` field; no
+  positional draft element was added.
+
+### Safety
+
+- Epistemic state and confidence are authored, never inferred. Completing the
+  operation promotes nothing: a claim is recorded in exactly the state a human
+  declared. A test records every one of the seven epistemic states and asserts
+  each is stored verbatim.
+- A high-trust assessment does not raise a claim. A composition test records a
+  high-trust assessment and then a hypothesis, and asserts the claim stays a
+  hypothesis with unassessed confidence.
+- The existing domain requires at least one evidence reference for every claim,
+  including a hypothesis or speculation. That exact rule is preserved rather than
+  replaced, so no claim can exist without evidence.
+- Evidence must belong to the bound run. Foreign and non-existent evidence
+  references are rejected with no mutation.
+- Claim text stays bounded, evidence references stay unique and bounded, and
+  confidence remains categorical with no fabricated number.
+- Supersession history is preserved: the superseded claim remains in its original
+  state and the replacement records the exact predecessor identity.
+- Existing contradiction state is untouched; recording a claim never resolves or
+  clears a contradiction.
+- Missing authorization, a closed run, an unknown run, a missing run binding, and
+  cancellation all record nothing.
+
+### Verification
+
+- The package-aware full local suite contains 1,840 passing automated tests.
+- Fifteen new operation tests cover authored recording, non-promotion of a
+  hypothesis, verbatim recording of every epistemic state, the evidence
+  requirement for speculation, rejection of foreign and stale evidence,
+  supersession history, untouched contradictions, missing authorization,
+  cancellation, closed and unknown runs, bounded detail, and authorization
+  validation.
+- The composition suite now covers nine capabilities and drives the complete
+  chain through real `CognitiveEngine` wiring: acceptance, evidence, assessment,
+  and claim.
+
 ## [0.3.134] - 2026-08-23
 
 ### Changed

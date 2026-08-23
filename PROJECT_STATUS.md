@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.134 (Genesis)`
+`v0.3.135 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.134`** is the current executable package and GitHub
+- **Runtime release `v0.3.135`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -32,6 +32,16 @@ with optional OpenAI-compatible LLM conversation support.
 ### Implemented
 
 - Application bootstrap, configuration, logging, and dependency injection.
+- The ninth connected capability, `CLAIM_CREATION`, records one authored claim
+  through the existing claim path. Epistemic state and confidence are authored,
+  never inferred, and completing the operation promotes nothing: every one of the
+  seven epistemic states is stored verbatim, and a high-trust assessment does not
+  raise a hypothesis. The existing domain rule requiring at least one evidence
+  reference for every claim, including hypothesis and speculation, is preserved
+  rather than replaced. Evidence must belong to the bound run, supersession
+  history is preserved, and existing contradiction state is untouched. The
+  complete chain from acceptance through evidence and assessment to claim is
+  covered by composition tests.
 - Authored plan-step drafts normalize through the named immutable
   `ResearchPlanStepDraftInput` instead of a widening positional tuple, while
   legacy tuples remain accepted unchanged. The eighth connected capability,
@@ -810,7 +820,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,822 automated tests pass through package-aware discovery.
+- 1,840 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.

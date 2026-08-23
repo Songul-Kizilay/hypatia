@@ -33,6 +33,8 @@ from research.JsonFileResearchRunStore import JsonFileResearchRunStore
 from research.ResearchAssessmentAuthorization import (
     ResearchAssessmentAuthorization,
 )
+from research.ResearchClaimAuthorization import ResearchClaimAuthorization
+from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchEvidenceIntegrityAuditor import (
     ResearchEvidenceIntegrityAuditor,
 )
@@ -96,6 +98,7 @@ EXPECTED_OPERATIONS = {
     ResearchPlanStepCapability.SOURCE_ACCEPT: "source_accept",
     ResearchPlanStepCapability.EVIDENCE_RECORDING: "evidence_recording",
     ResearchPlanStepCapability.SOURCE_ASSESSMENT: "source_assessment",
+    ResearchPlanStepCapability.CLAIM_CREATION: "claim_creation",
 }
 
 
@@ -695,6 +698,138 @@ class PlanExecutionCompositionTests(unittest.TestCase):
         self.assertEqual(state.status.value, "failed")
         self.assertFalse(state.steps[0].work_performed)
         self.assertEqual(self.run_manager.get(run.run_id).assessments, ())
+
+    def test_full_chain_accept_evidence_assessment_claim(self) -> None:
+        run = self.run_manager.create("What evidence supports the claim?")
+
+        self._advance(
+            self._start(
+                "source_accept",
+                run_id=run.run_id,
+                authorized_url="https://example.test/claimed",
+            )
+        )
+        document_id = self.run_manager.get(run.run_id).sources[0].document_id
+
+        self._advance(
+            self._start(
+                "evidence_recording",
+                run_id=run.run_id,
+                evidence=(document_id, 0, "Directly relevant to the question."),
+            )
+        )
+        evidence_id = self.run_manager.get(run.run_id).evidence[0].evidence_id
+
+        self._advance(
+            self._start_named(
+                ResearchPlanStepDraftInput(
+                    instruction="Assess the accepted source",
+                    capability="source_assessment",
+                    assessment_authorization=ResearchAssessmentAuthorization(
+                        document_id=document_id,
+                        evidence_ids=(evidence_id,),
+                        text="The source states the point directly.",
+                        information_trust="high",  # type: ignore[arg-type]
+                    ),
+                ),
+                run.run_id,
+            )
+        )
+
+        response = self._advance(
+            self._start_named(
+                ResearchPlanStepDraftInput(
+                    instruction="Record the authored claim",
+                    capability="claim_creation",
+                    claim_authorization=ResearchClaimAuthorization(
+                        evidence_ids=(evidence_id,),
+                        text="The question is supported by the accepted source.",
+                        epistemic_state=ResearchEpistemicState.STRONG_EVIDENCE,
+                        confidence="medium",  # type: ignore[arg-type]
+                    ),
+                ),
+                run.run_id,
+            )
+        )
+
+        state = response.research_plan_execution
+        assert state is not None
+        self.assertEqual(state.status.value, "completed")
+        self.assertTrue(state.steps[0].work_performed)
+        self.assertEqual(state.steps[0].operation, "claim_creation")
+
+        final = self.run_manager.get(run.run_id)
+        self.assertEqual(len(final.sources), 1)
+        self.assertEqual(len(final.evidence), 1)
+        self.assertEqual(len(final.assessments), 1)
+        self.assertEqual(len(final.claims), 1)
+        self.assertEqual(final.claims[0].evidence_ids, (evidence_id,))
+        self.assertEqual(final.claim_contradictions, ())
+
+    def test_high_trust_assessment_does_not_promote_a_claim(self) -> None:
+        run = self.run_manager.create("What evidence supports the claim?")
+        self._advance(
+            self._start(
+                "source_accept",
+                run_id=run.run_id,
+                authorized_url="https://example.test/unpromoted",
+            )
+        )
+        document_id = self.run_manager.get(run.run_id).sources[0].document_id
+        self._advance(
+            self._start(
+                "evidence_recording",
+                run_id=run.run_id,
+                evidence=(document_id, 0, "Relevant."),
+            )
+        )
+        evidence_id = self.run_manager.get(run.run_id).evidence[0].evidence_id
+        self._advance(
+            self._start_named(
+                ResearchPlanStepDraftInput(
+                    instruction="Assess",
+                    capability="source_assessment",
+                    assessment_authorization=ResearchAssessmentAuthorization(
+                        document_id=document_id,
+                        evidence_ids=(evidence_id,),
+                        text="Highly trusted source.",
+                        information_trust="high",  # type: ignore[arg-type]
+                    ),
+                ),
+                run.run_id,
+            )
+        )
+
+        self._advance(
+            self._start_named(
+                ResearchPlanStepDraftInput(
+                    instruction="Record a hypothesis",
+                    capability="claim_creation",
+                    claim_authorization=ResearchClaimAuthorization(
+                        evidence_ids=(evidence_id,),
+                        text="A cautious hypothesis.",
+                        epistemic_state=ResearchEpistemicState.HYPOTHESIS,
+                    ),
+                ),
+                run.run_id,
+            )
+        )
+
+        claim = self.run_manager.get(run.run_id).claims[0]
+        self.assertIs(claim.epistemic_state, ResearchEpistemicState.HYPOTHESIS)
+        self.assertEqual(claim.confidence.value, "unassessed")
+
+    def test_claim_creation_without_authorization_fails_the_step(self) -> None:
+        run = self.run_manager.create("What evidence supports the claim?")
+        plan_id = self._start("claim_creation", run_id=run.run_id)
+
+        response = self._advance(plan_id)
+
+        state = response.research_plan_execution
+        assert state is not None
+        self.assertEqual(state.status.value, "failed")
+        self.assertFalse(state.steps[0].work_performed)
+        self.assertEqual(self.run_manager.get(run.run_id).claims, ())
 
 
 if __name__ == "__main__":
