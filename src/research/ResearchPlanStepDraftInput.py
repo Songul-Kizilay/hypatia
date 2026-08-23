@@ -19,6 +19,9 @@ from research.ResearchClaimAuthorization import ResearchClaimAuthorization
 from research.ResearchComparisonAuthorization import (
     ResearchComparisonAuthorization,
 )
+from research.ResearchCompletionAuthorization import (
+    ResearchCompletionAuthorization,
+)
 from research.ResearchContradictionAuthorization import (
     ResearchContradictionAuthorization,
 )
@@ -40,6 +43,7 @@ class ResearchPlanStepDraftInput:
     claim_authorization: ResearchClaimAuthorization | None = None
     contradiction_authorization: ResearchContradictionAuthorization | None = None
     comparison_authorization: ResearchComparisonAuthorization | None = None
+    completion_authorization: ResearchCompletionAuthorization | None = None
 
     @classmethod
     def from_value(cls, value: object) -> ResearchPlanStepDraftInput:

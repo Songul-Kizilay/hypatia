@@ -101,6 +101,9 @@ from research.ResearchPlanOperationRegistry import (
 )
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 from research.ResearchRun import ResearchRun
+from research.ResearchRunCompletionStepOperation import (
+    ResearchRunCompletionStepOperation,
+)
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSourceCandidate import ResearchSourceCandidate
@@ -276,6 +279,10 @@ class CognitiveEngine:
             operation_registry.register(
                 ResearchPlanStepCapability.SOURCE_COMPARISON,
                 SourceComparisonStepOperation(research_run_manager),
+            )
+            operation_registry.register(
+                ResearchPlanStepCapability.RESEARCH_RUN_COMPLETION,
+                ResearchRunCompletionStepOperation(research_run_manager),
             )
             if research_evidence_integrity_auditor is not None:
                 operation_registry.register(

@@ -2,6 +2,51 @@
 
 All notable project changes are recorded here.
 
+## [0.3.137] - 2026-08-23
+
+### Added
+
+- `RESEARCH_RUN_COMPLETION` capability and `ResearchRunCompletionStepOperation`,
+  closing a run through the existing `transition_status` path.
+- `ResearchCompletionAuthorization` carries the one explicitly declared terminal
+  status and rejects a non-terminal target.
+
+### Fixed
+
+- The draft service did not carry `completion_authorization` through to the
+  plan step, so the capability was unreachable from an authored draft. The
+  composition test caught it before release; the passthrough is now covered.
+
+### Safety
+
+- The operation defines no completion rule of its own. Every condition comes
+  from the existing lifecycle: completion requires at least one accepted source
+  and at least one evidence record, a failed run requires a failure record, and a
+  closed run cannot change status. A refused transition is reported as performed
+  work that did not succeed, with the run left open.
+- Reaching the last execution step never closes a run. A composition test
+  advances an execution to `completed` and asserts the run is still
+  `collecting`.
+- Closing a run resolves nothing. Unresolved claims held as hypothesis,
+  speculation, unknown, or contradicted, together with contradictions and
+  failures, survive into the final state and are counted in the reported detail.
+  The detail states plainly that closing verifies no claim, settles no
+  contradiction, and asserts no certainty.
+- Missing authorization, an unknown run, a missing run binding, and cancellation
+  all close nothing.
+
+### Verification
+
+- The package-aware full local suite contains 1,876 passing automated tests.
+- Thirteen new operation tests cover domain-enforced refusal for missing sources
+  and evidence, successful closure, reporting and preservation of unresolved
+  claims and failures, contradictions surviving closure, the failure-record rule,
+  refusal to reclose, missing authorization, cancellation, unknown and unbound
+  runs, bounded detail, and authorization validation.
+- The composition suite now covers twelve capabilities, and proves that finishing
+  execution leaves the run open, that the capability respects domain rules
+  through real wiring, and that a closed run retains its unresolved hypothesis.
+
 ## [0.3.136] - 2026-08-23
 
 ### Added

@@ -37,6 +37,9 @@ from research.ResearchClaimAuthorization import ResearchClaimAuthorization
 from research.ResearchComparisonAuthorization import (
     ResearchComparisonAuthorization,
 )
+from research.ResearchCompletionAuthorization import (
+    ResearchCompletionAuthorization,
+)
 from research.ResearchContradictionAuthorization import (
     ResearchContradictionAuthorization,
 )
@@ -49,6 +52,7 @@ from research.ResearchPlanStep import ResearchPlanStep
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 from research.ResearchPlanStepDraftInput import ResearchPlanStepDraftInput
 from research.ResearchRunManager import ResearchRunManager
+from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSource import ResearchSource
 from research.ResearchSourceCandidate import ResearchSourceCandidate
 from response.ResponseComposer import ResponseComposer
@@ -107,6 +111,7 @@ EXPECTED_OPERATIONS = {
     ResearchPlanStepCapability.CLAIM_CREATION: "claim_creation",
     ResearchPlanStepCapability.CLAIM_CONTRADICTION: "claim_contradiction",
     ResearchPlanStepCapability.SOURCE_COMPARISON: "source_comparison",
+    ResearchPlanStepCapability.RESEARCH_RUN_COMPLETION: ("research_run_completion"),
 }
 
 
@@ -972,6 +977,95 @@ class PlanExecutionCompositionTests(unittest.TestCase):
         final = self.run_manager.get(run.run_id)
         self.assertEqual(final.claim_contradictions, ())
         self.assertEqual(final.comparison_notes, ())
+
+    def test_finishing_execution_does_not_close_the_run(self) -> None:
+        run = self.run_manager.create("What evidence supports the claim?")
+        plan_id = self._start("local_knowledge_search")
+
+        response = self._advance(plan_id)
+
+        state = response.research_plan_execution
+        assert state is not None
+        self.assertEqual(state.status.value, "completed")
+        self.assertIs(
+            self.run_manager.get(run.run_id).status,
+            ResearchRunStatus.COLLECTING,
+        )
+
+    def test_completion_capability_respects_domain_rules(self) -> None:
+        run = self.run_manager.create("What evidence supports the claim?")
+
+        response = self._advance(
+            self._start_named(
+                ResearchPlanStepDraftInput(
+                    instruction="Close the run",
+                    capability="research_run_completion",
+                    completion_authorization=ResearchCompletionAuthorization(
+                        target_status=ResearchRunStatus.COMPLETED
+                    ),
+                ),
+                run.run_id,
+            )
+        )
+
+        state = response.research_plan_execution
+        assert state is not None
+        self.assertEqual(state.status.value, "failed")
+        self.assertTrue(state.steps[0].work_performed)
+        self.assertEqual(state.steps[0].operation, "research_run_completion")
+        self.assertIn("The run remains open", state.steps[0].detail)
+        self.assertIs(
+            self.run_manager.get(run.run_id).status,
+            ResearchRunStatus.COLLECTING,
+        )
+
+    def test_complete_chain_closes_the_run_and_retains_uncertainty(self) -> None:
+        run = self.run_manager.create("What evidence supports the claim?")
+        document_id, evidence_id = self._accept_with_evidence(run.run_id, "final")
+
+        self._advance(
+            self._start_named(
+                ResearchPlanStepDraftInput(
+                    instruction="Record a hypothesis",
+                    capability="claim_creation",
+                    claim_authorization=ResearchClaimAuthorization(
+                        evidence_ids=(evidence_id,),
+                        text="A cautious hypothesis.",
+                        epistemic_state=ResearchEpistemicState.HYPOTHESIS,
+                    ),
+                ),
+                run.run_id,
+            )
+        )
+
+        response = self._advance(
+            self._start_named(
+                ResearchPlanStepDraftInput(
+                    instruction="Close the run",
+                    capability="research_run_completion",
+                    completion_authorization=ResearchCompletionAuthorization(
+                        target_status=ResearchRunStatus.COMPLETED
+                    ),
+                ),
+                run.run_id,
+            )
+        )
+
+        state = response.research_plan_execution
+        assert state is not None
+        self.assertEqual(state.status.value, "completed")
+        self.assertIn("1 unresolved claim(s)", state.steps[0].detail)
+        self.assertIn("resolves nothing", state.steps[0].detail)
+
+        closed = self.run_manager.get(run.run_id)
+        self.assertIs(closed.status, ResearchRunStatus.COMPLETED)
+        self.assertEqual(len(closed.sources), 1)
+        self.assertEqual(len(closed.evidence), 1)
+        self.assertIs(
+            closed.claims[0].epistemic_state,
+            ResearchEpistemicState.HYPOTHESIS,
+        )
+        self.assertEqual(document_id, closed.sources[0].document_id)
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.136 (Genesis)`
+`v0.3.137 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.136`** is the current executable package and GitHub
+- **Runtime release `v0.3.137`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -32,6 +32,14 @@ with optional OpenAI-compatible LLM conversation support.
 ### Implemented
 
 - Application bootstrap, configuration, logging, and dependency injection.
+- The twelfth connected capability, `RESEARCH_RUN_COMPLETION`, closes a run
+  through the existing lifecycle path and defines no completion rule of its own.
+  Reaching the last execution step never closes a run: execution completing, the
+  run completing, evidence being sufficient, claims being verified, and
+  uncertainty being resolved remain five separate things. A refused transition is
+  reported as performed work that did not succeed with the run left open, and a
+  closed run retains its unresolved claims, contradictions, and failures, which
+  are counted in the reported detail.
 - The tenth and eleventh connected capabilities, `CLAIM_CONTRADICTION` and
   `SOURCE_COMPARISON`, record through the existing contradiction and comparison
   paths. A proposal is never a contradiction: previewing persists nothing, and a
@@ -829,7 +837,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,860 automated tests pass through package-aware discovery.
+- 1,876 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.

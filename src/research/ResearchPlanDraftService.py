@@ -73,6 +73,7 @@ class ResearchPlanDraftService:
                         normalized.contradiction_authorization
                     ),
                     comparison_authorization=(normalized.comparison_authorization),
+                    completion_authorization=(normalized.completion_authorization),
                 )
             )
         return tuple(steps)
