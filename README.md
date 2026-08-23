@@ -924,6 +924,46 @@ sitting beside it.
 
 ---
 
+## Vulnerability family graph
+
+The weakness taxonomy is disabled by default. To keep it, set:
+
+```text
+HYPATIA_VULNERABILITY_GRAPH_ENABLED=true
+```
+
+The value must be exactly lowercase `true`. It is written to
+`vulnerability_families.json` beside the research-run store, in a separate
+versioned document.
+
+The graph answers one defensive question: given a class of weakness, what else
+is worth thinking about? The usual mistake in security work is treating one
+finding as one problem and missing the four siblings that come from the same
+design decision.
+
+Everything it holds is conceptual. A family is a class of weakness — "improper
+access control", "server-side request forgery" — never a system. The record has
+no field for a target, a host, an affected version, a payload, or a proof of
+concept, so none of those can be carried even by someone who wanted to. A schema
+that offers nowhere to put an exploit is a better guarantee than a rule asking
+people not to, and the tests assert that shape directly.
+
+Edges are authored and must say why they hold. Nothing infers a relationship
+from similar names or co-occurrence: a graph that grows itself fills with
+plausible connections nobody checked and then gets trusted anyway. An
+unexplained edge is one nobody can evaluate or argue with later, so the
+reasoning is required at the cheapest moment to demand it.
+
+`specializes` builds the taxonomy and is kept acyclic. `enables` is directional
+and is only ever followed forwards, because reading it backwards silently turns
+"this can lead to that" into a different and often wrong claim.
+`shares_root_cause`, `shares_mitigation`, and `related_to` are symmetric.
+
+Traversal is bounded in depth and count. An unbounded neighbourhood query on a
+well-connected taxonomy returns everything and means nothing.
+
+---
+
 ## Ordinary chat never performs research
 
 Hypatia can chat, and Hypatia can research. They are different subsystems, and

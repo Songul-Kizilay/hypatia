@@ -78,11 +78,19 @@ from research.ResearchSourceContentRestorationStatus import (
     ResearchSourceContentRestorationStatus,
 )
 from research.SourceReputation import SourceReputation
+from security.VulnerabilityFamily import VulnerabilityFamily
+from security.VulnerabilityFamilyGraph import RelatedFamily
+from security.VulnerabilityRelation import VulnerabilityRelation
 from session.SessionDeleteExecutionResult import SessionDeleteExecutionResult
 from session.SessionDeletePolicy import SessionDeleteStatus
 from session.SessionRecord import SessionRecord
 from session.SessionRenamePreview import SessionRenamePreview
 from session.SessionRenameResult import SessionRenameResult
+
+_WEAKNESS_CLASS_DISCLAIMER = (
+    "A weakness class is a concept, not a finding. Recording or relating "
+    "one says nothing about whether any system, product, or person is affected."
+)
 
 
 class ResponseComposer:
@@ -1500,6 +1508,131 @@ class ResponseComposer:
             message=message,
             request_id=request.request_id,
             intent="research_hypothesis",
+            memory_count=0,
+            success=False,
+        )
+
+    def vulnerability_family(
+        self,
+        request: BrainRequest,
+        family: VulnerabilityFamily,
+    ) -> BrainResponse:
+        """Render one recorded weakness class."""
+        message = "\n".join(
+            (
+                "Vulnerability family recorded:",
+                f"ID: {family.family_id}",
+                f"Name: {family.name}",
+                f"Weakness: {family.summary}",
+                f"Generally prevented by: {family.prevention}",
+                _WEAKNESS_CLASS_DISCLAIMER,
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="vulnerability_graph",
+            memory_count=0,
+            vulnerability_family=family,
+        )
+
+    def vulnerability_relation(
+        self,
+        request: BrainRequest,
+        relation: VulnerabilityRelation,
+    ) -> BrainResponse:
+        """Render one authored edge between two weakness classes."""
+        message = "\n".join(
+            (
+                "Vulnerability relation recorded:",
+                f"{relation.from_family_id} {relation.kind.value} "
+                f"{relation.to_family_id}",
+                f"Because: {relation.rationale}",
+                _WEAKNESS_CLASS_DISCLAIMER,
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="vulnerability_graph",
+            memory_count=0,
+            vulnerability_relation=relation,
+        )
+
+    def vulnerability_neighbourhood(
+        self,
+        request: BrainRequest,
+        family: VulnerabilityFamily,
+        related: tuple[RelatedFamily, ...],
+        ancestors: tuple[VulnerabilityFamily, ...],
+    ) -> BrainResponse:
+        """Render what else is worth thinking about near one weakness class."""
+        lines = [
+            f"Around {family.name}:",
+            f"Weakness: {family.summary}",
+            "",
+        ]
+        if ancestors:
+            lines.append("More general classes:")
+            lines.extend(f"- {entry.name}" for entry in ancestors)
+            lines.append("")
+        lines.append(f"Related classes: {len(related)}")
+        lines.extend(
+            f"- {entry.family.name} ({entry.via.value}, depth {entry.depth})"
+            for entry in related
+        )
+        if not related:
+            lines.append("Nothing recorded relates to this one yet.")
+        lines.extend(
+            (
+                "",
+                "These are suggestions about what to read next, not about what "
+                "to attack. " + _WEAKNESS_CLASS_DISCLAIMER,
+            )
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="vulnerability_graph",
+            memory_count=0,
+            vulnerability_family=family,
+            related_vulnerability_families=related,
+        )
+
+    def vulnerability_family_list(
+        self,
+        request: BrainRequest,
+        families: tuple[VulnerabilityFamily, ...],
+    ) -> BrainResponse:
+        """Render every recorded weakness class."""
+        lines = [f"Vulnerability families: {len(families)}"]
+        lines.extend(f"- {entry.family_id}: {entry.name}" for entry in families)
+        lines.append(_WEAKNESS_CLASS_DISCLAIMER)
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="vulnerability_graph",
+            memory_count=0,
+            vulnerability_families=families,
+        )
+
+    def vulnerability_graph_rejected(
+        self,
+        request: BrainRequest,
+        reason: str,
+    ) -> BrainResponse:
+        """Report one bounded refusal without changing the graph."""
+        message = "\n".join(
+            (
+                "Vulnerability graph request rejected:",
+                f"Reason: {reason}",
+                "The graph did not change.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="vulnerability_graph",
             memory_count=0,
             success=False,
         )

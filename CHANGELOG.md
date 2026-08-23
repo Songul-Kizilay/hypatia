@@ -2,6 +2,53 @@
 
 All notable project changes are recorded here.
 
+## [0.3.154] - 2026-08-23
+
+### Added
+
+- Vulnerability family graph. `VulnerabilityFamily` records one class of
+  weakness with a prevention note, `VulnerabilityRelation` records one authored
+  edge with its reasoning, and `VulnerabilityFamilyGraph` answers bounded
+  neighbourhood and ancestor queries.
+- `JsonFileVulnerabilityGraphStore`, `VulnerabilityGraphApplicationService` with
+  record, relate, neighbourhood, and list intents, and three bounded
+  `vulnerability_graph.*` events.
+- `HYPATIA_VULNERABILITY_GRAPH_ENABLED` opts into keeping the taxonomy, default
+  off.
+
+### Safety
+
+- The safety property is structural, not filtered. Neither a family nor a
+  relation has a field for a target, host, URL, payload, proof of concept,
+  affected version, or CVE, and tests assert those field names are absent from
+  both the domain types and the persisted document.
+- A family describes a concept and never a system. `describes_a_target` and
+  `asserts_exposure` are asserted false for every family and every relation
+  kind, and every response repeats that recording or relating one says nothing
+  about whether any system, product, or person is affected.
+- The neighbourhood response says explicitly that its suggestions are about what
+  to read next, not what to attack.
+- Edges are authored and require a rationale. An unexplained edge is refused at
+  construction and again on load.
+- `specializes` is kept acyclic so the taxonomy stays one, and a hand-edited
+  file introducing a cycle, a self-relation, or an edge to a family that does
+  not exist is refused on load because loading replays the same checks.
+- `enables` is directional and only followed forwards; a test asserts it is not
+  read backwards into the reverse claim.
+- Traversal is bounded in both depth and result count.
+- Event payloads carry identifiers, bounded kinds, and counts only. Tests assert
+  no family summary, prevention note, or relation rationale appears in any
+  payload.
+
+### Verification
+
+- The package-aware full local suite contains 2,392 passing automated tests.
+- Fifty-one new tests cover the absent-target schema shape, rationale
+  enforcement, self-relations, duplicate families and edges, acyclic
+  specialisation, symmetric versus directional traversal, depth and kind
+  filtering, ancestor chains, persistence and restart, hand-edited documents,
+  bounded events, and production composition wiring.
+
 ## [0.3.153] - 2026-08-23
 
 ### Added

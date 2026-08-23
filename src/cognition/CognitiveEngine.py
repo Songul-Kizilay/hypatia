@@ -61,6 +61,9 @@ from cognition.ResearchSourceAcceptanceService import (
 from cognition.SourceReputationApplicationService import (
     SourceReputationApplicationService,
 )
+from cognition.VulnerabilityGraphApplicationService import (
+    VulnerabilityGraphApplicationService,
+)
 from core.Exceptions import (
     KnowledgeError,
     MemoryError,
@@ -159,6 +162,7 @@ from research.SourceComparisonStepOperation import (
 from research.SourceDiscoveryStepOperation import SourceDiscoveryStepOperation
 from research.SourceFetchStepOperation import SourceFetchStepOperation
 from response.ResponseComposer import ResponseComposer
+from security.VulnerabilityGraphStore import VulnerabilityGraphStore
 from session.SessionCreateService import SessionCreateService
 from session.SessionDeletePreviewService import SessionDeletePreviewService
 from session.SessionDeleteService import SessionDeleteService
@@ -206,6 +210,7 @@ class CognitiveEngine:
         reflection_report_store: ReflectionReportStore | None = None,
         failure_lesson_store: FailureLessonStore | None = None,
         hypothesis_store: HypothesisStore | None = None,
+        vulnerability_graph_store: VulnerabilityGraphStore | None = None,
         research_source_discovery_provider: (
             ResearchSourceDiscoveryProvider | None
         ) = None,
@@ -430,6 +435,11 @@ class CognitiveEngine:
                 hypothesis_store=hypothesis_store,
                 event_bus=event_bus,
             )
+        self._vulnerability_graph_service = VulnerabilityGraphApplicationService(
+            response_composer,
+            graph_store=vulnerability_graph_store,
+            event_bus=event_bus,
+        )
         self._research_plan_preview_service = ResearchPlanPreviewApplicationService(
             response_composer,
             research_plan_draft_service,
@@ -533,6 +543,9 @@ class CognitiveEngine:
 
         if self._is_hypothesis_request(request):
             return self._process_hypothesis(request)
+
+        if self._is_vulnerability_graph_request(request):
+            return self._process_vulnerability_graph(request)
 
         if self._is_research_run_markdown_export_verify_request(request):
             return self._process_research_run_markdown_export_verify(request)
@@ -3194,6 +3207,34 @@ class CognitiveEngine:
             return service.process_list(request)
         except ResearchError as error:
             return self._response_composer.hypothesis_rejected(request, str(error))
+
+    @staticmethod
+    def _is_vulnerability_graph_request(request: BrainRequest) -> bool:
+        """Return whether this request addresses the weakness taxonomy."""
+        service = VulnerabilityGraphApplicationService
+        return (
+            service.is_family_record_request(request)
+            or service.is_relation_record_request(request)
+            or service.is_neighbourhood_request(request)
+            or service.is_family_list_request(request)
+        )
+
+    def _process_vulnerability_graph(self, request: BrainRequest) -> BrainResponse:
+        """Route one taxonomy intent. Nothing here targets a system."""
+        service = self._vulnerability_graph_service
+        try:
+            if service.is_family_record_request(request):
+                return service.process_family_record(request)
+            if service.is_relation_record_request(request):
+                return service.process_relation_record(request)
+            if service.is_neighbourhood_request(request):
+                return service.process_neighbourhood(request)
+            return service.process_family_list(request)
+        except ResearchError as error:
+            return self._response_composer.vulnerability_graph_rejected(
+                request,
+                str(error),
+            )
 
     def _process_calibration(self, request: BrainRequest) -> BrainResponse:
         """Route the calibration intent, which reads and never writes."""

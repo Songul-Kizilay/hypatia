@@ -85,6 +85,9 @@ from research.ResearchSourceContentRestorer import ResearchSourceContentRestorer
 from research.ResearchSourceDiscoveryProvider import ResearchSourceDiscoveryProvider
 from research.ResearchSourceFetcher import ResearchSourceFetcher
 from response.ResponseComposer import ResponseComposer
+from security.JsonFileVulnerabilityGraphStore import (
+    JsonFileVulnerabilityGraphStore,
+)
 from session.JsonFileSessionStore import JsonFileSessionStore
 from session.SessionManager import SessionManager
 from session.SessionRenameTransactionService import SessionRenameTransactionService
@@ -414,6 +417,7 @@ class Bootstrap:
         reflection_report_store = self._reflection_report_store()
         failure_lesson_store = self._failure_lesson_store()
         hypothesis_store = self._hypothesis_store()
+        vulnerability_graph_store = self._vulnerability_graph_store()
         research_source_content_store = JsonFileResearchSourceContentStore(
             self._research_source_content_path
             or self._research_source_content_store_path(
@@ -479,6 +483,7 @@ class Bootstrap:
             reflection_report_store=reflection_report_store,
             failure_lesson_store=failure_lesson_store,
             hypothesis_store=hypothesis_store,
+            vulnerability_graph_store=vulnerability_graph_store,
             research_source_discovery_provider=(
                 self._research_source_discovery_provider
             ),
@@ -656,6 +661,21 @@ class Bootstrap:
             self._memory_path
         )
         return JsonFileHypothesisStore(run_path.with_name("research_hypotheses.json"))
+
+    def _vulnerability_graph_store(self) -> JsonFileVulnerabilityGraphStore | None:
+        """Create the taxonomy store only when the graph is opted in.
+
+        Default off, so an unset environment knows no weakness taxonomy and
+        behaves exactly like a runtime without one.
+        """
+        if os.environ.get("HYPATIA_VULNERABILITY_GRAPH_ENABLED") != "true":
+            return None
+        run_path = self._research_run_path or self._research_run_store_path(
+            self._memory_path
+        )
+        return JsonFileVulnerabilityGraphStore(
+            run_path.with_name("vulnerability_families.json")
+        )
 
     @staticmethod
     def _default_research_run_path() -> Path:

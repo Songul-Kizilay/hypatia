@@ -68,6 +68,9 @@ from research.ResearchSourceContentRestorationStatus import (
     ResearchSourceContentRestorationStatus,
 )
 from research.SourceReputation import SourceReputation
+from security.VulnerabilityFamily import VulnerabilityFamily
+from security.VulnerabilityFamilyGraph import RelatedFamily
+from security.VulnerabilityRelation import VulnerabilityRelation
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,5 +144,9 @@ class BrainResponse:
     source_reputations: tuple[SourceReputation, ...] = ()
     hypothesis_appraisal: HypothesisAppraisal | None = None
     hypothesis_appraisals: tuple[HypothesisAppraisal, ...] = ()
+    vulnerability_family: VulnerabilityFamily | None = None
+    vulnerability_families: tuple[VulnerabilityFamily, ...] = ()
+    vulnerability_relation: VulnerabilityRelation | None = None
+    related_vulnerability_families: tuple[RelatedFamily, ...] = ()
     session_summaries: list[SessionSummary] = field(default_factory=list)
     session_delete_allowed: bool | None = None
