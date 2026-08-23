@@ -319,6 +319,7 @@ class CognitiveEngine:
         self._research_plan_execution_service = ResearchPlanExecutionApplicationService(
             response_composer,
             operation_registry=operation_registry,
+            event_bus=event_bus,
         )
         self._research_plan_preview_service = ResearchPlanPreviewApplicationService(
             response_composer,

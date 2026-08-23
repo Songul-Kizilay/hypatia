@@ -29,7 +29,12 @@ from typing import cast
 
 from brain.BrainRequest import BrainRequest
 from brain.BrainResponse import BrainResponse
+from cognition.ResearchPlanExecutionEvents import (
+    ExecutionBlockReason,
+    ResearchPlanExecutionEvents,
+)
 from core.Exceptions import ResearchError
+from eventbus.EventBus import EventBus
 from research.ResearchPlan import ResearchPlan
 from research.ResearchPlanDraftService import (
     ResearchPlanDraftService,
@@ -57,6 +62,7 @@ class ResearchPlanExecutionApplicationService:
         draft_service: ResearchPlanDraftService | None = None,
         *,
         operation_registry: ResearchPlanOperationRegistry | None = None,
+        event_bus: EventBus | None = None,
         max_active_executions: int = MAX_ACTIVE_RESEARCH_PLAN_EXECUTIONS,
     ) -> None:
         if (
@@ -70,6 +76,7 @@ class ResearchPlanExecutionApplicationService:
         self._response_composer = response_composer
         self._draft_service = draft_service or ResearchPlanDraftService()
         self._operation_registry = operation_registry or ResearchPlanOperationRegistry()
+        self._events = ResearchPlanExecutionEvents(event_bus)
         self._max_active_executions = max_active_executions
         self._executions: dict[str, ResearchPlanExecutionState] = {}
         self._plans: dict[str, ResearchPlan] = {}
@@ -132,6 +139,7 @@ class ResearchPlanExecutionApplicationService:
         self._executions[plan.plan_id] = state
         self._plans[plan.plan_id] = plan
         self._contexts[plan.plan_id] = context
+        self._events.started(state, context.has_research_run)
         return self._response_composer.research_plan_execution_status(request, state)
 
     def process_status(self, request: BrainRequest) -> BrainResponse:
@@ -162,6 +170,7 @@ class ResearchPlanExecutionApplicationService:
                 str(error),
             )
         self._executions[plan_id] = cancelled
+        self._events.cancelled(cancelled)
         return self._response_composer.research_plan_execution_status(
             request,
             cancelled,
@@ -193,6 +202,7 @@ class ResearchPlanExecutionApplicationService:
                 state,
                 step_id,
                 ("Step declares no executable capability; " "nothing was performed."),
+                ExecutionBlockReason.NO_DECLARED_CAPABILITY,
             )
         operation = self._operation_registry.resolve(step.capability)
         if operation is None:
@@ -205,6 +215,7 @@ class ResearchPlanExecutionApplicationService:
                     f"Capability '{step.capability.value}' has no registered "
                     "operation; nothing was performed."
                 ),
+                ExecutionBlockReason.UNREGISTERED_CAPABILITY,
             )
 
         try:
@@ -214,6 +225,12 @@ class ResearchPlanExecutionApplicationService:
                 request,
                 str(error),
             )
+        self._events.step_started(
+            plan_id,
+            step_id,
+            step.capability.value,
+            operation.operation_name,
+        )
         try:
             stored = self._contexts.get(plan_id, ResearchPlanExecutionContext())
             result = operation.run(
@@ -226,6 +243,13 @@ class ResearchPlanExecutionApplicationService:
         except ResearchError as error:
             failed = running.fail_step(step_id, str(error))
             self._executions[plan_id] = failed
+            self._events.step_failed(
+                plan_id,
+                step_id,
+                operation.operation_name,
+                type(error).__name__,
+                work_performed=False,
+            )
             return self._response_composer.research_plan_execution_status(
                 request,
                 failed,
@@ -237,6 +261,7 @@ class ResearchPlanExecutionApplicationService:
                 running,
                 step_id,
                 result.detail,
+                ExecutionBlockReason.OPERATION_PERFORMED_NOTHING,
             )
         if not result.succeeded:
             failed = running.fail_step(
@@ -246,6 +271,13 @@ class ResearchPlanExecutionApplicationService:
                 operation=operation.operation_name,
             )
             self._executions[plan_id] = failed
+            self._events.step_failed(
+                plan_id,
+                step_id,
+                operation.operation_name,
+                "operation_did_not_succeed",
+                work_performed=True,
+            )
             return self._response_composer.research_plan_execution_status(
                 request,
                 failed,
@@ -257,6 +289,7 @@ class ResearchPlanExecutionApplicationService:
             operation=operation.operation_name,
         )
         self._executions[plan_id] = completed
+        self._events.step_completed(plan_id, step_id, operation.operation_name)
         return self._response_composer.research_plan_execution_status(
             request,
             completed,
@@ -269,10 +302,12 @@ class ResearchPlanExecutionApplicationService:
         state: ResearchPlanExecutionState,
         step_id: str,
         detail: str,
+        reason: ExecutionBlockReason,
     ) -> BrainResponse:
         """Block a step instead of implying work that never happened."""
         blocked = state.block_step(step_id, detail)
         self._executions[plan_id] = blocked
+        self._events.step_blocked(plan_id, step_id, reason)
         return self._response_composer.research_plan_execution_status(
             request,
             blocked,

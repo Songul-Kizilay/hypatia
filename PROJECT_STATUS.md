@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.138 (Genesis)`
+`v0.3.139 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.138`** is the current executable package and GitHub
+- **Runtime release `v0.3.139`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -32,6 +32,15 @@ with optional OpenAI-compatible LLM conversation support.
 ### Implemented
 
 - Application bootstrap, configuration, logging, and dependency injection.
+- Research-plan execution publishes bounded events for start, step start, step
+  completion, step failure, step block, and cancellation from one focused
+  emitter. Observability is visibility only: an absent event bus makes every call
+  a no-op, and a test proves an observed and an unobserved engine produce
+  identical execution snapshots. Payloads carry safe identifiers, capability and
+  operation names, counts, and booleans; authored instructions, authorized URLs,
+  research questions, and source bodies never appear, a bound run is reported as
+  a boolean rather than an identifier, and a failure reports its exception class
+  name rather than its message.
 - One end-to-end scenario drives the whole explicit research chain through the
   real composition path, from question to closed run, using deterministic doubles
   only for the discovery provider and source fetcher. It asserts the boundaries
@@ -846,7 +855,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,877 automated tests pass through package-aware discovery.
+- 1,887 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.

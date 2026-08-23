@@ -2,6 +2,40 @@
 
 All notable project changes are recorded here.
 
+## [0.3.139] - 2026-08-23
+
+### Added
+
+- Bounded observability for research-plan execution. `ResearchPlanExecutionEvents`
+  publishes `research.plan.execution.started`, `.step_started`, `.step_completed`,
+  `.step_failed`, `.step_blocked`, and `.cancelled` from one focused emitter that
+  owns the event names and payload bounds.
+- `ExecutionBlockReason` gives a blocked step a bounded category rather than free
+  text: `no_declared_capability`, `unregistered_capability`, or
+  `operation_performed_nothing`.
+
+### Safety
+
+- Visibility only. No event changes behavior, and an absent event bus makes every
+  emitter call a no-op, so execution runs identically without observability. A
+  test drives the same plan through an observed and an unobserved engine and
+  asserts identical execution snapshots.
+- Payloads carry safe identifiers, capability and operation names, counts, and
+  booleans. A test asserts the authored instruction, the authorized URL, the
+  research question, and the fetched source body never appear in any payload.
+- A bound research run is reported as a boolean, not as an identifier.
+- A failed step reports its exception class name, never the exception message.
+- A step that genuinely ran without succeeding is distinguished from one that
+  never ran, through the `work_performed` field on the failure event.
+
+### Verification
+
+- The package-aware full local suite contains 1,887 passing automated tests.
+- Ten new tests cover the started-then-completed sequence with exact payloads,
+  absence of authored content, boolean run binding, both block reasons, failure
+  cause without message, cancellation reporting surviving progress, behavioral
+  equivalence without an event bus, and bounded block categories.
+
 ## [0.3.138] - 2026-08-23
 
 ### Added
