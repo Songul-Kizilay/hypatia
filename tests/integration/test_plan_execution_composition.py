@@ -34,6 +34,12 @@ from research.ResearchAssessmentAuthorization import (
     ResearchAssessmentAuthorization,
 )
 from research.ResearchClaimAuthorization import ResearchClaimAuthorization
+from research.ResearchComparisonAuthorization import (
+    ResearchComparisonAuthorization,
+)
+from research.ResearchContradictionAuthorization import (
+    ResearchContradictionAuthorization,
+)
 from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchEvidenceIntegrityAuditor import (
     ResearchEvidenceIntegrityAuditor,
@@ -99,6 +105,8 @@ EXPECTED_OPERATIONS = {
     ResearchPlanStepCapability.EVIDENCE_RECORDING: "evidence_recording",
     ResearchPlanStepCapability.SOURCE_ASSESSMENT: "source_assessment",
     ResearchPlanStepCapability.CLAIM_CREATION: "claim_creation",
+    ResearchPlanStepCapability.CLAIM_CONTRADICTION: "claim_contradiction",
+    ResearchPlanStepCapability.SOURCE_COMPARISON: "source_comparison",
 }
 
 
@@ -830,6 +838,140 @@ class PlanExecutionCompositionTests(unittest.TestCase):
         self.assertEqual(state.status.value, "failed")
         self.assertFalse(state.steps[0].work_performed)
         self.assertEqual(self.run_manager.get(run.run_id).claims, ())
+
+    def _accept_with_evidence(self, run_id: str, slug: str) -> tuple[str, str]:
+        self._advance(
+            self._start(
+                "source_accept",
+                run_id=run_id,
+                authorized_url=f"https://example.test/{slug}",
+            )
+        )
+        document_id = self.run_manager.get(run_id).sources[-1].document_id
+        self._advance(
+            self._start(
+                "evidence_recording",
+                run_id=run_id,
+                evidence=(document_id, 0, "Directly relevant."),
+            )
+        )
+        return document_id, self.run_manager.get(run_id).evidence[-1].evidence_id
+
+    def test_contradiction_runs_through_the_engine_route(self) -> None:
+        run = self.run_manager.create("What evidence supports the claim?")
+        _, first_evidence = self._accept_with_evidence(run.run_id, "c1")
+        _, second_evidence = self._accept_with_evidence(run.run_id, "c2")
+
+        for evidence_id, text in (
+            (first_evidence, "Saturn has rings."),
+            (second_evidence, "Saturn has no rings."),
+        ):
+            self._advance(
+                self._start_named(
+                    ResearchPlanStepDraftInput(
+                        instruction="Record a claim",
+                        capability="claim_creation",
+                        claim_authorization=ResearchClaimAuthorization(
+                            evidence_ids=(evidence_id,),
+                            text=text,
+                            epistemic_state=ResearchEpistemicState.LIKELY,
+                        ),
+                    ),
+                    run.run_id,
+                )
+            )
+        claims = self.run_manager.get(run.run_id).claims
+        before = claims
+
+        response = self._advance(
+            self._start_named(
+                ResearchPlanStepDraftInput(
+                    instruction="Record the confirmed contradiction",
+                    capability="claim_contradiction",
+                    contradiction_authorization=ResearchContradictionAuthorization(
+                        claim_ids=(claims[0].claim_id, claims[1].claim_id),
+                        note="These claims cannot both hold.",
+                    ),
+                ),
+                run.run_id,
+            )
+        )
+
+        state = response.research_plan_execution
+        assert state is not None
+        self.assertEqual(state.status.value, "completed")
+        self.assertEqual(state.steps[0].operation, "claim_contradiction")
+        final = self.run_manager.get(run.run_id)
+        self.assertEqual(len(final.claim_contradictions), 1)
+        self.assertEqual(final.claims, before)
+
+    def test_comparison_runs_through_the_engine_route(self) -> None:
+        run = self.run_manager.create("What evidence supports the claim?")
+        first_document, first_evidence = self._accept_with_evidence(run.run_id, "p1")
+        second_document, second_evidence = self._accept_with_evidence(run.run_id, "p2")
+
+        assessment_ids = []
+        for document_id, evidence_id in (
+            (first_document, first_evidence),
+            (second_document, second_evidence),
+        ):
+            self._advance(
+                self._start_named(
+                    ResearchPlanStepDraftInput(
+                        instruction="Assess the source",
+                        capability="source_assessment",
+                        assessment_authorization=ResearchAssessmentAuthorization(
+                            document_id=document_id,
+                            evidence_ids=(evidence_id,),
+                            text="Authored assessment.",
+                        ),
+                    ),
+                    run.run_id,
+                )
+            )
+            assessment_ids.append(
+                self.run_manager.get(run.run_id).assessments[-1].assessment_id
+            )
+
+        response = self._advance(
+            self._start_named(
+                ResearchPlanStepDraftInput(
+                    instruction="Compare the accepted sources",
+                    capability="source_comparison",
+                    comparison_authorization=ResearchComparisonAuthorization(
+                        document_ids=(first_document, second_document),
+                        evidence_ids=(first_evidence, second_evidence),
+                        assessment_ids=tuple(assessment_ids),
+                        text="Both sources describe the subject consistently.",
+                    ),
+                ),
+                run.run_id,
+            )
+        )
+
+        state = response.research_plan_execution
+        assert state is not None
+        self.assertEqual(state.status.value, "completed")
+        self.assertEqual(state.steps[0].operation, "source_comparison")
+        final = self.run_manager.get(run.run_id)
+        self.assertEqual(len(final.comparison_notes), 1)
+        self.assertEqual(final.claims, ())
+        self.assertEqual(final.claim_contradictions, ())
+
+    def test_contradiction_and_comparison_without_authorization_fail(self) -> None:
+        run = self.run_manager.create("What evidence supports the claim?")
+
+        for capability in ("claim_contradiction", "source_comparison"):
+            with self.subTest(capability=capability):
+                response = self._advance(self._start(capability, run_id=run.run_id))
+                state = response.research_plan_execution
+                assert state is not None
+                self.assertEqual(state.status.value, "failed")
+                self.assertFalse(state.steps[0].work_performed)
+
+        final = self.run_manager.get(run.run_id)
+        self.assertEqual(final.claim_contradictions, ())
+        self.assertEqual(final.comparison_notes, ())
 
 
 if __name__ == "__main__":

@@ -22,6 +22,8 @@ class ResearchPlanStepCapability(StrEnum):
     EVIDENCE_RECORDING = "evidence_recording"
     SOURCE_ASSESSMENT = "source_assessment"
     CLAIM_CREATION = "claim_creation"
+    CLAIM_CONTRADICTION = "claim_contradiction"
+    SOURCE_COMPARISON = "source_comparison"
 
     @property
     def executable(self) -> bool:

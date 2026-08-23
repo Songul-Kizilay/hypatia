@@ -2,6 +2,53 @@
 
 All notable project changes are recorded here.
 
+## [0.3.136] - 2026-08-23
+
+### Added
+
+- `CLAIM_CONTRADICTION` capability and `ClaimContradictionStepOperation`,
+  recording one confirmed contradiction through the existing
+  `record_claim_contradiction` path.
+- `SOURCE_COMPARISON` capability and `SourceComparisonStepOperation`, recording
+  one authored comparison note through the existing
+  `record_source_comparison_note` path.
+- `ResearchContradictionAuthorization` and `ResearchComparisonAuthorization`,
+  both arriving as named fields on `ResearchPlanStepDraftInput`. No positional
+  draft element was added.
+
+### Safety
+
+- A proposal is never a contradiction. Previewing a contradiction persists
+  nothing, and a suggestion, including a language-model one, stays a proposal
+  until a human authorizes it through the canonical path.
+- Recording a contradiction never rewrites either claim. A test captures both
+  claims before and after and asserts they are byte-identical, with their
+  epistemic states unchanged, so the contradiction never decides which claim is
+  true.
+- Exactly two distinct current claims from the bound run are required. Foreign
+  and non-existent claim references are rejected with no mutation, and a
+  duplicate relationship for the same pair is refused.
+- Comparison is a description, not a verdict. It selects no winner, produces no
+  ranking, promotes no trust, and verifies no claim; a test asserts assessments
+  and claims are unchanged and contradictions stay empty afterwards.
+- The existing 2-to-5 accepted-source bound is preserved rather than replaced,
+  and evidence and assessment references must belong to the run.
+- Authored notes and comparison text stay bounded, and user-facing detail stays
+  within the bounded operation limit.
+- Missing authorization, a closed run, an unknown run, a missing run binding, and
+  cancellation all record nothing for both capabilities.
+
+### Verification
+
+- The package-aware full local suite contains 1,860 passing automated tests.
+- Seventeen new operation tests cover confirmed recording, claims left
+  unrewritten, proposals persisting nothing, duplicate refusal, foreign and stale
+  references, source-count bounds, trust and claim state left untouched, missing
+  authorization, cancellation, closed and unknown runs, bounded detail, and
+  authorization validation for both capabilities.
+- The composition suite now covers eleven capabilities with production route
+  tests for both new ones.
+
 ## [0.3.135] - 2026-08-23
 
 ### Added

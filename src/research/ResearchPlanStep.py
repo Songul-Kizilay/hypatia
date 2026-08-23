@@ -18,6 +18,12 @@ from research.ResearchAssessmentAuthorization import (
     ResearchAssessmentAuthorization,
 )
 from research.ResearchClaimAuthorization import ResearchClaimAuthorization
+from research.ResearchComparisonAuthorization import (
+    ResearchComparisonAuthorization,
+)
+from research.ResearchContradictionAuthorization import (
+    ResearchContradictionAuthorization,
+)
 from research.ResearchEvidenceAuthorization import ResearchEvidenceAuthorization
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 
@@ -40,6 +46,8 @@ class ResearchPlanStep:
     evidence_authorization: ResearchEvidenceAuthorization | None = None
     assessment_authorization: ResearchAssessmentAuthorization | None = None
     claim_authorization: ResearchClaimAuthorization | None = None
+    contradiction_authorization: ResearchContradictionAuthorization | None = None
+    comparison_authorization: ResearchComparisonAuthorization | None = None
 
     def __post_init__(self) -> None:
         step_id = self._normalize_bounded_text(
@@ -66,6 +74,14 @@ class ResearchPlanStep:
             self.claim_authorization, ResearchClaimAuthorization
         ):
             raise ResearchError("Research plan claim authorization is invalid.")
+        if self.contradiction_authorization is not None and not isinstance(
+            self.contradiction_authorization, ResearchContradictionAuthorization
+        ):
+            raise ResearchError("Research plan contradiction authorization is invalid.")
+        if self.comparison_authorization is not None and not isinstance(
+            self.comparison_authorization, ResearchComparisonAuthorization
+        ):
+            raise ResearchError("Research plan comparison authorization is invalid.")
         if not isinstance(self.authorized_source_url, str):
             raise ResearchError("Research plan authorized source URL must be text.")
         authorized_source_url = self.authorized_source_url.strip()

@@ -69,6 +69,10 @@ class ResearchPlanDraftService:
                     evidence_authorization=normalized.evidence_authorization,
                     assessment_authorization=normalized.assessment_authorization,
                     claim_authorization=normalized.claim_authorization,
+                    contradiction_authorization=(
+                        normalized.contradiction_authorization
+                    ),
+                    comparison_authorization=(normalized.comparison_authorization),
                 )
             )
         return tuple(steps)
