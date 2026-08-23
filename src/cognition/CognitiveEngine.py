@@ -107,6 +107,9 @@ from research.ResearchSourceContentStore import ResearchSourceContentStore
 from research.ResearchSourceDiscoveryProvider import ResearchSourceDiscoveryProvider
 from research.ResearchSourceFetcher import ResearchSourceFetcher
 from research.SourceAcceptStepOperation import SourceAcceptStepOperation
+from research.SourceAssessmentStepOperation import (
+    SourceAssessmentStepOperation,
+)
 from research.SourceDiscoveryStepOperation import SourceDiscoveryStepOperation
 from research.SourceFetchStepOperation import SourceFetchStepOperation
 from response.ResponseComposer import ResponseComposer
@@ -250,6 +253,10 @@ class CognitiveEngine:
                     knowledge_engine,
                     research_run_manager,
                 ),
+            )
+            operation_registry.register(
+                ResearchPlanStepCapability.SOURCE_ASSESSMENT,
+                SourceAssessmentStepOperation(research_run_manager),
             )
             if research_evidence_integrity_auditor is not None:
                 operation_registry.register(

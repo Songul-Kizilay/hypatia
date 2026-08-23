@@ -2,6 +2,56 @@
 
 All notable project changes are recorded here.
 
+## [0.3.134] - 2026-08-23
+
+### Changed
+
+- Authored plan-step drafts now normalize through the named immutable
+  `ResearchPlanStepDraftInput`, replacing a widening positional tuple whose
+  fifth element could only be understood by counting. Legacy positional tuples
+  are still accepted unchanged, so existing callers, the desktop adapter, and the
+  plan domain are unaffected and no persisted schema changed.
+
+### Added
+
+- `SOURCE_ASSESSMENT` capability and `SourceAssessmentStepOperation`, recording
+  one authored assessment through the existing
+  `ResearchRunManager.record_source_assessment` path. No second assessment
+  implementation exists.
+- `ResearchAssessmentAuthorization` carries one exact accepted-source document,
+  its evidence references, the authored assessment text, an authored
+  information-trust label, and an optional superseded assessment.
+
+### Safety
+
+- Assessment text and information trust are authored, never derived. Nothing
+  about a successful fetch, a successful acceptance, or a completed operation can
+  set them, and no language model participates in this milestone.
+- At least one evidence reference is required, matching the existing domain rule,
+  so an assessment is always grounded in recorded evidence and can never rest on
+  a successful fetch alone.
+- The source must already be accepted on the bound run; a source accepted on a
+  different run is rejected, as is a foreign evidence reference.
+- Supersession history is preserved: the superseded assessment remains, and the
+  replacement records the exact predecessor identity.
+- Information trust describes confidence in what a source says. It is not
+  evidence, not claim verification, not proof the source is correct, and it never
+  grants the source's text instruction authority.
+- Missing authorization, a closed run, an unknown run, a missing run binding, and
+  cancellation all record nothing.
+
+### Verification
+
+- The package-aware full local suite contains 1,822 passing automated tests.
+- Fourteen new operation tests cover authored recording, absence of evidence or
+  claim creation, unassessed trust defaulting, supersession history, rejection of
+  unaccepted sources and foreign evidence, missing authorization, cancellation,
+  closed and unknown runs, bounded detail, normalization, evidence grounding, and
+  authorization validation.
+- The composition suite now covers eight capabilities, proves the named draft
+  input works through real wiring alongside legacy tuples, and drives the chain
+  from source acceptance through evidence recording to assessment.
+
 ## [0.3.133] - 2026-08-23
 
 ### Added
