@@ -2,6 +2,49 @@
 
 All notable project changes are recorded here.
 
+## [0.3.142] - 2026-08-23
+
+### Added
+
+- Stages 3 and 4 of research-execution persistence. `Bootstrap` creates a
+  `JsonFileResearchExecutionStore` beside the research-run store when
+  `HYPATIA_RESEARCH_EXECUTION_PERSISTENCE_ENABLED` is exactly `true`, and the
+  execution service owns loading, restoring, and writing.
+- `research.plan.execution.restored` and
+  `research.plan.execution.persistence_failed` events, both bounded.
+- A restored-execution response that reports durable state without implying a
+  resumable run.
+
+### Safety
+
+- Default off. With the flag absent or set to any other value, no store is
+  created and behavior is identical to a runtime without persistence; a test
+  asserts no file is written and status still reports ephemeral loss.
+- Restoring is inspection, never resumption. A step recorded as running becomes
+  `interrupted`, completed steps stay completed, and pending steps stay pending.
+  Authorizations are deliberately not persisted, so a restored execution cannot
+  be advanced and no completed operation is replayed. A test asserts the research
+  run is unchanged after attempting to advance a restored execution.
+- A corrupt store raises at startup rather than being replaced by an empty one,
+  because silently discarding it would erase execution history on the next write.
+- A failed write never erases live state: the in-memory execution continues and a
+  bounded `persistence_failed` event reports the cause class.
+- Persisted content is bookkeeping only. A test asserts the stored document
+  contains neither the authored step instruction nor any source content.
+- `CognitiveEngine` receives the store and forwards it, and gained no persistence
+  logic.
+
+### Verification
+
+- The package-aware full local suite contains 1,936 passing automated tests.
+- Thirteen new integration tests cover completed work surviving a restart without
+  replay, a mid-flight step restoring as interrupted, the bounded restore event,
+  refusal to advance a restored execution, terminal and cancelled executions
+  surviving, disabled persistence keeping ephemeral behavior, a corrupt store
+  refusing, duplicate identifiers refusing, a failed write preserving live state,
+  the stored document duplicating no research content, and the Bootstrap flag
+  requiring an exact value.
+
 ## [0.3.141] - 2026-08-23
 
 ### Added

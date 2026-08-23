@@ -51,6 +51,9 @@ from research.CrossrefResearchSourceDiscoveryProvider import (
     CrossrefResearchSourceDiscoveryProvider,
 )
 from research.HttpResearchSourceFetcher import HttpResearchSourceFetcher
+from research.JsonFileResearchExecutionStore import (
+    JsonFileResearchExecutionStore,
+)
 from research.JsonFileResearchRunStore import JsonFileResearchRunStore
 from research.JsonFileResearchSourceContentStore import (
     JsonFileResearchSourceContentStore,
@@ -390,6 +393,7 @@ class Bootstrap:
         )
         research_run_manager = ResearchRunManager(research_run_store)
         research_run_manager.load()
+        research_execution_store = self._research_execution_store()
         research_source_content_store = JsonFileResearchSourceContentStore(
             self._research_source_content_path
             or self._research_source_content_store_path(
@@ -449,6 +453,7 @@ class Bootstrap:
             chat_semantic_memory_enabled=self._chat_semantic_memory_enabled,
             research_source_fetcher=research_source_fetcher,
             research_run_manager=research_run_manager,
+            research_execution_store=research_execution_store,
             research_source_discovery_provider=(
                 self._research_source_discovery_provider
             ),
@@ -538,6 +543,21 @@ class Bootstrap:
     def _default_knowledge_relation_path() -> Path:
         project_root = Path(__file__).resolve().parents[2]
         return project_root / "data" / "knowledge" / "relations.json"
+
+    def _research_execution_store(self) -> JsonFileResearchExecutionStore | None:
+        """Create the execution store only when persistence is opted in.
+
+        Default off, so an unset environment keeps execution state ephemeral and
+        behavior identical to a runtime without this store.
+        """
+        if os.environ.get("HYPATIA_RESEARCH_EXECUTION_PERSISTENCE_ENABLED") != "true":
+            return None
+        run_path = self._research_run_path or self._research_run_store_path(
+            self._memory_path
+        )
+        return JsonFileResearchExecutionStore(
+            run_path.with_name("research_executions.json")
+        )
 
     @staticmethod
     def _default_research_run_path() -> Path:

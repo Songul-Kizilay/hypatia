@@ -25,6 +25,8 @@ resumable execution.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from datetime import UTC, datetime
 from typing import cast
 
 from brain.BrainRequest import BrainRequest
@@ -35,14 +37,19 @@ from cognition.ResearchPlanExecutionEvents import (
 )
 from core.Exceptions import ResearchError
 from eventbus.EventBus import EventBus
+from research.ResearchExecutionStore import ResearchExecutionStore
 from research.ResearchPlan import ResearchPlan
 from research.ResearchPlanDraftService import (
     ResearchPlanDraftService,
     ResearchPlanStepDraft,
 )
 from research.ResearchPlanExecutionContext import ResearchPlanExecutionContext
+from research.ResearchPlanExecutionSnapshot import (
+    ResearchPlanExecutionSnapshot,
+)
 from research.ResearchPlanExecutionState import ResearchPlanExecutionState
 from research.ResearchPlanOperationRegistry import ResearchPlanOperationRegistry
+from research.ResearchPlanStepStatus import ResearchPlanStepStatus
 from response.ResponseComposer import ResponseComposer
 
 RESEARCH_PLAN_EXECUTION_START_INTENT = "research_plan_execution_start"
@@ -63,6 +70,8 @@ class ResearchPlanExecutionApplicationService:
         *,
         operation_registry: ResearchPlanOperationRegistry | None = None,
         event_bus: EventBus | None = None,
+        execution_store: ResearchExecutionStore | None = None,
+        clock: Callable[[], datetime] | None = None,
         max_active_executions: int = MAX_ACTIVE_RESEARCH_PLAN_EXECUTIONS,
     ) -> None:
         if (
@@ -81,6 +90,10 @@ class ResearchPlanExecutionApplicationService:
         self._executions: dict[str, ResearchPlanExecutionState] = {}
         self._plans: dict[str, ResearchPlan] = {}
         self._contexts: dict[str, ResearchPlanExecutionContext] = {}
+        self._execution_store = execution_store
+        self._clock = clock or (lambda: datetime.now(UTC))
+        self._restored: dict[str, ResearchPlanExecutionSnapshot] = {}
+        self._restore()
 
     @staticmethod
     def is_start_request(request: BrainRequest) -> bool:
@@ -140,13 +153,20 @@ class ResearchPlanExecutionApplicationService:
         self._plans[plan.plan_id] = plan
         self._contexts[plan.plan_id] = context
         self._events.started(state, context.has_research_run)
+        self._persist(plan.plan_id)
         return self._response_composer.research_plan_execution_status(request, state)
 
     def process_status(self, request: BrainRequest) -> BrainResponse:
-        """Report current ephemeral state, or that none exists in this process."""
+        """Report live state, restored durable state, or neither."""
         plan_id = self._normalized_plan_id(request)
         state = self._executions.get(plan_id)
         if state is None:
+            restored = self._restored.get(plan_id)
+            if restored is not None:
+                return self._response_composer.research_plan_execution_restored(
+                    request,
+                    restored,
+                )
             return self._response_composer.research_plan_execution_missing(
                 request,
                 plan_id,
@@ -171,6 +191,7 @@ class ResearchPlanExecutionApplicationService:
             )
         self._executions[plan_id] = cancelled
         self._events.cancelled(cancelled)
+        self._persist(plan_id)
         return self._response_composer.research_plan_execution_status(
             request,
             cancelled,
@@ -250,6 +271,7 @@ class ResearchPlanExecutionApplicationService:
                 type(error).__name__,
                 work_performed=False,
             )
+            self._persist(plan_id)
             return self._response_composer.research_plan_execution_status(
                 request,
                 failed,
@@ -278,6 +300,7 @@ class ResearchPlanExecutionApplicationService:
                 "operation_did_not_succeed",
                 work_performed=True,
             )
+            self._persist(plan_id)
             return self._response_composer.research_plan_execution_status(
                 request,
                 failed,
@@ -290,10 +313,65 @@ class ResearchPlanExecutionApplicationService:
         )
         self._executions[plan_id] = completed
         self._events.step_completed(plan_id, step_id, operation.operation_name)
+        self._persist(plan_id)
         return self._response_composer.research_plan_execution_status(
             request,
             completed,
         )
+
+    def _restore(self) -> None:
+        """Load durable executions, marking mid-flight work interrupted.
+
+        A corrupt or unreadable store raises here rather than being replaced by
+        an empty one, because silently discarding it would erase execution
+        history on the next write.
+        """
+        if self._execution_store is None:
+            return
+        for snapshot in self._execution_store.load():
+            restored = snapshot.restored()
+            self._restored[restored.plan_id] = restored
+            self._events.restored(
+                restored.plan_id,
+                restored.status.value,
+                sum(
+                    1
+                    for step in restored.steps
+                    if step.status is ResearchPlanStepStatus.INTERRUPTED
+                ),
+            )
+
+    def _persist(self, plan_id: str) -> None:
+        """Write durable state, never erasing it silently on failure."""
+        if self._execution_store is None:
+            return
+        try:
+            self._execution_store.save(self._snapshots())
+        except ResearchError as error:
+            self._events.persistence_failed(plan_id, type(error).__name__)
+
+    def _snapshots(self) -> list[ResearchPlanExecutionSnapshot]:
+        """Capture live executions, keeping restored history alongside them."""
+        recorded_at = self._clock()
+        snapshots = [
+            ResearchPlanExecutionSnapshot.capture(
+                state,
+                self._plans[plan_id].question,
+                self._plans[plan_id].steps,
+                recorded_at,
+                self._contexts.get(
+                    plan_id,
+                    ResearchPlanExecutionContext(),
+                ).research_run_id,
+            )
+            for plan_id, state in self._executions.items()
+        ]
+        snapshots.extend(
+            snapshot
+            for plan_id, snapshot in self._restored.items()
+            if plan_id not in self._executions
+        )
+        return snapshots
 
     def _blocked(
         self,
@@ -308,6 +386,7 @@ class ResearchPlanExecutionApplicationService:
         blocked = state.block_step(step_id, detail)
         self._executions[plan_id] = blocked
         self._events.step_blocked(plan_id, step_id, reason)
+        self._persist(plan_id)
         return self._response_composer.research_plan_execution_status(
             request,
             blocked,

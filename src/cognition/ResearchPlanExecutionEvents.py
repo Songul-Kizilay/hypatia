@@ -23,6 +23,8 @@ EXECUTION_STEP_COMPLETED = "research.plan.execution.step_completed"
 EXECUTION_STEP_FAILED = "research.plan.execution.step_failed"
 EXECUTION_STEP_BLOCKED = "research.plan.execution.step_blocked"
 EXECUTION_CANCELLED = "research.plan.execution.cancelled"
+EXECUTION_RESTORED = "research.plan.execution.restored"
+EXECUTION_PERSISTENCE_FAILED = "research.plan.execution.persistence_failed"
 
 EVENT_SOURCE = "research.execution"
 
@@ -127,6 +129,24 @@ class ResearchPlanExecutionEvents:
                 "completed_steps": state.completed_steps,
                 "steps_with_research_work": state.steps_with_research_work,
             },
+        )
+
+    def restored(self, plan_id: str, status: str, interrupted_steps: int) -> None:
+        """Report one execution restored from durable state, never resumed."""
+        self._emit(
+            EXECUTION_RESTORED,
+            {
+                "plan_id": plan_id,
+                "status": status,
+                "interrupted_steps": interrupted_steps,
+            },
+        )
+
+    def persistence_failed(self, plan_id: str, cause: str) -> None:
+        """Report that durable state could not be written, by cause class."""
+        self._emit(
+            EXECUTION_PERSISTENCE_FAILED,
+            {"plan_id": plan_id, "cause": cause},
         )
 
     def _emit(self, name: str, payload: dict[str, object]) -> None:

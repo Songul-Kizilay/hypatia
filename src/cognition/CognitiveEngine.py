@@ -95,6 +95,7 @@ from research.ResearchClaimContradictionProposalProvider import (
 )
 from research.ResearchClaimRecord import ResearchClaimRecord
 from research.ResearchEvidenceIntegrityAuditor import ResearchEvidenceIntegrityAuditor
+from research.ResearchExecutionStore import ResearchExecutionStore
 from research.ResearchPlanDraftService import ResearchPlanDraftService
 from research.ResearchPlanOperationRegistry import (
     ResearchPlanOperationRegistry,
@@ -164,6 +165,7 @@ class CognitiveEngine:
         chat_semantic_memory_enabled: bool = False,
         research_source_fetcher: ResearchSourceFetcher | None = None,
         research_run_manager: ResearchRunManager | None = None,
+        research_execution_store: ResearchExecutionStore | None = None,
         research_source_discovery_provider: (
             ResearchSourceDiscoveryProvider | None
         ) = None,
@@ -320,6 +322,7 @@ class CognitiveEngine:
             response_composer,
             operation_registry=operation_registry,
             event_bus=event_bus,
+            execution_store=research_execution_store,
         )
         self._research_plan_preview_service = ResearchPlanPreviewApplicationService(
             response_composer,

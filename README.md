@@ -644,6 +644,38 @@ values, or the raw model response. Ordinary chat still succeeds and the
 conversation record is still persisted. No event is emitted for successful or
 no-op extraction.
 
+---
+
+## Research execution persistence
+
+Research-plan execution state is ephemeral by default. To persist it, set:
+
+```text
+HYPATIA_RESEARCH_EXECUTION_PERSISTENCE_ENABLED=true
+```
+
+The value must be exactly lowercase `true`. With the setting absent or any other
+value, execution state stays in memory and is lost when Hypatia exits, exactly as
+before.
+
+When enabled, execution snapshots are written to `research_executions.json`
+beside the research-run store, in a separate versioned document. `ResearchRun`
+and its schema are untouched, so existing snapshots stay valid and no migration
+runs. Deleting the execution file returns the runtime to ephemeral behavior.
+
+Only execution bookkeeping is persisted: step identity, declared capability,
+status, operation identity, the work flag, bounded detail, the plan question, and
+the bound run identity. Authored step instructions, fetched page bodies, source
+excerpts, notes, and claim text are never written, because those already live in
+the research run.
+
+On restart, an execution is restored for inspection, never resumed. A step
+recorded as running when the process ended becomes `interrupted`, since what its
+operation actually did is unknown; completed steps stay completed and pending
+steps stay pending. Authorizations are not persisted, so a restored execution
+cannot be advanced and nothing is replayed. A corrupt store raises at startup
+rather than being replaced by an empty one.
+
 The following optional settings control which learned memories are supplied to
 the LLM as additional context:
 

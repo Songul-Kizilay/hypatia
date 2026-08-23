@@ -35,7 +35,11 @@ from research.ResearchClaimPreview import ResearchClaimPreview
 from research.ResearchClaimWritePreview import ResearchClaimWritePreview
 from research.ResearchEvidenceIntegrityStatus import ResearchEvidenceIntegrityStatus
 from research.ResearchPlanDraftPreview import ResearchPlanDraftPreview
+from research.ResearchPlanExecutionSnapshot import (
+    ResearchPlanExecutionSnapshot,
+)
 from research.ResearchPlanExecutionState import ResearchPlanExecutionState
+from research.ResearchPlanStepStatus import ResearchPlanStepStatus
 from research.ResearchRun import ResearchRun
 from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
@@ -925,6 +929,47 @@ class ResponseComposer:
             intent="research_plan_execution",
             memory_count=0,
             research_plan_execution=state,
+        )
+
+    def research_plan_execution_restored(
+        self,
+        request: BrainRequest,
+        snapshot: ResearchPlanExecutionSnapshot,
+    ) -> BrainResponse:
+        """Render restored durable state without implying a resumable run."""
+        lines = [
+            "Research plan execution (restored):",
+            f"Plan ID: {snapshot.plan_id}",
+            f"Status: {snapshot.status.value}",
+            f"Steps: {len(snapshot.steps)}",
+        ]
+        for index, step in enumerate(snapshot.steps, start=1):
+            operation = f" | operation: {step.operation}" if step.operation else ""
+            lines.append(f"{index}. {step.step_id}: {step.status.value}{operation}")
+        interrupted = sum(
+            1
+            for step in snapshot.steps
+            if step.status is ResearchPlanStepStatus.INTERRUPTED
+        )
+        if interrupted:
+            lines.append(
+                f"Interrupted steps: {interrupted}. What those operations did is "
+                "unknown; nothing was replayed."
+            )
+        lines.extend(
+            (
+                "Restored from durable state; this execution is not running.",
+                "Authored step instructions and authorizations were not persisted, "
+                "so a restored execution cannot be advanced.",
+                "A completed operation means the operation ran; it is not "
+                "evidence and not a verified claim.",
+            )
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_plan_execution",
+            memory_count=0,
         )
 
     def research_plan_execution_missing(
