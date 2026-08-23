@@ -2,6 +2,47 @@
 
 All notable project changes are recorded here.
 
+## [0.3.141] - 2026-08-23
+
+### Added
+
+- Stage 2 of research-execution persistence: `JsonFileResearchExecutionStore`, a
+  dedicated versioned store for execution snapshots.
+
+### Safety
+
+- Deliberately separate from the research-run store. `ResearchRun` and its schema
+  are untouched, every existing snapshot stays valid, and no migration of
+  existing data is required. Deleting the execution file returns the runtime to
+  purely ephemeral behavior.
+- Writes follow the existing run-store discipline exactly: a bounded temporary
+  file in the destination directory, flushed and fsynced, then moved into place
+  with `os.replace`. A failed replace, a failed encode, and an oversized document
+  all leave the previous snapshot byte-identical, and no temporary file is left
+  behind.
+- An absent file means no persisted executions, matching a runtime with
+  persistence disabled. A malformed or unreadable file raises rather than being
+  silently treated as empty, because discarding it would hide execution history.
+- The document is versioned and an unknown `schema_version` is rejected outright.
+  Unexpected or missing document fields, non-list executions, malformed entries,
+  oversized files, too many executions, and duplicate execution IDs are all
+  refused on load and on save.
+- The stored document carries execution bookkeeping only. A test asserts it holds
+  no excerpt, claim, or instruction content, so research facts are never
+  duplicated out of the research run.
+- Nothing is wired into the runtime yet; execution state remains ephemeral.
+
+### Verification
+
+- The package-aware full local suite contains 1,923 passing automated tests.
+- Twenty-one new tests cover the absent file, lossless round trips, interrupted
+  round trip, clearing the document, schema versioning, corrupted JSON, unknown
+  schema version, invalid documents, oversized files, execution-count limits on
+  load and save, duplicate identifiers on load and save, non-snapshot values,
+  malformed entries, failed replace preserving the previous document, no
+  temporary file left behind, no partial document when encoding fails, parent
+  directory creation, and absence of research content in the stored document.
+
 ## [0.3.140] - 2026-08-23
 
 ### Added
