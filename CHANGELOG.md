@@ -2,6 +2,59 @@
 
 All notable project changes are recorded here.
 
+## [0.3.143] - 2026-08-23
+
+### Added
+
+- Bounded autonomous research. `ResearchAutonomyApplicationService` loops over
+  the existing execution service through the exact structured
+  `research_autonomy_run` intent; no second execution engine exists.
+- `ResearchAutonomyBudget` bounds step advances, network operations, LLM
+  operations, and wall-clock seconds, each with a hard ceiling.
+  `ResearchAutonomyResult` reports the stop reason, counters, and elapsed time.
+- `ResearchOperationCost` and an exhaustive `CAPABILITY_COSTS` table declaring
+  each capability's network and model cost.
+- Two bounded events, `research.autonomy.started` and `.stopped`, emitted only at
+  the boundaries of a run.
+
+### Safety
+
+- Autonomy runs only steps a human already authored and authorized, advanced
+  through the same `process_advance` path, registry, operations, and run manager.
+  It cannot invent a capability, infer one from instruction text, rewrite a plan,
+  fabricate an authorization, accept a source, promote trust, promote a claim, or
+  resolve a contradiction. Tests assert an instruction naming search and fetch
+  still blocks, and that a discovery run leaves sources, evidence, assessments,
+  claims, and contradictions empty.
+- Network and model accounting come from the declared capability cost table, not
+  from operation names or authored text. A test asserts exactly which
+  capabilities declare network cost, so a new capability cannot quietly consume
+  an unaccounted call.
+- Budgets are enforced before each advance, never after. A zero network budget
+  performs no network operation at all, and a zero step budget attempts nothing.
+- `max_step_advances` counts attempted advances rather than successes, so a plan
+  that keeps blocking cannot loop forever by never succeeding.
+- Stopping is not failure. Step-level reasons are reported ahead of the generic
+  terminal reason, so a failed, blocked, or interrupted step explains itself
+  rather than being flattened into "terminal".
+- Time comes from an injected clock; no test sleeps.
+- A restored execution cannot be driven by autonomy, and a missing live execution
+  is refused rather than started.
+- Autonomy telemetry carries identifiers, declared budgets, counters, and a stop
+  category only. A test asserts the authored instruction and the research
+  question never appear.
+
+### Verification
+
+- The package-aware full local suite contains 1,957 passing automated tests.
+- Twenty-one new tests cover completion within budget, exact step-budget
+  stopping, network-budget stopping, zero network and zero step budgets, LLM
+  accounting from declared cost, injected-clock time exhaustion, cancellation,
+  blocked and failed steps, capability invention, absence of source acceptance
+  and claim promotion, absence of duplicate side effects, unchanged manual
+  execution, refusal without a live execution, bounded events, budget validation,
+  and exhaustive capability-cost declaration.
+
 ## [0.3.142] - 2026-08-23
 
 ### Added

@@ -19,6 +19,9 @@ from cognition.LLMConversationHistoryBuilder import (
 from cognition.ResearchAuthoredHistoryApplicationService import (
     ResearchAuthoredHistoryApplicationService,
 )
+from cognition.ResearchAutonomyApplicationService import (
+    ResearchAutonomyApplicationService,
+)
 from cognition.ResearchOverviewApplicationService import (
     ResearchOverviewApplicationService,
 )
@@ -324,6 +327,11 @@ class CognitiveEngine:
             event_bus=event_bus,
             execution_store=research_execution_store,
         )
+        self._research_autonomy_service = ResearchAutonomyApplicationService(
+            self._research_plan_execution_service,
+            response_composer,
+            event_bus=event_bus,
+        )
         self._research_plan_preview_service = ResearchPlanPreviewApplicationService(
             response_composer,
             research_plan_draft_service,
@@ -385,6 +393,9 @@ class CognitiveEngine:
 
         if self._research_plan_execution_service.is_advance_request(request):
             return self._research_plan_execution_service.process_advance(request)
+
+        if self._research_autonomy_service.is_run_request(request):
+            return self._research_autonomy_service.process_run(request)
 
         if self._is_research_run_markdown_export_verify_request(request):
             return self._process_research_run_markdown_export_verify(request)

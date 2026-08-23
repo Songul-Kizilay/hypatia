@@ -156,6 +156,21 @@ class ResearchPlanExecutionApplicationService:
         self._persist(plan.plan_id)
         return self._response_composer.research_plan_execution_status(request, state)
 
+    def live_execution(self, plan_id: str) -> ResearchPlanExecutionState | None:
+        """Return live execution state for a caller that only reads it."""
+        return self._executions.get(plan_id)
+
+    def live_plan(self, plan_id: str) -> ResearchPlan | None:
+        """Return the authored plan behind a live execution, if any."""
+        return self._plans.get(plan_id)
+
+    def restored_execution(
+        self,
+        plan_id: str,
+    ) -> ResearchPlanExecutionSnapshot | None:
+        """Return restored durable state, which can be read but not advanced."""
+        return self._restored.get(plan_id)
+
     def process_status(self, request: BrainRequest) -> BrainResponse:
         """Report live state, restored durable state, or neither."""
         plan_id = self._normalized_plan_id(request)

@@ -22,6 +22,7 @@ from knowledge.KnowledgeRelationRevocationPreview import (
 from memory.LearnedMemoryAuditReport import LearnedMemoryAuditReport
 from memory.MemoryRecord import MemoryRecord
 from planner.Plan import Plan
+from research.ResearchAutonomyResult import ResearchAutonomyResult
 from research.ResearchClaimContradictionPreview import (
     ResearchClaimContradictionPreview,
 )
@@ -929,6 +930,60 @@ class ResponseComposer:
             intent="research_plan_execution",
             memory_count=0,
             research_plan_execution=state,
+        )
+
+    def research_autonomy_result(
+        self,
+        request: BrainRequest,
+        result: ResearchAutonomyResult,
+    ) -> BrainResponse:
+        """Render exactly what an autonomous run consumed and why it stopped."""
+        message = "\n".join(
+            (
+                "Autonomous research run:",
+                f"Plan ID: {result.plan_id}",
+                f"Stopped because: {result.stop_reason.value}",
+                f"Execution status: {result.execution_status}",
+                f"Steps attempted: {result.steps_attempted}",
+                f"Operations performed: {result.operations_performed}",
+                f"Network operations: {result.network_operations}",
+                f"LLM operations: {result.llm_operations}",
+                f"Elapsed seconds: {result.elapsed_seconds:.3f}",
+                "Only steps already authored and authorized were run.",
+                "A completed operation is not evidence, not a verified claim, "
+                "and not a research conclusion.",
+                "Stopping within budget is a normal outcome, not a failure.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="research_autonomy",
+            memory_count=0,
+            research_autonomy=result,
+        )
+
+    def research_autonomy_missing(
+        self,
+        request: BrainRequest,
+        plan_id: str,
+    ) -> BrainResponse:
+        """Refuse autonomy for an execution this process cannot advance."""
+        message = "\n".join(
+            (
+                "Autonomous research run rejected:",
+                f"Plan ID: {plan_id}",
+                "This process holds no live execution for that plan.",
+                "A restored execution cannot be advanced, and autonomy never "
+                "creates or authorizes a plan of its own.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="research_autonomy",
+            memory_count=0,
+            success=False,
         )
 
     def research_plan_execution_restored(

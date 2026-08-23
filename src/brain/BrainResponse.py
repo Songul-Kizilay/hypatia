@@ -16,6 +16,7 @@ from knowledge.KnowledgeRelationRevocationPreview import (
     KnowledgeRelationRevocationPreview,
 )
 from memory.LearnedMemoryAuditReport import LearnedMemoryAuditReport
+from research.ResearchAutonomyResult import ResearchAutonomyResult
 from research.ResearchClaimContradictionPreview import (
     ResearchClaimContradictionPreview,
 )
@@ -116,5 +117,6 @@ class BrainResponse:
     research_plan_draft_preview: ResearchPlanDraftPreview | None = None
     learned_memory_audit: LearnedMemoryAuditReport | None = None
     research_plan_execution: ResearchPlanExecutionState | None = None
+    research_autonomy: ResearchAutonomyResult | None = None
     session_summaries: list[SessionSummary] = field(default_factory=list)
     session_delete_allowed: bool | None = None

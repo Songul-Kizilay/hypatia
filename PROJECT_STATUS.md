@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.142 (Genesis)`
+`v0.3.143 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.142`** is the current executable package and GitHub
+- **Runtime release `v0.3.143`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -32,6 +32,16 @@ with optional OpenAI-compatible LLM conversation support.
 ### Implemented
 
 - Application bootstrap, configuration, logging, and dependency injection.
+- Bounded autonomous research loops over the existing execution service rather
+  than adding a second engine. It runs only steps a human already authored and
+  authorized, so it cannot invent a capability, infer one from instruction text,
+  rewrite a plan, accept a source, or promote a claim. Network and model costs
+  come from an exhaustive declared capability-cost table rather than from
+  operation names, and budgets for step advances, network operations, model
+  operations, and wall-clock time are enforced before each advance. Attempted
+  advances are counted rather than successes, time uses an injected clock, and
+  stopping within budget is reported as a normal outcome with a specific
+  step-level reason where one applies.
 - Research-execution persistence is wired behind
   `HYPATIA_RESEARCH_EXECUTION_PERSISTENCE_ENABLED`, default off. Bootstrap creates
   the store beside the research-run store and the execution service owns loading,
@@ -884,7 +894,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,936 automated tests pass through package-aware discovery.
+- 1,957 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
