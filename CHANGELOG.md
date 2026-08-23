@@ -2,6 +2,41 @@
 
 All notable project changes are recorded here.
 
+## [0.3.138] - 2026-08-23
+
+### Added
+
+- One end-to-end explicit research-execution scenario driving the whole chain
+  through the real `CognitiveEngine` composition path in a single narrative:
+  question, discovery, explicit authorization, fetch, acceptance, evidence,
+  assessment, two conflicting claims, contradiction, comparison, and honest
+  closure.
+- A research-execution persistence design proposal documenting why execution
+  state stays ephemeral, what a migration would require, and a staged additive
+  plan. It is a proposal only; nothing was implemented and no schema changed.
+
+### Safety
+
+- The scenario uses deterministic doubles only for the discovery provider and
+  source fetcher, so no network is required. Every other component is real,
+  including the run manager, knowledge engine, acceptance transaction, and
+  epistemic domain.
+- It asserts the chain's boundaries hold together, not merely that each step
+  passes: discovery accepts nothing and fetches nothing, acquisition accepts
+  nothing, only authorized URLs are ever contacted, recording a contradiction
+  leaves both claims byte-identical, and both claims remain hypotheses with
+  unassessed confidence at the end.
+- The closed run retains its unresolved claims and its contradiction, and the
+  completion detail reports them rather than implying resolution.
+- Research execution writes no conversation memory.
+
+### Verification
+
+- The package-aware full local suite contains 1,877 passing automated tests.
+- Black, Ruff, and MyPy pass for all 407 Python source and test files.
+- Live-model and live-network validation remain separate manual diagnostics and
+  are still pending.
+
 ## [0.3.137] - 2026-08-23
 
 ### Added

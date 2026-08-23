@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.137 (Genesis)`
+`v0.3.138 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.137`** is the current executable package and GitHub
+- **Runtime release `v0.3.138`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -32,6 +32,15 @@ with optional OpenAI-compatible LLM conversation support.
 ### Implemented
 
 - Application bootstrap, configuration, logging, and dependency injection.
+- One end-to-end scenario drives the whole explicit research chain through the
+  real composition path, from question to closed run, using deterministic doubles
+  only for the discovery provider and source fetcher. It asserts the boundaries
+  hold together rather than merely that each step passes, and the closed run
+  retains its unresolved hypotheses and its contradiction. Research-execution
+  persistence remains deliberately unimplemented; a staged additive design
+  proposal is documented in
+  `docs/Architecture/ResearchExecutionPersistence_Proposal_v0.1.md` and awaits
+  review because it involves persisted-schema decisions.
 - The twelfth connected capability, `RESEARCH_RUN_COMPLETION`, closes a run
   through the existing lifecycle path and defines no completion rule of its own.
   Reaching the last execution step never closes a run: execution completing, the
@@ -837,7 +846,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,876 automated tests pass through package-aware discovery.
+- 1,877 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.
