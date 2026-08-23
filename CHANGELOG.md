@@ -2,6 +2,49 @@
 
 All notable project changes are recorded here.
 
+## [0.3.151] - 2026-08-23
+
+### Added
+
+- Claim calibration. `ResearchClaimCalibrator` builds an `EvidenceSupportProfile`
+  for each active claim — distinct sources, evidence records, how many sources
+  carry an assessment, the lowest and highest trust, and whether anything
+  contradicts it — and compares the authored state and confidence against the
+  ceilings that structure supports.
+- `CalibrationVerdict`, `ResearchClaimCalibration`, `ResearchCalibrationReport`,
+  `CalibrationApplicationService` with a report intent, and one bounded
+  `calibration.reported` event.
+
+### Safety
+
+- Calibration never edits a claim. An epistemic state is the author's judgement
+  about what they are willing to assert, and quietly adjusting it would overrule
+  that judgement while presenting the change as bookkeeping. Tests assert an
+  overstated claim keeps its authored state and confidence, and that the run
+  store is byte-identical across repeated calibration.
+- There is no calibration store and no write path. The report is derived on
+  every request, so it cannot drift from the record it describes.
+- The ceilings are stated rules, not a score, and nothing supports `fact`. No
+  configuration of sources in our own record makes a claim a fact.
+- Overstatement is reported; understatement is not treated as a problem. Being
+  more careful than the record requires is never an error, and calibration does
+  not nudge anyone toward more confidence.
+- A ceiling is explicitly not a verdict on truth, and the response says so:
+  meeting it does not make a claim true, exceeding it does not make one false.
+- Superseded claims are excluded, and a contradicted claim supports nothing
+  until the contradiction is resolved.
+- The event payload carries the run identifier, bounded verdict counts, and a
+  `claims_modified` count that is always zero. Tests assert no claim text,
+  research question, or URL appears in it.
+
+### Verification
+
+- The package-aware full local suite contains 2,253 passing automated tests.
+- Thirty-one new tests cover every ceiling rule, contradiction, understatement,
+  superseded claims, empty runs, profile validation, verdict properties,
+  inertness over claims and the run store, derivation rather than storage,
+  bounded events, and production composition wiring.
+
 ## [0.3.150] - 2026-08-23
 
 ### Added

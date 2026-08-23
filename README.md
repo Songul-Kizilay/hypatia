@@ -812,6 +812,38 @@ and unauditable in exactly the way this project avoids.
 
 ---
 
+## Claim calibration
+
+Calibration compares what a claim asserts against the evidence structure behind
+it. It needs no flag, because it writes nothing: the report is derived from
+canonical state on every request, so there is no second copy to drift from the
+record or be believed by mistake.
+
+The ceilings are stated rules rather than a hidden score:
+
+| Evidence structure | Supports at most |
+| --- | --- |
+| Contradicted | contradicted, unassessed |
+| One source, not assessed | hypothesis, low |
+| One source, assessed high | likely, medium |
+| Two or more sources, not all assessed | likely, medium |
+| Two or more sources, all assessed medium or better | strong evidence, high |
+
+Nothing supports `fact`. No configuration of sources in our own record has ever
+been enough to make a claim a fact, so calibration will not pretend otherwise.
+
+A ceiling is not a verdict on truth. Meeting it does not make a claim true and
+exceeding it does not make one false — it describes what our record can bear the
+weight of. And the asymmetry is deliberate: claiming more than the record can
+carry is reported, claiming less is not. Being careful is not an error, and
+calibration has no business talking anyone into more confidence.
+
+Calibration never edits a claim. An epistemic state is someone's judgement about
+what they are willing to assert, and quietly downgrading it would be overruling
+that judgement while presenting the change as bookkeeping.
+
+---
+
 ## Ordinary chat never performs research
 
 Hypatia can chat, and Hypatia can research. They are different subsystems, and

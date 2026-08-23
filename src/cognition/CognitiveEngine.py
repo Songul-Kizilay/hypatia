@@ -12,6 +12,9 @@ from brain.BrainRouter import BrainRouter
 from cognition.BackgroundResearchSchedulerApplicationService import (
     BackgroundResearchSchedulerApplicationService,
 )
+from cognition.CalibrationApplicationService import (
+    CalibrationApplicationService,
+)
 from cognition.ConversationResearchClaimGuard import (
     ConversationResearchClaimGuard,
 )
@@ -395,6 +398,13 @@ class CognitiveEngine:
                 lesson_store=failure_lesson_store,
                 event_bus=event_bus,
             )
+        self._calibration_service: CalibrationApplicationService | None = None
+        if research_run_manager is not None:
+            self._calibration_service = CalibrationApplicationService(
+                research_run_manager,
+                response_composer,
+                event_bus=event_bus,
+            )
         self._research_plan_preview_service = ResearchPlanPreviewApplicationService(
             response_composer,
             research_plan_draft_service,
@@ -489,6 +499,9 @@ class CognitiveEngine:
 
         if self._is_failure_memory_request(request):
             return self._process_failure_memory(request)
+
+        if CalibrationApplicationService.is_report_request(request):
+            return self._process_calibration(request)
 
         if self._is_research_run_markdown_export_verify_request(request):
             return self._process_research_run_markdown_export_verify(request)
@@ -3101,6 +3114,22 @@ class CognitiveEngine:
             recent_records,
             session,
         )
+
+    def _process_calibration(self, request: BrainRequest) -> BrainResponse:
+        """Route the calibration intent, which reads and never writes."""
+        service = self._calibration_service
+        if service is None:
+            return self._response_composer.research_calibration_rejected(
+                request,
+                "Research run persistence is unavailable.",
+            )
+        try:
+            return service.process_report(request)
+        except ResearchError as error:
+            return self._response_composer.research_calibration_rejected(
+                request,
+                str(error),
+            )
 
     @staticmethod
     def _is_failure_memory_request(request: BrainRequest) -> bool:

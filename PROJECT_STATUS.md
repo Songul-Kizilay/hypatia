@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.150 (Genesis)`
+`v0.3.151 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.150`** is the current executable package and GitHub
+- **Runtime release `v0.3.151`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -32,6 +32,11 @@ with optional OpenAI-compatible LLM conversation support.
 ### Implemented
 
 - Application bootstrap, configuration, logging, and dependency injection.
+- Claim calibration compares each authored claim against the evidence structure
+  behind it and reports overstatement, using stated ceiling rules rather than a
+  hidden score. Nothing supports `fact`. It is derived on every request with no
+  store and no write path, it never edits a claim, and understatement is not
+  treated as a problem.
 - Failure memory derives seven bounded kinds of lesson from what a run
   recorded, each naming the persisted records it came from; a lesson without
   provenance is refused. Behind `HYPATIA_FAILURE_MEMORY_ENABLED`, default off.
@@ -935,7 +940,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 2,222 automated tests pass through package-aware discovery.
+- 2,253 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.

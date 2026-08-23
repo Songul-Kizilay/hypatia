@@ -26,6 +26,7 @@ from planner.Plan import Plan
 from research.BackgroundResearchTask import BackgroundResearchTask
 from research.CanonicalResearchSummary import CanonicalResearchSummary
 from research.ResearchAutonomyResult import ResearchAutonomyResult
+from research.ResearchCalibrationReport import ResearchCalibrationReport
 from research.ResearchClaimContradictionPreview import (
     ResearchClaimContradictionPreview,
 )
@@ -1312,6 +1313,67 @@ class ResponseComposer:
             message=message,
             request_id=request.request_id,
             intent="failure_memory",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_calibration(
+        self,
+        request: BrainRequest,
+        report: ResearchCalibrationReport,
+    ) -> BrainResponse:
+        """Render the fit between authored claims and their own support."""
+        lines = [
+            "Claim calibration:",
+            f"Run ID: {report.run_id}",
+            f"Claims: {len(report.calibrations)}",
+            f"Needing a second look: {len(report.needing_attention)}",
+            "",
+        ]
+        for entry in report.calibrations:
+            lines.append(f"- {entry.claim_id} [{entry.verdict.value}]")
+            lines.append(f"  {entry.summary()}")
+            lines.append(
+                f"  sources {entry.profile.source_count}, "
+                f"evidence {entry.profile.evidence_count}, "
+                f"assessed {entry.profile.assessed_source_count}"
+            )
+        if not report.calibrations:
+            lines.append("This run has no active claims to calibrate.")
+        lines.extend(
+            (
+                "",
+                "No claim was changed. A supported ceiling is what our own "
+                "record can carry, not a verdict on the claim: meeting it does "
+                "not make a claim true, and exceeding it does not make one "
+                "false. Understating is never reported as a problem.",
+            )
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_calibration",
+            memory_count=0,
+            research_calibration=report,
+        )
+
+    def research_calibration_rejected(
+        self,
+        request: BrainRequest,
+        reason: str,
+    ) -> BrainResponse:
+        """Report one bounded refusal without changing any claim."""
+        message = "\n".join(
+            (
+                "Claim calibration rejected:",
+                f"Reason: {reason}",
+                "No claim changed.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="research_calibration",
             memory_count=0,
             success=False,
         )
