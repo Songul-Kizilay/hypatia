@@ -4,6 +4,14 @@ Exercises the same runtime path as the desktop (Bootstrap -> CognitiveEngine ->
 configured LLM provider) without needing a Tkinter window, and reports whether
 each link of the durable-memory chain works: write, persist, retrieve, answer.
 
+Three runs, and they do not prove the same thing. The first writes the fact. The
+second restarts the runtime and asks again in the same session — which is a weak
+observation, because the teaching turn is still in that session's transcript and
+the model can read the answer straight out of it. The third asks in a session
+created empty, where the transcript is provably zero messages, so persisted
+learned memory is the only channel left. Only the third result is evidence of
+durable memory.
+
 This is a diagnostic, not part of the runtime. It changes no production
 behavior and adds no dependency.
 
@@ -31,6 +39,9 @@ from brain.BrainRequest import BrainRequest  # noqa: E402
 from cognition.CognitiveEngine import CognitiveEngine  # noqa: E402
 from cognition.LearnedMemoryContextService import (  # noqa: E402
     LearnedMemoryContextService,
+)
+from cognition.LLMConversationHistoryBuilder import (  # noqa: E402
+    build_llm_conversation_history,
 )
 from core.Bootstrap import Bootstrap  # noqa: E402
 from desktop.DesktopDataPaths import DesktopDataPaths  # noqa: E402
@@ -117,7 +128,7 @@ def main() -> int:
             "     No learned record was created. Extraction did not produce candidates."
         )
 
-    print("\n=== RUN 2: fresh runtime from the same file (restart) ===")
+    print("\n=== RUN 2: same session, restarted runtime ===")
     engine2 = build_engine(memory_path, session_path)
     reloaded = show_learned(engine2, "reloaded from disk")
 
@@ -142,18 +153,57 @@ def main() -> int:
 
     answered = "raven" in answer.message.lower()
     print(f"\n  ANSWER   -> {'PASS' if answered else 'FAIL'}")
+    print(
+        "     Note: this session already contains the teaching turn, so the "
+        "model may have read the answer straight out of the transcript."
+    )
+
+    print("\n=== RUN 3: fresh session, no conversation history ===")
+    engine3 = build_engine(memory_path, session_path)
+    session_id = f"diagnostic-{int(time.time())}"
+    engine3._session_manager.create(session_id)
+    print(f"  session   : {session_id} (created empty for this check)")
+
+    history = build_llm_conversation_history(
+        tuple(engine3._memory_manager.all()),
+        session_id,
+    )
+    isolated = len(history) == 0
+    print(f"  transcript: {len(history)} message(s)")
+    print(f"\n  ISOLATED -> {'PASS' if isolated else 'FAIL'}")
+    if not isolated:
+        print("     The session is not empty, so this run proves nothing extra.")
+
+    try:
+        fresh = engine3.process(
+            BrainRequest(message=QUESTION, metadata={"session_id": session_id})
+        )
+    except Exception as error:  # noqa: BLE001
+        print(f"  CHAT FAILED: {type(error).__name__}: {error}")
+        return 2
+
+    print(f"\n  user     : {QUESTION}")
+    print(f"  Hypatia  : {fresh.message.strip()[:300]}")
+
+    durable = isolated and "raven" in fresh.message.lower()
+    print(f"\n  DURABLE  -> {'PASS' if durable else 'FAIL'}")
+    print(
+        "     With an empty transcript the only channel left is persisted "
+        "learned memory, so this is the observation that actually counts."
+    )
 
     print("\n" + "=" * 60)
-    print(f"  write     : {'PASS' if wrote else 'FAIL'}")
-    print(f"  persist   : {'PASS' if reloaded else 'FAIL'}")
-    print(f"  retrieve  : {'PASS' if retrieved else 'FAIL'}")
-    print(f"  answer    : {'PASS' if answered else 'FAIL'}")
+    print(f"  write               : {'PASS' if wrote else 'FAIL'}")
+    print(f"  persist             : {'PASS' if reloaded else 'FAIL'}")
+    print(f"  retrieve            : {'PASS' if retrieved else 'FAIL'}")
+    print(f"  same-session recall : {'PASS' if answered else 'FAIL'}  (weak)")
+    print(f"  fresh-session recall: {'PASS' if durable else 'FAIL'}  (durable)")
     print("=" * 60)
 
     if temporary_directory is not None:
         temporary_directory.cleanup()
 
-    return 0 if (wrote and reloaded and retrieved and answered) else 1
+    return 0 if (wrote and reloaded and retrieved and answered and durable) else 1
 
 
 if __name__ == "__main__":

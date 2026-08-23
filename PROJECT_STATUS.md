@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.146 (Genesis)`
+`v0.3.147 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.146`** is the current executable package and GitHub
+- **Runtime release `v0.3.147`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -32,6 +32,12 @@ with optional OpenAI-compatible LLM conversation support.
 ### Implemented
 
 - Application bootstrap, configuration, logging, and dependency injection.
+- Live validation now covers the research pipeline end to end against real
+  network sources, not only deterministic doubles: a real discovery request, a
+  real HTTPS fetch, acceptance, and an evidence record, with assessment and
+  claim correctly unperformed. Two manual diagnostics under `tools/diagnostics/`
+  report each stage separately and distinguish same-session recall from durable
+  learned-memory recall.
 - Ordinary chat cannot narrate research it did not perform. A request that
   explicitly needs live web information never reaches the language model;
   Hypatia states deterministically that live research was not performed and
@@ -917,7 +923,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 2,097 automated tests pass through package-aware discovery.
+- 2,104 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.

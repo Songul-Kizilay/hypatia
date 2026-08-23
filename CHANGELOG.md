@@ -2,6 +2,36 @@
 
 All notable project changes are recorded here.
 
+## [0.3.147] - 2026-08-23
+
+### Added
+
+- `tools/diagnostics/research_pipeline_check.py` walks the real research
+  pipeline and reports each stage separately: network request, candidate
+  discovery, discovery record, explicit selection, HTTPS fetch, acceptance, and
+  evidence. Nothing is promoted automatically and each stage runs only when
+  named by flag. Assessments and claims are never produced by the diagnostic.
+- `tools/diagnostics/durable_memory_check.py` gained a third stage that asks in
+  a session created empty. The same-session result is now labelled weak, because
+  that session's transcript already contains the taught fact; only the
+  empty-transcript result is evidence of durable learned memory.
+
+### Verification
+
+- Live validation now covers the research pipeline end to end, not only
+  deterministic doubles. A real Crossref discovery request returned five
+  candidates; a real HTTPS fetch, acceptance, and evidence record completed; and
+  assessment and claim correctly remained unperformed.
+- Two real-world boundary observations from that run, both correct behaviour: a
+  Crossref DOI candidate was refused at the HTTPS boundary because the publisher
+  redirect was plain HTTP, and Wikipedia refused Hypatia's user agent with HTTP
+  403. Both fail honestly rather than retrying or degrading.
+- Seven new tests separate same-session recall from durable learned-memory
+  recall, asserting that a fresh session carries an empty transcript and that
+  the fact still reaches the model through injected learned-memory context. A
+  negative control asserts that without a learned record no channel carries it.
+- The package-aware full local suite contains 2,104 passing automated tests.
+
 ## [0.3.146] - 2026-08-23
 
 ### Fixed

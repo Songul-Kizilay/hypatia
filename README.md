@@ -821,6 +821,52 @@ HYPATIA_LLM_HISTORY_MAX_TURNS=24
 
 The literal `unbounded` restores unlimited history.
 
+---
+
+## Manual diagnostics
+
+Two developer-only checks live under `tools/diagnostics/`. Neither is part of
+the runtime, neither adds a dependency, and both default to temporary data.
+
+### Durable memory
+
+```bash
+python tools/diagnostics/durable_memory_check.py
+```
+
+Runs three stages that do not prove the same thing. The first teaches a fact.
+The second restarts the runtime and asks again in the same session — a weak
+observation, because that session's transcript still contains the teaching turn
+and the model can read the answer straight out of it. The third asks in a
+session created empty, where the transcript is provably zero messages, so
+persisted learned memory is the only channel left. Only the third result is
+evidence of durable memory, and the report labels them accordingly.
+
+Pass `--real` to use the actual desktop memory file instead of a temporary one.
+
+### Research pipeline
+
+```bash
+python tools/diagnostics/research_pipeline_check.py "your question"
+```
+
+Walks the real pipeline and reports each stage separately, because each is a
+different claim: a network request is not a discovery, a discovery is not an
+acceptance, an acceptance is not evidence, and evidence is not a verified claim.
+
+Nothing is promoted automatically. With no flags nothing touches the network.
+`--discover` performs one real discovery request. `--accept N` selects that
+candidate, or `--url` names a source directly. `--evidence` records one evidence
+record from the accepted source. Assessments and claims are never produced by
+the diagnostic at all; they require authored steps.
+
+Two things worth knowing before running it against real sources. Crossref
+candidates are DOI URLs, and publisher redirects are frequently plain HTTP, so
+the fetch is refused at the HTTPS boundary — that refusal is the boundary
+working, not a failure of the run. And some sites, Wikipedia among them, reject
+Hypatia's user agent with HTTP 403; the fetch fails honestly rather than
+retrying under a disguise.
+
 The following optional settings control which learned memories are supplied to
 the LLM as additional context:
 
