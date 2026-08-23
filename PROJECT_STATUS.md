@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.145 (Genesis)`
+`v0.3.146 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.145`** is the current executable package and GitHub
+- **Runtime release `v0.3.146`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -32,6 +32,12 @@ with optional OpenAI-compatible LLM conversation support.
 ### Implemented
 
 - Application bootstrap, configuration, logging, and dependency injection.
+- Ordinary chat cannot narrate research it did not perform. A request that
+  explicitly needs live web information never reaches the language model;
+  Hypatia states deterministically that live research was not performed and
+  reports canonical counts instead. Evidence questions are answered only from
+  persisted research state, and a post-generation guard annotates any reply that
+  claims research the canonical record does not support.
 - Bounded curiosity detects seven kinds of knowledge gap in a persisted
   research run, turns each into one deterministically templated and ranked
   question, and stops there. Behind `HYPATIA_CURIOSITY_ENABLED`, default off.
@@ -911,7 +917,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 2,045 automated tests pass through package-aware discovery.
+- 2,097 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.

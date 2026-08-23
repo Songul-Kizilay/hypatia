@@ -2,6 +2,66 @@
 
 All notable project changes are recorded here.
 
+## [0.3.146] - 2026-08-23
+
+### Fixed
+
+- Ordinary chat could answer a request for live web information as though
+  research had happened, inventing authors, journals, outlets, and dates, and
+  could then describe those inventions as collected evidence. Both are now
+  structurally prevented rather than discouraged.
+- The default conversation instruction told the model to always answer in
+  English and never in Turkish, which produced mixed and malformed output for
+  users writing in Turkish. It now asks for the language the user wrote in,
+  forbids mixing languages, asks for proportionate answers, and states that
+  browsing is unavailable. No language is hardcoded.
+- Conversation history was unbounded when `HYPATIA_LLM_HISTORY_MAX_TURNS` was
+  unset. With a small local context window that pushes the newest message toward
+  the truncation edge, so history is now bounded to twelve turns by default. The
+  literal `unbounded` restores the previous behaviour.
+
+### Added
+
+- `LiveInformationRequestDetector` and `LiveInformationRequestKind` classify a
+  plain chat message against a fixed phrase table in English and Turkish. The
+  classification authorizes nothing.
+- `ResearchHonestyApplicationService` answers such requests deterministically,
+  without calling any model, and answers evidence questions from
+  `CanonicalResearchSummary` counts derived from persisted runs.
+- `ConversationResearchClaimGuard` annotates a generated reply that claims
+  research in the first person with a bounded correction naming the canonical
+  counts. It never deletes the model output.
+
+### Safety
+
+- A detected live-information request never reaches the language model, so
+  there is nothing left that could fabricate a source. Tests assert zero
+  provider calls across the real failing prompts.
+- Detection cannot become an authorization path: it is gated on the absence of a
+  declared intent, it returns only a category, and no capability, plan, run, or
+  network operation follows from it.
+- Evidence questions are answered only from persisted state, with discoveries,
+  acceptances, evidence, assessments, claims, and contradictions counted
+  separately so no stage is collapsed into another.
+- Ordinary chat provably mutates no research state. Tests assert the run store
+  is byte-identical after talking about evidence, sources, claims, and
+  contradictions.
+- The unsafe-URL boundary is now exercised end to end rather than only at the
+  validator. Tests drive the real fetcher and the real authorized-fetch step
+  with a recording opener and assert loopback, `127.0.0.1:11434`, private
+  ranges, link-local metadata, embedded credentials, plain HTTP, non-standard
+  ports, and non-HTTPS schemes are all refused before any connection is opened,
+  and that a refusal records no source, evidence, or claim and leaks no
+  credential.
+
+### Verification
+
+- The package-aware full local suite contains 2,097 passing automated tests.
+- Fifty-two new tests cover live-information detection on the real failing
+  prompts and on ordinary conversation, refusal without a model call, canonical
+  evidence reporting, the post-generation guard, chat inertness over research
+  state, the end-to-end fetch boundary, and bounded conversation history.
+
 ## [0.3.145] - 2026-08-23
 
 ### Added

@@ -738,6 +738,89 @@ plan, queues a background task, or spends a network or model operation.
 Accepting a question records that a human thinks it worth pursuing — turning it
 into work stays a separate, explicit decision.
 
+---
+
+## Ordinary chat never performs research
+
+Hypatia can chat, and Hypatia can research. They are different subsystems, and
+ordinary chat is not allowed to sound like the other one.
+
+When a plain chat message explicitly asks for something only research can
+supply — the day's news, current events, recent papers, academic sources,
+"search the internet", or "cite your sources" — the message does not reach the
+language model at all. Hypatia answers deterministically instead: live research
+was not performed, no network was reached, no candidate was discovered, no
+source was accepted, no evidence was recorded, and here are the canonical
+counts. It then points at the explicit research workflow, where each step is
+authored and authorized separately.
+
+The detector is a fixed phrase table, not a model and not a score. It grants
+nothing: it cannot create a plan, authorize a capability, accept a source, or
+spend a network operation. Its only possible effect is to make Hypatia describe
+what it did not do, so an over-eager match costs a disclaimer rather than an
+action.
+
+Asking what evidence Hypatia collected is answered from persisted research state
+and nothing else. Runs, discovered candidates, accepted sources, evidence
+records, assessments, claims, and contradictions are reported as separate
+counts, because a discovery is not an acceptance, an acceptance is not evidence,
+and evidence is not a verified claim.
+
+A system prompt cannot make a model honest, so a second, deterministic guard
+runs after generation. If a reply claims research in the first person — "I
+researched", "my sources show", "arastirdim" — it is annotated with a bounded
+correction naming the canonical counts and stating that anything it called a
+source is model output. The model text is never deleted: you should see both the
+claim and the correction.
+
+---
+
+## Choosing a local model
+
+Hypatia depends on no particular provider or model. Anything speaking the
+OpenAI-compatible chat API works, and the model is configuration, never
+architecture.
+
+For local development the practical constraint is latency, not quality. On a
+mid-range machine a 4B reasoning model can take around twenty seconds for a
+trivial arithmetic question, and a full Hypatia turn — which also builds memory
+context and runs extraction — noticeably longer.
+
+A fast development profile:
+
+```text
+HYPATIA_LLM_MODEL=qwen3:1.7b
+```
+
+An even lighter fallback when that is still slow:
+
+```text
+HYPATIA_LLM_MODEL=gemma3:1b
+```
+
+A higher-quality profile for real work:
+
+```text
+HYPATIA_LLM_MODEL=qwen3:8b
+```
+
+Set the model deliberately; Hypatia does not change a configured model on your
+behalf. Smaller models mix languages, over-explain, and drift from the newest
+message more often. That is a model limitation, not something the runtime can
+promise away — the guarantees Hypatia does make, about never claiming research
+it did not perform, hold regardless of which model is configured.
+
+Conversation history is bounded by default, at twelve turns. With a small
+context window an unbounded transcript pushes the newest message toward the
+truncation edge, which is how a model ends up answering the previous question.
+To change it:
+
+```text
+HYPATIA_LLM_HISTORY_MAX_TURNS=24
+```
+
+The literal `unbounded` restores unlimited history.
+
 The following optional settings control which learned memories are supplied to
 the LLM as additional context:
 

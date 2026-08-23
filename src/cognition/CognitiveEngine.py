@@ -12,6 +12,9 @@ from brain.BrainRouter import BrainRouter
 from cognition.BackgroundResearchSchedulerApplicationService import (
     BackgroundResearchSchedulerApplicationService,
 )
+from cognition.ConversationResearchClaimGuard import (
+    ConversationResearchClaimGuard,
+)
 from cognition.CuriosityApplicationService import (
     CuriosityApplicationService,
 )
@@ -27,6 +30,9 @@ from cognition.ResearchAuthoredHistoryApplicationService import (
 )
 from cognition.ResearchAutonomyApplicationService import (
     ResearchAutonomyApplicationService,
+)
+from cognition.ResearchHonestyApplicationService import (
+    ResearchHonestyApplicationService,
 )
 from cognition.ResearchOverviewApplicationService import (
     ResearchOverviewApplicationService,
@@ -350,6 +356,11 @@ class CognitiveEngine:
                 event_bus=event_bus,
             )
         )
+        self._research_honesty_service = ResearchHonestyApplicationService(
+            response_composer,
+            run_manager=research_run_manager,
+        )
+        self._conversation_research_claim_guard = ConversationResearchClaimGuard()
         self._curiosity_service: CuriosityApplicationService | None = None
         if research_run_manager is not None:
             self._curiosity_service = CuriosityApplicationService(
@@ -367,6 +378,8 @@ class CognitiveEngine:
 
     def process(self, request: BrainRequest) -> BrainResponse:
         """Process a request using the currently supported cognitive intent."""
+        if self._is_undeclared_live_information_request(request):
+            return self._process_conversation(request)
         intent = self._router.detect_intent(request)
         if intent == "conversation_search":
             return self._process_conversation_search(request)
@@ -647,6 +660,19 @@ class CognitiveEngine:
             return self._process_recent_conversations(request)
 
         return self._process_conversation(request)
+
+    def _is_undeclared_live_information_request(self, request: BrainRequest) -> bool:
+        """Return whether plain chat asked for information only research provides.
+
+        Gated on the absence of a declared intent, so every explicit structured
+        request keeps its existing route. The check runs before the message
+        prefixes because "search the internet" is a request for the live web,
+        not a command to search the local knowledge base, and answering it from
+        local chunks would be its own quiet misdirection.
+        """
+        if request.metadata.get("intent") is not None:
+            return False
+        return self._research_honesty_service.detect(request).detected
 
     @staticmethod
     def _is_search_request(request: BrainRequest) -> bool:
@@ -2601,7 +2627,13 @@ class CognitiveEngine:
             source="brain",
         )
 
-        if context.intent == "message" and self._llm_provider is not None:
+        live_information_kind = self._research_honesty_service.detect(request)
+        if live_information_kind.detected:
+            response = self._research_honesty_service.process(
+                request,
+                live_information_kind,
+            )
+        elif context.intent == "message" and self._llm_provider is not None:
             try:
                 history = build_llm_conversation_history(
                     tuple(self._memory_manager.all()),
@@ -2615,10 +2647,14 @@ class CognitiveEngine:
                     user_message=request.message,
                     learned_memory_context=learned_memory_context,
                 )
+                generated = self._llm_provider.generate(
+                    provider_prompt,
+                    history=history,
+                )
                 response = BrainResponse(
-                    message=self._llm_provider.generate(
-                        provider_prompt,
-                        history=history,
+                    message=self._conversation_research_claim_guard.annotate(
+                        generated,
+                        self._research_honesty_service.summary(),
                     ),
                     request_id=request.request_id,
                     intent="message",

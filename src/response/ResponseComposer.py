@@ -8,6 +8,7 @@ from datetime import datetime
 from brain.BrainRequest import BrainRequest
 from brain.BrainResponse import BrainResponse
 from brain.SessionSummary import SessionSummary
+from cognition.LiveInformationRequestKind import LiveInformationRequestKind
 from knowledge.Chunk import Chunk
 from knowledge.KnowledgeCitation import KnowledgeCitation
 from knowledge.KnowledgeDocumentReference import KnowledgeDocumentReference
@@ -23,6 +24,7 @@ from memory.LearnedMemoryAuditReport import LearnedMemoryAuditReport
 from memory.MemoryRecord import MemoryRecord
 from planner.Plan import Plan
 from research.BackgroundResearchTask import BackgroundResearchTask
+from research.CanonicalResearchSummary import CanonicalResearchSummary
 from research.ResearchAutonomyResult import ResearchAutonomyResult
 from research.ResearchClaimContradictionPreview import (
     ResearchClaimContradictionPreview,
@@ -1054,6 +1056,78 @@ class ResponseComposer:
             request_id=request.request_id,
             intent="background_research_task",
             memory_count=0,
+        )
+
+    def live_research_not_performed(
+        self,
+        request: BrainRequest,
+        kind: LiveInformationRequestKind,
+        summary: CanonicalResearchSummary,
+    ) -> BrainResponse:
+        """Say plainly that no live research ran, and offer the real workflow."""
+        lines = [
+            "Live research was not performed.",
+            f"Request kind: {kind.value}",
+            "This was an ordinary conversation turn. Hypatia reached no "
+            "network, discovered no candidate sources, fetched nothing, "
+            "accepted no source, and recorded no evidence for it.",
+            "Answering from the language model alone would produce sources, "
+            "authors, outlets, and dates that were never read. That is why no "
+            "answer of that kind is given here.",
+            "",
+            "Canonical research state on this machine:",
+            *summary.lines(),
+            "",
+            "To research this for real, start an explicit research run and "
+            "author the steps: source discovery, then your own selection, then "
+            "a fetch, then acceptance, then evidence. Each step stays separate "
+            "and none of them is performed automatically.",
+        ]
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="live_research_declined",
+            memory_count=0,
+            canonical_research_summary=summary,
+            live_information_request=kind,
+        )
+
+    def research_evidence_provenance(
+        self,
+        request: BrainRequest,
+        summary: CanonicalResearchSummary,
+    ) -> BrainResponse:
+        """Answer an evidence question from persisted counts, never from prose."""
+        lines = [
+            "Evidence actually recorded:",
+            *summary.lines(),
+        ]
+        if summary.empty:
+            lines.append(
+                "No research operation has recorded anything on this machine. "
+                "Nothing said in ordinary conversation created evidence, and "
+                "any sources mentioned in an earlier reply were model output, "
+                "not material Hypatia read."
+            )
+        elif not summary.has_evidence:
+            lines.append(
+                "Sources exist but no evidence record does. An accepted source "
+                "is not evidence: evidence is recorded separately, from a "
+                "specific passage, by an explicit step."
+            )
+        else:
+            lines.append(
+                "These counts come from persisted research state. A recorded "
+                "operation is not evidence, evidence is not a verified claim, "
+                "and a claim is not an established truth."
+            )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_evidence_provenance",
+            memory_count=0,
+            canonical_research_summary=summary,
+            live_information_request=(LiveInformationRequestKind.EVIDENCE_PROVENANCE),
         )
 
     def curiosity_gaps(

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from brain.SessionSummary import SessionSummary
+from cognition.LiveInformationRequestKind import LiveInformationRequestKind
 from knowledge.Chunk import Chunk
 from knowledge.KnowledgeCitation import KnowledgeCitation
 from knowledge.KnowledgeDocumentReference import KnowledgeDocumentReference
@@ -17,6 +18,7 @@ from knowledge.KnowledgeRelationRevocationPreview import (
 )
 from memory.LearnedMemoryAuditReport import LearnedMemoryAuditReport
 from research.BackgroundResearchTask import BackgroundResearchTask
+from research.CanonicalResearchSummary import CanonicalResearchSummary
 from research.ResearchAutonomyResult import ResearchAutonomyResult
 from research.ResearchClaimContradictionPreview import (
     ResearchClaimContradictionPreview,
@@ -123,6 +125,8 @@ class BrainResponse:
     research_autonomy: ResearchAutonomyResult | None = None
     background_research_task: BackgroundResearchTask | None = None
     research_curiosity: ResearchCuriosityPreview | None = None
+    canonical_research_summary: CanonicalResearchSummary | None = None
+    live_information_request: LiveInformationRequestKind | None = None
     curiosity_question: ResearchCuriosityQuestion | None = None
     curiosity_questions: tuple[ResearchCuriosityQuestion, ...] = ()
     session_summaries: list[SessionSummary] = field(default_factory=list)
