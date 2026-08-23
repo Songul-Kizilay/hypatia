@@ -2,6 +2,51 @@
 
 All notable project changes are recorded here.
 
+## [0.3.150] - 2026-08-23
+
+### Added
+
+- Failure memory. `ResearchFailureLessonDeriver` reads a persisted run and
+  derives seven bounded lesson kinds — disproving evidence, failed hypothesis,
+  invalid assumption, false positive, confidence change, ineffective strategy,
+  and operation failure — each naming the records it came from.
+- `ResearchFailureLesson`, `JsonFileFailureLessonStore`, `FailureMemoryAdvisor`,
+  `FailureMemoryApplicationService` with preview, store, list, and recall
+  intents, and three bounded `failure_memory.*` events.
+- `HYPATIA_FAILURE_MEMORY_ENABLED` opts into remembering lessons, default off.
+
+### Safety
+
+- A lesson without provenance is refused at construction and again on load, so
+  no opinion can outlive the reasoning behind it. Repeated and empty provenance
+  entries are refused too.
+- The templates never overstate. A superseded hypothesis is recorded as
+  abandoned rather than disproved, a contradiction leaves open which claim
+  survives, and a barren search is a result about that query rather than a
+  verdict on the provider.
+- Recall is advisory and enforces nothing. It blocks no plan, refuses no
+  capability, downgrades no claim, and edits no run, and the response says so
+  explicitly. Tests assert research state is byte-identical after recall.
+- Matching is deterministic word overlap weighted by lesson kind, not a model
+  deciding which past failures apply to present work.
+- Deriving, storing, listing, and recalling all leave every run byte-identical.
+  Lesson identities are stable, so re-deriving remembers nothing new.
+- Event payloads carry identifiers, bounded kind counts, and provenance counts
+  only — never a lesson statement, research question, claim text, or URL. The
+  provenance is counted, never listed.
+- Persistence follows the proven atomic pattern, with unknown schema versions,
+  unknown kinds, duplicate IDs, stripped provenance, and oversized documents
+  refused, and a failed write leaving the previous document byte-identical.
+
+### Verification
+
+- The package-aware full local suite contains 2,222 passing automated tests.
+- Fifty-nine new tests cover provenance enforcement, each lesson kind, the cases
+  that correctly produce no lesson, weight ordering, identity stability, bounded
+  counts, advisory recall and its bounds, chat-free inertness over research
+  state, bounded events, store validation including stripped provenance, and
+  production composition wiring.
+
 ## [0.3.149] - 2026-08-23
 
 ### Added

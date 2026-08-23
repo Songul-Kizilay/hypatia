@@ -775,6 +775,43 @@ its reflections produces endless commentary and no new knowledge.
 
 ---
 
+## Failure memory
+
+Remembered lessons are disabled by default. To keep them, set:
+
+```text
+HYPATIA_FAILURE_MEMORY_ENABLED=true
+```
+
+The value must be exactly lowercase `true`. Lessons are written to
+`research_failure_lessons.json` beside the research-run store, in a separate
+versioned document.
+
+Seven kinds of lesson are derived from what a run recorded: a claim named in a
+contradiction, a claim we stopped holding, an assessment we revised, a source we
+accepted and then judged weak, a confidence that moved, a search that returned
+candidates and accepted none, and a stage that failed.
+
+Every lesson names the persisted records it came from, and one without
+provenance is refused at construction and again on load. That rule is the whole
+point of the store: an opinion with no provenance outlives the reasoning behind
+it and quietly hardens into a belief nobody can audit.
+
+The templates are careful about what they assert. A superseded hypothesis is
+recorded as abandoned, not disproved. A barren search is a result about that
+query, not a verdict on the provider. A lesson records that something did not
+work here, never that it cannot work.
+
+Recall is advisory and stays advisory. Asking for lessons relevant to a new
+question returns them ranked, bounded, and clearly labelled — it blocks no plan,
+refuses no capability, downgrades no claim, and edits no run. A system that
+stops trying things because something similar failed once has swapped research
+for superstition. Matching is deliberately dumb word overlap rather than a model
+deciding which past failures apply, because that judgement would be confident
+and unauditable in exactly the way this project avoids.
+
+---
+
 ## Ordinary chat never performs research
 
 Hypatia can chat, and Hypatia can research. They are different subsystems, and

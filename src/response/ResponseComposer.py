@@ -40,6 +40,7 @@ from research.ResearchClaimWritePreview import ResearchClaimWritePreview
 from research.ResearchCuriosityPreview import ResearchCuriosityPreview
 from research.ResearchCuriosityQuestion import ResearchCuriosityQuestion
 from research.ResearchEvidenceIntegrityStatus import ResearchEvidenceIntegrityStatus
+from research.ResearchFailureLesson import ResearchFailureLesson
 from research.ResearchPlanDraftPreview import ResearchPlanDraftPreview
 from research.ResearchPlanExecutionSnapshot import (
     ResearchPlanExecutionSnapshot,
@@ -1205,6 +1206,112 @@ class ResponseComposer:
             message=message,
             request_id=request.request_id,
             intent="research_reflection",
+            memory_count=0,
+            success=False,
+        )
+
+    def failure_lessons(
+        self,
+        request: BrainRequest,
+        lessons: tuple[ResearchFailureLesson, ...],
+        stored: bool,
+    ) -> BrainResponse:
+        """Render lessons together with the records that make them checkable."""
+        lines = [
+            "Failure lessons:",
+            f"Lessons: {len(lessons)}",
+            "",
+        ]
+        for lesson in lessons:
+            lines.append(f"- [{lesson.kind.value}] {lesson.statement}")
+            lines.append(f"  from: {', '.join(lesson.provenance)}")
+        lines.extend(
+            (
+                "",
+                "Remembered." if stored else "Not remembered.",
+                "A lesson records that something did not work here, not that it "
+                "cannot work. Deriving one performed no research and changed no "
+                "run, claim, or assessment.",
+            )
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="failure_memory",
+            memory_count=0,
+            failure_lessons=lessons,
+        )
+
+    def failure_lesson_list(
+        self,
+        request: BrainRequest,
+        lessons: tuple[ResearchFailureLesson, ...],
+    ) -> BrainResponse:
+        """Render everything remembered, deriving nothing new."""
+        lines = [f"Remembered failure lessons: {len(lessons)}"]
+        lines.extend(
+            f"- {lesson.lesson_id} [{lesson.kind.value}] "
+            f"({len(lesson.provenance)} record(s))"
+            for lesson in lessons
+        )
+        lines.append("Listing lessons performs no research.")
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="failure_memory",
+            memory_count=0,
+            failure_lessons=lessons,
+        )
+
+    def failure_lesson_recall(
+        self,
+        request: BrainRequest,
+        lessons: tuple[ResearchFailureLesson, ...],
+    ) -> BrainResponse:
+        """Offer prior lessons as advice, never as a decision."""
+        lines = [
+            "Possibly relevant prior lessons:",
+            f"Lessons: {len(lessons)}",
+            "",
+        ]
+        for lesson in lessons:
+            lines.append(f"- [{lesson.kind.value}] {lesson.statement}")
+            lines.append(f"  from: {', '.join(lesson.provenance)}")
+        if not lessons:
+            lines.append("Nothing remembered overlaps this question.")
+        lines.extend(
+            (
+                "",
+                "These are advisory. Nothing was blocked, no capability was "
+                "refused, and no claim was downgraded. Something failing once "
+                "is not a reason not to try it.",
+            )
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="failure_memory",
+            memory_count=0,
+            failure_lessons=lessons,
+        )
+
+    def failure_memory_rejected(
+        self,
+        request: BrainRequest,
+        reason: str,
+    ) -> BrainResponse:
+        """Report one bounded refusal without remembering anything."""
+        message = "\n".join(
+            (
+                "Failure memory request rejected:",
+                f"Reason: {reason}",
+                "Nothing was remembered and no run changed.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="failure_memory",
             memory_count=0,
             success=False,
         )

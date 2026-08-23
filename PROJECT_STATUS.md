@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.149 (Genesis)`
+`v0.3.150 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.149`** is the current executable package and GitHub
+- **Runtime release `v0.3.150`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -32,6 +32,12 @@ with optional OpenAI-compatible LLM conversation support.
 ### Implemented
 
 - Application bootstrap, configuration, logging, and dependency injection.
+- Failure memory derives seven bounded kinds of lesson from what a run
+  recorded, each naming the persisted records it came from; a lesson without
+  provenance is refused. Behind `HYPATIA_FAILURE_MEMORY_ENABLED`, default off.
+  A lesson records that something did not work here, never that it cannot work,
+  and recall is advisory: it blocks no plan, refuses no capability, downgrades
+  no claim, and edits no run.
 - Bounded reflection reports how a run went — what failed, what contradicted
   what, which beliefs were revised, what rests on thin evidence, what stayed
   uncertain, what effort went unused, what worked, and what to ask next — with
@@ -929,7 +935,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 2,163 automated tests pass through package-aware discovery.
+- 2,222 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.

@@ -18,6 +18,9 @@ from cognition.ConversationResearchClaimGuard import (
 from cognition.CuriosityApplicationService import (
     CuriosityApplicationService,
 )
+from cognition.FailureMemoryApplicationService import (
+    FailureMemoryApplicationService,
+)
 from cognition.LearnedMemoryAuditApplicationService import (
     LearnedMemoryAuditApplicationService,
 )
@@ -100,6 +103,7 @@ from research.EvidenceIntegrityCheckStepOperation import (
 from research.EvidenceRecordingStepOperation import (
     EvidenceRecordingStepOperation,
 )
+from research.FailureLessonStore import FailureLessonStore
 from research.LocalKnowledgeSearchStepOperation import (
     LocalKnowledgeSearchStepOperation,
 )
@@ -190,6 +194,7 @@ class CognitiveEngine:
         background_task_store: BackgroundTaskStore | None = None,
         curiosity_question_store: CuriosityQuestionStore | None = None,
         reflection_report_store: ReflectionReportStore | None = None,
+        failure_lesson_store: FailureLessonStore | None = None,
         research_source_discovery_provider: (
             ResearchSourceDiscoveryProvider | None
         ) = None,
@@ -382,6 +387,14 @@ class CognitiveEngine:
                 report_store=reflection_report_store,
                 event_bus=event_bus,
             )
+        self._failure_memory_service: FailureMemoryApplicationService | None = None
+        if research_run_manager is not None:
+            self._failure_memory_service = FailureMemoryApplicationService(
+                research_run_manager,
+                response_composer,
+                lesson_store=failure_lesson_store,
+                event_bus=event_bus,
+            )
         self._research_plan_preview_service = ResearchPlanPreviewApplicationService(
             response_composer,
             research_plan_draft_service,
@@ -473,6 +486,9 @@ class CognitiveEngine:
 
         if self._is_reflection_request(request):
             return self._process_reflection(request)
+
+        if self._is_failure_memory_request(request):
+            return self._process_failure_memory(request)
 
         if self._is_research_run_markdown_export_verify_request(request):
             return self._process_research_run_markdown_export_verify(request)
@@ -3085,6 +3101,39 @@ class CognitiveEngine:
             recent_records,
             session,
         )
+
+    @staticmethod
+    def _is_failure_memory_request(request: BrainRequest) -> bool:
+        """Return whether this request addresses failure memory."""
+        service = FailureMemoryApplicationService
+        return (
+            service.is_preview_request(request)
+            or service.is_store_request(request)
+            or service.is_list_request(request)
+            or service.is_recall_request(request)
+        )
+
+    def _process_failure_memory(self, request: BrainRequest) -> BrainResponse:
+        """Route one failure-memory intent, which never performs research."""
+        service = self._failure_memory_service
+        if service is None:
+            return self._response_composer.failure_memory_rejected(
+                request,
+                "Research run persistence is unavailable.",
+            )
+        try:
+            if service.is_preview_request(request):
+                return service.process_preview(request)
+            if service.is_store_request(request):
+                return service.process_store(request)
+            if service.is_recall_request(request):
+                return service.process_recall(request)
+            return service.process_list(request)
+        except ResearchError as error:
+            return self._response_composer.failure_memory_rejected(
+                request,
+                str(error),
+            )
 
     @staticmethod
     def _is_reflection_request(request: BrainRequest) -> bool:

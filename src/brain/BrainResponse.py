@@ -34,6 +34,7 @@ from research.ResearchClaimWritePreview import ResearchClaimWritePreview
 from research.ResearchCuriosityPreview import ResearchCuriosityPreview
 from research.ResearchCuriosityQuestion import ResearchCuriosityQuestion
 from research.ResearchEvidenceIntegrityStatus import ResearchEvidenceIntegrityStatus
+from research.ResearchFailureLesson import ResearchFailureLesson
 from research.ResearchPlanDraftPreview import ResearchPlanDraftPreview
 from research.ResearchPlanExecutionState import ResearchPlanExecutionState
 from research.ResearchReflectionReport import ResearchReflectionReport
@@ -132,5 +133,6 @@ class BrainResponse:
     curiosity_questions: tuple[ResearchCuriosityQuestion, ...] = ()
     research_reflection: ResearchReflectionReport | None = None
     research_reflections: tuple[ResearchReflectionReport, ...] = ()
+    failure_lessons: tuple[ResearchFailureLesson, ...] = ()
     session_summaries: list[SessionSummary] = field(default_factory=list)
     session_delete_allowed: bool | None = None
