@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.148 (Genesis)`
+`v0.3.149 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.148`** is the current executable package and GitHub
+- **Runtime release `v0.3.149`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -32,6 +32,12 @@ with optional OpenAI-compatible LLM conversation support.
 ### Implemented
 
 - Application bootstrap, configuration, logging, and dependency injection.
+- Bounded reflection reports how a run went — what failed, what contradicted
+  what, which beliefs were revised, what rests on thin evidence, what stayed
+  uncertain, what effort went unused, what worked, and what to ask next — with
+  problems ordered before successes. Behind `HYPATIA_REFLECTION_ENABLED`,
+  default off. Every finding describes the process and never the subject, and
+  there is no recursive reflection: only a run can be reflected on.
 - Live validation now covers the research pipeline end to end against real
   network sources, not only deterministic doubles: a real discovery request, a
   real HTTPS fetch, acceptance, and an evidence record, with assessment and
@@ -923,7 +929,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 2,117 automated tests pass through package-aware discovery.
+- 2,163 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.

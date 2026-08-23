@@ -57,6 +57,9 @@ from research.JsonFileBackgroundTaskStore import (
 from research.JsonFileCuriosityQuestionStore import (
     JsonFileCuriosityQuestionStore,
 )
+from research.JsonFileReflectionReportStore import (
+    JsonFileReflectionReportStore,
+)
 from research.JsonFileResearchExecutionStore import (
     JsonFileResearchExecutionStore,
 )
@@ -402,6 +405,7 @@ class Bootstrap:
         research_execution_store = self._research_execution_store()
         background_task_store = self._background_task_store()
         curiosity_question_store = self._curiosity_question_store()
+        reflection_report_store = self._reflection_report_store()
         research_source_content_store = JsonFileResearchSourceContentStore(
             self._research_source_content_path
             or self._research_source_content_store_path(
@@ -464,6 +468,7 @@ class Bootstrap:
             research_execution_store=research_execution_store,
             background_task_store=background_task_store,
             curiosity_question_store=curiosity_question_store,
+            reflection_report_store=reflection_report_store,
             research_source_discovery_provider=(
                 self._research_source_discovery_provider
             ),
@@ -597,6 +602,21 @@ class Bootstrap:
         )
         return JsonFileCuriosityQuestionStore(
             run_path.with_name("research_curiosity_questions.json")
+        )
+
+    def _reflection_report_store(self) -> JsonFileReflectionReportStore | None:
+        """Create the reflection store only when reflection is opted in.
+
+        Default off, so an unset environment keeps no reflection history and
+        behaves exactly like a runtime without a reflection engine.
+        """
+        if os.environ.get("HYPATIA_REFLECTION_ENABLED") != "true":
+            return None
+        run_path = self._research_run_path or self._research_run_store_path(
+            self._memory_path
+        )
+        return JsonFileReflectionReportStore(
+            run_path.with_name("research_reflections.json")
         )
 
     @staticmethod

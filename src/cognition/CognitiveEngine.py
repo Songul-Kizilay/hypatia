@@ -25,6 +25,9 @@ from cognition.LearnedMemoryContextService import LearnedMemoryContextService
 from cognition.LLMConversationHistoryBuilder import (
     build_llm_conversation_history,
 )
+from cognition.ReflectionApplicationService import (
+    ReflectionApplicationService,
+)
 from cognition.ResearchAuthoredHistoryApplicationService import (
     ResearchAuthoredHistoryApplicationService,
 )
@@ -100,6 +103,7 @@ from research.EvidenceRecordingStepOperation import (
 from research.LocalKnowledgeSearchStepOperation import (
     LocalKnowledgeSearchStepOperation,
 )
+from research.ReflectionReportStore import ReflectionReportStore
 from research.ResearchClaimContradictionCandidate import (
     ResearchClaimContradictionCandidate,
 )
@@ -185,6 +189,7 @@ class CognitiveEngine:
         research_execution_store: ResearchExecutionStore | None = None,
         background_task_store: BackgroundTaskStore | None = None,
         curiosity_question_store: CuriosityQuestionStore | None = None,
+        reflection_report_store: ReflectionReportStore | None = None,
         research_source_discovery_provider: (
             ResearchSourceDiscoveryProvider | None
         ) = None,
@@ -369,6 +374,14 @@ class CognitiveEngine:
                 question_store=curiosity_question_store,
                 event_bus=event_bus,
             )
+        self._reflection_service: ReflectionApplicationService | None = None
+        if research_run_manager is not None:
+            self._reflection_service = ReflectionApplicationService(
+                research_run_manager,
+                response_composer,
+                report_store=reflection_report_store,
+                event_bus=event_bus,
+            )
         self._research_plan_preview_service = ResearchPlanPreviewApplicationService(
             response_composer,
             research_plan_draft_service,
@@ -457,6 +470,9 @@ class CognitiveEngine:
 
         if self._is_curiosity_request(request):
             return self._process_curiosity(request)
+
+        if self._is_reflection_request(request):
+            return self._process_reflection(request)
 
         if self._is_research_run_markdown_export_verify_request(request):
             return self._process_research_run_markdown_export_verify(request)
@@ -3069,6 +3085,36 @@ class CognitiveEngine:
             recent_records,
             session,
         )
+
+    @staticmethod
+    def _is_reflection_request(request: BrainRequest) -> bool:
+        """Return whether this request addresses the reflection engine."""
+        service = ReflectionApplicationService
+        return (
+            service.is_preview_request(request)
+            or service.is_store_request(request)
+            or service.is_list_request(request)
+        )
+
+    def _process_reflection(self, request: BrainRequest) -> BrainResponse:
+        """Route one reflection intent, which never performs research."""
+        service = self._reflection_service
+        if service is None:
+            return self._response_composer.research_reflection_rejected(
+                request,
+                "Research run persistence is unavailable.",
+            )
+        try:
+            if service.is_preview_request(request):
+                return service.process_preview(request)
+            if service.is_store_request(request):
+                return service.process_store(request)
+            return service.process_list(request)
+        except ResearchError as error:
+            return self._response_composer.research_reflection_rejected(
+                request,
+                str(error),
+            )
 
     @staticmethod
     def _is_curiosity_request(request: BrainRequest) -> bool:

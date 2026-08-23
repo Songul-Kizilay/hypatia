@@ -46,6 +46,7 @@ from research.ResearchPlanExecutionSnapshot import (
 )
 from research.ResearchPlanExecutionState import ResearchPlanExecutionState
 from research.ResearchPlanStepStatus import ResearchPlanStepStatus
+from research.ResearchReflectionReport import ResearchReflectionReport
 from research.ResearchRun import ResearchRun
 from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
@@ -1128,6 +1129,84 @@ class ResponseComposer:
             memory_count=0,
             canonical_research_summary=summary,
             live_information_request=(LiveInformationRequestKind.EVIDENCE_PROVENANCE),
+        )
+
+    def research_reflection(
+        self,
+        request: BrainRequest,
+        report: ResearchReflectionReport,
+        stored: bool,
+    ) -> BrainResponse:
+        """Render how a run went, never what its subject turned out to be."""
+        lines = [
+            "Research reflection:",
+            f"Run ID: {report.run_id}",
+            f"Findings: {len(report.findings)} ({len(report.lessons)} to learn from)",
+            "",
+        ]
+        lines.extend(
+            f"- [{finding.kind.value}] {finding.detail}" for finding in report.findings
+        )
+        lines.extend(
+            (
+                "",
+                "Canonical research state for this run:",
+                *report.summary.lines(),
+                "",
+                "Stored." if stored else "Not stored.",
+                "This describes how the research went, not whether its "
+                "conclusions are true. Reflecting performed no operation, "
+                "established no evidence, and promoted nothing.",
+            )
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_reflection",
+            memory_count=0,
+            research_reflection=report,
+        )
+
+    def research_reflection_list(
+        self,
+        request: BrainRequest,
+        reports: tuple[ResearchReflectionReport, ...],
+    ) -> BrainResponse:
+        """Render stored reflections without producing a new one."""
+        lines = [f"Stored reflections: {len(reports)}"]
+        lines.extend(
+            f"- {report.report_id}: {len(report.findings)} finding(s), "
+            f"{len(report.lessons)} lesson(s)"
+            for report in reports
+        )
+        lines.append("Listing reflections performs no research.")
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_reflection",
+            memory_count=0,
+            research_reflections=reports,
+        )
+
+    def research_reflection_rejected(
+        self,
+        request: BrainRequest,
+        reason: str,
+    ) -> BrainResponse:
+        """Report one bounded refusal without storing anything."""
+        message = "\n".join(
+            (
+                "Research reflection rejected:",
+                f"Reason: {reason}",
+                "Nothing was stored and no run changed.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="research_reflection",
+            memory_count=0,
+            success=False,
         )
 
     def curiosity_gaps(

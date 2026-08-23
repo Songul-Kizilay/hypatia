@@ -36,6 +36,7 @@ from research.ResearchCuriosityQuestion import ResearchCuriosityQuestion
 from research.ResearchEvidenceIntegrityStatus import ResearchEvidenceIntegrityStatus
 from research.ResearchPlanDraftPreview import ResearchPlanDraftPreview
 from research.ResearchPlanExecutionState import ResearchPlanExecutionState
+from research.ResearchReflectionReport import ResearchReflectionReport
 from research.ResearchRun import ResearchRun
 from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
@@ -129,5 +130,7 @@ class BrainResponse:
     live_information_request: LiveInformationRequestKind | None = None
     curiosity_question: ResearchCuriosityQuestion | None = None
     curiosity_questions: tuple[ResearchCuriosityQuestion, ...] = ()
+    research_reflection: ResearchReflectionReport | None = None
+    research_reflections: tuple[ResearchReflectionReport, ...] = ()
     session_summaries: list[SessionSummary] = field(default_factory=list)
     session_delete_allowed: bool | None = None

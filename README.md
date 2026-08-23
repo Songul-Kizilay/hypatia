@@ -740,6 +740,41 @@ into work stays a separate, explicit decision.
 
 ---
 
+## Reflection
+
+Durable reflection history is disabled by default. To keep it, set:
+
+```text
+HYPATIA_REFLECTION_ENABLED=true
+```
+
+The value must be exactly lowercase `true`. Reports are written to
+`research_reflections.json` beside the research-run store, in a separate
+versioned document.
+
+Reflection reports how a run went, in this order: what failed, what contradicted
+what, which beliefs were revised, what rests on thin evidence, what stayed
+uncertain, what effort went unused, what worked, and what to ask next. Problems
+come before successes deliberately — a reflection that opens with what went well
+is one nobody learns from.
+
+Every finding describes the process, never the subject. "This claim rests on one
+source" is a fact about our record; "this claim is false" would be a research
+conclusion, and reflection cannot reach one. Producing or storing a report
+performs no operation, mutates no run, establishes no evidence, and promotes
+nothing.
+
+Where reflection and curiosity ask the same question, reflection reuses
+curiosity rather than duplicating it: the thin-record findings come from the gap
+detector, and the "what next" section is curiosity's proposals, reported but
+never stored.
+
+There is no recursive reflection. Only a research run can be reflected on; a
+stored report is not a run, and no intent accepts one. A system that reflects on
+its reflections produces endless commentary and no new knowledge.
+
+---
+
 ## Ordinary chat never performs research
 
 Hypatia can chat, and Hypatia can research. They are different subsystems, and

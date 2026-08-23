@@ -2,6 +2,53 @@
 
 All notable project changes are recorded here.
 
+## [0.3.149] - 2026-08-23
+
+### Added
+
+- Bounded reflection. `ResearchReflectionGenerator` reads a persisted run and
+  reports eight bounded finding kinds — failed, contradiction, revised belief,
+  weak evidence, uncertain, unused effort, worked, and next question — ordered
+  with problems before successes.
+- `ResearchReflectionReport`, `ResearchReflectionFinding`,
+  `JsonFileReflectionReportStore`, `ReflectionApplicationService` with preview,
+  store, and list intents, and two bounded `reflection.*` events.
+- `HYPATIA_REFLECTION_ENABLED` opts into durable reflection history, default
+  off.
+
+### Safety
+
+- Every finding describes the process, never the subject. Reflection reports
+  that a claim rests on one source; it has no way to report that a claim is
+  true. Tests assert an uncertain claim is still uncertain afterwards and that
+  the run store is byte-identical across repeated reflection.
+- There is no recursive reflection. The generator accepts a research run and
+  nothing else; passing a report raises, and reflecting on a stored report ID is
+  refused as an unknown run. Both are asserted.
+- Generation is deterministic and template-driven rather than model authored, so
+  a reflection cannot narrate work it did not inspect.
+- Reflection reuses curiosity for the questions it proposes and the gap detector
+  for thin-record findings, rather than adding a second engine. It reports those
+  questions without storing them.
+- Successes and proposed questions are excluded from lessons, so a run with
+  nothing to learn from reports nothing to learn from, and an empty run reports
+  no success at all.
+- Event payloads carry identifiers, bounded kind counts, and canonical counts
+  only. Tests assert no claim text, finding detail, research question, or URL
+  appears in any payload.
+- Persistence follows the proven atomic pattern, with unknown schema versions,
+  unknown finding kinds, duplicate report IDs, and oversized documents refused,
+  and a failed write leaving the previous document byte-identical.
+
+### Verification
+
+- The package-aware full local suite contains 2,163 passing automated tests.
+- Forty-six new tests cover each finding kind, report ordering, bounded counts,
+  reflection inertness, the recursion guard, preview without storing,
+  persistence and restart, repeated reflection, listing, disabled persistence,
+  failed writes, bounded events, store validation, and production composition
+  wiring.
+
 ## [0.3.148] - 2026-08-23
 
 ### Fixed
