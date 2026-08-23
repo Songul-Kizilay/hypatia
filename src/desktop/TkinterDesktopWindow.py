@@ -7,7 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from time import monotonic
-from tkinter import filedialog, messagebox, scrolledtext, ttk
+from tkinter import filedialog, font, messagebox, scrolledtext, ttk
 from typing import Protocol
 
 from brain.BrainResponse import BrainResponse
@@ -15,6 +15,10 @@ from brain.SessionSummary import SessionSummary
 from core.CancellationSignal import CancellationSignal
 from desktop.DesktopController import DesktopController
 from desktop.DesktopRequestRunner import DesktopRequestRunner
+from desktop.MarkdownTextSegments import (
+    MarkdownStyle,
+    markdown_segments,
+)
 from desktop.ResearchWorkspaceReadModel import (
     ResearchRunSort,
     ResearchRunStatusFacet,
@@ -2042,6 +2046,7 @@ class TkinterDesktopWindow:
             height=18,
         )
         self._transcript.grid(row=0, column=0, sticky="nsew")
+        self._configure_transcript_styles()
         self._transcript.insert(
             "1.0",
             (
@@ -4495,9 +4500,34 @@ class TkinterDesktopWindow:
         citations = f"\nSources:\n{citation_text}" if citation_text else ""
         self._append_to_transcript(f"Hypatia: {response.message}{citations}\n")
 
+    def _configure_transcript_styles(self) -> None:
+        """Prepare styling tags, tolerating a font the platform cannot derive.
+
+        Styling is presentation only. If a derived font is unavailable the tags
+        simply do nothing and the transcript reads exactly as before.
+        """
+        try:
+            base = font.nametofont(self._transcript.cget("font"))
+            bold = base.copy()
+            bold.configure(weight="bold")
+            italic = base.copy()
+            italic.configure(slant="italic")
+            self._transcript.tag_configure(MarkdownStyle.BOLD.value, font=bold)
+            self._transcript.tag_configure(MarkdownStyle.ITALIC.value, font=italic)
+            self._transcript.tag_configure(
+                MarkdownStyle.CODE.value,
+                font=font.nametofont("TkFixedFont"),
+            )
+        except tk.TclError:
+            return
+
     def _append_to_transcript(self, value: str) -> None:
         self._transcript.configure(state=tk.NORMAL)
-        self._transcript.insert(tk.END, value)
+        for segment in markdown_segments(value):
+            if segment.style is MarkdownStyle.PLAIN:
+                self._transcript.insert(tk.END, segment.text)
+            else:
+                self._transcript.insert(tk.END, segment.text, segment.style.value)
         self._transcript.see(tk.END)
         self._transcript.configure(state=tk.DISABLED)
 

@@ -2,6 +2,41 @@
 
 All notable project changes are recorded here.
 
+## [0.3.148] - 2026-08-23
+
+### Fixed
+
+- The desktop transcript displayed raw Markdown markers, so a reply containing
+  a bolded word showed the asterisks around it. Bold, italic, and inline code
+  are now drawn with Tk text tags and the markers are removed.
+
+### Added
+
+- `MarkdownTextSegments` splits a reply into styled segments. It imports no Tk,
+  makes no rendering decision beyond which span carries which style, and is
+  fully testable without a display.
+
+### Safety
+
+- Presentation cannot change content. Stripping the marker characters from the
+  input and from the rendered text yields the same string, asserted over every
+  sample, so no character of a reply can be lost to styling.
+- The parser is conservative by design: it never spans a line break, and an
+  unclosed marker, an empty span, or an underscore inside an identifier is left
+  literal rather than guessed at. Showing a stray asterisk is preferable to
+  swallowing text.
+- Styling degrades rather than fails. If the platform cannot derive a bold or
+  italic font the tags are simply not configured and the transcript reads
+  exactly as it did before. No browser or webview dependency was added.
+
+### Verification
+
+- The package-aware full local suite contains 2,117 passing automated tests.
+- Thirteen new tests cover content preservation across every sample, bold,
+  italic with either marker, inline code left unparsed, bold winning over
+  italic, unclosed and empty spans, identifiers keeping their underscores, spans
+  never crossing a line break, and empty or invalid input.
+
 ## [0.3.147] - 2026-08-23
 
 ### Added
