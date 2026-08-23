@@ -964,6 +964,56 @@ well-connected taxonomy returns everything and means nothing.
 
 ---
 
+## The security agent
+
+The security agent audits Hypatia, and only Hypatia. It needs no flag because it
+writes nothing: the report is derived from persisted state on every request.
+
+There is no scan intent, no probe intent, no target parameter, and no field
+anywhere in the component for someone else's system. An agent that reached
+outward would need authorisation this software has no way to establish, so it
+does not have the vocabulary to try. The audit opens no socket, and a test
+asserts that by making every socket call raise.
+
+The checks cover what the domain types do *not* already guarantee. `ResearchRun`
+refuses evidence citing a missing source and claims citing missing evidence at
+construction, so re-checking those here would be theatre that inflates the count
+of things audited. What no type checks is the shape of a persisted source URL,
+its content type, whether its timestamps are ordered, or whether the same page
+was accepted twice:
+
+| Check | Severity |
+| --- | --- |
+| Source claims instruction authority | high |
+| Source lost its untrusted-data label | high |
+| Source names a loopback or private address | high |
+| Source URL carries embedded credentials | high |
+| Source not obtained over HTTPS | medium |
+| The same URL accepted more than once | medium |
+| Stored content type the fetch boundary rejects | low |
+| Fetched after it was added | low |
+
+The duplicate-URL check matters more than it looks. Two records sharing a URL
+read as two independent sources to anything counting them, so a claim resting on
+one page can look corroborated to calibration and to the hypothesis appraiser.
+
+The address check is deliberately literal rather than resolved. Re-resolving a
+hostname at audit time would be a network call the audit has no authorisation to
+make, and a DNS answer today says nothing about the answer when the source was
+fetched — the resolution that mattered already happened at the fetch boundary,
+where it was pinned.
+
+Every report states what it examined alongside what it found, because "no
+findings" over nothing examined and "no findings" over four hundred sources are
+very different sentences. A clean report says explicitly that these specific
+properties held in the data just now, not that the system is safe.
+
+Nothing is repaired automatically. A finding says what is wrong; deciding what to
+do about a source already accepted, cited, and reasoned from is a judgement with
+consequences the auditor cannot see.
+
+---
+
 ## Ordinary chat never performs research
 
 Hypatia can chat, and Hypatia can research. They are different subsystems, and

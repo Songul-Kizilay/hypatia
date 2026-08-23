@@ -58,6 +58,9 @@ from cognition.ResearchPlanPreviewApplicationService import (
 from cognition.ResearchSourceAcceptanceService import (
     ResearchSourceAcceptanceService,
 )
+from cognition.SecurityAgentApplicationService import (
+    SecurityAgentApplicationService,
+)
 from cognition.SourceReputationApplicationService import (
     SourceReputationApplicationService,
 )
@@ -440,6 +443,13 @@ class CognitiveEngine:
             graph_store=vulnerability_graph_store,
             event_bus=event_bus,
         )
+        self._security_agent_service: SecurityAgentApplicationService | None = None
+        if research_run_manager is not None:
+            self._security_agent_service = SecurityAgentApplicationService(
+                research_run_manager,
+                response_composer,
+                event_bus=event_bus,
+            )
         self._research_plan_preview_service = ResearchPlanPreviewApplicationService(
             response_composer,
             research_plan_draft_service,
@@ -546,6 +556,9 @@ class CognitiveEngine:
 
         if self._is_vulnerability_graph_request(request):
             return self._process_vulnerability_graph(request)
+
+        if SecurityAgentApplicationService.is_audit_request(request):
+            return self._process_security_posture(request)
 
         if self._is_research_run_markdown_export_verify_request(request):
             return self._process_research_run_markdown_export_verify(request)
@@ -3232,6 +3245,22 @@ class CognitiveEngine:
             return service.process_family_list(request)
         except ResearchError as error:
             return self._response_composer.vulnerability_graph_rejected(
+                request,
+                str(error),
+            )
+
+    def _process_security_posture(self, request: BrainRequest) -> BrainResponse:
+        """Route the audit intent, which reads and contacts nothing."""
+        service = self._security_agent_service
+        if service is None:
+            return self._response_composer.security_posture_rejected(
+                request,
+                "Research run persistence is unavailable.",
+            )
+        try:
+            return service.process_audit(request)
+        except ResearchError as error:
+            return self._response_composer.security_posture_rejected(
                 request,
                 str(error),
             )

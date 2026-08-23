@@ -2,6 +2,52 @@
 
 All notable project changes are recorded here.
 
+## [0.3.155] - 2026-08-23
+
+### Added
+
+- Security agent. `SecurityPostureAuditor` checks Hypatia's own persisted
+  research state against eight bounded properties and reports findings with a
+  bounded `SecurityFindingSeverity`.
+- `SecurityFinding`, `SecurityPostureReport`,
+  `SecurityAgentApplicationService` with an audit intent, and one bounded
+  `security_agent.posture_audited` event.
+
+### Safety
+
+- The agent audits this system and has no vocabulary to audit another. There is
+  no scan intent, no probe intent, no target parameter, and no field for an
+  external system. Tests assert those method names are absent and that the audit
+  opens no socket, by making every socket call raise.
+- The address check is literal rather than resolved, so the audit never becomes
+  a network client. The resolution that mattered happened at the fetch boundary,
+  where it was pinned.
+- Checks cover what the domain types do not already guarantee. Referential
+  integrity is enforced by `ResearchRun` at construction, so it is not audited
+  again; a test asserts the type refuses those states rather than the auditor
+  claiming credit for them. The two taint checks are declared as defence in
+  depth via `covered_by_a_type`.
+- A newly detected class of problem: the same URL accepted twice. Two records
+  sharing a URL read as independent corroboration to calibration and to the
+  hypothesis appraiser, and no type checked for it.
+- Every report states its scope alongside its findings, and a clean report says
+  explicitly that specific properties held just now rather than that the system
+  is safe.
+- Nothing is repaired. Tests assert the run store is byte-identical after
+  repeated audits and that no file is created.
+- Event payloads carry counts, bounded kinds, and the worst severity, plus
+  explicit `external_systems_contacted: 0` and `records_modified: 0`. Tests
+  assert no URL or research question appears in any payload.
+
+### Verification
+
+- The package-aware full local suite contains 2,432 passing automated tests.
+- Forty new tests cover each check and its severity, loopback and private
+  address forms, public addresses not being misreported, duplicate and distinct
+  URLs, content types, timestamp ordering, worst-first ordering, empty scope,
+  the socket assertion, inertness, bounded events, and production composition
+  wiring.
+
 ## [0.3.154] - 2026-08-23
 
 ### Added

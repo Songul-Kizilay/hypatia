@@ -78,6 +78,7 @@ from research.ResearchSourceContentRestorationStatus import (
     ResearchSourceContentRestorationStatus,
 )
 from research.SourceReputation import SourceReputation
+from security.SecurityPostureReport import SecurityPostureReport
 from security.VulnerabilityFamily import VulnerabilityFamily
 from security.VulnerabilityFamilyGraph import RelatedFamily
 from security.VulnerabilityRelation import VulnerabilityRelation
@@ -1633,6 +1634,69 @@ class ResponseComposer:
             message=message,
             request_id=request.request_id,
             intent="vulnerability_graph",
+            memory_count=0,
+            success=False,
+        )
+
+    def security_posture(
+        self,
+        request: BrainRequest,
+        report: SecurityPostureReport,
+    ) -> BrainResponse:
+        """Render what was examined alongside what was found."""
+        highest = report.highest_severity
+        lines = [
+            "Security posture audit:",
+            *report.scope_lines(),
+            f"Findings: {len(report.findings)} "
+            f"({len(report.needing_action)} needing action)",
+            f"Highest severity: {'none' if highest is None else highest.value}",
+            "",
+        ]
+        lines.extend(
+            f"- [{finding.severity.value}] {finding.kind.value} "
+            f"({finding.subject_id}): {finding.detail}"
+            for finding in report.findings
+        )
+        if report.clean:
+            lines.append(
+                "Nothing was found. That means these specific properties held "
+                "in the data just now, not that the system is safe."
+            )
+        lines.extend(
+            (
+                "",
+                "This audit read Hypatia's own records. It contacted no external "
+                "system, examined nobody else's infrastructure, and repaired "
+                "nothing: what to do about a source already accepted and "
+                "reasoned from is a judgement it cannot make for you.",
+            )
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="security_posture",
+            memory_count=0,
+            security_posture=report,
+        )
+
+    def security_posture_rejected(
+        self,
+        request: BrainRequest,
+        reason: str,
+    ) -> BrainResponse:
+        """Report one bounded refusal without auditing anything."""
+        message = "\n".join(
+            (
+                "Security posture audit rejected:",
+                f"Reason: {reason}",
+                "Nothing was examined and nothing changed.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="security_posture",
             memory_count=0,
             success=False,
         )

@@ -68,6 +68,7 @@ from research.ResearchSourceContentRestorationStatus import (
     ResearchSourceContentRestorationStatus,
 )
 from research.SourceReputation import SourceReputation
+from security.SecurityPostureReport import SecurityPostureReport
 from security.VulnerabilityFamily import VulnerabilityFamily
 from security.VulnerabilityFamilyGraph import RelatedFamily
 from security.VulnerabilityRelation import VulnerabilityRelation
@@ -144,6 +145,7 @@ class BrainResponse:
     source_reputations: tuple[SourceReputation, ...] = ()
     hypothesis_appraisal: HypothesisAppraisal | None = None
     hypothesis_appraisals: tuple[HypothesisAppraisal, ...] = ()
+    security_posture: SecurityPostureReport | None = None
     vulnerability_family: VulnerabilityFamily | None = None
     vulnerability_families: tuple[VulnerabilityFamily, ...] = ()
     vulnerability_relation: VulnerabilityRelation | None = None
