@@ -2,6 +2,48 @@
 
 All notable project changes are recorded here.
 
+## [0.3.140] - 2026-08-23
+
+### Added
+
+- Stage 1 of research-execution persistence: a pure codec. `ResearchPlanExecutionSnapshot`
+  is the durable record and `ResearchPlanExecutionCodec` converts it to and from
+  its document form. No file access, no runtime wiring, and no restore policy
+  yet.
+- `INTERRUPTED` step and execution statuses, distinct from `BLOCKED`. Blocked
+  means a human must decide; interrupted means the process died mid-flight and
+  what the operation did is unknown. Neither is terminal.
+
+### Safety
+
+- A snapshot records what happened, never a running execution. `restored()`
+  turns a step recorded as running into interrupted, never completed, so a
+  mid-flight operation can never be fabricated as finished after a restart.
+  Completed steps stay completed and pending steps stay pending.
+- Terminal executions stay terminal across a restore, and restoring is
+  idempotent.
+- `work_performed` is never inferred at load time. A record claiming performed
+  work without naming its operation is rejected by both the value object and the
+  decoder.
+- The document is deliberately narrow: step identity, declared capability,
+  status, operation identity, work flag, bounded detail, the plan question, and
+  the bound run identity. Authored step instructions, fetched page bodies, source
+  excerpts, notes, claim text, and authorization payloads are never written, so
+  no research fact is duplicated out of the research run.
+- Malformed documents are refused rather than repaired: unknown or missing
+  fields, empty or oversized step lists, unknown enum values, naive timestamps,
+  and non-string identifiers all raise.
+
+### Verification
+
+- The package-aware full local suite contains 1,902 passing automated tests.
+- Fifteen new tests cover capability pairing, work and operation preservation,
+  interrupted restore, completed and pending steps surviving, terminal
+  executions, restore idempotence, the blocked/interrupted distinction, lossless
+  round trips with and without a bound run, absence of authored instructions in
+  the document, rejection of work without an operation, and malformed execution
+  and step documents.
+
 ## [0.3.139] - 2026-08-23
 
 ### Added

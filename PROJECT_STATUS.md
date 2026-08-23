@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.139 (Genesis)`
+`v0.3.140 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.139`** is the current executable package and GitHub
+- **Runtime release `v0.3.140`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -32,6 +32,15 @@ with optional OpenAI-compatible LLM conversation support.
 ### Implemented
 
 - Application bootstrap, configuration, logging, and dependency injection.
+- Research-execution persistence begins with a pure codec. A durable
+  `ResearchPlanExecutionSnapshot` records step identity, declared capability,
+  status, operation identity, work flag, bounded detail, the plan question, and
+  the bound run identity, and nothing that already lives in the research run.
+  Restoring marks a step recorded as running as interrupted rather than
+  completed, so mid-flight work is never fabricated as finished; completed steps
+  stay completed, pending steps stay pending, and terminal executions stay
+  terminal. `INTERRUPTED` is deliberately distinct from `BLOCKED`. No file access
+  or runtime wiring exists yet.
 - Research-plan execution publishes bounded events for start, step start, step
   completion, step failure, step block, and cancellation from one focused
   emitter. Observability is visibility only: an absent event bus makes every call
@@ -855,7 +864,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,887 automated tests pass through package-aware discovery.
+- 1,902 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for `src` and `tests`.
 - Whitespace validation (`git diff --check`) passes.

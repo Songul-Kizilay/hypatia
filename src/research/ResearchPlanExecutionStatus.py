@@ -12,6 +12,7 @@ class ResearchPlanExecutionStatus(StrEnum):
     FAILED = "failed"
     CANCELLED = "cancelled"
     BLOCKED = "blocked"
+    INTERRUPTED = "interrupted"
 
     @property
     def terminal(self) -> bool:

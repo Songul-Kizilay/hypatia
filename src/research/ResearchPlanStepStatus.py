@@ -1,4 +1,10 @@
-"""Lifecycle states for one step inside a research-plan execution."""
+"""Lifecycle states for one step inside a research-plan execution.
+
+``BLOCKED`` and ``INTERRUPTED`` are deliberately different. Blocked means a
+human must decide something before the step can proceed. Interrupted means the
+process died while the step was running, so what the operation actually did is
+unknown. Neither is terminal, and neither may be read as completed work.
+"""
 
 from enum import StrEnum
 
@@ -12,6 +18,7 @@ class ResearchPlanStepStatus(StrEnum):
     FAILED = "failed"
     CANCELLED = "cancelled"
     BLOCKED = "blocked"
+    INTERRUPTED = "interrupted"
 
     @property
     def terminal(self) -> bool:
