@@ -9,6 +9,9 @@ from brain.BrainContext import BrainContext
 from brain.BrainRequest import BrainRequest
 from brain.BrainResponse import BrainResponse
 from brain.BrainRouter import BrainRouter
+from cognition.BackgroundResearchSchedulerApplicationService import (
+    BackgroundResearchSchedulerApplicationService,
+)
 from cognition.LearnedMemoryAuditApplicationService import (
     LearnedMemoryAuditApplicationService,
 )
@@ -73,6 +76,7 @@ from memory.SessionMemoryPolicy import SessionMemoryPolicy
 from research.AcceptedSourceListingStepOperation import (
     AcceptedSourceListingStepOperation,
 )
+from research.BackgroundTaskStore import BackgroundTaskStore
 from research.ClaimContradictionStepOperation import (
     ClaimContradictionStepOperation,
 )
@@ -169,6 +173,7 @@ class CognitiveEngine:
         research_source_fetcher: ResearchSourceFetcher | None = None,
         research_run_manager: ResearchRunManager | None = None,
         research_execution_store: ResearchExecutionStore | None = None,
+        background_task_store: BackgroundTaskStore | None = None,
         research_source_discovery_provider: (
             ResearchSourceDiscoveryProvider | None
         ) = None,
@@ -332,6 +337,14 @@ class CognitiveEngine:
             response_composer,
             event_bus=event_bus,
         )
+        self._background_research_scheduler = (
+            BackgroundResearchSchedulerApplicationService(
+                self._research_autonomy_service,
+                response_composer,
+                task_store=background_task_store,
+                event_bus=event_bus,
+            )
+        )
         self._research_plan_preview_service = ResearchPlanPreviewApplicationService(
             response_composer,
             research_plan_draft_service,
@@ -396,6 +409,25 @@ class CognitiveEngine:
 
         if self._research_autonomy_service.is_run_request(request):
             return self._research_autonomy_service.process_run(request)
+
+        scheduler = self._background_research_scheduler
+        if scheduler.is_create_request(request):
+            return scheduler.process_create(request)
+
+        if scheduler.is_pause_request(request):
+            return scheduler.process_pause(request)
+
+        if scheduler.is_resume_request(request):
+            return scheduler.process_resume(request)
+
+        if scheduler.is_cancel_request(request):
+            return scheduler.process_cancel(request)
+
+        if scheduler.is_list_request(request):
+            return scheduler.process_list(request)
+
+        if scheduler.is_worker_cycle_request(request):
+            return scheduler.process_worker_cycle(request)
 
         if self._is_research_run_markdown_export_verify_request(request):
             return self._process_research_run_markdown_export_verify(request)

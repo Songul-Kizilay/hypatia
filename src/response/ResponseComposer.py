@@ -22,6 +22,7 @@ from knowledge.KnowledgeRelationRevocationPreview import (
 from memory.LearnedMemoryAuditReport import LearnedMemoryAuditReport
 from memory.MemoryRecord import MemoryRecord
 from planner.Plan import Plan
+from research.BackgroundResearchTask import BackgroundResearchTask
 from research.ResearchAutonomyResult import ResearchAutonomyResult
 from research.ResearchClaimContradictionPreview import (
     ResearchClaimContradictionPreview,
@@ -930,6 +931,127 @@ class ResponseComposer:
             intent="research_plan_execution",
             memory_count=0,
             research_plan_execution=state,
+        )
+
+    def background_task_status(
+        self,
+        request: BrainRequest,
+        task: BackgroundResearchTask,
+    ) -> BrainResponse:
+        """Render one background task without any research content."""
+        message = "\n".join(
+            (
+                "Background research task:",
+                f"Task ID: {task.task_id}",
+                f"Execution ID: {task.execution_id}",
+                f"Status: {task.status.value}",
+                f"Retries: {task.retry_count} of {task.max_retries}",
+                f"Last outcome: {task.outcome or 'none'}",
+                "Budget: "
+                f"{task.budget.max_step_advances} step(s), "
+                f"{task.budget.max_network_operations} network, "
+                f"{task.budget.max_llm_operations} model, "
+                f"{task.budget.max_seconds:.0f}s",
+                "Scheduling only; running a task establishes no evidence and "
+                "verifies no claim.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="background_research_task",
+            memory_count=0,
+            background_research_task=task,
+        )
+
+    def background_task_missing(
+        self,
+        request: BrainRequest,
+        task_id: str,
+    ) -> BrainResponse:
+        """Report an unknown task without inventing one."""
+        message = "\n".join(
+            (
+                "Background research task not found:",
+                f"Task ID: {task_id}",
+                "No task with that identifier is known to this scheduler.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="background_research_task",
+            memory_count=0,
+            success=False,
+        )
+
+    def background_task_rejected(
+        self,
+        request: BrainRequest,
+        reason: str,
+    ) -> BrainResponse:
+        """Report one bounded refusal without changing any task."""
+        message = "\n".join(
+            (
+                "Background research task rejected:",
+                f"Reason: {reason}",
+                "No task state changed.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="background_research_task",
+            memory_count=0,
+            success=False,
+        )
+
+    def background_task_list(
+        self,
+        request: BrainRequest,
+        tasks: tuple[BackgroundResearchTask, ...],
+    ) -> BrainResponse:
+        """Render bounded task identities and statuses only."""
+        lines = [f"Background research tasks: {len(tasks)}"]
+        lines.extend(
+            f"- {task.task_id}: {task.status.value}"
+            f" (retries {task.retry_count}/{task.max_retries})"
+            for task in tasks
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="background_research_task",
+            memory_count=0,
+        )
+
+    def background_worker_cycle(
+        self,
+        request: BrainRequest,
+        ran: tuple[BackgroundResearchTask, ...],
+        tasks: tuple[BackgroundResearchTask, ...],
+    ) -> BrainResponse:
+        """Report exactly what one bounded worker cycle did."""
+        lines = [
+            "Background worker cycle:",
+            f"Tasks run this cycle: {len(ran)}",
+        ]
+        lines.extend(
+            f"- {task.task_id}: {task.status.value} ({task.outcome or 'none'})"
+            for task in ran
+        )
+        lines.extend(
+            (
+                f"Known tasks: {len(tasks)}",
+                "One cycle runs a bounded number of approved tasks and stops.",
+                "Running a task establishes no evidence and verifies no claim.",
+            )
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="background_research_task",
+            memory_count=0,
         )
 
     def research_autonomy_result(

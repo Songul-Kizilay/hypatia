@@ -51,6 +51,9 @@ from research.CrossrefResearchSourceDiscoveryProvider import (
     CrossrefResearchSourceDiscoveryProvider,
 )
 from research.HttpResearchSourceFetcher import HttpResearchSourceFetcher
+from research.JsonFileBackgroundTaskStore import (
+    JsonFileBackgroundTaskStore,
+)
 from research.JsonFileResearchExecutionStore import (
     JsonFileResearchExecutionStore,
 )
@@ -394,6 +397,7 @@ class Bootstrap:
         research_run_manager = ResearchRunManager(research_run_store)
         research_run_manager.load()
         research_execution_store = self._research_execution_store()
+        background_task_store = self._background_task_store()
         research_source_content_store = JsonFileResearchSourceContentStore(
             self._research_source_content_path
             or self._research_source_content_store_path(
@@ -454,6 +458,7 @@ class Bootstrap:
             research_source_fetcher=research_source_fetcher,
             research_run_manager=research_run_manager,
             research_execution_store=research_execution_store,
+            background_task_store=background_task_store,
             research_source_discovery_provider=(
                 self._research_source_discovery_provider
             ),
@@ -557,6 +562,21 @@ class Bootstrap:
         )
         return JsonFileResearchExecutionStore(
             run_path.with_name("research_executions.json")
+        )
+
+    def _background_task_store(self) -> JsonFileBackgroundTaskStore | None:
+        """Create the task store only when background research is opted in.
+
+        Default off, so an unset environment schedules nothing and behaves
+        exactly like a runtime without a scheduler.
+        """
+        if os.environ.get("HYPATIA_BACKGROUND_RESEARCH_ENABLED") != "true":
+            return None
+        run_path = self._research_run_path or self._research_run_store_path(
+            self._memory_path
+        )
+        return JsonFileBackgroundTaskStore(
+            run_path.with_name("research_background_tasks.json")
         )
 
     @staticmethod

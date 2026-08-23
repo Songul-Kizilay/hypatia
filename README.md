@@ -676,6 +676,37 @@ steps stay pending. Authorizations are not persisted, so a restored execution
 cannot be advanced and nothing is replayed. A corrupt store raises at startup
 rather than being replaced by an empty one.
 
+---
+
+## Background research scheduling
+
+Background research is disabled by default. To persist scheduled tasks, set:
+
+```text
+HYPATIA_BACKGROUND_RESEARCH_ENABLED=true
+```
+
+The value must be exactly lowercase `true`. Tasks are written to
+`research_background_tasks.json` beside the research-run store, in a separate
+versioned document; `ResearchRun` and the execution store are untouched.
+
+A task is scheduling bookkeeping around an execution a human already approved.
+Running one drives the existing autonomy service, which drives the existing
+execution service, so a task cannot invent a capability, weaken a budget, accept
+a source, or promote a claim. Only identifiers, status, the declared budget,
+retry counters, a bounded outcome category, and timestamps are stored.
+
+Work is demand-driven: one explicit worker cycle runs a bounded number of
+runnable tasks and returns. There is no thread, no polling, and no busy loop.
+
+Retries are typed, not guessed. Only budget exhaustion is retryable, because it
+means the task did not fail — it ran out of allowance and more work remains. A
+blocked, failed, interrupted, or cancelled run is never retried automatically.
+
+On restart, a task recorded as running becomes `interrupted`, since what it
+achieved is unknown, and it is not replayed. `interrupted`, `paused`, and
+`blocked` remain three different things.
+
 The following optional settings control which learned memories are supplied to
 the LLM as additional context:
 

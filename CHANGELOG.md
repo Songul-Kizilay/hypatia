@@ -2,6 +2,59 @@
 
 All notable project changes are recorded here.
 
+## [0.3.144] - 2026-08-23
+
+### Added
+
+- Background research scheduling. `BackgroundResearchTask` and its status
+  domain, `JsonFileBackgroundTaskStore`, and
+  `BackgroundResearchSchedulerApplicationService` with create, pause, resume,
+  cancel, list, and worker-cycle intents.
+- `BackgroundTaskOutcome` classifies each autonomy stop reason, and nine bounded
+  `background_task.*` events.
+- `HYPATIA_BACKGROUND_RESEARCH_ENABLED` opts into durable task storage, default
+  off.
+
+### Safety
+
+- The scheduler owns queueing only. Every cycle drives the existing autonomy
+  service, which drives the existing execution service; there is still one
+  research-driving loop and this is not it. Tests assert an instruction naming
+  fetch and accept completes no step and performs no research work.
+- Budgets pass through unweakened. A task carries a `ResearchAutonomyBudget` and
+  a test asserts a two-step budget completes exactly two steps.
+- Retries are typed from the stop-reason enum, never from exception messages.
+  Only budget exhaustion is retryable; blocked, failed, interrupted, and
+  cancelled runs are never retried. The classification table is exhaustive, so a
+  new stop reason without a declared outcome raises rather than defaulting to a
+  retry.
+- Work is synchronous and demand-driven: one cycle runs a bounded number of
+  tasks and returns, with no thread, polling, or busy loop. Task selection is
+  oldest-first so a retried task cannot starve the queue.
+- A cancelled task never restarts and a completed task is never re-run; both are
+  refused at the domain level.
+- On restart a running task becomes `interrupted` and is not replayed.
+  `INTERRUPTED`, `PAUSED`, and `BLOCKED` remain distinct.
+- Persistence follows the proven atomic pattern: bounded temporary file, fsync,
+  and `os.replace`, with a failed write leaving the previous document
+  byte-identical. Unknown schema versions, malformed documents, duplicate task
+  IDs, and oversized task counts are all refused.
+- Stored documents and event payloads carry identifiers, statuses, counters, and
+  an exception class name only. Tests assert the research question and authored
+  instruction appear in neither.
+
+### Verification
+
+- The package-aware full local suite contains 1,988 passing automated tests.
+- Thirty-one new tests cover task creation and persistence, a completed worker
+  cycle, no re-running of completed tasks, pause and resume, cancellation and
+  refusal to resume, bounded retry, the retry limit, non-retryable failure,
+  budget pass-through, per-cycle and active-task bounds, cycle cancellation,
+  restart interruption, no auto-replay, capability invention, bounded events,
+  disabled persistence, malformed stores, atomic write failure, schema and
+  duplicate rejection, task-count limits, absence of research content, the
+  exhaustive outcome table, and production composition wiring.
+
 ## [0.3.143] - 2026-08-23
 
 ### Added
