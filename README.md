@@ -874,6 +874,56 @@ quoted later without its sample size.
 
 ---
 
+## Hypotheses
+
+Hypotheses are disabled by default. To keep them, set:
+
+```text
+HYPATIA_HYPOTHESIS_ENABLED=true
+```
+
+The value must be exactly lowercase `true`. They are written to
+`research_hypotheses.json` beside the research-run store, in a separate
+versioned document.
+
+Every hypothesis must name what would count against it, before any evidence
+exists, while it is still cheap to be honest about what would change your mind.
+A conjecture that names nothing capable of counting against it is refused: it is
+a belief with better manners, and it will survive any amount of evidence because
+nothing was ever allowed to threaten it.
+
+Supporting and opposing evidence go in separate lists and are never netted. A
+count of three-for and two-against is a real situation someone has to read; a
+score of "+1" is that situation destroyed. The same evidence cannot be entered
+on both sides, and all evidence must already be recorded in the run.
+
+The status rules are asymmetric on purpose:
+
+| Evidence | Status |
+| --- | --- |
+| None, or one supporting source | open |
+| Two or more supporting sources, none opposing | supported |
+| Opposing only | contradicted |
+| Both | weakened |
+| Withdrawn | withdrawn |
+
+Any opposing evidence at all moves a hypothesis off the supported track, while
+support needs more than one source to count. That asymmetry is the whole reason
+a discriminating test is required — softening it would make disconfirmation just
+another input to be outvoted.
+
+There is no confirm intent and no status meaning true. Propose, support, oppose,
+withdraw, and list are the entire vocabulary. `supported` means evidence
+accumulated on one side and none on the other, which is where most abandoned
+theories stood right up until the observation that undid them. A system that
+could mark something confirmed would be asked to, and once something is filed as
+confirmed nobody goes looking for what would have undone it.
+
+Status is never stored, only derived, so it cannot disagree with the evidence
+sitting beside it.
+
+---
+
 ## Ordinary chat never performs research
 
 Hypatia can chat, and Hypatia can research. They are different subsystems, and

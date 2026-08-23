@@ -19,6 +19,7 @@ from knowledge.KnowledgeRelationRevocationPreview import (
 from memory.LearnedMemoryAuditReport import LearnedMemoryAuditReport
 from research.BackgroundResearchTask import BackgroundResearchTask
 from research.CanonicalResearchSummary import CanonicalResearchSummary
+from research.HypothesisAppraisal import HypothesisAppraisal
 from research.ResearchAutonomyResult import ResearchAutonomyResult
 from research.ResearchCalibrationReport import ResearchCalibrationReport
 from research.ResearchClaimContradictionPreview import (
@@ -138,5 +139,7 @@ class BrainResponse:
     failure_lessons: tuple[ResearchFailureLesson, ...] = ()
     research_calibration: ResearchCalibrationReport | None = None
     source_reputations: tuple[SourceReputation, ...] = ()
+    hypothesis_appraisal: HypothesisAppraisal | None = None
+    hypothesis_appraisals: tuple[HypothesisAppraisal, ...] = ()
     session_summaries: list[SessionSummary] = field(default_factory=list)
     session_delete_allowed: bool | None = None

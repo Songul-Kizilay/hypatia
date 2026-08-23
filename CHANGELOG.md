@@ -2,6 +2,51 @@
 
 All notable project changes are recorded here.
 
+## [0.3.153] - 2026-08-23
+
+### Added
+
+- Hypothesis engine. `ResearchHypothesis` records one authored conjecture, the
+  observation that would count against it, and the evidence entered on each
+  side; `ResearchHypothesisAppraiser` derives a bounded `HypothesisStatus`.
+- `JsonFileHypothesisStore`, `HypothesisApplicationService` with propose,
+  support, oppose, withdraw, and list intents, and three bounded `hypothesis.*`
+  events.
+- `HYPATIA_HYPOTHESIS_ENABLED` opts into keeping hypotheses, default off.
+
+### Safety
+
+- A hypothesis without a discriminating test is refused at construction and
+  again on load. A conjecture that names nothing capable of counting against it
+  is a belief, and a stored one that lost its defeater would be
+  indistinguishable from a belief.
+- There is no confirm intent and no status meaning true. `HypothesisStatus`
+  contains no confirmed, proven, true, or false value, `means_true` is asserted
+  false for every status, and the service is asserted to expose no confirm
+  method.
+- Supporting and opposing evidence are never netted. Both counts are reported
+  separately, the same evidence cannot be entered on both sides, and all
+  evidence must already be recorded in the run.
+- The status rules are asymmetric: any opposing evidence moves a hypothesis off
+  the supported track, while support requires more than one source. A test
+  asserts one opposing source weakens two supporting ones rather than being
+  outvoted.
+- Status is derived, never stored, so it cannot disagree with the evidence
+  beside it. A test asserts no status field is written to the document.
+- A hypothesis creates no claim and changes no run.
+- Event payloads carry identifiers, bounded statuses, and per-side counts, plus
+  an explicit `asserts_truth: false`. Tests assert the statement, its defeater,
+  the research question, and URLs appear in no payload.
+
+### Verification
+
+- The package-aware full local suite contains 2,341 passing automated tests.
+- Forty-nine new tests cover defeater enforcement, evidence on both sides,
+  withdrawal, every status rule and its asymmetry, separate counting,
+  persistence and restart including the defeater surviving, unknown hypotheses,
+  unrecorded evidence, bounded events, store validation including a stripped
+  defeater, and production composition wiring.
+
 ## [0.3.152] - 2026-08-23
 
 ### Added

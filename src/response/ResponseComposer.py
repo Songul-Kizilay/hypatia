@@ -25,6 +25,7 @@ from memory.MemoryRecord import MemoryRecord
 from planner.Plan import Plan
 from research.BackgroundResearchTask import BackgroundResearchTask
 from research.CanonicalResearchSummary import CanonicalResearchSummary
+from research.HypothesisAppraisal import HypothesisAppraisal
 from research.ResearchAutonomyResult import ResearchAutonomyResult
 from research.ResearchCalibrationReport import ResearchCalibrationReport
 from research.ResearchClaimContradictionPreview import (
@@ -1430,6 +1431,75 @@ class ResponseComposer:
             message=message,
             request_id=request.request_id,
             intent="source_reputation",
+            memory_count=0,
+            success=False,
+        )
+
+    def hypothesis_appraisal(
+        self,
+        request: BrainRequest,
+        appraisal: HypothesisAppraisal,
+    ) -> BrainResponse:
+        """Render one hypothesis and its standing, concluding nothing."""
+        lines = [
+            "Research hypothesis:",
+            f"ID: {appraisal.hypothesis.hypothesis_id}",
+            *appraisal.lines(),
+            "",
+            "Supporting and opposing evidence are counted separately and never "
+            "netted. No status here means the hypothesis is true: supported "
+            "means evidence has accumulated on one side and none on the other, "
+            "which is where most abandoned theories stood right until the "
+            "observation that undid them.",
+        ]
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_hypothesis",
+            memory_count=0,
+            hypothesis_appraisal=appraisal,
+        )
+
+    def hypothesis_list(
+        self,
+        request: BrainRequest,
+        appraisals: tuple[HypothesisAppraisal, ...],
+    ) -> BrainResponse:
+        """Render every hypothesis with its derived standing."""
+        lines = [f"Research hypotheses: {len(appraisals)}"]
+        for appraisal in appraisals:
+            lines.append(
+                f"- {appraisal.hypothesis.hypothesis_id} "
+                f"[{appraisal.status.value}] "
+                f"for {appraisal.supporting_source_count} / "
+                f"against {appraisal.opposing_source_count} source(s)"
+            )
+        lines.append("Listing hypotheses performs no research and settles nothing.")
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_hypothesis",
+            memory_count=0,
+            hypothesis_appraisals=appraisals,
+        )
+
+    def hypothesis_rejected(
+        self,
+        request: BrainRequest,
+        reason: str,
+    ) -> BrainResponse:
+        """Report one bounded refusal without changing any hypothesis."""
+        message = "\n".join(
+            (
+                "Research hypothesis request rejected:",
+                f"Reason: {reason}",
+                "No hypothesis changed.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="research_hypothesis",
             memory_count=0,
             success=False,
         )

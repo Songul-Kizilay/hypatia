@@ -24,6 +24,9 @@ from cognition.CuriosityApplicationService import (
 from cognition.FailureMemoryApplicationService import (
     FailureMemoryApplicationService,
 )
+from cognition.HypothesisApplicationService import (
+    HypothesisApplicationService,
+)
 from cognition.LearnedMemoryAuditApplicationService import (
     LearnedMemoryAuditApplicationService,
 )
@@ -110,6 +113,7 @@ from research.EvidenceRecordingStepOperation import (
     EvidenceRecordingStepOperation,
 )
 from research.FailureLessonStore import FailureLessonStore
+from research.HypothesisStore import HypothesisStore
 from research.LocalKnowledgeSearchStepOperation import (
     LocalKnowledgeSearchStepOperation,
 )
@@ -201,6 +205,7 @@ class CognitiveEngine:
         curiosity_question_store: CuriosityQuestionStore | None = None,
         reflection_report_store: ReflectionReportStore | None = None,
         failure_lesson_store: FailureLessonStore | None = None,
+        hypothesis_store: HypothesisStore | None = None,
         research_source_discovery_provider: (
             ResearchSourceDiscoveryProvider | None
         ) = None,
@@ -417,6 +422,14 @@ class CognitiveEngine:
                 response_composer,
                 event_bus=event_bus,
             )
+        self._hypothesis_service: HypothesisApplicationService | None = None
+        if research_run_manager is not None:
+            self._hypothesis_service = HypothesisApplicationService(
+                research_run_manager,
+                response_composer,
+                hypothesis_store=hypothesis_store,
+                event_bus=event_bus,
+            )
         self._research_plan_preview_service = ResearchPlanPreviewApplicationService(
             response_composer,
             research_plan_draft_service,
@@ -517,6 +530,9 @@ class CognitiveEngine:
 
         if SourceReputationApplicationService.is_report_request(request):
             return self._process_source_reputation(request)
+
+        if self._is_hypothesis_request(request):
+            return self._process_hypothesis(request)
 
         if self._is_research_run_markdown_export_verify_request(request):
             return self._process_research_run_markdown_export_verify(request)
@@ -3145,6 +3161,39 @@ class CognitiveEngine:
                 request,
                 str(error),
             )
+
+    @staticmethod
+    def _is_hypothesis_request(request: BrainRequest) -> bool:
+        """Return whether this request addresses the hypothesis engine."""
+        service = HypothesisApplicationService
+        return (
+            service.is_propose_request(request)
+            or service.is_support_request(request)
+            or service.is_oppose_request(request)
+            or service.is_withdraw_request(request)
+            or service.is_list_request(request)
+        )
+
+    def _process_hypothesis(self, request: BrainRequest) -> BrainResponse:
+        """Route one hypothesis intent. There is deliberately no confirm."""
+        service = self._hypothesis_service
+        if service is None:
+            return self._response_composer.hypothesis_rejected(
+                request,
+                "Research run persistence is unavailable.",
+            )
+        try:
+            if service.is_propose_request(request):
+                return service.process_propose(request)
+            if service.is_support_request(request):
+                return service.process_support(request)
+            if service.is_oppose_request(request):
+                return service.process_oppose(request)
+            if service.is_withdraw_request(request):
+                return service.process_withdraw(request)
+            return service.process_list(request)
+        except ResearchError as error:
+            return self._response_composer.hypothesis_rejected(request, str(error))
 
     def _process_calibration(self, request: BrainRequest) -> BrainResponse:
         """Route the calibration intent, which reads and never writes."""

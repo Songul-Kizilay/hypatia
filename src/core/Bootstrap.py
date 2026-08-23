@@ -60,6 +60,9 @@ from research.JsonFileCuriosityQuestionStore import (
 from research.JsonFileFailureLessonStore import (
     JsonFileFailureLessonStore,
 )
+from research.JsonFileHypothesisStore import (
+    JsonFileHypothesisStore,
+)
 from research.JsonFileReflectionReportStore import (
     JsonFileReflectionReportStore,
 )
@@ -410,6 +413,7 @@ class Bootstrap:
         curiosity_question_store = self._curiosity_question_store()
         reflection_report_store = self._reflection_report_store()
         failure_lesson_store = self._failure_lesson_store()
+        hypothesis_store = self._hypothesis_store()
         research_source_content_store = JsonFileResearchSourceContentStore(
             self._research_source_content_path
             or self._research_source_content_store_path(
@@ -474,6 +478,7 @@ class Bootstrap:
             curiosity_question_store=curiosity_question_store,
             reflection_report_store=reflection_report_store,
             failure_lesson_store=failure_lesson_store,
+            hypothesis_store=hypothesis_store,
             research_source_discovery_provider=(
                 self._research_source_discovery_provider
             ),
@@ -638,6 +643,19 @@ class Bootstrap:
         return JsonFileFailureLessonStore(
             run_path.with_name("research_failure_lessons.json")
         )
+
+    def _hypothesis_store(self) -> JsonFileHypothesisStore | None:
+        """Create the hypothesis store only when hypotheses are opted in.
+
+        Default off, so an unset environment keeps no hypotheses and behaves
+        exactly like a runtime without a hypothesis engine.
+        """
+        if os.environ.get("HYPATIA_HYPOTHESIS_ENABLED") != "true":
+            return None
+        run_path = self._research_run_path or self._research_run_store_path(
+            self._memory_path
+        )
+        return JsonFileHypothesisStore(run_path.with_name("research_hypotheses.json"))
 
     @staticmethod
     def _default_research_run_path() -> Path:
