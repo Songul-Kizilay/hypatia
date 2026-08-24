@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from http.client import HTTPMessage
 from typing import IO, Protocol, Self, cast
@@ -26,7 +28,40 @@ _ALLOWED_CONTENT_TYPES = {
     "text/markdown",
     "text/plain",
 }
-RESEARCH_USER_AGENT = f"Hypatia/{VERSION.short} research-source-fetcher"
+DEFAULT_RESEARCH_USER_AGENT = f"Hypatia/{VERSION.short} research-source-fetcher"
+
+IMPERSONATION_MARKERS = ("mozilla/", "chrome/", "safari/", "gecko/", "edg/", "opr/")
+
+
+def research_user_agent(environment: Mapping[str, str] | None = None) -> str:
+    """Return the descriptive agent string research fetches identify with.
+
+    Some sites — Wikimedia among them — refuse non-browser clients that do not
+    name a contact, and that refusal is legitimate. The operator can therefore
+    append their own contact through `HYPATIA_RESEARCH_USER_AGENT_CONTACT`,
+    because inventing a contact address on someone's behalf would be worse than
+    the 403.
+
+    What the override cannot do is pretend to be a browser. A string carrying a
+    browser marker is refused outright: a 403 is a site declining to serve this
+    client, and the answer to that is to identify honestly or accept the answer,
+    never to dress up as something else.
+    """
+    values = os.environ if environment is None else environment
+    contact = values.get("HYPATIA_RESEARCH_USER_AGENT_CONTACT", "").strip()
+    if not contact:
+        return DEFAULT_RESEARCH_USER_AGENT
+    lowered = contact.casefold()
+    if any(marker in lowered for marker in IMPERSONATION_MARKERS):
+        raise ResearchError(
+            "A research user agent contact cannot impersonate a browser."
+        )
+    if len(contact) > 120 or any(character in contact for character in "\r\n"):
+        raise ResearchError("A research user agent contact is invalid.")
+    return f"{DEFAULT_RESEARCH_USER_AGENT} ({contact})"
+
+
+RESEARCH_USER_AGENT = DEFAULT_RESEARCH_USER_AGENT
 
 
 class ResearchHttpResponse(Protocol):
@@ -111,7 +146,7 @@ class HttpResearchSourceFetcher:
             normalized_url,
             headers={
                 "Accept": "text/html,text/plain,text/markdown,application/xhtml+xml",
-                "User-Agent": RESEARCH_USER_AGENT,
+                "User-Agent": research_user_agent(),
             },
         )
         try:

@@ -1097,6 +1097,43 @@ The literal `unbounded` restores unlimited history.
 
 ---
 
+## What a research fetch identifies as
+
+Research fetches send a descriptive agent string naming the product and version
+and nothing else — no browser markers, no tracking, no machine or user identity.
+
+Some sites refuse non-browser clients that do not name a contact, and that
+refusal is legitimate. The operator can append their own:
+
+```text
+HYPATIA_RESEARCH_USER_AGENT_CONTACT=https://example.org/your-project
+```
+
+Hypatia will not invent a contact on your behalf, and the override cannot
+impersonate a browser: a value containing a browser marker is refused, as are
+overlong values and anything carrying a line break. A 403 stays a 403. Dressing
+up as Chrome to get past one is bypassing an anti-bot control, and the answer to
+a site saying no is to identify honestly or accept the no.
+
+### DOIs and publisher redirects
+
+Crossref discovery works and returns real candidates. Loading one as a source
+often does not, and that is usually correct behaviour rather than a bug: DOI
+resolution redirects to a publisher, and those redirects frequently land on plain
+HTTP or on a PDF, both of which the fetch boundary refuses.
+
+Crossref metadata does carry a `link` field, and it was checked against the live
+API rather than assumed. The links returned are plain-HTTP PDF URLs, so exposing
+that field would not make DOI loading work under the current safety policy — it
+would add surface for no benefit. The honest result stands: the candidate was
+discovered, and its content could not be fetched safely.
+
+A direct public HTTPS page travels the whole path. A live run against
+`https://portswigger.net/web-security/web-cache-deception` fetched, indexed,
+attached to the run, and recorded evidence, ending at one accepted source.
+
+---
+
 ## Manual diagnostics
 
 Two developer-only checks live under `tools/diagnostics/`. Neither is part of

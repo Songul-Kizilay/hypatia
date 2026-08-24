@@ -2,6 +2,40 @@
 
 All notable project changes are recorded here.
 
+## [0.3.159] - 2026-08-24
+
+### Added
+
+- `HYPATIA_RESEARCH_USER_AGENT_CONTACT` lets an operator append their own
+  contact to the research agent string, for sites that ask non-browser clients
+  to name one. Hypatia does not invent a contact on anyone's behalf.
+
+### Safety
+
+- The override cannot impersonate a browser. A value containing a browser marker
+  is refused, as are overlong values and anything carrying a line break, so the
+  header cannot be used for injection either.
+- The default agent string was inspected and left unchanged: it names the
+  product and version, carries no browser marker, no tracking, and no machine or
+  user identity. A 403 remains a 403; no anti-bot control is bypassed.
+
+### Verification
+
+- The package-aware full local suite contains 2,519 passing automated tests.
+- Eight new tests cover the default string, the absence of impersonation and
+  identity, contact appending, blank contacts, browser impersonation, overlong
+  values, and header injection.
+- Live network validation, run against the real internet rather than doubles: a
+  direct public HTTPS page travelled the whole ingestion path — validation,
+  fetch of 32,585 characters, local index, canonical acceptance, evidence
+  record — ending at one accepted source, with assessment and claim correctly
+  unperformed. Crossref discovery returned five real candidates including a 2026
+  paper.
+- Crossref's `link` metadata was checked against the live API rather than
+  assumed. It returns plain-HTTP PDF URLs, which the HTTPS and content-type
+  boundaries refuse, so exposing it would not make DOI loading work under the
+  current safety policy and was deliberately not added.
+
 ## [0.3.158] - 2026-08-24
 
 ### Fixed
