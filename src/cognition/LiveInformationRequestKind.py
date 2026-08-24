@@ -23,6 +23,7 @@ class LiveInformationRequestKind(StrEnum):
 
     NONE = "none"
     EVIDENCE_PROVENANCE = "evidence_provenance"
+    URL_ACCESS = "url_access"
     CURRENT_EVENTS = "current_events"
     ACADEMIC_SOURCES = "academic_sources"
     WEB_SEARCH = "web_search"
@@ -34,6 +35,16 @@ class LiveInformationRequestKind(StrEnum):
             LiveInformationRequestKind.NONE,
             LiveInformationRequestKind.EVIDENCE_PROVENANCE,
         )
+
+    @property
+    def concerns_one_named_url(self) -> bool:
+        """Return whether the person named a specific page to open.
+
+        Kept separate because the honest answer is different. For a topic
+        request the answer is that no research ran; for a named link it is that
+        the link was not opened, which is not a claim about the site.
+        """
+        return self is LiveInformationRequestKind.URL_ACCESS
 
     @property
     def detected(self) -> bool:

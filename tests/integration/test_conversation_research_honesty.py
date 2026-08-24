@@ -50,7 +50,12 @@ from research.CanonicalResearchSummary import CanonicalResearchSummary
 from research.JsonFileResearchRunStore import JsonFileResearchRunStore
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchSource import ResearchSource
+from response.HonestyPhrasebook import phrase
 from response.ResponseComposer import ResponseComposer
+from response.ResponseLanguage import (
+    ResponseLanguage,
+    detect_response_language,
+)
 from session.SessionManager import SessionManager
 from session.SessionRenameTransactionService import SessionRenameTransactionService
 
@@ -258,11 +263,17 @@ class LiveResearchRefusalTests(HonestyFixture):
     def test_the_refusal_states_that_live_research_did_not_happen(self) -> None:
         engine = self.build_engine(RecordingLLMProvider("fabricated"))
 
-        response = self.chat(engine, FABRICATION_PROMPTS[0])
+        prompt = FABRICATION_PROMPTS[0]
+        response = self.chat(engine, prompt)
 
-        self.assertIn("Live research was not performed", response.message)
-        self.assertIn("reached no", response.message)
-        self.assertIn("recorded no evidence", response.message)
+        self.assertIn(
+            phrase("no_live_research", detect_response_language(prompt)),
+            response.message,
+        )
+        self.assertIs(
+            response.live_information_request,
+            LiveInformationRequestKind.ACADEMIC_SOURCES,
+        )
 
     def test_the_refusal_reports_canonical_counts(self) -> None:
         engine = self.build_engine(RecordingLLMProvider("fabricated"))
@@ -277,10 +288,13 @@ class LiveResearchRefusalTests(HonestyFixture):
     def test_the_refusal_points_at_the_explicit_research_workflow(self) -> None:
         engine = self.build_engine(RecordingLLMProvider("fabricated"))
 
-        response = self.chat(engine, FABRICATION_PROMPTS[3])
+        prompt = FABRICATION_PROMPTS[3]
+        response = self.chat(engine, prompt)
 
-        self.assertIn("explicit research run", response.message)
-        self.assertIn("none of them is performed automatically", response.message)
+        self.assertIn(
+            phrase("use_research", detect_response_language(prompt)),
+            response.message,
+        )
 
     def test_refusing_creates_no_research_state(self) -> None:
         engine = self.build_engine(RecordingLLMProvider("fabricated"))
@@ -306,7 +320,10 @@ class LiveResearchRefusalTests(HonestyFixture):
 
         response = self.chat(engine, FABRICATION_PROMPTS[2])
 
-        self.assertIn("Live research was not performed", response.message)
+        self.assertIn(
+            phrase("no_live_research", ResponseLanguage.ENGLISH),
+            response.message,
+        )
         self.assertIn("Research runs: 0", response.message)
 
 
@@ -315,12 +332,15 @@ class EvidenceProvenanceTests(HonestyFixture):
         provider = RecordingLLMProvider("I collected these sources for you.")
         engine = self.build_engine(provider)
 
-        response = self.chat(engine, "Bu konuda hangi kanıtları topladın?")
+        question = "Bu konuda hangi kanıtları topladın?"
+        language = detect_response_language(question)
+
+        response = self.chat(engine, question)
 
         self.assertEqual(provider.calls, [])
-        self.assertIn("Evidence actually recorded", response.message)
+        self.assertIn(phrase("evidence_heading", language), response.message)
         self.assertIn("Evidence records: 0", response.message)
-        self.assertIn("No research operation has recorded anything", response.message)
+        self.assertIn(phrase("evidence_none_at_all", language), response.message)
 
     def test_recorded_evidence_is_reported_truthfully(self) -> None:
         self.recorded_evidence()
@@ -355,7 +375,10 @@ class EvidenceProvenanceTests(HonestyFixture):
 
         self.assertIn("Sources accepted: 1", response.message)
         self.assertIn("Evidence records: 0", response.message)
-        self.assertIn("An accepted source is not evidence", response.message)
+        self.assertIn(
+            phrase("evidence_sources_without_evidence", ResponseLanguage.ENGLISH),
+            response.message,
+        )
 
     def test_the_summary_keeps_every_stage_separate(self) -> None:
         self.recorded_evidence()
@@ -515,7 +538,10 @@ class HonestyCompositionTests(HonestyFixture):
         response = service.process(request, kind)
 
         self.assertIs(kind, LiveInformationRequestKind.CURRENT_EVENTS)
-        self.assertIn("Live research was not performed", response.message)
+        self.assertIn(
+            phrase("no_live_research", ResponseLanguage.ENGLISH),
+            response.message,
+        )
 
 
 if __name__ == "__main__":

@@ -2,6 +2,57 @@
 
 All notable project changes are recorded here.
 
+## [0.3.157] - 2026-08-24
+
+### Fixed
+
+- An evidence reply printed "Sources accepted: 0" and then said "Sources exist
+  but no evidence record does". The branch tested whether anything at all had
+  been recorded, so a run with no sources fell past the empty case. The prose is
+  now chosen from the same two counters the reply prints.
+- Deterministic honesty responses were composed in English regardless of the
+  question, so a Turkish request received a wall of English that read like a
+  developer diagnostic. The sentences are now looked up per language, with the
+  plain statement first and the counters under a details heading.
+- Asked whether it could reach a URL, ordinary chat let the model answer and the
+  model claimed the page was not accessible — a claim about someone else's server
+  made without contacting it. Such a message is now recognised and answered
+  deterministically.
+
+### Added
+
+- `ResponseLanguage` and `detect_response_language`, a bounded hint table with
+  English as the fallback.
+- `HonestyPhrasebook`, the fixed honesty sentences per language, with a missing
+  key falling back to English rather than being approximated.
+- `LiveInformationRequestKind.URL_ACCESS`, matched only when a message contains
+  a URL *and* asks about reaching it.
+
+### Safety
+
+- The honesty statements remain composed in code and are never phrased by a
+  model. Only their translation is looked up.
+- The URL reply says three separate things: the link was not opened in this
+  turn, whether the site is reachable is unknown because nothing tried, and the
+  Research workflow is how to check. A test asserts no phrase in any language
+  contains inaccessible, unavailable, offline, blocked, or their Turkish
+  equivalents.
+- Both signals are required before a turn is treated as a URL request. A pasted
+  link used as context is not hijacked, and tests cover both directions.
+- Ordinary chat still reaches no network; the new kind changes what is said, not
+  what is done.
+- Language hints are restricted to tokens absent from the other language, after
+  an early version turned English questions containing "site" or "var" into
+  Turkish answers.
+
+### Verification
+
+- The package-aware full local suite contains 2,490 passing automated tests.
+- Twenty-eight new tests cover language detection including the shared-word
+  regression, phrasebook completeness and fallback, the five evidence-state
+  combinations table-driven, URL access detection in both languages, the
+  refusal to judge reachability, and statement-before-counters ordering.
+
 ## [0.3.156] - 2026-08-24
 
 ### Fixed

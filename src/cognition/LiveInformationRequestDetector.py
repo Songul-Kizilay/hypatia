@@ -15,13 +15,60 @@ bare noun like "news" or "haber".
 Turkish and English are both matched because the runtime is used in both, but
 neither language is privileged: adding a language means adding phrases, and no
 behaviour anywhere is conditioned on which language matched.
+
+One rule needs two signals rather than one. A message is treated as asking about
+a specific page only when it contains a URL *and* asks about reaching it, because
+a pasted link is usually context for a question rather than a request to open
+anything. Matching on the URL alone would take over every turn that mentioned
+one.
 """
 
 from __future__ import annotations
 
+import re
+
 from cognition.LiveInformationRequestKind import LiveInformationRequestKind
 
 MAX_INSPECTED_CHARACTERS = 4000
+
+URL_PATTERN = re.compile(r"https?://[^\s<>\"']+", re.IGNORECASE)
+
+URL_ACCESS_PHRASES = (
+    "can you access",
+    "can you open",
+    "can you read",
+    "can you reach",
+    "can you visit",
+    "can you fetch",
+    "are you able to access",
+    "do you have access to",
+    "open this link",
+    "open this url",
+    "read this page",
+    "check this page",
+    "check this link",
+    "fetch this",
+    "erisebiliyo",
+    "erişebiliyo",
+    "erisebilir",
+    "erişebilir",
+    "erisim var",
+    "erişim var",
+    "acabiliyo",
+    "açabiliyo",
+    "acabilir",
+    "açabilir",
+    "okuyabiliyo",
+    "okuyabilir",
+    "bakabilir",
+    "girebiliyo",
+    "girebilir",
+    "ulasabiliyo",
+    "ulaşabiliyo",
+    "ulasabilir",
+    "ulaşabilir",
+    "inceleyebilir",
+)
 
 EVIDENCE_PROVENANCE_PHRASES = (
     "what evidence did you",
@@ -133,10 +180,15 @@ class LiveInformationRequestDetector:
         """Return the most specific matching kind, or NONE."""
         if not isinstance(message, str) or not message.strip():
             return LiveInformationRequestKind.NONE
-        forms = _normalized_forms(message[:MAX_INSPECTED_CHARACTERS])
+        bounded = message[:MAX_INSPECTED_CHARACTERS]
+        forms = _normalized_forms(bounded)
         for kind, phrases in _TABLE:
             if any(phrase in form for form in forms for phrase in phrases):
                 return kind
+        if URL_PATTERN.search(bounded) and any(
+            phrase in form for form in forms for phrase in URL_ACCESS_PHRASES
+        ):
+            return LiveInformationRequestKind.URL_ACCESS
         return LiveInformationRequestKind.NONE
 
 

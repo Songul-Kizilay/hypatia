@@ -79,6 +79,8 @@ from research.ResearchSourceContentRestorationStatus import (
 )
 from research.SourceLoadStage import SourceLoadStage
 from research.SourceReputation import SourceReputation
+from response.HonestyPhrasebook import phrase
+from response.ResponseLanguage import detect_response_language
 from security.SecurityPostureReport import SecurityPostureReport
 from security.VulnerabilityFamily import VulnerabilityFamily
 from security.VulnerabilityFamilyGraph import RelatedFamily
@@ -1096,24 +1098,52 @@ class ResponseComposer:
         kind: LiveInformationRequestKind,
         summary: CanonicalResearchSummary,
     ) -> BrainResponse:
-        """Say plainly that no live research ran, and offer the real workflow."""
+        """Say plainly that no live research ran, and offer the real workflow.
+
+        The statement comes first and the counters follow. Someone asking a
+        normal question should learn in the first sentence that nothing was
+        researched, without reading a diagnostic to find out.
+        """
+        language = detect_response_language(request.message)
+        if kind is LiveInformationRequestKind.URL_ACCESS:
+            return self._url_not_opened(request, kind, summary)
         lines = [
-            "Live research was not performed.",
-            f"Request kind: {kind.value}",
-            "This was an ordinary conversation turn. Hypatia reached no "
-            "network, discovered no candidate sources, fetched nothing, "
-            "accepted no source, and recorded no evidence for it.",
-            "Answering from the language model alone would produce sources, "
-            "authors, outlets, and dates that were never read. That is why no "
-            "answer of that kind is given here.",
+            phrase("no_live_research", language),
+            phrase("use_research", language),
             "",
-            "Canonical research state on this machine:",
-            *summary.lines(),
+            phrase("details_heading", language),
+            f"- request kind: {kind.value}",
+            *(f"- {line}" for line in summary.lines()),
+        ]
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="live_research_declined",
+            memory_count=0,
+            canonical_research_summary=summary,
+            live_information_request=kind,
+        )
+
+    def _url_not_opened(
+        self,
+        request: BrainRequest,
+        kind: LiveInformationRequestKind,
+        summary: CanonicalResearchSummary,
+    ) -> BrainResponse:
+        """Report that a link was not opened, and claim nothing about the site.
+
+        Not fetching a page and a page being unreachable are different facts,
+        and only one of them was established. Saying the site is inaccessible
+        would be a claim about someone else's server made without contacting it.
+        """
+        language = detect_response_language(request.message)
+        lines = [
+            phrase("url_not_opened", language),
+            phrase("url_unknown_reachability", language),
+            phrase("url_use_research", language),
             "",
-            "To research this for real, start an explicit research run and "
-            "author the steps: source discovery, then your own selection, then "
-            "a fetch, then acceptance, then evidence. Each step stays separate "
-            "and none of them is performed automatically.",
+            phrase("details_heading", language),
+            *(f"- {line}" for line in summary.lines()),
         ]
         return BrainResponse(
             message="\n".join(lines),
@@ -1130,29 +1160,14 @@ class ResponseComposer:
         summary: CanonicalResearchSummary,
     ) -> BrainResponse:
         """Answer an evidence question from persisted counts, never from prose."""
+        language = detect_response_language(request.message)
         lines = [
-            "Evidence actually recorded:",
-            *summary.lines(),
+            phrase(self._evidence_phrase_key(summary), language),
+            phrase("nothing_fabricated", language),
+            "",
+            phrase("evidence_heading", language),
+            *(f"- {line}" for line in summary.lines()),
         ]
-        if summary.empty:
-            lines.append(
-                "No research operation has recorded anything on this machine. "
-                "Nothing said in ordinary conversation created evidence, and "
-                "any sources mentioned in an earlier reply were model output, "
-                "not material Hypatia read."
-            )
-        elif not summary.has_evidence:
-            lines.append(
-                "Sources exist but no evidence record does. An accepted source "
-                "is not evidence: evidence is recorded separately, from a "
-                "specific passage, by an explicit step."
-            )
-        else:
-            lines.append(
-                "These counts come from persisted research state. A recorded "
-                "operation is not evidence, evidence is not a verified claim, "
-                "and a claim is not an established truth."
-            )
         return BrainResponse(
             message="\n".join(lines),
             request_id=request.request_id,
@@ -1161,6 +1176,21 @@ class ResponseComposer:
             canonical_research_summary=summary,
             live_information_request=(LiveInformationRequestKind.EVIDENCE_PROVENANCE),
         )
+
+    @staticmethod
+    def _evidence_phrase_key(summary: CanonicalResearchSummary) -> str:
+        """Choose the sentence from the same counters the reply prints.
+
+        The previous version branched on whether anything at all was recorded,
+        so a run with no sources fell through to "Sources exist but no evidence
+        record does" while printing "Sources accepted: 0" two lines above. The
+        prose now reads the same two numbers the reader can see.
+        """
+        if summary.evidence_count:
+            return "evidence_recorded"
+        if summary.source_count:
+            return "evidence_sources_without_evidence"
+        return "evidence_none_at_all"
 
     def research_reflection(
         self,
