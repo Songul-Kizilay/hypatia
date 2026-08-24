@@ -822,11 +822,20 @@ class RegistrationTests(unittest.TestCase):
                 FilesystemMetadataTool,
             )
 
-    def test_no_content_capability_exists_anywhere(self) -> None:
+    def test_content_capability_is_declared_but_no_content_tool_is_registered(
+        self,
+    ) -> None:
         names = {capability.value for capability in ToolCapability}
 
+        self.assertIn("filesystem_read", names)
+        with tempfile.TemporaryDirectory() as temp:
+            registered = {
+                capability.value
+                for capability in ToolRuntime(FilesystemRoot(Path(temp))).capabilities
+            }
+        self.assertNotIn("filesystem_read", registered)
+
         for forbidden in (
-            "filesystem_read",
             "filesystem_write",
             "filesystem_delete",
             "filesystem_execute",

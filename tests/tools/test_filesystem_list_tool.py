@@ -48,6 +48,7 @@ from tools.ToolFailureKind import ToolFailureKind
 from tools.ToolInvocation import ToolInvocation
 from tools.ToolRegistry import ToolRegistry
 from tools.ToolResult import MAX_TOOL_VALUES
+from tools.ToolRuntime import ToolRuntime
 
 GRANT = frozenset({ToolEffect.READS_FILESYSTEM_METADATA})
 SENTINEL_DIR = "private-investigation-8472"
@@ -777,11 +778,18 @@ class TelemetryPrivacyTests(FilesystemFixture):
 class CapabilityScopeTests(unittest.TestCase):
     """What this milestone deliberately did not build."""
 
-    def test_no_read_write_or_execute_capability_exists(self) -> None:
+    def test_read_is_only_an_unregistered_value_and_mutation_does_not_exist(
+        self,
+    ) -> None:
         names = {capability.value for capability in ToolCapability}
 
+        self.assertIn("filesystem_read", names)
+        self.assertNotIn(
+            ToolCapability.FILESYSTEM_READ,
+            ToolRuntime(None).capabilities,
+        )
+
         for forbidden in (
-            "filesystem_read",
             "filesystem_write",
             "filesystem_delete",
             "filesystem_execute",

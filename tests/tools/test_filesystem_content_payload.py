@@ -238,7 +238,7 @@ class FilesystemContentPayloadTests(unittest.TestCase):
 
 
 class FilesystemContentPayloadIsolationTests(unittest.TestCase):
-    def test_no_production_module_uses_the_inert_payload_yet(self) -> None:
+    def test_only_result_boundary_modules_import_the_payload_contract(self) -> None:
         offenders = []
         for path in (ROOT_DIR / "src").rglob("*.py"):
             if path.name == "FilesystemContentPayload.py":
@@ -246,7 +246,13 @@ class FilesystemContentPayloadIsolationTests(unittest.TestCase):
             if "FilesystemContentPayload" in path.read_text(encoding="utf-8"):
                 offenders.append(path.relative_to(ROOT_DIR).as_posix())
 
-        self.assertEqual(offenders, [])
+        self.assertEqual(
+            sorted(offenders),
+            [
+                "src/tools/ToolExecutionService.py",
+                "src/tools/ToolResult.py",
+            ],
+        )
 
     def test_payload_source_has_no_filesystem_or_integration_operation(self) -> None:
         source = (ROOT_DIR / "src" / "tools" / "FilesystemContentPayload.py").read_text(

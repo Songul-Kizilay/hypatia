@@ -1,8 +1,9 @@
 # Read-Only Filesystem Capability — Design Proposal
 
-**Status: PROPOSED. NOT IMPLEMENTED.** No filesystem capability, effect, tool,
-or code exists in the runtime as of `v0.3.167`. This document exists so that the
-decisions below are reviewable before anything can act on them.
+**Status: HISTORICAL DESIGN, PARTLY SHIPPED.** `filesystem_list` and
+`filesystem_metadata` are CURRENT. File-content access remains unimplemented
+and is governed by
+[Filesystem_Content_Access_Design.md](Filesystem_Content_Access_Design.md).
 
 The findings in the Windows section were measured on the development machine
 (Windows 11, Python 3.14.5, `D:\hypatia-main`), not recalled. Several of them
@@ -27,9 +28,9 @@ Three capabilities, not one:
 
 | Capability | Answers | Status |
 | --- | --- | --- |
-| `filesystem_list` | what entries exist directly under one authorized directory | proposed first |
-| `filesystem_metadata` | size, kind, and timestamps of one named entry | proposed second |
-| `filesystem_read` | file contents | **not proposed** |
+| `filesystem_list` | what entries exist directly under one authorized directory | **CURRENT** |
+| `filesystem_metadata` | size, kind, and timestamps of one named entry | **CURRENT** |
+| `filesystem_read` | file contents | separately designed, **not implemented** |
 
 A single `filesystem` capability would be a mistake that cannot be undone later.
 Every grant of it would carry every future filesystem ability, including ones
@@ -58,8 +59,9 @@ metadata, not one per capability. The capability split already separates listing
 from reading; a second, parallel split in the effect vocabulary would add
 ceremony without adding a decision anyone would actually make differently.
 
-If `filesystem_read` is ever proposed, it must introduce its own effect. Content
-is a different kind of secret from names.
+The separate content design introduces `READS_FILESYSTEM_CONTENT` as an
+unregistered foundation. Content is a different kind of secret from names, and
+metadata authority never implies it.
 
 ## 4. Authorized root
 

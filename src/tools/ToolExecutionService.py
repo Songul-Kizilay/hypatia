@@ -35,8 +35,11 @@ from uuid import uuid4
 
 from core.Exceptions import ResearchError
 from eventbus.EventBus import EventBus
+from tools.FilesystemContentPayload import FilesystemContentPayload
 from tools.Tool import Tool
+from tools.ToolCapability import ToolCapability
 from tools.ToolDescriptor import ToolDescriptor
+from tools.ToolEffect import ToolEffect
 from tools.ToolEvents import ToolEvents
 from tools.ToolExecutionOutcome import ToolExecutionOutcome
 from tools.ToolFailureKind import ToolFailureKind
@@ -132,7 +135,7 @@ class ToolExecutionService:
                 "The tool ran and reported a failure.",
             )
         else:
-            self._validate_returned(result, invocation)
+            self._validate_returned(result, invocation, descriptor)
         failure_kind = ToolFailureKind.for_disposition(result.disposition)
         if failure_kind is None:
             events.completed(invocation, descriptor, result)
@@ -152,12 +155,29 @@ class ToolExecutionService:
         )
 
     @staticmethod
-    def _validate_returned(result: object, invocation: ToolInvocation) -> None:
+    def _validate_returned(
+        result: object,
+        invocation: ToolInvocation,
+        descriptor: ToolDescriptor,
+    ) -> None:
         """Refuse a tool that answered for a capability it was not asked about."""
         if not isinstance(result, ToolResult):
             raise ResearchError("A tool must return a tool result.")
         if result.capability is not invocation.capability:
             raise ResearchError("A tool returned a result for another capability.")
+        if result.content is None:
+            return
+        if not isinstance(result.content, FilesystemContentPayload):
+            raise ResearchError("A tool returned an invalid content payload.")
+        content_effect = ToolEffect.READS_FILESYSTEM_CONTENT
+        if (
+            result.capability is not ToolCapability.FILESYSTEM_READ
+            or content_effect not in descriptor.effects
+            or content_effect not in invocation.authorized_effects
+        ):
+            raise ResearchError(
+                "A tool returned content without explicit content authority."
+            )
 
     @staticmethod
     def _refused(

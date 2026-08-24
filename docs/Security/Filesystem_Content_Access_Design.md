@@ -1,10 +1,11 @@
 # Filesystem Content Access — Security Design
 
-**Status: PROPOSED. NOT IMPLEMENTED.** No content-reading capability, effect,
-tool, or runtime path exists as of `v0.3.173`. The inert, bounded
-`FilesystemContentPayload` data contract is CURRENT but is not imported by any
-production module. Everything else marked PROPOSED does not exist yet and must
-not be cited as though it does.
+**Status: PROPOSED. NOT IMPLEMENTED.** No content-reading tool or registered
+runtime path exists as of `v0.3.174`. The bounded
+`FilesystemContentPayload`, its success-only `ToolResult.content` channel, the
+separate content effect, and the unregistered capability value are CURRENT.
+Everything else marked PROPOSED does not exist yet and must not be cited as
+though it does.
 
 This is a separate document from
 [Filesystem_Capability_Design.md](Filesystem_Capability_Design.md) because
@@ -60,9 +61,10 @@ Each of those is a separate authority, and this document keeps them separate.
 | `FilesystemRoot`, `FilesystemPathRefusal`, `FilesystemEntryKind` | **CURRENT** |
 | `ToolDisposition`, `ToolFailureKind` | **CURRENT** |
 | Operator Tool Console, invocation-scoped grants | **CURRENT** |
-| `FilesystemContentPayload` | **CURRENT**, inert and unused by production modules |
-| `READS_FILESYSTEM_CONTENT` | **PROPOSED**, does not exist |
-| `filesystem_read` | **PROPOSED**, does not exist |
+| `FilesystemContentPayload`, `ToolResult.content` | **CURRENT**, bounded result channel |
+| `READS_FILESYSTEM_CONTENT` | **CURRENT**, separately authorized effect |
+| `FILESYSTEM_READ` capability value | **CURRENT**, deliberately unregistered |
+| `filesystem_read` tool | **PROPOSED**, does not exist |
 | Content in model context | **FUTURE**, separate milestone, separate authority |
 | Content in memory | **FUTURE**, separate milestone |
 | Content as research evidence | **FUTURE**, separate milestone |
@@ -82,7 +84,7 @@ that never appears in a diff. Two capabilities currently share
 `READS_FILESYSTEM_METADATA`, and any future grant of it must continue to mean
 "may learn that files exist and how big they are" and nothing more.
 
-Proposed name: `READS_FILESYSTEM_CONTENT` (PROPOSED).
+Current name: `READS_FILESYSTEM_CONTENT`.
 
 | Question | Decision |
 | --- | --- |
@@ -359,22 +361,24 @@ would quietly turn a size limit meant for structured fields into a content
 limit. The listing capability already refused to solve its bounding problem by
 raising `MAX_TOOL_VALUES`, for the same reason: that bound protects every tool.
 
-**DECIDED: content uses one optional, typed payload field on `ToolResult`.** The
-immutable `FilesystemContentPayload` type is CURRENT and inert; the future field
-is `content: FilesystemContentPayload | None`. It is not a sibling result type.
+**DECIDED AND CURRENT: content uses one optional, typed payload field on
+`ToolResult`.** The immutable `FilesystemContentPayload` type and
+`content: FilesystemContentPayload | None` field are CURRENT. It is not a
+sibling result type.
 Keeping the existing `ToolResult` return boundary means `Tool`,
 `ToolExecutionService`, `ToolExecutionOutcome`, failure taxonomy, and lifecycle
 ordering continue to describe exactly one result rather than growing a parallel
 execution path whose authorization behaviour could drift.
 
 This is not permission for every tool to return content. The payload is valid
-only on a successful, `COMPLETED` result for the future `filesystem_read`
-capability. The execution service must reject a payload when the resolved
-descriptor and invocation do not both carry the future
-`READS_FILESYSTEM_CONTENT` effect. Every refusal, decline, failure, cancellation,
-and all existing capabilities must have `content is None`. These checks belong
-at both the immutable result boundary and the central execution boundary; a
-tool must not be able to widen its authority by constructing a field.
+only on a successful, `COMPLETED` result for the unregistered
+`FILESYSTEM_READ` capability value. `ToolExecutionService` rejects a payload
+unless the resolved descriptor and invocation both carry
+`READS_FILESYSTEM_CONTENT`, and it revalidates the payload type. Every refusal,
+decline, failure, cancellation, and every other capability has
+`content is None`. These checks exist at both the immutable result boundary and
+the central execution boundary; a tool cannot widen its authority by
+constructing or later tampering with a field.
 
 `MAX_TOOL_VALUES` and `MAX_TOOL_VALUE_LENGTH` remain unchanged. The content
 field is not rendered by `ToolResult.lines()`, copied into `values`, included in
@@ -745,10 +749,10 @@ merely from the current endpoint classification.
 
 ## 18. Result contract
 
-The CURRENT, inert `FilesystemContentPayload` is the separate bounded data
-contract chosen in §8. It is immutable and owns the fields below plus the
-decoded `text`. No production module imports it yet, and none of these fields
-travels in `ToolResult.values`.
+The CURRENT `FilesystemContentPayload` is the separate bounded data contract
+chosen in §8. It is immutable and owns the fields below plus the decoded
+`text`. Only `ToolResult` and the central execution service import it; none of
+these fields travels in `ToolResult.values`.
 
 | Field | Why it is there |
 | --- | --- |
@@ -1038,7 +1042,7 @@ the same style of guard the metadata tool already carries.
 
 | Topic | Status | Note |
 | --- | --- | --- |
-| Separate effect for content | **DECIDED** | `READS_FILESYSTEM_CONTENT`, PROPOSED name |
+| Separate effect for content | **DECIDED, CURRENT** | `READS_FILESYSTEM_CONTENT`; metadata grants do not imply it |
 | Metadata never implies content | **DECIDED** | Invariant 1 |
 | Reuse `FilesystemRoot.locate` | **DECIDED** | No second path subsystem |
 | Directories declined | **DECIDED** | Not left to `PermissionError` |
@@ -1054,7 +1058,7 @@ the same style of guard the metadata tool already carries.
 | Read is not evidence | **DECIDED** | §13 |
 | Basename out of telemetry | **DECIDED** | §16 |
 | Local-only by default | **DECIDED** | §17 principle |
-| Content channel shape | **DECIDED** | Optional typed `FilesystemContentPayload` field on `ToolResult`; no sibling execution path |
+| Content channel shape | **DECIDED, CURRENT** | Optional typed `FilesystemContentPayload` field on `ToolResult`; no sibling execution path |
 | Phase A content bound | **DECIDED** | 64 KiB per invocation; existing tool-value limits unchanged |
 | Content invocation identity | **DECIDED** | Code-owned ID on `ToolExecutionOutcome`, carried beside content in `ToolRunView` |
 | Operator override for sensitive classes | **DEFERRED** | Needs its own UX |
@@ -1114,7 +1118,7 @@ the same style of guard the metadata tool already carries.
 
 ---
 
-## 29. Repository reference validation (`v0.3.173`)
+## 29. Repository reference validation (`v0.3.174`)
 
 This table records the source check completed before accepting the document.
 It is intentionally explicit so a future milestone cannot mistake a design name
@@ -1130,14 +1134,16 @@ for a shipped API.
 | `ToolResult` limits | CURRENT: `MAX_TOOL_VALUES = 20`, `MAX_TOOL_VALUE_LENGTH = 300`, `MAX_TOOL_DETAIL_LENGTH = 500` |
 | Tool lifecycle fields | CURRENT `ToolEvents` carries counts and bounded categories, not arguments, returned values, paths, or content |
 | Research taint constants | CURRENT module-level `EXTERNAL_SOURCE_TAINT_LABEL` and `EXTERNAL_SOURCE_INSTRUCTION_AUTHORITY` in `research/ResearchSourceRecord.py` |
-| `FilesystemContentPayload`, `MAX_CONTENT_BYTES`, `MAX_CONTENT_OFFSET` | CURRENT in `src/tools/FilesystemContentPayload.py`; immutable, bounded, and not imported by another production module |
+| `FilesystemContentPayload`, `MAX_CONTENT_BYTES`, `MAX_CONTENT_OFFSET` | CURRENT in `src/tools/FilesystemContentPayload.py`; immutable and bounded |
+| `ToolCapability.FILESYSTEM_READ`, `ToolEffect.READS_FILESYSTEM_CONTENT` | CURRENT declarations; deliberately absent from `ToolRuntime._build` |
+| `ToolResult.content` | CURRENT, success-only and excluded from `repr`, structured values, and line rendering |
+| Central content authority check | CURRENT in `ToolExecutionService`; payload type plus descriptor and invocation effect are revalidated |
 | `SourceLoadStage` | CURRENT and distinguishes `INDEXED_WITHOUT_RUN` from `ACCEPTED_INTO_RUN` |
 | `LLMLearnedMemoryCandidateExtractor`, `LearnedMemoryAuditApplicationService` | CURRENT; no file-content integration exists |
 | `SecurityAgentApplicationService`, `FailureMemoryApplicationService` | CURRENT; no file-content or Tool Layer failure ingestion is implied by their existence |
 | `is_loopback_llm_endpoint` | CURRENT endpoint-classification helper; not a content-disclosure grant |
-| `READS_FILESYSTEM_CONTENT`, `filesystem_read`, `ToolResult.content` | PROPOSED only; none exists in production code |
+| `filesystem_read` tool and runtime registration | PROPOSED only; neither exists in production code |
 | `MetaController` | FUTURE architectural role; no production type with that name exists |
 
-The inert contract implementation is versioned as `v0.3.173`; the preceding
-design-only and experiment-only commits intentionally did not change the
-runtime version.
+The bounded result-channel foundation is versioned as `v0.3.174`; it still
+opens and reads no file.

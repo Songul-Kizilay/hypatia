@@ -2,6 +2,45 @@
 
 All notable project changes are recorded here.
 
+## [0.3.174] - 2026-08-24
+
+### Added
+
+- `ToolCapability.FILESYSTEM_READ` and
+  `ToolEffect.READS_FILESYSTEM_CONTENT` as explicit but still-unregistered
+  declarations. Metadata authority does not imply content authority.
+- An optional, typed `FilesystemContentPayload` field on `ToolResult`, separate
+  from the existing bounded structured `values` channel.
+
+### Safety
+
+- Content is accepted only on a successful `COMPLETED` result for
+  `FILESYSTEM_READ`; refusals, declines, failures, cancellations, every other
+  capability, and results with structured values must carry no content.
+- The content field is excluded from `repr`, `ToolResult.lines()`, and generic
+  lifecycle events. Sentinel tests prove neither file text nor its relative
+  resource enters those disclosure paths.
+- `ToolExecutionService` revalidates the payload type and requires the content
+  effect in both the resolved descriptor and this invocation's explicit grant.
+  A metadata-only grant never reaches a content-declaring test tool, and a tool
+  that returns content without declaring the effect is rejected centrally.
+- `ToolRuntime` still registers no content capability. No file is opened or
+  read; no desktop, model, memory, research, evidence, persistence, or telemetry
+  content path is introduced.
+
+### Verification
+
+- Fifteen new focused tests cover declaration separation, runtime absence,
+  success-only result construction, type-smuggling defence, central effect
+  enforcement, metadata-grant isolation, representation privacy, lifecycle
+  privacy, and unchanged structured results.
+- The package-aware full local suite contains 3,189 passing automated tests,
+  with the same three platform-dependent skips.
+- Black and Ruff pass across production and test sources; whitespace validation
+  passes. MyPy passes across all production sources and both focused content
+  contract test modules. The separately recorded pre-existing full-test typing
+  debt remains outside this milestone.
+
 ## [0.3.173] - 2026-08-24
 
 ### Added

@@ -15,6 +15,11 @@ and for a while the only difference between them was the wording of ``detail``.
 That made an important distinction depend on prose, so it is a bounded value
 now. Use ``declined`` and ``failed`` to build the two, rather than setting the
 flags by hand and hoping they agree.
+
+File content is not a structured value. The optional content field is a
+separate, typed, success-only channel and is hidden from ``repr`` so an ordinary
+diagnostic cannot quote private text. The central execution service separately
+revalidates the authority to return it.
 """
 
 from __future__ import annotations
@@ -22,6 +27,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from core.Exceptions import ResearchError
+from tools.FilesystemContentPayload import FilesystemContentPayload
 from tools.ToolCapability import ToolCapability
 from tools.ToolDisposition import ToolDisposition
 
@@ -40,6 +46,7 @@ class ToolResult:
     succeeded: bool = True
     values: tuple[tuple[str, str], ...] = field(default_factory=tuple)
     disposition: ToolDisposition | None = None
+    content: FilesystemContentPayload | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         if not isinstance(self.capability, ToolCapability):
@@ -58,6 +65,7 @@ class ToolResult:
             raise ResearchError("A tool result detail is too long.")
         self._settle_disposition()
         self._validate_values()
+        self._validate_content()
 
     def _settle_disposition(self) -> None:
         """Fill in the disposition when obvious, and refuse it when it disagrees.
@@ -120,6 +128,25 @@ class ToolResult:
     def lines(self) -> tuple[str, ...]:
         """Render the returned values as bounded, labelled lines."""
         return tuple(f"{name}: {value}" for name, value in self.values)
+
+    def _validate_content(self) -> None:
+        """Keep the separate content channel narrow and success-only."""
+        if self.content is None:
+            return
+        if not isinstance(self.content, FilesystemContentPayload):
+            raise ResearchError("A tool content result must be a bounded payload.")
+        if self.capability is not ToolCapability.FILESYSTEM_READ:
+            raise ResearchError("Only filesystem read may return file content.")
+        if (
+            not self.performed
+            or not self.succeeded
+            or self.disposition is not ToolDisposition.COMPLETED
+        ):
+            raise ResearchError("An unsuccessful tool result cannot return content.")
+        if self.values:
+            raise ResearchError(
+                "A filesystem content result cannot duplicate data in values."
+            )
 
     @classmethod
     def refused(cls, capability: ToolCapability, reason: str) -> ToolResult:
