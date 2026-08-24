@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
 from brain.BrainContext import BrainContext
 from brain.BrainRequest import BrainRequest
@@ -60,6 +61,10 @@ from cognition.ResearchSourceAcceptanceService import (
 )
 from cognition.SecurityAgentApplicationService import (
     SecurityAgentApplicationService,
+)
+from cognition.SourceIngestionEvents import (
+    IngestionFailureKind,
+    SourceIngestionEvents,
 )
 from cognition.SourceReputationApplicationService import (
     SourceReputationApplicationService,
@@ -164,6 +169,8 @@ from research.SourceComparisonStepOperation import (
 )
 from research.SourceDiscoveryStepOperation import SourceDiscoveryStepOperation
 from research.SourceFetchStepOperation import SourceFetchStepOperation
+from research.SourceIdentity import identity_of
+from research.SourceLoadStage import SourceLoadStage
 from response.ResponseComposer import ResponseComposer
 from security.VulnerabilityGraphStore import VulnerabilityGraphStore
 from session.SessionCreateService import SessionCreateService
@@ -272,6 +279,7 @@ class CognitiveEngine:
             knowledge_engine,
             research_run_manager,
             research_source_content_store,
+            event_bus=event_bus,
         )
         self._research_run_manager = research_run_manager
         self._research_source_discovery_provider = research_source_discovery_provider
@@ -454,6 +462,7 @@ class CognitiveEngine:
             response_composer,
             research_plan_draft_service,
         )
+        self._source_ingestion_events = SourceIngestionEvents(event_bus)
         self._hybrid_semantic_memory_ranker = HybridSemanticMemoryRanker()
         self._router = BrainRouter()
 
@@ -1972,15 +1981,33 @@ class CognitiveEngine:
         *,
         response_intent: str = "research_source_load",
     ) -> BrainResponse:
-        """Acquire and index one explicit source without LLM or memory side effects."""
+        """Acquire and index one explicit source without LLM or memory side effects.
+
+        Each real transition is announced on the event bus. The identifier ties
+        one attempt's events together, so a subscriber can follow a single load
+        without inferring which events belong to it.
+        """
+        attempt_id = str(uuid4())
+        events = self._source_ingestion_events.for_attempt(attempt_id)
+        events.validation_started()
         url = request.metadata.get("research_url")
         if not isinstance(url, str) or not url.strip():
+            events.failed(
+                SourceLoadStage.NOT_ATTEMPTED,
+                IngestionFailureKind.VALIDATION_REFUSED,
+            )
             return self._response_composer.research_source_load_failure(
                 request,
                 "A research source URL is required.",
                 intent=response_intent,
             )
+        resource = identity_of(url)
         if self._research_source_fetcher is None:
+            events.failed(
+                SourceLoadStage.NOT_ATTEMPTED,
+                IngestionFailureKind.VALIDATION_REFUSED,
+                resource_identity=resource,
+            )
             return self._response_composer.research_source_load_failure(
                 request,
                 "Internet research source loading is unavailable.",
@@ -1989,12 +2016,23 @@ class CognitiveEngine:
         run_id_value = request.metadata.get("research_run_id")
         run_id = run_id_value.strip() if isinstance(run_id_value, str) else ""
         if run_id_value is not None and not run_id:
+            events.failed(
+                SourceLoadStage.NOT_ATTEMPTED,
+                IngestionFailureKind.VALIDATION_REFUSED,
+                resource_identity=resource,
+            )
             return self._response_composer.research_source_load_failure(
                 request,
                 "A valid research run ID is required.",
                 intent=response_intent,
             )
         if run_id and self._research_run_manager is None:
+            events.failed(
+                SourceLoadStage.NOT_ATTEMPTED,
+                IngestionFailureKind.RUN_UNAVAILABLE,
+                resource_identity=resource,
+                run_id=run_id,
+            )
             return self._response_composer.research_source_load_failure(
                 request,
                 "Research run persistence is unavailable.",
@@ -2005,39 +2043,62 @@ class CognitiveEngine:
             try:
                 selected_run = self._research_run_manager.get(run_id)
             except ResearchError:
+                events.failed(
+                    SourceLoadStage.NOT_ATTEMPTED,
+                    IngestionFailureKind.RUN_UNAVAILABLE,
+                    resource_identity=resource,
+                    run_id=run_id,
+                )
                 return self._response_composer.research_source_load_failure(
                     request,
                     "Research run was not found.",
                     intent=response_intent,
                 )
             if selected_run.status.terminal:
+                events.failed(
+                    SourceLoadStage.NOT_ATTEMPTED,
+                    IngestionFailureKind.RUN_UNAVAILABLE,
+                    resource_identity=resource,
+                    run_id=run_id,
+                )
                 return self._response_composer.research_source_load_failure(
                     request,
                     "Research run is closed and cannot accept new sources.",
                     intent=response_intent,
                 )
         if self._request_cancelled(request):
+            events.cancelled(resource_identity=resource, run_id=run_id)
             return self._response_composer.research_source_load_failure(
                 request,
                 "Research source loading was cancelled.",
                 intent=response_intent,
             )
+        events.validation_completed(resource, run_id=run_id)
         try:
+            events.fetch_started(resource, run_id=run_id)
             source = self._research_source_fetcher.fetch(url.strip())
+            events.fetch_completed(resource, run_id=run_id)
             if self._request_cancelled(request):
+                events.cancelled(resource_identity=resource, run_id=run_id)
                 return self._response_composer.research_source_load_failure(
                     request,
                     "Research source loading was cancelled.",
                     intent=response_intent,
                 )
-            result = self._research_source_acceptance_service.accept(source, run_id)
+            result = self._research_source_acceptance_service.accept(
+                source,
+                run_id,
+                attempt_id=attempt_id,
+            )
         except (ResearchError, KnowledgeError) as error:
             if isinstance(error, ResearchError) and self._request_cancelled(request):
+                events.cancelled(resource_identity=resource, run_id=run_id)
                 return self._response_composer.research_source_load_failure(
                     request,
                     "Research source loading was cancelled.",
                     intent=response_intent,
                 )
+            fetch_refused = isinstance(error, ResearchError)
             if run_id and self._research_run_manager is not None:
                 audit_reason = (
                     "Research source acquisition failed."
@@ -2051,6 +2112,21 @@ class CognitiveEngine:
                         audit_reason,
                     )
                 except ResearchError:
+                    events.failed(
+                        (
+                            SourceLoadStage.FETCH_REFUSED
+                            if fetch_refused
+                            else SourceLoadStage.INDEX_FAILED
+                        ),
+                        (
+                            IngestionFailureKind.FETCH_REFUSED
+                            if fetch_refused
+                            else IngestionFailureKind.INDEX_FAILED
+                        ),
+                        resource_identity=resource,
+                        run_id=run_id,
+                        safe_failure_recorded=False,
+                    )
                     return self._response_composer.research_source_load_failure(
                         request,
                         (
@@ -2059,6 +2135,17 @@ class CognitiveEngine:
                         ),
                         intent=response_intent,
                     )
+                safe_failure_recorded = True
+            else:
+                safe_failure_recorded = False
+            if fetch_refused:
+                events.failed(
+                    SourceLoadStage.FETCH_REFUSED,
+                    IngestionFailureKind.FETCH_REFUSED,
+                    resource_identity=resource,
+                    run_id=run_id,
+                    safe_failure_recorded=safe_failure_recorded,
+                )
             return self._response_composer.research_source_load_failure(
                 request,
                 f"Research source could not be loaded: {error}",

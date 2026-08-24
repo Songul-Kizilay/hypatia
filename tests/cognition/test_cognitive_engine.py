@@ -6274,7 +6274,12 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(llm_provider.calls, [])
         self.assertEqual(extractor.calls, [])
         self.assertEqual(self.memory_manager.count(), memory_count)
-        self.assertEqual(events, [])
+        # The guarantee is that a structured source load has no conversation,
+        # memory, or model side effects -- not that it is silent. Observability
+        # events for the ingestion itself are the point of that subsystem, so
+        # this asserts the absence of brain events rather than of all events.
+        self.assertEqual([name for name in events if name.startswith("brain.")], [])
+        self.assertTrue(all(name.startswith("source_ingestion.") for name in events))
         self.assertEqual(len(response.knowledge_documents), 1)
         document = response.knowledge_documents[0]
         self.assertEqual(document.source, source.url)

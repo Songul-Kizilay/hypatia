@@ -2,6 +2,49 @@
 
 All notable project changes are recorded here.
 
+## [0.3.160] - 2026-08-24
+
+### Added
+
+- `SourceIngestionEvents` publishes every real transition of a source load:
+  validation, fetch, index, and research-run attachment each start and complete,
+  and a stop is announced as cancelled or failed.
+- Every event of one load shares an attempt identifier, so a subscriber can
+  follow a single ingestion without inferring which events belong to it.
+
+### Safety
+
+- The stage vocabulary is reused, not duplicated. Events carry `SourceLoadStage`
+  values, so the stream cannot drift from the transaction it describes.
+- An event fires only after the transition it names, except the `*_started`
+  events, which claim nothing about outcome.
+- The payload is machine-readable only: identifiers, a stage, a status,
+  booleans, and a bounded failure kind. No prose, no translation, no exception
+  message.
+- Indexed locally still does not mean accepted into a run. The two facts are
+  separate fields, only `ACCEPTED_INTO_RUN` carries `attached_to_run`, and a
+  test asserts no event of an index-only load claims attachment.
+- Safe-failure metadata reports what happened: a refused fetch with a bound run
+  reports the recorded failure, and the same refusal without a run reports that
+  none was recorded.
+- Evidence recording is deliberately outside this pipeline. It is a separate
+  authored transaction, and announcing it here would invent progress.
+
+### Changed
+
+- One existing test asserted zero events as a proxy for "no side effects". It
+  now asserts the guarantee it meant — no conversation, memory, or model work —
+  by requiring the absence of `brain.*` events and that every emitted event
+  belongs to the ingestion subsystem.
+
+### Verification
+
+- The package-aware full local suite contains 2,544 passing automated tests.
+- Twenty-five new tests cover the full successful order, exactly-once emission,
+  attempt correlation, index-only distinctness, refused fetch, index failure,
+  attach failure, duplicate documents, cancellation, retry, safe-failure
+  reporting, payload shape, and a service constructed without a bus.
+
 ## [0.3.159] - 2026-08-24
 
 ### Added

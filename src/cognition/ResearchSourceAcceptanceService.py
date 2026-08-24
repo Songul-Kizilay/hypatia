@@ -27,13 +27,19 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from cognition.SourceIngestionEvents import (
+    IngestionFailureKind,
+    SourceIngestionEvents,
+)
 from core.Exceptions import KnowledgeError, ResearchError
+from eventbus.EventBus import EventBus
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchSource import ResearchSource
 from research.ResearchSourceAcceptanceResult import ResearchSourceAcceptanceResult
 from research.ResearchSourceContentRecord import ResearchSourceContentRecord
 from research.ResearchSourceContentStore import ResearchSourceContentStore
+from research.SourceIdentity import identity_of
 from research.SourceLoadStage import SourceLoadStage
 
 
@@ -45,26 +51,42 @@ class ResearchSourceAcceptanceService:
         knowledge_engine: KnowledgeEngine,
         research_run_manager: ResearchRunManager | None = None,
         research_source_content_store: ResearchSourceContentStore | None = None,
+        event_bus: EventBus | None = None,
     ) -> None:
         self._knowledge_engine = knowledge_engine
         self._research_run_manager = research_run_manager
         self._research_source_content_store = research_source_content_store
+        self._events = SourceIngestionEvents(event_bus)
 
     def accept(
         self,
         source: ResearchSource,
         run_id: str = "",
+        attempt_id: str = "",
     ) -> ResearchSourceAcceptanceResult:
         """Run the canonical acceptance transaction for one fetched source.
 
         Indexing failures raise `KnowledgeError` so the caller can distinguish
         them from acquisition failures, exactly as before the extraction.
         """
+        events = self._events.for_attempt(attempt_id)
+        resource = identity_of(source.url)
         source_document = source.to_document()
-        document = self._knowledge_engine.add_document(
-            source_document,
-            stable_chunk_ids=bool(run_id),
-        )
+        events.index_started(resource, run_id=run_id)
+        try:
+            document = self._knowledge_engine.add_document(
+                source_document,
+                stable_chunk_ids=bool(run_id),
+            )
+        except KnowledgeError:
+            events.failed(
+                SourceLoadStage.INDEX_FAILED,
+                IngestionFailureKind.INDEX_FAILED,
+                resource_identity=resource,
+                run_id=run_id,
+            )
+            raise
+        events.index_completed(resource, document.document_id, run_id=run_id)
 
         if not run_id or self._research_run_manager is None:
             return ResearchSourceAcceptanceResult(
@@ -91,17 +113,26 @@ class ResearchSourceAcceptanceService:
                 try:
                     self._knowledge_engine.remove_document(document.document_id)
                 except KnowledgeError:
-                    return self._rejected(
+                    return self._failed(
+                        events,
                         "Research source content failed and knowledge "
                         "rollback failed.",
                         SourceLoadStage.CONTENT_PERSIST_FAILED,
+                        IngestionFailureKind.CONTENT_PERSIST_FAILED,
+                        resource,
+                        run_id,
                     )
-                return self._rejected(
+                return self._failed(
+                    events,
                     "Research source content could not be saved; "
                     "knowledge was rolled back.",
                     SourceLoadStage.CONTENT_PERSIST_FAILED,
+                    IngestionFailureKind.CONTENT_PERSIST_FAILED,
+                    resource,
+                    run_id,
                 )
 
+        events.attach_started(resource, document.document_id, run_id)
         try:
             run = self._research_run_manager.add_source(
                 run_id,
@@ -109,10 +140,20 @@ class ResearchSourceAcceptanceService:
                 document.document_id,
             )
         except ResearchError:
-            return self._rejected(
+            return self._failed(
+                events,
                 self._rollback(document.document_id, content_snapshot),
                 SourceLoadStage.RUN_ATTACH_FAILED,
+                IngestionFailureKind.ATTACH_REFUSED,
+                resource,
+                run_id,
             )
+        events.attach_completed(
+            resource,
+            document.document_id,
+            run_id,
+            len(run.sources),
+        )
         return ResearchSourceAcceptanceResult(
             accepted=True,
             transaction_attempted=True,
@@ -165,10 +206,21 @@ class ResearchSourceAcceptanceService:
         return "Research source audit could not be saved; knowledge was rolled back."
 
     @staticmethod
-    def _rejected(
+    def _failed(
+        events: SourceIngestionEvents,
         reason: str,
         stage: SourceLoadStage,
+        failure_kind: IngestionFailureKind,
+        resource_identity: str,
+        run_id: str,
     ) -> ResearchSourceAcceptanceResult:
+        """Announce the stop once, then return the matching result."""
+        events.failed(
+            stage,
+            failure_kind,
+            resource_identity=resource_identity,
+            run_id=run_id,
+        )
         return ResearchSourceAcceptanceResult(
             accepted=False,
             transaction_attempted=True,
