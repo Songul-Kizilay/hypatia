@@ -63,6 +63,11 @@ revocation, stale confirmations, active operations, and restart semantics. The
 console shows only the existing opaque `Scope: workspace` label; it does not
 put the absolute root path into results, audit lines, telemetry, or saved state.
 
+That separate future boundary is now accepted in
+[`Desktop_Workspace_Selection_Decision.md`](Desktop_Workspace_Selection_Decision.md).
+It remains unimplemented and restart-bound; this current `v0.3.180` capability
+still has no folder picker or live root replacement.
+
 The existing refusal of drive roots, filesystem roots, the user's home
 directory, and ancestors of the home directory remains unchanged.
 

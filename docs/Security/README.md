@@ -168,6 +168,12 @@ Hypatia currently runs as a local-first CLI. The initial security boundary is:
   projection, literal local-only presentation, and discard-on-cancel/close.
   It authorizes no model, memory, research, persistence, export, clipboard,
   automatic continuation, override, or POSIX path.
+- [Desktop workspace selection decision](Desktop_Workspace_Selection_Decision.md).
+  A future Windows-only folder picker is accepted as a restart-bound settings
+  flow: exact local preview, single-use confirmation, bounded atomic preference,
+  local-NTFS proof, fail-closed startup, and no live root hot-swap. It is not
+  implemented and authorizes no path disclosure to model, memory, research,
+  Tool telemetry, exports, clipboard, remote systems, or POSIX content access.
 
 The current full-repository security baseline is recorded in the Codex Security
 scan completed for v0.3 planning. Before Hypatia gains a networked UI, plugins,

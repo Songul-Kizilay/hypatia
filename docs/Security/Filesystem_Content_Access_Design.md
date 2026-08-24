@@ -1112,6 +1112,7 @@ the same style of guard the metadata tool already carries.
 | Content invocation identity | **DECIDED, CURRENT** | Required code-owned ID on `ToolExecutionOutcome`; future `ToolRunView` carries it beside content |
 | Windows desktop Stage-A registration | **DECIDED, CURRENT** | Composed explicitly only with the same resolved root and exact rooted reader/tool; absent on unsupported platforms or failed composition |
 | First Stage-A root selection | **DECIDED, CURRENT POLICY** | Startup-only `HYPATIA_FILESYSTEM_ROOT` or Hypatia data root; no live picker or root hot-swap |
+| Restart-bound desktop workspace selection | **DECIDED, NOT IMPLEMENTED** | Future Windows-only local-NTFS picker persists one exact next-start preference; environment precedence, fail-closed invalid state, single-use confirmation, and no live root replacement are specified in `Desktop_Workspace_Selection_Decision.md` |
 | Content confirmation | **DECIDED, CURRENT** | Exact path/range/effect/scope tuple shown and authorized once; cancel creates no invocation |
 | Content presentation | **DECIDED, CURRENT** | Dedicated literal local-only untrusted panel; request ID bound beside payload; no generic lines, clipboard, export, transcript, or downstream integration |
 | Content cancellation and close | **DECIDED, CURRENT RUNNER SEMANTICS** | Existing single-flight worker discards completion after cancel or close and never claims forceful I/O termination |

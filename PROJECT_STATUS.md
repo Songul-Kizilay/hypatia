@@ -1065,12 +1065,12 @@ changed.
 
 ## Next Milestone
 
-Design a user-friendly, restart-bound workspace selector for the desktop so an
-operator can choose a narrower local folder without editing an environment
-variable. The design must preserve startup-only authority, refuse broad roots,
-show the exact selected scope before restart, invalidate stale confirmations,
-and keep absolute paths out of telemetry, model context, memory, research, and
-exports.
+Implement the accepted restart-bound desktop workspace-selection design in
+small stages, beginning with the bounded strict preference record and immutable
+types only. The accepted design preserves environment precedence, startup-only
+authority, local-NTFS proof, exact single-use confirmation, fail-closed invalid
+state, and a visible active-versus-next-start distinction. It does not permit a
+live root hot-swap or automatic relaunch.
 
 Do not wire content into model context, memory, research, evidence,
 persistence, exports, clipboard, remote disclosure, automatic continuation,
