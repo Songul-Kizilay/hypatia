@@ -9,16 +9,38 @@ property the gate exists to guarantee.
 `authorized` is a fact about this invocation, not a standing permission. It says
 the effects declared by this tool were granted for this call, and nothing about
 the next one.
+
+The request identifier is generated once by the central execution service. It
+is carried here beside the tool-authored result, never inside it, so the tool or
+returned content cannot invent its own provenance. The same identifier is used
+for every lifecycle event belonging to that invocation.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from core.Exceptions import ResearchError
 from tools.ToolCapability import ToolCapability
 from tools.ToolFailureKind import ToolFailureKind
 from tools.ToolResult import ToolResult
+
+MAX_TOOL_REQUEST_ID_LENGTH = 100
+_REQUEST_ID_SEPARATORS = frozenset("-_.")
+
+
+def validate_tool_request_id(value: object) -> str:
+    """Return one safe code-owned identifier or refuse it before telemetry."""
+    if not isinstance(value, str):
+        raise ResearchError("A tool request identifier must be text.")
+    if not value or len(value) > MAX_TOOL_REQUEST_ID_LENGTH:
+        raise ResearchError("A tool request identifier must be bounded.")
+    if not value.isascii() or not all(
+        character.isalnum() or character in _REQUEST_ID_SEPARATORS
+        for character in value
+    ):
+        raise ResearchError("A tool request identifier must be a safe ASCII token.")
+    return value
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,6 +52,7 @@ class ToolExecutionOutcome:
     resolved: bool
     authorized: bool
     failure_kind: ToolFailureKind | None = None
+    request_id: str = field(kw_only=True)
 
     def __post_init__(self) -> None:
         if not isinstance(self.capability, ToolCapability):
@@ -46,6 +69,7 @@ class ToolExecutionOutcome:
             self.failure_kind, ToolFailureKind
         ):
             raise ResearchError("An execution failure kind must be bounded.")
+        validate_tool_request_id(self.request_id)
         self._validate_consistency()
 
     def _validate_consistency(self) -> None:

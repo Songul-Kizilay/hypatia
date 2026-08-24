@@ -41,7 +41,7 @@ from tools.ToolCapability import ToolCapability
 from tools.ToolDescriptor import ToolDescriptor
 from tools.ToolEffect import ToolEffect
 from tools.ToolEvents import ToolEvents
-from tools.ToolExecutionOutcome import ToolExecutionOutcome
+from tools.ToolExecutionOutcome import ToolExecutionOutcome, validate_tool_request_id
 from tools.ToolFailureKind import ToolFailureKind
 from tools.ToolInvocation import ToolInvocation
 from tools.ToolRegistry import ToolRegistry
@@ -83,7 +83,8 @@ class ToolExecutionService:
         """Run one invocation and report how far it got and why it stopped."""
         if not isinstance(invocation, ToolInvocation):
             raise ResearchError("A tool execution requires an invocation.")
-        events = self._events.for_request(self._id_factory())
+        request_id = validate_tool_request_id(self._id_factory())
+        events = self._events.for_request(request_id)
         events.requested(invocation)
 
         tool = self._registry.resolve(invocation.capability)
@@ -94,11 +95,12 @@ class ToolExecutionService:
                 ToolFailureKind.UNKNOWN_CAPABILITY,
                 "No tool is registered for this capability.",
                 resolved=False,
+                request_id=request_id,
             )
 
         if self._cancelled(cancellation_token):
             events.cancelled(invocation)
-            return self._cancellation(invocation)
+            return self._cancellation(invocation, request_id=request_id)
 
         descriptor = tool.descriptor
         if not descriptor.within(invocation.authorized_effects):
@@ -109,17 +111,20 @@ class ToolExecutionService:
                 "The tool declares effects this invocation did not authorize.",
                 resolved=True,
                 descriptor=descriptor,
+                request_id=request_id,
             )
 
         events.authorized(invocation, descriptor)
         events.started(invocation, descriptor)
-        return self._run(events, tool, invocation)
+        return self._run(events, tool, invocation, request_id=request_id)
 
     def _run(
         self,
         events: ToolEvents,
         tool: Tool,
         invocation: ToolInvocation,
+        *,
+        request_id: str,
     ) -> ToolExecutionOutcome:
         """Invoke an authorised tool, turning a raised failure into a bounded one."""
         descriptor = tool.descriptor
@@ -152,6 +157,7 @@ class ToolExecutionService:
             resolved=True,
             authorized=True,
             failure_kind=failure_kind,
+            request_id=request_id,
         )
 
     @staticmethod
@@ -188,6 +194,7 @@ class ToolExecutionService:
         *,
         resolved: bool,
         descriptor: ToolDescriptor | None = None,
+        request_id: str,
     ) -> ToolExecutionOutcome:
         """Report a stop that happened before the implementation was reached."""
         result = ToolResult.refused(invocation.capability, reason)
@@ -203,10 +210,15 @@ class ToolExecutionService:
             resolved=resolved,
             authorized=False,
             failure_kind=failure_kind,
+            request_id=request_id,
         )
 
     @staticmethod
-    def _cancellation(invocation: ToolInvocation) -> ToolExecutionOutcome:
+    def _cancellation(
+        invocation: ToolInvocation,
+        *,
+        request_id: str,
+    ) -> ToolExecutionOutcome:
         """Report a cancellation, which is neither a refusal nor a tool failure."""
         return ToolExecutionOutcome(
             capability=invocation.capability,
@@ -217,6 +229,7 @@ class ToolExecutionService:
             resolved=True,
             authorized=False,
             failure_kind=ToolFailureKind.CANCELLED,
+            request_id=request_id,
         )
 
     @staticmethod

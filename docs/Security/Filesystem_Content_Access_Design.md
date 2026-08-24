@@ -1,9 +1,10 @@
 # Filesystem Content Access — Security Design
 
 **Status: PROPOSED. NOT IMPLEMENTED.** No content-reading tool or registered
-runtime path exists as of `v0.3.174`. The bounded
+runtime path exists as of `v0.3.175`. The bounded
 `FilesystemContentPayload`, its success-only `ToolResult.content` channel, the
-separate content effect, and the unregistered capability value are CURRENT.
+separate content effect, the unregistered capability value, and the code-owned
+request identifier on `ToolExecutionOutcome` are CURRENT.
 Everything else marked PROPOSED does not exist yet and must not be cited as
 though it does.
 
@@ -64,6 +65,7 @@ Each of those is a separate authority, and this document keeps them separate.
 | `FilesystemContentPayload`, `ToolResult.content` | **CURRENT**, bounded result channel |
 | `READS_FILESYSTEM_CONTENT` | **CURRENT**, separately authorized effect |
 | `FILESYSTEM_READ` capability value | **CURRENT**, deliberately unregistered |
+| `ToolExecutionOutcome.request_id` | **CURRENT**, code-owned and shared with lifecycle events |
 | `filesystem_read` tool | **PROPOSED**, does not exist |
 | Content in model context | **FUTURE**, separate milestone, separate authority |
 | Content in memory | **FUTURE**, separate milestone |
@@ -818,13 +820,17 @@ which root, which relative resource, which byte range, when it was read, which
 invocation produced it, whether it was truncated, and what interpretation was
 applied.
 
-**DECIDED: the code-owned invocation ID belongs to `ToolExecutionOutcome`, not
-the filesystem payload.** `ToolExecutionService` already creates that ID before
-emitting lifecycle events; the future change exposes the same bounded ID on the
-outcome, and `ToolRunView` carries it beside the payload. This prevents a tool
-implementation or file from authoring its own invocation identity. Any future
-export or persistence must wrap the payload together with that outcome ID; the
-payload may not be detached and presented as provenance-complete on its own.
+**DECIDED AND CURRENT: the code-owned invocation ID belongs to
+`ToolExecutionOutcome`, not the filesystem payload.** `ToolExecutionService`
+creates and validates one bounded ASCII token before emitting lifecycle events,
+uses the same value for those events, and exposes it as the required immutable
+`request_id` on every detailed outcome. The tool receives no identifier through
+`ToolInvocation`, and neither `ToolResult` nor `FilesystemContentPayload`
+contains one. This prevents a tool implementation or file from authoring its
+own invocation identity. A future `ToolRunView` presentation milestone may
+carry the outcome ID beside the payload. Any future export or persistence must
+wrap the payload together with that outcome ID; the payload may not be detached
+and presented as provenance-complete on its own.
 
 **Staleness: DECIDED as a principle — a chunk describes a moment, not a file.**
 Provenance records `read_at_utc`, and should record the `size` and `mtime`
@@ -1060,7 +1066,7 @@ the same style of guard the metadata tool already carries.
 | Local-only by default | **DECIDED** | §17 principle |
 | Content channel shape | **DECIDED, CURRENT** | Optional typed `FilesystemContentPayload` field on `ToolResult`; no sibling execution path |
 | Phase A content bound | **DECIDED** | 64 KiB per invocation; existing tool-value limits unchanged |
-| Content invocation identity | **DECIDED** | Code-owned ID on `ToolExecutionOutcome`, carried beside content in `ToolRunView` |
+| Content invocation identity | **DECIDED, CURRENT** | Required code-owned ID on `ToolExecutionOutcome`; future `ToolRunView` carries it beside content |
 | Operator override for sensitive classes | **DEFERRED** | Needs its own UX |
 | Secret detection in content | **DEFERRED** | Redaction aid at most |
 | Content hash | **DEFERRED** | Inside read only, never metadata |
@@ -1118,7 +1124,7 @@ the same style of guard the metadata tool already carries.
 
 ---
 
-## 29. Repository reference validation (`v0.3.174`)
+## 29. Repository reference validation (`v0.3.175`)
 
 This table records the source check completed before accepting the document.
 It is intentionally explicit so a future milestone cannot mistake a design name
@@ -1138,6 +1144,7 @@ for a shipped API.
 | `ToolCapability.FILESYSTEM_READ`, `ToolEffect.READS_FILESYSTEM_CONTENT` | CURRENT declarations; deliberately absent from `ToolRuntime._build` |
 | `ToolResult.content` | CURRENT, success-only and excluded from `repr`, structured values, and line rendering |
 | Central content authority check | CURRENT in `ToolExecutionService`; payload type plus descriptor and invocation effect are revalidated |
+| `ToolExecutionOutcome.request_id` | CURRENT, required and immutable; `ToolExecutionService` validates one value before telemetry and shares it with every lifecycle event for the invocation |
 | `SourceLoadStage` | CURRENT and distinguishes `INDEXED_WITHOUT_RUN` from `ACCEPTED_INTO_RUN` |
 | `LLMLearnedMemoryCandidateExtractor`, `LearnedMemoryAuditApplicationService` | CURRENT; no file-content integration exists |
 | `SecurityAgentApplicationService`, `FailureMemoryApplicationService` | CURRENT; no file-content or Tool Layer failure ingestion is implied by their existence |
@@ -1145,5 +1152,5 @@ for a shipped API.
 | `filesystem_read` tool and runtime registration | PROPOSED only; neither exists in production code |
 | `MetaController` | FUTURE architectural role; no production type with that name exists |
 
-The bounded result-channel foundation is versioned as `v0.3.174`; it still
-opens and reads no file.
+The code-owned outcome identity foundation is versioned as `v0.3.175`; it still
+opens and reads no file, and the desktop does not yet project that identity.

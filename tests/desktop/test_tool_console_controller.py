@@ -416,6 +416,7 @@ class OutcomeDistinctionTests(ConsoleFixture):
             resolved=True,
             authorized=True,
             failure_kind=kind,
+            request_id="request-1",
         )
 
     def view_for(self, kind: object, disposition: str) -> object:

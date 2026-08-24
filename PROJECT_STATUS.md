@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.174 (Genesis)`
+`v0.3.175 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.174`** is the current executable package and GitHub
+- **Runtime release `v0.3.175`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -943,6 +943,13 @@ with optional OpenAI-compatible LLM conversation support.
   and its effect are declared but no production runtime registers the
   capability. No content-reading tool, desktop path, model path, memory path,
   research path, persistence path, or generic telemetry content exists.
+- Every detailed Tool Layer outcome now carries the same code-owned request
+  identifier used by its lifecycle events. The central service validates one
+  bounded ASCII token before telemetry and carries it through success, refusal,
+  cancellation, and failure. The identifier is absent from `ToolInvocation`,
+  `ToolResult`, and `FilesystemContentPayload`, so neither a tool nor returned
+  content can author its own provenance. It is not yet projected into the
+  desktop presentation model.
 
 ### Intentionally Not Implemented
 
@@ -974,9 +981,9 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 3,189 automated tests pass through package-aware discovery.
+- 3,198 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
-- MyPy passes for all `src` files and both focused content-contract tests. A full
+- MyPy passes for all `src` files and the focused request-ID contract test. A full
   `src` + `tests` MyPy sweep currently reports 354 existing errors across 35
   test files, so repository-wide test typing is explicitly not a passing gate.
 - Whitespace validation (`git diff --check`) passes.
@@ -1011,13 +1018,13 @@ changed.
 
 ## Next Milestone
 
-Expose the existing code-owned tool request identifier on
-`ToolExecutionOutcome`, as decided in
-[the content-access security design](docs/Security/Filesystem_Content_Access_Design.md),
-and carry it beside (never inside) the content payload at future presentation
-boundaries. The tool implementation or file must never author its own
-invocation identity.
+Decide the production boundary for the measured Windows rooted-open primitive:
+supported API surface, wrapper ownership, packaging, handle lifetime, and
+bounded refusal/failure mapping. Record that decision before moving prototype
+native calls into `src`.
 
-Keep this increment free of filesystem reads, content-capability runtime
-registration, desktop rendering, model context, memory, research, evidence,
-persistence, and generic telemetry content.
+Keep the next increment free of filesystem reads, content-capability runtime
+registration, desktop controls, model context, memory, research, evidence,
+persistence, and generic telemetry content. POSIX/Linux rooted-open work remains
+a later platform milestone rather than being mixed into the Windows production
+boundary decision.

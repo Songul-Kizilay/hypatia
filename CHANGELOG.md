@@ -2,6 +2,41 @@
 
 All notable project changes are recorded here.
 
+## [0.3.175] - 2026-08-24
+
+### Added
+
+- A required, immutable `request_id` on `ToolExecutionOutcome`, carried beside
+  the tool-authored result rather than inside it.
+- A shared request-identifier validator with a 100-character ceiling and a
+  deliberately narrow ASCII token alphabet.
+
+### Safety
+
+- `ToolExecutionService` creates and validates one identifier before emitting
+  any lifecycle event, then carries that exact value through successful,
+  unknown-capability, unauthorized, cancelled, declined, and failed outcomes.
+- Invalid identifier-factory output stops before an event is emitted or a tool
+  implementation is reached. Validation errors contain no rejected identifier.
+- `ToolInvocation`, `ToolResult`, and `FilesystemContentPayload` carry no
+  request identifier, so a tool or local file cannot author its own provenance.
+  The ordinary result-only execution API remains unchanged.
+- No filesystem read, runtime registration, desktop presentation field, model
+  context, memory, research, evidence, persistence, or telemetry content path
+  is introduced.
+
+### Verification
+
+- Nine focused tests cover bounds and immutability, unsafe token refusal,
+  success/event correlation, every terminal branch, per-invocation generation,
+  fail-before-telemetry behavior, and result/payload isolation.
+- The package-aware full local suite contains 3,198 passing automated tests,
+  with the same three platform-dependent skips.
+- Black and Ruff pass across production and test sources; whitespace validation
+  passes. MyPy passes across all production sources and the focused request-ID
+  contract test. The separately recorded pre-existing full-test typing debt
+  remains outside this milestone.
+
 ## [0.3.174] - 2026-08-24
 
 ### Added
