@@ -213,12 +213,15 @@ class WindowsRootedOpenDeterministicTests(unittest.TestCase):
         )
 
     def test_sensitive_admitted_name_is_refused_before_native_acquisition(self) -> None:
-        sensitive = self.root_path / ".ENV. "
+        # Keep this integration case portable: POSIX preserves trailing spaces,
+        # while Windows normalizes them away before lookup. Windows suffix
+        # normalization itself is covered by the pure policy tests.
+        sensitive = self.root_path / ".ENV"
         sensitive.write_text("must not be read", encoding="utf-8")
         root_open_count = self.api.open_root_count
 
         with self.assertRaises(WindowsRootedOpenError) as raised:
-            with self.acquirer.acquire(".ENV. "):
+            with self.acquirer.acquire(".ENV"):
                 pass
 
         self.assertIs(
