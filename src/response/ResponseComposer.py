@@ -77,6 +77,7 @@ from research.ResearchSourceComparisonPreview import ResearchSourceComparisonPre
 from research.ResearchSourceContentRestorationStatus import (
     ResearchSourceContentRestorationStatus,
 )
+from research.SourceLoadStage import SourceLoadStage
 from research.SourceReputation import SourceReputation
 from security.SecurityPostureReport import SecurityPostureReport
 from security.VulnerabilityFamily import VulnerabilityFamily
@@ -600,19 +601,35 @@ class ResponseComposer:
         document: KnowledgeDocumentReference,
         *,
         run: ResearchRun | None = None,
+        stage: SourceLoadStage = SourceLoadStage.INDEXED_WITHOUT_RUN,
         intent: str = "research_source_load",
     ) -> BrainResponse:
-        """Report one explicitly selected internet source after local indexing."""
+        """Report how far one source load got, never further than it went.
+
+        The headline is chosen from the stage rather than from the presence of a
+        document. A document exists in both successful outcomes, so leading with
+        "loaded" and quietly appending a run line let a knowledge-only index read
+        as an accepted research source.
+        """
+        attached = stage.attached_to_run and run is not None
         lines = [
-            "Research source loaded:",
+            (
+                "Research source accepted into the run:"
+                if attached
+                else "Indexed locally, but NOT accepted into a research run:"
+            ),
             f"Title: {document.title}",
             f"Source: {document.source}",
             f"Type: {document.document_type.value}",
             f"Chunks: {document.chunk_count}",
-            f"ID: {document.document_id}",
+            f"Local document ID: {document.document_id}",
+            f"Stage reached: {stage.value}",
         ]
-        if run is not None:
+        if attached:
+            assert run is not None
             lines.append(f"Research run: {run.run_id}")
+            lines.append(f"Accepted sources in this run: {len(run.sources)}")
+        lines.append(stage.summary)
         return BrainResponse(
             message="\n".join(lines),
             request_id=request.request_id,
@@ -620,6 +637,7 @@ class ResponseComposer:
             memory_count=0,
             knowledge_documents=[document],
             research_runs=[] if run is None else [run],
+            source_load_stage=stage,
         )
 
     def research_source_load_failure(

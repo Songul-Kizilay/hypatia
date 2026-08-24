@@ -14,6 +14,13 @@ The transaction is unchanged:
 
 Accepted means accepted into the run's canonical source set and nothing more.
 No evidence, assessment, claim, trust, or conclusion is produced here.
+
+There are two successful outcomes and they are not the same. With a run bound,
+the source is attached to it and the stage is ACCEPTED_INTO_RUN. With no run
+bound, the document is indexed into local knowledge and the stage is
+INDEXED_WITHOUT_RUN — a real result, but not an accepted research source, and
+nothing may record evidence from it. Both used to return the same flag, which
+let a knowledge-only index be reported to a person as a loaded research source.
 """
 
 from __future__ import annotations
@@ -27,6 +34,7 @@ from research.ResearchSource import ResearchSource
 from research.ResearchSourceAcceptanceResult import ResearchSourceAcceptanceResult
 from research.ResearchSourceContentRecord import ResearchSourceContentRecord
 from research.ResearchSourceContentStore import ResearchSourceContentStore
+from research.SourceLoadStage import SourceLoadStage
 
 
 class ResearchSourceAcceptanceService:
@@ -64,6 +72,7 @@ class ResearchSourceAcceptanceService:
                 transaction_attempted=True,
                 document_id=document.document_id,
                 run=None,
+                stage=SourceLoadStage.INDEXED_WITHOUT_RUN,
             )
 
         content_snapshot: list[ResearchSourceContentRecord] | None = None
@@ -84,11 +93,13 @@ class ResearchSourceAcceptanceService:
                 except KnowledgeError:
                     return self._rejected(
                         "Research source content failed and knowledge "
-                        "rollback failed."
+                        "rollback failed.",
+                        SourceLoadStage.CONTENT_PERSIST_FAILED,
                     )
                 return self._rejected(
                     "Research source content could not be saved; "
-                    "knowledge was rolled back."
+                    "knowledge was rolled back.",
+                    SourceLoadStage.CONTENT_PERSIST_FAILED,
                 )
 
         try:
@@ -99,13 +110,15 @@ class ResearchSourceAcceptanceService:
             )
         except ResearchError:
             return self._rejected(
-                self._rollback(document.document_id, content_snapshot)
+                self._rollback(document.document_id, content_snapshot),
+                SourceLoadStage.RUN_ATTACH_FAILED,
             )
         return ResearchSourceAcceptanceResult(
             accepted=True,
             transaction_attempted=True,
             document_id=document.document_id,
             run=run,
+            stage=SourceLoadStage.ACCEPTED_INTO_RUN,
         )
 
     def _rollback(
@@ -152,9 +165,13 @@ class ResearchSourceAcceptanceService:
         return "Research source audit could not be saved; knowledge was rolled back."
 
     @staticmethod
-    def _rejected(reason: str) -> ResearchSourceAcceptanceResult:
+    def _rejected(
+        reason: str,
+        stage: SourceLoadStage,
+    ) -> ResearchSourceAcceptanceResult:
         return ResearchSourceAcceptanceResult(
             accepted=False,
             transaction_attempted=True,
             failure_reason=reason,
+            stage=stage,
         )

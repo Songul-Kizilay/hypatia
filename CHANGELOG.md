@@ -2,6 +2,54 @@
 
 All notable project changes are recorded here.
 
+## [0.3.156] - 2026-08-24
+
+### Fixed
+
+- A source load with no research run bound indexed the document into local
+  knowledge and reported "Research source loaded" with a real document ID, while
+  the run's canonical state correctly showed zero accepted sources and zero safe
+  failures. Nothing had failed; one word was covering two different outcomes.
+  Every load now reports the stage it reached, and an indexed-only load says
+  plainly that no research run accepted it.
+
+### Added
+
+- `SourceLoadStage` names how far a load got: fetch refused, index failed,
+  content persist failed, run attach failed, indexed without run, accepted into
+  run, cancelled. It distinguishes a stage that created a local document, one
+  that rolled its work back, and the single stage that means the run accepted
+  the source.
+- `ResearchSourceAcceptanceResult.stage` and `attached_to_run`, which is the
+  question callers asking "was it accepted?" actually mean.
+- `BrainResponse.source_load_stage`, so a caller can branch on the stage rather
+  than parse prose.
+
+### Safety
+
+- The acceptance result refuses a stage that disagrees with it: reporting
+  acceptance into a run without a run, carrying a run without the accepted
+  stage, or naming an indexed document that does not exist.
+- The reply leads with the stage rather than the presence of a document. An
+  indexed-only load is headed "Indexed locally, but NOT accepted into a research
+  run", labels the identifier as a local document ID, and states that no
+  evidence can be recorded from it.
+- Partial transaction points are covered end to end: index succeeds and
+  attachment fails leaves the run byte-honest and rolls the local document back;
+  content persistence failure names its own stage; a retry after a failed
+  attachment still succeeds exactly once.
+- A test asserts no evidence can be recorded against a run from a document that
+  was only indexed.
+- The desktop guard that selects an accepted source only when the returned run
+  confirms it now has a regression test.
+
+### Verification
+
+- The package-aware full local suite contains 2,462 passing automated tests.
+- Thirty new tests cover the stage vocabulary, result consistency, every partial
+  transaction point, reporting for each successful and failed stage, and the
+  desktop capture guard.
+
 ## [0.3.155] - 2026-08-23
 
 ### Added

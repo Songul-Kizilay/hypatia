@@ -2079,6 +2079,7 @@ class CognitiveEngine:
             request,
             loaded_document,
             run=result.run,
+            stage=result.stage,
             intent=response_intent,
         )
 
