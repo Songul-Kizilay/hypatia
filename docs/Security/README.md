@@ -131,9 +131,11 @@ Hypatia currently runs as a local-first CLI. The initial security boundary is:
   bounded metadata for one authorized local entry. Filesystem content has a
   separate declared effect and capability value but remains unregistered. The
   production-inert Windows NTFS rooted-open foundation reads zero bytes and is
-  also absent from the runtime. No model, cognition, memory, or research module
-  can import the tool layer, name the execution service, or construct an
-  invocation.
+  also absent from the runtime. Its current sensitive-name floor refuses eight
+  bounded classes before native acquisition and again from the final
+  handle-derived name; it inspects no content and offers no override. No model,
+  cognition, memory, or research module can import the tool layer, name the
+  execution service, or construct an invocation.
 
 ## Filesystem capability boundaries
 
@@ -143,9 +145,10 @@ Hypatia currently runs as a local-first CLI. The initial security boundary is:
   refuse links and expose no content.
 - [Filesystem content-access security design](Filesystem_Content_Access_Design.md).
   The result/effect/request-identity contracts and a production-inert Windows
-  NTFS rooted-open foundation are implemented. No content-reading tool, runtime
-  registration, desktop control, model context, memory, research, evidence,
-  persistence, or generic telemetry content path exists.
+  NTFS rooted-open foundation plus the first sensitive-name refusal floor are
+  implemented. No content-reading tool, runtime registration, desktop control,
+  model context, memory, research, evidence, persistence, or generic telemetry
+  content path exists.
 - [Windows rooted-open production boundary](Windows_Rooted_Open_Production_Decision.md).
   The fixed-system-DLL, handle-relative, no-follow NTFS construction is
   implemented with bounded failures and zero content bytes. POSIX/Linux and

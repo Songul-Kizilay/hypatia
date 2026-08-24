@@ -1,8 +1,8 @@
 # Filesystem Content Access — Security Design
 
 **Status: FOUNDATION PARTIALLY IMPLEMENTED; CONTENT ACCESS UNAVAILABLE.** No
-content-reading tool or registered runtime path exists as of `v0.3.176`. The
-production-inert Windows NTFS rooted-open boundary, the bounded
+content-reading tool or registered runtime path exists as of `v0.3.177`. The
+production-inert Windows NTFS rooted-open boundary, sensitive-name floor, bounded
 `FilesystemContentPayload`, its success-only `ToolResult.content` channel, the
 separate content effect, the unregistered capability value, and the code-owned
 request identifier on `ToolExecutionOutcome` are CURRENT.
@@ -307,23 +307,23 @@ insufficient on its own: it requires reading the file to decide whether it shoul
 have been read, which is the wrong order, and high-entropy detection both misses
 novel formats and fires on minified assets.
 
-**DECIDED for the first implementation: a small, explicit, conservative deny
-class that causes a *decline*, plus a documented operator override that is not
-built in Phase A.**
+**DECIDED AND CURRENT as a production-inert foundation: a small, explicit,
+conservative deny class. A future content tool maps it to a *decline*. The
+operator override is not built in Phase A.**
 
-Proposed initial deny classes, matched case-insensitively against canonicalized
-path components and rechecked against the final safely-opened resource before
-any byte is read:
+The current initial deny classes are matched case-insensitively against
+canonicalized path components and rechecked against the final safely-opened
+resource before any byte can be read:
 
 | Class | Examples |
 | --- | --- |
 | Environment files | `.env`, `.env.*`, `*.env` |
 | Private keys | `*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa`, `id_ed25519`, `id_ecdsa` |
 | SSH material | anything directly inside a `.ssh` directory component |
-| Cloud credentials | `credentials`, `config` inside `.aws`; `*.kubeconfig`; `gcloud` credential files |
+| Cloud credentials | `credentials`, `config` inside `.aws`; `*.kubeconfig`; known `gcloud` credential databases/JSON files under a `gcloud` component |
 | VCS credentials | `.git-credentials`, `.netrc`, `_netrc`; `.git/config` |
 | Package manager auth | `.npmrc`, `.pypirc`, `.docker/config.json` |
-| Browser/OS stores | `*.sqlite` inside a browser profile component, `Login Data`, credential vault files |
+| Browser/OS stores | `*.sqlite` below an explicit browser profile component, `Login Data`, keychain/keyring and Windows vault suffixes |
 | CI secrets | `*.secrets.*`, `secrets.*` |
 
 Rules for that table:
@@ -334,11 +334,12 @@ Rules for that table:
    path admitted by `FilesystemRoot.locate`; the decisive check uses the
    final-handle resource identity from the §6 platform primitive. Windows
    silently strips trailing dots and spaces, and `.env.` is `.env`.
-3. A denied file produces `INVOCATION_DECLINED` with a fixed sentence naming
-   the *class*, not the path.
-4. Classification must happen before the first content byte is read and be
-   repeated after the safe handle is acquired, so a replacement cannot turn an
-   ordinary name into a sensitive target between checks.
+3. The CURRENT rooted-open error carries one bounded sensitive class and fixed
+   wording naming the *class*, not the path. A future content tool must map that
+   structural value to `INVOCATION_DECLINED`; it must not parse the sentence.
+4. Classification currently happens before native acquisition and repeats
+   after final-handle containment and identity proof, so a replacement cannot
+   turn an ordinary admitted name into a sensitive final name without refusal.
 5. The operator override is **DEFERRED**. Phase A refuses these outright. An
    override needs its own UX design (§16) and probably its own confirmation, and
    shipping it alongside the first read would mean the safe default existed for
@@ -1062,7 +1063,7 @@ the same style of guard the metadata tool already carries.
 | `MAX_TOOL_VALUES` unchanged | **DECIDED** | Stays at 20 |
 | Strict UTF-8, no auto-detection | **DECIDED** | §9 |
 | Binary declined in Phase A | **DECIDED** | No base64 fallback |
-| Sensitive classes declined | **DECIDED** | Floor, not fence |
+| Sensitive classes declined | **DECIDED, CURRENT FOUNDATION** | `FilesystemSensitivePathPolicy`; floor, not fence; no content tool |
 | Phase A is console-only | **DECIDED** | No model context |
 | Read never writes memory | **DECIDED** | §12 |
 | Read is not evidence | **DECIDED** | §13 |
@@ -1128,7 +1129,7 @@ the same style of guard the metadata tool already carries.
 
 ---
 
-## 29. Repository reference validation (`v0.3.176`)
+## 29. Repository reference validation (`v0.3.177`)
 
 This table records the source check completed before accepting the document.
 It is intentionally explicit so a future milestone cannot mistake a design name
@@ -1150,6 +1151,7 @@ for a shipped API.
 | Central content authority check | CURRENT in `ToolExecutionService`; payload type plus descriptor and invocation effect are revalidated |
 | `ToolExecutionOutcome.request_id` | CURRENT, required and immutable; `ToolExecutionService` validates one value before telemetry and shares it with every lifecycle event for the invocation |
 | `WindowsRootedOpen` | CURRENT production-inert NTFS foundation in `src/tools`; accepted ADR in `docs/Security/Windows_Rooted_Open_Production_Decision.md`; no content read or runtime registration |
+| `FilesystemSensitivePathPolicy`, `FilesystemSensitiveClass` | CURRENT production-inert preflight/final-handle name-classification floor; no content inspection or override |
 | `SourceLoadStage` | CURRENT and distinguishes `INDEXED_WITHOUT_RUN` from `ACCEPTED_INTO_RUN` |
 | `LLMLearnedMemoryCandidateExtractor`, `LearnedMemoryAuditApplicationService` | CURRENT; no file-content integration exists |
 | `SecurityAgentApplicationService`, `FailureMemoryApplicationService` | CURRENT; no file-content or Tool Layer failure ingestion is implied by their existence |
@@ -1157,7 +1159,8 @@ for a shipped API.
 | `filesystem_read` tool and runtime registration | PROPOSED only; neither exists in production code |
 | `MetaController` | FUTURE architectural role; no production type with that name exists |
 
-The production-inert Windows rooted-open foundation is versioned as `v0.3.176`.
-It temporarily opens only attribute-capable handles to prove containment and
-identity, reads zero content bytes, and remains absent from the Tool Runtime.
-The desktop does not project content identity.
+The sensitive-name floor integrated with the production-inert Windows
+rooted-open foundation is versioned as `v0.3.177`. It temporarily opens only
+attribute-capable handles to prove containment, identity, and final-name
+classification, reads zero content bytes, and remains absent from the Tool
+Runtime. The desktop does not project content identity.

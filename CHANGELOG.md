@@ -2,6 +2,53 @@
 
 All notable project changes are recorded here.
 
+## [0.3.177] - 2026-08-24
+
+### Added
+
+- `FilesystemSensitivePathPolicy`, a filesystem-free classifier for the first
+  explicit sensitive-name floor: environment files, private keys, SSH material,
+  cloud and VCS credentials, package-manager authentication, browser/OS stores,
+  and CI secrets.
+- `FilesystemSensitiveClass`, a bounded categorical result with fixed operator
+  wording and no path, basename, content, score, or raw platform detail.
+
+### Safety
+
+- `WindowsRootedOpen` classifies canonical admitted components before native
+  acquisition and repeats the classification against components derived from
+  the final safely-opened handle path after containment and identity proof.
+- Matching is case-insensitive and removes Windows-ignored trailing dots and
+  spaces. Contextual locations take deterministic precedence over generic file
+  extensions so the future decline can name the most useful bounded class.
+- A sensitive refusal carries exactly one code-owned class; every other rooted
+  failure carries `NONE`. Error text names only the class and never interpolates
+  the requested path or final handle path.
+- Final-name classification precedes identity-mismatch reporting, so a safely
+  opened sensitive name is structurally declined even when replacement also
+  changed the file identity.
+- The policy explicitly describes itself as a floor rather than complete secret
+  detection. There is no operator override, content inspection, read API,
+  capability registration, desktop control, model, memory, research, evidence,
+  persistence, or telemetry integration.
+
+### Verification
+
+- Twenty-eight pure policy tests cover every initial class, case folding,
+  Windows name normalization, contextual precedence, near misses, malformed
+  internal components, fixed wording, and lack of filesystem/process authority.
+- Four rooted-open integration tests cover pre-native refusal, final-handle
+  reclassification and precedence, invalid final-name containment failure,
+  bounded class/error consistency, and handle closure.
+- The local PyInstaller build succeeds and its archive table contains both
+  rooted-open and sensitive-policy modules. The final generated unsigned
+  executable's local startup smoke is unverified because Windows Application
+  Control blocked that artifact before process start; this gate is not reported
+  as passing.
+- The package-aware full-suite, packaging, formatting, lint, typing, and
+  whitespace results are recorded in `PROJECT_STATUS.md` after local
+  verification.
+
 ## [0.3.176] - 2026-08-24
 
 ### Added

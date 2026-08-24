@@ -21,6 +21,7 @@ if str(SRC_DIR) not in sys.path:
 import tools.WindowsRootedOpen as rooted
 from tools.FilesystemPathRefusal import FilesystemPathRefusal
 from tools.FilesystemRoot import FilesystemRoot
+from tools.FilesystemSensitivePathPolicy import FilesystemSensitiveClass
 from tools.WindowsRootedOpen import (
     WindowsOpenedFile,
     WindowsRootedOpen,
@@ -211,6 +212,68 @@ class WindowsRootedOpenDeterministicTests(unittest.TestCase):
             FilesystemPathRefusal.LINK_COMPONENT,
         )
 
+    def test_sensitive_admitted_name_is_refused_before_native_acquisition(self) -> None:
+        sensitive = self.root_path / ".ENV. "
+        sensitive.write_text("must not be read", encoding="utf-8")
+        root_open_count = self.api.open_root_count
+
+        with self.assertRaises(WindowsRootedOpenError) as raised:
+            with self.acquirer.acquire(".ENV. "):
+                pass
+
+        self.assertIs(
+            raised.exception.failure,
+            WindowsRootedOpenFailure.SENSITIVE_FILE,
+        )
+        self.assertIs(
+            raised.exception.sensitive_class,
+            FilesystemSensitiveClass.ENVIRONMENT_FILE,
+        )
+        self.assertIn("environment file", str(raised.exception))
+        self.assertNotIn(".ENV", str(raised.exception))
+        self.assertEqual(self.api.open_root_count, root_open_count)
+        self.assertEqual(self.api.open_calls, [])
+
+    def test_final_handle_name_is_reclassified_after_safe_open(self) -> None:
+        self.api.path_by_component["note.txt"] = PureWindowsPath(
+            r"\Device\HarddiskVolume7\workspace\.ENV. "
+        )
+        self.api.identity_by_component["note.txt"] = rooted._FileIdentity(7, 404)
+
+        with self.assertRaises(WindowsRootedOpenError) as raised:
+            with self.acquirer.acquire("parent/note.txt"):
+                pass
+
+        self.assertIs(
+            raised.exception.failure,
+            WindowsRootedOpenFailure.SENSITIVE_FILE,
+        )
+        self.assertIs(
+            raised.exception.sensitive_class,
+            FilesystemSensitiveClass.ENVIRONMENT_FILE,
+        )
+        self.assertEqual(
+            self.api.closed_labels,
+            ["note.txt", "parent", "<root>"],
+        )
+
+    def test_invalid_final_handle_component_is_a_bounded_containment_failure(
+        self,
+    ) -> None:
+        self.api.path_by_component["note.txt"] = PureWindowsPath(
+            r"\Device\HarddiskVolume7\workspace\..."
+        )
+
+        with self.assertRaises(WindowsRootedOpenError) as raised:
+            with self.acquirer.acquire("parent/note.txt"):
+                pass
+
+        self.assertIs(
+            raised.exception.failure,
+            WindowsRootedOpenFailure.CONTAINMENT_UNPROVEN,
+        )
+        self.assertIsNone(raised.exception.__cause__)
+
     def test_entry_disappearing_between_locate_and_lstat_is_bounded(self) -> None:
         def locate_then_remove(
             _root: FilesystemRoot, _relative: str
@@ -372,6 +435,10 @@ class WindowsRootedOpenDeterministicTests(unittest.TestCase):
         self.assertNotIn("Device", rendered)
         self.assertNotIn("WinError", rendered)
         self.assertIsNone(raised.exception.__cause__)
+        self.assertIs(
+            raised.exception.sensitive_class,
+            FilesystemSensitiveClass.NONE,
+        )
 
 
 class WindowsRootedOpenConstructionTests(unittest.TestCase):
@@ -426,6 +493,16 @@ class WindowsRootedOpenConstructionTests(unittest.TestCase):
     def test_constructor_requires_the_code_owned_root_type(self) -> None:
         with self.assertRaisesRegex(TypeError, "FilesystemRoot"):
             WindowsRootedOpen(object())  # type: ignore[arg-type]
+
+    def test_sensitive_failure_requires_exactly_one_bounded_class(self) -> None:
+        with self.assertRaisesRegex(ValueError, "needs a bounded class"):
+            WindowsRootedOpenError(WindowsRootedOpenFailure.SENSITIVE_FILE)
+
+        with self.assertRaisesRegex(ValueError, "Only a sensitive-file"):
+            WindowsRootedOpenError(
+                WindowsRootedOpenFailure.OPEN_FAILED,
+                sensitive_class=FilesystemSensitiveClass.PRIVATE_KEY,
+            )
 
 
 class _WarningSystemApi(rooted._SystemWindowsApi):

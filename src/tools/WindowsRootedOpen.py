@@ -25,6 +25,10 @@ from typing import Protocol
 from tools.FilesystemEntryKind import FilesystemEntryKind
 from tools.FilesystemPathRefusal import FilesystemPathRefusal
 from tools.FilesystemRoot import FilesystemRoot
+from tools.FilesystemSensitivePathPolicy import (
+    FilesystemSensitiveClass,
+    FilesystemSensitivePathPolicy,
+)
 
 __all__ = [
     "WindowsOpenedFile",
@@ -76,6 +80,7 @@ class WindowsRootedOpenFailure(StrEnum):
     NOT_DIRECTORY = "not_directory"
     CONTAINMENT_UNPROVEN = "containment_unproven"
     IDENTITY_MISMATCH = "identity_mismatch"
+    SENSITIVE_FILE = "sensitive_file"
     CLOSE_FAILED = "close_failed"
 
 
@@ -114,6 +119,9 @@ _FAILURE_DETAILS: dict[WindowsRootedOpenFailure, str] = {
     WindowsRootedOpenFailure.IDENTITY_MISMATCH: (
         "The admitted and acquired file identities differ."
     ),
+    WindowsRootedOpenFailure.SENSITIVE_FILE: (
+        "The requested file belongs to a refused sensitive class."
+    ),
     WindowsRootedOpenFailure.CLOSE_FAILED: (
         "A native rooted-open handle could not be closed."
     ),
@@ -128,10 +136,22 @@ class WindowsRootedOpenError(RuntimeError):
         failure: WindowsRootedOpenFailure,
         *,
         path_refusal: FilesystemPathRefusal = FilesystemPathRefusal.NONE,
+        sensitive_class: FilesystemSensitiveClass = FilesystemSensitiveClass.NONE,
     ) -> None:
+        if failure is WindowsRootedOpenFailure.SENSITIVE_FILE:
+            if not sensitive_class.refused:
+                raise ValueError("A sensitive-file refusal needs a bounded class.")
+            detail = (
+                f"The requested file is refused as {sensitive_class.operator_label}."
+            )
+        else:
+            if sensitive_class.refused:
+                raise ValueError("Only a sensitive-file refusal may carry a class.")
+            detail = _FAILURE_DETAILS[failure]
         self.failure = failure
         self.path_refusal = path_refusal
-        super().__init__(_FAILURE_DETAILS[failure])
+        self.sensitive_class = sensitive_class
+        super().__init__(detail)
 
 
 class WindowsOpenedFile:
@@ -538,6 +558,7 @@ class WindowsRootedOpen:
             _api = _SystemWindowsApi()
         self._root = root
         self._api = _api
+        self._sensitive_policy = FilesystemSensitivePathPolicy()
         with self._open_root() as root_handle:
             self._require_directory_without_reparse(root_handle)
             self._require_supported_filesystem(root_handle)
@@ -571,6 +592,10 @@ class WindowsRootedOpen:
             ) from None
         if admitted_kind is not FilesystemEntryKind.FILE or not parts:
             raise WindowsRootedOpenError(WindowsRootedOpenFailure.NOT_FILE)
+        self._require_not_sensitive(
+            parts,
+            invalid_failure=WindowsRootedOpenFailure.ENTRY_CHANGED,
+        )
         admitted_identity = _FileIdentity(
             int(admitted_status.st_dev) & 0xFFFFFFFF,
             int(admitted_status.st_ino),
@@ -623,10 +648,15 @@ class WindowsRootedOpen:
                 raise WindowsRootedOpenError(WindowsRootedOpenFailure.OPEN_FAILED)
             self._notify(_seam, _WindowsRootedOpenStage.BEFORE_FINAL_PROOF)
             final_path = self._api.final_path(final_handle._native_value)
-            if not self._is_strict_descendant(final_path, root_path):
+            final_components = self._strict_relative_components(final_path, root_path)
+            if final_components is None:
                 raise WindowsRootedOpenError(
                     WindowsRootedOpenFailure.CONTAINMENT_UNPROVEN
                 )
+            self._require_not_sensitive(
+                final_components,
+                invalid_failure=WindowsRootedOpenFailure.CONTAINMENT_UNPROVEN,
+            )
             if self._identity(final_handle) != admitted_identity:
                 raise WindowsRootedOpenError(WindowsRootedOpenFailure.IDENTITY_MISMATCH)
 
@@ -679,11 +709,34 @@ class WindowsRootedOpen:
         return self._api.identity(handle._native_value)
 
     @staticmethod
-    def _is_strict_descendant(
+    def _strict_relative_components(
         final_path: PureWindowsPath,
         root_path: PureWindowsPath,
-    ) -> bool:
-        return final_path != root_path and final_path.is_relative_to(root_path)
+    ) -> tuple[str, ...] | None:
+        try:
+            components = final_path.relative_to(root_path).parts
+        except ValueError:
+            return None
+        return components or None
+
+    def _require_not_sensitive(
+        self,
+        components: tuple[str, ...],
+        *,
+        invalid_failure: WindowsRootedOpenFailure,
+    ) -> None:
+        try:
+            sensitive_class = self._sensitive_policy.classify(
+                components,
+                windows_names=True,
+            )
+        except TypeError, ValueError:
+            raise WindowsRootedOpenError(invalid_failure) from None
+        if sensitive_class.refused:
+            raise WindowsRootedOpenError(
+                WindowsRootedOpenFailure.SENSITIVE_FILE,
+                sensitive_class=sensitive_class,
+            )
 
     @staticmethod
     def _notify(

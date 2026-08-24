@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.176 (Genesis)`
+`v0.3.177 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.176`** is the current executable package and GitHub
+- **Runtime release `v0.3.177`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -959,6 +959,14 @@ with optional OpenAI-compatible LLM conversation support.
   proves zero content bytes were read. It remains absent from `ToolRuntime` and
   every desktop, model, memory, research, evidence, persistence, and telemetry
   path.
+- The first sensitive local-file name floor is implemented without content
+  access. `FilesystemSensitivePathPolicy` classifies environment files, private
+  keys, direct `.ssh` material, cloud/VCS/package credentials, browser/OS stores,
+  and CI secrets using bounded categories. `WindowsRootedOpen` applies it to
+  canonical admitted components before native acquisition and repeats it from
+  final handle-derived components after containment and identity proof. Windows
+  trailing dots/spaces and case cannot disguise a class. This remains a floor,
+  not complete secret detection; no override or content tool exists.
 
 ### Intentionally Not Implemented
 
@@ -990,16 +998,18 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 3,235 automated tests pass through package-aware discovery.
+- 3,267 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
-- MyPy passes for all `src` files and the focused rooted-open security test. A
-  full `src` + `tests` MyPy sweep still has separately recorded pre-existing
-  test typing debt, so repository-wide test typing is not claimed as a passing
-  gate.
-- The local PyInstaller Windows onedir package builds successfully; its normal
-  hidden-window startup imports the production-inert rooted-open module and
-  creates the expected session registry without constructing or registering the
-  boundary.
+- MyPy passes for all `src` files and the focused sensitive-path/rooted-open
+  security tests. A full `src` + `tests` MyPy sweep still has separately
+  recorded pre-existing test typing debt, so repository-wide test typing is not
+  claimed as a passing gate.
+- The local PyInstaller Windows onedir package builds successfully and its
+  archive contains both production-inert filesystem security modules. The final
+  generated unsigned executable's local startup smoke is not a passing gate:
+  Windows Application Control blocked that artifact before process start. An
+  earlier package smoke passed before the final policy-order hardening, but it
+  is not evidence for the exact final artifact.
 - Whitespace validation (`git diff --check`) passes.
 
 These checks describe the local working tree and do not create a GitHub
@@ -1032,13 +1042,14 @@ changed.
 
 ## Next Milestone
 
-Implement the conservative sensitive-file refusal policy decided in §7 of the
-filesystem content-access design. The policy must classify canonical relative
-components before acquisition and be rechecked against the final safely opened
-resource inside the rooted-open boundary, without exposing a basename or path.
+Decide the production boundary for a first bounded Windows content-range read
+on an already-proven handle: exact native API, offset and `max_bytes + 1`
+enforcement, short-read semantics, in-place mutation/staleness limits, strict
+UTF-8/BOM handling, close-before-result ownership, and bounded refusal/failure
+mapping. Record that decision before adding any content-read method.
 
-Keep that increment production-inert: no content bytes, `FILESYSTEM_READ`
-runtime registration, desktop control, model context, memory, research,
-evidence, persistence, generic telemetry content, or operator override. Preserve
-the independent Windows experiment. POSIX/Linux rooted-open work remains a later
-platform milestone rather than being mixed into the sensitive-file boundary.
+Keep the decision milestone free of content bytes, `FILESYSTEM_READ` runtime
+registration, desktop control, model context, memory, research, evidence,
+persistence, generic telemetry content, or operator override. POSIX/Linux
+rooted-open remains a later platform milestone rather than being mixed into the
+Windows read-boundary decision.

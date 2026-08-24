@@ -8,6 +8,8 @@
 
 **Foundation implementation:** `v0.3.176 (Genesis)`
 
+**Sensitive-name integration:** `v0.3.177 (Genesis)`
+
 **Capability state:** `FILESYSTEM_READ` remains unregistered. No file-content
 read is authorized or implemented by this decision.
 
@@ -28,7 +30,9 @@ That boundary:
 6. support an NTFS volume only in the first production boundary;
 7. fail closed when any required API, proof, or filesystem property is absent;
 8. own and close every native handle inside the platform module; and
-9. expose no raw handle, absolute path, OS error text, content, Tool Layer
+9. classify sensitive names before native acquisition and again from the final
+   handle-derived relative components before yielding; and
+10. expose no raw handle, absolute path, OS error text, content, Tool Layer
    capability, runtime registration, or presentation integration.
 
 This is a *foundation module*, not `filesystem_read`. The implementation reads
@@ -119,7 +123,9 @@ It owns:
 - configured-root identity capture;
 - component-relative acquisition;
 - handle-derived filesystem, kind, reparse, identity, and final-path queries;
-- final containment proof; and
+- final containment proof;
+- the production-inert `FilesystemSensitivePathPolicy` preflight and final-name
+  gates; and
 - later, only after a separate milestone, the bounded read operation on the
   already-proven handle.
 
@@ -222,20 +228,22 @@ The production foundation must perform this order without a shortcut:
 
 ```text
 1. FilesystemRoot.locate(relative) for lexical/current admission
-2. capture admitted NTFS volume serial + 64-bit file index
-3. open the configured absolute root with CreateFileW, no reparse following
-4. query root attributes, NTFS filesystem, NT final path, and identity
-5. compare root identity with the identity captured at acquirer construction
-6. split only the already-admitted relative components
-7. NtCreateFile one component relative to the held parent
-8. query that handle; reject every reparse point
-9. require directory kind for intermediates and regular-file kind for final
-10. retain every parent handle and repeat until final
-11. query root and final paths in VOLUME_NAME_NT normalized form
-12. prove final path is a strict descendant of the held root path
-13. compare admitted and final NTFS identities
-14. only then yield the opaque, still-owned opened-file object
-15. close final, parents, and root before any successful result is built
+2. split only the already-admitted relative components
+3. classify those canonical components with Windows name normalization
+4. capture admitted NTFS volume serial + 64-bit file index
+5. open the configured absolute root with CreateFileW, no reparse following
+6. query root attributes, NTFS filesystem, NT final path, and identity
+7. compare root identity with the identity captured at acquirer construction
+8. NtCreateFile one component relative to the held parent
+9. query that handle; reject every reparse point
+10. require directory kind for intermediates and regular-file kind for final
+11. retain every parent handle and repeat until final
+12. query root and final paths in VOLUME_NAME_NT normalized form
+13. derive the final relative components and prove strict-root descent
+14. classify the final handle-derived components with Windows normalization
+15. compare admitted and final NTFS identities when the class is not refused
+16. only then yield the opaque, still-owned opened-file object
+17. close final, parents, and root before any successful result is built
 ```
 
 The final-path comparison is a handle-derived secondary proof, not authority to
@@ -260,12 +268,13 @@ The low-level boundary uses a bounded enum. Initial members are:
 | `not_directory` | An intermediate component is not a directory |
 | `containment_unproven` | Handle-derived final containment could not be proven |
 | `identity_mismatch` | Admitted and opened file identities disagree |
+| `sensitive_file` | Preflight or final handle-derived name belongs to one bounded sensitive class |
 | `close_failed` | Native handle closure did not complete successfully |
 
-The exception carries only the enum and, for initial admission only, the
-existing `FilesystemPathRefusal`. It carries no relative path, basename,
-absolute path, raw `NTSTATUS`, Win32 code, system error string, DLL path, or
-native handle.
+The exception carries only the enum, the existing `FilesystemPathRefusal` for
+initial admission, and exactly one `FilesystemSensitiveClass` only for a
+`sensitive_file` refusal. It carries no relative path, basename, absolute path,
+raw `NTSTATUS`, Win32 code, system error string, DLL path, or native handle.
 
 `RtlNtStatusToDosError` and `GetLastError` may be used internally to select a
 bounded enum. Their numeric values are not domain output and are not telemetry.
@@ -276,6 +285,8 @@ The future tool mapping remains the one already decided in the content design:
 
 - malformed or initially refused request: `declined`;
 - initially admitted directory/non-file: `declined`;
+- a structurally reported sensitive class: `declined`, with fixed wording naming
+  the class rather than the path;
 - entry changed after admission, unavailable proof, permission failure,
   identity mismatch, unsupported runtime/filesystem, or close failure: `failed`;
 - missing content effect: `not_reached`; and
@@ -296,6 +307,8 @@ The production foundation is covered by tests for:
 - intermediate non-directory and final directory;
 - final-path query failure;
 - identity mismatch;
+- sensitive-name preflight before native open and final-name reclassification
+  after containment/identity proof;
 - `NtCreateFile` failure with a defensive close of a non-null output handle;
 - close-on-success and close on every deterministic exception seam;
 - close failure preventing successful proof output;
