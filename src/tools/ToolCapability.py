@@ -22,6 +22,7 @@ class ToolCapability(StrEnum):
     NONE = "none"
     CLOCK_READ = "clock_read"
     TEXT_STATISTICS = "text_statistics"
+    FILESYSTEM_LIST = "filesystem_list"
     RESEARCH_STATE_SUMMARY = "research_state_summary"
     KNOWLEDGE_DOCUMENT_LIST = "knowledge_document_list"
 

@@ -12,6 +12,16 @@ quietly acquire a network call would be the one that stopped mentioning it.
 The set is deliberately coarse. Fine-grained permissions look rigorous and end
 up unreadable, and a permission nobody reads is a permission everybody grants.
 
+Reading the filesystem is its own effect rather than a kind of reading local
+state. READS_LOCAL_STATE means state this application owns — a clock, an
+in-process index — and folding directory listing into it would mean every
+existing grant of it silently became authority to enumerate the disk. That is
+authority acquired by renaming rather than by decision, and nobody would have
+reviewed it. One effect covers listing and metadata together, because the
+capability split already separates them and a second parallel split would add
+ceremony without adding a decision anyone would make differently. File contents
+are a different kind of secret and must introduce their own effect.
+
 One effect is not about the outside world at all. A tool that only transforms
 data it was handed still declares COMPUTES_LOCALLY, because the alternative —
 letting a pure tool declare nothing — would make the empty declaration mean both
@@ -32,6 +42,7 @@ class ToolEffect(StrEnum):
 
     COMPUTES_LOCALLY = "computes_locally"
     READS_LOCAL_STATE = "reads_local_state"
+    READS_FILESYSTEM_METADATA = "reads_filesystem_metadata"
     WRITES_LOCAL_STATE = "writes_local_state"
     READS_NETWORK = "reads_network"
     SPENDS_MODEL = "spends_model"

@@ -2,6 +2,62 @@
 
 All notable project changes are recorded here.
 
+## [0.3.169] - 2026-08-24
+
+### Added
+
+- `filesystem_list`, the first capability whose argument selects its target. It
+  lists one directory level inside one operator-configured root.
+- `ToolEffect.READS_FILESYSTEM_METADATA`, a separate effect rather than a reuse
+  of `READS_LOCAL_STATE`.
+- `FilesystemRoot`, `FilesystemPathRefusal`, and `FilesystemEntryKind`.
+
+### Security
+
+- The root is operator configuration and never an argument. `root` is not an
+  accepted argument name, and a tool cannot be constructed without a root.
+- Containment is decided on the resolved path. A sibling directory whose name
+  merely begins with the root's name passes a string prefix check and is
+  refused here.
+- Absolute, rooted, drive-qualified, UNC, extended-length, device-namespace,
+  NTFS stream-syntax, reserved-device, and over-deep paths are all refused,
+  under both Windows and POSIX path semantics regardless of host.
+- Links are never followed, and the check runs on every component rather than
+  the last. What counts as a link is the reparse-point attribute, not
+  `is_symlink`: a Windows junction answers False to that question while
+  `scandir` reports it as an ordinary directory, and creating one needs no
+  privilege while creating a symlink needs elevation.
+- Reusing `READS_LOCAL_STATE` would have turned every existing grant of it into
+  authority to enumerate the disk. A local-state grant is refused.
+- No detail quotes the requested path, the root path, or any `OSError` text,
+  whose Windows form interpolates the path it failed on.
+
+### Bounding
+
+- A listing returns a page: five values describe the directory and fifteen carry
+  entries, which is exactly the existing `MAX_TOOL_VALUES` budget.
+  `MAX_TOOL_VALUES` was not raised, because that bound protects every tool.
+- Directory-level and page-level incompleteness are reported separately as
+  `entries_exceeded` and `more_pages`, so neither can be read as the other.
+- The whole directory level is collected before sorting, so paging is stable:
+  an entry's page does not depend on the order the filesystem returned names in.
+
+### Privacy
+
+- No lifecycle event carries a path, a path fragment, or an entry name. Verified
+  against a real listing and by sentinel-named directories on both the success
+  and refusal paths.
+
+### Verification
+
+- The package-aware full local suite contains 2,906 passing automated tests.
+- Eighty-seven new tests cover root configuration, listing, non-recursion,
+  paging determinism and completeness, every rejected path form, real directory
+  junctions, effect authorization, error disclosure, and telemetry privacy.
+- Two symlink tests skip with a stated reason where the platform refuses to
+  create one without elevation; real junctions cover the unprivileged case.
+- No test requires a network.
+
 ## [0.3.168] - 2026-08-24
 
 ### Added
