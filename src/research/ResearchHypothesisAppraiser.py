@@ -2,10 +2,11 @@
 
 The rules are stated rather than scored, and they are asymmetric on purpose. Any
 opposing evidence at all is enough to move a hypothesis off the supported track,
-while support has to come from more than one source before it counts as
-anything. That asymmetry is not fairness — it is the whole reason a
-discriminating test is required, and softening it would make disconfirmation
-just another input to be outvoted.
+while positive support has to come from more than one independent source and
+each source needs an active authored trust assessment of at least medium. That
+asymmetry is not fairness — it is the whole reason a discriminating test is
+required, and softening it would make disconfirmation just another input to be
+outvoted.
 
 Nothing here decides whether a hypothesis is true. Which side wins is a
 judgement someone makes after reading both, and the appraiser exists to make
@@ -14,14 +15,15 @@ sure both are still visible when they do.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from core.Exceptions import ResearchError
 from research.HypothesisAppraisal import HypothesisAppraisal
 from research.HypothesisStatus import HypothesisStatus
 from research.ResearchHypothesis import ResearchHypothesis
+from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRun import ResearchRun
 from research.SourceIdentity import identity_of
-
-MIN_SOURCES_FOR_SUPPORT = 2
 
 
 class ResearchHypothesisAppraiser:
@@ -40,49 +42,104 @@ class ResearchHypothesisAppraiser:
         identities = {
             source.document_id: identity_of(source.url) for source in run.sources
         }
-        sources = {
-            record.evidence_id: identities.get(record.source_document_id)
-            or record.source_document_id
-            for record in run.evidence
+        evidence_documents = {
+            record.evidence_id: record.source_document_id for record in run.evidence
         }
-        supporting = self._sources(hypothesis.supporting_evidence_ids, sources)
-        opposing = self._sources(hypothesis.opposing_evidence_ids, sources)
-        return HypothesisAppraisal(
-            hypothesis=hypothesis,
-            status=self._status(hypothesis, len(supporting), len(opposing)),
-            supporting_source_count=len(supporting),
-            opposing_source_count=len(opposing),
+        trust = self._active_trust(run)
+        supporting = self._profile(
+            hypothesis.supporting_evidence_ids,
+            evidence_documents,
+            identities,
+            trust,
         )
+        opposing = self._profile(
+            hypothesis.opposing_evidence_ids,
+            evidence_documents,
+            identities,
+            trust,
+        )
+        appraisal = HypothesisAppraisal(
+            hypothesis=hypothesis,
+            status=HypothesisStatus.OPEN,
+            supporting_source_count=supporting[0],
+            opposing_source_count=opposing[0],
+            supporting_assessed_source_count=supporting[1],
+            opposing_assessed_source_count=opposing[1],
+            lowest_supporting_trust=supporting[2],
+            lowest_opposing_trust=opposing[2],
+        )
+        return replace(appraisal, status=self._status(hypothesis, appraisal))
 
     @staticmethod
     def _status(
         hypothesis: ResearchHypothesis,
-        supporting: int,
-        opposing: int,
+        appraisal: HypothesisAppraisal,
     ) -> HypothesisStatus:
         """Return the bounded standing. No branch here returns "true"."""
         if hypothesis.withdrawn:
             return HypothesisStatus.WITHDRAWN
-        if opposing and supporting:
+        if appraisal.opposing_source_count and appraisal.supporting_source_count:
             return HypothesisStatus.WEAKENED
-        if opposing:
+        if appraisal.opposing_source_count:
             return HypothesisStatus.CONTRADICTED
-        if supporting >= MIN_SOURCES_FOR_SUPPORT:
+        if appraisal.support_boundary_met:
             return HypothesisStatus.SUPPORTED
         return HypothesisStatus.OPEN
 
     @staticmethod
-    def _sources(
+    def _profile(
         evidence_ids: tuple[str, ...],
-        sources: dict[str, str],
-    ) -> set[str]:
-        """Return the distinct resources behind this evidence, not the records.
+        evidence_documents: dict[str, str],
+        identities: dict[str, str],
+        trust: dict[str, ResearchInformationTrust],
+    ) -> tuple[int, int, ResearchInformationTrust]:
+        """Return distinct-source count, trust coverage, and the lowest trust.
 
         Support requires more than one source; two records of the same page must
-        not satisfy that between them.
+        not satisfy that between them. When duplicate records carry different
+        active assessments, the resource keeps the least-trusting authored one.
         """
-        return {
-            sources[evidence_id]
+        documents = {
+            evidence_documents[evidence_id]
             for evidence_id in evidence_ids
-            if evidence_id in sources
+            if evidence_id in evidence_documents
         }
+        resource_trust: dict[str, list[ResearchInformationTrust]] = {}
+        for document in documents:
+            resource = identities.get(document) or document
+            resource_trust.setdefault(resource, [])
+            if document in trust:
+                resource_trust[resource].append(trust[document])
+        assessed = [values for values in resource_trust.values() if values]
+        lowest = (
+            min(
+                (value for values in assessed for value in values),
+                key=ResearchHypothesisAppraiser._trust_rank,
+            )
+            if assessed
+            else ResearchInformationTrust.UNASSESSED
+        )
+        return len(resource_trust), len(assessed), lowest
+
+    @staticmethod
+    def _active_trust(run: ResearchRun) -> dict[str, ResearchInformationTrust]:
+        """Return the newest active authored trust for every source record."""
+        superseded = {
+            assessment.supersedes_assessment_id
+            for assessment in run.assessments
+            if assessment.supersedes_assessment_id
+        }
+        return {
+            assessment.source_document_id: assessment.information_trust
+            for assessment in run.assessments
+            if assessment.assessment_id not in superseded
+        }
+
+    @staticmethod
+    def _trust_rank(value: ResearchInformationTrust) -> int:
+        return {
+            ResearchInformationTrust.UNASSESSED: 0,
+            ResearchInformationTrust.LOW: 1,
+            ResearchInformationTrust.MEDIUM: 2,
+            ResearchInformationTrust.HIGH: 3,
+        }[value]

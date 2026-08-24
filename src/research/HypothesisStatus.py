@@ -1,11 +1,12 @@
 """Where a hypothesis currently stands. None of these means "true".
 
 There is deliberately no CONFIRMED and no PROVEN. SUPPORTED is as far as this
-enum goes, and it means only that evidence has accumulated on one side and none
-on the other — which is exactly the position from which most abandoned theories
-looked healthy. A vocabulary that offered "confirmed" would get used, and once
-something is filed as confirmed nobody looks for the observation that would have
-undone it.
+enum goes, and it means that evidence has accumulated from more than one
+independent source, every supporting source has an active authored trust
+assessment of at least medium, and none opposes it. That is still the position
+from which most abandoned theories looked healthy. A vocabulary that offered
+"confirmed" would get used, and once something is filed as confirmed nobody
+looks for the observation that would have undone it.
 
 CONTRADICTED is likewise not "false". It records that evidence was entered
 against the hypothesis, and which way that resolves is a judgement someone makes

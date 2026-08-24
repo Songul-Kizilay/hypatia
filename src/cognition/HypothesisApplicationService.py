@@ -13,6 +13,11 @@ read, and the same evidence cannot be entered on both sides.
 Supporting and opposing evidence are never netted. Both counts are reported
 separately, because which side wins is a judgement someone makes after reading
 both, and this service exists to keep both visible when they do.
+
+Positive support also carries the active authored source-trust coverage into
+the appraisal. The appraiser will not call a hypothesis supported until more
+than one independent source is present and every supporting source is assessed
+at medium trust or better. This is an evidence boundary, never a truth claim.
 """
 
 from __future__ import annotations

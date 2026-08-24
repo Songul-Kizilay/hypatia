@@ -902,22 +902,27 @@ The status rules are asymmetric on purpose:
 | Evidence | Status |
 | --- | --- |
 | None, or one supporting source | open |
-| Two or more supporting sources, none opposing | supported |
+| Two or more supporting sources, but any is unassessed or low trust | open |
+| Two or more supporting sources, all actively assessed medium/high, none opposing | supported |
 | Opposing only | contradicted |
 | Both | weakened |
 | Withdrawn | withdrawn |
 
 Any opposing evidence at all moves a hypothesis off the supported track, while
-support needs more than one source to count. That asymmetry is the whole reason
-a discriminating test is required — softening it would make disconfirmation just
-another input to be outvoted.
+positive support needs more than one independent source and an active authored
+trust assessment of at least `medium` for every supporting source. The appraisal
+shows trust coverage and the lowest active trust on each side. Superseded
+assessments do not count. That asymmetry is the whole reason a discriminating
+test is required — softening it would make disconfirmation just another input
+to be outvoted.
 
 There is no confirm intent and no status meaning true. Propose, support, oppose,
-withdraw, and list are the entire vocabulary. `supported` means evidence
-accumulated on one side and none on the other, which is where most abandoned
-theories stood right up until the observation that undid them. A system that
-could mark something confirmed would be asked to, and once something is filed as
-confirmed nobody goes looking for what would have undone it.
+withdraw, and list are the entire vocabulary. `supported` means corroborated
+positive evidence passed the explicit authored-trust boundary and none opposes
+it, which is still where most abandoned theories stood right up until the
+observation that undid them. A system that could mark something confirmed would
+be asked to, and once something is filed as confirmed nobody goes looking for
+what would have undone it.
 
 Status is never stored, only derived, so it cannot disagree with the evidence
 sitting beside it.
@@ -993,9 +998,10 @@ was accepted twice:
 | Stored content type the fetch boundary rejects | low |
 | Fetched after it was added | low |
 
-The duplicate-URL check matters more than it looks. Two records sharing a URL
-read as two independent sources to anything counting them, so a claim resting on
-one page can look corroborated to calibration and to the hypothesis appraiser.
+The duplicate-URL check matters more than it looks. Calibration and hypothesis
+appraisal now collapse near-certain equivalent URLs to one resource before
+counting corroboration, but the duplicate persisted records remain visible to
+the audit because they still signal ingestion quality and provenance debt.
 
 The address check is deliberately literal rather than resolved. Re-resolving a
 hostname at audit time would be a network call the audit has no authorisation to

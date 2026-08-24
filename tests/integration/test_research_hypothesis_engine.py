@@ -7,9 +7,9 @@ evidence because nothing was ever allowed to threaten it.
 
 The second is that no vocabulary exists for settling one. There is no confirm
 intent and no status meaning true — SUPPORTED goes as far as this system goes,
-and it means only that evidence accumulated on one side and none on the other,
-which is where most abandoned theories stood right up until the observation that
-undid them.
+and it requires corroboration plus active authored source trust of at least
+medium on every supporting source. That is still where most abandoned theories
+stood right up until the observation that undid them.
 
 Supporting and opposing evidence are never netted. Three-for and two-against is
 a situation someone has to read; any single number describing it has thrown away
@@ -59,6 +59,7 @@ from research.JsonFileHypothesisStore import (
 from research.JsonFileResearchRunStore import JsonFileResearchRunStore
 from research.ResearchHypothesis import ResearchHypothesis
 from research.ResearchHypothesisAppraiser import ResearchHypothesisAppraiser
+from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchSource import ResearchSource
 from response.ResponseComposer import ResponseComposer
@@ -154,6 +155,28 @@ class HypothesisFixture(unittest.TestCase):
         )
         updated = self.manager.add_evidence(run_id, chunk, "Directly relevant.")
         return updated.evidence[-1].evidence_id
+
+    def assess(
+        self,
+        run_id: str,
+        evidence_id: str,
+        trust: ResearchInformationTrust,
+        *,
+        supersedes_assessment_id: str | None = None,
+    ) -> str:
+        run = self.manager.get(run_id)
+        record = next(
+            entry for entry in run.evidence if entry.evidence_id == evidence_id
+        )
+        updated = self.manager.record_source_assessment(
+            run_id,
+            record.source_document_id,
+            [evidence_id],
+            "Assessed for the hypothesis test.",
+            supersedes_assessment_id=supersedes_assessment_id,
+            information_trust=trust,
+        )
+        return updated.assessments[-1].assessment_id
 
     def request(self, intent: str, **metadata: object) -> BrainRequest:
         return BrainRequest(
@@ -300,7 +323,20 @@ class AppraisalTests(HypothesisFixture):
 
         self.assertIs(status, HypothesisStatus.OPEN)
 
-    def test_two_supporting_sources_make_it_supported(self) -> None:
+    def test_two_medium_trust_supporting_sources_make_it_supported(self) -> None:
+        service = self.service()
+        run_id = self.new_run()
+        hypothesis_id = self.propose(service, run_id)
+        first = self.evidence(run_id, "a")
+        second = self.evidence(run_id, "b")
+        self.assess(run_id, first, ResearchInformationTrust.MEDIUM)
+        self.assess(run_id, second, ResearchInformationTrust.MEDIUM)
+
+        status = self.enter(service, hypothesis_id, [first, second], True)
+
+        self.assertIs(status, HypothesisStatus.SUPPORTED)
+
+    def test_two_unassessed_supporting_sources_stay_open(self) -> None:
         service = self.service()
         run_id = self.new_run()
         hypothesis_id = self.propose(service, run_id)
@@ -309,7 +345,66 @@ class AppraisalTests(HypothesisFixture):
 
         status = self.enter(service, hypothesis_id, [first, second], True)
 
+        self.assertIs(status, HypothesisStatus.OPEN)
+
+    def test_one_low_trust_supporting_source_keeps_corroboration_open(self) -> None:
+        service = self.service()
+        run_id = self.new_run()
+        hypothesis_id = self.propose(service, run_id)
+        first = self.evidence(run_id, "a")
+        second = self.evidence(run_id, "b")
+        self.assess(run_id, first, ResearchInformationTrust.MEDIUM)
+        self.assess(run_id, second, ResearchInformationTrust.LOW)
+
+        status = self.enter(service, hypothesis_id, [first, second], True)
+
+        self.assertIs(status, HypothesisStatus.OPEN)
+
+    def test_the_newest_active_trust_assessment_controls_support(self) -> None:
+        service = self.service()
+        run_id = self.new_run()
+        hypothesis_id = self.propose(service, run_id)
+        first = self.evidence(run_id, "a")
+        second = self.evidence(run_id, "b")
+        earlier = self.assess(run_id, first, ResearchInformationTrust.LOW)
+        self.assess(
+            run_id,
+            first,
+            ResearchInformationTrust.HIGH,
+            supersedes_assessment_id=earlier,
+        )
+        self.assess(run_id, second, ResearchInformationTrust.MEDIUM)
+
+        status = self.enter(service, hypothesis_id, [first, second], True)
+
         self.assertIs(status, HypothesisStatus.SUPPORTED)
+
+    def test_appraisal_reports_authored_trust_coverage(self) -> None:
+        service = self.service()
+        run_id = self.new_run()
+        hypothesis_id = self.propose(service, run_id)
+        first = self.evidence(run_id, "a")
+        second = self.evidence(run_id, "b")
+        self.assess(run_id, first, ResearchInformationTrust.HIGH)
+
+        response = service.process_support(
+            self.request(
+                "research_hypothesis_support",
+                hypothesis_id=hypothesis_id,
+                evidence_ids=[first, second],
+            )
+        )
+
+        assert response.hypothesis_appraisal is not None
+        appraisal = response.hypothesis_appraisal
+        self.assertEqual(appraisal.supporting_source_count, 2)
+        self.assertEqual(appraisal.supporting_assessed_source_count, 1)
+        self.assertIs(
+            appraisal.lowest_supporting_trust,
+            ResearchInformationTrust.HIGH,
+        )
+        self.assertIn("Supporting trust: 1/2", response.message)
+        self.assertIn("lowest high", response.message)
 
     def test_any_opposing_evidence_alone_contradicts(self) -> None:
         service = self.service()

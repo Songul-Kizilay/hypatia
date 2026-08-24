@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.180 (Genesis)`
+`v0.3.181 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,8 +12,8 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.180`** is the current executable package and GitHub
-  release line.
+- **Runtime release `v0.3.181`** is the current source/package release line.
+  GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
   current main branch; it is not an unmerged or later release.
@@ -47,8 +47,11 @@ with optional OpenAI-compatible LLM conversation support.
   against it, keeps supporting and opposing evidence in separate never-netted
   lists, and offers no way to confirm one: there is no confirm intent and no
   status meaning true. Behind `HYPATIA_HYPOTHESIS_ENABLED`, default off. Status
-  is derived rather than stored, and any opposing evidence moves a hypothesis
-  off the supported track.
+  is derived rather than stored. Positive support now requires more than one
+  independent source plus an active authored trust assessment of at least
+  `medium` for every supporting source; the appraisal reports trust coverage on
+  both sides. Any opposing evidence still moves a hypothesis off the supported
+  track.
 - Source reputation aggregates authored assessments by origin across runs and
   reports counts with a bounded standing, never a score. It is derived on every
   request with no store, so revising an assessment revises the reputation. Below
@@ -1023,16 +1026,16 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 3,347 automated tests pass through package-aware discovery.
+- 3,351 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for all `src` files and the focused sensitive-path/rooted-open
   security tests. A full `src` + `tests` MyPy sweep still has separately
   recorded pre-existing test typing debt, so repository-wide test typing is not
   claimed as a passing gate.
-- The local PyInstaller Windows onedir package builds successfully. The exact
-  `v0.3.180` generated executable's startup smoke is unverified because Windows
-  Application Control blocked that new unsigned artifact before process start.
-  No Windows security control was disabled or bypassed.
+- The local PyInstaller Windows onedir package builds successfully. The most
+  recently generated `v0.3.180` executable's startup smoke is unverified
+  because Windows Application Control blocked that new unsigned artifact
+  before process start. No Windows security control was disabled or bypassed.
 - Whitespace validation (`git diff --check`) passes.
 
 These checks describe the local working tree and do not create a GitHub

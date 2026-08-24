@@ -294,6 +294,7 @@ class HypothesisCorroborationTests(DuplicateCorroborationFixture):
 
     def test_two_different_pages_do_support_a_hypothesis(self) -> None:
         run_id, evidence_ids = self.distinct_run()
+        self.assess_all(run_id, evidence_ids, ResearchInformationTrust.MEDIUM)
 
         self.assertIs(self.appraise(run_id, evidence_ids), HypothesisStatus.SUPPORTED)
 

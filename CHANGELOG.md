@@ -2,6 +2,40 @@
 
 All notable project changes are recorded here.
 
+## [0.3.181] - 2026-08-24
+
+### Changed
+
+- Hypothesis appraisal now carries active user-authored trust coverage for the
+  supporting and opposing source sets, including the number of assessed
+  independent resources and the lowest active trust label on each side.
+- A hypothesis reaches `supported` only with more than one independent
+  supporting source, an active trust assessment of at least `medium` for every
+  supporting source, and no opposing evidence. Unassessed or low-trust support
+  remains visible but leaves the hypothesis `open`.
+- Superseded source assessments no longer influence the hypothesis boundary;
+  the newest active authored assessment controls each source record. Opposing
+  evidence remains deliberately conservative and moves a hypothesis off the
+  supported track regardless of its trust label.
+
+### Safety
+
+- The change derives status and trust coverage from existing persisted research
+  records. It adds no model judgement, hidden numeric confidence, truth state,
+  automatic assessment, storage schema, network access, or filesystem/tool
+  capability.
+- Supporting and opposing evidence remain separately reported and never netted;
+  `supported` still never means true or confirmed.
+
+### Verification
+
+- Focused integration coverage includes medium-trust corroboration, unassessed
+  support, low-trust support, superseded trust assessments, trust projection,
+  and duplicate-resource counting.
+- Package-aware discovery passes 3,351 tests with 3 existing platform-dependent
+  skips. Black, Ruff, source MyPy, and whitespace checks pass for this release
+  scope.
+
 ## [0.3.180] - 2026-08-24
 
 ### Added

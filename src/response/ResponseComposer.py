@@ -1508,9 +1508,11 @@ class ResponseComposer:
             "",
             "Supporting and opposing evidence are counted separately and never "
             "netted. No status here means the hypothesis is true: supported "
-            "means evidence has accumulated on one side and none on the other, "
-            "which is where most abandoned theories stood right until the "
-            "observation that undid them.",
+            "requires more than one independent supporting source, an active "
+            "authored trust assessment of at least medium for every supporting "
+            "source, and no opposing evidence. That is still where most "
+            "abandoned theories stood right until the observation that undid "
+            "them.",
         ]
         return BrainResponse(
             message="\n".join(lines),
@@ -1532,7 +1534,10 @@ class ResponseComposer:
                 f"- {appraisal.hypothesis.hypothesis_id} "
                 f"[{appraisal.status.value}] "
                 f"for {appraisal.supporting_source_count} / "
-                f"against {appraisal.opposing_source_count} source(s)"
+                f"against {appraisal.opposing_source_count} source(s); "
+                f"support trust {appraisal.supporting_assessed_source_count}/"
+                f"{appraisal.supporting_source_count} assessed, lowest "
+                f"{appraisal.lowest_supporting_trust.value}"
             )
         lines.append("Listing hypotheses performs no research and settles nothing.")
         return BrainResponse(
