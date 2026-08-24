@@ -876,7 +876,11 @@ absence.
 
 ## 20. Operator UX
 
-Minimal, and consistent with the existing console rather than a new surface:
+The exact Stage-A desktop contract is now accepted in
+[`Filesystem_Content_Preview_Decision.md`](Filesystem_Content_Preview_Decision.md).
+It is not implemented at the `v0.3.179` checkpoint. The accepted surface is
+minimal and remains inside the existing console rather than creating a second
+control plane:
 
 ```
 Capability : filesystem_read
@@ -899,6 +903,13 @@ Range      : offset 0, at most 65536 bytes
 - Truncation is visible in the result, not buried.
 - If §11 Phase B ever lands, "send to model" is a *second*, separate button with
   its own confirmation.
+- Root configuration remains startup-only for the first implementation. The
+  window shows the opaque scope identity, never the absolute root path.
+- The read uses the existing desktop single-flight worker. Cancellation
+  discards the eventual completion without claiming to terminate native I/O;
+  close discards every late result.
+- Content is inserted literally into a dedicated local-only panel and is kept
+  out of generic values, audit lines, logs, transcripts, exports, and clipboard.
 
 ---
 
@@ -1097,6 +1108,11 @@ the same style of guard the metadata tool already carries.
 | Content channel shape | **DECIDED, CURRENT** | Optional typed `FilesystemContentPayload` field on `ToolResult`; no sibling execution path |
 | Phase A content bound | **DECIDED** | 64 KiB per invocation; existing tool-value limits unchanged |
 | Content invocation identity | **DECIDED, CURRENT** | Required code-owned ID on `ToolExecutionOutcome`; future `ToolRunView` carries it beside content |
+| Windows desktop Stage-A registration | **DECIDED, NOT IMPLEMENTED** | May be composed explicitly only with the same resolved root and exact rooted reader/tool; absent on unsupported platforms or failed composition |
+| First Stage-A root selection | **DECIDED, CURRENT POLICY** | Startup-only `HYPATIA_FILESYSTEM_ROOT` or Hypatia data root; no live picker or root hot-swap |
+| Content confirmation | **DECIDED, NOT IMPLEMENTED** | Exact path/range/effect/scope tuple shown and authorized once; cancel/escape/close creates no invocation |
+| Content presentation | **DECIDED, NOT IMPLEMENTED** | Dedicated literal local-only untrusted panel; request ID bound beside payload; no generic lines, clipboard, export, transcript, or downstream integration |
+| Content cancellation and close | **DECIDED, CURRENT RUNNER SEMANTICS** | Existing single-flight worker discards completion after cancel or close and never claims forceful I/O termination |
 | Operator override for sensitive classes | **DEFERRED** | Needs its own UX |
 | Secret detection in content | **DEFERRED** | Redaction aid at most |
 | Content hash | **DEFERRED** | Inside read only, never metadata |

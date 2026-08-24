@@ -162,6 +162,12 @@ Hypatia currently runs as a local-first CLI. The initial security boundary is:
   staleness and close-before-result contract as a production-inert raw platform
   method. The decoded-text Tool seam exists but is unregistered and has no UI;
   no product-invocable content path exists.
+- [Filesystem content preview decision](Filesystem_Content_Preview_Decision.md).
+  The first Windows Stage-A operator contract is accepted but not implemented:
+  startup-only bounded scope, exact one-read confirmation, central request-ID
+  projection, literal local-only presentation, and discard-on-cancel/close.
+  It authorizes no model, memory, research, persistence, export, clipboard,
+  automatic continuation, override, or POSIX path.
 
 The current full-repository security baseline is recorded in the Codex Security
 scan completed for v0.3 planning. Before Hypatia gains a networked UI, plugins,

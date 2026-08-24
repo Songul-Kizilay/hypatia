@@ -982,6 +982,15 @@ with optional OpenAI-compatible LLM conversation support.
   local-only/untrusted payload on success. It performs no path open, retry,
   continuation, persistence, telemetry-content, or downstream integration.
   `ToolRuntime` and the desktop still neither import nor register it.
+- The first operator-facing content-preview contract is accepted in
+  `docs/Security/Filesystem_Content_Preview_Decision.md` but is not yet
+  implemented. It permits a Windows desktop to compose the exact bounded read
+  tool only with the same startup-resolved root, requires a second explicit
+  confirmation over one relative path and byte range, binds the central request
+  ID beside a local-only literal preview, and reuses the current single-flight
+  discard-on-cancel/close behavior. It does not authorize content registration
+  at this checkpoint or any model, memory, research, persistence, export,
+  clipboard, continuation, sensitive override, or POSIX integration.
 
 ### Intentionally Not Implemented
 
@@ -1056,15 +1065,15 @@ changed.
 
 ## Next Milestone
 
-Design the first explicit operator-facing content preview boundary before
-registering anything: root selection/configuration, one relative path and byte
-range, invocation-scoped confirmation wording, safe local-only presentation,
-and cancellation/close behavior. The design must decide whether the desktop
-may manually compose and register `FILESYSTEM_READ`; implementation begins only
-after those UI and authority contracts are testable.
+Implement the accepted Windows Stage-A operator content preview as
+`v0.3.180`: explicitly compose the exact rooted reader/tool at desktop startup,
+register it only when the same bounded root and Windows platform boundary are
+available, add the three typed arguments and exact one-read confirmation, bind
+the code-owned request ID beside the typed payload, and render it literally in
+a dedicated local-only panel through the existing single-flight worker.
 
 Do not wire content into model context, memory, research, evidence,
 persistence, exports, clipboard, remote disclosure, automatic continuation,
 generic telemetry content, or an operator override. POSIX/Linux rooted-open
-remains a later platform milestone rather than being mixed into the first
-manual preview decision.
+remains a later platform milestone rather than being mixed into this Windows
+implementation.
