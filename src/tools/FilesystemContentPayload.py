@@ -1,9 +1,10 @@
-"""An inert, bounded contract for one future local-file content range.
+"""An inert, bounded contract for one local-file content range.
 
-This type reads nothing and grants nothing. It exists before
-``filesystem_read`` so the content boundary can be reviewed and tested without
-also reviewing native handles, decoding, authorization, presentation, or model
-integration. Nothing in the production runtime imports it yet.
+This type reads nothing and grants nothing. The isolated, unregistered
+text-policy Tool may construct it after an authorized platform read; the
+production runtime and product surfaces still do not register or present it.
+Native handles, presentation, model integration, and downstream persistence
+remain outside this contract.
 
 The relative resource is a code-owned reference derived after
 ``FilesystemRoot`` admission. Validation here bounds and canonicalizes the
@@ -14,7 +15,7 @@ policy and never probes the path.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from core.Exceptions import ResearchError
 from tools.FilesystemRoot import (
@@ -50,7 +51,7 @@ class FilesystemContentPayload:
     modified_utc: datetime
     bom_stripped: bool
     read_at_utc: datetime
-    text: str
+    text: str = field(repr=False)
     source_kind: str = field(default=FILESYSTEM_CONTENT_SOURCE_KIND, init=False)
     kind: str = field(default=FILESYSTEM_CONTENT_KIND, init=False)
     encoding: str = field(default=FILESYSTEM_CONTENT_ENCODING, init=False)
@@ -133,10 +134,12 @@ class FilesystemContentPayload:
             (self.modified_utc, "modification time"),
             (self.read_at_utc, "read time"),
         ):
-            if not isinstance(value, datetime) or value.utcoffset() is None:
-                raise ResearchError(
-                    f"Filesystem content {label} must be timezone-aware."
-                )
+            if (
+                not isinstance(value, datetime)
+                or value.utcoffset() is None
+                or value.utcoffset() != timedelta(0)
+            ):
+                raise ResearchError(f"Filesystem content {label} must be UTC.")
 
     def _validate_text(self) -> None:
         if not isinstance(self.text, str):

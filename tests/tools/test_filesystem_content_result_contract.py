@@ -288,6 +288,7 @@ class ContentChannelIsolationTests(unittest.TestCase):
         self.assertEqual(
             sorted(offenders),
             [
+                "src/tools/FilesystemReadTool.py",
                 "src/tools/ToolExecutionService.py",
                 "src/tools/ToolResult.py",
             ],

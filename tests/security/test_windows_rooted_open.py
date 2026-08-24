@@ -1485,7 +1485,9 @@ class WindowsRootedOpenSourceGuards(unittest.TestCase):
         self.assertNotIn("getenv", source)
         self.assertNotIn("ctypes.CDLL", source)
 
-    def test_only_the_composition_root_imports_the_inert_foundation(self) -> None:
+    def test_only_composition_and_the_unregistered_read_seam_import_foundation(
+        self,
+    ) -> None:
         offenders = []
         target = SRC_DIR / "tools" / "WindowsRootedOpen.py"
         for path in SRC_DIR.rglob("*.py"):
@@ -1494,7 +1496,10 @@ class WindowsRootedOpenSourceGuards(unittest.TestCase):
             if "WindowsRootedOpen" in path.read_text(encoding="utf-8"):
                 offenders.append(path.relative_to(ROOT_DIR).as_posix())
 
-        self.assertEqual(offenders, ["src/desktop_main.py"])
+        self.assertEqual(
+            offenders,
+            ["src/desktop_main.py", "src/tools/FilesystemReadTool.py"],
+        )
         entrypoint = (SRC_DIR / "desktop_main.py").read_text(encoding="utf-8")
         self.assertNotIn("WindowsRootedOpen(", entrypoint)
 

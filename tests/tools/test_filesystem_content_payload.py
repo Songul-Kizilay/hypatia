@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 import unittest
 from dataclasses import FrozenInstanceError, replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, cast
 
@@ -194,17 +194,26 @@ class FilesystemContentPayloadTests(unittest.TestCase):
         with self.assertRaisesRegex(ResearchError, "byte count"):
             replace(payload, bytes_requested=2, bytes_returned=2, file_size_bytes=2)
 
-    def test_rejects_naive_or_non_datetime_provenance_times(self) -> None:
+    def test_rejects_naive_non_utc_or_non_datetime_provenance_times(self) -> None:
         payload = self.payload("a")
 
         for field_name, value in (
             ("modified_utc", datetime(2026, 8, 24, 18, 0)),
             ("read_at_utc", datetime(2026, 8, 24, 18, 1)),
+            (
+                "read_at_utc",
+                datetime(2026, 8, 24, 21, 1, tzinfo=timezone(timedelta(hours=3))),
+            ),
             ("read_at_utc", "2026-08-24T18:01:00Z"),
         ):
             with self.subTest(field_name=field_name):
-                with self.assertRaisesRegex(ResearchError, "timezone-aware"):
+                with self.assertRaisesRegex(ResearchError, "must be UTC"):
                     replace(payload, **cast(Any, {field_name: value}))
+
+    def test_repr_never_copies_decoded_content(self) -> None:
+        sentinel = "private-content-sentinel-4821"
+
+        self.assertNotIn(sentinel, repr(self.payload(sentinel)))
 
     def test_bounds_root_and_requires_a_canonical_relative_resource(self) -> None:
         payload = self.payload("a")
@@ -249,6 +258,7 @@ class FilesystemContentPayloadIsolationTests(unittest.TestCase):
         self.assertEqual(
             sorted(offenders),
             [
+                "src/tools/FilesystemReadTool.py",
                 "src/tools/ToolExecutionService.py",
                 "src/tools/ToolResult.py",
             ],

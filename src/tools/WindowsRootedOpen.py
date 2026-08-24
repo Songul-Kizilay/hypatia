@@ -1,16 +1,17 @@
 """Acquire or read one bounded Windows file range through held handles.
 
 This module is the production-owned but deliberately inert foundation for a
-future local-file content capability.  It performs lexical admission through
+local-file content capability.  It performs lexical admission through
 ``FilesystemRoot`` and then repeats the decisive proof with Windows handles:
 the configured root is opened without following its final reparse point, each
 relative component is opened against its held parent, every reparse point is
 refused, and the final handle is checked for containment and identity.
 
-No capability imports this module.  Its content-range method is production
-owned but deliberately unregistered: it returns one bounded raw observation,
-never a native handle, decoded text, ``ToolResult`` or runtime capability.  It
-loads Windows system APIs only when constructed on Windows.
+Only the isolated, unregistered text-policy Tool seam imports this module's
+bounded failure and observation contract.  Its content-range method remains
+absent from the production runtime and returns one bounded raw observation,
+never a native handle, decoded text, ``ToolResult`` or registered capability.
+It loads Windows system APIs only when constructed on Windows.
 """
 
 from __future__ import annotations

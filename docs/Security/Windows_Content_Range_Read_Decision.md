@@ -9,9 +9,10 @@
 **Implemented in:** `v0.3.178 (Genesis)`
 
 **Capability state:** `FILESYSTEM_READ` remains unregistered. Production owns
-one bounded raw `read_range` primitive, but no Tool, desktop, model, memory,
+one bounded raw `read_range` primitive and, as of `v0.3.179`, an isolated
+platform-neutral text-policy Tool seam. No runtime, desktop, model, memory,
 research, evidence, persistence, Linux/POSIX, or generic content-telemetry path
-can invoke or receive it.
+can invoke or receive them.
 
 ## 1. Decision
 
@@ -44,10 +45,11 @@ proof. It will:
 10. preserve the existing 64 KiB payload ceiling, strict UTF-8/BOM policy,
     binary refusal, local-only taint and generic-telemetry exclusion.
 
-`v0.3.178` implements this production-*inert* platform primitive only. This
-decision does not authorize a Tool implementation, registration, desktop control,
-model context, memory, research, evidence, persistence, remote disclosure,
-automatic continuation, or sensitive-file override.
+`v0.3.178` implements this production-*inert* platform primitive. `v0.3.179`
+adds the separately tested, still-unregistered Tool text-policy seam. This
+decision does not authorize registration, desktop control, model context,
+memory, research, evidence, persistence, remote disclosure, automatic
+continuation, or sensitive-file override.
 
 ## 2. Evidence and official contracts
 
@@ -161,9 +163,10 @@ containing:
 - explicit truncation.
 
 It returns no handle, absolute path, raw final path, native status, system error
-text, DLL path or unbounded buffer. A later `FilesystemReadTool` would own NUL,
-UTF-8 and BOM interpretation and construct `FilesystemContentPayload`; the
-Windows platform module does not become a presentation or Tool Layer module.
+text, DLL path or unbounded buffer. The unregistered `FilesystemReadTool` now
+owns NUL, UTF-8 and BOM interpretation and constructs
+`FilesystemContentPayload`; the Windows platform module does not become a
+presentation or Tool Layer module.
 
 ## 6. Range validation and the hard byte ceiling
 
@@ -275,7 +278,7 @@ labelled “immutable”, “verified unchanged” or “snapshot”.
 Only the retained bytes enter the platform-neutral text policy. The discarded
 lookahead byte must not affect binary classification, decoding or byte counts.
 
-The future tool applies this order after successful handle closure:
+The unregistered Tool applies this order after successful handle closure:
 
 1. if retained bytes contain NUL, decline as binary;
 2. if `offset == 0` and the retained bytes start with the three-byte UTF-8 BOM,
@@ -321,7 +324,7 @@ local, bounded native call cannot be made safely cancellable by closing its
 handle from another thread in the first milestone; adding
 `CancelSynchronousIo` would require a separate thread/lifetime design.
 
-## 11. Bounded failures and future Tool mapping
+## 11. Bounded failures and current unregistered Tool mapping
 
 The implementation adds exactly these low-level categories:
 
@@ -335,7 +338,7 @@ Existing rooted-open categories remain authoritative for platform, admission,
 sensitive class, containment, identity, open and close failures. Raw Win32
 codes and messages never cross the platform boundary.
 
-The future Tool mapping is:
+The current unregistered Tool mapping is:
 
 - invalid `offset`/`max_bytes`, non-file and initial path refusals:
   `INVOCATION_DECLINED`;
@@ -410,24 +413,26 @@ EOF, non-zero-offset, non-ASCII UTF-8, BOM, invalid UTF-8 and active-writer
 cases. Packaging must bind `ReadFile` from the system `kernel32.dll` lazily and
 repeat the normal startup smoke.
 
-The implemented `v0.3.178` boundary has 64 focused rooted-open tests. The four
-focused sensitive-path, rooted-open, payload and Tool-contract modules have 119
-passing tests; the package-aware repository suite has 3,290 passing tests with
-three platform-dependent skips. Black, Ruff, the scoped MyPy gate and
-whitespace validation pass. The local Windows onedir package builds and its
+The implemented `v0.3.178` boundary has 64 focused rooted-open tests. The five
+focused sensitive-path, rooted-open, payload, Tool-contract and text-policy
+modules have 123 passing tests; the package-aware repository suite has 3,321
+passing tests with three platform-dependent skips. Black, Ruff, the scoped
+MyPy gate and whitespace validation pass. The local Windows onedir package builds and its
 hidden-window startup smoke creates the isolated session registry without
 disabling or bypassing a host security control. GitHub's Windows and Linux
 package workflows remain the independent post-push gates for the exact commit.
 
-The future Tool milestone separately tests NUL, strict UTF-8, range-split
-multi-byte characters, payload invariants, effect authorization and lifecycle
-privacy. Passing platform tests alone will not authorize Tool registration.
+The `v0.3.179` Tool seam separately tests NUL, strict UTF-8, range-split
+multi-byte characters, payload invariants, effect authorization, lifecycle
+privacy, single-call behavior and real Windows NTFS composition. Passing those
+tests still does not authorize Tool registration.
 
 ## 14. Explicit non-decisions
 
 This ADR does not authorize or design:
 
-- `FilesystemReadTool` implementation or `ToolRuntime` registration;
+- `ToolRuntime` registration or product-facing composition of
+  `FilesystemReadTool`;
 - desktop preview or authorization controls;
 - model, memory, RAG, research, graph, evidence or agent ingestion;
 - persistence, export, clipboard, remote disclosure or generic content audit;
@@ -471,7 +476,7 @@ explain exactly, not broad enough to hide ambiguity.
 
 ## 16. Repository reality after implementation
 
-At `v0.3.178`:
+At `v0.3.179`:
 
 - `WindowsRootedOpen` is production-owned and production-inert;
 - `WindowsOpenedFile` still exposes no handle, path or content;
@@ -483,6 +488,8 @@ At `v0.3.178`:
   the final handle-derived name;
 - `FilesystemContentPayload`, the separate content effect and the
   `ToolResult.content` channel exist as inert contracts;
+- `FilesystemReadTool` applies the bounded text/failure policy to one injected
+  observation but remains production-inert;
 - `ToolRuntime` does not register `FILESYSTEM_READ`;
 - desktop, model, memory, research, evidence and persistence receive no local
   file content; and

@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.178 (Genesis)`
+`v0.3.179 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.178`** is the current executable package and GitHub
+- **Runtime release `v0.3.179`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -971,9 +971,17 @@ with optional OpenAI-compatible LLM conversation support.
   `ReadFile` at an explicit 64-bit `OVERLAPPED` offset, caps native capacity at
   `max_bytes + 1`, and compares identity, size, and raw last-write time before
   and after the read. It returns an immutable raw observation only after every
-  handle closes. `FILESYSTEM_READ` remains unregistered; no content-reading
-  tool, UI, decoded text, model, memory, research, evidence, persistence,
+  handle closes. `FILESYSTEM_READ` remains unregistered; no product-invocable
+  content path, UI, model, memory, research, evidence, persistence,
   Linux/POSIX, or generic content-telemetry path exists.
+- The platform-neutral `FilesystemReadTool` text-policy seam is now implemented
+  but deliberately unregistered. It accepts one injected bounded range,
+  requires the separate invocation-scoped content effect, refuses NUL/binary
+  and invalid or split UTF-8, strips an exact UTF-8 BOM only at offset zero,
+  maps platform failures to bounded Tool outcomes, and constructs the typed
+  local-only/untrusted payload on success. It performs no path open, retry,
+  continuation, persistence, telemetry-content, or downstream integration.
+  `ToolRuntime` and the desktop still neither import nor register it.
 
 ### Intentionally Not Implemented
 
@@ -986,7 +994,7 @@ with optional OpenAI-compatible LLM conversation support.
   cross-document semantic relation extraction.
 - Agent execution, tool gateway, browser/OS control, voice, vision, robotics,
   and smart-home integrations.
-- A registered or user-invocable local-filesystem content tool, decoded content
+- A registered or user-invocable local-filesystem content path, decoded content
   presentation, or any path that sends local-file content to a model, memory,
   research, evidence, persistence, or generic telemetry.
 - Encryption at rest, cloud synchronization, multi-process storage locking,
@@ -1006,14 +1014,14 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 3,290 automated tests pass through package-aware discovery.
+- 3,321 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for all `src` files and the focused sensitive-path/rooted-open
   security tests. A full `src` + `tests` MyPy sweep still has separately
   recorded pre-existing test typing debt, so repository-wide test typing is not
   claimed as a passing gate.
 - The local PyInstaller Windows onedir package builds successfully. The exact
-  `v0.3.178` package starts in a hidden-window smoke check and creates the
+  `v0.3.179` package starts in a hidden-window smoke check and creates the
   expected isolated `sessions/sessions.json` registry before clean termination.
   No Windows security control was disabled or bypassed for this verification.
 - Whitespace validation (`git diff --check`) passes.
@@ -1048,15 +1056,15 @@ changed.
 
 ## Next Milestone
 
-Design and implement the still-unregistered, platform-neutral text-policy seam
-above the raw Windows observation: NUL/binary refusal, offset-zero UTF-8 BOM
-handling, strict UTF-8 decoding, range-split refusal, bounded failure mapping,
-and successful `FilesystemContentPayload` construction. Preserve the existing
-effect/request/lifecycle contracts and require explicit invocation-scoped
-authorization in focused tests.
+Design the first explicit operator-facing content preview boundary before
+registering anything: root selection/configuration, one relative path and byte
+range, invocation-scoped confirmation wording, safe local-only presentation,
+and cancellation/close behavior. The design must decide whether the desktop
+may manually compose and register `FILESYSTEM_READ`; implementation begins only
+after those UI and authority contracts are testable.
 
-Keep `FILESYSTEM_READ` absent from `ToolRuntime` and the desktop. Do not wire
-content into model context, memory, research, evidence, persistence, exports,
-clipboard, remote disclosure, automatic continuation, generic telemetry
-content, or an operator override. POSIX/Linux rooted-open remains a later
-platform milestone rather than being mixed into the first isolated Tool seam.
+Do not wire content into model context, memory, research, evidence,
+persistence, exports, clipboard, remote disclosure, automatic continuation,
+generic telemetry content, or an operator override. POSIX/Linux rooted-open
+remains a later platform milestone rather than being mixed into the first
+manual preview decision.

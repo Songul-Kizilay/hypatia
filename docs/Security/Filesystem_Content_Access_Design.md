@@ -1,14 +1,15 @@
 # Filesystem Content Access — Security Design
 
-**Status: FOUNDATION PARTIALLY IMPLEMENTED; CONTENT ACCESS UNAVAILABLE.** No
-content-reading tool or registered runtime path exists as of `v0.3.178`. The
-Windows platform layer now owns one bounded raw `read_range` primitive, but it
-is production-inert and unreachable from `ToolRuntime`, desktop, model, memory,
-research, evidence, persistence, Linux/POSIX, and generic content telemetry. The
-production-inert Windows NTFS rooted-open boundary, sensitive-name floor, bounded
-`FilesystemContentPayload`, its success-only `ToolResult.content` channel, the
-separate content effect, the unregistered capability value, and the code-owned
-request identifier on `ToolExecutionOutcome` are CURRENT.
+**Status: UNREGISTERED TOOL SEAM IMPLEMENTED; CONTENT ACCESS UNAVAILABLE.** As
+of `v0.3.179`, production owns a bounded Windows raw-range primitive and a
+platform-neutral `FilesystemReadTool` text-policy seam, but no runtime or
+product surface registers either one. They remain unreachable from
+`ToolRuntime`, desktop, model, memory, research, evidence, persistence,
+Linux/POSIX, and generic content telemetry. The production-inert Windows NTFS
+rooted-open boundary, sensitive-name floor, bounded `FilesystemContentPayload`,
+its success-only `ToolResult.content` channel, the separate content effect, the
+unregistered capability and Tool, and the code-owned request identifier on
+`ToolExecutionOutcome` are CURRENT.
 Everything else marked PROPOSED remains absent and must not be cited as though
 it exists.
 
@@ -16,7 +17,8 @@ This is a separate document from
 [Filesystem_Capability_Design.md](Filesystem_Capability_Design.md) because
 content is a different trust boundary, not a larger version of the same one.
 That document governs `filesystem_list` and `filesystem_metadata`, both shipped;
-this one governs a capability that has deliberately not been built.
+this one governs a capability whose isolated Tool seam is deliberately not
+registered or exposed.
 
 The platform measurements in §4, §6, §8 and §9 were taken on the development
 machine (Windows 11, Python 3.14.5) during this design, not recalled. They are
@@ -71,7 +73,7 @@ Each of those is a separate authority, and this document keeps them separate.
 | `FILESYSTEM_READ` capability value | **CURRENT**, deliberately unregistered |
 | `ToolExecutionOutcome.request_id` | **CURRENT**, code-owned and shared with lifecycle events |
 | Windows rooted-open production boundary | **CURRENT**, production-inert and unregistered |
-| `filesystem_read` tool | **PROPOSED**, does not exist |
+| `FilesystemReadTool` | **CURRENT**, deliberately unregistered and product-inert |
 | Content in model context | **FUTURE**, separate milestone, separate authority |
 | Content in memory | **FUTURE**, separate milestone |
 | Content as research evidence | **FUTURE**, separate milestone |
@@ -297,8 +299,9 @@ It selects one synchronous `ReadFile` call with an explicit `OVERLAPPED`
 64-bit offset, a hard `max_bytes + 1` native capacity, read-only final-handle
 sharing, pre/post handle observations, strict EOF/short-read rules, and
 close-before-result ownership. `WindowsRootedOpen.read_range` now implements
-that bounded raw platform contract; `FILESYSTEM_READ` remains unregistered and
-no Tool or product surface can invoke it.
+that bounded raw platform contract. `FilesystemReadTool` now consumes only an
+injected bounded observation and applies the text policy; `FILESYSTEM_READ`
+remains unregistered and no product surface can invoke it.
 
 Even after those proofs, an attacker with write access to an already-open
 regular file may change bytes in place without changing its identity. The read
@@ -321,8 +324,8 @@ have been read, which is the wrong order, and high-entropy detection both misses
 novel formats and fires on minified assets.
 
 **DECIDED AND CURRENT as a production-inert foundation: a small, explicit,
-conservative deny class. A future content tool maps it to a *decline*. The
-operator override is not built in Phase A.**
+conservative deny class. The unregistered content tool maps it to a *decline*.
+The operator override is not built in Phase A.**
 
 The current initial deny classes are matched case-insensitively against
 canonicalized path components and rechecked against the final safely-opened
@@ -348,8 +351,9 @@ Rules for that table:
    final-handle resource identity from the §6 platform primitive. Windows
    silently strips trailing dots and spaces, and `.env.` is `.env`.
 3. The CURRENT rooted-open error carries one bounded sensitive class and fixed
-   wording naming the *class*, not the path. A future content tool must map that
-   structural value to `INVOCATION_DECLINED`; it must not parse the sentence.
+   wording naming the *class*, not the path. The unregistered content tool maps
+   that structural value to `INVOCATION_DECLINED`; it must not parse the
+   sentence.
 4. Classification currently happens before native acquisition and repeats
    after final-handle containment but before identity proof. This makes a
    sensitive final name refuse as a sensitive class rather than being reported
@@ -1084,8 +1088,8 @@ the same style of guard the metadata tool already carries.
 | `MAX_TOOL_VALUES` unchanged | **DECIDED** | Stays at 20 |
 | Strict UTF-8, no auto-detection | **DECIDED** | §9 |
 | Binary declined in Phase A | **DECIDED** | No base64 fallback |
-| Sensitive classes declined | **DECIDED, CURRENT FOUNDATION** | `FilesystemSensitivePathPolicy`; floor, not fence; no content tool |
-| Phase A is console-only | **DECIDED** | No model context |
+| Sensitive classes declined | **DECIDED, CURRENT** | `FilesystemSensitivePathPolicy`; floor, not fence; the unregistered Tool maps the bounded class to decline |
+| Phase A is operator-only | **DECIDED** | No product UI or model context yet |
 | Read never writes memory | **DECIDED** | §12 |
 | Read is not evidence | **DECIDED** | §13 |
 | Basename out of telemetry | **DECIDED** | §16 |
@@ -1102,7 +1106,8 @@ the same style of guard the metadata tool already carries.
 | Knowledge-graph ingestion | **DEFERRED** | Needs provenance type first |
 | Split multi-byte character at range edge | **DECIDED** | Phase A declines; no read outside the authorized range |
 | Windows root-handle primitive | **DECIDED, CURRENT** | `WindowsRootedOpen` performs an NTFS-only `NtCreateFile` root-relative, no-follow component walk; zero bytes and no runtime registration |
-| Windows bounded content-range primitive | **CURRENT, PRODUCTION-INERT** | One synchronous `ReadFile` with explicit `OVERLAPPED` offset, `max_bytes + 1` capacity, pre/post observation and close-before-result; no Tool/runtime registration |
+| Windows bounded content-range primitive | **CURRENT, PRODUCTION-INERT** | One synchronous `ReadFile` with explicit `OVERLAPPED` offset, `max_bytes + 1` capacity, pre/post observation and close-before-result; no runtime registration |
+| Platform-neutral text-policy Tool seam | **CURRENT, PRODUCTION-INERT** | `FilesystemReadTool` applies NUL/BOM/strict-UTF-8 and bounded failure mapping to one injected observation; no runtime or desktop registration |
 | POSIX descriptor-relative primitive | **OPEN** | Measure supported platforms; **Phase A blocker for each platform** |
 | Remote-eligibility granularity | **OPEN** | Endpoint locality exists; disclosure authority does not |
 
@@ -1151,7 +1156,7 @@ the same style of guard the metadata tool already carries.
 
 ---
 
-## 29. Repository reference validation (`v0.3.178`)
+## 29. Repository reference validation (`v0.3.179`)
 
 This table records the source check completed before accepting the document.
 It is intentionally explicit so a future milestone cannot mistake a design name
@@ -1174,16 +1179,17 @@ for a shipped API.
 | `ToolExecutionOutcome.request_id` | CURRENT, required and immutable; `ToolExecutionService` validates one value before telemetry and shares it with every lifecycle event for the invocation |
 | `WindowsRootedOpen` | CURRENT production-inert NTFS foundation in `src/tools`; accepted ADR in `docs/Security/Windows_Rooted_Open_Production_Decision.md`; no content read or runtime registration |
 | `FilesystemSensitivePathPolicy`, `FilesystemSensitiveClass` | CURRENT production-inert preflight/final-handle name-classification floor; no content inspection or override |
-| `WindowsContentRangeObservation`, `WindowsRootedOpen.read_range` | CURRENT production-inert Windows raw range boundary; one bounded read after rooted proof, no handle/path exposure and no Tool/runtime registration |
+| `WindowsContentRangeObservation`, `WindowsRootedOpen.read_range` | CURRENT production-inert Windows raw range boundary; one bounded read after rooted proof, no handle/path exposure and no runtime registration |
+| `FilesystemReadTool` | CURRENT production-owned text-policy seam; accepts one injected bounded range, produces only a typed local-only payload on success, and remains absent from `ToolRuntime` and desktop |
 | `SourceLoadStage` | CURRENT and distinguishes `INDEXED_WITHOUT_RUN` from `ACCEPTED_INTO_RUN` |
 | `LLMLearnedMemoryCandidateExtractor`, `LearnedMemoryAuditApplicationService` | CURRENT; no file-content integration exists |
 | `SecurityAgentApplicationService`, `FailureMemoryApplicationService` | CURRENT; no file-content or Tool Layer failure ingestion is implied by their existence |
 | `is_loopback_llm_endpoint` | CURRENT endpoint-classification helper; not a content-disclosure grant |
-| `filesystem_read` tool and runtime registration | PROPOSED only; neither exists in production code |
+| `FILESYSTEM_READ` runtime registration and product UI | PROPOSED only; neither exists in production code |
 | `MetaController` | FUTURE architectural role; no production type with that name exists |
 
-The sensitive-name floor and bounded raw range primitive integrated with the
-production-inert Windows rooted-open foundation are versioned as `v0.3.178`.
+The sensitive-name floor, bounded raw range primitive, and unregistered text
+policy Tool seam are versioned through `v0.3.179`.
 Ordinary `acquire` remains attribute-only and reads zero bytes. `read_range`
 uses data-read rights only for its final handle, performs one bounded native
 read, and returns an immutable raw observation only after every handle closes.

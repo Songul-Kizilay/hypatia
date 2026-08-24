@@ -2,6 +2,43 @@
 
 All notable project changes are recorded here.
 
+## [0.3.179] - 2026-08-24
+
+### Added
+
+- `FilesystemReadTool`, a production-owned but deliberately unregistered Tool
+  seam that interprets one injected bounded range as strict UTF-8 text and
+  returns a typed `FilesystemContentPayload` only after successful platform
+  acquisition and closure.
+- Explicit request parsing for one relative `path`, byte `offset`, and
+  `max_bytes` within the existing 64 KiB and signed-64-bit boundaries.
+
+### Safety
+
+- NUL-containing ranges decline as binary; an exact UTF-8 BOM is stripped only
+  at offset zero; invalid or range-split UTF-8 declines without guessing,
+  replacement, retry, or automatic continuation.
+- Platform refusal categories map to bounded Tool dispositions without leaking
+  native errors, absolute paths, file bytes, or reader exception text.
+- Corrupted non-text arguments and hostile observation access fail as bounded
+  Tool results, while decoded payload text is excluded from dataclass `repr`.
+- `READS_FILESYSTEM_CONTENT` remains an explicit invocation-scoped grant.
+  Lifecycle events carry no path, detail, or content, and `ToolRuntime` plus the
+  desktop still do not import or register `FILESYSTEM_READ`.
+- Successful content remains `local_only`, `external_untrusted_data`, and has
+  `instruction_authority="none"`; no model, memory, research, evidence,
+  persistence, export, clipboard, remote disclosure, or operator override is
+  added.
+
+### Verification
+
+- Focused tests cover argument bounds, authorization, lifecycle privacy,
+  binary/BOM/strict-UTF-8 policy, EOF, truncation, platform failure mapping,
+  source isolation, single-call behavior, and real Windows NTFS composition.
+- The package-aware full suite, local Windows package build/startup smoke,
+  formatting, lint, scoped typing, whitespace, and GitHub Windows/Linux gates
+  are recorded in `PROJECT_STATUS.md` for the exact release commit.
+
 ## [0.3.178] - 2026-08-24
 
 ### Added
