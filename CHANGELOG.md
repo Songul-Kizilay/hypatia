@@ -2,6 +2,48 @@
 
 All notable project changes are recorded here.
 
+## [0.3.163] - 2026-08-24
+
+### Added
+
+- `ToolRegistry` binds each invocable capability to exactly one tool, reading
+  the capability from the tool's own descriptor.
+- `ToolExecutionService`, the single seam every invocation passes through:
+  resolve, authorize, invoke, report.
+- `ToolFailureKind` and `ToolExecutionOutcome`, which keep refusals and failures
+  apart and carry resolution and authorization alongside the result.
+- The existing Tool Layer abstractions — `ToolCapability`, `ToolEffect`,
+  `ToolDescriptor`, `ToolInvocation`, `ToolResult`, and the `Tool` protocol —
+  are adopted unchanged as the foundation.
+
+### Safety
+
+- Authorization is central and fail-closed. A tool never checks its own grant;
+  the service compares declared effects against the invocation's authorized
+  effects before the implementation is reached.
+- There is no bypass, no trusted-tool shortcut, and no ambient permission. A
+  grant applies to one invocation and does not carry into the next.
+- The registry has no fallback. An unregistered capability resolves to `None`,
+  never to a similar tool, and the registry cannot invoke anything itself.
+- A refused invocation never reaches the implementation, proven by a tool that
+  counts its calls rather than by inspecting the returned result.
+- Failure kinds are bounded and a raised error becomes `TOOL_FAILED` with a
+  fixed sentence, so no exception text reaches a consumer.
+- The outcome refuses to disagree with itself: no performed work without
+  authorization, no performed work after a pre-execution refusal, and no
+  failure kind on a successful result.
+- No concrete tool is registered, nothing is wired into ordinary chat, and no
+  filesystem, process, network, or model capability exists.
+
+### Verification
+
+- The package-aware full local suite contains 2,613 passing automated tests.
+- Twenty-five new tests cover registration, duplicates, `NONE`, unknown
+  capabilities, the absence of fallback, determinism, exact and partial
+  authorization, empty grants, unreached implementations, cancellation, bounded
+  failure kinds, the performed/succeeded distinction, and the absence of bypass
+  methods.
+
 ## [0.3.162] - 2026-08-24
 
 ### Added
