@@ -8,11 +8,13 @@
 
 **Implemented in:** `v0.3.178 (Genesis)`
 
-**Capability state:** `FILESYSTEM_READ` remains unregistered. Production owns
-one bounded raw `read_range` primitive and, as of `v0.3.179`, an isolated
-platform-neutral text-policy Tool seam. No runtime, desktop, model, memory,
-research, evidence, persistence, Linux/POSIX, or generic content-telemetry path
-can invoke or receive them.
+**Capability state:** This raw primitive remains Windows-only and bounded. As of
+`v0.3.180`, the separately accepted
+[`Filesystem_Content_Preview_Decision.md`](Filesystem_Content_Preview_Decision.md)
+allows supported same-scope Windows desktop composition to invoke it through
+one confirmed local-only Tool preview. No model, memory, research, evidence,
+persistence, export, clipboard, remote, Linux/POSIX, or generic
+content-telemetry path receives the content.
 
 ## 1. Decision
 
@@ -428,6 +430,11 @@ privacy, single-call behavior and real Windows NTFS composition. Passing those
 tests still does not authorize Tool registration.
 
 ## 14. Explicit non-decisions
+
+These were non-decisions of the raw-range milestone. The later
+`v0.3.180` preview decision separately authorizes only the Windows Stage-A Tool
+registration and literal local desktop presentation; every other item below
+remains excluded.
 
 This ADR does not authorize or design:
 

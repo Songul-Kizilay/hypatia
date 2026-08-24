@@ -9,8 +9,11 @@ from desktop.DesktopDataPaths import DesktopDataPaths
 from desktop.TkinterDesktopWindow import TkinterDesktopWindow
 from desktop.ToolConsoleController import ToolConsoleController
 from eventbus.EventBus import EventBus
+from tools.FilesystemReadTool import FilesystemReadTool
+from tools.FilesystemRoot import FilesystemRoot
 from tools.FilesystemRootPolicy import resolve_filesystem_root
 from tools.ToolRuntime import ToolRuntime
+from tools.WindowsRootedOpen import WindowsRootedOpen, WindowsRootedOpenError
 
 
 def _verify_inert_platform_boundary_imports() -> None:
@@ -19,6 +22,19 @@ def _verify_inert_platform_boundary_imports() -> None:
 
     if WindowsRootedOpen.__module__ != "tools.WindowsRootedOpen":
         raise RuntimeError("A required platform boundary could not be imported.")
+
+
+def _compose_filesystem_read_tool(
+    filesystem_root: FilesystemRoot | None,
+) -> FilesystemReadTool | None:
+    """Build the exact Windows content tool or leave the capability absent."""
+    if filesystem_root is None:
+        return None
+    try:
+        reader = WindowsRootedOpen(filesystem_root)
+    except WindowsRootedOpenError:
+        return None
+    return FilesystemReadTool(reader)
 
 
 def main() -> None:
@@ -44,8 +60,10 @@ def main() -> None:
         # decides where this installation keeps its data. Its filesystem scope
         # defaults to that directory and can only be widened by an operator
         # environment variable — never by a model, a message, or an argument.
+        filesystem_root = resolve_filesystem_root(default_root=data_paths.root)
         tool_runtime = ToolRuntime(
-            resolve_filesystem_root(default_root=data_paths.root),
+            filesystem_root,
+            filesystem_read_tool=_compose_filesystem_read_tool(filesystem_root),
             event_bus=event_bus,
         )
         TkinterDesktopWindow(

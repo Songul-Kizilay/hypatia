@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.179 (Genesis)`
+`v0.3.180 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.179`** is the current executable package and GitHub
+- **Runtime release `v0.3.180`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -933,24 +933,24 @@ with optional OpenAI-compatible LLM conversation support.
   API key is not sent over a remote unencrypted connection. Authenticated
   completion requests also reject redirects so a bearer token cannot cross to
   a different endpoint.
-- A bounded `FilesystemContentPayload` contract now fixes the future local-file
+- A bounded `FilesystemContentPayload` contract fixes the local-file
   content boundary at 64 KiB per invocation with strict UTF-8/BOM byte
   accounting, canonical relative provenance, timezone-aware file/read times,
   explicit truncation, untrusted/no-instruction labels, and a local-only
   disclosure class. `ToolResult` carries it only through a separate success-only
   field, while `ToolExecutionService` requires an explicit
   `READS_FILESYSTEM_CONTENT` grant and matching descriptor. `FILESYSTEM_READ`
-  and its effect are declared but no production runtime registers the
-  capability. No content-reading tool, desktop path, model path, memory path,
-  research path, persistence path, or generic telemetry content exists.
+  and its effect are registered only by supported Windows desktop composition
+  with the same bounded root. No model, memory, research, persistence, export,
+  clipboard, remote, or generic telemetry content path exists.
 - Every detailed Tool Layer outcome now carries the same code-owned request
   identifier used by its lifecycle events. The central service validates one
   bounded ASCII token before telemetry and carries it through success, refusal,
   cancellation, and failure. The identifier is absent from `ToolInvocation`,
   `ToolResult`, and `FilesystemContentPayload`, so neither a tool nor returned
-  content can author its own provenance. It is not yet projected into the
-  desktop presentation model.
-- The Windows rooted-open production boundary is implemented as an inert Tool
+  content can author its own provenance. The desktop projects that identity
+  beside the payload without placing it inside file-authored data.
+- The Windows rooted-open production boundary is implemented as the exact Tool
   Layer foundation. `WindowsRootedOpen` lazily binds fixed Windows system APIs,
   opens one component at a time relative to held parent handles, refuses every
   reparse point, supports only the proven local NTFS boundary, verifies root and
@@ -964,33 +964,32 @@ with optional OpenAI-compatible LLM conversation support.
   canonical admitted components before native acquisition and repeats it from
   final handle-derived components after containment but before identity proof.
   Windows trailing dots/spaces and case cannot disguise a class. This remains
-  a floor, not complete secret detection; no override or content tool exists.
-- The first Windows content-range boundary is implemented as a production-inert
-  platform primitive. `read_range` acquires the final file in the same rooted
+  a floor, not complete secret detection; no override exists.
+- The first Windows content-range boundary is the bounded platform primitive
+  behind explicit desktop composition. `read_range` acquires the final file in
+  the same rooted
   walk with data-read rights and read-only sharing, issues one synchronous
   `ReadFile` at an explicit 64-bit `OVERLAPPED` offset, caps native capacity at
   `max_bytes + 1`, and compares identity, size, and raw last-write time before
   and after the read. It returns an immutable raw observation only after every
-  handle closes. `FILESYSTEM_READ` remains unregistered; no product-invocable
-  content path, UI, model, memory, research, evidence, persistence,
-  Linux/POSIX, or generic content-telemetry path exists.
-- The platform-neutral `FilesystemReadTool` text-policy seam is now implemented
-  but deliberately unregistered. It accepts one injected bounded range,
+  handle closes. No model, memory, research, evidence, persistence, Linux/POSIX,
+  or generic content-telemetry path exists.
+- The platform-neutral `FilesystemReadTool` is registered only when supported
+  Windows desktop composition supplies the same root and rooted reader. It
+  accepts one injected bounded range,
   requires the separate invocation-scoped content effect, refuses NUL/binary
   and invalid or split UTF-8, strips an exact UTF-8 BOM only at offset zero,
   maps platform failures to bounded Tool outcomes, and constructs the typed
   local-only/untrusted payload on success. It performs no path open, retry,
   continuation, persistence, telemetry-content, or downstream integration.
-  `ToolRuntime` and the desktop still neither import nor register it.
-- The first operator-facing content-preview contract is accepted in
-  `docs/Security/Filesystem_Content_Preview_Decision.md` but is not yet
-  implemented. It permits a Windows desktop to compose the exact bounded read
-  tool only with the same startup-resolved root, requires a second explicit
-  confirmation over one relative path and byte range, binds the central request
-  ID beside a local-only literal preview, and reuses the current single-flight
-  discard-on-cancel/close behavior. It does not authorize content registration
-  at this checkpoint or any model, memory, research, persistence, export,
-  clipboard, continuation, sensitive override, or POSIX integration.
+- The operator-facing content-preview contract is implemented in the existing
+  Tool Console. Three required typed fields define one relative path and byte
+  range; a second dialog repeats the exact scope, effect and arguments before
+  one authorization. `FilesystemContentPreview` binds the central request ID
+  beside provenance, while a dedicated read-only panel inserts text literally
+  and labels it local-only, untrusted, and without instruction authority. The
+  existing single-flight worker discards results after cancel or close, and old
+  content is cleared before every new or non-success terminal state.
 
 ### Intentionally Not Implemented
 
@@ -1003,9 +1002,10 @@ with optional OpenAI-compatible LLM conversation support.
   cross-document semantic relation extraction.
 - Agent execution, tool gateway, browser/OS control, voice, vision, robotics,
   and smart-home integrations.
-- A registered or user-invocable local-filesystem content path, decoded content
-  presentation, or any path that sends local-file content to a model, memory,
-  research, evidence, persistence, or generic telemetry.
+- Any path that sends local-file content to a model, memory, research, evidence,
+  persistence, export, clipboard, remote endpoint, or generic telemetry; any
+  automatic continuation, multi-file read, sensitive override, or Linux/POSIX
+  content reader.
 - Encryption at rest, cloud synchronization, multi-process storage locking,
   and automated repair or unattended migration tooling.
 
@@ -1023,16 +1023,16 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 3,321 automated tests pass through package-aware discovery.
+- 3,347 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for all `src` files and the focused sensitive-path/rooted-open
   security tests. A full `src` + `tests` MyPy sweep still has separately
   recorded pre-existing test typing debt, so repository-wide test typing is not
   claimed as a passing gate.
 - The local PyInstaller Windows onedir package builds successfully. The exact
-  `v0.3.179` package starts in a hidden-window smoke check and creates the
-  expected isolated `sessions/sessions.json` registry before clean termination.
-  No Windows security control was disabled or bypassed for this verification.
+  `v0.3.180` generated executable's startup smoke is unverified because Windows
+  Application Control blocked that new unsigned artifact before process start.
+  No Windows security control was disabled or bypassed.
 - Whitespace validation (`git diff --check`) passes.
 
 These checks describe the local working tree and do not create a GitHub
@@ -1065,15 +1065,15 @@ changed.
 
 ## Next Milestone
 
-Implement the accepted Windows Stage-A operator content preview as
-`v0.3.180`: explicitly compose the exact rooted reader/tool at desktop startup,
-register it only when the same bounded root and Windows platform boundary are
-available, add the three typed arguments and exact one-read confirmation, bind
-the code-owned request ID beside the typed payload, and render it literally in
-a dedicated local-only panel through the existing single-flight worker.
+Design a user-friendly, restart-bound workspace selector for the desktop so an
+operator can choose a narrower local folder without editing an environment
+variable. The design must preserve startup-only authority, refuse broad roots,
+show the exact selected scope before restart, invalidate stale confirmations,
+and keep absolute paths out of telemetry, model context, memory, research, and
+exports.
 
 Do not wire content into model context, memory, research, evidence,
 persistence, exports, clipboard, remote disclosure, automatic continuation,
 generic telemetry content, or an operator override. POSIX/Linux rooted-open
-remains a later platform milestone rather than being mixed into this Windows
-implementation.
+remains a later platform milestone rather than being mixed into the workspace
+selection boundary.

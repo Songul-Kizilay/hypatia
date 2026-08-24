@@ -21,6 +21,7 @@ about to do would be a control plane whose explanations could be wrong.
 from __future__ import annotations
 
 from core.Exceptions import ResearchError
+from desktop.FilesystemContentPreview import FilesystemContentPreview
 from desktop.ToolArgumentKind import ToolArgumentKind
 from desktop.ToolArgumentSpec import ToolArgumentSpec
 from desktop.ToolConsoleEntry import ToolConsoleEntry
@@ -78,6 +79,29 @@ _ARGUMENTS: dict[ToolCapability, tuple[ToolArgumentSpec, ...]] = {
             kind=ToolArgumentKind.RELATIVE_PATH,
             required=True,
             hint="One file or folder, relative to the configured scope.",
+        ),
+    ),
+    ToolCapability.FILESYSTEM_READ: (
+        ToolArgumentSpec(
+            name="path",
+            label="Entry",
+            kind=ToolArgumentKind.RELATIVE_PATH,
+            required=True,
+            hint="One local UTF-8 file, relative to the configured scope.",
+        ),
+        ToolArgumentSpec(
+            name="offset",
+            label="Byte offset",
+            kind=ToolArgumentKind.WHOLE_NUMBER,
+            required=True,
+            hint="Start at this byte. Use 0 for the beginning.",
+        ),
+        ToolArgumentSpec(
+            name="max_bytes",
+            label="Maximum bytes",
+            kind=ToolArgumentKind.WHOLE_NUMBER,
+            required=True,
+            hint="Read at most 65,536 bytes in this one request.",
         ),
     ),
 }
@@ -181,6 +205,17 @@ class ToolConsoleController:
             )
         return self._view(entry, self._runtime.service.execute_detailed(invocation))
 
+    def validation_problem(
+        self,
+        capability: str,
+        arguments: tuple[tuple[str, str], ...] = (),
+    ) -> str | None:
+        """Validate a plain form before confirmation without invoking a tool."""
+        entry = self.entry(capability)
+        if entry is None:
+            return UNKNOWN_CAPABILITY_DETAIL
+        return self._validate(entry, arguments)
+
     def _validate(
         self,
         entry: ToolConsoleEntry,
@@ -218,6 +253,7 @@ class ToolConsoleController:
         outcome: ToolExecutionOutcome,
     ) -> ToolRunView:
         """Project one execution outcome, taking every fact from the outcome."""
+        content_preview = self._content_preview(outcome)
         return ToolRunView(
             capability=entry.capability,
             status=self._status(outcome),
@@ -230,6 +266,36 @@ class ToolConsoleController:
             events=tuple(
                 event.name for event in self._events if event.name.startswith("tool.")
             ),
+            request_id=outcome.request_id,
+            content_preview=content_preview,
+        )
+
+    @staticmethod
+    def _content_preview(
+        outcome: ToolExecutionOutcome,
+    ) -> FilesystemContentPreview | None:
+        """Project content beside central identity, never into generic values."""
+        payload = outcome.result.content
+        if payload is None:
+            return None
+        return FilesystemContentPreview(
+            request_id=outcome.request_id,
+            root_id=payload.root_id,
+            resource=payload.resource,
+            offset=payload.offset,
+            bytes_requested=payload.bytes_requested,
+            bytes_returned=payload.bytes_returned,
+            truncated=payload.truncated,
+            file_size_bytes=payload.file_size_bytes,
+            modified_utc=payload.modified_utc,
+            bom_stripped=payload.bom_stripped,
+            read_at_utc=payload.read_at_utc,
+            source_kind=payload.source_kind,
+            encoding=payload.encoding,
+            taint_label=payload.taint_label,
+            instruction_authority=payload.instruction_authority,
+            disclosure_class=payload.disclosure_class,
+            text=payload.text,
         )
 
     @staticmethod
@@ -292,6 +358,7 @@ class ToolConsoleController:
         if capability not in (
             ToolCapability.FILESYSTEM_LIST,
             ToolCapability.FILESYSTEM_METADATA,
+            ToolCapability.FILESYSTEM_READ,
         ):
             return ""
         root_id = self._runtime.filesystem_root_id

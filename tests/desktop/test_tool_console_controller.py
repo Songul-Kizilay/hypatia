@@ -13,9 +13,12 @@ can actually do.
 
 from __future__ import annotations
 
+import os
 import sys
 import tempfile
 import unittest
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
@@ -23,6 +26,7 @@ if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
 from core.Exceptions import ResearchError
+from desktop.FilesystemContentPreview import FilesystemContentPreview
 from desktop.ToolArgumentKind import ToolArgumentKind
 from desktop.ToolConsoleController import (
     MALFORMED_ARGUMENT_DETAIL,
@@ -33,11 +37,50 @@ from desktop.ToolConsoleController import (
 )
 from desktop.ToolRunStatus import ToolRunStatus
 from eventbus.EventBus import EventBus
+from tools.FilesystemReadTool import FilesystemReadTool
 from tools.FilesystemRoot import FilesystemRoot
 from tools.ToolCapability import ToolCapability
 from tools.ToolRuntime import ToolRuntime
+from tools.WindowsRootedOpen import WindowsRootedOpen
 
 SENTINEL_DIR = "private-investigation-8472"
+SENTINEL_CONTENT = "literal local preview sentinel 7391"
+
+
+@dataclass(frozen=True, slots=True)
+class _ContentObservation:
+    root_id: str = "workspace"
+    resource: str = "readme.md"
+    offset: int = 0
+    bytes_requested: int = len(SENTINEL_CONTENT.encode())
+    bytes_returned: int = len(SENTINEL_CONTENT.encode())
+    truncated: bool = False
+    file_size_bytes: int = len(SENTINEL_CONTENT.encode())
+    modified_utc: datetime = datetime(2026, 8, 24, 19, 0, tzinfo=UTC)
+    read_at_utc: datetime = datetime(2026, 8, 24, 19, 1, tzinfo=UTC)
+    content: bytes = SENTINEL_CONTENT.encode()
+
+
+class _ContentReader:
+    root_id = "workspace"
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, int, int]] = []
+
+    def read_range(
+        self,
+        relative: str,
+        *,
+        offset: int,
+        max_bytes: int,
+    ) -> _ContentObservation:
+        self.calls.append((relative, offset, max_bytes))
+        return _ContentObservation(
+            resource=relative,
+            offset=offset,
+            bytes_requested=max_bytes,
+            bytes_returned=len(SENTINEL_CONTENT.encode()),
+        )
 
 
 class ConsoleFixture(unittest.TestCase):
@@ -594,6 +637,125 @@ class MetadataConsoleTests(ConsoleFixture):
                 self.assertFalse(hasattr(self.console, forbidden))
 
 
+class ContentConsoleTests(ConsoleFixture):
+    """The explicit composition path projects content without flattening it."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.reader = _ContentReader()
+        root = FilesystemRoot(self.root_path, root_id="workspace")
+        self.runtime = ToolRuntime(
+            root,
+            filesystem_read_tool=FilesystemReadTool(self.reader),
+            event_bus=self.event_bus,
+            id_factory=lambda: "request-content-1",
+        )
+        self.console = ToolConsoleController(self.runtime, self.event_bus)
+
+    def test_explicit_composition_registers_the_content_capability(self) -> None:
+        self.assertIn(
+            "filesystem_read",
+            [entry.capability for entry in self.console.catalogue()],
+        )
+
+    def test_content_arguments_match_the_tool_contract_and_are_required(self) -> None:
+        from tools.FilesystemReadTool import ACCEPTED_ARGUMENTS
+
+        entry = self.console.entry("filesystem_read")
+        assert entry is not None
+
+        self.assertEqual({spec.name for spec in entry.arguments}, ACCEPTED_ARGUMENTS)
+        self.assertTrue(all(spec.required for spec in entry.arguments))
+        self.assertEqual(entry.scope_label, "Scope: workspace")
+
+    def test_one_authorized_read_returns_a_separate_preview(self) -> None:
+        view = self.console.run(
+            "filesystem_read",
+            (
+                ("path", "readme.md"),
+                ("offset", "0"),
+                ("max_bytes", str(len(SENTINEL_CONTENT.encode()))),
+            ),
+            authorized=True,
+        )
+
+        self.assertTrue(view.succeeded, view.detail)
+        self.assertEqual(view.values, ())
+        self.assertEqual(view.lines(), ())
+        self.assertEqual(view.request_id, "request-content-1")
+        self.assertIsInstance(view.content_preview, FilesystemContentPreview)
+        assert view.content_preview is not None
+        self.assertEqual(view.content_preview.text, SENTINEL_CONTENT)
+        self.assertEqual(view.content_preview.resource, "readme.md")
+        self.assertEqual(self.reader.calls, [("readme.md", 0, 35)])
+
+    def test_preview_text_is_absent_from_repr_generic_lines_and_audit(self) -> None:
+        view = self.console.run(
+            "filesystem_read",
+            (("path", "readme.md"), ("offset", "0"), ("max_bytes", "35")),
+            authorized=True,
+        )
+
+        self.assertNotIn(SENTINEL_CONTENT, repr(view))
+        self.assertNotIn(SENTINEL_CONTENT, " ".join(view.lines()))
+        self.assertNotIn(SENTINEL_CONTENT, " ".join(view.audit_lines()))
+        self.assertNotIn("readme.md", " ".join(view.audit_lines()))
+
+    def test_missing_range_value_is_rejected_before_the_reader(self) -> None:
+        view = self.console.run(
+            "filesystem_read",
+            (("path", "readme.md"), ("offset", "0")),
+            authorized=True,
+        )
+
+        self.assertIs(view.status, ToolRunStatus.INVALID_ARGUMENTS)
+        self.assertEqual(self.reader.calls, [])
+
+    def test_read_authorization_does_not_persist(self) -> None:
+        arguments = (("path", "readme.md"), ("offset", "0"), ("max_bytes", "35"))
+
+        self.assertTrue(
+            self.console.run("filesystem_read", arguments, authorized=True).performed
+        )
+        self.assertFalse(self.console.run("filesystem_read", arguments).performed)
+
+
+@unittest.skipUnless(os.name == "nt", "requires the Windows rooted-open boundary")
+class NativeContentConsoleTests(unittest.TestCase):
+    def test_real_ntfs_content_reaches_only_the_confirmed_preview_projection(
+        self,
+    ) -> None:
+        text = "Merhaba, Hypatia 🌙"
+        with tempfile.TemporaryDirectory() as temporary:
+            root_path = Path(temporary)
+            (root_path / "note.txt").write_text(text, encoding="utf-8")
+            root = FilesystemRoot(root_path, root_id="workspace")
+            runtime = ToolRuntime(
+                root,
+                filesystem_read_tool=FilesystemReadTool(WindowsRootedOpen(root)),
+                id_factory=lambda: "native-content-request",
+            )
+            console = ToolConsoleController(runtime)
+
+            view = console.run(
+                "filesystem_read",
+                (
+                    ("path", "note.txt"),
+                    ("offset", "0"),
+                    ("max_bytes", str(len(text.encode()))),
+                ),
+                authorized=True,
+            )
+
+        self.assertTrue(view.succeeded, view.detail)
+        self.assertEqual(view.values, ())
+        self.assertEqual(view.request_id, "native-content-request")
+        self.assertIsNotNone(view.content_preview)
+        assert view.content_preview is not None
+        self.assertEqual(view.content_preview.text, text)
+        self.assertEqual(view.content_preview.resource, "note.txt")
+
+
 class AuditTests(ConsoleFixture):
     """Enough history to answer what happened, and nothing sensitive."""
 
@@ -806,6 +968,34 @@ class RuntimeCompositionTests(unittest.TestCase):
         for forbidden in ("shell", "process", "filesystem_read", "filesystem_write"):
             with self.subTest(capability=forbidden):
                 self.assertNotIn(forbidden, names)
+
+    def test_content_tool_requires_the_same_configured_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = FilesystemRoot(Path(temp), root_id="workspace")
+            reader = _ContentReader()
+
+            runtime = ToolRuntime(
+                root,
+                filesystem_read_tool=FilesystemReadTool(reader),
+            )
+
+        self.assertIn(ToolCapability.FILESYSTEM_READ, runtime.capabilities)
+
+    def test_content_tool_without_a_root_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            ToolRuntime(
+                None,
+                filesystem_read_tool=FilesystemReadTool(_ContentReader()),
+            )
+
+    def test_mismatched_content_scope_is_rejected(self) -> None:
+        reader = _ContentReader()
+        reader.root_id = "other"  # type: ignore[misc]
+        with tempfile.TemporaryDirectory() as temp, self.assertRaises(ValueError):
+            ToolRuntime(
+                FilesystemRoot(Path(temp), root_id="workspace"),
+                filesystem_read_tool=FilesystemReadTool(reader),
+            )
 
     def test_the_runtime_builds_tools_by_construction_not_discovery(self) -> None:
         source = (SRC_DIR / "tools" / "ToolRuntime.py").read_text(encoding="utf-8")

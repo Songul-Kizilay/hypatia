@@ -1,14 +1,14 @@
 # Filesystem Content Access — Security Design
 
-**Status: UNREGISTERED TOOL SEAM IMPLEMENTED; CONTENT ACCESS UNAVAILABLE.** As
-of `v0.3.179`, production owns a bounded Windows raw-range primitive and a
-platform-neutral `FilesystemReadTool` text-policy seam, but no runtime or
-product surface registers either one. They remain unreachable from
-`ToolRuntime`, desktop, model, memory, research, evidence, persistence,
-Linux/POSIX, and generic content telemetry. The production-inert Windows NTFS
+**Status: WINDOWS STAGE-A LOCAL PREVIEW IMPLEMENTED.** As of `v0.3.180`,
+production owns a bounded Windows raw-range primitive, a platform-neutral
+`FilesystemReadTool` text-policy seam, explicit same-scope runtime composition,
+and one confirmed literal Tool Console preview. Content remains unreachable
+from model, memory, research, evidence, persistence, export, clipboard,
+Linux/POSIX, and generic content telemetry. The Windows NTFS
 rooted-open boundary, sensitive-name floor, bounded `FilesystemContentPayload`,
 its success-only `ToolResult.content` channel, the separate content effect, the
-unregistered capability and Tool, and the code-owned request identifier on
+explicitly composed capability and Tool, and the code-owned request identifier on
 `ToolExecutionOutcome` are CURRENT.
 Everything else marked PROPOSED remains absent and must not be cited as though
 it exists.
@@ -70,10 +70,11 @@ Each of those is a separate authority, and this document keeps them separate.
 | Operator Tool Console, invocation-scoped grants | **CURRENT** |
 | `FilesystemContentPayload`, `ToolResult.content` | **CURRENT**, bounded result channel |
 | `READS_FILESYSTEM_CONTENT` | **CURRENT**, separately authorized effect |
-| `FILESYSTEM_READ` capability value | **CURRENT**, deliberately unregistered |
+| `FILESYSTEM_READ` capability value | **CURRENT**, explicitly registered only by supported Windows desktop composition |
 | `ToolExecutionOutcome.request_id` | **CURRENT**, code-owned and shared with lifecycle events |
-| Windows rooted-open production boundary | **CURRENT**, production-inert and unregistered |
-| `FilesystemReadTool` | **CURRENT**, deliberately unregistered and product-inert |
+| Windows rooted-open production boundary | **CURRENT**, bounded and platform-specific |
+| `FilesystemReadTool` | **CURRENT**, same-scope explicit composition only |
+| `FilesystemContentPreview`, exact confirmation, literal Tool Console panel | **CURRENT**, Windows Stage A |
 | Content in model context | **FUTURE**, separate milestone, separate authority |
 | Content in memory | **FUTURE**, separate milestone |
 | Content as research evidence | **FUTURE**, separate milestone |
@@ -249,7 +250,7 @@ Required logical sequence for any future implementation:
 9. close every handle on every branch
 ```
 
-### Platform strategy — Windows production-inert boundary implemented
+### Platform strategy — bounded Windows boundary implemented
 
 The current Python path API does not establish those invariants on Windows.
 `os.O_NOFOLLOW` is absent there, and calling `os.open` after
@@ -286,22 +287,23 @@ The experiment remains independent evidence rather than a runtime dependency.
 The production API surface, module ownership, dependency-free packaging, handle
 lifetime, NTFS-only initial support, and bounded error mapping are recorded in
 [Windows_Rooted_Open_Production_Decision.md](Windows_Rooted_Open_Production_Decision.md).
-`WindowsRootedOpen` implements that production-inert boundary with deterministic
+`WindowsRootedOpen` implements that bounded boundary with deterministic
 and native adversarial coverage. Its ordinary `acquire` path reads zero bytes;
-neither acquisition mode exposes a native handle or absolute path, and no
-capability is registered. The Windows NTFS rooted-open blocker is closed; the
+neither acquisition mode exposes a native handle or absolute path. The Windows
+NTFS rooted-open blocker is closed; the
 POSIX strategy remains open, and no implementation may silently fall back to a
 path-only open on any platform.
 
-The exact Windows data boundary is accepted and implemented production-inert in
+The exact Windows data boundary is accepted and implemented in
 [Windows_Content_Range_Read_Decision.md](Windows_Content_Range_Read_Decision.md).
 It selects one synchronous `ReadFile` call with an explicit `OVERLAPPED`
 64-bit offset, a hard `max_bytes + 1` native capacity, read-only final-handle
 sharing, pre/post handle observations, strict EOF/short-read rules, and
 close-before-result ownership. `WindowsRootedOpen.read_range` now implements
-that bounded raw platform contract. `FilesystemReadTool` now consumes only an
-injected bounded observation and applies the text policy; `FILESYSTEM_READ`
-remains unregistered and no product surface can invoke it.
+that bounded raw platform contract. `FilesystemReadTool` consumes only an
+injected bounded observation and applies the text policy. `v0.3.180` registers
+it only through supported same-scope Windows desktop composition and presents
+one explicitly confirmed local range.
 
 Even after those proofs, an attacker with write access to an already-open
 regular file may change bytes in place without changing its identity. The read
@@ -323,8 +325,8 @@ insufficient on its own: it requires reading the file to decide whether it shoul
 have been read, which is the wrong order, and high-entropy detection both misses
 novel formats and fires on minified assets.
 
-**DECIDED AND CURRENT as a production-inert foundation: a small, explicit,
-conservative deny class. The unregistered content tool maps it to a *decline*.
+**DECIDED AND CURRENT: a small, explicit, conservative deny class. The content
+tool maps it to a *decline*.
 The operator override is not built in Phase A.**
 
 The current initial deny classes are matched case-insensitively against
@@ -351,7 +353,7 @@ Rules for that table:
    final-handle resource identity from the §6 platform primitive. Windows
    silently strips trailing dots and spaces, and `.env.` is `.env`.
 3. The CURRENT rooted-open error carries one bounded sensitive class and fixed
-   wording naming the *class*, not the path. The unregistered content tool maps
+   wording naming the *class*, not the path. The content tool maps
    that structural value to `INVOCATION_DECLINED`; it must not parse the
    sentence.
 4. Classification currently happens before native acquisition and repeats
@@ -397,7 +399,7 @@ ordering continue to describe exactly one result rather than growing a parallel
 execution path whose authorization behaviour could drift.
 
 This is not permission for every tool to return content. The payload is valid
-only on a successful, `COMPLETED` result for the unregistered
+only on a successful, `COMPLETED` result for the explicitly composed
 `FILESYSTEM_READ` capability value. `ToolExecutionService` rejects a payload
 unless the resolved descriptor and invocation both carry
 `READS_FILESYSTEM_CONTENT`, and it revalidates the payload type. Every refusal,
@@ -878,9 +880,9 @@ absence.
 
 The exact Stage-A desktop contract is now accepted in
 [`Filesystem_Content_Preview_Decision.md`](Filesystem_Content_Preview_Decision.md).
-It is not implemented at the `v0.3.179` checkpoint. The accepted surface is
-minimal and remains inside the existing console rather than creating a second
-control plane:
+It was not implemented at the `v0.3.179` checkpoint and is implemented in
+`v0.3.180`. The surface is minimal and remains inside the existing console
+rather than creating a second control plane:
 
 ```
 Capability : filesystem_read
@@ -1099,7 +1101,7 @@ the same style of guard the metadata tool already carries.
 | `MAX_TOOL_VALUES` unchanged | **DECIDED** | Stays at 20 |
 | Strict UTF-8, no auto-detection | **DECIDED** | §9 |
 | Binary declined in Phase A | **DECIDED** | No base64 fallback |
-| Sensitive classes declined | **DECIDED, CURRENT** | `FilesystemSensitivePathPolicy`; floor, not fence; the unregistered Tool maps the bounded class to decline |
+| Sensitive classes declined | **DECIDED, CURRENT** | `FilesystemSensitivePathPolicy`; floor, not fence; the Tool maps the bounded class to decline |
 | Phase A is operator-only | **DECIDED** | No product UI or model context yet |
 | Read never writes memory | **DECIDED** | §12 |
 | Read is not evidence | **DECIDED** | §13 |
@@ -1108,10 +1110,10 @@ the same style of guard the metadata tool already carries.
 | Content channel shape | **DECIDED, CURRENT** | Optional typed `FilesystemContentPayload` field on `ToolResult`; no sibling execution path |
 | Phase A content bound | **DECIDED** | 64 KiB per invocation; existing tool-value limits unchanged |
 | Content invocation identity | **DECIDED, CURRENT** | Required code-owned ID on `ToolExecutionOutcome`; future `ToolRunView` carries it beside content |
-| Windows desktop Stage-A registration | **DECIDED, NOT IMPLEMENTED** | May be composed explicitly only with the same resolved root and exact rooted reader/tool; absent on unsupported platforms or failed composition |
+| Windows desktop Stage-A registration | **DECIDED, CURRENT** | Composed explicitly only with the same resolved root and exact rooted reader/tool; absent on unsupported platforms or failed composition |
 | First Stage-A root selection | **DECIDED, CURRENT POLICY** | Startup-only `HYPATIA_FILESYSTEM_ROOT` or Hypatia data root; no live picker or root hot-swap |
-| Content confirmation | **DECIDED, NOT IMPLEMENTED** | Exact path/range/effect/scope tuple shown and authorized once; cancel/escape/close creates no invocation |
-| Content presentation | **DECIDED, NOT IMPLEMENTED** | Dedicated literal local-only untrusted panel; request ID bound beside payload; no generic lines, clipboard, export, transcript, or downstream integration |
+| Content confirmation | **DECIDED, CURRENT** | Exact path/range/effect/scope tuple shown and authorized once; cancel creates no invocation |
+| Content presentation | **DECIDED, CURRENT** | Dedicated literal local-only untrusted panel; request ID bound beside payload; no generic lines, clipboard, export, transcript, or downstream integration |
 | Content cancellation and close | **DECIDED, CURRENT RUNNER SEMANTICS** | Existing single-flight worker discards completion after cancel or close and never claims forceful I/O termination |
 | Operator override for sensitive classes | **DEFERRED** | Needs its own UX |
 | Secret detection in content | **DEFERRED** | Redaction aid at most |
@@ -1121,9 +1123,9 @@ the same style of guard the metadata tool already carries.
 | Filesystem-specific audit channel | **DEFERRED** | New disclosure domain |
 | Knowledge-graph ingestion | **DEFERRED** | Needs provenance type first |
 | Split multi-byte character at range edge | **DECIDED** | Phase A declines; no read outside the authorized range |
-| Windows root-handle primitive | **DECIDED, CURRENT** | `WindowsRootedOpen` performs an NTFS-only `NtCreateFile` root-relative, no-follow component walk; zero bytes and no runtime registration |
-| Windows bounded content-range primitive | **CURRENT, PRODUCTION-INERT** | One synchronous `ReadFile` with explicit `OVERLAPPED` offset, `max_bytes + 1` capacity, pre/post observation and close-before-result; no runtime registration |
-| Platform-neutral text-policy Tool seam | **CURRENT, PRODUCTION-INERT** | `FilesystemReadTool` applies NUL/BOM/strict-UTF-8 and bounded failure mapping to one injected observation; no runtime or desktop registration |
+| Windows root-handle primitive | **DECIDED, CURRENT** | `WindowsRootedOpen` performs an NTFS-only `NtCreateFile` root-relative, no-follow component walk; ordinary `acquire` reads zero bytes |
+| Windows bounded content-range primitive | **CURRENT** | One synchronous `ReadFile` with explicit `OVERLAPPED` offset, `max_bytes + 1` capacity, pre/post observation and close-before-result |
+| Platform-neutral text-policy Tool seam | **CURRENT** | `FilesystemReadTool` applies NUL/BOM/strict-UTF-8 and bounded failure mapping; same-scope Windows desktop composition only |
 | POSIX descriptor-relative primitive | **OPEN** | Measure supported platforms; **Phase A blocker for each platform** |
 | Remote-eligibility granularity | **OPEN** | Endpoint locality exists; disclosure authority does not |
 
@@ -1172,7 +1174,7 @@ the same style of guard the metadata tool already carries.
 
 ---
 
-## 29. Repository reference validation (`v0.3.179`)
+## 29. Repository reference validation (`v0.3.180`)
 
 This table records the source check completed before accepting the document.
 It is intentionally explicit so a future milestone cannot mistake a design name
@@ -1189,25 +1191,26 @@ for a shipped API.
 | Tool lifecycle fields | CURRENT `ToolEvents` carries counts and bounded categories, not arguments, returned values, paths, or content |
 | Research taint constants | CURRENT module-level `EXTERNAL_SOURCE_TAINT_LABEL` and `EXTERNAL_SOURCE_INSTRUCTION_AUTHORITY` in `research/ResearchSourceRecord.py` |
 | `FilesystemContentPayload`, `MAX_CONTENT_BYTES`, `MAX_CONTENT_OFFSET` | CURRENT in `src/tools/FilesystemContentPayload.py`; immutable and bounded |
-| `ToolCapability.FILESYSTEM_READ`, `ToolEffect.READS_FILESYSTEM_CONTENT` | CURRENT declarations; deliberately absent from `ToolRuntime._build` |
+| `ToolCapability.FILESYSTEM_READ`, `ToolEffect.READS_FILESYSTEM_CONTENT` | CURRENT declarations; explicit Windows desktop composition only |
 | `ToolResult.content` | CURRENT, success-only and excluded from `repr`, structured values, and line rendering |
 | Central content authority check | CURRENT in `ToolExecutionService`; payload type plus descriptor and invocation effect are revalidated |
 | `ToolExecutionOutcome.request_id` | CURRENT, required and immutable; `ToolExecutionService` validates one value before telemetry and shares it with every lifecycle event for the invocation |
-| `WindowsRootedOpen` | CURRENT production-inert NTFS foundation in `src/tools`; accepted ADR in `docs/Security/Windows_Rooted_Open_Production_Decision.md`; no content read or runtime registration |
-| `FilesystemSensitivePathPolicy`, `FilesystemSensitiveClass` | CURRENT production-inert preflight/final-handle name-classification floor; no content inspection or override |
-| `WindowsContentRangeObservation`, `WindowsRootedOpen.read_range` | CURRENT production-inert Windows raw range boundary; one bounded read after rooted proof, no handle/path exposure and no runtime registration |
-| `FilesystemReadTool` | CURRENT production-owned text-policy seam; accepts one injected bounded range, produces only a typed local-only payload on success, and remains absent from `ToolRuntime` and desktop |
+| `WindowsRootedOpen` | CURRENT NTFS foundation in `src/tools`; accepted ADR in `docs/Security/Windows_Rooted_Open_Production_Decision.md`; exact desktop composition only |
+| `FilesystemSensitivePathPolicy`, `FilesystemSensitiveClass` | CURRENT preflight/final-handle name-classification floor; no content inspection or override |
+| `WindowsContentRangeObservation`, `WindowsRootedOpen.read_range` | CURRENT Windows raw range boundary; one bounded read after rooted proof and no handle/path exposure |
+| `FilesystemReadTool` | CURRENT production-owned text-policy Tool; accepts one injected bounded range and explicit same-scope runtime composition |
+| `FilesystemContentPreview`, `ToolRunView.content_preview` | CURRENT desktop-only projection; request ID bound beside payload and text excluded from generic rendering and `repr` |
 | `SourceLoadStage` | CURRENT and distinguishes `INDEXED_WITHOUT_RUN` from `ACCEPTED_INTO_RUN` |
 | `LLMLearnedMemoryCandidateExtractor`, `LearnedMemoryAuditApplicationService` | CURRENT; no file-content integration exists |
 | `SecurityAgentApplicationService`, `FailureMemoryApplicationService` | CURRENT; no file-content or Tool Layer failure ingestion is implied by their existence |
 | `is_loopback_llm_endpoint` | CURRENT endpoint-classification helper; not a content-disclosure grant |
-| `FILESYSTEM_READ` runtime registration and product UI | PROPOSED only; neither exists in production code |
+| `FILESYSTEM_READ` runtime registration and product UI | CURRENT Windows Stage A; exact confirmation and literal local-only preview only |
 | `MetaController` | FUTURE architectural role; no production type with that name exists |
 
-The sensitive-name floor, bounded raw range primitive, and unregistered text
-policy Tool seam are versioned through `v0.3.179`.
+The sensitive-name floor, bounded raw range primitive, text-policy Tool, and
+explicit local Windows preview are versioned through `v0.3.180`.
 Ordinary `acquire` remains attribute-only and reads zero bytes. `read_range`
 uses data-read rights only for its final handle, performs one bounded native
 read, and returns an immutable raw observation only after every handle closes.
-The Tool Runtime and desktop still expose no content capability or content
-identity.
+The Tool Runtime and desktop expose content only through the confirmed Stage-A
+preview; every downstream integration remains absent.

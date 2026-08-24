@@ -128,12 +128,11 @@ Hypatia currently runs as a local-first CLI. The initial security boundary is:
   gate. Lifecycle events carry counts, categories, and booleans, never argument
   values or returned values. Four capabilities are registered: reading a clock,
   counting supplied text, listing one authorized local directory, and reading
-  bounded metadata for one authorized local entry. Filesystem content has a
-  separate declared effect and capability value but remains unregistered. The
-  production-inert Windows NTFS rooted-open foundation is also absent from the
-  runtime. Its bounded raw range method now has one isolated, unregistered Tool
-  caller that applies NUL/BOM/strict-UTF-8 policy and returns only a typed
-  local-only/untrusted payload after success. Its current
+  bounded metadata for one authorized local entry. On supported Windows desktop
+  composition, a fifth capability reads one explicitly confirmed, bounded UTF-8
+  range through the separate content effect. Its rooted range method and
+  text-policy Tool return only a typed local-only/untrusted payload after
+  success. Its current
   sensitive-name floor refuses eight
   bounded classes before native acquisition and again from the final
   handle-derived name; it inspects no content and offers no override. No model,
@@ -147,23 +146,24 @@ Hypatia currently runs as a local-first CLI. The initial security boundary is:
   operator-configured root and explicit per-invocation authorization. They
   refuse links and expose no content.
 - [Filesystem content-access security design](Filesystem_Content_Access_Design.md).
-  The result/effect/request-identity contracts and a production-inert Windows
+  The result/effect/request-identity contracts and a bounded Windows
   NTFS rooted-open foundation plus the first sensitive-name refusal floor are
-  implemented, together with the isolated text-policy Tool seam. No runtime
-  registration, desktop control, model context, memory, research, evidence,
-  persistence, or generic telemetry content path exists.
+  implemented, together with the isolated text-policy Tool and explicit local
+  desktop preview. No model context, memory, research, evidence, persistence,
+  export, clipboard, remote, or generic telemetry content path exists.
 - [Windows rooted-open production boundary](Windows_Rooted_Open_Production_Decision.md).
   The fixed-system-DLL, handle-relative, no-follow NTFS construction is
   implemented with bounded failures. Ordinary opaque acquisition reads zero
-  content bytes; the separate raw range method remains production-inert.
+  content bytes; the separate raw range method is reachable only through the
+  exact confirmed Windows Stage-A Tool path.
   POSIX/Linux and non-NTFS filesystems are separate, unsupported milestones.
 - [Windows content-range read production decision](Windows_Content_Range_Read_Decision.md).
   One synchronous `ReadFile` range implements the accepted byte-bound, EOF,
-  staleness and close-before-result contract as a production-inert raw platform
-  method. The decoded-text Tool seam exists but is unregistered and has no UI;
-  no product-invocable content path exists.
+  staleness and close-before-result contract as a bounded raw platform method.
+  The decoded-text Tool is registered only by supported Windows desktop
+  composition with the matching scope and explicit per-read confirmation.
 - [Filesystem content preview decision](Filesystem_Content_Preview_Decision.md).
-  The first Windows Stage-A operator contract is accepted but not implemented:
+  The first Windows Stage-A operator contract is implemented:
   startup-only bounded scope, exact one-read confirmation, central request-ID
   projection, literal local-only presentation, and discard-on-cancel/close.
   It authorizes no model, memory, research, persistence, export, clipboard,

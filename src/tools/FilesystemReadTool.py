@@ -1,9 +1,9 @@
 """Interpret one proven, bounded file range as local-only UTF-8 text.
 
-This tool is deliberately absent from ``ToolRuntime``.  Production can review
-and test the complete Tool boundary without making file contents user- or
-model-invocable.  A platform reader is injected; this module never opens a
-path, owns a native handle, retries a read, or continues into another range.
+This tool is registered only when desktop composition explicitly supplies the
+same bounded scope and supported platform reader to ``ToolRuntime``. A reader
+is injected; this module never opens a path, owns a native handle, retries a
+read, or continues into another range.
 
 Only bytes retained by the reader enter the text policy.  NUL means binary and
 is declined.  A UTF-8 BOM is stripped only at offset zero.  Everything else is
@@ -81,6 +81,9 @@ class _ContentRangeObservation(Protocol):
 
 @runtime_checkable
 class _ContentRangeReader(Protocol):
+    @property
+    def root_id(self) -> str: ...
+
     def read_range(
         self,
         relative: str,
@@ -93,7 +96,7 @@ class _ContentRangeReader(Protocol):
 class FilesystemReadTool:
     """Return one authorized text range without registering it globally."""
 
-    def __init__(self, reader: _ContentRangeReader) -> None:
+    def __init__(self, reader: object) -> None:
         if not isinstance(reader, _ContentRangeReader):
             raise TypeError("A filesystem read tool requires a bounded range reader.")
         self._reader = reader
@@ -102,6 +105,11 @@ class FilesystemReadTool:
             effects=frozenset({ToolEffect.READS_FILESYSTEM_CONTENT}),
             summary=FILESYSTEM_READ_SUMMARY,
         )
+
+    @property
+    def root_id(self) -> str:
+        """Return the opaque reader scope used to bind runtime composition."""
+        return self._reader.root_id
 
     @property
     def descriptor(self) -> ToolDescriptor:

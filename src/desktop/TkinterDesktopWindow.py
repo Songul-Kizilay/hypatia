@@ -8,13 +8,14 @@ from dataclasses import dataclass
 from enum import StrEnum
 from time import monotonic
 from tkinter import filedialog, font, messagebox, scrolledtext, ttk
-from typing import Protocol
+from typing import Literal, Protocol
 
 from brain.BrainResponse import BrainResponse
 from brain.SessionSummary import SessionSummary
 from core.CancellationSignal import CancellationSignal
 from desktop.DesktopController import DesktopController
 from desktop.DesktopRequestRunner import DesktopRequestRunner
+from desktop.FilesystemContentPreview import FilesystemContentPreview
 from desktop.MarkdownTextSegments import (
     MarkdownStyle,
     markdown_segments,
@@ -32,6 +33,7 @@ from desktop.SimpleResearchReadModel import SimpleResearchReadModel
 from desktop.SimpleSourceCard import SimpleSourceCard
 from desktop.ToolConsoleController import ToolConsoleController
 from desktop.ToolConsoleEntry import ToolConsoleEntry
+from desktop.ToolRunView import ToolRunView
 from eventbus.EventBus import EventBus
 from knowledge.KnowledgeCitation import KnowledgeCitation
 from research.ResearchClaimConfidence import ResearchClaimConfidence
@@ -70,6 +72,10 @@ _TOOL_NO_ARGUMENTS = "This capability takes no arguments."
 _TOOL_GRANT_NOTE = (
     "These effects are granted for this one run only. Nothing is remembered "
     "between runs or across restarts."
+)
+_FILESYSTEM_READ_CAPABILITY = "filesystem_read"
+_CONTENT_PREVIEW_BANNER = (
+    "LOCAL FILE PREVIEW - UNTRUSTED DATA - NO INSTRUCTION AUTHORITY"
 )
 
 _DEFAULT_FONT_SIZE = 12
@@ -282,7 +288,7 @@ class TkinterDesktopWindow:
         self._root = root or tk.Tk()
         self._research_refresh_signal = ResearchStateRefreshSignal(event_bus)
         self._request_runner = DesktopRequestRunner()
-        self._request_completion_handler: Callable[[BrainResponse], None] | None = None
+        self._request_completion_handler: Callable[[object], None] | None = None
         self._request_controls: list[ttk.Button] = []
         self._request_label: str | None = None
         self._request_started_at: float | None = None
@@ -478,9 +484,52 @@ class TkinterDesktopWindow:
         cancellation_signal: CancellationSignal | None = None,
     ) -> None:
         """Start one long action without blocking or queueing the Tk event loop."""
+
+        def present(value: object) -> None:
+            if not isinstance(value, BrainResponse):
+                raise TypeError("A Brain request returned the wrong result type.")
+            on_success(value)
+
+        self._start_bounded_action(
+            action,
+            present,
+            label,
+            cancellation_signal=cancellation_signal,
+        )
+
+    def _start_tool_request(
+        self,
+        action: Callable[[], ToolRunView],
+        on_success: Callable[[ToolRunView], None],
+        label: str,
+    ) -> None:
+        """Run one local Tool action through the shared single-flight worker."""
+
+        def present(value: object) -> None:
+            if not isinstance(value, ToolRunView):
+                raise TypeError("A Tool request returned the wrong result type.")
+            on_success(value)
+
+        result = self._start_bounded_action(action, present, label)
+        if result == "busy":
+            self._tool_status.set("Hypatia is already processing a request.")
+        elif result == "stopped":
+            self._tool_status.set("Hypatia is closing.")
+        elif result == "failed":
+            self._tool_status.set("Local file read could not be started.")
+
+    def _start_bounded_action(
+        self,
+        action: Callable[[], object],
+        on_success: Callable[[object], None],
+        label: str,
+        *,
+        cancellation_signal: CancellationSignal | None = None,
+    ) -> Literal["started", "busy", "stopped", "failed"]:
+        """Reserve the one desktop worker for one bounded local action."""
         if self._closing:
             self._status.set("Hypatia is closing.")
-            return
+            return "stopped"
         start_result = self._request_runner.start(
             action,
             cancel_callback=(
@@ -493,14 +542,15 @@ class TkinterDesktopWindow:
             self._request_started_at = monotonic()
             self._set_request_controls_busy(True)
             self._status.set(f"{label}: working (0s elapsed)")
-            return
+            return "started"
         if start_result == "busy":
             self._status.set("Hypatia is already processing a request.")
-            return
+            return "busy"
         if start_result == "stopped":
             self._status.set("Hypatia is closing.")
-            return
+            return "stopped"
         self._status.set("Desktop request could not be started.")
+        return "failed"
 
     def _poll_requests(self) -> None:
         """Consume worker results and touch widgets only from the Tk event loop."""
@@ -523,7 +573,7 @@ class TkinterDesktopWindow:
                 else:
                     self._status.set("Desktop request failed.")
                 continue
-            if handler is None or not isinstance(completion.value, BrainResponse):
+            if handler is None:
                 self._status.set("Desktop request failed.")
                 continue
             try:
@@ -614,6 +664,7 @@ class TkinterDesktopWindow:
             return
         result = self._request_runner.request_cancel()
         if result in {"requested", "already_requested"}:
+            self._clear_tool_content()
             cancel_button = getattr(self, "_cancel_button", None)
             if cancel_button is not None:
                 cancel_button.state(("disabled",))
@@ -642,6 +693,7 @@ class TkinterDesktopWindow:
         if self._closing:
             return
         self._closing = True
+        self._clear_tool_content()
         self._request_completion_handler = None
         self._request_runner.stop()
         self._root.destroy()
@@ -4099,13 +4151,33 @@ class TkinterDesktopWindow:
         results = ttk.LabelFrame(parent, text="Result", padding=12)
         results.grid(row=3, column=0, sticky="nsew", pady=(10, 0))
         results.columnconfigure(0, weight=1)
-        results.rowconfigure(1, weight=1)
+        results.rowconfigure(2, weight=1)
         ttk.Label(results, textvariable=self._tool_status, wraplength=720).grid(
             row=0, column=0, sticky="w"
         )
-        self._tool_output = tk.Text(results, height=14, wrap="word")
+        self._tool_output = tk.Text(results, height=7, wrap="word")
         self._tool_output.grid(row=1, column=0, sticky="nsew", pady=(6, 0))
         self._tool_output.configure(state=tk.DISABLED)
+        self._tool_content_metadata = tk.StringVar(value="")
+        content = ttk.LabelFrame(
+            results,
+            text=_CONTENT_PREVIEW_BANNER,
+            padding=8,
+        )
+        content.grid(row=2, column=0, sticky="nsew", pady=(10, 0))
+        content.columnconfigure(0, weight=1)
+        content.rowconfigure(1, weight=1)
+        ttk.Label(
+            content,
+            textvariable=self._tool_content_metadata,
+            wraplength=960,
+            justify=tk.LEFT,
+        ).grid(row=0, column=0, sticky="w")
+        self._tool_content_output = tk.Text(content, height=9, wrap="word")
+        self._tool_content_output.grid(row=1, column=0, sticky="nsew", pady=(6, 0))
+        for sequence in ("<<Copy>>", "<Control-c>", "<Control-C>", "<Command-c>"):
+            self._tool_content_output.bind(sequence, lambda _event: "break")
+        self._tool_content_output.configure(state=tk.DISABLED)
         if self._tool_entries:
             self._tool_selector.current(0)
             self._tool_selected()
@@ -4120,6 +4192,7 @@ class TkinterDesktopWindow:
         self._tool_scope.set(entry.scope_label)
         self._tool_effects.set(entry.authorization_prompt)
         self._tool_status.set(_TOOL_IDLE_STATUS)
+        self._clear_tool_content()
         self._render_tool_arguments(entry)
 
     def _render_tool_arguments(self, entry: ToolConsoleEntry) -> None:
@@ -4195,11 +4268,64 @@ class TkinterDesktopWindow:
         if entry is None:
             self._tool_status.set(_TOOL_NO_SELECTION)
             return
-        view = self._tool_console.run(
-            entry.capability,
-            self._collect_tool_arguments(entry),
-            authorized=True,
+        arguments = self._collect_tool_arguments(entry)
+        problem = self._tool_console.validation_problem(entry.capability, arguments)
+        if problem is not None:
+            self._clear_tool_content()
+            self._tool_status.set(problem)
+            return
+        if entry.capability == _FILESYSTEM_READ_CAPABILITY:
+            self._run_confirmed_filesystem_read(entry, arguments)
+            return
+        view = self._tool_console.run(entry.capability, arguments, authorized=True)
+        self._present_tool_run(view)
+
+    def _run_confirmed_filesystem_read(
+        self,
+        entry: ToolConsoleEntry,
+        arguments: tuple[tuple[str, str], ...],
+    ) -> None:
+        """Confirm one exact local path/range before starting its bounded read."""
+        supplied = dict(arguments)
+        confirmation = (
+            "Read local file content once?\n\n"
+            f"Capability: {entry.capability}\n"
+            f"Requires: {', '.join(entry.effects)}\n"
+            f"{entry.scope_label}\n"
+            f"Entry: {supplied['path']}\n"
+            f"Offset: {supplied['offset']}\n"
+            f"Maximum: {supplied['max_bytes']} bytes\n\n"
+            "The result stays in this Tool Console as untrusted local data.\n"
+            "It is not sent to a model, memory, research, evidence, or an export.\n"
+            "This authorizes one bounded read only."
         )
+        if not messagebox.askyesno(
+            "Authorize one local file read",
+            confirmation,
+            parent=self._root,
+        ):
+            self._clear_tool_content()
+            self._tool_status.set("File-content read cancelled before execution.")
+            return
+        self._clear_tool_content()
+        console = self._tool_console
+        if console is None:
+            return
+        capability = entry.capability
+        exact_arguments = tuple(arguments)
+        self._tool_status.set("Reading one bounded local range...")
+        self._start_tool_request(
+            lambda: console.run(
+                capability,
+                exact_arguments,
+                authorized=True,
+            ),
+            self._present_tool_run,
+            "Local file read",
+        )
+
+    def _present_tool_run(self, view: ToolRunView) -> None:
+        """Render generic audit separately from optional literal file content."""
         self._tool_status.set(view.headline + " " + view.detail)
         lines = list(view.lines())
         if lines:
@@ -4210,6 +4336,40 @@ class TkinterDesktopWindow:
         self._tool_output.delete("1.0", tk.END)
         self._tool_output.insert(tk.END, chr(10).join(lines))
         self._tool_output.configure(state=tk.DISABLED)
+        self._clear_tool_content()
+        if view.content_preview is not None:
+            self._present_filesystem_content(view.content_preview)
+
+    def _present_filesystem_content(
+        self,
+        preview: FilesystemContentPreview,
+    ) -> None:
+        """Insert untrusted text literally, with no parser or action binding."""
+        metadata = getattr(self, "_tool_content_metadata", None)
+        output = getattr(self, "_tool_content_output", None)
+        if metadata is None or output is None:
+            return
+        metadata.set(chr(10).join(preview.provenance_lines()))
+        output.configure(state=tk.NORMAL)
+        output.delete("1.0", tk.END)
+        output.insert(tk.END, preview.text)
+        output.configure(state=tk.DISABLED)
+
+    def _clear_tool_content(self) -> None:
+        """Make stale content disappear before every new terminal state."""
+        metadata = getattr(self, "_tool_content_metadata", None)
+        if metadata is not None:
+            metadata.set("")
+        output = getattr(self, "_tool_content_output", None)
+        if output is None:
+            return
+        try:
+            output.configure(state=tk.NORMAL)
+            output.delete("1.0", tk.END)
+            output.configure(state=tk.DISABLED)
+        except tk.TclError:
+            # Close may race only with widget destruction; content remains gone.
+            pass
 
     # ------------------------------------------------------------------
     # Simple research mode

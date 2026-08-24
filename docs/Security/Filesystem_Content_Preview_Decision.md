@@ -1,15 +1,16 @@
 # Filesystem Content Preview Decision
 
-**Status: ACCEPTED FOR IMPLEMENTATION; NOT YET IMPLEMENTED.**
+**Status: ACCEPTED AND IMPLEMENTED IN `v0.3.180 (Genesis)`.**
 
 **Decision date:** 2026-08-24
 
 **Runtime at decision:** `v0.3.179 (Genesis)`
 
-**Capability state:** `FILESYSTEM_READ` is declared but unregistered. The
-Windows rooted range reader and the platform-neutral `FilesystemReadTool` text
-policy exist only as production-inert components. No desktop control can read
-or present file content at this checkpoint.
+**Capability state:** `FILESYSTEM_READ` is registered only by supported Windows
+desktop composition with one matching startup-resolved root and rooted reader.
+The existing Tool Console can confirm and present one bounded local UTF-8 range.
+No model, memory, research, evidence, persistence, export, clipboard, remote,
+automatic-continuation, override, or POSIX path receives the content.
 
 ## 1. Decision
 
@@ -302,23 +303,22 @@ The implementation milestone is not complete until tests prove at least:
 Existing range, sensitive-path, UTF-8, binary, result-authority, request-ID,
 telemetry, and Tool isolation suites remain mandatory regression gates.
 
-## 11. Repository reality at acceptance
+## 11. Repository reality after implementation
 
 | Reference | Verified state |
 | --- | --- |
-| `FilesystemReadTool` | CURRENT, tested, production-inert, and unregistered |
+| `FilesystemReadTool` | CURRENT, tested, and explicitly composed only with a matching bounded Windows root |
 | `FilesystemReadTool.ACCEPTED_ARGUMENTS` | CURRENT: exactly `path`, `offset`, `max_bytes`; all required by the Tool |
 | `WindowsRootedOpen.read_range` | CURRENT Windows-only bounded raw primitive |
 | `FilesystemContentPayload` | CURRENT typed local-only content channel; text excluded from `repr` |
 | `ToolExecutionOutcome.request_id` | CURRENT central code-owned invocation identity |
-| `ToolRuntime` | CURRENT explicit registry; accepts only the root/event bus/ID factory and does not import `FilesystemReadTool` |
-| `ToolConsoleController` | CURRENT sole desktop-to-Tool boundary; does not project request ID or content |
-| `ToolRunView` | CURRENT values/audit-only view; no content field |
-| `TkinterDesktopWindow` | CURRENT synchronous generic Tool execution and generic result box; no content confirmation or preview |
+| `ToolRuntime` | CURRENT explicit registry; accepts one exact optional `FilesystemReadTool`, rejects absent or mismatched root composition, and exposes no generic registration |
+| `ToolConsoleController` | CURRENT sole desktop-to-Tool boundary; validates three typed arguments and projects request ID beside a dedicated content preview |
+| `ToolRunView` | CURRENT generic values/audit view with one `repr`-hidden optional `FilesystemContentPreview` |
+| `TkinterDesktopWindow` | CURRENT exact second confirmation, shared single-flight execution, literal read-only local panel, and stale-content clearing |
 | `DesktopRequestRunner` | CURRENT daemon single-flight worker with discard-on-cancel and discard-on-close semantics |
 | `resolve_filesystem_root` | CURRENT startup-only operator configuration with bounded-root refusals |
-| Product-invocable content read | ABSENT at this checkpoint |
+| Product-invocable content read | CURRENT only in the supported Windows desktop Tool Console and only after one explicit confirmation |
 
-This document is the contract for the next implementation milestone. Its
-acceptance does not itself register the capability, change runtime version, or
-claim a working desktop preview.
+The implementation remains exactly Stage A. Visibility on the operator's local
+screen does not widen the content into any downstream subsystem.

@@ -1,10 +1,9 @@
 """An inert, bounded contract for one local-file content range.
 
-This type reads nothing and grants nothing. The isolated, unregistered
-text-policy Tool may construct it after an authorized platform read; the
-production runtime and product surfaces still do not register or present it.
-Native handles, presentation, model integration, and downstream persistence
-remain outside this contract.
+This type reads nothing and grants nothing. The isolated text-policy Tool may
+construct it after an authorized platform read; the Windows desktop may project
+it only into the explicit local Tool Console preview. Native handles, model
+integration, and downstream persistence remain outside this contract.
 
 The relative resource is a code-owned reference derived after
 ``FilesystemRoot`` admission. Validation here bounds and canonicalizes the

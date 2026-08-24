@@ -16,9 +16,53 @@ from brain.Brain import Brain
 from desktop.DesktopDataPaths import DesktopDataPaths
 from desktop.ToolConsoleController import ToolConsoleController
 from eventbus.EventBus import EventBus
+from tools.FilesystemReadTool import FilesystemReadTool
+from tools.FilesystemRoot import FilesystemRoot
+from tools.WindowsRootedOpen import (
+    WindowsRootedOpenError,
+    WindowsRootedOpenFailure,
+)
 
 
 class DesktopMainTests(unittest.TestCase):
+    def test_content_composition_requires_a_resolved_root(self) -> None:
+        with patch("desktop_main.WindowsRootedOpen") as reader_type:
+            tool = desktop_main._compose_filesystem_read_tool(None)
+
+        self.assertIsNone(tool)
+        reader_type.assert_not_called()
+
+    def test_content_composition_builds_the_exact_tool_from_the_same_root(
+        self,
+    ) -> None:
+        root = Mock(spec=FilesystemRoot)
+        root.root_id = "workspace"
+        reader = Mock()
+        reader.root_id = "workspace"
+        reader.read_range = Mock()
+
+        with patch(
+            "desktop_main.WindowsRootedOpen", return_value=reader
+        ) as reader_type:
+            tool = desktop_main._compose_filesystem_read_tool(root)
+
+        self.assertIsInstance(tool, FilesystemReadTool)
+        assert tool is not None
+        reader_type.assert_called_once_with(root)
+        self.assertEqual(tool.root_id, "workspace")
+
+    def test_bounded_platform_failure_leaves_content_capability_absent(self) -> None:
+        root = Mock(spec=FilesystemRoot)
+        root.root_id = "workspace"
+
+        with patch(
+            "desktop_main.WindowsRootedOpen",
+            side_effect=WindowsRootedOpenError(WindowsRootedOpenFailure.NOT_WINDOWS),
+        ):
+            tool = desktop_main._compose_filesystem_read_tool(root)
+
+        self.assertIsNone(tool)
+
     def test_main_uses_desktop_owned_paths_and_stops_after_window_closes(self) -> None:
         paths = DesktopDataPaths(Path("C:/Users/Songul/AppData/Local/Hypatia"))
         brain = Mock(spec=Brain)

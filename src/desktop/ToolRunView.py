@@ -16,6 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from core.Exceptions import ResearchError
+from desktop.FilesystemContentPreview import FilesystemContentPreview
 from desktop.ToolRunStatus import ToolRunStatus
 
 
@@ -32,6 +33,11 @@ class ToolRunView:
     authorized_effects: tuple[str, ...] = field(default_factory=tuple)
     values: tuple[tuple[str, str], ...] = field(default_factory=tuple)
     events: tuple[str, ...] = field(default_factory=tuple)
+    request_id: str = ""
+    content_preview: FilesystemContentPreview | None = field(
+        default=None,
+        repr=False,
+    )
 
     def __post_init__(self) -> None:
         if not isinstance(self.status, ToolRunStatus):
@@ -44,6 +50,19 @@ class ToolRunView:
             raise ResearchError("A successful run must report the success status.")
         if self.values and not self.performed:
             raise ResearchError("A run that performed nothing returned values.")
+        if not isinstance(self.request_id, str):
+            raise ResearchError("A tool run request identifier must be text.")
+        if self.content_preview is not None:
+            if not isinstance(self.content_preview, FilesystemContentPreview):
+                raise ResearchError("A tool run content preview is invalid.")
+            if (
+                self.capability != "filesystem_read"
+                or not self.succeeded
+                or self.values
+                or not self.request_id
+                or self.content_preview.request_id != self.request_id
+            ):
+                raise ResearchError("A tool run content preview is inconsistent.")
 
     @property
     def headline(self) -> str:

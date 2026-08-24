@@ -215,12 +215,14 @@ class WindowBoundaryTests(unittest.TestCase):
                 self.assertNotIn(forbidden, source)
 
     def test_the_window_always_passes_an_explicit_authorization(self) -> None:
-        """One code path, one press, and the flag is written out where it is read."""
+        """Generic press and confirmed content read both grant explicitly once."""
         source = (SRC_DIR / "desktop" / "TkinterDesktopWindow.py").read_text(
             encoding="utf-8"
         )
 
-        self.assertEqual(source.count("authorized=True"), 1)
+        self.assertEqual(source.count("authorized=True"), 2)
+        self.assertIn("_run_confirmed_filesystem_read", source)
+        self.assertIn("messagebox.askyesno", source)
 
     def test_a_window_without_a_console_offers_no_tools_tab(self) -> None:
         window: Any = object.__new__(TkinterDesktopWindow)

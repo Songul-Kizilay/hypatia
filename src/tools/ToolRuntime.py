@@ -10,9 +10,10 @@ no entry-point discovery, no name-to-class table, and nothing that turns a
 string into a tool. Adding a capability means editing this file, which is the
 cost that keeps the list short.
 
-The filesystem tool is conditional on a configured root and nothing else. When
-no root resolves, the capability is absent rather than present-and-refusing,
-because an absent capability cannot be switched on by a configuration mistake.
+Filesystem metadata tools are conditional on a configured root. Content read
+is narrower: it also requires one exact, same-scope tool supplied explicitly by
+the composition root. When either prerequisite is absent, the capability is
+absent rather than present-and-refusing.
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from eventbus.EventBus import EventBus
 from tools.ClockReadTool import ClockReadTool
 from tools.FilesystemListTool import FilesystemListTool
 from tools.FilesystemMetadataTool import FilesystemMetadataTool
+from tools.FilesystemReadTool import FilesystemReadTool
 from tools.FilesystemRoot import FilesystemRoot
 from tools.TextStatisticsTool import TextStatisticsTool
 from tools.Tool import Tool
@@ -38,12 +40,14 @@ class ToolRuntime:
         self,
         filesystem_root: FilesystemRoot | None = None,
         *,
+        filesystem_read_tool: FilesystemReadTool | None = None,
         event_bus: EventBus | None = None,
         id_factory: Callable[[], str] | None = None,
     ) -> None:
         self._filesystem_root = filesystem_root
+        self._validate_content_composition(filesystem_root, filesystem_read_tool)
         self._registry = ToolRegistry()
-        for tool in self._build(filesystem_root):
+        for tool in self._build(filesystem_root, filesystem_read_tool):
             self._registry.register(tool)
         self._service = ToolExecutionService(
             self._registry,
@@ -79,7 +83,10 @@ class ToolRuntime:
         return self._registry.registered_capabilities
 
     @staticmethod
-    def _build(filesystem_root: FilesystemRoot | None) -> tuple[Tool, ...]:
+    def _build(
+        filesystem_root: FilesystemRoot | None,
+        filesystem_read_tool: FilesystemReadTool | None,
+    ) -> tuple[Tool, ...]:
         """List every tool this installation registers, by construction."""
         tools: list[Tool] = [ClockReadTool(), TextStatisticsTool()]
         if filesystem_root is not None:
@@ -89,4 +96,21 @@ class ToolRuntime:
             # exist.
             tools.append(FilesystemListTool(filesystem_root))
             tools.append(FilesystemMetadataTool(filesystem_root))
+            if filesystem_read_tool is not None:
+                tools.append(filesystem_read_tool)
         return tuple(tools)
+
+    @staticmethod
+    def _validate_content_composition(
+        filesystem_root: FilesystemRoot | None,
+        filesystem_read_tool: FilesystemReadTool | None,
+    ) -> None:
+        """Refuse content authority that is absent, generic, or mis-scoped."""
+        if filesystem_read_tool is None:
+            return
+        if not isinstance(filesystem_read_tool, FilesystemReadTool):
+            raise TypeError("ToolRuntime requires an exact filesystem read tool.")
+        if filesystem_root is None:
+            raise ValueError("Filesystem read requires a configured root.")
+        if filesystem_read_tool.root_id != filesystem_root.root_id:
+            raise ValueError("Filesystem read scope does not match its root.")

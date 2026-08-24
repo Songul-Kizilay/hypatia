@@ -1400,7 +1400,7 @@ class WindowsRootedOpenNativeTests(unittest.TestCase):
 
 
 class WindowsRootedOpenSourceGuards(unittest.TestCase):
-    """Keep the foundation inert, local, unregistered, and experiment-free."""
+    """Keep the Windows boundary local, bounded, explicit, and experiment-free."""
 
     @classmethod
     def source(cls) -> str:
@@ -1485,7 +1485,7 @@ class WindowsRootedOpenSourceGuards(unittest.TestCase):
         self.assertNotIn("getenv", source)
         self.assertNotIn("ctypes.CDLL", source)
 
-    def test_only_composition_and_the_unregistered_read_seam_import_foundation(
+    def test_only_composition_and_the_bounded_read_seam_import_foundation(
         self,
     ) -> None:
         offenders = []
@@ -1501,7 +1501,8 @@ class WindowsRootedOpenSourceGuards(unittest.TestCase):
             ["src/desktop_main.py", "src/tools/FilesystemReadTool.py"],
         )
         entrypoint = (SRC_DIR / "desktop_main.py").read_text(encoding="utf-8")
-        self.assertNotIn("WindowsRootedOpen(", entrypoint)
+        self.assertEqual(entrypoint.count("WindowsRootedOpen("), 1)
+        self.assertEqual(entrypoint.count("FilesystemReadTool(reader)"), 1)
 
     def test_packaging_import_check_constructs_no_windows_api(self) -> None:
         import desktop_main

@@ -2,6 +2,51 @@
 
 All notable project changes are recorded here.
 
+## [0.3.180] - 2026-08-24
+
+### Added
+
+- An explicitly composed Windows `FILESYSTEM_READ` capability in the existing
+  Tool Console. It appears only when one bounded startup root and the proven
+  NTFS rooted reader are both available; unsupported or failed composition
+  leaves the capability absent.
+- Required typed controls for one relative path, byte offset, and maximum byte
+  count, followed by a second confirmation that repeats the exact scope,
+  effect, path, and range before one invocation is authorized.
+- A dedicated `FilesystemContentPreview` presentation contract that binds the
+  central request ID beside local provenance and keeps decoded text out of
+  generic values, audit lines, status text, event payloads, and `repr`.
+- A literal read-only local preview panel with visible range completeness,
+  timestamps, UTF-8/BOM state, untrusted-data taint, no instruction authority,
+  and local-only disclosure status.
+
+### Safety
+
+- Root authority remains startup-only through `HYPATIA_FILESYSTEM_ROOT` or
+  Hypatia's data directory. The UI exposes the opaque `workspace` identity,
+  never the absolute root, and cannot hot-swap or widen it.
+- The exact content tool is accepted by `ToolRuntime` only with a matching root
+  identity. There is still no generic registration, discovery, factory, plugin,
+  path fallback, or Linux/POSIX content implementation.
+- The existing desktop single-flight worker owns execution. Cancellation and
+  close discard late content without claiming to terminate native I/O; no
+  retry, queue, second range, or automatic continuation is introduced.
+- Prior content is cleared before a new read and after every non-success state.
+  The preview uses literal Tk insertion, disables copy bindings, and offers no
+  save, export, open, send, ingest, transcript, model, memory, research,
+  evidence, persistence, telemetry-content, remote-disclosure, or sensitive
+  override path.
+
+### Verification
+
+- Focused tests cover exact composition and scope matching, typed form
+  validation, confirmation cancellation, exact tuple binding, request-ID
+  projection, literal rendering, stale-content clearing, shared single-flight
+  execution, cancellation/close disposal, and existing Tool isolation.
+- Full-suite, formatting, lint, scoped typing, local package-build status,
+  executable-smoke limitations, and whitespace results are recorded in
+  `PROJECT_STATUS.md`. GitHub Windows/Linux checks remain commit-time evidence.
+
 ## [0.3.179] - 2026-08-24
 
 ### Added

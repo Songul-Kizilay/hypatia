@@ -1,6 +1,6 @@
 # Windows Rooted-Open Production Boundary
 
-**Status: IMPLEMENTED AS A PRODUCTION-INERT FOUNDATION.**
+**Status: IMPLEMENTED; CONSUMED ONLY BY THE BOUNDED WINDOWS STAGE-A PREVIEW.**
 
 **Decision date:** 2026-08-24
 
@@ -12,10 +12,11 @@
 
 **Content-range integration:** `v0.3.178 (Genesis)`
 
-**Capability state:** `FILESYSTEM_READ` remains unregistered. The separate
-[Windows content-range decision](Windows_Content_Range_Read_Decision.md) now
-owns one production-inert raw primitive; no Tool or product surface can invoke
-it.
+**Capability state:** As of `v0.3.180`, the separate
+[filesystem content preview decision](Filesystem_Content_Preview_Decision.md)
+allows supported same-scope Windows desktop composition to invoke the bounded
+raw primitive through one confirmed local-only Tool preview. No path fallback
+or downstream content integration is authorized.
 
 ## 1. Decision
 

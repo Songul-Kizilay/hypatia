@@ -1,4 +1,4 @@
-"""Security and isolation tests for the still-unregistered text-read Tool seam."""
+"""Security and isolation tests for the explicitly composed text-read Tool."""
 
 from __future__ import annotations
 
@@ -97,6 +97,7 @@ def observation(
 
 class FakeReader:
     def __init__(self, result: object | None = None) -> None:
+        self.root_id = "workspace"
         self.result = result if result is not None else observation()
         self.error: Exception | None = None
         self.calls: list[tuple[str, int, int]] = []
@@ -552,16 +553,24 @@ class NativeWindowsCompositionTests(unittest.TestCase):
 
 
 class IsolationTests(unittest.TestCase):
-    def test_runtime_still_does_not_register_filesystem_read(self) -> None:
+    def test_runtime_without_explicit_composition_does_not_register_read(self) -> None:
         runtime = ToolRuntime(None)
 
         self.assertNotIn(ToolCapability.FILESYSTEM_READ, runtime.capabilities)
         self.assertIsNone(runtime.registry.resolve(ToolCapability.FILESYSTEM_READ))
 
-    def test_runtime_and_desktop_do_not_import_the_read_tool(self) -> None:
-        for relative in ("src/tools/ToolRuntime.py", "src/desktop_main.py"):
-            source = (ROOT_DIR / relative).read_text(encoding="utf-8")
-            self.assertNotIn("FilesystemReadTool", source)
+    def test_only_composition_boundaries_import_the_read_tool(self) -> None:
+        expected = {
+            "src/desktop_main.py",
+            "src/tools/FilesystemReadTool.py",
+            "src/tools/ToolRuntime.py",
+        }
+        offenders = set()
+        for path in (ROOT_DIR / "src").rglob("*.py"):
+            if "FilesystemReadTool" in path.read_text(encoding="utf-8"):
+                offenders.add(path.relative_to(ROOT_DIR).as_posix())
+
+        self.assertEqual(offenders, expected)
 
     def test_read_tool_has_no_direct_filesystem_process_or_integration_api(
         self,
@@ -588,13 +597,12 @@ class IsolationTests(unittest.TestCase):
             with self.subTest(forbidden=forbidden):
                 self.assertNotIn(forbidden, source)
 
-    def test_only_the_expected_production_modules_name_the_read_tool(self) -> None:
-        offenders = []
-        for path in (ROOT_DIR / "src").rglob("*.py"):
-            if "FilesystemReadTool" in path.read_text(encoding="utf-8"):
-                offenders.append(path.relative_to(ROOT_DIR).as_posix())
+    def test_the_tk_window_still_names_no_read_tool_type(self) -> None:
+        source = (ROOT_DIR / "src/desktop/TkinterDesktopWindow.py").read_text(
+            encoding="utf-8"
+        )
 
-        self.assertEqual(offenders, ["src/tools/FilesystemReadTool.py"])
+        self.assertNotIn("FilesystemReadTool", source)
 
 
 if __name__ == "__main__":

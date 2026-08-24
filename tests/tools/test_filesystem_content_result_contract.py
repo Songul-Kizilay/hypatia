@@ -1,4 +1,4 @@
-"""Authorization and isolation for the still-unregistered content channel."""
+"""Authorization and isolation for the separately registered content channel."""
 
 from __future__ import annotations
 
@@ -322,7 +322,7 @@ class ContentChannelIsolationTests(unittest.TestCase):
             with self.subTest(forbidden=forbidden):
                 self.assertNotIn(forbidden, source)
         self.assertNotIn("FilesystemContentPayload", runtime_source)
-        self.assertNotIn("FILESYSTEM_READ", runtime_source)
+        self.assertNotIn("open(", runtime_source)
 
 
 if __name__ == "__main__":
