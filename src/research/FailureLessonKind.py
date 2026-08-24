@@ -20,6 +20,7 @@ class FailureLessonKind(StrEnum):
     """Name one bounded way a run's work did not pay off."""
 
     FAILED_HYPOTHESIS = "failed_hypothesis"
+    REVISED_CLAIM = "revised_claim"
     DISPROVING_EVIDENCE = "disproving_evidence"
     INVALID_ASSUMPTION = "invalid_assumption"
     FALSE_POSITIVE = "false_positive"
@@ -41,6 +42,7 @@ class FailureLessonKind(StrEnum):
         """
         return self in (
             FailureLessonKind.FAILED_HYPOTHESIS,
+            FailureLessonKind.REVISED_CLAIM,
             FailureLessonKind.DISPROVING_EVIDENCE,
             FailureLessonKind.INVALID_ASSUMPTION,
             FailureLessonKind.CONFIDENCE_CHANGE,
@@ -50,6 +52,7 @@ class FailureLessonKind(StrEnum):
 _WEIGHTS: dict[FailureLessonKind, int] = {
     FailureLessonKind.DISPROVING_EVIDENCE: 70,
     FailureLessonKind.FAILED_HYPOTHESIS: 60,
+    FailureLessonKind.REVISED_CLAIM: 60,
     FailureLessonKind.INVALID_ASSUMPTION: 50,
     FailureLessonKind.FALSE_POSITIVE: 40,
     FailureLessonKind.CONFIDENCE_CHANGE: 30,

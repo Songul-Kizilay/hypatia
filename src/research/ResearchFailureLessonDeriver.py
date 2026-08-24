@@ -4,8 +4,8 @@ Derivation is pure reading and fixed templates. Every lesson it produces names
 the persisted records it came from, so a lesson can always be traced back and,
 if the records say otherwise, discarded.
 
-The templates are careful about what they assert. A superseded hypothesis
-produced "we stopped holding this", not "this was false". A discovery whose
+The templates are careful about what they assert. A superseded claim records
+revision, not falsity. A discovery whose
 candidates were never accepted produced "this did not pay off here", not "this
 provider is useless". The difference matters most later, when the lesson is
 recalled by someone who no longer remembers the run.
@@ -18,6 +18,7 @@ from datetime import datetime
 from core.Exceptions import ResearchError
 from research.FailureLessonKind import FailureLessonKind
 from research.ResearchClaimRecord import ResearchClaimRecord
+from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchFailureLesson import (
     MAX_LESSON_CONTEXT_LENGTH,
     MAX_LESSON_PROVENANCE,
@@ -88,21 +89,24 @@ class ResearchFailureLessonDeriver:
         run: ResearchRun,
         recorded_at: datetime,
     ) -> list[ResearchFailureLesson]:
-        """A replaced claim is one we stopped holding, not one shown false."""
+        """Classify a replaced claim from its actual authored epistemic state."""
         by_id = {claim.claim_id: claim for claim in run.claims}
         lessons: list[ResearchFailureLesson] = []
         for claim in run.claims:
             earlier = by_id.get(claim.supersedes_claim_id or "")
             if earlier is None:
                 continue
+            kind = (
+                FailureLessonKind.FAILED_HYPOTHESIS
+                if earlier.epistemic_state is ResearchEpistemicState.HYPOTHESIS
+                else FailureLessonKind.REVISED_CLAIM
+            )
             lessons.append(
                 self._lesson(
                     run,
-                    FailureLessonKind.FAILED_HYPOTHESIS,
+                    kind,
                     earlier.claim_id,
-                    f"We stopped holding this {earlier.epistemic_state.value} claim "
-                    f"and replaced it with a {claim.epistemic_state.value} one. It "
-                    "was abandoned, not disproved.",
+                    self._revision_statement(earlier, claim),
                     (earlier.claim_id, claim.claim_id),
                     recorded_at,
                 )
@@ -112,6 +116,22 @@ class ResearchFailureLessonDeriver:
                     self._confidence_lesson(run, earlier, claim, recorded_at)
                 )
         return lessons
+
+    @staticmethod
+    def _revision_statement(
+        earlier: ResearchClaimRecord,
+        later: ResearchClaimRecord,
+    ) -> str:
+        if earlier.epistemic_state is ResearchEpistemicState.HYPOTHESIS:
+            return (
+                "We stopped holding this hypothesis claim and replaced it with a "
+                f"{later.epistemic_state.value} one. It was abandoned, not disproved."
+            )
+        return (
+            f"We revised this {earlier.epistemic_state.value} claim and replaced it "
+            f"with a {later.epistemic_state.value} one. The earlier claim was "
+            "superseded, not disproved by that replacement."
+        )
 
     def _confidence_lesson(
         self,

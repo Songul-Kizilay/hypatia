@@ -245,9 +245,14 @@ class ProvenanceTests(unittest.TestCase):
 
     def test_only_belief_kinds_concern_belief(self) -> None:
         self.assertTrue(FailureLessonKind.FAILED_HYPOTHESIS.concerns_belief)
+        self.assertTrue(FailureLessonKind.REVISED_CLAIM.concerns_belief)
         self.assertTrue(FailureLessonKind.DISPROVING_EVIDENCE.concerns_belief)
         self.assertFalse(FailureLessonKind.INEFFECTIVE_STRATEGY.concerns_belief)
         self.assertFalse(FailureLessonKind.OPERATION_FAILURE.concerns_belief)
+        self.assertEqual(
+            FailureLessonKind.REVISED_CLAIM.weight,
+            FailureLessonKind.FAILED_HYPOTHESIS.weight,
+        )
 
 
 class LessonDerivationTests(FailureMemoryFixture):
@@ -283,6 +288,49 @@ class LessonDerivationTests(FailureMemoryFixture):
         self.assertEqual(len(lessons), 1)
         self.assertIn("abandoned, not disproved", lessons[0].statement)
         self.assertIn(earlier_id, lessons[0].provenance)
+
+    def test_superseded_claim_kind_matches_the_authored_epistemic_state(self) -> None:
+        for state in ResearchEpistemicState:
+            with self.subTest(state=state.value):
+                run_id, _, evidence_id = self.sourced_run(f"state-{state.value}")
+                run = self.manager.record_claim(
+                    run_id,
+                    [evidence_id],
+                    f"Earlier {state.value} claim.",
+                    state,
+                )
+                earlier_id = run.claims[-1].claim_id
+                self.manager.record_claim(
+                    run_id,
+                    [evidence_id],
+                    "A later authored claim.",
+                    ResearchEpistemicState.LIKELY,
+                    supersedes_claim_id=earlier_id,
+                )
+
+                revision = next(
+                    lesson
+                    for lesson in self.derive(run_id)
+                    if lesson.subject_id == earlier_id
+                    and lesson.kind
+                    in (
+                        FailureLessonKind.FAILED_HYPOTHESIS,
+                        FailureLessonKind.REVISED_CLAIM,
+                    )
+                )
+                expected = (
+                    FailureLessonKind.FAILED_HYPOTHESIS
+                    if state is ResearchEpistemicState.HYPOTHESIS
+                    else FailureLessonKind.REVISED_CLAIM
+                )
+
+                self.assertIs(revision.kind, expected)
+                self.assertIn(state.value, revision.statement)
+                self.assertIn("not disproved", revision.statement)
+                self.assertEqual(
+                    revision.lesson_id,
+                    f"lesson:{run_id}:{expected.value}:{earlier_id}",
+                )
 
     def test_a_confidence_move_is_remembered_separately(self) -> None:
         run_id, _, evidence_id = self.sourced_run()
@@ -886,6 +934,18 @@ class FailureLessonStoreTests(unittest.TestCase):
 
         self.assertEqual(reloaded, [original])
         self.assertEqual(reloaded[0].provenance, original.provenance)
+
+    def test_a_legacy_failed_hypothesis_lesson_still_loads(self) -> None:
+        original = replace(
+            self.lesson(),
+            lesson_id="lesson:run-1:failed_hypothesis:claim-1",
+            kind=FailureLessonKind.FAILED_HYPOTHESIS,
+            subject_id="claim-1",
+        )
+
+        self.store.save([original])
+
+        self.assertEqual(self.store.load(), [original])
 
     def test_a_malformed_document_is_refused(self) -> None:
         self.path.write_text("{ not json", encoding="utf-8")

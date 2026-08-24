@@ -2,6 +2,37 @@
 
 All notable project changes are recorded here.
 
+## [0.3.183] - 2026-08-24
+
+### Fixed
+
+- Failure Memory now derives `failed_hypothesis` only when the superseded
+  authored claim was explicitly a `hypothesis`. Superseded facts, strong
+  evidence, likely claims, speculation, unknowns, and contradicted claims are
+  classified as `revised_claim` instead of being mislabeled as failed
+  hypotheses.
+- Revision wording continues to name the earlier and replacement epistemic
+  states and explicitly says that replacement is not disproof. Both lesson
+  kinds retain the previous belief-oriented recall weight, so the correction
+  changes taxonomy rather than silently changing recall priority.
+
+### Compatibility and safety
+
+- The failure-lesson document remains schema v1. Existing
+  `failed_hypothesis` records still load, and unknown kinds remain refused.
+  Existing documents are not rewritten or migrated automatically.
+- The change adds no truth decision, model judgement, hidden score, automatic
+  lesson creation, research mutation, tool capability, or filesystem access.
+
+### Verification
+
+- Focused integration coverage parametrizes all seven epistemic states and
+  verifies the kind, bounded statement, stable identity, belief classification,
+  and legacy `failed_hypothesis` loading behavior.
+- Package-aware discovery passes 3,356 tests with 3 existing platform-dependent
+  skips. Black, Ruff, source MyPy, and whitespace checks pass for this release
+  scope.
+
 ## [0.3.182] - 2026-08-24
 
 ### Fixed
