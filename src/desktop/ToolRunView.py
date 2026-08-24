@@ -74,6 +74,8 @@ class ToolRunView:
             f"Execution began: {'yes' if self.performed else 'no'}",
             f"Performed: {'yes' if self.performed else 'no'}",
             f"Succeeded: {'yes' if self.succeeded else 'no'}",
+            f"Work attempted: {'yes' if self.status.attempted_the_work else 'no'}",
+            f"Outcome: {self.status.value}",
             f"Values returned: {self.value_count}",
             f"Lifecycle: {' -> '.join(self.events) or 'none'}",
         )

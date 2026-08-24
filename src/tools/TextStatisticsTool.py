@@ -117,13 +117,12 @@ class TextStatisticsTool:
 
     @staticmethod
     def _declined(detail: str) -> ToolResult:
-        """Report a call this tool ran and refused to answer."""
-        return ToolResult(
-            capability=ToolCapability.TEXT_STATISTICS,
-            performed=True,
-            detail=detail,
-            succeeded=False,
-        )
+        """Report a call this tool ran and refused to answer.
+
+        Declined rather than failed: nothing was counted, nothing was attempted,
+        and a different request is the thing that would help.
+        """
+        return ToolResult.declined(ToolCapability.TEXT_STATISTICS, detail)
 
     @staticmethod
     def _unsupported(invocation: ToolInvocation) -> tuple[str, ...]:

@@ -54,14 +54,16 @@ class ClockReadTool:
         than a refusal, because the tool did run: it was reached, it looked at
         what it was given, and it declined. A refusal means the implementation
         was never entered, and that distinction belongs to the gate.
+
+        A clock source that answers with something other than an unambiguous
+        time is a different matter and raises, because the request was fine and
+        the environment was not. The service reports that as a failed attempt.
         """
         unsupported = self._unsupported(invocation)
         if unsupported:
-            return ToolResult(
-                capability=ToolCapability.CLOCK_READ,
-                performed=True,
-                detail="This tool accepts no arguments.",
-                succeeded=False,
+            return ToolResult.declined(
+                ToolCapability.CLOCK_READ,
+                "This tool accepts no arguments.",
             )
         moment = self._read()
         return ToolResult(

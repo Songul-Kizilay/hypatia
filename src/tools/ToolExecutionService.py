@@ -16,6 +16,13 @@ that skips the gate for something that looks harmless. The clock tool goes
 through exactly the path a filesystem or process tool would, which is the only
 way to know the path works before anything dangerous uses it.
 
+How a run ended is taken from the tool, not guessed at here. A tool that raised
+is reported as a failed attempt; a tool that returned an unsuccessful result is
+reported as whatever it says it did. Inferring instead — treating every return
+as a decline — would be wrong for the tools that already catch their own errors
+and answer with a result, and being wrong about that is how "the disk would not
+read" becomes "you asked badly".
+
 Nothing here decides *whether* a tool should be used. That judgement belongs to
 a caller — eventually a meta-controller — and keeping it out means ordinary
 conversation cannot reach a tool just because one exists.
@@ -116,32 +123,23 @@ class ToolExecutionService:
         try:
             result = tool.invoke(invocation)
         except ResearchError:
-            failed = ToolResult(
-                capability=invocation.capability,
-                performed=True,
-                detail="The tool ran and reported a failure.",
-                succeeded=False,
+            # A tool that raised was part-way through something. It is reported
+            # as a failed attempt rather than a decline, and its exception text
+            # is dropped rather than forwarded: the message is where paths and
+            # arguments escape, and a bounded kind is what a caller can act on.
+            result = ToolResult.failed(
+                invocation.capability,
+                "The tool ran and reported a failure.",
             )
-            events.failed(
-                invocation,
-                ToolFailureKind.TOOL_FAILED,
-                descriptor=descriptor,
-                result=failed,
-            )
-            return ToolExecutionOutcome(
-                capability=invocation.capability,
-                result=failed,
-                resolved=True,
-                authorized=True,
-                failure_kind=ToolFailureKind.TOOL_FAILED,
-            )
-        self._validate_returned(result, invocation)
-        if result.succeeded:
+        else:
+            self._validate_returned(result, invocation)
+        failure_kind = ToolFailureKind.for_disposition(result.disposition)
+        if failure_kind is None:
             events.completed(invocation, descriptor, result)
         else:
             events.failed(
                 invocation,
-                ToolFailureKind.TOOL_FAILED,
+                failure_kind,
                 descriptor=descriptor,
                 result=result,
             )
@@ -150,7 +148,7 @@ class ToolExecutionService:
             result=result,
             resolved=True,
             authorized=True,
-            failure_kind=None if result.succeeded else ToolFailureKind.TOOL_FAILED,
+            failure_kind=failure_kind,
         )
 
     @staticmethod

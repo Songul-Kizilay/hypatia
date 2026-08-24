@@ -2,6 +2,52 @@
 
 All notable project changes are recorded here.
 
+## [0.3.171] - 2026-08-24
+
+### Changed
+
+- `ToolFailureKind.TOOL_FAILED` is replaced by `INVOCATION_DECLINED` and
+  `EXECUTION_FAILED`. A tool that read a request and would not take it, and a
+  tool that accepted it and could not finish, are no longer the same fact.
+- `ToolResult` carries a `ToolDisposition`, so which of the two happened is
+  declared by the tool rather than inferred at the seam.
+
+### Added
+
+- `ToolDisposition`: `NOT_REACHED`, `COMPLETED`, `DECLINED`, `FAILED`, with
+  `entered_the_tool`, `attempted_the_work`, and `worth_reformulating`.
+- `ToolResult.declined()` and `ToolResult.failed()` constructors.
+- `ToolFailureKind.attempted_the_work`, `concerns_the_request`, and the single
+  `for_disposition()` translation point.
+- `ToolRunStatus.DECLINED` and `ToolRunStatus.EXECUTION_FAILED`, replacing the
+  coarse `REFUSED`.
+
+### Safety
+
+- The category never comes from prose. Tests assert no classifier compares
+  against `detail`, lowercases anything, or matches a message, and the test
+  doubles for the two cases say exactly the same sentence so any implementation
+  that read the wording would fail rather than pass.
+- `performed` keeps its meaning — the implementation was entered — and is now
+  defined against the disposition, so a result claiming to have failed without
+  having been reached cannot be constructed.
+- Authorization stays separate. An unauthorized invocation reports
+  `NOT_REACHED`, `performed=False`, and still emits no `tool.started`.
+- `filesystem_list` keeps every bounded refusal reason. Its path refusals are
+  declines, and `UNREADABLE` is classified as a failed attempt, because the
+  filesystem refusing a well-formed question is not the caller asking badly.
+- A raised failure still drops its exception text. The result detail is a fixed
+  sentence and no path, argument, or `WinError` reaches telemetry.
+
+### Verification
+
+- The package-aware full local suite contains 3,051 passing automated tests.
+- Forty-two new tests cover the four canonical outcomes as mutually distinct
+  states, the `performed`/`succeeded`/`disposition` matrix and its contradictory
+  combinations, lifecycle fields, absence of prose classification, the real
+  tools classifying themselves, and the console rendering declined and
+  execution-failed as different statuses under identical wording.
+
 ## [0.3.170] - 2026-08-24
 
 ### Added

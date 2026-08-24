@@ -363,17 +363,31 @@ class TextStatisticsEndToEndTests(unittest.TestCase):
 
         failed = [e for e in self.events if e.name == TOOL_FAILED][0]
         self.assertIs(failed.payload["refused_before_execution"], False)
-        self.assertEqual(failed.payload["failure_kind"], ToolFailureKind.TOOL_FAILED)
+        self.assertEqual(
+            failed.payload["failure_kind"],
+            ToolFailureKind.INVOCATION_DECLINED,
+        )
         self.assertIs(failed.payload["performed"], True)
 
-    def test_bad_arguments_produce_a_tool_failure_not_an_authorization_one(
+    def test_bad_arguments_are_a_decline_and_not_an_attempt(self) -> None:
+        """The tool read the request and stopped. Nothing was counted."""
+        self.service.execute(self.invocation((("extra", "no"),)))
+
+        payload = [e for e in self.events if e.name == TOOL_FAILED][0].payload
+        self.assertIs(payload["attempted_the_work"], False)
+        self.assertIs(payload["concerns_the_request"], True)
+        self.assertEqual(payload["disposition"], "declined")
+
+    def test_bad_arguments_produce_a_decline_not_an_authorization_failure(
         self,
     ) -> None:
         outcome = self.service.execute_detailed(self.invocation(()))
 
         self.assertTrue(outcome.authorized)
-        self.assertIs(outcome.failure_kind, ToolFailureKind.TOOL_FAILED)
+        self.assertIs(outcome.failure_kind, ToolFailureKind.INVOCATION_DECLINED)
         self.assertFalse(outcome.failure_kind.concerns_authorization)
+        self.assertFalse(outcome.failure_kind.attempted_the_work)
+        self.assertTrue(outcome.result.declined_request)
 
     def test_a_pure_tool_is_still_refused_without_a_grant(self) -> None:
         """Purity is granted, not assumed. No exemption for touching nothing."""

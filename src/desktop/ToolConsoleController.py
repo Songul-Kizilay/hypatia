@@ -225,7 +225,13 @@ class ToolConsoleController:
 
     @staticmethod
     def _status(outcome: ToolExecutionOutcome) -> ToolRunStatus:
-        """Map one bounded failure kind onto one bounded operator outcome."""
+        """Map one bounded failure kind onto one bounded operator outcome.
+
+        Every branch tests an enum identity. Nothing here reads `detail`, and
+        nothing may start to: the moment a status is decided by what a sentence
+        says, the sentence becomes the contract and a reworded message becomes a
+        behaviour change.
+        """
         if outcome.failure_kind is None:
             return ToolRunStatus.SUCCEEDED
         if outcome.failure_kind is ToolFailureKind.UNKNOWN_CAPABILITY:
@@ -234,7 +240,9 @@ class ToolConsoleController:
             return ToolRunStatus.UNAUTHORIZED
         if outcome.failure_kind is ToolFailureKind.CANCELLED:
             return ToolRunStatus.CANCELLED
-        return ToolRunStatus.REFUSED
+        if outcome.failure_kind is ToolFailureKind.EXECUTION_FAILED:
+            return ToolRunStatus.EXECUTION_FAILED
+        return ToolRunStatus.DECLINED
 
     def _rejected(
         self,

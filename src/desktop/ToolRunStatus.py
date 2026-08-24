@@ -1,16 +1,18 @@
 """How one console run ended, in terms an operator can act on.
 
-Five outcomes, and the boundary between the first two is the one that matters.
+Six outcomes, each mapped from bounded Tool Layer state and never from wording.
+
 INVALID_ARGUMENTS means the console refused to build an invocation at all, so
 nothing was requested and no effect was granted. UNAUTHORIZED means the gate
 refused, so the tool was never reached. Everything after that means a tool ran.
 
-REFUSED covers a tool that ran and did not succeed, whether because it declined
-the arguments it was given or because its work failed. The Tool Layer does not
-distinguish those two: both arrive as `ToolFailureKind.TOOL_FAILED`, and the
-difference exists only in a detail sentence the tool chose. The console does not
-invent the distinction. Splitting them here would mean guessing, and a guess
-presented as a category is worse than a category that admits it is coarse.
+DECLINED and EXECUTION_FAILED used to be one status, because the Tool Layer gave
+the console one failure kind for both and the difference survived only in a
+sentence. They are separate now for the reason they were always different: a
+declined request is something the operator can fix by asking differently, and a
+failed execution is something to go and look at. The console still does not
+invent the distinction — it reads `ToolFailureKind` and translates, which is why
+there is no string matching anywhere in this file or its controller.
 """
 
 from __future__ import annotations
@@ -26,12 +28,22 @@ class ToolRunStatus(StrEnum):
     UNAVAILABLE = "unavailable"
     UNAUTHORIZED = "unauthorized"
     CANCELLED = "cancelled"
-    REFUSED = "refused"
+    DECLINED = "declined"
+    EXECUTION_FAILED = "execution_failed"
 
     @property
     def reached_the_tool(self) -> bool:
         """Return whether an implementation actually ran."""
-        return self in (ToolRunStatus.SUCCEEDED, ToolRunStatus.REFUSED)
+        return self in (
+            ToolRunStatus.SUCCEEDED,
+            ToolRunStatus.DECLINED,
+            ToolRunStatus.EXECUTION_FAILED,
+        )
+
+    @property
+    def attempted_the_work(self) -> bool:
+        """Return whether the tool got as far as doing what it was asked."""
+        return self in (ToolRunStatus.SUCCEEDED, ToolRunStatus.EXECUTION_FAILED)
 
     @property
     def concerns_authorization(self) -> bool:
@@ -54,5 +66,12 @@ _LABELS: dict[ToolRunStatus, str] = {
         "Not run. The required effects were not authorized for this invocation."
     ),
     ToolRunStatus.CANCELLED: "Not run. The invocation was cancelled first.",
-    ToolRunStatus.REFUSED: "The tool ran and did not succeed.",
+    ToolRunStatus.DECLINED: (
+        "Request declined. The tool read it and would not take it, so nothing "
+        "was attempted."
+    ),
+    ToolRunStatus.EXECUTION_FAILED: (
+        "Execution failed. The tool accepted the request, started, and could "
+        "not finish."
+    ),
 }

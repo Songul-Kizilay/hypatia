@@ -133,9 +133,12 @@ class FilesystemListTool:
     def invoke(self, invocation: ToolInvocation) -> ToolResult:
         """List one directory, or say plainly why this call listed nothing.
 
-        Every refusal here reports `performed=True, succeeded=False`. The tool
-        ran: it was reached, it looked at what it was given, and it declined.
-        Only the effect gate refuses, and a refusal never reaches this method.
+        Every outcome here reports `performed=True, succeeded=False`. The tool
+        ran: it was reached, it looked at what it was given, and it either
+        declined the request or accepted it and could not finish. Which of those
+        two is recorded as bounded state rather than left to the wording, since
+        one says fix the path and the other says look at the machine. Only the
+        effect gate refuses, and a refusal never reaches this method.
         """
         if self._unsupported(invocation):
             return self._declined(UNKNOWN_ARGUMENT_DETAIL)
@@ -149,6 +152,11 @@ class FilesystemListTool:
             return self._declined(BAD_OFFSET_DETAIL)
         refusal, directory = self._root.locate(requested)
         if not refusal.admitted or directory is None:
+            # The bounded refusal reason decides which this was. Every reason is
+            # about the request except UNREADABLE, which is the filesystem
+            # declining to answer a question that was properly formed.
+            if refusal is FilesystemPathRefusal.UNREADABLE:
+                return self._failed(_DETAILS[refusal])
             return self._declined(_DETAILS[refusal])
         return self._list(directory, offset)
 
@@ -162,7 +170,9 @@ class FilesystemListTool:
             return self._declined(_DETAILS[FilesystemPathRefusal.MISSING])
         except OSError:
             # No WinError text crosses this boundary: it interpolates the path.
-            return self._declined(_DETAILS[FilesystemPathRefusal.UNREADABLE])
+            # The tool had accepted the request and started reading, so this is
+            # a failed attempt rather than a rejected request.
+            return self._failed(_DETAILS[FilesystemPathRefusal.UNREADABLE])
         if not self._still_contained(directory):
             # Re-checked after the scan. This narrows the window between
             # validating and reading; it does not close it. See the module
@@ -235,13 +245,23 @@ class FilesystemListTool:
 
     @staticmethod
     def _declined(detail: str) -> ToolResult:
-        """Report a call this tool ran and refused to answer."""
-        return ToolResult(
-            capability=ToolCapability.FILESYSTEM_LIST,
-            performed=True,
-            detail=detail,
-            succeeded=False,
-        )
+        """Report a request this tool read and would not take.
+
+        Nothing was listed and nothing was attempted. The path, the arguments,
+        or the scope is what would have to change.
+        """
+        return ToolResult.declined(ToolCapability.FILESYSTEM_LIST, detail)
+
+    @staticmethod
+    def _failed(detail: str) -> ToolResult:
+        """Report a request this tool accepted and could not finish.
+
+        Used only where the filesystem itself refused work that had already
+        begun. That is not the caller asking badly, and reporting it as a
+        decline would send someone to rewrite a path that was never the
+        problem.
+        """
+        return ToolResult.failed(ToolCapability.FILESYSTEM_LIST, detail)
 
     @staticmethod
     def _unsupported(invocation: ToolInvocation) -> tuple[str, ...]:

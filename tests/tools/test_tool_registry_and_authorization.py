@@ -280,7 +280,14 @@ class AuthorizationGateTests(unittest.TestCase):
             )
         )
 
-        self.assertIs(outcome.failure_kind, ToolFailureKind.TOOL_FAILED)
+        # A tool that raised was part-way through something, so this is a failed
+        # attempt rather than a rejected request. Before the taxonomy split both
+        # produced one kind, and a caller could only tell them apart by reading
+        # the sentence this test asserts is absent.
+        self.assertIs(outcome.failure_kind, ToolFailureKind.EXECUTION_FAILED)
+        self.assertTrue(outcome.failure_kind.attempted_the_work)
+        self.assertFalse(outcome.failure_kind.concerns_the_request)
+        self.assertTrue(outcome.result.failed_execution)
         self.assertNotIn("broke while doing", outcome.result.detail)
         self.assertEqual(len(tool.calls), 1)
 

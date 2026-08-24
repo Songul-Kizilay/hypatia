@@ -18,6 +18,12 @@ gate actually allowed the call, `started` only when the implementation is about
 to run, and `completed` only when it returned. A refused invocation therefore
 produces neither, which is what keeps the stream from reading as a better story
 than the execution.
+
+A failure event says which kind of failure it was in bounded fields rather than
+in its detail, because the detail is not carried at all. A subscriber can tell
+an unauthorized call from a declined request from a failed attempt without
+parsing anything, which is the property a later system needs in order to decide
+whether reformulating would help.
 """
 
 from __future__ import annotations
@@ -141,4 +147,13 @@ class ToolEvents:
         if failure_kind is not None:
             payload["failure_kind"] = failure_kind.value
             payload["refused_before_execution"] = failure_kind.refused_before_execution
+            # Both are derived from the bounded kind, so a subscriber never has
+            # to read a sentence to learn whether the tool got as far as trying.
+            # They are separate keys because "nothing was attempted" and "the
+            # request was the problem" are different claims, and a caller acts
+            # on them differently.
+            payload["attempted_the_work"] = failure_kind.attempted_the_work
+            payload["concerns_the_request"] = failure_kind.concerns_the_request
+        if result is not None and result.disposition is not None:
+            payload["disposition"] = result.disposition.value
         self._event_bus.emit(name, payload, source=EVENT_SOURCE)

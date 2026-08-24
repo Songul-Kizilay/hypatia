@@ -332,7 +332,7 @@ class ResultFidelityTests(ConsoleFixture):
     def test_a_tool_refusal_is_not_dressed_up_as_success(self) -> None:
         view = self.run_tool("filesystem_list", path="no-such-folder")
 
-        self.assertIs(view.status, ToolRunStatus.REFUSED)
+        self.assertIs(view.status, ToolRunStatus.DECLINED)
         self.assertTrue(view.performed)
         self.assertFalse(view.succeeded)
         self.assertIn("no such entry", view.detail.casefold())
@@ -367,7 +367,7 @@ class ResultFidelityTests(ConsoleFixture):
         with self.assertRaises(ResearchError):
             ToolRunView(
                 capability="clock_read",
-                status=ToolRunStatus.REFUSED,
+                status=ToolRunStatus.DECLINED,
                 performed=True,
                 succeeded=True,
                 detail="Contradictory.",
@@ -385,6 +385,103 @@ class ResultFidelityTests(ConsoleFixture):
                 continue
             with self.subTest(status=status):
                 self.assertNotIn(status.value, status.label)
+
+
+class OutcomeDistinctionTests(ConsoleFixture):
+    """The operator sees four different answers, from four different states.
+
+    The execution-failure cases build a real `ToolExecutionOutcome` rather than
+    breaking a registered tool. The taxonomy suite already proves the layer
+    produces EXECUTION_FAILED from a tool that raises; what belongs here is
+    whether the console translates that state faithfully, and injecting a broken
+    tool into a private registry field would test neither thing well.
+    """
+
+    def outcome_for(self, result: object, kind: object) -> object:
+        from tools.ToolExecutionOutcome import ToolExecutionOutcome
+
+        return ToolExecutionOutcome(
+            capability=ToolCapability.CLOCK_READ,
+            result=result,
+            resolved=True,
+            authorized=True,
+            failure_kind=kind,
+        )
+
+    def view_for(self, kind: object, disposition: str) -> object:
+        from tools.ToolFailureKind import ToolFailureKind
+        from tools.ToolResult import ToolResult
+
+        builder = (
+            ToolResult.failed
+            if kind is ToolFailureKind.EXECUTION_FAILED
+            else ToolResult.declined
+        )
+        result = builder(ToolCapability.CLOCK_READ, "Identical wording either way.")
+        entry = self.console.entry("clock_read")
+        return self.console._view(entry, self.outcome_for(result, kind))
+
+    def test_a_declined_request_reads_as_declined(self) -> None:
+        view = self.run_tool("filesystem_list", path="no-such-folder")
+
+        self.assertIs(view.status, ToolRunStatus.DECLINED)
+        self.assertIn("Request declined", view.headline)
+        self.assertFalse(view.status.attempted_the_work)
+
+    def test_a_failed_execution_reads_as_execution_failed(self) -> None:
+        from tools.ToolFailureKind import ToolFailureKind
+
+        view = self.view_for(ToolFailureKind.EXECUTION_FAILED, "failed")
+
+        self.assertIs(view.status, ToolRunStatus.EXECUTION_FAILED)
+        self.assertIn("Execution failed", view.headline)
+        self.assertTrue(view.status.attempted_the_work)
+
+    def test_declined_and_failed_differ_despite_identical_wording(self) -> None:
+        """The two results say the same sentence. The status still separates."""
+        from tools.ToolFailureKind import ToolFailureKind
+
+        declined = self.view_for(ToolFailureKind.INVOCATION_DECLINED, "declined")
+        failed = self.view_for(ToolFailureKind.EXECUTION_FAILED, "failed")
+
+        self.assertEqual(declined.detail, failed.detail)
+        self.assertNotEqual(declined.status, failed.status)
+        self.assertNotEqual(declined.headline, failed.headline)
+
+    def test_authorization_denial_stays_its_own_status(self) -> None:
+        view = self.console.run("clock_read")
+
+        self.assertIs(view.status, ToolRunStatus.UNAUTHORIZED)
+        self.assertFalse(view.status.reached_the_tool)
+
+    def test_success_still_reads_as_success(self) -> None:
+        view = self.run_tool("clock_read")
+
+        self.assertIs(view.status, ToolRunStatus.SUCCEEDED)
+        self.assertEqual(view.headline, "Succeeded.")
+
+    def test_every_status_has_a_distinct_sentence(self) -> None:
+        labels = [status.label for status in ToolRunStatus]
+
+        self.assertEqual(len(labels), len(set(labels)))
+
+    def test_the_audit_names_the_outcome_and_whether_work_was_attempted(self) -> None:
+        lines = " | ".join(
+            self.run_tool("filesystem_list", path="no-such-folder").audit_lines()
+        )
+
+        self.assertIn("Work attempted: no", lines)
+        self.assertIn("Outcome: declined", lines)
+
+    def test_the_audit_distinguishes_an_attempted_failure(self) -> None:
+        from tools.ToolFailureKind import ToolFailureKind
+
+        lines = " | ".join(
+            self.view_for(ToolFailureKind.EXECUTION_FAILED, "failed").audit_lines()
+        )
+
+        self.assertIn("Work attempted: yes", lines)
+        self.assertIn("Outcome: execution_failed", lines)
 
 
 class AuditTests(ConsoleFixture):
@@ -507,7 +604,7 @@ class FilesystemPagingTests(ConsoleFixture):
         """The form rejects shapes; only the root knows where the root is."""
         view = self.run_tool("filesystem_list", path="..")
 
-        self.assertIs(view.status, ToolRunStatus.REFUSED)
+        self.assertIs(view.status, ToolRunStatus.DECLINED)
         self.assertTrue(view.performed)
         self.assertFalse(view.succeeded)
         self.assertEqual(view.values, ())
