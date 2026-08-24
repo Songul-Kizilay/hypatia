@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.172 (Genesis)`
+`v0.3.173 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.172`** is the current executable package and GitHub
+- **Runtime release `v0.3.173`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -933,6 +933,13 @@ with optional OpenAI-compatible LLM conversation support.
   API key is not sent over a remote unencrypted connection. Authenticated
   completion requests also reject redirects so a bearer token cannot cross to
   a different endpoint.
+- An inert `FilesystemContentPayload` contract now fixes the future local-file
+  content boundary at 64 KiB per invocation with strict UTF-8/BOM byte
+  accounting, canonical relative provenance, timezone-aware file/read times,
+  explicit truncation, untrusted/no-instruction labels, and a local-only
+  disclosure class. No production module imports it, and no content-reading
+  capability, effect, runtime registration, desktop path, model path, memory
+  path, or research path exists.
 
 ### Intentionally Not Implemented
 
@@ -945,6 +952,8 @@ with optional OpenAI-compatible LLM conversation support.
   cross-document semantic relation extraction.
 - Agent execution, tool gateway, browser/OS control, voice, vision, robotics,
   and smart-home integrations.
+- Local filesystem content reading or any path that sends local-file content to
+  a model, memory, research, evidence, or generic telemetry.
 - Encryption at rest, cloud synchronization, multi-process storage locking,
   and automated repair or unattended migration tooling.
 
@@ -962,9 +971,11 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 3,152 automated tests pass through package-aware discovery.
+- 3,174 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
-- MyPy passes for `src` and `tests`.
+- MyPy passes for all `src` files and the new content-payload test. A full
+  `src` + `tests` MyPy sweep currently reports 354 existing errors across 35
+  test files, so repository-wide test typing is explicitly not a passing gate.
 - Whitespace validation (`git diff --check`) passes.
 
 These checks describe the local working tree and do not create a GitHub
@@ -997,14 +1008,13 @@ changed.
 
 ## Next Milestone
 
-Implement `filesystem_list` as the first read-only filesystem capability,
-following [the design proposal](docs/Security/Filesystem_Capability_Design.md).
-It should introduce a `READS_FILESYSTEM_METADATA` effect rather than reusing
-`READS_LOCAL_STATE`, take its authorized root from operator configuration rather
-than from the invocation, refuse absolute, rooted, drive-relative, UNC, and
-stream-syntax arguments, decide containment on the resolved path rather than a
-string prefix, report links without following them, list one directory one level
-deep with reported truncation, and put no path into any lifecycle event.
+Add the still-unregistered result-channel foundation described in
+[the content-access security design](docs/Security/Filesystem_Content_Access_Design.md):
+the separate `READS_FILESYSTEM_CONTENT` effect, an unregistered
+`FILESYSTEM_READ` capability value, an optional `FilesystemContentPayload`
+field on `ToolResult`, and central checks that only a successful completed
+result with the explicitly authorized content effect may carry it.
 
-Keep this increment free of file reading, writing, recursion, link following,
-chat wiring, and evidence integration.
+Keep this increment free of filesystem reads, runtime registration, desktop
+controls, model context, memory, research, evidence, persistence, and generic
+telemetry content.

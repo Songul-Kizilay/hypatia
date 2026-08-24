@@ -1,10 +1,10 @@
 # Filesystem Content Access — Security Design
 
 **Status: PROPOSED. NOT IMPLEMENTED.** No content-reading capability, effect,
-tool, or code exists in the runtime as of `v0.3.172`. Nothing in this document
-describes behaviour Hypatia currently has. Where a name appears in `code font`
-and is marked PROPOSED, it does not exist yet and must not be cited as though it
-does.
+tool, or runtime path exists as of `v0.3.173`. The inert, bounded
+`FilesystemContentPayload` data contract is CURRENT but is not imported by any
+production module. Everything else marked PROPOSED does not exist yet and must
+not be cited as though it does.
 
 This is a separate document from
 [Filesystem_Capability_Design.md](Filesystem_Capability_Design.md) because
@@ -60,6 +60,7 @@ Each of those is a separate authority, and this document keeps them separate.
 | `FilesystemRoot`, `FilesystemPathRefusal`, `FilesystemEntryKind` | **CURRENT** |
 | `ToolDisposition`, `ToolFailureKind` | **CURRENT** |
 | Operator Tool Console, invocation-scoped grants | **CURRENT** |
+| `FilesystemContentPayload` | **CURRENT**, inert and unused by production modules |
 | `READS_FILESYSTEM_CONTENT` | **PROPOSED**, does not exist |
 | `filesystem_read` | **PROPOSED**, does not exist |
 | Content in model context | **FUTURE**, separate milestone, separate authority |
@@ -359,7 +360,7 @@ limit. The listing capability already refused to solve its bounding problem by
 raising `MAX_TOOL_VALUES`, for the same reason: that bound protects every tool.
 
 **DECIDED: content uses one optional, typed payload field on `ToolResult`.** The
-future immutable type is named `FilesystemContentPayload` and the future field
+immutable `FilesystemContentPayload` type is CURRENT and inert; the future field
 is `content: FilesystemContentPayload | None`. It is not a sibling result type.
 Keeping the existing `ToolResult` return boundary means `Tool`,
 `ToolExecutionService`, `ToolExecutionOutcome`, failure taxonomy, and lifecycle
@@ -744,9 +745,10 @@ merely from the current endpoint classification.
 
 ## 18. Result contract
 
-The future `FilesystemContentPayload` is the separate bounded channel chosen in
-§8. It is immutable and owns the fields below plus the decoded `text`. None of
-these fields travels in `ToolResult.values`.
+The CURRENT, inert `FilesystemContentPayload` is the separate bounded data
+contract chosen in §8. It is immutable and owns the fields below plus the
+decoded `text`. No production module imports it yet, and none of these fields
+travels in `ToolResult.values`.
 
 | Field | Why it is there |
 | --- | --- |
@@ -769,14 +771,15 @@ these fields travels in `ToolResult.values`.
 
 Constructor invariants are part of the contract, not caller etiquette:
 
-- `root_id` and `resource` are non-empty and reuse the existing root/path bounds;
+- `root_id` and `resource` are non-empty, valid Unicode, and reuse the existing
+  root/path bounds; `resource` is a canonical forward-slash relative reference;
 - `source_kind`, `kind`, `encoding`, taint, instruction authority, and
   disclosure class are fixed bounded values, not caller-authored labels;
 - `offset` is an integer in `0..2^63-1` and booleans are not accepted as
   integers;
 - `bytes_requested` is in `0..65_536`, and `bytes_returned` is in
   `0..bytes_requested`;
-- `file_size_bytes` is a non-negative integer, while `modified_utc` and
+- `file_size_bytes` is an integer in `0..2^63-1`, while `modified_utc` and
   `read_at_utc` are timezone-aware;
 - `truncated` agrees with the handle-observed file size at the read boundary:
   it is true exactly when `offset + bytes_returned < file_size_bytes`;
@@ -1111,7 +1114,7 @@ the same style of guard the metadata tool already carries.
 
 ---
 
-## 29. Repository reference validation (`v0.3.172`)
+## 29. Repository reference validation (`v0.3.173`)
 
 This table records the source check completed before accepting the document.
 It is intentionally explicit so a future milestone cannot mistake a design name
@@ -1127,12 +1130,14 @@ for a shipped API.
 | `ToolResult` limits | CURRENT: `MAX_TOOL_VALUES = 20`, `MAX_TOOL_VALUE_LENGTH = 300`, `MAX_TOOL_DETAIL_LENGTH = 500` |
 | Tool lifecycle fields | CURRENT `ToolEvents` carries counts and bounded categories, not arguments, returned values, paths, or content |
 | Research taint constants | CURRENT module-level `EXTERNAL_SOURCE_TAINT_LABEL` and `EXTERNAL_SOURCE_INSTRUCTION_AUTHORITY` in `research/ResearchSourceRecord.py` |
+| `FilesystemContentPayload`, `MAX_CONTENT_BYTES`, `MAX_CONTENT_OFFSET` | CURRENT in `src/tools/FilesystemContentPayload.py`; immutable, bounded, and not imported by another production module |
 | `SourceLoadStage` | CURRENT and distinguishes `INDEXED_WITHOUT_RUN` from `ACCEPTED_INTO_RUN` |
 | `LLMLearnedMemoryCandidateExtractor`, `LearnedMemoryAuditApplicationService` | CURRENT; no file-content integration exists |
 | `SecurityAgentApplicationService`, `FailureMemoryApplicationService` | CURRENT; no file-content or Tool Layer failure ingestion is implied by their existence |
 | `is_loopback_llm_endpoint` | CURRENT endpoint-classification helper; not a content-disclosure grant |
-| `READS_FILESYSTEM_CONTENT`, `filesystem_read`, `MAX_CONTENT_BYTES`, a content payload type | PROPOSED only; none exists in production code |
+| `READS_FILESYSTEM_CONTENT`, `filesystem_read`, `ToolResult.content` | PROPOSED only; none exists in production code |
 | `MetaController` | FUTURE architectural role; no production type with that name exists |
 
-No version bump is required by the repository's design-document precedent: the
-earlier `Filesystem_Capability_Design.md` commit did not change `Version.py`.
+The inert contract implementation is versioned as `v0.3.173`; the preceding
+design-only and experiment-only commits intentionally did not change the
+runtime version.

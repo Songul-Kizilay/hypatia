@@ -2,6 +2,47 @@
 
 All notable project changes are recorded here.
 
+## [0.3.173] - 2026-08-24
+
+### Added
+
+- `FilesystemContentPayload`, an immutable and slotted contract for one future
+  bounded local-file text range. It records the configured root identity,
+  canonical relative resource, byte range, observed file size and modification
+  time, read time, truncation state, and strict UTF-8/BOM interpretation.
+- A 64 KiB per-invocation payload ceiling and a `2^63 - 1` maximum offset,
+  independent of the existing structured `ToolResult.values` limits.
+
+### Safety
+
+- The payload is inert: no production module imports it, no capability or
+  effect exists for content, and no tool, runtime, desktop, model, memory, or
+  research path can construct or receive it.
+- Source kind, file kind, UTF-8 encoding, `external_untrusted_data` taint,
+  `none` instruction authority, and `local_only` disclosure class are fixed
+  code-owned fields rather than constructor inputs.
+- Raw byte count is cross-checked against strict UTF-8 text, including explicit
+  three-byte BOM accounting. Invalid Unicode, mismatched counts, non-boolean
+  flags, naive timestamps, non-canonical references, and inconsistent
+  truncation fail at construction.
+- A source guard asserts the contract contains no filesystem read, process,
+  Tool Layer integration, model, or memory operation; another guard asserts no
+  production module uses the contract yet.
+
+### Verification
+
+- Thirteen focused tests cover exact bounds, zero-byte EOF ranges, multi-byte
+  UTF-8, BOM handling, immutable fixed labels, whole-number type strictness,
+  timestamp provenance, canonical resources, truncation truth, taint alignment,
+  and production isolation.
+- The package-aware full local suite contains 3,174 passing automated tests,
+  with the same three platform-dependent skips.
+- Black and Ruff pass across production and test sources; whitespace validation
+  passes. MyPy passes across all production sources and the new focused test.
+  A broader MyPy sweep of the pre-existing test suite remains non-green with
+  354 errors in 35 existing test files; this milestone introduces none of them
+  and does not describe that gate as passed.
+
 ## [0.3.172] - 2026-08-24
 
 ### Added
