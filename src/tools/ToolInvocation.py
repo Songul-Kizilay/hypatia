@@ -9,6 +9,11 @@ easiest fix.
 Arguments are bounded strings keyed by name. There is deliberately no
 free-form object: a tool that needed arbitrary structure passed to it would be
 a tool whose inputs nobody could review.
+
+"Strings" is checked rather than assumed. A length bound alone lets an empty
+list or dict through — both have a length — and the tool downstream then either
+crashes or quietly stringifies whatever it was handed. Coercion is the worse
+outcome of the two, because it succeeds.
 """
 
 from __future__ import annotations
@@ -47,14 +52,16 @@ class ToolInvocation:
     def _validate_arguments(self) -> None:
         if len(self.arguments) > MAX_ARGUMENTS:
             raise ResearchError("A tool invocation passed too many arguments.")
-        names = [name for name, _ in self.arguments]
-        if len(names) != len(set(names)):
-            raise ResearchError("A tool invocation repeated an argument name.")
         for name, value in self.arguments:
+            if not isinstance(name, str) or not isinstance(value, str):
+                raise ResearchError("A tool argument name and value must be text.")
             if not name.strip():
                 raise ResearchError("A tool argument name cannot be empty.")
             if len(value) > MAX_ARGUMENT_LENGTH:
                 raise ResearchError("A tool argument is too long.")
+        names = [name for name, _ in self.arguments]
+        if len(names) != len(set(names)):
+            raise ResearchError("A tool invocation repeated an argument name.")
 
     def argument(self, name: str) -> str:
         """Return one argument, or empty when it was not supplied."""

@@ -2,6 +2,42 @@
 
 All notable project changes are recorded here.
 
+## [0.3.166] - 2026-08-24
+
+### Added
+
+- `ToolEffect.COMPUTES_LOCALLY`, so a tool that only transforms data it was
+  handed can declare that truthfully instead of borrowing an effect it does not
+  have.
+
+### Changed
+
+- `ToolInvocation` and `ToolResult` now check that argument and value pairs are
+  actually strings. A length bound alone admitted an empty list or dict, because
+  both have a length.
+
+### Safety
+
+- The blank-declaration guard in `ToolDescriptor` is kept, not relaxed. An empty
+  effect set is a subset of every grant, so making it legal would turn the
+  declaration nobody filled in into the only one no authorisation could refuse.
+- Declaring purity explicitly keeps "authorise nothing" and "authorise pure
+  computation" different sentences. A pure tool is refused under an empty grant.
+- `COMPUTES_LOCALLY` is neither irreversible nor observable outside the machine,
+  so a tool declaring only it is read-only and reaches nothing.
+- Granting computation grants nothing else: a clock tool declaring
+  `READS_LOCAL_STATE` is refused under a computation-only grant.
+- Rejecting a non-string argument is a construction-time refusal, so a
+  mistyped value never reaches a tool and is never coerced into text.
+
+### Verification
+
+- The package-aware full local suite contains 2,664 passing automated tests.
+- Fourteen new tests cover the retained empty-set refusal, the new effect's
+  authorization behaviour in both directions, the closed empty-container hole,
+  non-string names and values on both the argument and result side, and the
+  still-valid empty string.
+
 ## [0.3.165] - 2026-08-24
 
 ### Added

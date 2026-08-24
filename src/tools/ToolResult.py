@@ -51,14 +51,16 @@ class ToolResult:
     def _validate_values(self) -> None:
         if len(self.values) > MAX_TOOL_VALUES:
             raise ResearchError("A tool result returned too many values.")
-        names = [name for name, _ in self.values]
-        if len(names) != len(set(names)):
-            raise ResearchError("A tool result repeated a value name.")
         for name, value in self.values:
+            if not isinstance(name, str) or not isinstance(value, str):
+                raise ResearchError("A tool result name and value must be text.")
             if not name.strip():
                 raise ResearchError("A tool result value name cannot be empty.")
             if len(value) > MAX_TOOL_VALUE_LENGTH:
                 raise ResearchError("A tool result value is too long.")
+        names = [name for name, _ in self.values]
+        if len(names) != len(set(names)):
+            raise ResearchError("A tool result repeated a value name.")
         if self.values and not self.performed:
             raise ResearchError("A tool that performed nothing returned values.")
 
