@@ -358,21 +358,37 @@ would quietly turn a size limit meant for structured fields into a content
 limit. The listing capability already refused to solve its bounding problem by
 raising `MAX_TOOL_VALUES`, for the same reason: that bound protects every tool.
 
-**PROPOSED: content needs its own channel with its own bound.** Either an
-optional bounded payload field on `ToolResult`, or a sibling result type, with
-`MAX_TOOL_VALUES` left exactly as it is. The two limits answer different
-questions — *how many structured facts* and *how many bytes* — and a small value
-count does not make a large string bounded. **DEFERRED to implementation which
-of the two shapes is chosen**; the invariant is that they are separate numbers.
+**DECIDED: content uses one optional, typed payload field on `ToolResult`.** The
+future immutable type is named `FilesystemContentPayload` and the future field
+is `content: FilesystemContentPayload | None`. It is not a sibling result type.
+Keeping the existing `ToolResult` return boundary means `Tool`,
+`ToolExecutionService`, `ToolExecutionOutcome`, failure taxonomy, and lifecycle
+ordering continue to describe exactly one result rather than growing a parallel
+execution path whose authorization behaviour could drift.
 
-### Proposed limits
+This is not permission for every tool to return content. The payload is valid
+only on a successful, `COMPLETED` result for the future `filesystem_read`
+capability. The execution service must reject a payload when the resolved
+descriptor and invocation do not both carry the future
+`READS_FILESYSTEM_CONTENT` effect. Every refusal, decline, failure, cancellation,
+and all existing capabilities must have `content is None`. These checks belong
+at both the immutable result boundary and the central execution boundary; a
+tool must not be able to widen its authority by constructing a field.
 
-| Bound | Proposed | Reason |
-| --- | --- | --- |
-| `MAX_CONTENT_BYTES` per invocation | 64 KiB | Large enough for a source file or config; small enough that a mistake is survivable and a model context is not exhausted by one read. |
+`MAX_TOOL_VALUES` and `MAX_TOOL_VALUE_LENGTH` remain unchanged. The content
+field is not rendered by `ToolResult.lines()`, copied into `values`, included in
+an exception, or serialized into a generic lifecycle event. The two limits
+answer different questions — *how many structured facts* and *how many bytes* —
+and a small value count does not make a large string bounded.
+
+### Phase A bounds
+
+| Bound | Decision |
+| --- | --- |
+| `MAX_CONTENT_BYTES` per invocation | **64 KiB, DECIDED for Phase A.** Large enough for a source file or config; small enough that a mistake is survivable and a model context is not exhausted by one read. |
 | Full-file reads | **Only when the file is within the cap.** No "read whole file" mode that ignores it. |
 | Caller byte range | **Yes**: `offset` and `max_bytes`, both bounded. |
-| `offset` | whole number, ≥ 0, ≤ proposed `MAX_CONTENT_OFFSET = 2^63 - 1`; it may be beyond current EOF |
+| `offset` | **Whole number, 0..`MAX_CONTENT_OFFSET`; `MAX_CONTENT_OFFSET = 2^63 - 1`, DECIDED.** It may be beyond current EOF. |
 | Over-cap file | **Not an error.** Return the first `max_bytes` and say the file is larger. |
 | Truncation | **Explicit and always reported**, never silent. |
 | Offset past EOF | Zero bytes returned, reported as such, not an error. |
@@ -728,12 +744,14 @@ merely from the current endpoint classification.
 
 ## 18. Result contract
 
-PROPOSED fields, each justified. Content itself travels in the separate bounded
-channel of §8, not in `values`.
+The future `FilesystemContentPayload` is the separate bounded channel chosen in
+§8. It is immutable and owns the fields below plus the decoded `text`. None of
+these fields travels in `ToolResult.values`.
 
 | Field | Why it is there |
 | --- | --- |
 | `root_id` | Names the scope without disclosing where it is. |
+| `source_kind` | Fixed to `local_filesystem`; prevents a local chunk being mistaken for fetched research. |
 | `resource` | The relative path, echoed so the operator knows what they got. Result domain only. |
 | `kind` | Always `file`; present so a future addition cannot silently change it. |
 | `offset` | Where this range started. Required for provenance. |
@@ -741,8 +759,38 @@ channel of §8, not in `values`.
 | `bytes_returned` | What came back. Never inferred from the payload length. |
 | `truncated` | Whether more content exists after this range. Explicit, never silent. |
 | `file_size_bytes` | Lets the operator see the gap between range and whole without another invocation. |
+| `modified_utc` | Handle-observed modification time at the read boundary; useful evidence of later change, never proof of sameness. |
 | `encoding` | `utf-8`. Fixed in Phase A, present so it is recorded rather than assumed. |
+| `bom_stripped` | Reconciles raw `bytes_returned` with decoded text when a UTF-8 BOM was removed at offset zero. |
 | `read_at_utc` | When. Required for staleness (§19). |
+| `taint_label` | Fixed to `external_untrusted_data`; callers cannot relabel file text as trusted. |
+| `instruction_authority` | Fixed to `none`; absence is not used to imply safety. |
+| `disclosure_class` | Fixed to `local_only` in Phase A; no constructor accepts a remote-eligible value. |
+
+Constructor invariants are part of the contract, not caller etiquette:
+
+- `root_id` and `resource` are non-empty and reuse the existing root/path bounds;
+- `source_kind`, `kind`, `encoding`, taint, instruction authority, and
+  disclosure class are fixed bounded values, not caller-authored labels;
+- `offset` is an integer in `0..2^63-1` and booleans are not accepted as
+  integers;
+- `bytes_requested` is in `0..65_536`, and `bytes_returned` is in
+  `0..bytes_requested`;
+- `file_size_bytes` is a non-negative integer, while `modified_utc` and
+  `read_at_utc` are timezone-aware;
+- `truncated` agrees with the handle-observed file size at the read boundary:
+  it is true exactly when `offset + bytes_returned < file_size_bytes`;
+- `text` is a string whose strict UTF-8 encoding is exactly `bytes_returned`,
+  minus the three raw BOM bytes when `bom_stripped` is true;
+- `bom_stripped` may be true only for offset zero and a raw return of at least
+  three bytes; and
+- unsuccessful results and non-content capabilities cannot carry the payload.
+
+`bytes_returned` counts raw bytes acquired from the file, so it is deliberately
+recorded rather than inferred from `len(text)`. The constructor re-encodes the
+stored, unescaped text to cross-check that count, accounting explicitly for a
+stripped BOM. Literal display escaping happens later and must not mutate either
+the payload or its provenance counts.
 
 **Deliberately absent**: absolute path, root path, owner, ACL, inode, device,
 MIME type, content hash (see below), any unbounded structure.
@@ -762,6 +810,14 @@ Every chunk that leaves the tool must be provenance-addressable, answering:
 which root, which relative resource, which byte range, when it was read, which
 invocation produced it, whether it was truncated, and what interpretation was
 applied.
+
+**DECIDED: the code-owned invocation ID belongs to `ToolExecutionOutcome`, not
+the filesystem payload.** `ToolExecutionService` already creates that ID before
+emitting lifecycle events; the future change exposes the same bounded ID on the
+outcome, and `ToolRunView` carries it beside the payload. This prevents a tool
+implementation or file from authoring its own invocation identity. Any future
+export or persistence must wrap the payload together with that outcome ID; the
+payload may not be detached and presented as provenance-complete on its own.
 
 **Staleness: DECIDED as a principle — a chunk describes a moment, not a file.**
 Provenance records `read_at_utc`, and should record the `size` and `mtime`
@@ -995,7 +1051,9 @@ the same style of guard the metadata tool already carries.
 | Read is not evidence | **DECIDED** | §13 |
 | Basename out of telemetry | **DECIDED** | §16 |
 | Local-only by default | **DECIDED** | §17 principle |
-| Content channel shape (field vs sibling type) | **DEFERRED** | Implementation choice |
+| Content channel shape | **DECIDED** | Optional typed `FilesystemContentPayload` field on `ToolResult`; no sibling execution path |
+| Phase A content bound | **DECIDED** | 64 KiB per invocation; existing tool-value limits unchanged |
+| Content invocation identity | **DECIDED** | Code-owned ID on `ToolExecutionOutcome`, carried beside content in `ToolRunView` |
 | Operator override for sensitive classes | **DEFERRED** | Needs its own UX |
 | Secret detection in content | **DEFERRED** | Redaction aid at most |
 | Content hash | **DEFERRED** | Inside read only, never metadata |
