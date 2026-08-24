@@ -1294,7 +1294,7 @@ class ResponseComposer:
                 "Remembered." if stored else "Not remembered.",
                 "A lesson records that something did not work here, not that it "
                 "cannot work. Deriving one performed no research and changed no "
-                "run, claim, or assessment.",
+                "run, hypothesis, claim, or assessment.",
             )
         )
         return BrainResponse(
@@ -1339,7 +1339,7 @@ class ResponseComposer:
                     f"Lessons retained in this process: {len(lessons)}",
                     "Durable write: failed.",
                     "Restarting Hypatia may lose these in-memory lessons.",
-                    "No research run, claim, or assessment changed.",
+                    "No research run, hypothesis, claim, or assessment changed.",
                 )
             ),
             request_id=request.request_id,

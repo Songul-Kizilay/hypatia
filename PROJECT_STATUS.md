@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.183 (Genesis)`
+`v0.3.184 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.183`** is the current source/package release line.
+- **Runtime release `v0.3.184`** is the current source/package release line.
   GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -73,6 +73,11 @@ with optional OpenAI-compatible LLM conversation support.
   store request retries the pending durable write. Only a superseded authored
   `hypothesis` is classified as a failed hypothesis; every other superseded
   epistemic state is a revised claim, not a disguised hypothesis failure.
+  A separate explicit `failure_memory_hypothesis_store` command reads only
+  durable hypotheses for the selected run: `weakened` derives a
+  `disproving_evidence` lesson, `contradicted` derives a `failed_hypothesis`
+  lesson, and `open`, `supported`, or `withdrawn` derives none. No event handler
+  or background task creates these lessons automatically.
 - Bounded reflection reports how a run went — what failed, what contradicted
   what, which beliefs were revised, what rests on thin evidence, what stayed
   uncertain, what effort went unused, what worked, and what to ask next — with
@@ -1031,7 +1036,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 3,356 automated tests pass through package-aware discovery.
+- 3,368 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for all `src` files and the focused sensitive-path/rooted-open
   security tests. A full `src` + `tests` MyPy sweep still has separately

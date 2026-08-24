@@ -423,6 +423,7 @@ class CognitiveEngine:
                 research_run_manager,
                 response_composer,
                 lesson_store=failure_lesson_store,
+                hypothesis_store=hypothesis_store,
                 event_bus=event_bus,
             )
         self._calibration_service: CalibrationApplicationService | None = None
@@ -3410,6 +3411,7 @@ class CognitiveEngine:
             or service.is_store_request(request)
             or service.is_list_request(request)
             or service.is_recall_request(request)
+            or service.is_hypothesis_store_request(request)
         )
 
     def _process_failure_memory(self, request: BrainRequest) -> BrainResponse:
@@ -3425,6 +3427,8 @@ class CognitiveEngine:
                 return service.process_preview(request)
             if service.is_store_request(request):
                 return service.process_store(request)
+            if service.is_hypothesis_store_request(request):
+                return service.process_hypothesis_store(request)
             if service.is_recall_request(request):
                 return service.process_recall(request)
             return service.process_list(request)

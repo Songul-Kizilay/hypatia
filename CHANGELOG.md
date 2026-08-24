@@ -2,6 +2,42 @@
 
 All notable project changes are recorded here.
 
+## [0.3.184] - 2026-08-25
+
+### Added
+
+- Failure Memory now has a separate explicit
+  `failure_memory_hypothesis_store` command. It reads the durable hypothesis
+  store fresh for the selected research run and derives a
+  `disproving_evidence` lesson from a `weakened` appraisal or a
+  `failed_hypothesis` lesson from a `contradicted` appraisal.
+- `open`, `supported`, and `withdrawn` hypotheses produce no failure lesson.
+  A hypothesis that is first remembered as weakened and later contradicted
+  produces two stable, distinct lessons only after the two explicit commands;
+  repeated commands remain idempotent.
+- Hypothesis lesson identity, provenance, text, and per-run output are bounded.
+  Provenance names the hypothesis and its opposing evidence without duplicate
+  identifiers, and every statement remains truth-neutral.
+
+### Compatibility and safety
+
+- Hypothesis outcomes are never remembered from event callbacks or an
+  in-memory-only change. Missing durable hypothesis support is refused, lesson
+  persistence failure is reported honestly, and neither path mutates the run,
+  hypothesis, claim, evidence, or assessment.
+- The change adds no new lesson kind, storage schema, automatic lesson write,
+  model judgement, truth decision, tool capability, or filesystem access.
+
+### Verification
+
+- Integration coverage exercises all five hypothesis statuses, cross-run
+  isolation, stable identity, duplicate and bounded provenance, idempotency,
+  the weakened-to-contradicted contract, persistence failure and restart,
+  missing-store refusal, routing, and feature-off behavior.
+- Package-aware discovery passes 3,368 tests with 3 existing platform-dependent
+  skips. Black, Ruff, source MyPy, and whitespace checks pass for this release
+  scope.
+
 ## [0.3.183] - 2026-08-24
 
 ### Fixed

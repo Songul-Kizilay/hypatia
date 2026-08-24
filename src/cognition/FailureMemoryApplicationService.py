@@ -13,6 +13,11 @@ be ignored.
 Nothing in this service performs research either. Deriving, storing, and
 recalling all leave every run byte-identical.
 
+Hypothesis outcomes enter through a separate explicit command. That command
+reads the durable hypothesis store on every request rather than reaching into
+the hypothesis service's in-memory state. A lesson therefore never claims that
+an outcome survived restart unless the hypothesis itself did.
+
 A durable-write failure leaves the lessons available in this process but
 returns an unsuccessful response. Repeating the explicit store request retries
 that pending write; no timer, background loop, or unbounded retry is introduced.
@@ -30,9 +35,15 @@ from core.Exceptions import ResearchError
 from eventbus.EventBus import EventBus
 from research.FailureLessonStore import FailureLessonStore
 from research.FailureMemoryAdvisor import FailureMemoryAdvisor
+from research.HypothesisFailureLessonDeriver import (
+    MAX_HYPOTHESIS_FAILURE_LESSONS_PER_RUN,
+    HypothesisFailureLessonDeriver,
+)
+from research.HypothesisStore import HypothesisStore
 from research.JsonFileFailureLessonStore import MAX_FAILURE_STORE_LESSONS
 from research.ResearchFailureLesson import ResearchFailureLesson
 from research.ResearchFailureLessonDeriver import ResearchFailureLessonDeriver
+from research.ResearchHypothesisAppraiser import ResearchHypothesisAppraiser
 from research.ResearchRunManager import ResearchRunManager
 from response.ResponseComposer import ResponseComposer
 
@@ -40,6 +51,7 @@ FAILURE_LESSON_PREVIEW_INTENT = "failure_memory_preview"
 FAILURE_LESSON_STORE_INTENT = "failure_memory_store"
 FAILURE_LESSON_LIST_INTENT = "failure_memory_list"
 FAILURE_LESSON_RECALL_INTENT = "failure_memory_recall"
+HYPOTHESIS_FAILURE_LESSON_STORE_INTENT = "failure_memory_hypothesis_store"
 
 
 class FailureMemoryApplicationService:
@@ -51,6 +63,9 @@ class FailureMemoryApplicationService:
         response_composer: ResponseComposer,
         *,
         deriver: ResearchFailureLessonDeriver | None = None,
+        hypothesis_deriver: HypothesisFailureLessonDeriver | None = None,
+        hypothesis_appraiser: ResearchHypothesisAppraiser | None = None,
+        hypothesis_store: HypothesisStore | None = None,
         advisor: FailureMemoryAdvisor | None = None,
         lesson_store: FailureLessonStore | None = None,
         event_bus: EventBus | None = None,
@@ -59,6 +74,13 @@ class FailureMemoryApplicationService:
         self._run_manager = run_manager
         self._response_composer = response_composer
         self._deriver = deriver or ResearchFailureLessonDeriver()
+        self._hypothesis_deriver = (
+            hypothesis_deriver or HypothesisFailureLessonDeriver()
+        )
+        self._hypothesis_appraiser = (
+            hypothesis_appraiser or ResearchHypothesisAppraiser()
+        )
+        self._hypothesis_store = hypothesis_store
         self._advisor = advisor or FailureMemoryAdvisor()
         self._lesson_store = lesson_store
         self._events = FailureMemoryEvents(event_bus)
@@ -82,6 +104,10 @@ class FailureMemoryApplicationService:
     @staticmethod
     def is_recall_request(request: BrainRequest) -> bool:
         return request.metadata.get("intent") == FAILURE_LESSON_RECALL_INTENT
+
+    @staticmethod
+    def is_hypothesis_store_request(request: BrainRequest) -> bool:
+        return request.metadata.get("intent") == HYPOTHESIS_FAILURE_LESSON_STORE_INTENT
 
     def lessons(self) -> tuple[ResearchFailureLesson, ...]:
         """Return every remembered lesson, heaviest first."""
@@ -111,6 +137,32 @@ class FailureMemoryApplicationService:
         self._events.stored(run_id, derived, stored, len(self._lessons))
         return self._response_composer.failure_lessons(request, derived, True)
 
+    def process_hypothesis_store(self, request: BrainRequest) -> BrainResponse:
+        """Explicitly remember durable weakened and contradicted hypotheses."""
+        run_id = self._required_run_id(request)
+        run = self._run_manager.get(run_id)
+        store = self._hypothesis_store
+        if store is None:
+            raise ResearchError("Persisted hypotheses are unavailable.")
+        recorded_at = self._clock()
+        lessons: list[ResearchFailureLesson] = []
+        for hypothesis in store.load():
+            if hypothesis.run_id != run.run_id:
+                continue
+            appraisal = self._hypothesis_appraiser.appraise(hypothesis, run)
+            lessons.extend(self._hypothesis_deriver.derive(appraisal, run, recorded_at))
+        lessons.sort(key=lambda lesson: (-lesson.weight, lesson.lesson_id))
+        derived = tuple(lessons[:MAX_HYPOTHESIS_FAILURE_LESSONS_PER_RUN])
+        self._events.derived(run.run_id, derived)
+        stored, persisted = self._store(derived)
+        if not persisted:
+            return self._response_composer.failure_lessons_persistence_failed(
+                request,
+                derived,
+            )
+        self._events.stored(run.run_id, derived, stored, len(self._lessons))
+        return self._response_composer.failure_lessons(request, derived, True)
+
     def process_list(self, request: BrainRequest) -> BrainResponse:
         """Report everything remembered, deriving nothing new."""
         return self._response_composer.failure_lesson_list(request, self.lessons())
@@ -128,11 +180,15 @@ class FailureMemoryApplicationService:
         self,
         request: BrainRequest,
     ) -> tuple[str, tuple[ResearchFailureLesson, ...]]:
+        run = self._run_manager.get(self._required_run_id(request))
+        return run.run_id, self._deriver.derive(run, self._clock())
+
+    @staticmethod
+    def _required_run_id(request: BrainRequest) -> str:
         run_id = request.metadata.get("research_run_id")
         if not isinstance(run_id, str) or not run_id.strip():
             raise ResearchError("Failure memory requires a research run ID.")
-        run = self._run_manager.get(run_id.strip())
-        return run.run_id, self._deriver.derive(run, self._clock())
+        return run_id.strip()
 
     def _store(
         self,

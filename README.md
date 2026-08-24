@@ -812,6 +812,15 @@ hypothesis. A barren search is a result about that query, not a verdict on the
 provider. A lesson records that something did not work here, never that it
 cannot work.
 
+An explicit `failure_memory_hypothesis_store` request can also remember the
+current appraisal of hypotheses that are already in the durable hypothesis
+store for one research run. `weakened` produces a `disproving_evidence` lesson
+and `contradicted` produces a `failed_hypothesis` lesson; `open`, `supported`,
+and `withdrawn` produce none. This is not an event listener or background
+write. Repeating the request is idempotent, and a weakened hypothesis that is
+later contradicted can retain both distinct, provenance-backed lessons without
+either lesson claiming that the hypothesis is true or false.
+
 Recall is advisory and stays advisory. Asking for lessons relevant to a new
 question returns them ranked, bounded, and clearly labelled — it blocks no plan,
 refuses no capability, downgrades no claim, and edits no run. A system that
