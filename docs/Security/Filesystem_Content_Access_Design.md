@@ -1,12 +1,13 @@
 # Filesystem Content Access — Security Design
 
-**Status: PROPOSED. NOT IMPLEMENTED.** No content-reading tool or registered
-runtime path exists as of `v0.3.175`. The bounded
+**Status: FOUNDATION PARTIALLY IMPLEMENTED; CONTENT ACCESS UNAVAILABLE.** No
+content-reading tool or registered runtime path exists as of `v0.3.176`. The
+production-inert Windows NTFS rooted-open boundary, the bounded
 `FilesystemContentPayload`, its success-only `ToolResult.content` channel, the
 separate content effect, the unregistered capability value, and the code-owned
 request identifier on `ToolExecutionOutcome` are CURRENT.
-Everything else marked PROPOSED does not exist yet and must not be cited as
-though it does.
+Everything else marked PROPOSED remains absent and must not be cited as though
+it exists.
 
 This is a separate document from
 [Filesystem_Capability_Design.md](Filesystem_Capability_Design.md) because
@@ -66,7 +67,7 @@ Each of those is a separate authority, and this document keeps them separate.
 | `READS_FILESYSTEM_CONTENT` | **CURRENT**, separately authorized effect |
 | `FILESYSTEM_READ` capability value | **CURRENT**, deliberately unregistered |
 | `ToolExecutionOutcome.request_id` | **CURRENT**, code-owned and shared with lifecycle events |
-| Windows rooted-open production boundary | **DECIDED**, implementation absent |
+| Windows rooted-open production boundary | **CURRENT**, production-inert and unregistered |
 | `filesystem_read` tool | **PROPOSED**, does not exist |
 | Content in model context | **FUTURE**, separate milestone, separate authority |
 | Content in memory | **FUTURE**, separate milestone |
@@ -243,7 +244,7 @@ Required logical sequence for any future implementation:
 9. close every handle on every branch
 ```
 
-### Platform strategy — Windows production boundary decided; implementation absent
+### Platform strategy — Windows production-inert boundary implemented
 
 The current Python path API does not establish those invariants on Windows.
 `os.O_NOFOLLOW` is absent there, and calling `os.open` after
@@ -276,16 +277,15 @@ by a junction, fail final containment when an opened parent is moved outside the
 root, detect configured-root and final-entry replacement, close handles on an
 exception branch, and return `content_bytes_read == 0`.
 
-The experiment itself remains evidence rather than production code. The
-production API surface, module ownership, dependency-free packaging, handle
-lifetime, NTFS-only initial support, and bounded error mapping are now accepted
-in
+The experiment remains independent evidence rather than a runtime dependency.
+The production API surface, module ownership, dependency-free packaging, handle
+lifetime, NTFS-only initial support, and bounded error mapping are recorded in
 [Windows_Rooted_Open_Production_Decision.md](Windows_Rooted_Open_Production_Decision.md).
-The accepted next step is a production-inert Windows foundation that still
-reads zero bytes and registers no capability. Implementing and adversarially
-testing that boundary remains a Phase A blocker. The POSIX strategy is also
-still open; no implementation may silently fall back to a path-only open on any
-platform.
+`WindowsRootedOpen` now implements that production-inert boundary with
+deterministic and native adversarial coverage. It reads zero bytes, exposes no
+native handle or path, and registers no capability. The Windows NTFS rooted-open
+blocker is closed; the POSIX strategy remains open, and no implementation may
+silently fall back to a path-only open on any platform.
 
 Even after those proofs, an attacker with write access to an already-open
 regular file may change bytes in place without changing its identity. The read
@@ -916,7 +916,7 @@ bounded capability becomes an unbounded one by increment.
 | R-1 | Path traversal out of root | Supplies the path | `locate` | Lexical `..` collapse, containment on resolved path | None known |
 | R-2 | Absolute / UNC / device path | Supplies the path | `locate` | Refused under both path flavours | None known |
 | R-3 | NTFS stream syntax | Supplies the path | `locate` | Colon refused after drive check | None known |
-| R-4 | Junction/reparse escape | Can create a junction in the root, unprivileged | `locate` + §6 | Root-handle-anchored, component-wise no-follow open plus final-handle containment | **OPEN until platform prototype proves it** |
+| R-4 | Junction/reparse escape | Can create a junction in the root, unprivileged | `locate` + §6 | Root-handle-anchored, component-wise no-follow open plus final-handle containment | Closed for the current Windows NTFS foundation; POSIX remains open |
 | R-5 | **TOCTOU replacement** | Write access in root | §6 | Rooted handle walk; final containment; stable identity comparison where documented | Denial of service; in-place writes remain possible |
 | R-6 | In-place content modification | Write access to the file | §19 | Provenance records read time; bounded one-pass read | **Not fully detectable**; treated as staleness |
 | R-7 | Sensitive file disclosure | Places or names a credential file in root | §7 | Deny classes decline before reading | Denylist is a floor; novel names pass |
@@ -1079,7 +1079,7 @@ the same style of guard the metadata tool already carries.
 | Filesystem-specific audit channel | **DEFERRED** | New disclosure domain |
 | Knowledge-graph ingestion | **DEFERRED** | Needs provenance type first |
 | Split multi-byte character at range edge | **DECIDED** | Phase A declines; no read outside the authorized range |
-| Windows root-handle primitive | **DECIDED, NOT IMPLEMENTED** | `NtCreateFile` root-relative, no-follow component walk; NTFS-only first boundary; production-inert implementation remains a **Phase A blocker** |
+| Windows root-handle primitive | **DECIDED, CURRENT** | `WindowsRootedOpen` performs an NTFS-only `NtCreateFile` root-relative, no-follow component walk; zero bytes and no runtime registration |
 | POSIX descriptor-relative primitive | **OPEN** | Measure supported platforms; **Phase A blocker for each platform** |
 | Remote-eligibility granularity | **OPEN** | Endpoint locality exists; disclosure authority does not |
 
@@ -1128,7 +1128,7 @@ the same style of guard the metadata tool already carries.
 
 ---
 
-## 29. Repository reference validation (`v0.3.175`)
+## 29. Repository reference validation (`v0.3.176`)
 
 This table records the source check completed before accepting the document.
 It is intentionally explicit so a future milestone cannot mistake a design name
@@ -1149,7 +1149,7 @@ for a shipped API.
 | `ToolResult.content` | CURRENT, success-only and excluded from `repr`, structured values, and line rendering |
 | Central content authority check | CURRENT in `ToolExecutionService`; payload type plus descriptor and invocation effect are revalidated |
 | `ToolExecutionOutcome.request_id` | CURRENT, required and immutable; `ToolExecutionService` validates one value before telemetry and shares it with every lifecycle event for the invocation |
-| Windows rooted-open production decision | CURRENT accepted ADR in `docs/Security/Windows_Rooted_Open_Production_Decision.md`; no production module exists yet |
+| `WindowsRootedOpen` | CURRENT production-inert NTFS foundation in `src/tools`; accepted ADR in `docs/Security/Windows_Rooted_Open_Production_Decision.md`; no content read or runtime registration |
 | `SourceLoadStage` | CURRENT and distinguishes `INDEXED_WITHOUT_RUN` from `ACCEPTED_INTO_RUN` |
 | `LLMLearnedMemoryCandidateExtractor`, `LearnedMemoryAuditApplicationService` | CURRENT; no file-content integration exists |
 | `SecurityAgentApplicationService`, `FailureMemoryApplicationService` | CURRENT; no file-content or Tool Layer failure ingestion is implied by their existence |
@@ -1157,7 +1157,7 @@ for a shipped API.
 | `filesystem_read` tool and runtime registration | PROPOSED only; neither exists in production code |
 | `MetaController` | FUTURE architectural role; no production type with that name exists |
 
-The code-owned outcome identity foundation is versioned as `v0.3.175`. The
-Windows rooted-open production boundary was decided afterward without changing
-the runtime version; no production module opens a content handle or reads a
-file, and the desktop does not project content identity.
+The production-inert Windows rooted-open foundation is versioned as `v0.3.176`.
+It temporarily opens only attribute-capable handles to prove containment and
+identity, reads zero content bytes, and remains absent from the Tool Runtime.
+The desktop does not project content identity.

@@ -18,9 +18,11 @@ The experiment:
 7. closes every handle before returning bounded proof metadata.
 
 It uses the Windows native `NtCreateFile` `RootDirectory` contract because
-`CreateFileW` has no parent-handle argument. The prototype remains evidence,
-not production code. Its production boundary is now accepted separately in
-`docs/Security/Windows_Rooted_Open_Production_Decision.md`.
+`CreateFileW` has no parent-handle argument. The prototype remains independent
+evidence, not production code. Its accepted boundary and production-inert
+implementation are recorded in
+`docs/Security/Windows_Rooted_Open_Production_Decision.md` and
+`src/tools/WindowsRootedOpen.py`.
 
 Pass criteria are deterministic tests for an ordinary file, root replacement,
 parent replacement by a junction after admission, moving an already-open parent
@@ -41,8 +43,8 @@ pass. The prototype:
 - returns bounded proof metadata with `content_bytes_read == 0`.
 
 This result proves that the candidate construction is testable on this host.
-The later production decision accepts a dependency-free, NTFS-only, fail-closed
-foundation built from this evidence; it does not turn this experiment into a
-runtime dependency. The production module, broader filesystem support, and the
-separate POSIX strategy remain unimplemented. `filesystem_read` therefore
-remains unimplemented.
+The production-inert module now carries the dependency-free, NTFS-only,
+fail-closed foundation built from this evidence; it does not import this
+experiment or turn it into a runtime dependency. Broader filesystem support and
+the separate POSIX strategy remain unimplemented. `filesystem_read` therefore
+remains unimplemented and unregistered.

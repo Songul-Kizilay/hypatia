@@ -13,8 +13,20 @@ from tools.FilesystemRootPolicy import resolve_filesystem_root
 from tools.ToolRuntime import ToolRuntime
 
 
+def _verify_inert_platform_boundary_imports() -> None:
+    """Keep inert platform modules importable in the packaged desktop."""
+    from tools.WindowsRootedOpen import WindowsRootedOpen
+
+    if WindowsRootedOpen.__module__ != "tools.WindowsRootedOpen":
+        raise RuntimeError("A required platform boundary could not be imported.")
+
+
 def main() -> None:
     """Start Hypatia's runtime, then hand its Brain to the desktop adapter."""
+    # The module import binds no native API and registers no capability. Running
+    # it before ordinary startup makes the existing packaged-desktop smoke test
+    # prove that PyInstaller included the production-owned inert boundary.
+    _verify_inert_platform_boundary_imports()
     data_paths = DesktopDataPaths.from_process_environment()
     app = HypatiaApplication.from_process_environment(
         memory_path=data_paths.memory_path,

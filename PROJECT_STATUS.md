@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.175 (Genesis)`
+`v0.3.176 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.175`** is the current executable package and GitHub
+- **Runtime release `v0.3.176`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -950,13 +950,15 @@ with optional OpenAI-compatible LLM conversation support.
   `ToolResult`, and `FilesystemContentPayload`, so neither a tool nor returned
   content can author its own provenance. It is not yet projected into the
   desktop presentation model.
-- The Windows rooted-open production boundary is now decided from the nine-test
-  prototype and Microsoft API contracts. The accepted first foundation uses a
-  lazily bound, dependency-free `NtCreateFile` root-relative component walk,
-  keeps every handle inside one production module, supports only a proven NTFS
-  boundary, and maps all native failures to bounded categories without paths or
-  OS messages. This is a design decision only: no production rooted-open module,
-  content read, runtime registration, or desktop control exists yet.
+- The Windows rooted-open production boundary is implemented as an inert Tool
+  Layer foundation. `WindowsRootedOpen` lazily binds fixed Windows system APIs,
+  opens one component at a time relative to held parent handles, refuses every
+  reparse point, supports only the proven local NTFS boundary, verifies root and
+  final identities plus handle-derived containment, and closes every handle in
+  reverse order. Its opaque context exposes no handle, path, or content and
+  proves zero content bytes were read. It remains absent from `ToolRuntime` and
+  every desktop, model, memory, research, evidence, persistence, and telemetry
+  path.
 
 ### Intentionally Not Implemented
 
@@ -988,11 +990,16 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 3,198 automated tests pass through package-aware discovery.
+- 3,235 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
-- MyPy passes for all `src` files and the focused request-ID contract test. A full
-  `src` + `tests` MyPy sweep currently reports 354 existing errors across 35
-  test files, so repository-wide test typing is explicitly not a passing gate.
+- MyPy passes for all `src` files and the focused rooted-open security test. A
+  full `src` + `tests` MyPy sweep still has separately recorded pre-existing
+  test typing debt, so repository-wide test typing is not claimed as a passing
+  gate.
+- The local PyInstaller Windows onedir package builds successfully; its normal
+  hidden-window startup imports the production-inert rooted-open module and
+  creates the expected session registry without constructing or registering the
+  boundary.
 - Whitespace validation (`git diff --check`) passes.
 
 These checks describe the local working tree and do not create a GitHub
@@ -1025,14 +1032,13 @@ changed.
 
 ## Next Milestone
 
-Implement the accepted production-inert Windows rooted-open foundation in one
-Tool Layer platform module. It must lazily bind only the approved system APIs,
-acquire one relative component at a time, prove NTFS/reparse/root/final
-containment and identity, own every handle through deterministic context
-management, and expose no raw handle or path.
+Implement the conservative sensitive-file refusal policy decided in §7 of the
+filesystem content-access design. The policy must classify canonical relative
+components before acquisition and be rechecked against the final safely opened
+resource inside the rooted-open boundary, without exposing a basename or path.
 
-Keep the next increment free of content reads, `FILESYSTEM_READ` runtime
-registration, desktop controls, model context, memory, research, evidence,
-persistence, and generic telemetry content. Preserve the existing experiment
-as independent evidence. POSIX/Linux rooted-open work remains a later platform
-milestone rather than being mixed into the Windows foundation.
+Keep that increment production-inert: no content bytes, `FILESYSTEM_READ`
+runtime registration, desktop control, model context, memory, research,
+evidence, persistence, generic telemetry content, or operator override. Preserve
+the independent Windows experiment. POSIX/Linux rooted-open work remains a later
+platform milestone rather than being mixed into the sensitive-file boundary.

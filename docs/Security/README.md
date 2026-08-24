@@ -126,18 +126,30 @@ Hypatia currently runs as a local-first CLI. The initial security boundary is:
   invocation authorized before the implementation is reached. There is no
   ambient grant, no trusted-tool shortcut, and no path to a tool that skips the
   gate. Lifecycle events carry counts, categories, and booleans, never argument
-  values or returned values. Only two capabilities are registered — reading a
-  clock and counting supplied text — and no module outside the tool layer can
-  import it, name the execution service, or construct an invocation.
+  values or returned values. Four capabilities are registered: reading a clock,
+  counting supplied text, listing one authorized local directory, and reading
+  bounded metadata for one authorized local entry. Filesystem content has a
+  separate declared effect and capability value but remains unregistered. The
+  production-inert Windows NTFS rooted-open foundation reads zero bytes and is
+  also absent from the runtime. No model, cognition, memory, or research module
+  can import the tool layer, name the execution service, or construct an
+  invocation.
 
-## Proposed, not implemented
+## Filesystem capability boundaries
 
 - [Read-only filesystem capability design](Filesystem_Capability_Design.md).
-  No filesystem capability, effect, tool, or code exists in the runtime. The
-  document records the authorized-root model, measured Windows path behaviour,
-  link policy, output bounds, telemetry rules, and the TOCTOU guarantee that
-  cannot be made, so that those choices are reviewable before anything can act
-  on them.
+  Directory listing and single-entry metadata are implemented behind an
+  operator-configured root and explicit per-invocation authorization. They
+  refuse links and expose no content.
+- [Filesystem content-access security design](Filesystem_Content_Access_Design.md).
+  The result/effect/request-identity contracts and a production-inert Windows
+  NTFS rooted-open foundation are implemented. No content-reading tool, runtime
+  registration, desktop control, model context, memory, research, evidence,
+  persistence, or generic telemetry content path exists.
+- [Windows rooted-open production boundary](Windows_Rooted_Open_Production_Decision.md).
+  The fixed-system-DLL, handle-relative, no-follow NTFS construction is
+  implemented with bounded failures and zero content bytes. POSIX/Linux and
+  non-NTFS filesystems remain separate, unsupported milestones.
 
 The current full-repository security baseline is recorded in the Codex Security
 scan completed for v0.3 planning. Before Hypatia gains a networked UI, plugins,

@@ -1,19 +1,21 @@
 # Windows Rooted-Open Production Boundary
 
-**Status: ACCEPTED FOR A PRODUCTION-INERT FOUNDATION.**
+**Status: IMPLEMENTED AS A PRODUCTION-INERT FOUNDATION.**
 
 **Decision date:** 2026-08-24
 
 **Runtime at decision:** `v0.3.175 (Genesis)`
+
+**Foundation implementation:** `v0.3.176 (Genesis)`
 
 **Capability state:** `FILESYSTEM_READ` remains unregistered. No file-content
 read is authorized or implemented by this decision.
 
 ## 1. Decision
 
-Hypatia may move the measured Windows rooted-open construction from the
+Hypatia has moved the measured Windows rooted-open construction from the
 isolated experiment into a production-owned, still-inert platform boundary.
-That boundary will:
+That boundary:
 
 1. use `CreateFileW` only to acquire the configured absolute root;
 2. use `NtCreateFile` with `OBJECT_ATTRIBUTES.RootDirectory` to acquire exactly
@@ -29,9 +31,8 @@ That boundary will:
 9. expose no raw handle, absolute path, OS error text, content, Tool Layer
    capability, runtime registration, or presentation integration.
 
-This approves a *foundation module*, not `filesystem_read`. The follow-up
-implementation must still read zero content bytes and must remain absent from
-`ToolRuntime`.
+This is a *foundation module*, not `filesystem_read`. The implementation reads
+zero content bytes and remains absent from `ToolRuntime`.
 
 ## 2. Evidence used
 
@@ -91,7 +92,8 @@ The acceptance is narrow:
 - only the documented `NtCreateFile` signature is bound;
 - only `FILE_OPEN` is permitted; create, overwrite, supersede, append, delete,
   write, execute, and backup-intent options are forbidden;
-- intermediate handles request traversal/attribute access only;
+- root, intermediate, and final handles request attributes and synchronization
+  only; no file-data access bit is requested even if a component changes kind;
 - the final handle may request `FILE_READ_DATA` only in the later, separately
   authorized content-read milestone;
 - all required functions are loaded lazily after an `os.name == "nt"` gate;
@@ -101,8 +103,8 @@ The acceptance is narrow:
 
 ## 4. Module ownership and shape
 
-The next milestone may add one flat Tool Layer platform module, consistent with
-the existing repository layout:
+Version `v0.3.176` adds one flat Tool Layer platform module, consistent with the
+existing repository layout:
 
 ```text
 src/tools/WindowsRootedOpen.py
@@ -121,7 +123,7 @@ It owns:
 - later, only after a separate milestone, the bounded read operation on the
   already-proven handle.
 
-The proposed public production types are deliberately few:
+The public production types are deliberately few:
 
 ```text
 WindowsRootedOpen
@@ -158,10 +160,9 @@ DLLs already present on the host:
 - no application-local DLL fallback; and
 - no import-time native binding.
 
-This keeps Linux/POSIX imports safe: importing the module must not touch a
+This keeps Linux/POSIX imports safe: importing the module does not touch a
 Windows symbol. Construction on a non-Windows host returns the bounded
-`not_windows` failure. The module is not imported by `ToolRuntime` in the
-foundation milestone.
+`not_windows` failure. The module is not imported by `ToolRuntime`.
 
 Windows packaging verification must include:
 
@@ -282,7 +283,7 @@ The future tool mapping remains the one already decided in the content design:
 
 ## 10. Test and release gates for the foundation milestone
 
-Moving the proof into `src` is approved only with tests for:
+The production foundation is covered by tests for:
 
 - ordinary local NTFS acquisition, zero bytes, and no raw handle/path output;
 - import and bounded `not_windows` construction on a non-Windows test path;
@@ -301,9 +302,11 @@ Moving the proof into `src` is approved only with tests for:
 - no content read/write/process/ToolRuntime/model imports; and
 - no production import from the experiment package.
 
-The existing nine-test prototype remains evidence and must continue to pass.
-The production tests must use injectable API bindings and deterministic seams;
-timing a race is not a release gate.
+The existing nine-test prototype remains passing independent evidence. The
+production suite uses injectable API bindings and deterministic seams rather
+than making release correctness depend on timing a race. Native Windows tests
+repeat the ordinary, replacement, junction, containment, and closure checks
+against the system APIs.
 
 ## 11. Explicit non-decisions
 
@@ -325,7 +328,7 @@ Those remain separate milestones with separate authority.
 
 ### Positive
 
-- The Windows foundation can reuse a measured construction rather than invent a
+- The Windows foundation reuses a measured construction rather than inventing a
   second path policy.
 - Every security-critical native dependency and failure boundary is explicit
   before production code exists.
@@ -340,7 +343,7 @@ Those remain separate milestones with separate authority.
 - Native `ctypes` declarations and lifetime tests become security-critical.
 - A future POSIX implementation will be structurally different and cannot be
   inferred from this one.
-- Real content access remains unavailable after the next foundation milestone.
+- Real content access remains unavailable after the foundation milestone.
 
 These costs are accepted. A broader but unproven filesystem boundary would make
 Hypatia appear more capable while weakening the one property the capability

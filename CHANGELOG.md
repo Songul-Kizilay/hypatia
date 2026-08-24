@@ -2,6 +2,50 @@
 
 All notable project changes are recorded here.
 
+## [0.3.176] - 2026-08-24
+
+### Added
+
+- A production-owned `WindowsRootedOpen` foundation that opens one admitted
+  relative component at a time beneath a held Windows root handle, without
+  reading file content or registering a capability.
+- A bounded `WindowsRootedOpenFailure` taxonomy and opaque
+  `WindowsOpenedFile` context view exposing only the root identifier, component
+  count, active state, and the invariant that zero content bytes were read.
+
+### Safety
+
+- Native APIs are loaded lazily from fixed Windows system-DLL names after the
+  platform gate. The first supported boundary is local NTFS; unsupported
+  filesystems and unavailable proofs fail closed with no path or OS message.
+- Every component uses `NtCreateFile` relative to its held parent with reparse
+  processing disabled. The root, intermediate directories, and final file stay
+  open through reparse, kind, root-identity, final-containment, and
+  final-identity proof.
+- Root, intermediate, and final handles request attributes and synchronization
+  only, so a component replaced by a file does not gain content-read authority.
+  No content read/write/process API, content payload, Tool Runtime registration,
+  desktop, model, memory, research, evidence, persistence, telemetry, or
+  experiment dependency is introduced.
+- Every acquired native handle is closed in reverse order. A close failure
+  prevents a successful context exit, and a non-success `NtCreateFile` result
+  carrying a handle is closed defensively before its bounded failure is raised.
+
+### Verification
+
+- Thirty-seven new deterministic and native tests cover ordinary acquisition,
+  Windows API and NTFS gates, traversal, root/parent/final replacement,
+  junctions, kind and identity changes, containment, handle lifetime,
+  close-failure behavior, error privacy, lazy packaging, and runtime isolation.
+- The nine-test isolated prototype remains green as independent evidence.
+- The normal packaged-desktop startup imports the inert module before composing
+  the application, proving PyInstaller includes it without constructing it or
+  registering a capability.
+- The local PyInstaller Windows onedir package builds successfully and its
+  hidden-window startup smoke creates the expected session registry.
+- The package-aware full-suite, formatting, lint, typing, and whitespace
+  results are recorded in `PROJECT_STATUS.md` after local verification.
+
 ## [0.3.175] - 2026-08-24
 
 ### Added
