@@ -93,6 +93,7 @@ jobs:
           "archive=Hypatia-windows-x64-v$version.zip" >> $env:GITHUB_OUTPUT
 
       - name: Create Windows archive
+        if: github.event_name != 'pull_request'
         shell: pwsh
         run: |
           Compress-Archive `
@@ -101,6 +102,7 @@ jobs:
             -CompressionLevel Optimal
 
       - name: Upload Windows desktop artifact
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: Hypatia-windows-x64-v${{ steps.package.outputs.version }}
