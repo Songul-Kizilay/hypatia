@@ -2,6 +2,53 @@
 
 All notable project changes are recorded here.
 
+## [0.3.167] - 2026-08-24
+
+### Added
+
+- `TextStatisticsTool`, the first tool that takes an argument. It reports four
+  counts over text supplied with the call and reads nothing else.
+- A structural guard asserting that no module outside `src/tools` imports the
+  tool layer, names the execution service, or constructs an invocation.
+
+### Safety
+
+- The tool is pure: no file, clipboard, network, environment, process state, or
+  model, and nothing mutated. It declares only `COMPUTES_LOCALLY`.
+- Purity earns no exemption. An empty grant refuses it before it starts, and a
+  grant of an unrelated effect refuses it too.
+- It accepts exactly one argument name. No alias for `text` is recognised.
+- Result details are fixed sentences. Neither the text nor the name of an
+  unexpected argument is quoted back, because a message is the easiest place for
+  input to escape and the hardest place to notice it did.
+- The result carries derived counts only. A sentinel string is asserted absent
+  from result values, result details, and every lifecycle payload.
+- Bad arguments are a tool failure, not an authorization refusal: the tool ran,
+  so the outcome reports `performed=True` and the event reports
+  `refused_before_execution=False` after `started`.
+- A non-string argument is refused when the invocation is built, and the tool
+  independently declines to coerce one that bypasses construction.
+
+### Counting
+
+- `character_count` is Unicode code points, `word_count` is whitespace-separated
+  non-empty segments, `line_count` is Python line boundaries, and
+  `non_whitespace_character_count` is code points that are not whitespace.
+- Line counting treats a newline, a carriage return, and a CRLF pair identically
+  on every platform, so the same text counts the same on every machine.
+
+### Verification
+
+- The package-aware full local suite contains 2,719 passing automated tests.
+- Fifty-five new tests cover the descriptor and its truthful effects, the empty
+  string, spaces, tabs, trailing and lone newlines, blank lines, CRLF, Turkish
+  and non-Latin text, missing and unknown and aliased arguments, non-string
+  values on both sides of construction, result and telemetry sentinel absence,
+  both lifecycle orderings, registry ordering across two tools, and the
+  isolation guard.
+- An application-level run confirms all four paths: success, missing argument,
+  unknown argument, and refusal under an empty grant.
+
 ## [0.3.166] - 2026-08-24
 
 ### Added
