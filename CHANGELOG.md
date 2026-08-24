@@ -2,6 +2,50 @@
 
 All notable project changes are recorded here.
 
+## [0.3.165] - 2026-08-24
+
+### Added
+
+- `ClockReadTool`, the one concrete tool of this milestone. It reports the
+  current UTC time as four structured values through the full tool path.
+
+### Removed
+
+- `ToolFailureKind.INVALID_ARGUMENTS`, which had no producer. Malformed
+  arguments are refused when the invocation is constructed, and unsupported ones
+  are a tool discovering by looking, which is a failure rather than a refusal.
+
+### Safety
+
+- The tool declares exactly what it does: it reads local state and nothing else.
+  Tests assert each absent effect individually — no write, no network, no model.
+- It touches no network, no filesystem, no process, and no model, and mutates
+  nothing.
+- The clock is injected, so no test depends on the second it ran in. A naive
+  datetime from the clock source is refused rather than guessed at, and a
+  non-UTC one is normalised.
+- It accepts no arguments. An unsupported argument yields a
+  performed-but-unsuccessful result, because the tool was reached and declined.
+- The clock tool is not exempt from the gate. A test invokes it with an empty
+  grant and asserts it is refused before starting, since a trusted-tool shortcut
+  for something harmless is the shortcut a later tool would inherit.
+- Only `clock_read` is registered. No filesystem, terminal, process, browser,
+  network, or generic execution capability exists, and nothing is wired into
+  ordinary chat.
+
+### Verification
+
+- The package-aware full local suite contains 2,650 passing automated tests.
+- Eighteen new tests cover the descriptor and its truthful effects, injected and
+  normalised clocks, refused ambiguous times, argument rejection, and the
+  end-to-end path including lifecycle order, the gate applying to the clock
+  tool, cancellation, unknown capabilities, and telemetry carrying no time
+  value.
+- An application-level run confirms the path: granted, it emits requested,
+  authorized, started, completed and returns the injected time; ungranted, it
+  emits requested and failed with `unauthorized_effect` and never reaches the
+  tool.
+
 ## [0.3.164] - 2026-08-24
 
 ### Added

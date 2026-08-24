@@ -7,11 +7,14 @@ telemetry, and eventually a screen. A caller deciding what to do next needs a
 category, not a sentence.
 
 The kinds separate refusals from failures. A refusal means the tool never ran —
-the capability was not registered, the effects were not granted, the arguments
-were wrong, or the work was cancelled first. A failure means the implementation
-ran and did not achieve its outcome. Collapsing the two would make "it did not
-work" indistinguishable from "it was not allowed", which is exactly the
-distinction an authorization boundary exists to preserve.
+the capability was not registered, the effects were not granted, or the work was
+cancelled first. A failure means the implementation ran and did not achieve its
+outcome, which includes a tool that was reached and declined the arguments it was
+given: being asked badly is something a tool discovers by looking.
+
+Collapsing the two would make "it did not work" indistinguishable from "it was
+not allowed", which is exactly the distinction an authorization boundary exists
+to preserve.
 """
 
 from __future__ import annotations
@@ -24,7 +27,6 @@ class ToolFailureKind(StrEnum):
 
     UNKNOWN_CAPABILITY = "unknown_capability"
     UNAUTHORIZED_EFFECT = "unauthorized_effect"
-    INVALID_ARGUMENTS = "invalid_arguments"
     CANCELLED = "cancelled"
     TOOL_FAILED = "tool_failed"
 
