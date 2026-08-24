@@ -121,6 +121,24 @@ Hypatia currently runs as a local-first CLI. The initial security boundary is:
 - semantic embeddings are opt-in and restricted to the local Ollama endpoint
   policy enforced at bootstrap.
 
+- tool invocation is centrally gated. A tool declares its effects, and the
+  execution service compares that declaration against the effects the single
+  invocation authorized before the implementation is reached. There is no
+  ambient grant, no trusted-tool shortcut, and no path to a tool that skips the
+  gate. Lifecycle events carry counts, categories, and booleans, never argument
+  values or returned values. Only two capabilities are registered — reading a
+  clock and counting supplied text — and no module outside the tool layer can
+  import it, name the execution service, or construct an invocation.
+
+## Proposed, not implemented
+
+- [Read-only filesystem capability design](Filesystem_Capability_Design.md).
+  No filesystem capability, effect, tool, or code exists in the runtime. The
+  document records the authorized-root model, measured Windows path behaviour,
+  link policy, output bounds, telemetry rules, and the TOCTOU guarantee that
+  cannot be made, so that those choices are reviewable before anything can act
+  on them.
+
 The current full-repository security baseline is recorded in the Codex Security
 scan completed for v0.3 planning. Before Hypatia gains a networked UI, plugins,
 remote storage, or multi-user operation, this document must grow into a complete

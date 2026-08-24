@@ -997,17 +997,14 @@ changed.
 
 ## Next Milestone
 
-Add `TEXT_STATISTICS` as the second concrete tool, because it is the only
-already-declared capability that needs no new effect vocabulary and touches
-nothing: it is a pure function of text handed to it in the invocation. That makes
-it the smallest possible test of whether the layer can carry a tool that takes
-arguments, which `ClockReadTool` deliberately does not.
+Implement `filesystem_list` as the first read-only filesystem capability,
+following [the design proposal](docs/Security/Filesystem_Capability_Design.md).
+It should introduce a `READS_FILESYSTEM_METADATA` effect rather than reusing
+`READS_LOCAL_STATE`, take its authorized root from operator configuration rather
+than from the invocation, refuse absolute, rooted, drive-relative, UNC, and
+stream-syntax arguments, decide containment on the resolved path rather than a
+string prefix, report links without following them, list one directory one level
+deep with reported truncation, and put no path into any lifecycle event.
 
-A read-only filesystem listing tool is the more useful next capability but not
-the smaller one. It would require a new `ToolEffect`, a new `ToolCapability`, a
-root-confinement rule, symlink and path-traversal handling, and a decision about
-whether names themselves are sensitive. Those are real design questions and
-should not ride along with the first argument-accepting tool.
-
-Keep this increment free of chat wiring, evidence integration, and any capability
-that reaches the filesystem, network, process table, or model.
+Keep this increment free of file reading, writing, recursion, link following,
+chat wiring, and evidence integration.
