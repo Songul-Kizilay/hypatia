@@ -237,7 +237,7 @@ Required logical sequence for any future implementation:
 9. close every handle on every branch
 ```
 
-### Platform strategy — unresolved and blocking implementation
+### Platform strategy — Windows candidate measured; production decision open
 
 The current Python path API does not establish those invariants on Windows.
 `os.O_NOFOLLOW` is absent there, and calling `os.open` after
@@ -262,12 +262,21 @@ not sufficient. A platform that cannot prove the invariants must leave
 `filesystem_read` unregistered rather than silently fall back to path-based
 opening.
 
-**OPEN — platform experiment required and it is a Phase A blocker.** The
-measured identity pair remains part of the experiment because it can detect
-final-object replacement. It is not the experiment's conclusion. No
-implementation milestone may begin until the repository records a supported
-Windows construction that satisfies CONTENT-ROOTED-OPEN and
-CONTENT-FINAL-CONTAINMENT, plus the equivalent supported-platform strategy.
+The isolated experiment at
+`experiments/prototypes/windows_rooted_open` now demonstrates a candidate
+Windows construction on the development host. Its nine focused tests acquire
+one component per native root-relative open, refuse an admitted parent replaced
+by a junction, fail final containment when an opened parent is moved outside the
+root, detect configured-root and final-entry replacement, close handles on an
+exception branch, and return `content_bytes_read == 0`.
+
+**MEASURED, NOT PRODUCTION-APPROVED.** This result satisfies the experimental
+proof requested above on Windows 11 / Python 3.14.5. It does not itself approve
+the native API wrapper as a supported runtime dependency, establish behaviour
+on every Windows filesystem, or settle packaging, ownership, and error-mapping
+policy. Those production decisions remain blockers. The POSIX strategy is also
+still open; no implementation may silently fall back to a path-only open on any
+platform.
 
 Even after those proofs, an attacker with write access to an already-open
 regular file may change bytes in place without changing its identity. The read
@@ -995,7 +1004,7 @@ the same style of guard the metadata tool already carries.
 | Filesystem-specific audit channel | **DEFERRED** | New disclosure domain |
 | Knowledge-graph ingestion | **DEFERRED** | Needs provenance type first |
 | Split multi-byte character at range edge | **DECIDED** | Phase A declines; no read outside the authorized range |
-| Windows root-handle primitive | **OPEN** | Prototype and adversarial seams required; **Phase A blocker** |
+| Windows root-handle primitive | **MEASURED** | Nine-test isolated prototype passes on Windows 11 / Python 3.14.5; production adoption remains a **Phase A blocker** |
 | POSIX descriptor-relative primitive | **OPEN** | Measure supported platforms; **Phase A blocker for each platform** |
 | Remote-eligibility granularity | **OPEN** | Endpoint locality exists; disclosure authority does not |
 
