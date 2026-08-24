@@ -2,6 +2,38 @@
 
 All notable project changes are recorded here.
 
+## [0.3.164] - 2026-08-24
+
+### Added
+
+- `ToolEvents` publishes six lifecycle events on the existing event bus:
+  `tool.requested`, `tool.authorized`, `tool.started`, `tool.completed`,
+  `tool.failed`, and `tool.cancelled`. No second event system was created.
+
+### Safety
+
+- The events are required to be true. `authorized` is emitted only after the
+  gate allowed the call and `started` only when the implementation is about to
+  run, so a refused invocation produces neither — tests assert the absence of
+  both, since those are the two events that would make a refusal read as a run.
+- A cancelled invocation reports cancellation rather than failure, and a tool
+  that ran and failed reports failure after starting with `performed` true.
+- Payloads are bounded now, while the only tool reads a clock. Arguments and
+  returned values are counted, never carried. Tests plant a secret in an
+  argument, a returned value, and a raised error, and assert none of the three
+  appears in any payload.
+- What is carried: a request id correlating one invocation, the capability, the
+  declared and authorized effects, `performed`, `succeeded`, and a bounded
+  failure kind.
+
+### Verification
+
+- The package-aware full local suite contains 2,632 passing automated tests.
+- Nineteen new tests cover the exact event order for success, unknown
+  capability, unauthorized effects, cancellation, a raising tool and a failing
+  tool, once-only emission, request correlation, a service without a bus, and
+  the bounded-payload rules.
+
 ## [0.3.163] - 2026-08-24
 
 ### Added
