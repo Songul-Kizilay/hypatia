@@ -22,6 +22,7 @@ from collections.abc import Callable
 from eventbus.EventBus import EventBus
 from tools.ClockReadTool import ClockReadTool
 from tools.FilesystemListTool import FilesystemListTool
+from tools.FilesystemMetadataTool import FilesystemMetadataTool
 from tools.FilesystemRoot import FilesystemRoot
 from tools.TextStatisticsTool import TextStatisticsTool
 from tools.Tool import Tool
@@ -82,5 +83,10 @@ class ToolRuntime:
         """List every tool this installation registers, by construction."""
         tools: list[Tool] = [ClockReadTool(), TextStatisticsTool()]
         if filesystem_root is not None:
+            # Both filesystem capabilities appear together or not at all. They
+            # share one scope and one effect, so a runtime that offered one
+            # without the other would be describing a boundary that does not
+            # exist.
             tools.append(FilesystemListTool(filesystem_root))
+            tools.append(FilesystemMetadataTool(filesystem_root))
         return tuple(tools)

@@ -71,6 +71,15 @@ _ARGUMENTS: dict[ToolCapability, tuple[ToolArgumentSpec, ...]] = {
             hint="Leave blank for the first page.",
         ),
     ),
+    ToolCapability.FILESYSTEM_METADATA: (
+        ToolArgumentSpec(
+            name="path",
+            label="Entry",
+            kind=ToolArgumentKind.RELATIVE_PATH,
+            required=True,
+            hint="One file or folder, relative to the configured scope.",
+        ),
+    ),
 }
 
 
@@ -280,7 +289,10 @@ class ToolConsoleController:
         in force; neither they nor anything downstream needs the absolute
         location to understand that, and telemetry must never see it.
         """
-        if capability is not ToolCapability.FILESYSTEM_LIST:
+        if capability not in (
+            ToolCapability.FILESYSTEM_LIST,
+            ToolCapability.FILESYSTEM_METADATA,
+        ):
             return ""
         root_id = self._runtime.filesystem_root_id
         return f"Scope: {root_id}" if root_id else ""

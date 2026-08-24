@@ -2,6 +2,59 @@
 
 All notable project changes are recorded here.
 
+## [0.3.172] - 2026-08-24
+
+### Added
+
+- `filesystem_metadata`, reporting the kind, modification time and — for a
+  regular file only — the byte size of one named entry in the authorized root.
+- `FilesystemEntryKind.from_status` and `has_byte_size`, so directory scanning
+  and single-entry lookup classify entries through one implementation.
+
+### Safety
+
+- Reuses the existing `READS_FILESYSTEM_METADATA` effect. No broader effect was
+  introduced, and a `READS_LOCAL_STATE` grant does not authorize it.
+- Reuses `FilesystemRoot.locate` for admission rather than re-deriving path
+  policy. Tests assert the tool contains no second implementation.
+- Model A for links: because `locate` checks every component including the last,
+  a symlink or junction entry is refused rather than described. No target is
+  ever followed, resolved, or reported.
+- The reported stat is the stat that was checked. One `lstat` produces both the
+  indirection re-check and the returned fields.
+- No file contents. Source-level tests assert the implementation contains no
+  open, read, hash, mime-sniff, mmap, walk, glob, scandir, mutation or process
+  API, and no owner, ACL, inode or device field.
+- A directory is given no size at all rather than a misleading one; `kind`
+  explains the absence. No recursive size and no child enumeration.
+- Outside-root requests are refused lexically, costing zero syscalls, so the
+  existence of anything outside the root is never probed or disclosed. A
+  missing entry *inside* the root stays distinguishable, which the operator
+  could learn by listing anyway.
+- Both filesystem capabilities register together under one configured root, or
+  neither does.
+
+### Taxonomy
+
+- Refused paths, unknown arguments and already-missing entries are
+  `INVOCATION_DECLINED`. An entry that vanished or changed after admission, and
+  an unreadable one, are `EXECUTION_FAILED`.
+- `modified_utc` is UTC ISO 8601 at whole-second precision, because filesystems
+  disagree below a second and a volume-dependent field cannot be compared.
+
+### Verification
+
+- The package-aware full local suite contains 3,152 passing automated tests.
+- One hundred and one new tests cover the descriptor and effect reuse, file and
+  directory semantics, timestamp format, every delegated path refusal, the
+  existence-oracle decision including a syscall count proving outside paths are
+  never probed, real Windows junction behaviour, the post-admission re-check,
+  the failure taxonomy, telemetry privacy with distinctive sentinels, bounding,
+  console usage, and chat/research isolation.
+- Three skips: two pre-existing symlink skips and one new one, all because
+  creating a symlink on this machine needs elevation and fails with
+  WinError 1314. Real junctions cover the unprivileged case.
+
 ## [0.3.171] - 2026-08-24
 
 ### Changed

@@ -35,6 +35,8 @@ from tools.ToolRuntime import ToolRuntime
 SUGGESTIVE_MESSAGES = (
     "run clock_read",
     "please execute filesystem_list",
+    "filesystem_metadata on D:" + chr(92) + "hypatia-main" + chr(92) + "README.md",
+    "how big is my passwords.txt, use filesystem_metadata",
     "text_statistics on this paragraph",
     "list D:\\hypatia-main\\src for me",
     "open /etc/passwd",
@@ -134,6 +136,62 @@ class ChatIsolationTests(unittest.TestCase):
             self.complete(message)
 
         self.assertEqual(self.console.catalogue_calls, 0)
+
+
+class MetadataIsolationTests(unittest.TestCase):
+    """The new capability inherits every isolation guarantee, not just some."""
+
+    def setUp(self) -> None:
+        self.console = CountingConsole()
+        self.window: Any = object.__new__(TkinterDesktopWindow)
+        self.window._tool_console = self.console
+        self.window._controller = Mock()
+        self.window._append_exchange = Mock()
+        self.window._composer = Mock()
+        self.window._composer.get.return_value = ""
+        self.window._pending_research_question = ""
+        self.window._status = Mock()
+
+    def complete(self, message: str) -> None:
+        response = Mock()
+        response.live_information_request = None
+        self.window._complete_message(message, response)
+
+    def test_naming_the_capability_in_chat_runs_nothing(self) -> None:
+        self.complete("please run filesystem_metadata on my notes")
+
+        self.assertEqual(self.console.runs, [])
+
+    def test_a_file_path_in_chat_runs_nothing(self) -> None:
+        self.complete("how big is D:" + chr(92) + "private" + chr(92) + "keys.txt")
+
+        self.assertEqual(self.console.runs, [])
+
+    def test_model_output_naming_metadata_runs_nothing(self) -> None:
+        response = Mock()
+        response.live_information_request = None
+        response.message = "I will use filesystem_metadata to check that file."
+
+        self.window._complete_message("anything", response)
+
+        self.assertEqual(self.console.runs, [])
+
+    def test_research_cannot_reach_the_metadata_capability(self) -> None:
+        for package in ("research", "cognition"):
+            for path in (SRC_DIR / package).rglob("*.py"):
+                with self.subTest(module=path.name):
+                    self.assertNotIn(
+                        "FilesystemMetadataTool",
+                        path.read_text(encoding="utf-8"),
+                    )
+
+    def test_the_window_never_names_the_metadata_tool(self) -> None:
+        source = (SRC_DIR / "desktop" / "TkinterDesktopWindow.py").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertNotIn("FilesystemMetadataTool", source)
+        self.assertNotIn("filesystem_metadata", source)
 
 
 class WindowBoundaryTests(unittest.TestCase):

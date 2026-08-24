@@ -70,7 +70,15 @@ class CatalogueTests(ConsoleFixture):
     def test_the_catalogue_lists_the_registered_capabilities(self) -> None:
         names = [entry.capability for entry in self.console.catalogue()]
 
-        self.assertEqual(names, ["clock_read", "text_statistics", "filesystem_list"])
+        self.assertEqual(
+            names,
+            [
+                "clock_read",
+                "text_statistics",
+                "filesystem_list",
+                "filesystem_metadata",
+            ],
+        )
 
     def test_the_catalogue_matches_the_registry_exactly(self) -> None:
         """No second list to fall out of date with what can actually run."""
@@ -129,12 +137,14 @@ class CatalogueTests(ConsoleFixture):
         """The tool stays authoritative; the spec only adds what a form needs."""
         from tools.ClockReadTool import ACCEPTED_ARGUMENTS as CLOCK
         from tools.FilesystemListTool import ACCEPTED_ARGUMENTS as FILES
+        from tools.FilesystemMetadataTool import ACCEPTED_ARGUMENTS as META
         from tools.TextStatisticsTool import ACCEPTED_ARGUMENTS as TEXT
 
         expected = {
             "clock_read": CLOCK,
             "text_statistics": TEXT,
             "filesystem_list": FILES,
+            "filesystem_metadata": META,
         }
         for entry in self.console.catalogue():
             with self.subTest(capability=entry.capability):
@@ -482,6 +492,105 @@ class OutcomeDistinctionTests(ConsoleFixture):
 
         self.assertIn("Work attempted: yes", lines)
         self.assertIn("Outcome: execution_failed", lines)
+
+
+class MetadataConsoleTests(ConsoleFixture):
+    """The new capability is usable from the console on the same terms."""
+
+    def test_it_appears_in_the_catalogue_when_registered(self) -> None:
+        names = [entry.capability for entry in self.console.catalogue()]
+
+        self.assertIn("filesystem_metadata", names)
+
+    def test_it_shows_the_filesystem_effect_before_running(self) -> None:
+        entry = self.console.entry("filesystem_metadata")
+
+        self.assertEqual(entry.effects, ("reads_filesystem_metadata",))
+        self.assertIn("reads_filesystem_metadata", entry.authorization_prompt)
+
+    def test_it_shows_the_scope_identity_not_the_path(self) -> None:
+        entry = self.console.entry("filesystem_metadata")
+
+        self.assertEqual(entry.scope_label, "Scope: workspace")
+        self.assertNotIn(str(self.root_path), entry.scope_label)
+
+    def test_it_asks_for_exactly_one_relative_path(self) -> None:
+        entry = self.console.entry("filesystem_metadata")
+
+        self.assertEqual([spec.name for spec in entry.arguments], ["path"])
+        self.assertTrue(entry.arguments[0].required)
+
+    def test_selecting_it_executes_nothing(self) -> None:
+        """Reading the catalogue is not running anything, proven by the bus."""
+        seen: list[object] = []
+        self.event_bus.subscribe("*", seen.append)
+
+        self.console.catalogue()
+        self.console.entry("filesystem_metadata")
+
+        self.assertEqual(seen, [])
+
+    def test_running_it_without_authorization_does_nothing(self) -> None:
+        view = self.console.run("filesystem_metadata", (("path", "."),))
+
+        self.assertIs(view.status, ToolRunStatus.UNAUTHORIZED)
+        self.assertFalse(view.performed)
+
+    def test_one_authorization_does_not_carry_to_the_next_run(self) -> None:
+        self.assertTrue(self.run_tool("filesystem_metadata", path=".").performed)
+
+        self.assertFalse(
+            self.console.run("filesystem_metadata", (("path", "."),)).performed
+        )
+
+    def test_a_successful_lookup_renders_bounded_metadata(self) -> None:
+        view = self.run_tool("filesystem_metadata", path="readme.md")
+
+        self.assertIs(view.status, ToolRunStatus.SUCCEEDED)
+        values = dict(view.values)
+        self.assertEqual(values["kind"], "file")
+        self.assertEqual(values["size_bytes"], "5")
+
+    def test_a_refused_path_renders_as_declined(self) -> None:
+        view = self.run_tool("filesystem_metadata", path="..")
+
+        self.assertIs(view.status, ToolRunStatus.DECLINED)
+        self.assertIn("Request declined", view.headline)
+
+    def test_an_unknown_argument_is_rejected_before_execution(self) -> None:
+        view = self.console.run(
+            "filesystem_metadata",
+            (("path", "."), ("recursive", "true")),
+            authorized=True,
+        )
+
+        self.assertIs(view.status, ToolRunStatus.INVALID_ARGUMENTS)
+        self.assertFalse(view.performed)
+
+    def test_an_absolute_path_is_rejected_by_the_form(self) -> None:
+        view = self.console.run(
+            "filesystem_metadata",
+            (("path", "C:" + chr(92) + "Windows"),),
+            authorized=True,
+        )
+
+        self.assertIs(view.status, ToolRunStatus.INVALID_ARGUMENTS)
+
+    def test_listing_does_not_chain_into_metadata(self) -> None:
+        """One human action is one invocation. No implicit follow-up."""
+        listed = self.run_tool("filesystem_list", path=".")
+
+        self.assertTrue(listed.succeeded)
+        self.assertEqual(listed.capability, "filesystem_list")
+        for name, _ in listed.values:
+            with self.subTest(field=name):
+                self.assertNotIn("size_bytes", name)
+                self.assertNotIn("modified_utc", name)
+
+    def test_the_console_offers_no_metadata_shortcut_method(self) -> None:
+        for forbidden in ("describe", "metadata_for", "inspect", "stat"):
+            with self.subTest(name=forbidden):
+                self.assertFalse(hasattr(self.console, forbidden))
 
 
 class AuditTests(ConsoleFixture):

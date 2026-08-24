@@ -53,13 +53,46 @@ class FilesystemEntryKind(StrEnum):
     @classmethod
     def of(cls, entry: os.DirEntry[str]) -> FilesystemEntryKind:
         """Classify one scanned entry without a single following syscall."""
-        if is_indirection(entry.stat(follow_symlinks=False), entry.is_symlink()):
+        return cls.from_status(
+            entry.stat(follow_symlinks=False),
+            entry.is_symlink(),
+        )
+
+    @classmethod
+    def from_status(
+        cls,
+        status: os.stat_result,
+        symlink: bool,
+    ) -> FilesystemEntryKind:
+        """Classify one already-taken no-follow stat.
+
+        Directory scanning and single-entry lookup ask the same question from
+        different starting points, and answering it twice would be two
+        implementations of one security-relevant rule. This is the one answer;
+        `of` is the DirEntry-shaped door into it.
+
+        The caller must have taken the stat without following, because nothing
+        here can tell whether it did. Passing a followed stat would describe a
+        link's target while calling it the link.
+        """
+        if is_indirection(status, symlink):
             return cls.LINK
-        if entry.is_dir(follow_symlinks=False):
+        if stat.S_ISDIR(status.st_mode):
             return cls.DIRECTORY
-        if entry.is_file(follow_symlinks=False):
+        if stat.S_ISREG(status.st_mode):
             return cls.FILE
         return cls.OTHER
+
+    @property
+    def has_byte_size(self) -> bool:
+        """Return whether a byte count means anything for this kind.
+
+        Only a regular file has a length. A directory's stat size is bookkeeping
+        about the directory record, not the size of what is inside it, and
+        reporting it as `size` would be a number that looks like an answer to a
+        question nobody asked.
+        """
+        return self is FilesystemEntryKind.FILE
 
 
 def is_indirection(status: os.stat_result, symlink: bool) -> bool:
