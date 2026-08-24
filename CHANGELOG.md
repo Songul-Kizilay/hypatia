@@ -2,6 +2,44 @@
 
 All notable project changes are recorded here.
 
+## [0.3.162] - 2026-08-24
+
+### Added
+
+- Knowledge reconciliation classifies every indexed resource as attached,
+  knowledge-only, or a broken reference, and reports counts for resources,
+  documents, and each classification.
+- `knowledge_reconciliation_report` and `knowledge_only_list` intents, and one
+  bounded `knowledge_reconciliation.reported` event.
+
+### Safety
+
+- Read only. There is no delete, prune, or garbage-collect path, and tests
+  assert neither the reconciler nor the service exposes a method whose name
+  contains one, and that the run store and index are byte-unchanged after
+  repeated reconciliation.
+- Knowledge-only is presented as a normal state rather than a cleanup list. The
+  user-facing report never calls it an orphan; that word is reserved for a run
+  naming a document the index does not hold, which is the only genuine
+  structural breakage here.
+- Resources are keyed by identity, so the same page stored twice is one resource
+  holding two documents rather than two resources.
+- A record cannot contradict its classification: an attached resource must name
+  its runs, a knowledge-only one must name none, and a broken reference names a
+  run but no document.
+- Event payloads carry counts plus explicit `documents_removed` and
+  `references_repaired` zeroes, and deliberately no identity or title.
+
+### Verification
+
+- The package-aware full local suite contains 2,588 passing automated tests.
+- Twenty-eight new tests cover the vocabulary and its consistency rules, empty
+  machines, attached and knowledge-only classification, duplicated resources,
+  broken references and their exclusion from indexed counts, shared resources
+  across runs, read-only behaviour, the absence of removal methods,
+  presentation, events, and engine routing with and without research
+  persistence.
+
 ## [0.3.161] - 2026-08-24
 
 ### Fixed

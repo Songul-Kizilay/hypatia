@@ -28,6 +28,9 @@ from cognition.FailureMemoryApplicationService import (
 from cognition.HypothesisApplicationService import (
     HypothesisApplicationService,
 )
+from cognition.KnowledgeReconciliationApplicationService import (
+    KnowledgeReconciliationApplicationService,
+)
 from cognition.LearnedMemoryAuditApplicationService import (
     LearnedMemoryAuditApplicationService,
 )
@@ -463,6 +466,14 @@ class CognitiveEngine:
             research_plan_draft_service,
         )
         self._source_ingestion_events = SourceIngestionEvents(event_bus)
+        self._knowledge_reconciliation_service = (
+            KnowledgeReconciliationApplicationService(
+                knowledge_engine,
+                response_composer,
+                run_manager=research_run_manager,
+                event_bus=event_bus,
+            )
+        )
         self._hybrid_semantic_memory_ranker = HybridSemanticMemoryRanker()
         self._router = BrainRouter()
 
@@ -565,6 +576,9 @@ class CognitiveEngine:
 
         if self._is_vulnerability_graph_request(request):
             return self._process_vulnerability_graph(request)
+
+        if self._is_knowledge_reconciliation_request(request):
+            return self._process_knowledge_reconciliation(request)
 
         if SecurityAgentApplicationService.is_audit_request(request):
             return self._process_security_posture(request)
@@ -3352,6 +3366,24 @@ class CognitiveEngine:
                 request,
                 str(error),
             )
+
+    @staticmethod
+    def _is_knowledge_reconciliation_request(request: BrainRequest) -> bool:
+        """Return whether this request addresses knowledge reconciliation."""
+        service = KnowledgeReconciliationApplicationService
+        return service.is_report_request(request) or service.is_knowledge_only_request(
+            request
+        )
+
+    def _process_knowledge_reconciliation(
+        self,
+        request: BrainRequest,
+    ) -> BrainResponse:
+        """Route one reconciliation intent. Both of them only read."""
+        service = self._knowledge_reconciliation_service
+        if service.is_knowledge_only_request(request):
+            return service.process_knowledge_only(request)
+        return service.process_report(request)
 
     def _process_calibration(self, request: BrainRequest) -> BrainResponse:
         """Route the calibration intent, which reads and never writes."""

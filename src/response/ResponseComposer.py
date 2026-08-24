@@ -26,6 +26,9 @@ from planner.Plan import Plan
 from research.BackgroundResearchTask import BackgroundResearchTask
 from research.CanonicalResearchSummary import CanonicalResearchSummary
 from research.HypothesisAppraisal import HypothesisAppraisal
+from research.KnowledgeReconciliationReport import (
+    KnowledgeReconciliationReport,
+)
 from research.ResearchAutonomyResult import ResearchAutonomyResult
 from research.ResearchCalibrationReport import ResearchCalibrationReport
 from research.ResearchClaimContradictionPreview import (
@@ -1747,6 +1750,62 @@ class ResponseComposer:
             intent="security_posture",
             memory_count=0,
             success=False,
+        )
+
+    def knowledge_reconciliation(
+        self,
+        request: BrainRequest,
+        report: KnowledgeReconciliationReport,
+    ) -> BrainResponse:
+        """Render what is indexed against what research actually uses."""
+        lines = [
+            "Knowledge reconciliation:",
+            *report.lines(),
+            "",
+            "Knowledge-only means indexed locally and not referenced by any "
+            "research run. That is a normal state for anything loaded for local "
+            "search, not a problem and not a cleanup list.",
+        ]
+        if report.broken_references:
+            lines.append(
+                "A broken reference is a research run naming a document the "
+                "local index does not hold. That one is genuine breakage."
+            )
+        lines.append(
+            "This report read state only. Nothing was deleted, merged, or " "repaired."
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="knowledge_reconciliation",
+            memory_count=0,
+            knowledge_reconciliation=report,
+        )
+
+    def knowledge_only_resources(
+        self,
+        request: BrainRequest,
+        report: KnowledgeReconciliationReport,
+    ) -> BrainResponse:
+        """List indexed resources no research run references."""
+        records = report.knowledge_only
+        lines = [f"Knowledge-only resources: {len(records)}"]
+        lines.extend(f"- {record.line()}" for record in records)
+        if not records:
+            lines.append("Every indexed resource is referenced by a research run.")
+        lines.extend(
+            (
+                "",
+                "These are indexed and searchable locally. They are not research "
+                "evidence, and nothing here removes them.",
+            )
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="knowledge_reconciliation",
+            memory_count=0,
+            knowledge_reconciliation=report,
         )
 
     def curiosity_gaps(
