@@ -7,6 +7,7 @@ from core.Application import HypatiaApplication
 from desktop.DesktopController import DesktopController
 from desktop.DesktopDataPaths import DesktopDataPaths
 from desktop.TkinterDesktopWindow import TkinterDesktopWindow
+from eventbus.EventBus import EventBus
 
 
 def main() -> None:
@@ -23,7 +24,11 @@ def main() -> None:
 
     try:
         brain = app.bootstrap.container.resolve(Brain)
-        TkinterDesktopWindow(DesktopController(brain)).run()
+        event_bus = app.bootstrap.container.resolve(EventBus)
+        TkinterDesktopWindow(
+            DesktopController(brain),
+            event_bus=event_bus,
+        ).run()
     finally:
         app.stop()
 

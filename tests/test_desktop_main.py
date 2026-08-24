@@ -14,6 +14,7 @@ if str(SRC_DIR) not in sys.path:
 import desktop_main
 from brain.Brain import Brain
 from desktop.DesktopDataPaths import DesktopDataPaths
+from eventbus.EventBus import EventBus
 
 
 class DesktopMainTests(unittest.TestCase):
@@ -50,7 +51,14 @@ class DesktopMainTests(unittest.TestCase):
             research_source_content_path=paths.research_source_content_path,
         )
         application.start.assert_called_once_with()
-        container.resolve.assert_called_once_with(Brain)
+        # The desktop now also resolves the runtime event bus, so it can
+        # refresh research state from canonical reads when a run changes.
+        # The guarantee here is that both come from the same container,
+        # not that exactly one thing is resolved.
+        self.assertEqual(
+            [call.args[0] for call in container.resolve.call_args_list],
+            [Brain, EventBus],
+        )
         window_type.assert_called_once()
         window.run.assert_called_once_with()
         application.stop.assert_called_once_with()

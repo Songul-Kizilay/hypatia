@@ -19,12 +19,14 @@ from desktop.MarkdownTextSegments import (
     MarkdownStyle,
     markdown_segments,
 )
+from desktop.ResearchStateRefreshSignal import ResearchStateRefreshSignal
 from desktop.ResearchWorkspaceReadModel import (
     ResearchRunSort,
     ResearchRunStatusFacet,
     ResearchSourceCoverageFacet,
     ResearchWorkspaceReadModel,
 )
+from eventbus.EventBus import EventBus
 from knowledge.KnowledgeCitation import KnowledgeCitation
 from research.ResearchClaimConfidence import ResearchClaimConfidence
 from research.ResearchClaimContradictionCandidate import (
@@ -228,13 +230,21 @@ class SessionRenameProcessor(Protocol):
 class TkinterDesktopWindow:
     """Render conversation, session selection, and semantic status locally."""
 
+    #: Set for every constructed window. Declared at class level because
+    #: focused unit tests build bare instances through ``object.__new__`` to
+    #: exercise one method, and the polling loop must stay safe for those
+    #: rather than requiring every such test to know about this subsystem.
+    _research_refresh_signal: ResearchStateRefreshSignal | None = None
+
     def __init__(
         self,
         controller: DesktopController,
         root: tk.Tk | None = None,
+        event_bus: EventBus | None = None,
     ) -> None:
         self._controller = controller
         self._root = root or tk.Tk()
+        self._research_refresh_signal = ResearchStateRefreshSignal(event_bus)
         self._request_runner = DesktopRequestRunner()
         self._request_completion_handler: Callable[[BrainResponse], None] | None = None
         self._request_controls: list[ttk.Button] = []
@@ -473,10 +483,73 @@ class TkinterDesktopWindow:
                 handler(completion.value)
             except Exception:
                 self._status.set("Desktop request failed.")
+        self._apply_pending_research_refresh()
         if self._request_runner.is_running():
             self._update_request_progress()
         if not self._closing:
             self._root.after(_REQUEST_POLL_INTERVAL_MS, self._poll_requests)
+
+    def _apply_pending_research_refresh(self) -> None:
+        """Re-read runs the event bus reported as canonically changed.
+
+        The event supplies only the identifier. Every number shown is read back
+        from the store, so a payload can never put a count on screen that the
+        store does not hold.
+        """
+        if self._research_refresh_signal is None:
+            return
+        changed = self._research_refresh_signal.drain()
+        if not changed:
+            return
+        try:
+            response = self._controller.list_research_runs()
+        except Exception:
+            self._status.set("Research state could not be refreshed.")
+            return
+        if not response.success or not response.research_runs:
+            return
+        self._refresh_research_run_presentations(tuple(response.research_runs))
+
+    def _refresh_research_run_presentations(
+        self,
+        runs: tuple[ResearchRun, ...],
+    ) -> None:
+        """Redraw only the research presentations, keeping the selection.
+
+        The selected run is looked up in the freshly read catalogue rather than
+        reused, so the counts on screen and the run they describe come from the
+        same read.
+        """
+        selected_run_id = self._research_run_id.get().strip()
+        self._research_runs = runs
+        visible = self._sort_research_runs(runs, self._current_research_run_sort())
+        self._visible_research_runs = visible
+        self._research_run_selector.configure(
+            values=tuple(self._research_run_label(run) for run in visible)
+        )
+        self._research_run_catalog_summary.set(
+            self._research_run_catalog_summary_text(runs)
+        )
+        if not selected_run_id:
+            return
+        selected = next(
+            (run for run in visible if run.run_id == selected_run_id),
+            None,
+        )
+        if selected is None:
+            return
+        self._render_research_source_selector(selected)
+        self._render_research_claim_selector(selected)
+        self._render_research_persisted_contradiction_selector(selected)
+        self._render_research_persisted_comparison_note_selector(selected)
+        read_view = ResearchWorkspaceReadModel.run_view(selected)
+        self._research_run_summary.set(read_view.summary)
+        self._research_run_context.set(read_view.context)
+        self._research_run_progress.set(read_view.progress)
+        self._research_workflow_snapshot.set(read_view.workflow_snapshot)
+        self._research_evidence_coverage.set(read_view.evidence_coverage)
+        self._research_assessment_coverage.set(read_view.assessment_coverage)
+        self._research_run_metadata.set(read_view.metadata)
 
     def _update_request_progress(self) -> None:
         """Show elapsed time without inventing a provider completion percentage."""

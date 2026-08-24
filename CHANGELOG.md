@@ -2,6 +2,49 @@
 
 All notable project changes are recorded here.
 
+## [0.3.161] - 2026-08-24
+
+### Fixed
+
+- Displayed research counts did not refresh after a source was accepted. The
+  interface now re-reads the affected run when the event bus reports canonical
+  acceptance.
+
+### Added
+
+- `ResearchStateRefreshSignal` records which runs changed canonically and never
+  records a count. It is thread-safe, because events arrive on the worker thread
+  while the interface drains on its own event-loop thread.
+
+### Safety
+
+- The event says which run changed; every number shown is read back from the
+  store. A payload can never put a count on screen that the store does not hold.
+- Only canonical acceptance marks a run. A local index, a refused attachment,
+  and a cancellation change no run, so none of them refresh anything — tests
+  assert each case leaves the displayed count unchanged.
+- The `attached_to_run` flag is checked as well as the event name, so a payload
+  that does not claim acceptance cannot trigger a refresh under an acceptance
+  name.
+- Draining is destructive and idempotent, so a retry after a failed attachment
+  refreshes exactly once and a duplicate load does not double-count.
+- No polling was added. The existing Tk event-loop poll drains the signal.
+
+### Changed
+
+- Two tests encoded obsolete proxies rather than guarantees. One built bare
+  windows through `object.__new__`; the signal is now declared at class level so
+  focused tests stay safe. The other asserted exactly one container resolution;
+  it now asserts the Brain and the event bus both come from the same container.
+
+### Verification
+
+- The package-aware full local suite contains 2,560 passing automated tests.
+- Sixteen new tests cover signal semantics, self-subscription, and the full
+  chain driven through the real ingestion pipeline: zero to one, index-only,
+  failed attachment, retry, duplicate load, two acceptances, and a replay
+  asserting no event order can show a count the store lacks.
+
 ## [0.3.160] - 2026-08-24
 
 ### Added
