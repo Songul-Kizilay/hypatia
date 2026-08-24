@@ -964,9 +964,16 @@ with optional OpenAI-compatible LLM conversation support.
   keys, direct `.ssh` material, cloud/VCS/package credentials, browser/OS stores,
   and CI secrets using bounded categories. `WindowsRootedOpen` applies it to
   canonical admitted components before native acquisition and repeats it from
-  final handle-derived components after containment and identity proof. Windows
-  trailing dots/spaces and case cannot disguise a class. This remains a floor,
-  not complete secret detection; no override or content tool exists.
+  final handle-derived components after containment but before identity proof.
+  Windows trailing dots/spaces and case cannot disguise a class. This remains
+  a floor, not complete secret detection; no override or content tool exists.
+- The first Windows content-range read boundary is now accepted as a design,
+  not an implementation. It fixes the future platform primitive to one
+  synchronous `ReadFile` call at an explicit 64-bit `OVERLAPPED` offset, an
+  exact `max_bytes + 1` native capacity, read-only final-handle sharing,
+  pre/post handle observations, strict EOF/short-read rules, and
+  close-before-observation return. The current runtime still reads zero local
+  file-content bytes and registers no content capability.
 
 ### Intentionally Not Implemented
 
@@ -1042,14 +1049,18 @@ changed.
 
 ## Next Milestone
 
-Decide the production boundary for a first bounded Windows content-range read
-on an already-proven handle: exact native API, offset and `max_bytes + 1`
-enforcement, short-read semantics, in-place mutation/staleness limits, strict
-UTF-8/BOM handling, close-before-result ownership, and bounded refusal/failure
-mapping. Record that decision before adding any content-read method.
+Implement the accepted, production-inert Windows content-range primitive inside
+`WindowsRootedOpen`: final-handle `FILE_READ_DATA` access with read-only sharing,
+one synchronous `ReadFile` at an explicit `OVERLAPPED` offset, exact
+`max_bytes + 1` capacity, pre/post handle observations, strict EOF/short-read
+classification, and close-before-observation return. Follow
+`docs/Security/Windows_Content_Range_Read_Decision.md` exactly.
 
-Keep the decision milestone free of content bytes, `FILESYSTEM_READ` runtime
-registration, desktop control, model context, memory, research, evidence,
-persistence, generic telemetry content, or operator override. POSIX/Linux
-rooted-open remains a later platform milestone rather than being mixed into the
-Windows read-boundary decision.
+Keep that implementation milestone free of `FilesystemReadTool`,
+`FILESYSTEM_READ` runtime registration, desktop control, text presentation,
+model context, memory, research, evidence, persistence, generic telemetry
+content, automatic continuation, or operator override. The platform primitive
+may return only a bounded raw observation after all handles close; UTF-8/BOM
+interpretation belongs to the later Tool milestone. POSIX/Linux rooted-open
+remains a later platform milestone rather than being mixed into this Windows
+implementation.

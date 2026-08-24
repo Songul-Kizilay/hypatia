@@ -287,6 +287,15 @@ native handle or path, and registers no capability. The Windows NTFS rooted-open
 blocker is closed; the POSIX strategy remains open, and no implementation may
 silently fall back to a path-only open on any platform.
 
+The exact next Windows data boundary is now accepted in
+[Windows_Content_Range_Read_Decision.md](Windows_Content_Range_Read_Decision.md).
+It selects one synchronous `ReadFile` call with an explicit `OVERLAPPED`
+64-bit offset, a hard `max_bytes + 1` native capacity, read-only final-handle
+sharing, pre/post handle observations, strict EOF/short-read rules, and
+close-before-result ownership. The decision is not an implementation:
+`WindowsRootedOpen` still has no read method and `FILESYSTEM_READ` remains
+unregistered.
+
 Even after those proofs, an attacker with write access to an already-open
 regular file may change bytes in place without changing its identity. The read
 therefore describes one moment, not an immutable file; §19 owns that staleness
@@ -338,8 +347,10 @@ Rules for that table:
    wording naming the *class*, not the path. A future content tool must map that
    structural value to `INVOCATION_DECLINED`; it must not parse the sentence.
 4. Classification currently happens before native acquisition and repeats
-   after final-handle containment and identity proof, so a replacement cannot
-   turn an ordinary admitted name into a sensitive final name without refusal.
+   after final-handle containment but before identity proof. This makes a
+   sensitive final name refuse as a sensitive class rather than being reported
+   only as an identity mismatch; a replacement still cannot turn an ordinary
+   admitted name into a sensitive final name without refusal.
 5. The operator override is **DEFERRED**. Phase A refuses these outright. An
    override needs its own UX design (§16) and probably its own confirmation, and
    shipping it alongside the first read would mean the safe default existed for
@@ -407,6 +418,12 @@ and a small value count does not make a large string bounded.
 | Multiple ranges | **Separate invocations, each separately authorized.** |
 | Automatic continuation | **Forbidden.** No crawling to the end of a file. |
 
+The accepted Windows primitive may acquire exactly one additional internal
+lookahead byte (`max_bytes + 1`) solely to cross-check truncation. That byte is
+not returned content: it is discarded before NUL detection, BOM handling,
+decoding, telemetry, persistence, or result construction. `bytes_returned` and
+the 64 KiB payload ceiling count only the retained authorized range.
+
 Measured and confirmed available: `os.read(fd, n)` returns at most `n`, is
 EOF-bounded (requested 1,000 at offset 99,990 of a 100,000-byte file, got 10),
 and returns 0 bytes past EOF rather than raising.
@@ -472,10 +489,10 @@ claims in the text trustworthy.
 
 A range that splits a multi-byte character at either end is a real case.
 **DECIDED for Phase A: decline the range as invalid UTF-8.** The tool does not
-read outside the authorized byte range to search for a character boundary, does
-not trim caller-requested bytes silently, and does not replace them. The
-operator may authorize a differently aligned range. A later character-oriented
-capability would be a different contract.
+use the fixed truncation-only lookahead to search for or repair a character
+boundary, does not trim caller-requested bytes silently, and does not replace
+them. The operator may authorize a differently aligned range. A later
+character-oriented capability would be a different contract.
 
 ---
 
@@ -1081,6 +1098,7 @@ the same style of guard the metadata tool already carries.
 | Knowledge-graph ingestion | **DEFERRED** | Needs provenance type first |
 | Split multi-byte character at range edge | **DECIDED** | Phase A declines; no read outside the authorized range |
 | Windows root-handle primitive | **DECIDED, CURRENT** | `WindowsRootedOpen` performs an NTFS-only `NtCreateFile` root-relative, no-follow component walk; zero bytes and no runtime registration |
+| Windows bounded content-range primitive | **DECIDED, NOT IMPLEMENTED** | One synchronous `ReadFile` with explicit `OVERLAPPED` offset, `max_bytes + 1` capacity, pre/post observation and close-before-result; see the Windows content-range ADR |
 | POSIX descriptor-relative primitive | **OPEN** | Measure supported platforms; **Phase A blocker for each platform** |
 | Remote-eligibility granularity | **OPEN** | Endpoint locality exists; disclosure authority does not |
 
@@ -1152,6 +1170,7 @@ for a shipped API.
 | `ToolExecutionOutcome.request_id` | CURRENT, required and immutable; `ToolExecutionService` validates one value before telemetry and shares it with every lifecycle event for the invocation |
 | `WindowsRootedOpen` | CURRENT production-inert NTFS foundation in `src/tools`; accepted ADR in `docs/Security/Windows_Rooted_Open_Production_Decision.md`; no content read or runtime registration |
 | `FilesystemSensitivePathPolicy`, `FilesystemSensitiveClass` | CURRENT production-inert preflight/final-handle name-classification floor; no content inspection or override |
+| Windows content-range read decision | CURRENT decision document in `docs/Security/Windows_Content_Range_Read_Decision.md`; no `read_range` method or content byte exists |
 | `SourceLoadStage` | CURRENT and distinguishes `INDEXED_WITHOUT_RUN` from `ACCEPTED_INTO_RUN` |
 | `LLMLearnedMemoryCandidateExtractor`, `LearnedMemoryAuditApplicationService` | CURRENT; no file-content integration exists |
 | `SecurityAgentApplicationService`, `FailureMemoryApplicationService` | CURRENT; no file-content or Tool Layer failure ingestion is implied by their existence |
@@ -1163,4 +1182,6 @@ The sensitive-name floor integrated with the production-inert Windows
 rooted-open foundation is versioned as `v0.3.177`. It temporarily opens only
 attribute-capable handles to prove containment, identity, and final-name
 classification, reads zero content bytes, and remains absent from the Tool
-Runtime. The desktop does not project content identity.
+Runtime. The desktop does not project content identity. The separately accepted
+Windows content-range ADR changes no runtime fact; it only constrains the next
+production-inert implementation milestone.

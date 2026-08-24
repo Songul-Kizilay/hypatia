@@ -13,6 +13,9 @@
 **Capability state:** `FILESYSTEM_READ` remains unregistered. No file-content
 read is authorized or implemented by this decision.
 
+**Next boundary:** the still-unimplemented read contract is accepted separately
+in [Windows_Content_Range_Read_Decision.md](Windows_Content_Range_Read_Decision.md).
+
 ## 1. Decision
 
 Hypatia has moved the measured Windows rooted-open construction from the

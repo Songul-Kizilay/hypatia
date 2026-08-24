@@ -153,6 +153,10 @@ Hypatia currently runs as a local-first CLI. The initial security boundary is:
   The fixed-system-DLL, handle-relative, no-follow NTFS construction is
   implemented with bounded failures and zero content bytes. POSIX/Linux and
   non-NTFS filesystems remain separate, unsupported milestones.
+- [Windows content-range read production decision](Windows_Content_Range_Read_Decision.md).
+  One future synchronous `ReadFile` range now has an accepted API, byte-bound,
+  EOF, staleness, UTF-8/BOM and close-before-result contract. It is a decision
+  only: no read method, content byte, registered capability or UI exists.
 
 The current full-repository security baseline is recorded in the Codex Security
 scan completed for v0.3 planning. Before Hypatia gains a networked UI, plugins,
