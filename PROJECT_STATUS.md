@@ -997,9 +997,17 @@ changed.
 
 ## Next Milestone
 
-Define one bounded local Research-plan snapshot store behind the immutable plan
-domain. The store should use a versioned schema, exact UTF-8 bounds, deterministic
-ordering, and atomic replacement with rollback-safe failure behavior. Keep this
-increment free of Brain, desktop, `ResearchRun`, provider, network, LLM,
-event-bus, confirmation, automatic source selection, and execution integration
-until direct persistence tests establish the boundary.
+Add `TEXT_STATISTICS` as the second concrete tool, because it is the only
+already-declared capability that needs no new effect vocabulary and touches
+nothing: it is a pure function of text handed to it in the invocation. That makes
+it the smallest possible test of whether the layer can carry a tool that takes
+arguments, which `ClockReadTool` deliberately does not.
+
+A read-only filesystem listing tool is the more useful next capability but not
+the smaller one. It would require a new `ToolEffect`, a new `ToolCapability`, a
+root-confinement rule, symlink and path-traversal handling, and a decision about
+whether names themselves are sensitive. Those are real design questions and
+should not ride along with the first argument-accepting tool.
+
+Keep this increment free of chat wiring, evidence integration, and any capability
+that reaches the filesystem, network, process table, or model.
