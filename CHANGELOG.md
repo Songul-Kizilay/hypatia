@@ -2,6 +2,48 @@
 
 All notable project changes are recorded here.
 
+## [0.3.158] - 2026-08-24
+
+### Fixed
+
+- The same resource stored under two document IDs read as two independent
+  sources to everything that counted support, so a claim resting on one page
+  could satisfy the corroboration ceiling and a hypothesis could look supported
+  by sources it did not have. Support is now counted over resource identities.
+
+### Added
+
+- `SourceIdentity`, a conservative canonical identity for a source URL:
+  lowercased scheme and host, dropped default port, dropped `www.` prefix, one
+  dropped trailing slash. The query string is kept, path case is kept, and
+  titles are never compared.
+
+### Safety
+
+- Storage stays history-preserving. No record is merged, rewritten, or deleted;
+  only counting changed. A test asserts both records and both evidence entries
+  survive.
+- Normalisation is conservative because the errors are asymmetric: a missed
+  merge overcounts support, which the audit flags, while a wrong merge silently
+  discards a genuinely independent source, which nothing would flag.
+- Claim calibration, hypothesis appraisal, and thin-claim detection count
+  resources. Two different pages on one host still corroborate; the same page
+  twice does not.
+- Source reputation counts a resource once toward its standing, so a duplicate
+  cannot reach a standing on its own. Accepted-record counts stay as stored.
+- The audit's duplicate finding stays and now matches on identity rather than
+  exact URL. It is redundant with the protection above, which is why it is worth
+  keeping: a check that is redundant today is the one that notices a regression.
+
+### Verification
+
+- The package-aware full local suite contains 2,511 passing automated tests.
+- Twenty-one new tests cover identity equivalence and non-equivalence
+  table-driven, calibration and hypothesis corroboration for duplicated versus
+  distinct pages, thin-claim detection, reputation sample counting and standing
+  thresholds, audit detection of equivalent forms, and the preservation of every
+  stored record.
+
 ## [0.3.157] - 2026-08-24
 
 ### Fixed

@@ -12,6 +12,11 @@ it was any good.
 
 Superseded assessments are excluded, so changing your mind about one page
 actually changes the record rather than adding to it.
+
+Assessing the same page twice counts once toward the standing. The sample is
+meant to say how often this origin has produced work we judged well, and the same
+page judged twice is one page's worth of evidence about the host. Accepted-record
+counts stay as stored, because how many records exist is a storage fact.
 """
 
 from __future__ import annotations
@@ -21,6 +26,7 @@ from dataclasses import replace
 
 from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRun import ResearchRun
+from research.SourceIdentity import identity_of
 from research.SourceOrigin import origin_of
 from research.SourceReputation import SourceReputation
 
@@ -37,8 +43,10 @@ class SourceReputationLedger:
         """Return one reputation per origin, most-assessed first."""
         reputations: dict[str, SourceReputation] = {}
         seen_runs: dict[str, set[str]] = {}
+        graded_resources: dict[str, set[str]] = {}
         for run in runs:
             origins = self._origins(run)
+            urls = {source.document_id: source.url for source in run.sources}
             trust = self._active_trust(run)
             cited = self._cited_counts(run, origins)
             for document_id, origin in origins.items():
@@ -48,7 +56,13 @@ class SourceReputationLedger:
                     accepted_count=current.accepted_count + 1,
                     evidence_count=current.evidence_count + cited.get(document_id, 0),
                 )
-                current = self._with_assessment(current, trust.get(document_id))
+                resource = identity_of(urls.get(document_id, "")) or document_id
+                graded = graded_resources.setdefault(origin, set())
+                if resource not in graded:
+                    judged = self._with_assessment(current, trust.get(document_id))
+                    if judged is not current:
+                        graded.add(resource)
+                    current = judged
                 reputations[origin] = current
                 seen_runs.setdefault(origin, set()).add(run.run_id)
         finished = [

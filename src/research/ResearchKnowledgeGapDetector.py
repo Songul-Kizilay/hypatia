@@ -20,6 +20,7 @@ from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchKnowledgeGap import MAX_GAP_SUMMARY_LENGTH, ResearchKnowledgeGap
 from research.ResearchKnowledgeGapKind import ResearchKnowledgeGapKind
 from research.ResearchRun import ResearchRun
+from research.SourceIdentity import identity_of
 
 MAX_GAPS_PER_RUN = 50
 RUN_SUBJECT = ""
@@ -93,8 +94,13 @@ class ResearchKnowledgeGapDetector:
             for record in run.claim_contradictions
             for claim_id in record.claim_ids
         }
+        identities = {
+            source.document_id: identity_of(source.url) for source in run.sources
+        }
         evidence_sources = {
-            record.evidence_id: record.source_document_id for record in run.evidence
+            record.evidence_id: identities.get(record.source_document_id)
+            or record.source_document_id
+            for record in run.evidence
         }
         gaps: list[ResearchKnowledgeGap] = []
         for claim in self._active_claims(run):
@@ -124,7 +130,8 @@ class ResearchKnowledgeGapDetector:
                 continue
             if (
                 claim.epistemic_state in SETTLED_STATES
-                and self._distinct_source_count(claim, evidence_sources) == 1
+                and self._distinct_source_count(claim, evidence_sources, identities)
+                == 1
             ):
                 gaps.append(
                     self._gap(
@@ -220,14 +227,24 @@ class ResearchKnowledgeGapDetector:
     def _distinct_source_count(
         claim: ResearchClaimRecord,
         evidence_sources: dict[str, str],
+        identities: dict[str, str],
     ) -> int:
-        documents = {
+        """Count independent resources, so one page cannot look like two.
+
+        The claim's own document IDs are mapped through the identity table too.
+        Leaving them raw would add the duplicate records back after the evidence
+        side had already collapsed them.
+        """
+        resources = {
             evidence_sources[evidence_id]
             for evidence_id in claim.evidence_ids
             if evidence_id in evidence_sources
         }
-        documents.update(claim.source_document_ids)
-        return len(documents)
+        resources.update(
+            identities.get(document) or document
+            for document in claim.source_document_ids
+        )
+        return len(resources)
 
     @staticmethod
     def _gap(

@@ -27,6 +27,7 @@ from research.ResearchClaimRecord import ResearchClaimRecord
 from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRun import ResearchRun
+from research.SourceIdentity import identity_of
 
 _STATE_RANK: dict[ResearchEpistemicState, int] = {
     ResearchEpistemicState.CONTRADICTED: 0,
@@ -73,6 +74,9 @@ class ResearchClaimCalibrator:
         evidence_sources = {
             record.evidence_id: record.source_document_id for record in run.evidence
         }
+        identities = {
+            source.document_id: identity_of(source.url) for source in run.sources
+        }
         trust = self._active_trust(run)
         return tuple(
             self._calibrate(claim, profile)
@@ -82,6 +86,7 @@ class ResearchClaimCalibrator:
                 self._profile(
                     claim,
                     evidence_sources,
+                    identities,
                     trust,
                     contradicted=claim.claim_id in contradicted,
                 ),
@@ -166,21 +171,29 @@ class ResearchClaimCalibrator:
     def _profile(
         claim: ResearchClaimRecord,
         evidence_sources: dict[str, str],
+        identities: dict[str, str],
         trust: dict[str, ResearchInformationTrust],
         *,
         contradicted: bool,
     ) -> EvidenceSupportProfile:
+        """Count independent resources, not stored records.
+
+        Two records of the same page are not two sources. Counting documents
+        would let one page satisfy the corroboration rule on its own, which is
+        exactly the inflation the ceilings exist to prevent.
+        """
         documents = {
             evidence_sources[evidence_id]
             for evidence_id in claim.evidence_ids
             if evidence_id in evidence_sources
         }
         documents.update(claim.source_document_ids)
+        resources = {identities.get(document) or document for document in documents}
         assessed = [trust[document] for document in documents if document in trust]
         return EvidenceSupportProfile(
-            source_count=len(documents),
+            source_count=len(resources),
             evidence_count=len(claim.evidence_ids),
-            assessed_source_count=len(assessed),
+            assessed_source_count=min(len(assessed), len(resources)),
             lowest_trust=(
                 min(assessed, key=lambda value: _TRUST_RANK[value])
                 if assessed

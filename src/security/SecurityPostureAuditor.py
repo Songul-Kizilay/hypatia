@@ -40,6 +40,7 @@ from research.ResearchSourceRecord import (
     EXTERNAL_SOURCE_TAINT_LABEL,
     ResearchSourceRecord,
 )
+from research.SourceIdentity import identity_of
 from security.SecurityFinding import MAX_FINDING_DETAIL_LENGTH, SecurityFinding
 from security.SecurityFindingKind import SecurityFindingKind
 from security.SecurityPostureReport import SecurityPostureReport
@@ -182,22 +183,24 @@ class SecurityPostureAuditor:
     def _duplicate_findings(self, run: ResearchRun) -> list[SecurityFinding]:
         """Find one page accepted twice, which would fake corroboration.
 
-        Two accepted sources sharing a URL read as two independent sources to
-        anything counting them, so a claim resting on one page can look
-        corroborated. The run type checks for duplicate document IDs; it does
-        not check for duplicate URLs.
+        Two accepted sources naming the same resource used to read as two
+        independent sources to anything counting them. Support counting now
+        works over resource identities, so the inflation is fixed; this check
+        stays because the duplicate records are still worth knowing about, and
+        because a check that is currently redundant is the one that notices when
+        the protection regresses.
         """
-        counts = Counter(source.url for source in run.sources)
+        counts = Counter(identity_of(source.url) for source in run.sources)
         return [
             self._finding(
                 run,
                 SecurityFindingKind.DUPLICATE_SOURCE_URL,
                 source.document_id,
-                "This URL was accepted more than once, so one page can read as "
-                "several independent sources.",
+                "This resource was accepted more than once. Support counting "
+                "already treats it as one source; the duplicate records remain.",
             )
             for source in run.sources
-            if counts[source.url] > 1
+            if counts[identity_of(source.url)] > 1
         ]
 
     @staticmethod

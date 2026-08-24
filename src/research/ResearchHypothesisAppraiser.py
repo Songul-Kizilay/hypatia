@@ -19,6 +19,7 @@ from research.HypothesisAppraisal import HypothesisAppraisal
 from research.HypothesisStatus import HypothesisStatus
 from research.ResearchHypothesis import ResearchHypothesis
 from research.ResearchRun import ResearchRun
+from research.SourceIdentity import identity_of
 
 MIN_SOURCES_FOR_SUPPORT = 2
 
@@ -36,8 +37,13 @@ class ResearchHypothesisAppraiser:
             raise ResearchError("Appraisal requires a hypothesis.")
         if not isinstance(run, ResearchRun):
             raise ResearchError("Appraisal requires a research run.")
+        identities = {
+            source.document_id: identity_of(source.url) for source in run.sources
+        }
         sources = {
-            record.evidence_id: record.source_document_id for record in run.evidence
+            record.evidence_id: identities.get(record.source_document_id)
+            or record.source_document_id
+            for record in run.evidence
         }
         supporting = self._sources(hypothesis.supporting_evidence_ids, sources)
         opposing = self._sources(hypothesis.opposing_evidence_ids, sources)
@@ -70,6 +76,11 @@ class ResearchHypothesisAppraiser:
         evidence_ids: tuple[str, ...],
         sources: dict[str, str],
     ) -> set[str]:
+        """Return the distinct resources behind this evidence, not the records.
+
+        Support requires more than one source; two records of the same page must
+        not satisfy that between them.
+        """
         return {
             sources[evidence_id]
             for evidence_id in evidence_ids
