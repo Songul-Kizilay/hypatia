@@ -10,11 +10,12 @@
 
 **Sensitive-name integration:** `v0.3.177 (Genesis)`
 
-**Capability state:** `FILESYSTEM_READ` remains unregistered. No file-content
-read is authorized or implemented by this decision.
+**Content-range integration:** `v0.3.178 (Genesis)`
 
-**Next boundary:** the still-unimplemented read contract is accepted separately
-in [Windows_Content_Range_Read_Decision.md](Windows_Content_Range_Read_Decision.md).
+**Capability state:** `FILESYSTEM_READ` remains unregistered. The separate
+[Windows content-range decision](Windows_Content_Range_Read_Decision.md) now
+owns one production-inert raw primitive; no Tool or product surface can invoke
+it.
 
 ## 1. Decision
 
@@ -38,8 +39,9 @@ That boundary:
 10. expose no raw handle, absolute path, OS error text, content, Tool Layer
    capability, runtime registration, or presentation integration.
 
-This is a *foundation module*, not `filesystem_read`. The implementation reads
-zero content bytes and remains absent from `ToolRuntime`.
+This is a *foundation module*, not `filesystem_read`. Its original opaque
+`acquire` path reads zero content bytes. The separately constrained
+`read_range` path remains absent from `ToolRuntime` and every product surface.
 
 ## 2. Evidence used
 

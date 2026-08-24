@@ -1,17 +1,21 @@
 # Windows Content-Range Read Production Decision
 
-**Status: ACCEPTED DESIGN, NOT IMPLEMENTED.**
+**Status: ACCEPTED AND IMPLEMENTED AS A PRODUCTION-INERT PLATFORM PRIMITIVE.**
 
 **Decision date:** 2026-08-24
 
 **Runtime at decision:** `v0.3.177 (Genesis)`
 
-**Capability state:** `FILESYSTEM_READ` remains unregistered. The current
-production code still reads zero file-content bytes.
+**Implemented in:** `v0.3.178 (Genesis)`
+
+**Capability state:** `FILESYSTEM_READ` remains unregistered. Production owns
+one bounded raw `read_range` primitive, but no Tool, desktop, model, memory,
+research, evidence, persistence, Linux/POSIX, or generic content-telemetry path
+can invoke or receive it.
 
 ## 1. Decision
 
-Hypatia's first Windows content read will be one bounded, synchronous range
+Hypatia's first Windows content read is one bounded, synchronous range
 from the final NTFS handle already acquired by the production rooted-open
 proof. It will:
 
@@ -40,8 +44,8 @@ proof. It will:
 10. preserve the existing 64 KiB payload ceiling, strict UTF-8/BOM policy,
     binary refusal, local-only taint and generic-telemetry exclusion.
 
-This decision authorizes a later production-*inert* platform primitive only.
-It does not authorize a Tool implementation, registration, desktop control,
+`v0.3.178` implements this production-*inert* platform primitive only. This
+decision does not authorize a Tool implementation, registration, desktop control,
 model context, memory, research, evidence, persistence, remote disclosure,
 automatic continuation, or sensitive-file override.
 
@@ -87,7 +91,7 @@ the content contract.
 
 `ReadFile` is the narrow documented Win32 surface that fits the existing
 synchronous handle. A non-null `OVERLAPPED` gives each call an explicit offset,
-so the future implementation does not depend on an earlier mutable seek.
+so the implementation does not depend on an earlier mutable seek.
 
 The alternatives are rejected for the first boundary:
 
@@ -134,19 +138,19 @@ This is not an immutable snapshot guarantee. An already-created mapping,
 filesystem filter, delayed timestamp update or lower-level storage behaviour
 may still make an in-place change invisible. §8 states the residual limit.
 
-## 5. Proposed API ownership
+## 5. Implemented API ownership
 
-The later implementation will keep the operation inside
-`src/tools/WindowsRootedOpen.py`. The proposed shape is one bounded method on
-the owner, not a handle method exposed to a tool:
+The implementation keeps the operation inside
+`src/tools/WindowsRootedOpen.py`. Its shape is one bounded method on the owner,
+not a handle method exposed to a tool:
 
 ```text
 WindowsRootedOpen.read_range(relative, *, offset, max_bytes)
 ```
 
-The name is **PROPOSED**, not a current API. Its implementation will internally
-perform the rooted acquisition, one native read, pre/post checks and all closes.
-Only after successful closure may it return one immutable bounded observation
+The method performs the rooted acquisition, one native read, pre/post checks
+and all closes. Only after successful closure may it return one immutable
+`WindowsContentRangeObservation`
 containing:
 
 - retained raw bytes, no more than `max_bytes`;
@@ -163,7 +167,7 @@ Windows platform module does not become a presentation or Tool Layer module.
 
 ## 6. Range validation and the hard byte ceiling
 
-The later method must validate before native acquisition:
+The method validates before native acquisition:
 
 - `offset` is an integer but not a boolean, in
   `0..MAX_CONTENT_OFFSET` (`2^63 - 1`);
@@ -194,7 +198,7 @@ zero content bytes with an accurate truncation flag.
 
 ## 7. Exact `ReadFile`, EOF and short-read semantics
 
-The future implementation issues exactly one `ReadFile` call after the rooted
+The implementation issues exactly one `ReadFile` call after the rooted
 proof and pre-read snapshot. There is no hidden loop or retry.
 
 Let:
@@ -236,8 +240,7 @@ it.
 ## 8. Pre/post observation and staleness
 
 Immediately before `ReadFile`, and again immediately after it, the same final
-handle is queried with `GetFileInformationByHandle`. The later implementation
-compares:
+handle is queried with `GetFileInformationByHandle`. The implementation compares:
 
 - volume serial plus 64-bit file index;
 - 64-bit file size; and
@@ -252,10 +255,18 @@ The read timestamp is captured from an injected UTC clock after native read
 completion and before handle closure. The clock is provenance, not a timeout
 or an authorization source.
 
+The raw 100-nanosecond `FILETIME` participates in the pre/post comparison.
+Python `datetime` stores only microseconds, so `modified_utc` intentionally
+drops the final sub-microsecond digit; this presentation limit does not weaken
+the raw staleness comparison.
+
 These checks detect observed change; they do not prove absence of change.
 Matching identity, size and time can miss in-place replacement of bytes,
 timestamp restoration, caching/delayed updates, identity reuse outside the
 accepted NTFS assumptions, or a change that occurs after the post-read query.
+The admitted `st_dev` value is narrowed to the Windows volume-serial width only
+for the existing local-NTFS identity comparison; no collision-resistance claim
+is made beyond that accepted boundary.
 The returned payload therefore describes one observed moment and must never be
 labelled “immutable”, “verified unchanged” or “snapshot”.
 
@@ -286,7 +297,7 @@ current payload invariant.
 
 ## 10. Close-before-result ownership
 
-The future implementation must preserve this ownership order:
+The implementation preserves this ownership order:
 
 ```text
 rooted admission and proof
@@ -312,8 +323,7 @@ handle from another thread in the first milestone; adding
 
 ## 11. Bounded failures and future Tool mapping
 
-The implementation milestone may add exactly these low-level categories if
-needed:
+The implementation adds exactly these low-level categories:
 
 | Proposed low-level failure | Meaning |
 | --- | --- |
@@ -342,9 +352,9 @@ The future Tool mapping is:
 The mapping is structural. No caller reads an English detail sentence or raw
 native error to decide disposition.
 
-## 12. Required implementation sequence
+## 12. Implemented sequence
 
-The first production-inert implementation must perform this order:
+The first production-inert implementation performs this order:
 
 ```text
 1. validate offset and max_bytes
@@ -375,7 +385,7 @@ The first production-inert implementation must perform this order:
 No step may reopen a path, expose a handle, perform a second read, or convert a
 failed close into success.
 
-## 13. Verification gates for the later implementation
+## 13. Verification gates
 
 Deterministic fake-API tests must cover:
 
@@ -400,6 +410,15 @@ EOF, non-zero-offset, non-ASCII UTF-8, BOM, invalid UTF-8 and active-writer
 cases. Packaging must bind `ReadFile` from the system `kernel32.dll` lazily and
 repeat the normal startup smoke.
 
+The implemented `v0.3.178` boundary has 64 focused rooted-open tests. The four
+focused sensitive-path, rooted-open, payload and Tool-contract modules have 119
+passing tests; the package-aware repository suite has 3,290 passing tests with
+three platform-dependent skips. Black, Ruff, the scoped MyPy gate and
+whitespace validation pass. The local Windows onedir package builds and its
+hidden-window startup smoke creates the isolated session registry without
+disabling or bypassing a host security control. GitHub's Windows and Linux
+package workflows remain the independent post-push gates for the exact commit.
+
 The future Tool milestone separately tests NUL, strict UTF-8, range-split
 multi-byte characters, payload invariants, effect authorization and lifecycle
 privacy. Passing platform tests alone will not authorize Tool registration.
@@ -408,7 +427,6 @@ privacy. Passing platform tests alone will not authorize Tool registration.
 
 This ADR does not authorize or design:
 
-- a current `read_range` method or any content byte in production;
 - `FilesystemReadTool` implementation or `ToolRuntime` registration;
 - desktop preview or authorization controls;
 - model, memory, RAG, research, graph, evidence or agent ingestion;
@@ -444,20 +462,23 @@ Each remains a separate decision and separately authorized milestone.
 - A matching pre/post observation does not prove immutable content.
 - A byte range can split UTF-8 and be declined even when the whole file is
   valid text.
-- Windows content reading will remain unavailable until a later implementation
-  milestone passes every gate above, and Linux still needs its own measured
+- User-invocable Windows content reading remains unavailable until a later Tool
+  milestone passes its separate gates, and Linux still needs its own measured
   descriptor-relative primitive.
 
 These costs are accepted. The first content boundary should be small enough to
 explain exactly, not broad enough to hide ambiguity.
 
-## 16. Repository reality at this decision
+## 16. Repository reality after implementation
 
-At `v0.3.177`:
+At `v0.3.178`:
 
 - `WindowsRootedOpen` is production-owned and production-inert;
-- `WindowsOpenedFile` exposes no handle, path or read method;
-- the final native handle has attribute access only;
+- `WindowsOpenedFile` still exposes no handle, path or content;
+- `read_range` acquires its final handle once, in the same root-relative walk,
+  with exact data-read rights and read-only sharing;
+- `WindowsContentRangeObservation` is immutable and carries no handle or
+  absolute/native path;
 - `FilesystemSensitivePathPolicy` runs before native acquisition and again on
   the final handle-derived name;
 - `FilesystemContentPayload`, the separate content effect and the
@@ -465,8 +486,9 @@ At `v0.3.177`:
 - `ToolRuntime` does not register `FILESYSTEM_READ`;
 - desktop, model, memory, research, evidence and persistence receive no local
   file content; and
-- the repository contains no `ReadFile`, `NtReadFile`, `SetFilePointerEx`,
-  memory-map or Python content-open implementation in this boundary.
+- the platform primitive binds one `ReadFile` call from fixed `kernel32.dll`;
+  no `NtReadFile`, `SetFilePointerEx`, memory-map, Python content-open, retry,
+  loop, or path reopen exists in this boundary.
 
-This document changes no one of those facts. It records the next implementation
-contract so code cannot quietly choose a wider one.
+The implementation is intentionally below the Tool boundary. Passing its
+platform tests does not register or authorize `FILESYSTEM_READ`.

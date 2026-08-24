@@ -1,7 +1,10 @@
 # Filesystem Content Access — Security Design
 
 **Status: FOUNDATION PARTIALLY IMPLEMENTED; CONTENT ACCESS UNAVAILABLE.** No
-content-reading tool or registered runtime path exists as of `v0.3.177`. The
+content-reading tool or registered runtime path exists as of `v0.3.178`. The
+Windows platform layer now owns one bounded raw `read_range` primitive, but it
+is production-inert and unreachable from `ToolRuntime`, desktop, model, memory,
+research, evidence, persistence, Linux/POSIX, and generic content telemetry. The
 production-inert Windows NTFS rooted-open boundary, sensitive-name floor, bounded
 `FilesystemContentPayload`, its success-only `ToolResult.content` channel, the
 separate content effect, the unregistered capability value, and the code-owned
@@ -281,20 +284,21 @@ The experiment remains independent evidence rather than a runtime dependency.
 The production API surface, module ownership, dependency-free packaging, handle
 lifetime, NTFS-only initial support, and bounded error mapping are recorded in
 [Windows_Rooted_Open_Production_Decision.md](Windows_Rooted_Open_Production_Decision.md).
-`WindowsRootedOpen` now implements that production-inert boundary with
-deterministic and native adversarial coverage. It reads zero bytes, exposes no
-native handle or path, and registers no capability. The Windows NTFS rooted-open
-blocker is closed; the POSIX strategy remains open, and no implementation may
-silently fall back to a path-only open on any platform.
+`WindowsRootedOpen` implements that production-inert boundary with deterministic
+and native adversarial coverage. Its ordinary `acquire` path reads zero bytes;
+neither acquisition mode exposes a native handle or absolute path, and no
+capability is registered. The Windows NTFS rooted-open blocker is closed; the
+POSIX strategy remains open, and no implementation may silently fall back to a
+path-only open on any platform.
 
-The exact next Windows data boundary is now accepted in
+The exact Windows data boundary is accepted and implemented production-inert in
 [Windows_Content_Range_Read_Decision.md](Windows_Content_Range_Read_Decision.md).
 It selects one synchronous `ReadFile` call with an explicit `OVERLAPPED`
 64-bit offset, a hard `max_bytes + 1` native capacity, read-only final-handle
 sharing, pre/post handle observations, strict EOF/short-read rules, and
-close-before-result ownership. The decision is not an implementation:
-`WindowsRootedOpen` still has no read method and `FILESYSTEM_READ` remains
-unregistered.
+close-before-result ownership. `WindowsRootedOpen.read_range` now implements
+that bounded raw platform contract; `FILESYSTEM_READ` remains unregistered and
+no Tool or product surface can invoke it.
 
 Even after those proofs, an attacker with write access to an already-open
 regular file may change bytes in place without changing its identity. The read
@@ -1098,7 +1102,7 @@ the same style of guard the metadata tool already carries.
 | Knowledge-graph ingestion | **DEFERRED** | Needs provenance type first |
 | Split multi-byte character at range edge | **DECIDED** | Phase A declines; no read outside the authorized range |
 | Windows root-handle primitive | **DECIDED, CURRENT** | `WindowsRootedOpen` performs an NTFS-only `NtCreateFile` root-relative, no-follow component walk; zero bytes and no runtime registration |
-| Windows bounded content-range primitive | **DECIDED, NOT IMPLEMENTED** | One synchronous `ReadFile` with explicit `OVERLAPPED` offset, `max_bytes + 1` capacity, pre/post observation and close-before-result; see the Windows content-range ADR |
+| Windows bounded content-range primitive | **CURRENT, PRODUCTION-INERT** | One synchronous `ReadFile` with explicit `OVERLAPPED` offset, `max_bytes + 1` capacity, pre/post observation and close-before-result; no Tool/runtime registration |
 | POSIX descriptor-relative primitive | **OPEN** | Measure supported platforms; **Phase A blocker for each platform** |
 | Remote-eligibility granularity | **OPEN** | Endpoint locality exists; disclosure authority does not |
 
@@ -1147,7 +1151,7 @@ the same style of guard the metadata tool already carries.
 
 ---
 
-## 29. Repository reference validation (`v0.3.177`)
+## 29. Repository reference validation (`v0.3.178`)
 
 This table records the source check completed before accepting the document.
 It is intentionally explicit so a future milestone cannot mistake a design name
@@ -1170,7 +1174,7 @@ for a shipped API.
 | `ToolExecutionOutcome.request_id` | CURRENT, required and immutable; `ToolExecutionService` validates one value before telemetry and shares it with every lifecycle event for the invocation |
 | `WindowsRootedOpen` | CURRENT production-inert NTFS foundation in `src/tools`; accepted ADR in `docs/Security/Windows_Rooted_Open_Production_Decision.md`; no content read or runtime registration |
 | `FilesystemSensitivePathPolicy`, `FilesystemSensitiveClass` | CURRENT production-inert preflight/final-handle name-classification floor; no content inspection or override |
-| Windows content-range read decision | CURRENT decision document in `docs/Security/Windows_Content_Range_Read_Decision.md`; no `read_range` method or content byte exists |
+| `WindowsContentRangeObservation`, `WindowsRootedOpen.read_range` | CURRENT production-inert Windows raw range boundary; one bounded read after rooted proof, no handle/path exposure and no Tool/runtime registration |
 | `SourceLoadStage` | CURRENT and distinguishes `INDEXED_WITHOUT_RUN` from `ACCEPTED_INTO_RUN` |
 | `LLMLearnedMemoryCandidateExtractor`, `LearnedMemoryAuditApplicationService` | CURRENT; no file-content integration exists |
 | `SecurityAgentApplicationService`, `FailureMemoryApplicationService` | CURRENT; no file-content or Tool Layer failure ingestion is implied by their existence |
@@ -1178,10 +1182,10 @@ for a shipped API.
 | `filesystem_read` tool and runtime registration | PROPOSED only; neither exists in production code |
 | `MetaController` | FUTURE architectural role; no production type with that name exists |
 
-The sensitive-name floor integrated with the production-inert Windows
-rooted-open foundation is versioned as `v0.3.177`. It temporarily opens only
-attribute-capable handles to prove containment, identity, and final-name
-classification, reads zero content bytes, and remains absent from the Tool
-Runtime. The desktop does not project content identity. The separately accepted
-Windows content-range ADR changes no runtime fact; it only constrains the next
-production-inert implementation milestone.
+The sensitive-name floor and bounded raw range primitive integrated with the
+production-inert Windows rooted-open foundation are versioned as `v0.3.178`.
+Ordinary `acquire` remains attribute-only and reads zero bytes. `read_range`
+uses data-read rights only for its final handle, performs one bounded native
+read, and returns an immutable raw observation only after every handle closes.
+The Tool Runtime and desktop still expose no content capability or content
+identity.

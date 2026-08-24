@@ -130,8 +130,9 @@ Hypatia currently runs as a local-first CLI. The initial security boundary is:
   counting supplied text, listing one authorized local directory, and reading
   bounded metadata for one authorized local entry. Filesystem content has a
   separate declared effect and capability value but remains unregistered. The
-  production-inert Windows NTFS rooted-open foundation reads zero bytes and is
-  also absent from the runtime. Its current sensitive-name floor refuses eight
+  production-inert Windows NTFS rooted-open foundation is also absent from the
+  runtime. Its bounded raw range method has no Tool caller. Its current
+  sensitive-name floor refuses eight
   bounded classes before native acquisition and again from the final
   handle-derived name; it inspects no content and offers no override. No model,
   cognition, memory, or research module can import the tool layer, name the
@@ -151,12 +152,13 @@ Hypatia currently runs as a local-first CLI. The initial security boundary is:
   content path exists.
 - [Windows rooted-open production boundary](Windows_Rooted_Open_Production_Decision.md).
   The fixed-system-DLL, handle-relative, no-follow NTFS construction is
-  implemented with bounded failures and zero content bytes. POSIX/Linux and
-  non-NTFS filesystems remain separate, unsupported milestones.
+  implemented with bounded failures. Ordinary opaque acquisition reads zero
+  content bytes; the separate raw range method remains production-inert.
+  POSIX/Linux and non-NTFS filesystems are separate, unsupported milestones.
 - [Windows content-range read production decision](Windows_Content_Range_Read_Decision.md).
-  One future synchronous `ReadFile` range now has an accepted API, byte-bound,
-  EOF, staleness, UTF-8/BOM and close-before-result contract. It is a decision
-  only: no read method, content byte, registered capability or UI exists.
+  One synchronous `ReadFile` range implements the accepted byte-bound, EOF,
+  staleness and close-before-result contract as a production-inert raw platform
+  method. No content Tool, registered capability, decoded text or UI exists.
 
 The current full-repository security baseline is recorded in the Codex Security
 scan completed for v0.3 planning. Before Hypatia gains a networked UI, plugins,

@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.177 (Genesis)`
+`v0.3.178 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.177`** is the current executable package and GitHub
+- **Runtime release `v0.3.178`** is the current executable package and GitHub
   release line.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -955,10 +955,8 @@ with optional OpenAI-compatible LLM conversation support.
   opens one component at a time relative to held parent handles, refuses every
   reparse point, supports only the proven local NTFS boundary, verifies root and
   final identities plus handle-derived containment, and closes every handle in
-  reverse order. Its opaque context exposes no handle, path, or content and
-  proves zero content bytes were read. It remains absent from `ToolRuntime` and
-  every desktop, model, memory, research, evidence, persistence, and telemetry
-  path.
+  reverse order. Its original opaque acquisition context still exposes no
+  handle, path, or content.
 - The first sensitive local-file name floor is implemented without content
   access. `FilesystemSensitivePathPolicy` classifies environment files, private
   keys, direct `.ssh` material, cloud/VCS/package credentials, browser/OS stores,
@@ -967,13 +965,15 @@ with optional OpenAI-compatible LLM conversation support.
   final handle-derived components after containment but before identity proof.
   Windows trailing dots/spaces and case cannot disguise a class. This remains
   a floor, not complete secret detection; no override or content tool exists.
-- The first Windows content-range read boundary is now accepted as a design,
-  not an implementation. It fixes the future platform primitive to one
-  synchronous `ReadFile` call at an explicit 64-bit `OVERLAPPED` offset, an
-  exact `max_bytes + 1` native capacity, read-only final-handle sharing,
-  pre/post handle observations, strict EOF/short-read rules, and
-  close-before-observation return. The current runtime still reads zero local
-  file-content bytes and registers no content capability.
+- The first Windows content-range boundary is implemented as a production-inert
+  platform primitive. `read_range` acquires the final file in the same rooted
+  walk with data-read rights and read-only sharing, issues one synchronous
+  `ReadFile` at an explicit 64-bit `OVERLAPPED` offset, caps native capacity at
+  `max_bytes + 1`, and compares identity, size, and raw last-write time before
+  and after the read. It returns an immutable raw observation only after every
+  handle closes. `FILESYSTEM_READ` remains unregistered; no content-reading
+  tool, UI, decoded text, model, memory, research, evidence, persistence,
+  Linux/POSIX, or generic content-telemetry path exists.
 
 ### Intentionally Not Implemented
 
@@ -986,8 +986,9 @@ with optional OpenAI-compatible LLM conversation support.
   cross-document semantic relation extraction.
 - Agent execution, tool gateway, browser/OS control, voice, vision, robotics,
   and smart-home integrations.
-- Local filesystem content reading or any path that sends local-file content to
-  a model, memory, research, evidence, or generic telemetry.
+- A registered or user-invocable local-filesystem content tool, decoded content
+  presentation, or any path that sends local-file content to a model, memory,
+  research, evidence, persistence, or generic telemetry.
 - Encryption at rest, cloud synchronization, multi-process storage locking,
   and automated repair or unattended migration tooling.
 
@@ -1005,18 +1006,16 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 3,267 automated tests pass through package-aware discovery.
+- 3,290 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for all `src` files and the focused sensitive-path/rooted-open
   security tests. A full `src` + `tests` MyPy sweep still has separately
   recorded pre-existing test typing debt, so repository-wide test typing is not
   claimed as a passing gate.
-- The local PyInstaller Windows onedir package builds successfully and its
-  archive contains both production-inert filesystem security modules. The final
-  generated unsigned executable's local startup smoke is not a passing gate:
-  Windows Application Control blocked that artifact before process start. An
-  earlier package smoke passed before the final policy-order hardening, but it
-  is not evidence for the exact final artifact.
+- The local PyInstaller Windows onedir package builds successfully. The exact
+  `v0.3.178` package starts in a hidden-window smoke check and creates the
+  expected isolated `sessions/sessions.json` registry before clean termination.
+  No Windows security control was disabled or bypassed for this verification.
 - Whitespace validation (`git diff --check`) passes.
 
 These checks describe the local working tree and do not create a GitHub
@@ -1049,18 +1048,15 @@ changed.
 
 ## Next Milestone
 
-Implement the accepted, production-inert Windows content-range primitive inside
-`WindowsRootedOpen`: final-handle `FILE_READ_DATA` access with read-only sharing,
-one synchronous `ReadFile` at an explicit `OVERLAPPED` offset, exact
-`max_bytes + 1` capacity, pre/post handle observations, strict EOF/short-read
-classification, and close-before-observation return. Follow
-`docs/Security/Windows_Content_Range_Read_Decision.md` exactly.
+Design and implement the still-unregistered, platform-neutral text-policy seam
+above the raw Windows observation: NUL/binary refusal, offset-zero UTF-8 BOM
+handling, strict UTF-8 decoding, range-split refusal, bounded failure mapping,
+and successful `FilesystemContentPayload` construction. Preserve the existing
+effect/request/lifecycle contracts and require explicit invocation-scoped
+authorization in focused tests.
 
-Keep that implementation milestone free of `FilesystemReadTool`,
-`FILESYSTEM_READ` runtime registration, desktop control, text presentation,
-model context, memory, research, evidence, persistence, generic telemetry
-content, automatic continuation, or operator override. The platform primitive
-may return only a bounded raw observation after all handles close; UTF-8/BOM
-interpretation belongs to the later Tool milestone. POSIX/Linux rooted-open
-remains a later platform milestone rather than being mixed into this Windows
-implementation.
+Keep `FILESYSTEM_READ` absent from `ToolRuntime` and the desktop. Do not wire
+content into model context, memory, research, evidence, persistence, exports,
+clipboard, remote disclosure, automatic continuation, generic telemetry
+content, or an operator override. POSIX/Linux rooted-open remains a later
+platform milestone rather than being mixed into the first isolated Tool seam.

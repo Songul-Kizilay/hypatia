@@ -2,6 +2,49 @@
 
 All notable project changes are recorded here.
 
+## [0.3.178] - 2026-08-24
+
+### Added
+
+- `WindowsRootedOpen.read_range`, a production-owned but deliberately
+  unregistered Windows NTFS primitive for one raw, bounded content range.
+- Immutable `WindowsContentRangeObservation` provenance containing only the
+  canonical relative resource, requested range, retained bytes, stable file
+  size/time, truncation state and injected UTC read time.
+- Bounded `read_failed`, `read_incomplete`, and `content_changed` native
+  failure categories with fixed, path-free wording.
+
+### Safety
+
+- The final component is opened during the existing root-relative no-follow
+  walk with exactly `FILE_READ_DATA | FILE_READ_ATTRIBUTES | SYNCHRONIZE` and
+  `FILE_SHARE_READ`; it is never reopened from a path.
+- Each invocation validates `offset` and `max_bytes` before acquisition, issues
+  exactly one synchronous `ReadFile` with an explicit zero-initialized
+  `OVERLAPPED` offset, and caps native capacity at `max_bytes + 1` (65,537 bytes
+  maximum). The lookahead byte is discarded and never returned.
+- Pre/post handle observations compare identity, file size and raw last-write
+  `FILETIME`. Unexpected short reads, impossible counts, observed changes,
+  native failures, and close failures return no observation.
+- Every handle closes in reverse order before the raw observation returns. No
+  decoded text, content payload, registered capability, desktop control, model,
+  memory, research, evidence, persistence, Linux/POSIX, or content-telemetry
+  integration is added.
+
+### Verification
+
+- Deterministic fake-API tests cover decisive offsets and byte ceilings,
+  lookahead disposal, EOF forms, crossing EOF, short reads, impossible counts,
+  every pre/post change dimension, bounded failures, clock validity, immutable
+  observation invariants and close-before-return ownership.
+- Native Windows tests cover raw ordinary/truncated/zero/EOF/non-zero ranges,
+  BOM/non-UTF-8 bytes and active-writer sharing conflict. ABI tests prove the
+  exact `OVERLAPPED` split and bounded EOF handling.
+- The package-aware full suite, local Windows package build/startup smoke,
+  formatting, lint, scoped typing and whitespace gates pass as recorded in
+  `PROJECT_STATUS.md`. GitHub's Windows and Linux package workflows remain the
+  independent post-push checks for the exact commit.
+
 ## [0.3.177] - 2026-08-24
 
 ### Added
