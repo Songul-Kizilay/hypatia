@@ -7,7 +7,10 @@ from core.Application import HypatiaApplication
 from desktop.DesktopController import DesktopController
 from desktop.DesktopDataPaths import DesktopDataPaths
 from desktop.TkinterDesktopWindow import TkinterDesktopWindow
+from desktop.ToolConsoleController import ToolConsoleController
 from eventbus.EventBus import EventBus
+from tools.FilesystemRootPolicy import resolve_filesystem_root
+from tools.ToolRuntime import ToolRuntime
 
 
 def main() -> None:
@@ -25,9 +28,18 @@ def main() -> None:
     try:
         brain = app.bootstrap.container.resolve(Brain)
         event_bus = app.bootstrap.container.resolve(EventBus)
+        # The tool runtime is composed here, in the same place that already
+        # decides where this installation keeps its data. Its filesystem scope
+        # defaults to that directory and can only be widened by an operator
+        # environment variable — never by a model, a message, or an argument.
+        tool_runtime = ToolRuntime(
+            resolve_filesystem_root(default_root=data_paths.root),
+            event_bus=event_bus,
+        )
         TkinterDesktopWindow(
             DesktopController(brain),
             event_bus=event_bus,
+            tool_console=ToolConsoleController(tool_runtime, event_bus),
         ).run()
     finally:
         app.stop()

@@ -14,6 +14,7 @@ if str(SRC_DIR) not in sys.path:
 import desktop_main
 from brain.Brain import Brain
 from desktop.DesktopDataPaths import DesktopDataPaths
+from desktop.ToolConsoleController import ToolConsoleController
 from eventbus.EventBus import EventBus
 
 
@@ -21,8 +22,13 @@ class DesktopMainTests(unittest.TestCase):
     def test_main_uses_desktop_owned_paths_and_stops_after_window_closes(self) -> None:
         paths = DesktopDataPaths(Path("C:/Users/Songul/AppData/Local/Hypatia"))
         brain = Mock(spec=Brain)
+        # The tool console subscribes to the bus, so resolve must answer with
+        # the right kind of object per type rather than one Mock for both.
+        event_bus = EventBus()
         container = Mock()
-        container.resolve.return_value = brain
+        container.resolve.side_effect = lambda requested: (
+            brain if requested is Brain else event_bus
+        )
         application = Mock()
         application.bootstrap.container = container
         window = Mock()
@@ -39,6 +45,9 @@ class DesktopMainTests(unittest.TestCase):
             patch(
                 "desktop_main.TkinterDesktopWindow", return_value=window
             ) as window_type,
+            patch(
+                "desktop_main.resolve_filesystem_root", return_value=None
+            ) as root_policy,
         ):
             desktop_main.main()
 
@@ -62,3 +71,74 @@ class DesktopMainTests(unittest.TestCase):
         window_type.assert_called_once()
         window.run.assert_called_once_with()
         application.stop.assert_called_once_with()
+        # The filesystem scope is decided from the desktop's own data root, by
+        # the policy, at composition time. Nothing later can widen it, and no
+        # argument or message can supply one.
+        root_policy.assert_called_once_with(default_root=paths.root)
+        console = window_type.call_args.kwargs["tool_console"]
+        self.assertIsInstance(console, ToolConsoleController)
+
+    def test_main_composes_a_console_that_runs_nothing_on_its_own(self) -> None:
+        """Composition wires the console. It does not authorize anything."""
+        paths = DesktopDataPaths(Path("C:/Users/Songul/AppData/Local/Hypatia"))
+        brain = Mock(spec=Brain)
+        event_bus = EventBus()
+        container = Mock()
+        container.resolve.side_effect = lambda requested: (
+            brain if requested is Brain else event_bus
+        )
+        application = Mock()
+        application.bootstrap.container = container
+
+        with (
+            patch(
+                "desktop_main.DesktopDataPaths.from_process_environment",
+                return_value=paths,
+            ),
+            patch(
+                "desktop_main.HypatiaApplication.from_process_environment",
+                return_value=application,
+            ),
+            patch(
+                "desktop_main.TkinterDesktopWindow", return_value=Mock()
+            ) as window_type,
+            patch("desktop_main.resolve_filesystem_root", return_value=None),
+        ):
+            desktop_main.main()
+
+        console = window_type.call_args.kwargs["tool_console"]
+        view = console.run("clock_read")
+
+        self.assertFalse(view.performed)
+
+    def test_main_without_a_root_registers_no_filesystem_capability(self) -> None:
+        paths = DesktopDataPaths(Path("C:/Users/Songul/AppData/Local/Hypatia"))
+        brain = Mock(spec=Brain)
+        event_bus = EventBus()
+        container = Mock()
+        container.resolve.side_effect = lambda requested: (
+            brain if requested is Brain else event_bus
+        )
+        application = Mock()
+        application.bootstrap.container = container
+
+        with (
+            patch(
+                "desktop_main.DesktopDataPaths.from_process_environment",
+                return_value=paths,
+            ),
+            patch(
+                "desktop_main.HypatiaApplication.from_process_environment",
+                return_value=application,
+            ),
+            patch(
+                "desktop_main.TkinterDesktopWindow", return_value=Mock()
+            ) as window_type,
+            patch("desktop_main.resolve_filesystem_root", return_value=None),
+        ):
+            desktop_main.main()
+
+        console = window_type.call_args.kwargs["tool_console"]
+        names = [entry.capability for entry in console.catalogue()]
+
+        self.assertEqual(names, ["clock_read", "text_statistics"])

@@ -30,6 +30,8 @@ from desktop.SimpleResearchActivity import SimpleResearchActivity
 from desktop.SimpleResearchPhrasebook import phrase as simple_phrase
 from desktop.SimpleResearchReadModel import SimpleResearchReadModel
 from desktop.SimpleSourceCard import SimpleSourceCard
+from desktop.ToolConsoleController import ToolConsoleController
+from desktop.ToolConsoleEntry import ToolConsoleEntry
 from eventbus.EventBus import EventBus
 from knowledge.KnowledgeCitation import KnowledgeCitation
 from research.ResearchClaimConfidence import ResearchClaimConfidence
@@ -61,6 +63,14 @@ from research.ResearchSourceComparisonNoteRecord import (
 from research.ResearchSourceRecord import ResearchSourceRecord
 from research.SourceLoadStage import SourceLoadStage
 from response.ResponseLanguage import ResponseLanguage, detect_response_language
+
+_TOOL_IDLE_STATUS = "Nothing has been run yet."
+_TOOL_NO_SELECTION = "Choose a capability first."
+_TOOL_NO_ARGUMENTS = "This capability takes no arguments."
+_TOOL_GRANT_NOTE = (
+    "These effects are granted for this one run only. Nothing is remembered "
+    "between runs or across restarts."
+)
 
 _DEFAULT_FONT_SIZE = 12
 _MINIMUM_FONT_SIZE = 10
@@ -254,13 +264,21 @@ class TkinterDesktopWindow:
     _simple_language: ResponseLanguage = ResponseLanguage.ENGLISH
     _pending_research_question: str = ""
 
+    #: Present only when an operator-facing tool console was composed for
+    #: this window. None means the Tools tab is absent, not disabled: a
+    #: panel that could not run anything should not offer to.
+    _tool_console: ToolConsoleController | None = None
+    _tool_entries: tuple[ToolConsoleEntry, ...] = ()
+
     def __init__(
         self,
         controller: DesktopController,
         root: tk.Tk | None = None,
         event_bus: EventBus | None = None,
+        tool_console: ToolConsoleController | None = None,
     ) -> None:
         self._controller = controller
+        self._tool_console = tool_console
         self._root = root or tk.Tk()
         self._research_refresh_signal = ResearchStateRefreshSignal(event_bus)
         self._request_runner = DesktopRequestRunner()
@@ -670,16 +688,26 @@ class TkinterDesktopWindow:
         # claims, and failure stages stay, and nothing was removed from it.
         self._workspace_tabs.add(simple_research_tab, text="Research")
         self._workspace_tabs.add(research_tab, text="Research (Advanced)")
-        self._workspace_tabs.add(appearance_tab, text="Appearance")
-        for tab in (
+        tabs = [
             chat_tab,
             knowledge_tab,
             simple_research_tab,
             research_tab,
-            appearance_tab,
-        ):
+        ]
+        # The Tools tab appears only when a console was composed. An empty
+        # panel offering to run nothing would read as a feature that is broken
+        # rather than a capability this installation was not given.
+        if self._tool_console is not None:
+            tools_tab = ttk.Frame(self._workspace_tabs, padding=10)
+            self._workspace_tabs.add(tools_tab, text="Tools")
+            tabs.append(tools_tab)
+        self._workspace_tabs.add(appearance_tab, text="Appearance")
+        tabs.append(appearance_tab)
+        for tab in tabs:
             tab.columnconfigure(0, weight=1)
         self._build_simple_research_tab(simple_research_tab)
+        if self._tool_console is not None:
+            self._build_tool_console_tab(tools_tab)
         chat_tab.rowconfigure(3, weight=1)
 
         accessibility_frame = ttk.LabelFrame(
@@ -3992,6 +4020,196 @@ class TkinterDesktopWindow:
             self._status.set(str(error))
             return
         self._append_response(response)
+
+    # ------------------------------------------------------------------
+    # Tool console
+    #
+    # An operator control plane, not a reasoning feature. Nothing here asks a
+    # model anything: the capability list comes from the production registry,
+    # the descriptions are each tool's own declared summary, and the result is
+    # read from the execution outcome rather than from the fact that a button
+    # was pressed. It works with the LLM switched off, and a test says so.
+    #
+    # The window holds no tool-layer types. It passes plain strings to the
+    # console controller and renders plain data back, so this file cannot name
+    # an effect or build an invocation even by mistake.
+    # ------------------------------------------------------------------
+
+    def _build_tool_console_tab(self, parent: ttk.Frame) -> None:
+        """Lay out the operator surface for the capabilities actually present."""
+        if self._tool_console is None:
+            return
+        self._tool_entries = self._tool_console.catalogue()
+        self._tool_choice = tk.StringVar()
+        self._tool_effects = tk.StringVar(value="")
+        self._tool_safety = tk.StringVar(value="")
+        self._tool_scope = tk.StringVar(value="")
+        self._tool_description = tk.StringVar(value="")
+        self._tool_status = tk.StringVar(value=_TOOL_IDLE_STATUS)
+        self._tool_argument_values: dict[str, tk.StringVar] = {}
+        self._tool_argument_texts: dict[str, tk.Text] = {}
+
+        parent.rowconfigure(3, weight=1)
+
+        chooser = ttk.LabelFrame(parent, text="Capability", padding=12)
+        chooser.grid(row=0, column=0, sticky="ew")
+        chooser.columnconfigure(0, weight=1)
+        self._tool_selector = ttk.Combobox(
+            chooser,
+            textvariable=self._tool_choice,
+            state="readonly",
+            values=tuple(entry.capability for entry in self._tool_entries),
+        )
+        self._tool_selector.grid(row=0, column=0, sticky="ew")
+        self._tool_selector.bind(
+            "<<ComboboxSelected>>",
+            lambda _event: self._tool_selected(),
+        )
+        ttk.Label(chooser, textvariable=self._tool_description, wraplength=720).grid(
+            row=1, column=0, sticky="w", pady=(6, 0)
+        )
+        ttk.Label(chooser, textvariable=self._tool_safety).grid(
+            row=2, column=0, sticky="w"
+        )
+        ttk.Label(chooser, textvariable=self._tool_scope).grid(
+            row=3, column=0, sticky="w"
+        )
+
+        self._tool_arguments_frame = ttk.LabelFrame(
+            parent, text="Arguments", padding=12
+        )
+        self._tool_arguments_frame.grid(row=1, column=0, sticky="ew", pady=(10, 0))
+        self._tool_arguments_frame.columnconfigure(1, weight=1)
+
+        authorize = ttk.LabelFrame(parent, text="Authorization", padding=12)
+        authorize.grid(row=2, column=0, sticky="ew", pady=(10, 0))
+        authorize.columnconfigure(0, weight=1)
+        ttk.Label(authorize, textvariable=self._tool_effects, wraplength=720).grid(
+            row=0, column=0, sticky="w"
+        )
+        ttk.Label(authorize, text=_TOOL_GRANT_NOTE, wraplength=720).grid(
+            row=1, column=0, sticky="w", pady=(4, 8)
+        )
+        self._request_button(
+            authorize,
+            "Authorize and run once",
+            self._run_selected_tool,
+        ).grid(row=2, column=0, sticky="w")
+
+        results = ttk.LabelFrame(parent, text="Result", padding=12)
+        results.grid(row=3, column=0, sticky="nsew", pady=(10, 0))
+        results.columnconfigure(0, weight=1)
+        results.rowconfigure(1, weight=1)
+        ttk.Label(results, textvariable=self._tool_status, wraplength=720).grid(
+            row=0, column=0, sticky="w"
+        )
+        self._tool_output = tk.Text(results, height=14, wrap="word")
+        self._tool_output.grid(row=1, column=0, sticky="nsew", pady=(6, 0))
+        self._tool_output.configure(state=tk.DISABLED)
+        if self._tool_entries:
+            self._tool_selector.current(0)
+            self._tool_selected()
+
+    def _tool_selected(self) -> None:
+        """Show what the chosen capability declares, before anything runs."""
+        entry = self._selected_tool_entry()
+        if entry is None:
+            return
+        self._tool_description.set(entry.description)
+        self._tool_safety.set(entry.safety_note)
+        self._tool_scope.set(entry.scope_label)
+        self._tool_effects.set(entry.authorization_prompt)
+        self._tool_status.set(_TOOL_IDLE_STATUS)
+        self._render_tool_arguments(entry)
+
+    def _render_tool_arguments(self, entry: ToolConsoleEntry) -> None:
+        """Build one typed control per declared argument, and nothing else.
+
+        There is no free-form field. An operator can fill in what the capability
+        declares and cannot express anything it did not, which is what stops the
+        panel becoming a place to type whatever the layer happens to accept.
+        """
+        for child in self._tool_arguments_frame.winfo_children():
+            child.destroy()
+        self._tool_argument_values = {}
+        self._tool_argument_texts = {}
+        if not entry.arguments:
+            ttk.Label(self._tool_arguments_frame, text=_TOOL_NO_ARGUMENTS).grid(
+                row=0, column=0, columnspan=2, sticky="w"
+            )
+            return
+        for row, spec in enumerate(entry.arguments):
+            suffix = " *" if spec.required else ""
+            ttk.Label(self._tool_arguments_frame, text=spec.label + suffix).grid(
+                row=row * 2, column=0, sticky="nw", padx=(0, 8)
+            )
+            if spec.kind.multiline:
+                widget = tk.Text(self._tool_arguments_frame, height=4, wrap="word")
+                widget.grid(row=row * 2, column=1, sticky="ew")
+                self._tool_argument_texts[spec.name] = widget
+            else:
+                value = tk.StringVar()
+                ttk.Entry(self._tool_arguments_frame, textvariable=value).grid(
+                    row=row * 2, column=1, sticky="ew"
+                )
+                self._tool_argument_values[spec.name] = value
+            if spec.hint:
+                ttk.Label(self._tool_arguments_frame, text=spec.hint).grid(
+                    row=row * 2 + 1, column=1, sticky="w", pady=(0, 6)
+                )
+
+    def _selected_tool_entry(self) -> ToolConsoleEntry | None:
+        """Return the chosen catalogue entry, matched by exact capability."""
+        chosen = self._tool_choice.get().strip()
+        for entry in self._tool_entries:
+            if entry.capability == chosen:
+                return entry
+        return None
+
+    def _collect_tool_arguments(
+        self,
+        entry: ToolConsoleEntry,
+    ) -> tuple[tuple[str, str], ...]:
+        """Read the form, naming only arguments this capability declared."""
+        collected: list[tuple[str, str]] = []
+        for spec in entry.arguments:
+            if spec.name in self._tool_argument_texts:
+                value = self._tool_argument_texts[spec.name].get("1.0", "end-1c")
+            elif spec.name in self._tool_argument_values:
+                value = self._tool_argument_values[spec.name].get()
+            else:
+                continue
+            collected.append((spec.name, value))
+        return tuple(collected)
+
+    def _run_selected_tool(self) -> None:
+        """Authorize exactly the declared effects, for exactly this one run.
+
+        The authorization is this method call and nothing else. It is not
+        stored, not reused for the next run, and not widened: the controller
+        grants the resolved tool's own declared effects and forgets them again.
+        """
+        if self._tool_console is None:
+            return
+        entry = self._selected_tool_entry()
+        if entry is None:
+            self._tool_status.set(_TOOL_NO_SELECTION)
+            return
+        view = self._tool_console.run(
+            entry.capability,
+            self._collect_tool_arguments(entry),
+            authorized=True,
+        )
+        self._tool_status.set(view.headline + " " + view.detail)
+        lines = list(view.lines())
+        if lines:
+            lines.append("")
+        lines.append("Audit")
+        lines.extend(view.audit_lines())
+        self._tool_output.configure(state=tk.NORMAL)
+        self._tool_output.delete("1.0", tk.END)
+        self._tool_output.insert(tk.END, chr(10).join(lines))
+        self._tool_output.configure(state=tk.DISABLED)
 
     # ------------------------------------------------------------------
     # Simple research mode

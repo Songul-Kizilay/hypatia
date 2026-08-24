@@ -2,6 +2,61 @@
 
 All notable project changes are recorded here.
 
+## [0.3.170] - 2026-08-24
+
+### Added
+
+- A `Tools` desktop tab: the first way to run a capability in the running
+  application. An operator selects a capability, reads its declared effects,
+  fills in typed arguments, and authorizes one run.
+- `ToolRuntime`, which composes the production registry and execution service
+  by construction, and `FilesystemRootPolicy`, which decides the filesystem
+  scope from operator configuration.
+- `ToolConsoleController` plus `ToolConsoleEntry`, `ToolArgumentSpec`,
+  `ToolArgumentKind`, `ToolRunStatus`, and `ToolRunView`.
+
+### Changed
+
+- `desktop_main` composes the tool runtime and passes a console to the window.
+- The tool-layer isolation guard now names who may reach the layer instead of
+  asserting nobody does. It gained assertions rather than losing them.
+
+### Safety
+
+- The operator is the only authority added. A model cannot authorize, a chat
+  message cannot execute, research text cannot execute, and a capability name
+  or filesystem path in prose executes nothing.
+- Authorization is invocation-scoped and never stored. `run` takes an
+  `authorized` flag defaulting to False; one press authorizes one run.
+- There is no auto-approve, remembered grant, allow-all, or wildcard.
+- The grant is exactly the resolved tool's declared effects, never a superset,
+  and never carried between capabilities.
+- Only registered capabilities appear and only registered names resolve.
+  Selection is a lookup over the registry, never a constructor, an import, or
+  a module path.
+- Unknown, missing, and malformed arguments are rejected before an invocation
+  exists. There is no free-form argument kind.
+- The window imports no tool-layer type at all; the console passes plain data
+  across that boundary. Two named modules hold tool authority, not a package.
+- The filesystem scope comes from `HYPATIA_FILESYSTEM_ROOT` or the desktop's
+  own data directory. A drive root, a filesystem root, and the home directory
+  are refused. With no root, no filesystem capability is registered.
+- Scope is shown as `root_id`. No absolute path reaches the catalogue, the
+  audit view, or any lifecycle event.
+- Results are read from the execution outcome, so a refusal keeps the tool's
+  own words and is never presented as success.
+- Paging stays explicit: one operator action is one bounded invocation, and
+  `MAX_TOOL_VALUES` is unchanged at 20.
+
+### Verification
+
+- The package-aware full local suite contains 3,009 passing automated tests.
+- One hundred and three new tests cover the catalogue against the real
+  registry, effect disclosure, explicit and non-persisting authorization,
+  argument validation, result fidelity, the audit view, paging, scope privacy,
+  root policy, chat and research isolation, and execution with no model
+  present.
+
 ## [0.3.169] - 2026-08-24
 
 ### Added
