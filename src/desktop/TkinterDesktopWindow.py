@@ -26,6 +26,10 @@ from desktop.ResearchWorkspaceReadModel import (
     ResearchSourceCoverageFacet,
     ResearchWorkspaceReadModel,
 )
+from desktop.SimpleResearchActivity import SimpleResearchActivity
+from desktop.SimpleResearchPhrasebook import phrase as simple_phrase
+from desktop.SimpleResearchReadModel import SimpleResearchReadModel
+from desktop.SimpleSourceCard import SimpleSourceCard
 from eventbus.EventBus import EventBus
 from knowledge.KnowledgeCitation import KnowledgeCitation
 from research.ResearchClaimConfidence import ResearchClaimConfidence
@@ -55,6 +59,8 @@ from research.ResearchSourceComparisonNoteRecord import (
     ResearchSourceComparisonNoteRecord,
 )
 from research.ResearchSourceRecord import ResearchSourceRecord
+from research.SourceLoadStage import SourceLoadStage
+from response.ResponseLanguage import ResponseLanguage, detect_response_language
 
 _DEFAULT_FONT_SIZE = 12
 _MINIMUM_FONT_SIZE = 10
@@ -236,6 +242,18 @@ class TkinterDesktopWindow:
     #: rather than requiring every such test to know about this subsystem.
     _research_refresh_signal: ResearchStateRefreshSignal | None = None
 
+    #: Simple mode state, declared here for the same reason: focused tests build
+    #: bare instances to exercise one method, and a Simple-mode handler must not
+    #: require the whole window to have been constructed.
+    _simple_run_id: str = ""
+    _simple_run: ResearchRun | None = None
+    _simple_discovery_id: str = ""
+    _simple_cards: tuple[SimpleSourceCard, ...] = ()
+    _simple_activity: SimpleResearchActivity = SimpleResearchActivity.IDLE
+    _simple_last_stage: SourceLoadStage | None = None
+    _simple_language: ResponseLanguage = ResponseLanguage.ENGLISH
+    _pending_research_question: str = ""
+
     def __init__(
         self,
         controller: DesktopController,
@@ -392,6 +410,17 @@ class TkinterDesktopWindow:
         self._research_markdown_export_preview: (
             ResearchRunMarkdownExportPreview | None
         ) = None
+        # Simple mode keeps its own run context so an ordinary user is never
+        # told to go to another tab and select something. It is a separate
+        # field from the Advanced selector on purpose: sharing one would let a
+        # click in Advanced silently redirect where a Simple load attaches.
+        self._simple_run_id = ""
+        self._simple_run: ResearchRun | None = None
+        self._simple_discovery_id = ""
+        self._simple_cards: tuple[SimpleSourceCard, ...] = ()
+        self._simple_activity = SimpleResearchActivity.IDLE
+        self._simple_last_stage: SourceLoadStage | None = None
+        self._simple_language = ResponseLanguage.ENGLISH
         self._font_size = _DEFAULT_FONT_SIZE
         self._font_size_label = tk.StringVar()
         self._theme_mode = tk.StringVar(value=DesktopTheme.EYE_COMFORT.value)
@@ -631,14 +660,26 @@ class TkinterDesktopWindow:
         self._workspace_tabs.grid(row=0, column=0, sticky="nsew")
         chat_tab = ttk.Frame(self._workspace_tabs, padding=10)
         knowledge_tab = ttk.Frame(self._workspace_tabs, padding=10)
+        simple_research_tab = ttk.Frame(self._workspace_tabs, padding=10)
         research_tab = ttk.Frame(self._workspace_tabs, padding=10)
         appearance_tab = ttk.Frame(self._workspace_tabs, padding=10)
         self._workspace_tabs.add(chat_tab, text="Chat")
         self._workspace_tabs.add(knowledge_tab, text="Knowledge")
-        self._workspace_tabs.add(research_tab, text="Research")
+        # Simple comes first and keeps the plain name. The detailed workflow is
+        # not reduced, only relabelled: it is where identifiers, assessments,
+        # claims, and failure stages stay, and nothing was removed from it.
+        self._workspace_tabs.add(simple_research_tab, text="Research")
+        self._workspace_tabs.add(research_tab, text="Research (Advanced)")
         self._workspace_tabs.add(appearance_tab, text="Appearance")
-        for tab in (chat_tab, knowledge_tab, research_tab, appearance_tab):
+        for tab in (
+            chat_tab,
+            knowledge_tab,
+            simple_research_tab,
+            research_tab,
+            appearance_tab,
+        ):
             tab.columnconfigure(0, weight=1)
+        self._build_simple_research_tab(simple_research_tab)
         chat_tab.rowconfigure(3, weight=1)
 
         accessibility_frame = ttk.LabelFrame(
@@ -2144,6 +2185,14 @@ class TkinterDesktopWindow:
             text="Send",
             command=self._send_message,
         ).grid(row=0, column=1, sticky="ns")
+        # Offered only after chat has said it did not research something, and
+        # it starts nothing: it carries the question to the Research panel as a
+        # draft the user still has to start.
+        self._research_this_button = ttk.Button(
+            composer_frame,
+            text=simple_phrase("research_this", ResponseLanguage.ENGLISH),
+            command=self._research_this,
+        )
         self._composer.bind("<Control-Return>", self._send_with_keyboard)
         self._composer.focus_set()
         self._request_controls = [
@@ -2363,6 +2412,29 @@ class TkinterDesktopWindow:
         self._append_exchange("You", message, response)
         if self._composer.get("1.0", "end-1c") == message:
             self._composer.delete("1.0", tk.END)
+        self._offer_research_this(message, response)
+
+    def _offer_research_this(self, message: str, response: BrainResponse) -> None:
+        """Show a research offer when chat has just said it researched nothing.
+
+        Only an offer. Ordinary chat stays non-networked, and this button does
+        not change that: pressing it fills in the Research panel and stops.
+        """
+        kind = response.live_information_request
+        wanted = kind is not None and kind.requires_live_research
+        self._pending_research_question = message.strip() if wanted else ""
+        if not hasattr(self, "_research_this_button"):
+            return
+        if wanted:
+            self._research_this_button.grid(row=1, column=1, sticky="ew", pady=(6, 0))
+        else:
+            self._research_this_button.grid_remove()
+
+    def _research_this(self) -> None:
+        """Carry the last unresearched question into the Research panel."""
+        if not self._pending_research_question:
+            return
+        self._offer_simple_research_handoff(self._pending_research_question)
 
     def _select_session(self) -> None:
         try:
@@ -3920,6 +3992,365 @@ class TkinterDesktopWindow:
             self._status.set(str(error))
             return
         self._append_response(response)
+
+    # ------------------------------------------------------------------
+    # Simple research mode
+    #
+    # A presentation layer over the same canonical services the Advanced tab
+    # uses. There is no second research engine here: every state change goes
+    # through the existing controller methods, the existing guarded loader, and
+    # the existing confirmation, and every displayed fact is re-read from
+    # persisted state afterwards rather than inferred from what was returned.
+    # ------------------------------------------------------------------
+
+    def _build_simple_research_tab(self, parent: ttk.Frame) -> None:
+        """Lay out the guided research panel an ordinary user starts from."""
+        self._simple_question = tk.StringVar()
+        self._simple_status = tk.StringVar(value=self._simple_say("no_question_yet"))
+        self._simple_ladder = tk.StringVar(value="")
+        self._simple_stage = tk.StringVar(value="")
+        self._simple_evidence = tk.StringVar(value="")
+        self._simple_advanced_visible = False
+
+        parent.rowconfigure(2, weight=1)
+
+        ask = ttk.LabelFrame(
+            parent,
+            text=self._simple_say("panel_title"),
+            padding=12,
+        )
+        ask.grid(row=0, column=0, sticky="ew")
+        ask.columnconfigure(0, weight=1)
+        ttk.Label(ask, text=self._simple_say("question_prompt")).grid(
+            row=0, column=0, columnspan=2, sticky="w"
+        )
+        question_entry = ttk.Entry(ask, textvariable=self._simple_question)
+        question_entry.grid(row=1, column=0, sticky="ew", pady=(4, 8))
+        self._simple_question_entry = question_entry
+        self._request_button(
+            ask,
+            self._simple_say("start_research"),
+            self._simple_start_research,
+        ).grid(row=1, column=1, sticky="w", padx=(8, 0), pady=(4, 8))
+
+        status = ttk.LabelFrame(
+            parent,
+            text=self._simple_say("status_heading"),
+            padding=12,
+        )
+        status.grid(row=1, column=0, sticky="ew", pady=(10, 0))
+        status.columnconfigure(0, weight=1)
+        ttk.Label(
+            status,
+            textvariable=self._simple_status,
+            wraplength=720,
+        ).grid(row=0, column=0, sticky="w")
+        ttk.Label(status, textvariable=self._simple_ladder, wraplength=720).grid(
+            row=1, column=0, sticky="w", pady=(4, 0)
+        )
+        ttk.Label(status, textvariable=self._simple_stage, wraplength=720).grid(
+            row=2, column=0, sticky="w", pady=(4, 0)
+        )
+        ttk.Label(status, textvariable=self._simple_evidence, wraplength=720).grid(
+            row=3, column=0, sticky="w", pady=(4, 0)
+        )
+        self._request_button(
+            status,
+            self._simple_say("find_sources"),
+            self._simple_find_sources,
+        ).grid(row=4, column=0, sticky="w", pady=(8, 0))
+
+        sources = ttk.LabelFrame(
+            parent,
+            text=self._simple_say("sources_heading"),
+            padding=12,
+        )
+        sources.grid(row=2, column=0, sticky="nsew", pady=(10, 0))
+        sources.columnconfigure(0, weight=1)
+        self._simple_cards_frame = ttk.Frame(sources)
+        self._simple_cards_frame.grid(row=0, column=0, sticky="nsew")
+        self._simple_cards_frame.columnconfigure(0, weight=1)
+
+        advanced = ttk.Frame(parent)
+        advanced.grid(row=3, column=0, sticky="ew", pady=(10, 0))
+        advanced.columnconfigure(0, weight=1)
+        ttk.Button(
+            advanced,
+            text=self._simple_say("advanced_details"),
+            command=self._simple_toggle_advanced,
+        ).grid(row=0, column=0, sticky="w")
+        self._simple_advanced_text = tk.Text(advanced, height=8, wrap="word")
+        self._simple_advanced_text.configure(state=tk.DISABLED)
+        self._simple_advanced_frame = advanced
+        self._simple_render()
+
+    def _simple_say(self, key: str) -> str:
+        """Look up one fixed Simple-mode string in the active language."""
+        return simple_phrase(key, self._simple_language)
+
+    def _simple_model(self) -> SimpleResearchReadModel:
+        """Build the projection from the canonical snapshot Simple mode holds."""
+        return SimpleResearchReadModel(
+            run=self._simple_run,
+            language=self._simple_language,
+            activity=self._simple_activity,
+            last_stage=self._simple_last_stage,
+        )
+
+    def _simple_render(self) -> None:
+        """Push the projection into the widgets, if the tab was ever built.
+
+        Focused tests build bare windows to exercise one handler, so this stays
+        safe when no widget exists. Everything it renders comes from the read
+        model, so there is no path here that can display a fact the projection
+        did not derive from canonical state.
+        """
+        if not hasattr(self, "_simple_status"):
+            return
+        model = self._simple_model()
+        self._simple_status.set(model.status_text())
+        self._simple_ladder.set(
+            "  ".join(
+                f"{'●' if reached else '○'} {label}"
+                for label, reached in model.ladder()
+            )
+        )
+        self._simple_stage.set(model.stage_text())
+        self._simple_evidence.set(model.evidence_text())
+        self._simple_cards = model.candidate_cards()
+        self._simple_render_cards()
+        self._simple_render_advanced(model)
+
+    def _simple_render_cards(self) -> None:
+        """Replace the card list with the current projection, one row each."""
+        if not hasattr(self, "_simple_cards_frame"):
+            return
+        for child in self._simple_cards_frame.winfo_children():
+            child.destroy()
+        if not self._simple_cards:
+            ttk.Label(
+                self._simple_cards_frame,
+                text=self._simple_say("no_sources_yet"),
+                wraplength=700,
+            ).grid(row=0, column=0, sticky="w")
+            return
+        for index, card in enumerate(self._simple_cards):
+            row = ttk.Frame(self._simple_cards_frame, padding=(0, 6))
+            row.grid(row=index, column=0, sticky="ew")
+            row.columnconfigure(0, weight=1)
+            ttk.Label(row, text=card.heading, wraplength=620).grid(
+                row=0, column=0, sticky="w"
+            )
+            ttk.Label(row, text=card.subheading).grid(row=1, column=0, sticky="w")
+            ttk.Label(row, text=card.status_text, wraplength=620).grid(
+                row=2, column=0, sticky="w"
+            )
+            if not card.accepted:
+                self._request_button(
+                    row,
+                    self._simple_say("use_this_source"),
+                    self._simple_card_command(index),
+                ).grid(row=0, column=1, rowspan=3, sticky="e", padx=(8, 0))
+
+    def _simple_card_command(self, position: int) -> Callable[[], None]:
+        """Bind one card's position, so every row acts on its own source.
+
+        A closure over the loop variable would give every button the last
+        index, and each one would then load a source the user did not press.
+        """
+
+        def use() -> None:
+            self._simple_use_source(position)
+
+        return use
+
+    def _simple_render_advanced(self, model: SimpleResearchReadModel) -> None:
+        """Write every hidden identifier out unchanged, when asked for."""
+        if not hasattr(self, "_simple_advanced_text"):
+            return
+        lines = [self._simple_say("advanced_hidden_note"), ""]
+        lines.extend(f"{label}: {value}" for label, value in model.advanced_details())
+        self._simple_advanced_text.configure(state=tk.NORMAL)
+        self._simple_advanced_text.delete("1.0", tk.END)
+        self._simple_advanced_text.insert(tk.END, "\n".join(lines))
+        self._simple_advanced_text.configure(state=tk.DISABLED)
+
+    def _simple_toggle_advanced(self) -> None:
+        """Show or hide the identifiers, which are moved rather than removed."""
+        if not hasattr(self, "_simple_advanced_text"):
+            return
+        self._simple_advanced_visible = not self._simple_advanced_visible
+        if self._simple_advanced_visible:
+            self._simple_advanced_text.grid(row=1, column=0, sticky="ew", pady=(6, 0))
+        else:
+            self._simple_advanced_text.grid_remove()
+
+    def _simple_start_research(self) -> None:
+        """Create one run for the typed question and keep it as the context.
+
+        The run is created and then held here, so a person is never told that
+        no research run is selected. It is never inherited from the Advanced
+        selector: attaching a source to a run the user did not create in this
+        workflow is the one mistake this whole panel exists to prevent.
+        """
+        question = self._simple_question.get().strip()
+        if not question:
+            self._status.set(self._simple_say("question_required"))
+            return
+        self._simple_language = detect_response_language(question)
+        try:
+            response = self._controller.create_research_run(question)
+        except ValueError as error:
+            self._status.set(str(error))
+            return
+        self._append_response(response)
+        if not response.success or not response.research_runs:
+            return
+        created = response.research_runs[-1]
+        self._simple_run_id = created.run_id
+        self._simple_run = created
+        self._simple_discovery_id = ""
+        self._simple_last_stage = None
+        self._simple_render()
+        self._simple_find_sources()
+
+    def _simple_find_sources(self) -> None:
+        """Ask the existing discovery service for candidates for this run."""
+        if not self._simple_run_id:
+            self._status.set(self._simple_say("question_required"))
+            return
+        run_id = self._simple_run_id
+        cancellation_signal = CancellationSignal()
+        self._simple_activity = SimpleResearchActivity.FINDING_SOURCES
+        self._simple_render()
+        self._start_request(
+            lambda: self._controller.discover_research_sources(
+                run_id,
+                cancellation_token=cancellation_signal,
+            ),
+            self._complete_simple_discovery,
+            "simple research discovery",
+            cancellation_signal=cancellation_signal,
+        )
+
+    def _complete_simple_discovery(self, response: BrainResponse) -> None:
+        """Adopt the discovered candidates from canonical run state only."""
+        self._append_response(response)
+        self._simple_activity = SimpleResearchActivity.IDLE
+        self._simple_adopt_canonical(response)
+        self._simple_render()
+
+    def _simple_use_source(self, position: int) -> None:
+        """Preview, confirm, then load one card through the guarded path.
+
+        This is one button for the user and the same three boundaries
+        underneath. The preview still runs, the confirmation is still shown,
+        and the fetch still goes through the loader that validates the URL.
+        Nothing is skipped because the surface got smaller.
+        """
+        if not 0 <= position < len(self._simple_cards):
+            self._status.set(self._simple_say("select_source_first"))
+            return
+        card = self._simple_cards[position]
+        if not self._simple_run_id or not self._simple_discovery_id:
+            self._status.set(self._simple_say("select_source_first"))
+            return
+        run_id = self._simple_run_id
+        discovery_id = self._simple_discovery_id
+        try:
+            preview_response = (
+                self._controller.preview_research_source_candidate_acceptance(
+                    run_id,
+                    discovery_id,
+                    card.url,
+                )
+            )
+        except ValueError as error:
+            self._status.set(str(error))
+            return
+        self._append_response(preview_response)
+        preview = preview_response.research_source_candidate_acceptance_preview
+        if not preview_response.success or preview is None or not preview.allowed:
+            return
+        if not messagebox.askyesno(
+            self._simple_say("confirm_title"),
+            f"{card.heading}\n{card.subheading}\n\n"
+            f"{self._simple_say('confirm_body')}",
+            parent=self._root,
+        ):
+            self._status.set(self._simple_say("cancelled_by_user"))
+            return
+        cancellation_signal = CancellationSignal()
+        self._simple_activity = SimpleResearchActivity.LOADING_SOURCE
+        self._simple_render()
+        self._start_request(
+            lambda: self._controller.accept_research_source_candidate(
+                run_id,
+                discovery_id,
+                card.url,
+                cancellation_token=cancellation_signal,
+            ),
+            self._complete_simple_source_load,
+            "simple research source load",
+            cancellation_signal=cancellation_signal,
+        )
+
+    def _complete_simple_source_load(self, response: BrainResponse) -> None:
+        """Report the stage the loader reached, then re-read canonical state.
+
+        The stage is taken from the loader because it is a fact about what
+        happened. Everything else is re-read, because a response saying a
+        source was accepted and a run holding that source are different claims,
+        and only the second one is the one this panel is allowed to show.
+        """
+        self._append_response(response)
+        self._simple_activity = SimpleResearchActivity.IDLE
+        self._simple_last_stage = response.source_load_stage
+        self._simple_refresh_canonical()
+        self._simple_render()
+
+    def _simple_refresh_canonical(self) -> None:
+        """Re-read the persisted run rather than trusting an earlier result."""
+        if not self._simple_run_id:
+            return
+        try:
+            response = self._controller.list_research_runs()
+        except ValueError:
+            return
+        self._simple_adopt_canonical(response)
+
+    def _simple_adopt_canonical(self, response: BrainResponse) -> None:
+        """Take the run matching the Simple context, and nothing else.
+
+        Matching by ID matters. A response carrying several runs must never
+        move this panel onto a different one, because the source the user is
+        about to load would then attach somewhere they never chose.
+        """
+        if not response.success or not self._simple_run_id:
+            return
+        for run in response.research_runs:
+            if run.run_id != self._simple_run_id:
+                continue
+            self._simple_run = run
+            if run.discoveries:
+                self._simple_discovery_id = run.discoveries[-1].discovery_id
+            return
+
+    def _offer_simple_research_handoff(self, question: str) -> None:
+        """Carry a chat question into Simple mode as a draft, not as an action.
+
+        This creates nothing and fetches nothing. It fills the question box and
+        moves the user to the panel, so starting the research stays an explicit
+        press. Text that arrived in a conversation must not become authority to
+        run anything, however clearly it reads as a request.
+        """
+        if not hasattr(self, "_simple_question"):
+            return
+        self._simple_question.set(question.strip())
+        self._simple_language = detect_response_language(question)
+        if hasattr(self, "_workspace_tabs"):
+            self._workspace_tabs.select(2)
+        self._status.set(self._simple_say("start_research"))
 
     def _discover_research_sources(self) -> None:
         """Discover and display metadata candidates for the selected run."""

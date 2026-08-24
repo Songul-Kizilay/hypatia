@@ -2,6 +2,59 @@
 
 All notable project changes are recorded here.
 
+## [0.3.168] - 2026-08-24
+
+### Added
+
+- A Simple research mode: one question box, a guided status ladder, readable
+  source cards, and a single `Use this source` action. It is the default
+  Research tab.
+- `SimpleResearchStep`, `SimpleResearchActivity`, `SimpleSourceCard`,
+  `SimpleResearchPhrasebook`, and `SimpleResearchReadModel` — a Tk-free,
+  read-only projection over canonical research state.
+- A `Research this` offer in Chat, shown only after chat has reported that it
+  did not research something.
+
+### Changed
+
+- The existing detailed Research tab is now labelled `Research (Advanced)`.
+  Nothing was removed from it.
+
+### Safety
+
+- No second research engine. Every state change goes through the existing
+  controller, the existing candidate preview, the existing confirmation, and
+  the existing guarded loader.
+- A step is derived from a persisted run and has no setter, so no button press
+  can advance it. In-flight work is a separate `SimpleResearchActivity` type
+  whose values cannot collide with a step.
+- After a load, the run is re-read from the store rather than inferred from the
+  response, and only the run matching the Simple context is adopted.
+- `INDEXED_WITHOUT_RUN` renders as "Indexed locally, but not added to this
+  research" and never as "Loaded"; the ladder does not advance for it.
+- A discovered candidate is never shown as fetched, an accepted source is never
+  shown as evidence, and evidence is never shown as a verified claim.
+- Candidate cards are deduplicated by canonical resource identity, so one
+  resource listed twice is not presented as two sources.
+- Simple mode keeps its own run context, separate from the Advanced selector,
+  so a source can never attach to a run the user did not create here.
+- `Research this` creates nothing and fetches nothing. It fills the question
+  box, leaving the start as an explicit press, so conversational text never
+  becomes authority to run anything.
+- All failure text is deterministic table lookup in English and Turkish. No
+  model phrases any of it. Technical codes are moved to Advanced details, not
+  hidden.
+
+### Verification
+
+- The package-aware full local suite contains 2,819 passing automated tests.
+- One hundred new tests cover step derivation, activity separation, card
+  projection and deduplication, every load stage's plain sentence in both
+  languages, identifier hiding and exposure, run-context isolation, the
+  preview-confirm-load routing, canonical refresh after a load, and the chat
+  handoff creating nothing.
+- No test requires a network. Discovery and fetching are controlled doubles.
+
 ## [0.3.167] - 2026-08-24
 
 ### Added
