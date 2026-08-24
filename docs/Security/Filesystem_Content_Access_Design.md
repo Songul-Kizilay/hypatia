@@ -66,6 +66,7 @@ Each of those is a separate authority, and this document keeps them separate.
 | `READS_FILESYSTEM_CONTENT` | **CURRENT**, separately authorized effect |
 | `FILESYSTEM_READ` capability value | **CURRENT**, deliberately unregistered |
 | `ToolExecutionOutcome.request_id` | **CURRENT**, code-owned and shared with lifecycle events |
+| Windows rooted-open production boundary | **DECIDED**, implementation absent |
 | `filesystem_read` tool | **PROPOSED**, does not exist |
 | Content in model context | **FUTURE**, separate milestone, separate authority |
 | Content in memory | **FUTURE**, separate milestone |
@@ -242,7 +243,7 @@ Required logical sequence for any future implementation:
 9. close every handle on every branch
 ```
 
-### Platform strategy — Windows candidate measured; production decision open
+### Platform strategy — Windows production boundary decided; implementation absent
 
 The current Python path API does not establish those invariants on Windows.
 `os.O_NOFOLLOW` is absent there, and calling `os.open` after
@@ -275,11 +276,14 @@ by a junction, fail final containment when an opened parent is moved outside the
 root, detect configured-root and final-entry replacement, close handles on an
 exception branch, and return `content_bytes_read == 0`.
 
-**MEASURED, NOT PRODUCTION-APPROVED.** This result satisfies the experimental
-proof requested above on Windows 11 / Python 3.14.5. It does not itself approve
-the native API wrapper as a supported runtime dependency, establish behaviour
-on every Windows filesystem, or settle packaging, ownership, and error-mapping
-policy. Those production decisions remain blockers. The POSIX strategy is also
+The experiment itself remains evidence rather than production code. The
+production API surface, module ownership, dependency-free packaging, handle
+lifetime, NTFS-only initial support, and bounded error mapping are now accepted
+in
+[Windows_Rooted_Open_Production_Decision.md](Windows_Rooted_Open_Production_Decision.md).
+The accepted next step is a production-inert Windows foundation that still
+reads zero bytes and registers no capability. Implementing and adversarially
+testing that boundary remains a Phase A blocker. The POSIX strategy is also
 still open; no implementation may silently fall back to a path-only open on any
 platform.
 
@@ -1075,7 +1079,7 @@ the same style of guard the metadata tool already carries.
 | Filesystem-specific audit channel | **DEFERRED** | New disclosure domain |
 | Knowledge-graph ingestion | **DEFERRED** | Needs provenance type first |
 | Split multi-byte character at range edge | **DECIDED** | Phase A declines; no read outside the authorized range |
-| Windows root-handle primitive | **MEASURED** | Nine-test isolated prototype passes on Windows 11 / Python 3.14.5; production adoption remains a **Phase A blocker** |
+| Windows root-handle primitive | **DECIDED, NOT IMPLEMENTED** | `NtCreateFile` root-relative, no-follow component walk; NTFS-only first boundary; production-inert implementation remains a **Phase A blocker** |
 | POSIX descriptor-relative primitive | **OPEN** | Measure supported platforms; **Phase A blocker for each platform** |
 | Remote-eligibility granularity | **OPEN** | Endpoint locality exists; disclosure authority does not |
 
@@ -1145,6 +1149,7 @@ for a shipped API.
 | `ToolResult.content` | CURRENT, success-only and excluded from `repr`, structured values, and line rendering |
 | Central content authority check | CURRENT in `ToolExecutionService`; payload type plus descriptor and invocation effect are revalidated |
 | `ToolExecutionOutcome.request_id` | CURRENT, required and immutable; `ToolExecutionService` validates one value before telemetry and shares it with every lifecycle event for the invocation |
+| Windows rooted-open production decision | CURRENT accepted ADR in `docs/Security/Windows_Rooted_Open_Production_Decision.md`; no production module exists yet |
 | `SourceLoadStage` | CURRENT and distinguishes `INDEXED_WITHOUT_RUN` from `ACCEPTED_INTO_RUN` |
 | `LLMLearnedMemoryCandidateExtractor`, `LearnedMemoryAuditApplicationService` | CURRENT; no file-content integration exists |
 | `SecurityAgentApplicationService`, `FailureMemoryApplicationService` | CURRENT; no file-content or Tool Layer failure ingestion is implied by their existence |
@@ -1152,5 +1157,7 @@ for a shipped API.
 | `filesystem_read` tool and runtime registration | PROPOSED only; neither exists in production code |
 | `MetaController` | FUTURE architectural role; no production type with that name exists |
 
-The code-owned outcome identity foundation is versioned as `v0.3.175`; it still
-opens and reads no file, and the desktop does not yet project that identity.
+The code-owned outcome identity foundation is versioned as `v0.3.175`. The
+Windows rooted-open production boundary was decided afterward without changing
+the runtime version; no production module opens a content handle or reads a
+file, and the desktop does not project content identity.

@@ -950,6 +950,13 @@ with optional OpenAI-compatible LLM conversation support.
   `ToolResult`, and `FilesystemContentPayload`, so neither a tool nor returned
   content can author its own provenance. It is not yet projected into the
   desktop presentation model.
+- The Windows rooted-open production boundary is now decided from the nine-test
+  prototype and Microsoft API contracts. The accepted first foundation uses a
+  lazily bound, dependency-free `NtCreateFile` root-relative component walk,
+  keeps every handle inside one production module, supports only a proven NTFS
+  boundary, and maps all native failures to bounded categories without paths or
+  OS messages. This is a design decision only: no production rooted-open module,
+  content read, runtime registration, or desktop control exists yet.
 
 ### Intentionally Not Implemented
 
@@ -1018,13 +1025,14 @@ changed.
 
 ## Next Milestone
 
-Decide the production boundary for the measured Windows rooted-open primitive:
-supported API surface, wrapper ownership, packaging, handle lifetime, and
-bounded refusal/failure mapping. Record that decision before moving prototype
-native calls into `src`.
+Implement the accepted production-inert Windows rooted-open foundation in one
+Tool Layer platform module. It must lazily bind only the approved system APIs,
+acquire one relative component at a time, prove NTFS/reparse/root/final
+containment and identity, own every handle through deterministic context
+management, and expose no raw handle or path.
 
-Keep the next increment free of filesystem reads, content-capability runtime
+Keep the next increment free of content reads, `FILESYSTEM_READ` runtime
 registration, desktop controls, model context, memory, research, evidence,
-persistence, and generic telemetry content. POSIX/Linux rooted-open work remains
-a later platform milestone rather than being mixed into the Windows production
-boundary decision.
+persistence, and generic telemetry content. Preserve the existing experiment
+as independent evidence. POSIX/Linux rooted-open work remains a later platform
+milestone rather than being mixed into the Windows foundation.
