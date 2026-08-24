@@ -1326,6 +1326,29 @@ class ResponseComposer:
             failure_lessons=lessons,
         )
 
+    def failure_lessons_persistence_failed(
+        self,
+        request: BrainRequest,
+        lessons: tuple[ResearchFailureLesson, ...],
+    ) -> BrainResponse:
+        """Report lessons retained only in memory after a durable-write failure."""
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Failure lessons were not durably remembered.",
+                    f"Lessons retained in this process: {len(lessons)}",
+                    "Durable write: failed.",
+                    "Restarting Hypatia may lose these in-memory lessons.",
+                    "No research run, claim, or assessment changed.",
+                )
+            ),
+            request_id=request.request_id,
+            intent="failure_memory",
+            memory_count=0,
+            success=False,
+            failure_lessons=lessons,
+        )
+
     def failure_lesson_recall(
         self,
         request: BrainRequest,
@@ -1567,6 +1590,30 @@ class ResponseComposer:
             intent="research_hypothesis",
             memory_count=0,
             success=False,
+        )
+
+    def hypothesis_persistence_failed(
+        self,
+        request: BrainRequest,
+        appraisal: HypothesisAppraisal,
+    ) -> BrainResponse:
+        """Report a hypothesis change retained only in the current process."""
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Research hypothesis was not durably saved.",
+                    f"ID: {appraisal.hypothesis.hypothesis_id}",
+                    f"Status in this process: {appraisal.status.value}",
+                    "Durable write: failed.",
+                    "Restarting Hypatia may lose this in-memory change.",
+                    "No status here means the hypothesis is true.",
+                )
+            ),
+            request_id=request.request_id,
+            intent="research_hypothesis",
+            memory_count=0,
+            success=False,
+            hypothesis_appraisal=appraisal,
         )
 
     def vulnerability_family(

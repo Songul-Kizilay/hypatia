@@ -12,6 +12,10 @@ be ignored.
 
 Nothing in this service performs research either. Deriving, storing, and
 recalling all leave every run byte-identical.
+
+A durable-write failure leaves the lessons available in this process but
+returns an unsuccessful response. Repeating the explicit store request retries
+that pending write; no timer, background loop, or unbounded retry is introduced.
 """
 
 from __future__ import annotations
@@ -60,6 +64,7 @@ class FailureMemoryApplicationService:
         self._events = FailureMemoryEvents(event_bus)
         self._clock = clock or (lambda: datetime.now(UTC))
         self._lessons: dict[str, ResearchFailureLesson] = {}
+        self._persistence_pending = False
         self._restore()
 
     @staticmethod
@@ -97,7 +102,12 @@ class FailureMemoryApplicationService:
         """Remember the lessons a run supports, changing nothing about it."""
         run_id, derived = self._derive(request)
         self._events.derived(run_id, derived)
-        stored = self._store(derived)
+        stored, persisted = self._store(derived)
+        if not persisted:
+            return self._response_composer.failure_lessons_persistence_failed(
+                request,
+                derived,
+            )
         self._events.stored(run_id, derived, stored, len(self._lessons))
         return self._response_composer.failure_lessons(request, derived, True)
 
@@ -124,7 +134,10 @@ class FailureMemoryApplicationService:
         run = self._run_manager.get(run_id.strip())
         return run.run_id, self._deriver.derive(run, self._clock())
 
-    def _store(self, lessons: tuple[ResearchFailureLesson, ...]) -> int:
+    def _store(
+        self,
+        lessons: tuple[ResearchFailureLesson, ...],
+    ) -> tuple[int, bool]:
         """Keep lessons that are new, never rewriting one already remembered."""
         stored = 0
         for lesson in lessons:
@@ -134,9 +147,12 @@ class FailureMemoryApplicationService:
                 break
             self._lessons[lesson.lesson_id] = lesson
             stored += 1
-        if stored:
-            self._persist()
-        return stored
+        if stored and self._lesson_store is not None:
+            self._persistence_pending = True
+        persisted = not self._persistence_pending or self._persist()
+        if persisted:
+            self._persistence_pending = False
+        return stored, persisted
 
     def _restore(self) -> None:
         if self._lesson_store is None:
@@ -144,11 +160,12 @@ class FailureMemoryApplicationService:
         for lesson in self._lesson_store.load():
             self._lessons[lesson.lesson_id] = lesson
 
-    def _persist(self) -> None:
+    def _persist(self) -> bool:
         """Write remembered lessons, never erasing them silently on failure."""
         if self._lesson_store is None:
-            return
+            return True
         try:
             self._lesson_store.save(list(self._lessons.values()))
         except ResearchError:
-            return
+            return False
+        return True

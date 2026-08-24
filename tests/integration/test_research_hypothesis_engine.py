@@ -618,7 +618,7 @@ class HypothesisServiceTests(HypothesisFixture):
         self.assertEqual(len(service.hypotheses()), 1)
         self.assertFalse(self.hypothesis_path.exists())
 
-    def test_a_failed_write_keeps_the_hypothesis_in_memory(self) -> None:
+    def test_a_failed_proposal_write_is_reported_and_kept_in_memory(self) -> None:
         service = self.service()
         run_id = self.new_run()
 
@@ -627,9 +627,69 @@ class HypothesisServiceTests(HypothesisFixture):
             "save",
             side_effect=ResearchError("disk full"),
         ):
-            self.propose(service, run_id)
+            response = service.process_propose(
+                self.request(
+                    "research_hypothesis_propose",
+                    research_run_id=run_id,
+                    hypothesis_statement=STATEMENT,
+                    hypothesis_discriminating_test=TEST,
+                )
+            )
 
+        self.assertFalse(response.success)
+        self.assertIsNotNone(response.hypothesis_appraisal)
+        self.assertIn("not durably saved", response.message)
+        self.assertIn("Durable write: failed", response.message)
+        self.assertIn("may lose", response.message)
         self.assertEqual(len(service.hypotheses()), 1)
+        self.assertEqual(self.service().hypotheses(), ())
+
+    def test_a_failed_evidence_write_reports_the_unpersisted_delta(self) -> None:
+        service = self.service()
+        run_id = self.new_run()
+        hypothesis_id = self.propose(service, run_id)
+        evidence_id = self.evidence(run_id, "a")
+
+        with patch.object(
+            JsonFileHypothesisStore,
+            "save",
+            side_effect=ResearchError("disk full"),
+        ):
+            response = service.process_support(
+                self.request(
+                    "research_hypothesis_support",
+                    hypothesis_id=hypothesis_id,
+                    evidence_ids=[evidence_id],
+                )
+            )
+
+        self.assertFalse(response.success)
+        self.assertEqual(
+            service.hypotheses()[0].supporting_evidence_ids,
+            (evidence_id,),
+        )
+        self.assertEqual(self.service().hypotheses()[0].supporting_evidence_ids, ())
+
+    def test_a_failed_withdraw_write_reports_the_unpersisted_delta(self) -> None:
+        service = self.service()
+        run_id = self.new_run()
+        hypothesis_id = self.propose(service, run_id)
+
+        with patch.object(
+            JsonFileHypothesisStore,
+            "save",
+            side_effect=ResearchError("disk full"),
+        ):
+            response = service.process_withdraw(
+                self.request(
+                    "research_hypothesis_withdraw",
+                    hypothesis_id=hypothesis_id,
+                )
+            )
+
+        self.assertFalse(response.success)
+        self.assertTrue(service.hypotheses()[0].withdrawn)
+        self.assertFalse(self.service().hypotheses()[0].withdrawn)
 
     def test_hypotheses_never_change_the_run(self) -> None:
         service = self.service()

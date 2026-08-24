@@ -2,6 +2,39 @@
 
 All notable project changes are recorded here.
 
+## [0.3.182] - 2026-08-24
+
+### Fixed
+
+- Hypothesis propose, evidence-entry, and withdrawal requests now return
+  `success=false` when the hypothesis store rejects the durable write. The
+  updated appraisal remains available in memory and in the response, but the
+  message states that a restart may lose the change.
+- Failure Memory store requests now return `success=false` when lessons cannot
+  be written durably. The derived lessons remain in the current process, and an
+  explicit repeated store request retries the pending write even when it adds no
+  new lesson identifiers.
+- A failed Failure Memory write no longer emits the normal `lessons_stored`
+  event. Derivation remains observable, while durable storage is never claimed
+  when it did not happen.
+
+### Safety
+
+- Persistence exceptions remain bounded: responses expose no exception text,
+  native path, store path, or platform detail. Existing in-memory state is not
+  erased or rolled back deceptively.
+- The change adds no storage schema, migration, automatic retry loop, model
+  judgement, research operation, filesystem/tool capability, or truth state.
+
+### Verification
+
+- Focused integration coverage exercises failed proposal, evidence, withdrawal,
+  lesson storage, restart-loss visibility, missing success events, and an
+  explicit successful retry.
+- Package-aware discovery passes 3,354 tests with 3 existing platform-dependent
+  skips. Black, Ruff, source MyPy, and whitespace checks pass for this release
+  scope.
+
 ## [0.3.181] - 2026-08-24
 
 ### Changed

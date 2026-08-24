@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.181 (Genesis)`
+`v0.3.182 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.181`** is the current source/package release line.
+- **Runtime release `v0.3.182`** is the current source/package release line.
   GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -51,7 +51,8 @@ with optional OpenAI-compatible LLM conversation support.
   independent source plus an active authored trust assessment of at least
   `medium` for every supporting source; the appraisal reports trust coverage on
   both sides. Any opposing evidence still moves a hypothesis off the supported
-  track.
+  track. If a hypothesis write fails, the response is explicitly unsuccessful,
+  retains the in-process appraisal, and warns that restart may lose the change.
 - Source reputation aggregates authored assessments by origin across runs and
   reports counts with a bounded standing, never a score. It is derived on every
   request with no store, so revising an assessment revises the reputation. Below
@@ -67,7 +68,9 @@ with optional OpenAI-compatible LLM conversation support.
   provenance is refused. Behind `HYPATIA_FAILURE_MEMORY_ENABLED`, default off.
   A lesson records that something did not work here, never that it cannot work,
   and recall is advisory: it blocks no plan, refuses no capability, downgrades
-  no claim, and edits no run.
+  no claim, and edits no run. A failed lesson-store write is reported as
+  unsuccessful while keeping the lessons in memory; repeating the explicit
+  store request retries the pending durable write.
 - Bounded reflection reports how a run went — what failed, what contradicted
   what, which beliefs were revised, what rests on thin evidence, what stayed
   uncertain, what effort went unused, what worked, and what to ask next — with
@@ -1026,7 +1029,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 3,351 automated tests pass through package-aware discovery.
+- 3,354 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for all `src` files and the focused sensitive-path/rooted-open
   security tests. A full `src` + `tests` MyPy sweep still has separately

@@ -746,20 +746,44 @@ class FailureMemoryServiceTests(FailureMemoryFixture):
         self.assertEqual(len(service.lessons()), 1)
         self.assertFalse(self.lesson_path.exists())
 
-    def test_a_failed_write_keeps_the_lesson_in_memory(self) -> None:
+    def test_a_failed_write_is_reported_and_keeps_the_lesson_in_memory(self) -> None:
         run_id = self.failing_run()
         service = self.service()
+        request = self.request("failure_memory_store", research_run_id=run_id)
 
         with patch.object(
             JsonFileFailureLessonStore,
             "save",
             side_effect=ResearchError("disk full"),
         ):
-            service.process_store(
-                self.request("failure_memory_store", research_run_id=run_id)
-            )
+            response = service.process_store(request)
 
+        self.assertFalse(response.success)
+        self.assertEqual(len(response.failure_lessons), 1)
+        self.assertIn("not durably remembered", response.message)
+        self.assertIn("Durable write: failed", response.message)
+        self.assertIn("may lose", response.message)
         self.assertEqual(len(service.lessons()), 1)
+        self.assertEqual(self.service().lessons(), ())
+        self.assertEqual(self.named(LESSONS_STORED), [])
+
+    def test_an_explicit_second_store_retries_a_pending_write(self) -> None:
+        run_id = self.failing_run()
+        service = self.service()
+        request = self.request("failure_memory_store", research_run_id=run_id)
+
+        with patch.object(
+            JsonFileFailureLessonStore,
+            "save",
+            side_effect=ResearchError("disk full"),
+        ):
+            first = service.process_store(request)
+
+        second = service.process_store(request)
+
+        self.assertFalse(first.success)
+        self.assertTrue(second.success)
+        self.assertEqual(len(self.service().lessons()), 1)
 
 
 class FailureMemoryEventTests(FailureMemoryFixture):

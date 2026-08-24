@@ -18,6 +18,10 @@ Positive support also carries the active authored source-trust coverage into
 the appraisal. The appraiser will not call a hypothesis supported until more
 than one independent source is present and every supporting source is assessed
 at medium trust or better. This is an evidence boundary, never a truth claim.
+
+Durable-write failure never masquerades as success. The changed hypothesis is
+kept in this process and returned with an unsuccessful response that warns about
+restart loss; store paths and exception text never enter the response.
 """
 
 from __future__ import annotations
@@ -126,8 +130,7 @@ class HypothesisApplicationService:
         self._hypotheses[hypothesis.hypothesis_id] = hypothesis
         appraisal = self._appraiser.appraise(hypothesis, run)
         self._events.proposed(appraisal)
-        self._persist()
-        return self._response_composer.hypothesis_appraisal(request, appraisal)
+        return self._response_after_persist(request, appraisal)
 
     def process_support(self, request: BrainRequest) -> BrainResponse:
         return self._enter_evidence(request, supporting=True)
@@ -142,8 +145,7 @@ class HypothesisApplicationService:
         self._hypotheses[updated.hypothesis_id] = updated
         appraisal = self._appraiser.appraise(updated, run)
         self._events.withdrawn(appraisal)
-        self._persist()
-        return self._response_composer.hypothesis_appraisal(request, appraisal)
+        return self._response_after_persist(request, appraisal)
 
     def process_list(self, request: BrainRequest) -> BrainResponse:
         """Report every hypothesis with its derived standing."""
@@ -174,7 +176,19 @@ class HypothesisApplicationService:
         self._hypotheses[updated.hypothesis_id] = updated
         appraisal = self._appraiser.appraise(updated, run)
         self._events.evidence_entered(appraisal, supporting)
-        self._persist()
+        return self._response_after_persist(request, appraisal)
+
+    def _response_after_persist(
+        self,
+        request: BrainRequest,
+        appraisal: HypothesisAppraisal,
+    ) -> BrainResponse:
+        """Report the in-memory change honestly when its durable write fails."""
+        if not self._persist():
+            return self._response_composer.hypothesis_persistence_failed(
+                request,
+                appraisal,
+            )
         return self._response_composer.hypothesis_appraisal(request, appraisal)
 
     def _existing(
@@ -221,11 +235,12 @@ class HypothesisApplicationService:
         for hypothesis in self._hypothesis_store.load():
             self._hypotheses[hypothesis.hypothesis_id] = hypothesis
 
-    def _persist(self) -> None:
+    def _persist(self) -> bool:
         """Write hypotheses, never erasing them silently on failure."""
         if self._hypothesis_store is None:
-            return
+            return True
         try:
             self._hypothesis_store.save(list(self._hypotheses.values()))
         except ResearchError:
-            return
+            return False
+        return True

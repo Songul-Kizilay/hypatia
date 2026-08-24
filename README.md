@@ -787,6 +787,11 @@ The value must be exactly lowercase `true`. Lessons are written to
 `research_failure_lessons.json` beside the research-run store, in a separate
 versioned document.
 
+If that durable write fails, the store request returns `success=false` and says
+that the lessons exist only in the current process and may be lost on restart.
+The lessons are not erased from memory. Repeating the explicit store request
+retries the pending write; there is no background or unbounded retry loop.
+
 Seven kinds of lesson are derived from what a run recorded: a claim named in a
 contradiction, a claim we stopped holding, an assessment we revised, a source we
 accepted and then judged weak, a confidence that moved, a search that returned
@@ -885,6 +890,11 @@ HYPATIA_HYPOTHESIS_ENABLED=true
 The value must be exactly lowercase `true`. They are written to
 `research_hypotheses.json` beside the research-run store, in a separate
 versioned document.
+
+If a proposal, evidence entry, or withdrawal cannot be written durably, the
+response returns `success=false`, keeps the updated appraisal in the current
+process, and warns that restart may lose the change. Store paths and native
+errors are never included in the response.
 
 Every hypothesis must name what would count against it, before any evidence
 exists, while it is still cheap to be honest about what would change your mind.
