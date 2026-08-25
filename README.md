@@ -791,6 +791,13 @@ With it set, the desktop's **Learning** tab gains the lesson half: preview what
 a run's record would support, remember it, recall what overlaps a question, and
 review everything kept. Without it that half is absent rather than disabled.
 
+A lesson collapses its statement and context to a single line when it is
+created. Lessons are listed one per line, and a failure reason is free text, so
+a line break inside one would otherwise arrive in the report as an extra entry
+carrying a lesson kind of its own choosing. The rule lives on the record rather
+than in each renderer, because a rendering convention every composer has to
+remember is one a composer eventually forgets.
+
 If that durable write fails, the store request returns `success=false` and says
 that the lessons exist only in the current process and may be lost on restart.
 The lessons are not erased from memory. Repeating the explicit store request

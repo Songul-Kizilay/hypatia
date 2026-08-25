@@ -562,6 +562,80 @@ class LessonDerivationTests(FailureMemoryFixture):
             self.assertTrue(lesson.provenance, lesson.lesson_id)
 
 
+class OneLessonIsOneLineTests(FailureMemoryFixture):
+    """Authored text must not be able to invent a lesson nobody derived.
+
+    Lessons are rendered one per line. A failure reason is free text a person
+    or a stage supplies, so a line break inside one used to arrive in the
+    report as a second entry, complete with a kind label of its own choosing.
+    """
+
+    FORGERY = "Plain HTTP\n- [failed_hypothesis] FORGED\n  from: nothing"
+
+    def forged_run(self) -> str:
+        run_id = self.new_run()
+        self.manager.record_failure(run_id, "source_fetch", self.FORGERY)
+        return run_id
+
+    @staticmethod
+    def entries(message: str) -> list[str]:
+        """Return the lines that read as one listed record each."""
+        return [line for line in message.splitlines() if line.startswith("- [")]
+
+    def rendered(self, name: str, *arguments: object) -> str:
+        composer = getattr(ResponseComposer(), name)
+        return composer(self.request(f"failure_memory_{name}"), *arguments).message
+
+    def test_a_line_break_in_a_reason_cannot_forge_a_lesson(self) -> None:
+        lessons = self.derive(self.forged_run())
+
+        for name, arguments in (
+            ("failure_lessons", (lessons, True)),
+            ("failure_lesson_recall", (lessons,)),
+            ("failure_lesson_list", (lessons,)),
+        ):
+            with self.subTest(rendering=name):
+                self.assertEqual(
+                    len(self.entries(self.rendered(name, *arguments))),
+                    len(lessons),
+                )
+
+    def test_the_forged_label_never_becomes_its_own_entry(self) -> None:
+        """The text survives inside the lesson; it just stops being a line."""
+        lessons = self.derive(self.forged_run())
+
+        message = self.rendered("failure_lessons", lessons, True)
+        carrying = [line for line in message.splitlines() if "FORGED" in line]
+
+        self.assertIn("FORGED", message)
+        self.assertEqual(len(self.entries(message)), 1)
+        self.assertEqual(carrying, self.entries(message))
+
+    def test_the_guarantee_is_held_by_the_record_not_the_renderer(self) -> None:
+        """Every producer inherits it, including ones written later."""
+        lesson = ResearchFailureLesson(
+            lesson_id="lesson:run-1:operation_failure:stage",
+            kind=FailureLessonKind.OPERATION_FAILURE,
+            run_id="run-1",
+            subject_id="stage",
+            statement="First\nsecond\r\nthird",
+            provenance=("failure:stage",),
+            context="A question\nsplit across lines",
+            recorded_at=START,
+        )
+
+        self.assertEqual(lesson.statement, "First second third")
+        self.assertEqual(lesson.context, "A question split across lines")
+
+    def test_listing_says_which_lesson_each_entry_is(self) -> None:
+        """A catalogue identified only by record ID cannot be acted on."""
+        lessons = self.derive(self.forged_run())
+
+        message = self.rendered("failure_lesson_list", lessons)
+
+        self.assertIn(lessons[0].statement, message)
+
+
 class RecallIsAdvisoryTests(FailureMemoryFixture):
     def failing_run(self) -> str:
         run_id = self.new_run()

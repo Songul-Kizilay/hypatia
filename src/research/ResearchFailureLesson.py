@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from core.Exceptions import ResearchError
+from research.DisplayText import one_line
 from research.FailureLessonKind import FailureLessonKind
 
 MAX_LESSON_STATEMENT_LENGTH = 300
@@ -37,6 +38,14 @@ class ResearchFailureLesson:
     recorded_at: datetime
 
     def __post_init__(self) -> None:
+        # Collapsed rather than refused. Lessons are rendered one per line, so
+        # a statement containing a line break would forge an entry in the
+        # report it appears in — a typed failure reason arriving as a lesson
+        # nobody derived. Refusing here would instead turn an awkward reason
+        # into an exception, and would make an already-stored lesson written
+        # before this rule unreadable.
+        object.__setattr__(self, "statement", one_line(self.statement))
+        object.__setattr__(self, "context", one_line(self.context))
         for value, label in (
             (self.lesson_id, "lesson ID"),
             (self.run_id, "run ID"),

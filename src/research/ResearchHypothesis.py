@@ -22,6 +22,7 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 
 from core.Exceptions import ResearchError
+from research.DisplayText import one_bounded_line
 
 MAX_HYPOTHESIS_STATEMENT_LENGTH = 400
 MAX_DISCRIMINATING_TEST_LENGTH = 400
@@ -94,19 +95,10 @@ class ResearchHypothesis:
         return len(self.supporting_evidence_ids) + len(self.opposing_evidence_ids)
 
     def one_line_statement(self, limit: int) -> str:
-        """Return the statement as a single line, bounded for display.
-
-        Anywhere a hypothesis appears among others it is one line among many,
-        so a statement containing newlines could otherwise forge entries in
-        that report. Collapsing here rather than at each call site means every
-        such report inherits the guarantee instead of remembering it.
-        """
+        """Return the statement as a single line, bounded for display."""
         if limit < 1:
             raise ResearchError("A hypothesis display limit must be positive.")
-        collapsed = " ".join(self.statement.split())
-        if len(collapsed) <= limit:
-            return collapsed
-        return collapsed[: max(limit - 3, 1)] + "..."
+        return one_bounded_line(self.statement, limit)
 
     def supported_by(
         self,

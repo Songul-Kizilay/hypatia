@@ -2,6 +2,39 @@
 
 All notable project changes are recorded here.
 
+## [0.3.188] - 2026-08-26
+
+### Fixed
+
+- Authored text can no longer forge a failure lesson in a report. Lessons are
+  rendered one per line, and a failure reason is free text, so a line break
+  inside one arrived in the report as a second entry carrying a lesson kind of
+  its own choosing. One real lesson rendered as two, the invented one labelled
+  `failed_hypothesis`. Reproduced, then closed at the record: a lesson collapses
+  its statement and context to a single line at construction, so every producer
+  inherits the guarantee rather than each renderer having to remember it.
+- Collapsing rather than refusing, so an awkward failure reason becomes one
+  line instead of an exception, and a lesson stored before this rule still
+  loads. The text itself is unchanged; it simply stops being its own line.
+- Listing remembered lessons now says which lesson each entry is. Entries had
+  been identified only by record ID, the same unreadability fixed for the
+  hypothesis listing in `0.3.187`, and it matters for the same reason: the
+  reason to open the list is to decide what to do about what is in it.
+
+### Changed
+
+- The single-line rule now has one implementation shared by hypotheses and
+  lessons, rather than one copy per record type.
+
+### Verification
+
+- Coverage pins the forgery across all three lesson renderings, the collapse at
+  the record itself for both statement and context, that the forged text still
+  survives inside its own entry rather than being silently discarded, and that
+  listings name what they list.
+- Package-aware discovery passes 3,449 tests with 3 existing platform-dependent
+  skips. Black, Ruff, and source MyPy pass for this release scope.
+
 ## [0.3.187] - 2026-08-26
 
 ### Added

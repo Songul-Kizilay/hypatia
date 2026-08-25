@@ -1334,13 +1334,16 @@ class ResponseComposer:
         request: BrainRequest,
         lessons: tuple[ResearchFailureLesson, ...],
     ) -> BrainResponse:
-        """Render everything remembered, deriving nothing new."""
+        """Render everything remembered, deriving nothing new.
+
+        The lesson leads, for the reason the hypothesis listing does: a
+        catalogue identified only by record ID cannot be read by anyone
+        deciding what to do about it.
+        """
         lines = [f"Remembered failure lessons: {len(lessons)}"]
-        lines.extend(
-            f"- {lesson.lesson_id} [{lesson.kind.value}] "
-            f"({len(lesson.provenance)} record(s))"
-            for lesson in lessons
-        )
+        for lesson in lessons:
+            lines.append(f"- [{lesson.kind.value}] {lesson.statement}")
+            lines.append(f"  {lesson.lesson_id} ({len(lesson.provenance)} record(s))")
         lines.append("Listing lessons performs no research.")
         return BrainResponse(
             message="\n".join(lines),
