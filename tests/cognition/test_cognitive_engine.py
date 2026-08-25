@@ -6531,7 +6531,11 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(self.memory_manager.count(), memory_count)
         self.assertEqual(llm_provider.calls, [])
         self.assertEqual(extractor.calls, [])
-        self.assertEqual(events, [])
+        # Creating a run consults failure memory for advice, which is a read and
+        # says so. Naming the one permitted event is a stronger claim than an
+        # empty list: a derive, a store or a run mutation would still fail here.
+        self.assertEqual(events, ["failure_memory.lessons_recalled"])
+        self.assertEqual(created.failure_lessons, ())
 
     def test_terminal_research_markdown_preview_is_read_only_and_local(self) -> None:
         store = ToggleResearchRunStore()

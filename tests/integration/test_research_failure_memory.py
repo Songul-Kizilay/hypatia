@@ -50,6 +50,7 @@ from research.CanonicalResearchSummary import CanonicalResearchSummary
 from research.FailureLessonKind import FailureLessonKind, weight_for
 from research.FailureMemoryAdvisor import (
     MAX_RECALL_LIMIT,
+    MIN_SHARED_TOKENS,
     FailureMemoryAdvisor,
 )
 from research.JsonFileFailureLessonStore import (
@@ -680,6 +681,42 @@ class RecallIsAdvisoryTests(FailureMemoryFixture):
         )
 
         self.assertEqual(relevant[0].lesson_id, "heavy")
+
+    def test_a_single_shared_word_is_not_enough_to_recall(self) -> None:
+        """Lessons share vocabulary just by being lessons.
+
+        Both questions below overlap this lesson. Only the second overlaps it
+        on anything that identifies the subject; the first shares "evidence",
+        which every disproving lesson ever written will also contain. Recall
+        that fires on one such word is recall nobody reads.
+        """
+        lesson = ResearchFailureLesson(
+            lesson_id="lesson:run-1:disproving_evidence:h1",
+            kind=FailureLessonKind.DISPROVING_EVIDENCE,
+            run_id="run-1",
+            subject_id="h1",
+            statement="Opposing evidence was recorded against the ring-age reading.",
+            provenance=("h1",),
+            context="Which observation would change the ring-age hypothesis?",
+            recorded_at=START,
+        )
+        advisor = FailureMemoryAdvisor()
+
+        self.assertEqual(MIN_SHARED_TOKENS, 2)
+        self.assertEqual(
+            advisor.relevant(
+                "Does quantum error correction reduce evidence loss?",
+                [lesson],
+            ),
+            (),
+        )
+        self.assertEqual(
+            advisor.relevant(
+                "Which observation settles the ring-age question?",
+                [lesson],
+            ),
+            (lesson,),
+        )
 
     def test_an_empty_question_recalls_nothing(self) -> None:
         self.assertEqual(FailureMemoryAdvisor().relevant("", []), ())

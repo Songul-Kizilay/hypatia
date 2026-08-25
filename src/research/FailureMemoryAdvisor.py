@@ -11,6 +11,13 @@ lesson's own wording, weighted by how much the lesson kind is worth
 remembering. A smarter matcher would be a model deciding which past failures
 apply to present work, which is exactly the kind of confident, unauditable
 judgement this project keeps out of the loop.
+
+Dumb is not the same as indiscriminate. Every lesson carries some shared
+vocabulary simply by being a lesson, so a single overlapping word says almost
+nothing: an unrelated question about error-correction thresholds matched a
+hypothesis about planetary rings on the word "evidence" alone. Two words is
+still a crude test, but it is a test. Advice nobody trusts is worse than no
+advice, because it teaches people to skip the part that was worth reading.
 """
 
 from __future__ import annotations
@@ -21,7 +28,7 @@ from research.ResearchFailureLesson import ResearchFailureLesson
 
 DEFAULT_RECALL_LIMIT = 5
 MAX_RECALL_LIMIT = 20
-MIN_SHARED_TOKENS = 1
+MIN_SHARED_TOKENS = 2
 
 
 class FailureMemoryAdvisor:

@@ -13,6 +13,10 @@ be ignored.
 Nothing in this service performs research either. Deriving, storing, and
 recalling all leave every run byte-identical.
 
+Recall is also offered as a plain read, so a caller can put advice in front of
+someone at the moment a new question is asked. That path still decides nothing:
+it returns lessons to display and cannot fail the work it accompanies.
+
 Hypothesis outcomes enter through a separate explicit command. That command
 reads the durable hypothesis store on every request rather than reaching into
 the hypothesis service's in-memory state. A lesson therefore never claims that
@@ -38,6 +42,7 @@ from research.FailureMemoryAdvisor import FailureMemoryAdvisor
 from research.HypothesisFailureLessonDeriver import (
     MAX_HYPOTHESIS_FAILURE_LESSONS_PER_RUN,
     HypothesisFailureLessonDeriver,
+    hypothesis_retention_key,
 )
 from research.HypothesisStore import HypothesisStore
 from research.JsonFileFailureLessonStore import MAX_FAILURE_STORE_LESSONS
@@ -151,17 +156,24 @@ class FailureMemoryApplicationService:
                 continue
             appraisal = self._hypothesis_appraiser.appraise(hypothesis, run)
             lessons.extend(self._hypothesis_deriver.derive(appraisal, run, recorded_at))
-        lessons.sort(key=lambda lesson: (-lesson.weight, lesson.lesson_id))
+        lessons.sort(key=hypothesis_retention_key)
         derived = tuple(lessons[:MAX_HYPOTHESIS_FAILURE_LESSONS_PER_RUN])
+        dropped = len(lessons) - len(derived)
         self._events.derived(run.run_id, derived)
         stored, persisted = self._store(derived)
         if not persisted:
             return self._response_composer.failure_lessons_persistence_failed(
                 request,
                 derived,
+                dropped=dropped,
             )
         self._events.stored(run.run_id, derived, stored, len(self._lessons))
-        return self._response_composer.failure_lessons(request, derived, True)
+        return self._response_composer.failure_lessons(
+            request,
+            derived,
+            True,
+            dropped=dropped,
+        )
 
     def process_list(self, request: BrainRequest) -> BrainResponse:
         """Report everything remembered, deriving nothing new."""
@@ -172,9 +184,28 @@ class FailureMemoryApplicationService:
         question = request.metadata.get("research_question")
         if not isinstance(question, str) or not question.strip():
             raise ResearchError("Failure recall requires a research question.")
+        return self._response_composer.failure_lesson_recall(
+            request,
+            self.advice(question),
+        )
+
+    def advice(self, question: str) -> tuple[ResearchFailureLesson, ...]:
+        """Return prior lessons overlapping a question, changing nothing.
+
+        This is recall without a command behind it, so that advice can reach a
+        person at the moment it is relevant rather than only when they think to
+        ask. It derives no lesson, writes nothing, and leaves every run
+        byte-identical.
+
+        An unusable question returns nothing instead of raising. A caller using
+        this to decorate work that already succeeded must not be handed an
+        exception that turns that success into a failure.
+        """
+        if not isinstance(question, str) or not question.strip():
+            return ()
         relevant = self._advisor.relevant(question, self._lessons.values())
         self._events.recalled(relevant, len(self._lessons))
-        return self._response_composer.failure_lesson_recall(request, relevant)
+        return relevant
 
     def _derive(
         self,

@@ -821,9 +821,23 @@ write. Repeating the request is idempotent, and a weakened hypothesis that is
 later contradicted can retain both distinct, provenance-backed lessons without
 either lesson claiming that the hypothesis is true or false.
 
-Recall is advisory and stays advisory. Asking for lessons relevant to a new
-question returns them ranked, bounded, and clearly labelled — it blocks no plan,
-refuses no capability, downgrades no claim, and edits no run. A system that
+Each such lesson quotes the hypothesis in the wording it was written in. An
+outcome recorded only as a record ID is unreadable by the time anyone needs it,
+and recall matches on shared words, so a lesson made entirely of fixed phrasing
+would match every later question containing a word like "evidence". The
+quotation is collapsed to one line and shortened before the sentence around it,
+so a long or multi-line hypothesis can neither forge report lines nor push the
+truth-neutrality disclaimer off the end.
+
+Recall is advisory and stays advisory. Creating a research run surfaces the
+remembered lessons whose wording overlaps the new question, and asking for them
+directly returns the same thing ranked, bounded, and clearly labelled — it
+blocks no plan, refuses no capability, downgrades no claim, and edits no run.
+The run is persisted before recall is consulted and advice cannot fail it: a
+recall that turned a saved run into a reported failure would be worse than no
+recall at all. Relevance needs at least two shared words, because every lesson
+shares some vocabulary simply by being a lesson, and advice nobody trusts is
+worse than no advice — it teaches people to skip the part worth reading. A system that
 stops trying things because something similar failed once has swapped research
 for superstition. Matching is deliberately dumb word overlap rather than a model
 deciding which past failures apply, because that judgement would be confident

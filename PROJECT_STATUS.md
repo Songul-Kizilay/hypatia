@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.184 (Genesis)`
+`v0.3.185 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.184`** is the current source/package release line.
+- **Runtime release `v0.3.185`** is the current source/package release line.
   GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -77,7 +77,14 @@ with optional OpenAI-compatible LLM conversation support.
   durable hypotheses for the selected run: `weakened` derives a
   `disproving_evidence` lesson, `contradicted` derives a `failed_hypothesis`
   lesson, and `open`, `supported`, or `withdrawn` derives none. No event handler
-  or background task creates these lessons automatically.
+  or background task creates these lessons automatically. Each lesson quotes the
+  hypothesis in its own wording on a single bounded line, and the per-run limit
+  keeps contradictions ahead of weakened outcomes while reporting any overflow.
+- Creating a research run surfaces remembered lessons whose wording overlaps the
+  new question. That path is read-only, consults no model, requires at least two
+  shared words, and cannot fail the run it accompanies: the run is persisted
+  before recall is consulted, and an advisory failure returns no lessons rather
+  than an error about work that succeeded.
 - Bounded reflection reports how a run went — what failed, what contradicted
   what, which beliefs were revised, what rests on thin evidence, what stayed
   uncertain, what effort went unused, what worked, and what to ask next — with
@@ -1036,7 +1043,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 3,368 automated tests pass through package-aware discovery.
+- 3,383 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for all `src` files and the focused sensitive-path/rooted-open
   security tests. A full `src` + `tests` MyPy sweep still has separately

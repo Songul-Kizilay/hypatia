@@ -750,28 +750,43 @@ class ResponseComposer:
         self,
         request: BrainRequest,
         run: ResearchRun,
+        prior_lessons: tuple[ResearchFailureLesson, ...] = (),
     ) -> BrainResponse:
-        """Report a newly persisted auditable research run."""
+        """Report a newly persisted auditable research run.
+
+        Prior lessons are printed after the run, never instead of it. The run
+        exists by the time this is composed, so nothing in the advisory section
+        may read as a condition on it.
+        """
+        lines = [
+            "Research run created:",
+            f"Question: {run.question}",
+            f"Status: {run.status.value}",
+            f"Sources: {len(run.sources)}",
+            f"Discoveries: {len(run.discoveries)}",
+            f"Evidence: {len(run.evidence)}",
+            f"Assessments: {len(run.assessments)}",
+            f"Comparison notes: {len(run.comparison_notes)}",
+            f"Claims: {len(run.claims)}",
+            f"Failures: {len(run.failures)}",
+            f"ID: {run.run_id}",
+        ]
+        if prior_lessons:
+            lines.extend(("", f"Possibly relevant prior lessons: {len(prior_lessons)}"))
+            for lesson in prior_lessons:
+                lines.append(f"- [{lesson.kind.value}] {lesson.statement}")
+                lines.append(f"  from: {', '.join(lesson.provenance)}")
+            lines.append(
+                "These are advisory. This run was created either way, nothing "
+                "was blocked, and no plan, claim, or confidence changed."
+            )
         return BrainResponse(
-            message="\n".join(
-                [
-                    "Research run created:",
-                    f"Question: {run.question}",
-                    f"Status: {run.status.value}",
-                    f"Sources: {len(run.sources)}",
-                    f"Discoveries: {len(run.discoveries)}",
-                    f"Evidence: {len(run.evidence)}",
-                    f"Assessments: {len(run.assessments)}",
-                    f"Comparison notes: {len(run.comparison_notes)}",
-                    f"Claims: {len(run.claims)}",
-                    f"Failures: {len(run.failures)}",
-                    f"ID: {run.run_id}",
-                ]
-            ),
+            message="\n".join(lines),
             request_id=request.request_id,
             intent="research_run_create",
             memory_count=0,
             research_runs=[run],
+            failure_lessons=prior_lessons,
         )
 
     def research_source_content_restoration_status(
@@ -1278,6 +1293,8 @@ class ResponseComposer:
         request: BrainRequest,
         lessons: tuple[ResearchFailureLesson, ...],
         stored: bool,
+        *,
+        dropped: int = 0,
     ) -> BrainResponse:
         """Render lessons together with the records that make them checkable."""
         lines = [
@@ -1288,6 +1305,8 @@ class ResponseComposer:
         for lesson in lessons:
             lines.append(f"- [{lesson.kind.value}] {lesson.statement}")
             lines.append(f"  from: {', '.join(lesson.provenance)}")
+        if dropped:
+            lines.append(f"Beyond the per-run limit, not derived: {dropped}")
         lines.extend(
             (
                 "",
@@ -1330,18 +1349,25 @@ class ResponseComposer:
         self,
         request: BrainRequest,
         lessons: tuple[ResearchFailureLesson, ...],
+        *,
+        dropped: int = 0,
     ) -> BrainResponse:
         """Report lessons retained only in memory after a durable-write failure."""
+        lines = [
+            "Failure lessons were not durably remembered.",
+            f"Lessons retained in this process: {len(lessons)}",
+        ]
+        if dropped:
+            lines.append(f"Beyond the per-run limit, not derived: {dropped}")
+        lines.extend(
+            (
+                "Durable write: failed.",
+                "Restarting Hypatia may lose these in-memory lessons.",
+                "No research run, hypothesis, claim, or assessment changed.",
+            )
+        )
         return BrainResponse(
-            message="\n".join(
-                (
-                    "Failure lessons were not durably remembered.",
-                    f"Lessons retained in this process: {len(lessons)}",
-                    "Durable write: failed.",
-                    "Restarting Hypatia may lose these in-memory lessons.",
-                    "No research run, hypothesis, claim, or assessment changed.",
-                )
-            ),
+            message="\n".join(lines),
             request_id=request.request_id,
             intent="failure_memory",
             memory_count=0,

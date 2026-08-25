@@ -145,6 +145,7 @@ from research.ResearchClaimContradictionProposalProvider import (
 from research.ResearchClaimRecord import ResearchClaimRecord
 from research.ResearchEvidenceIntegrityAuditor import ResearchEvidenceIntegrityAuditor
 from research.ResearchExecutionStore import ResearchExecutionStore
+from research.ResearchFailureLesson import ResearchFailureLesson
 from research.ResearchPlanDraftService import ResearchPlanDraftService
 from research.ResearchPlanOperationRegistry import (
     ResearchPlanOperationRegistry,
@@ -979,7 +980,30 @@ class CognitiveEngine:
                 request,
                 "Research run could not be created.",
             )
-        return self._response_composer.research_run_create_success(request, run)
+        return self._response_composer.research_run_create_success(
+            request,
+            run,
+            self._prior_lessons(question),
+        )
+
+    def _prior_lessons(self, question: str) -> tuple[ResearchFailureLesson, ...]:
+        """Offer what previously went wrong on a similar question, if anything.
+
+        Deliberately unable to fail its caller. The run is already persisted by
+        the time this is asked, so an advisory read that raised would report a
+        failure for work that actually succeeded — the misleading-success class
+        this layer keeps closing. Advice is worth having; it is not worth
+        lying about a saved run to get it.
+        """
+        service = self._failure_memory_service
+        if service is None:
+            return ()
+        try:
+            return service.advice(question)
+        except Exception:
+            # Broad on purpose. Any narrower clause is a bet about which
+            # failures advice can have, and losing that bet costs a saved run.
+            return ()
 
     def _process_research_run_markdown_export_preview(
         self,

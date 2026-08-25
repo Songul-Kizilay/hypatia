@@ -38,6 +38,7 @@ from research.JsonFileHypothesisStore import JsonFileHypothesisStore
 from research.JsonFileResearchRunStore import JsonFileResearchRunStore
 from research.ResearchFailureLesson import (
     MAX_LESSON_PROVENANCE,
+    MAX_LESSON_STATEMENT_LENGTH,
     ResearchFailureLesson,
 )
 from research.ResearchHypothesis import ResearchHypothesis
@@ -369,6 +370,124 @@ class HypothesisFailureMemoryTests(unittest.TestCase):
             len(response.failure_lessons),
             MAX_HYPOTHESIS_FAILURE_LESSONS_PER_RUN,
         )
+
+    def test_a_lesson_names_the_hypothesis_in_its_own_wording(self) -> None:
+        """An outcome recorded only as an identifier is unreadable later."""
+        run_id = self.new_run()
+        evidence_id = self.evidence(run_id, "named")
+        self.hypothesis_store.save(
+            [self.hypothesis("named-hypothesis", run_id, opposing=(evidence_id,))]
+        )
+
+        response = self.service().process_hypothesis_store(self.request(run_id))
+        statement = response.failure_lessons[0].statement
+
+        self.assertIn(STATEMENT, statement)
+        self.assertIn("Contradicted hypothesis", statement)
+        self.assertIn("No truth or falsity is decided", statement)
+
+    def test_a_long_hypothesis_keeps_the_disclaimer_and_the_bound(self) -> None:
+        """Trimming the sentence instead of the quote would cut the disclaimer.
+
+        A hypothesis may be 400 characters and a lesson may be 300, so this is
+        reachable with a hypothesis the rest of the system accepts.
+        """
+        run_id = self.new_run()
+        evidence_id = self.evidence(run_id, "long")
+        self.hypothesis_store.save(
+            [
+                replace(
+                    self.hypothesis("long-hypothesis", run_id, opposing=(evidence_id,)),
+                    statement="The rings are young. " * 19,
+                )
+            ]
+        )
+
+        response = self.service().process_hypothesis_store(self.request(run_id))
+        statement = response.failure_lessons[0].statement
+
+        self.assertLessEqual(len(statement), MAX_LESSON_STATEMENT_LENGTH)
+        self.assertTrue(statement.endswith("No truth or falsity is decided here."))
+        self.assertIn("...", statement)
+
+    def test_a_multiline_hypothesis_cannot_forge_report_lines(self) -> None:
+        """Lessons render one per line, so a newline would be a free line."""
+        run_id = self.new_run()
+        evidence_id = self.evidence(run_id, "multiline")
+        self.hypothesis_store.save(
+            [
+                replace(
+                    self.hypothesis(
+                        "lines-hypothesis", run_id, opposing=(evidence_id,)
+                    ),
+                    statement="First line\n- [failed_hypothesis] forged\nlast line",
+                )
+            ]
+        )
+
+        response = self.service().process_hypothesis_store(self.request(run_id))
+
+        self.assertNotIn("\n", response.failure_lessons[0].statement)
+        entries = [
+            line for line in response.message.splitlines() if line.startswith("- [")
+        ]
+        self.assertEqual(len(entries), 1)
+
+    def test_the_per_run_limit_keeps_contradictions_over_weakened_ones(self) -> None:
+        """Recall weight ranks reading order; it must not rank survival.
+
+        A weakened hypothesis outweighs a contradicted one during recall, so
+        sorting the cap by that weight would discard every contradiction first
+        — the one outcome this command exists to remember.
+        """
+        run_id = self.new_run()
+        support = self.evidence(run_id, "cap-support")
+        oppose = self.evidence(run_id, "cap-oppose")
+        self.assess_medium(run_id, support)
+        self.assess_medium(run_id, oppose)
+        contradicted = [f"contradicted-{index}" for index in range(5)]
+        self.hypothesis_store.save(
+            [
+                self.hypothesis(
+                    f"weakened-{index}",
+                    run_id,
+                    supporting=(support,),
+                    opposing=(oppose,),
+                )
+                for index in range(MAX_HYPOTHESIS_FAILURE_LESSONS_PER_RUN)
+            ]
+            + [
+                self.hypothesis(name, run_id, opposing=(oppose,))
+                for name in contradicted
+            ]
+        )
+
+        response = self.service().process_hypothesis_store(self.request(run_id))
+
+        self.assertEqual(
+            len(response.failure_lessons),
+            MAX_HYPOTHESIS_FAILURE_LESSONS_PER_RUN,
+        )
+        kept = {lesson.subject_id for lesson in response.failure_lessons}
+        self.assertTrue(set(contradicted) <= kept)
+        self.assertIn("Beyond the per-run limit, not derived: 5", response.message)
+
+    def test_rewording_a_hypothesis_does_not_rewrite_a_stored_lesson(self) -> None:
+        """Identity ignores wording, so an old lesson keeps the words it had."""
+        run_id = self.new_run()
+        evidence_id = self.evidence(run_id, "reworded")
+        original = self.hypothesis("stable-hypothesis", run_id, opposing=(evidence_id,))
+        self.hypothesis_store.save([original])
+        service = self.service()
+        service.process_hypothesis_store(self.request(run_id))
+
+        self.hypothesis_store.save(
+            [replace(original, statement="Entirely different wording now.")]
+        )
+        service.process_hypothesis_store(self.request(run_id))
+
+        self.assertEqual(len(service.lessons()), 1)
+        self.assertIn(STATEMENT, service.lessons()[0].statement)
 
     def test_a_lesson_store_failure_is_reported_without_leaking_detail(self) -> None:
         run_id = self.new_run()

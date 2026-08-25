@@ -2,6 +2,54 @@
 
 All notable project changes are recorded here.
 
+## [0.3.185] - 2026-08-25
+
+### Added
+
+- Creating a research run now surfaces previously remembered lessons whose
+  wording overlaps the new question. Recall previously required someone to ask
+  for it, which is the moment they are least likely to think of it.
+- Hypothesis failure lessons now name the hypothesis in its own wording instead
+  of fixed phrasing. A lesson identified only by record ID is unreadable by the
+  time anyone needs it.
+
+### Fixed
+
+- The per-run hypothesis lesson limit no longer discards contradictions first.
+  It had been ordered by recall weight, under which a `weakened` lesson
+  outranks a `contradicted` one, so a run at the limit dropped exactly the
+  outcome the command exists to remember. Retention is now ordered separately
+  from recall, and lessons beyond the limit are reported instead of dropped
+  silently.
+- Failure recall now requires two shared words rather than one. Every lesson
+  shares vocabulary simply by being a lesson, so a single overlap matched
+  unrelated questions on words like "evidence" alone.
+
+### Compatibility and safety
+
+- Advisory recall cannot affect the run it accompanies. The run is persisted
+  before recall is consulted, an unusable question returns nothing rather than
+  raising, and any failure in the advisory path leaves the run reported as the
+  success it was.
+- Recall derives no lesson, writes nothing, consults no model, and leaves every
+  run, hypothesis, claim, evidence record, and assessment byte-identical.
+- Lesson identity still ignores wording, so lessons stored before this release
+  keep the text they were written with. No storage schema changed and no data
+  was migrated.
+- A hypothesis is quoted on one line with whitespace collapsed and only the
+  quotation shortened, so a long or multi-line hypothesis can neither forge
+  report lines nor push the truth-neutrality disclaimer off the end.
+
+### Verification
+
+- Integration coverage exercises advisory recall at run creation, an unrelated
+  question surfacing nothing, a raising advisor, absent failure memory, the
+  read-only guarantee, model isolation, ordering of run before advice, the
+  retention ordering and its reported overflow, hypothesis wording in lessons,
+  bounded and single-line statements, and identity stability across rewording.
+- Package-aware discovery passes 3,383 tests with 3 existing platform-dependent
+  skips. Black, Ruff, and source MyPy pass for this release scope.
+
 ## [0.3.184] - 2026-08-25
 
 ### Added

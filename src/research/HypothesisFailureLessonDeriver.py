@@ -9,6 +9,11 @@ If an operator remembers a weakened hypothesis and later remembers it again
 after it becomes contradicted, both observations keep stable, distinct lesson
 identities. That is a bounded record of two explicit observations, not hidden
 transition tracking.
+
+A lesson names the hypothesis in the wording it was written in. An outcome
+recorded only as an identifier is unreadable by the time anyone needs it, and
+recall matches on shared words, so a lesson made entirely of fixed phrasing
+would match every later question containing a word like "evidence".
 """
 
 from __future__ import annotations
@@ -34,6 +39,26 @@ _LESSON_KINDS = {
     HypothesisStatus.WEAKENED: FailureLessonKind.DISPROVING_EVIDENCE,
     HypothesisStatus.CONTRADICTED: FailureLessonKind.FAILED_HYPOTHESIS,
 }
+
+#: Retention order for a run that produces more outcomes than the cap keeps.
+#: Deliberately not the recall weight. Recall ranks what is most worth reading
+#: next; retention decides what is kept at all. A weakened hypothesis outranks a
+#: contradicted one during recall, so reusing that order here would discard the
+#: contradictions first — losing exactly the outcome this capability exists for.
+_RETENTION_ORDER = {
+    FailureLessonKind.FAILED_HYPOTHESIS: 0,
+    FailureLessonKind.DISPROVING_EVIDENCE: 1,
+}
+
+NO_TRUTH_DECIDED = "No truth or falsity is decided here."
+
+
+def hypothesis_retention_key(lesson: ResearchFailureLesson) -> tuple[int, str]:
+    """Order outcome lessons so a bounded run keeps the strongest signal."""
+    return (
+        _RETENTION_ORDER.get(lesson.kind, len(_RETENTION_ORDER)),
+        lesson.lesson_id,
+    )
 
 
 class HypothesisFailureLessonDeriver:
@@ -79,15 +104,38 @@ class HypothesisFailureLessonDeriver:
         )
         return (lesson,)
 
-    @staticmethod
-    def _statement(appraisal: HypothesisAppraisal) -> str:
+    @classmethod
+    def _statement(cls, appraisal: HypothesisAppraisal) -> str:
+        """Describe the outcome in terms of the hypothesis actually written."""
         if appraisal.status is HypothesisStatus.WEAKENED:
-            return (
-                "This hypothesis is currently weakened: opposing evidence is "
-                "recorded alongside support. No truth or falsity is decided here."
+            prefix = 'Weakened hypothesis: "'
+            suffix = (
+                '" - opposing evidence is recorded alongside its support. '
+                f"{NO_TRUTH_DECIDED}"
             )
-        return (
-            "This hypothesis is currently contradicted: opposing evidence is "
-            "recorded without supporting source coverage in this run. No truth or "
-            "falsity is decided here."
-        )
+        else:
+            prefix = 'Contradicted hypothesis: "'
+            suffix = (
+                '" - opposing evidence is recorded without supporting source '
+                f"coverage in this run. {NO_TRUTH_DECIDED}"
+            )
+        budget = MAX_LESSON_STATEMENT_LENGTH - len(prefix) - len(suffix)
+        wording = cls._one_line(appraisal.hypothesis.statement, budget)
+        return f"{prefix}{wording}{suffix}"
+
+    @staticmethod
+    def _one_line(wording: str, budget: int) -> str:
+        """Reduce a hypothesis to one bounded line, trimming the wording only.
+
+        Only the quoted wording is shortened. Trimming the whole sentence would
+        eventually cut the disclaimer off the end, leaving a lesson that reads
+        like a verdict.
+
+        Collapsing whitespace is not cosmetic either. Lessons are rendered one
+        per line, so a hypothesis containing newlines could otherwise forge
+        additional lines in that report.
+        """
+        collapsed = " ".join(wording.split())
+        if len(collapsed) <= budget:
+            return collapsed
+        return collapsed[: max(budget - 3, 0)] + "..."
