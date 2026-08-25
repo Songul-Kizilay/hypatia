@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.186 (Genesis)`
+`v0.3.187 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.186`** is the current source/package release line.
+- **Runtime release `v0.3.187`** is the current source/package release line.
   GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -80,6 +80,10 @@ with optional OpenAI-compatible LLM conversation support.
   or background task creates these lessons automatically. Each lesson quotes the
   hypothesis in its own wording on a single bounded line, and the per-run limit
   keeps contradictions ahead of weakened outcomes while reporting any overflow.
+- The learning loop is reachable from the desktop. A Learning tab drives
+  hypotheses and failure lessons, each half gated on its own opt-in, with the
+  hypothesis-outcome command offered only where both stores exist. Listing
+  hypotheses names each one in its own bounded wording rather than by record ID.
 - The weakness taxonomy is reachable from the desktop when
   `HYPATIA_VULNERABILITY_GRAPH_ENABLED=true`. A Security tab records classes,
   relates them with a required reason, and reports a bounded neighbourhood. The
@@ -1048,7 +1052,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 3,415 automated tests pass through package-aware discovery.
+- 3,445 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for all `src` files and the focused sensitive-path/rooted-open
   security tests. A full `src` + `tests` MyPy sweep still has separately

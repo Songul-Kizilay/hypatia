@@ -93,6 +93,21 @@ class ResearchHypothesis:
         """Return how much evidence has been entered on either side."""
         return len(self.supporting_evidence_ids) + len(self.opposing_evidence_ids)
 
+    def one_line_statement(self, limit: int) -> str:
+        """Return the statement as a single line, bounded for display.
+
+        Anywhere a hypothesis appears among others it is one line among many,
+        so a statement containing newlines could otherwise forge entries in
+        that report. Collapsing here rather than at each call site means every
+        such report inherits the guarantee instead of remembering it.
+        """
+        if limit < 1:
+            raise ResearchError("A hypothesis display limit must be positive.")
+        collapsed = " ".join(self.statement.split())
+        if len(collapsed) <= limit:
+            return collapsed
+        return collapsed[: max(limit - 3, 1)] + "..."
+
     def supported_by(
         self,
         evidence_ids: tuple[str, ...],

@@ -787,6 +787,10 @@ The value must be exactly lowercase `true`. Lessons are written to
 `research_failure_lessons.json` beside the research-run store, in a separate
 versioned document.
 
+With it set, the desktop's **Learning** tab gains the lesson half: preview what
+a run's record would support, remember it, recall what overlaps a question, and
+review everything kept. Without it that half is absent rather than disabled.
+
 If that durable write fails, the store request returns `success=false` and says
 that the lessons exist only in the current process and may be lost on restart.
 The lessons are not erased from memory. Repeating the explicit store request
@@ -918,6 +922,12 @@ HYPATIA_HYPOTHESIS_ENABLED=true
 The value must be exactly lowercase `true`. They are written to
 `research_hypotheses.json` beside the research-run store, in a separate
 versioned document.
+
+With it set, the desktop's **Learning** tab gains the hypothesis half: propose
+one with its defeater, enter recorded evidence on either side, withdraw, and
+review derived standing. The two opt-ins are independent, so a build keeping
+one shows only the half it can honour. Remembering hypothesis outcomes into
+failure memory needs both, and is offered only where both are kept.
 
 If a proposal, evidence entry, or withdrawal cannot be written durably, the
 response returns `success=false`, keeps the updated appraisal in the current

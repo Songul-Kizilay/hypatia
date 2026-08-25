@@ -119,23 +119,9 @@ class HypothesisFailureLessonDeriver:
                 '" - opposing evidence is recorded without supporting source '
                 f"coverage in this run. {NO_TRUTH_DECIDED}"
             )
+        # Only the quoted wording is shortened. Trimming the whole sentence
+        # would eventually cut the disclaimer off the end, leaving a lesson
+        # that reads like a verdict.
         budget = MAX_LESSON_STATEMENT_LENGTH - len(prefix) - len(suffix)
-        wording = cls._one_line(appraisal.hypothesis.statement, budget)
+        wording = appraisal.hypothesis.one_line_statement(budget)
         return f"{prefix}{wording}{suffix}"
-
-    @staticmethod
-    def _one_line(wording: str, budget: int) -> str:
-        """Reduce a hypothesis to one bounded line, trimming the wording only.
-
-        Only the quoted wording is shortened. Trimming the whole sentence would
-        eventually cut the disclaimer off the end, leaving a lesson that reads
-        like a verdict.
-
-        Collapsing whitespace is not cosmetic either. Lessons are rendered one
-        per line, so a hypothesis containing newlines could otherwise forge
-        additional lines in that report.
-        """
-        collapsed = " ".join(wording.split())
-        if len(collapsed) <= budget:
-            return collapsed
-        return collapsed[: max(budget - 3, 0)] + "..."

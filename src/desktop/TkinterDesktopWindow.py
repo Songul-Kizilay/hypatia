@@ -74,6 +74,25 @@ _WEAKNESS_PANEL_NOTE = (
     "scans, probes, or reaches any system."
 )
 _WEAKNESS_IDLE_STATUS = "Nothing has been recorded or looked up yet."
+_LEARNING_IDLE_STATUS = "Nothing has been proposed, remembered, or recalled yet."
+_LEARNING_PANEL_NOTE = (
+    "Hypotheses record what you expect and what would change your mind. "
+    "Lessons record what did not work. Nothing on this tab decides that "
+    "anything is true, and no status here means confirmed."
+)
+_HYPOTHESIS_DEFEATER_NOTE = (
+    "Required. A conjecture that names nothing capable of counting against it "
+    "will survive any amount of evidence, because nothing was ever allowed to "
+    "threaten it."
+)
+_HYPOTHESIS_EVIDENCE_NOTE = (
+    "Evidence must already be recorded in the run. Separate several IDs with "
+    "commas or spaces. The same record cannot be entered on both sides."
+)
+_LESSON_ADVISORY_NOTE = (
+    "Recall is advisory. It blocks no plan, refuses no capability, and "
+    "downgrades no claim. Something failing once is not a reason not to try it."
+)
 _WEAKNESS_RELATION_NOTE = (
     "Every relation is authored with a reason. Nothing here infers an edge "
     "from similar names, so the graph only ever holds connections a person "
@@ -296,6 +315,13 @@ class TkinterDesktopWindow:
     #: that does not exist would lose them at the next restart without saying so.
     _weakness_graph_enabled: bool = False
 
+    #: The learning surfaces follow the same rule, and separately. Each is a
+    #: distinct opt-in with its own store, so one being kept says nothing about
+    #: the other, and a section for an absent store would collect work that
+    #: never survives a restart.
+    _hypothesis_enabled: bool = False
+    _failure_memory_enabled: bool = False
+
     def __init__(
         self,
         controller: DesktopController,
@@ -303,10 +329,14 @@ class TkinterDesktopWindow:
         event_bus: EventBus | None = None,
         tool_console: ToolConsoleController | None = None,
         weakness_graph_enabled: bool = False,
+        hypothesis_enabled: bool = False,
+        failure_memory_enabled: bool = False,
     ) -> None:
         self._controller = controller
         self._tool_console = tool_console
         self._weakness_graph_enabled = weakness_graph_enabled
+        self._hypothesis_enabled = hypothesis_enabled
+        self._failure_memory_enabled = failure_memory_enabled
         self._root = root or tk.Tk()
         self._research_refresh_signal = ResearchStateRefreshSignal(event_bus)
         self._request_runner = DesktopRequestRunner()
@@ -781,6 +811,13 @@ class TkinterDesktopWindow:
             security_tab = ttk.Frame(self._workspace_tabs, padding=10)
             self._workspace_tabs.add(security_tab, text="Security")
             tabs.append(security_tab)
+        # Either opt-in earns the tab; each section still checks its own. The
+        # two stores are independent, so a build that keeps hypotheses but not
+        # lessons should show exactly the half it can honour.
+        if self._learning_visible:
+            learning_tab = ttk.Frame(self._workspace_tabs, padding=10)
+            self._workspace_tabs.add(learning_tab, text="Learning")
+            tabs.append(learning_tab)
         self._workspace_tabs.add(appearance_tab, text="Appearance")
         tabs.append(appearance_tab)
         for tab in tabs:
@@ -790,6 +827,8 @@ class TkinterDesktopWindow:
             self._build_tool_console_tab(tools_tab)
         if self._weakness_graph_enabled:
             self._build_security_tab(security_tab)
+        if self._learning_visible:
+            self._build_learning_tab(learning_tab)
         chat_tab.rowconfigure(3, weight=1)
 
         accessibility_frame = ttk.LabelFrame(
@@ -4117,6 +4156,216 @@ class TkinterDesktopWindow:
     # an effect or build an invocation even by mistake.
     # ------------------------------------------------------------------
 
+    @property
+    def _learning_visible(self) -> bool:
+        """Return whether either learning surface has somewhere durable to go."""
+        return self._hypothesis_enabled or self._failure_memory_enabled
+
+    def _build_learning_tab(self, parent: ttk.Frame) -> None:
+        """Lay out the two halves of learning: what we expect, and what failed.
+
+        These have existed in the runtime for some time with no way to reach
+        them, which made the loop real and unusable at once. Hypotheses feed
+        failure memory, failure memory surfaces itself when a new run begins,
+        and neither half could be driven by the person the loop is for.
+        """
+        self._learning_status = tk.StringVar(value=_LEARNING_IDLE_STATUS)
+        parent.rowconfigure(3, weight=1)
+        ttk.Label(parent, text=_LEARNING_PANEL_NOTE, wraplength=720).grid(
+            row=0, column=0, sticky="w"
+        )
+        if self._hypothesis_enabled:
+            self._build_hypothesis_section(parent)
+        if self._failure_memory_enabled:
+            self._build_lesson_section(parent)
+
+        results = ttk.LabelFrame(parent, text="Result", padding=12)
+        results.grid(row=3, column=0, sticky="nsew", pady=(10, 0))
+        results.columnconfigure(0, weight=1)
+        results.rowconfigure(1, weight=1)
+        ttk.Label(results, textvariable=self._learning_status, wraplength=720).grid(
+            row=0, column=0, sticky="w"
+        )
+        self._learning_output = tk.Text(results, height=12, wrap="word")
+        self._learning_output.grid(row=1, column=0, sticky="nsew", pady=(6, 0))
+        self._learning_output.configure(state=tk.DISABLED)
+
+    def _build_hypothesis_section(self, parent: ttk.Frame) -> None:
+        """Propose, take evidence on either side, withdraw, and review."""
+        self._hypothesis_run_id = tk.StringVar()
+        self._hypothesis_id = tk.StringVar()
+        self._hypothesis_evidence_ids = tk.StringVar()
+
+        section = ttk.LabelFrame(parent, text="Hypotheses", padding=12)
+        section.grid(row=1, column=0, sticky="ew", pady=(10, 0))
+        section.columnconfigure(1, weight=1)
+        ttk.Label(section, text="Research run ID").grid(row=0, column=0, sticky="w")
+        ttk.Entry(section, textvariable=self._hypothesis_run_id).grid(
+            row=0, column=1, sticky="ew", padx=(8, 0)
+        )
+        ttk.Label(section, text="Statement").grid(
+            row=1, column=0, sticky="nw", pady=(6, 0)
+        )
+        self._hypothesis_statement_text = tk.Text(section, height=3, wrap="word")
+        self._hypothesis_statement_text.grid(
+            row=1, column=1, sticky="ew", padx=(8, 0), pady=(6, 0)
+        )
+        ttk.Label(section, text="What would count against it").grid(
+            row=2, column=0, sticky="nw", pady=(6, 0)
+        )
+        self._hypothesis_test_text = tk.Text(section, height=3, wrap="word")
+        self._hypothesis_test_text.grid(
+            row=2, column=1, sticky="ew", padx=(8, 0), pady=(6, 0)
+        )
+        ttk.Label(section, text=_HYPOTHESIS_DEFEATER_NOTE, wraplength=680).grid(
+            row=3, column=1, sticky="w", padx=(8, 0), pady=(6, 0)
+        )
+        self._request_button(section, "Propose", self._propose_hypothesis).grid(
+            row=4, column=1, sticky="w", padx=(8, 0), pady=(8, 0)
+        )
+
+        ttk.Separator(section).grid(
+            row=5, column=0, columnspan=2, sticky="ew", pady=(12, 8)
+        )
+        ttk.Label(section, text="Hypothesis ID").grid(row=6, column=0, sticky="w")
+        ttk.Entry(section, textvariable=self._hypothesis_id).grid(
+            row=6, column=1, sticky="ew", padx=(8, 0)
+        )
+        ttk.Label(section, text="Evidence IDs").grid(
+            row=7, column=0, sticky="w", pady=(6, 0)
+        )
+        ttk.Entry(section, textvariable=self._hypothesis_evidence_ids).grid(
+            row=7, column=1, sticky="ew", padx=(8, 0), pady=(6, 0)
+        )
+        ttk.Label(section, text=_HYPOTHESIS_EVIDENCE_NOTE, wraplength=680).grid(
+            row=8, column=1, sticky="w", padx=(8, 0), pady=(6, 0)
+        )
+        buttons = ttk.Frame(section)
+        buttons.grid(row=9, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
+        for column, (label, command) in enumerate(
+            (
+                ("Support", self._support_hypothesis),
+                ("Oppose", self._oppose_hypothesis),
+                ("Withdraw", self._withdraw_hypothesis),
+                ("List hypotheses", self._list_hypotheses),
+            )
+        ):
+            self._request_button(buttons, label, command).grid(
+                row=0, column=column, sticky="w", padx=(0 if column == 0 else 8, 0)
+            )
+
+    def _build_lesson_section(self, parent: ttk.Frame) -> None:
+        """Preview, remember, recall, and review what did not work."""
+        self._lesson_run_id = tk.StringVar()
+        self._lesson_question = tk.StringVar()
+
+        section = ttk.LabelFrame(parent, text="Failure lessons", padding=12)
+        section.grid(row=2, column=0, sticky="ew", pady=(10, 0))
+        section.columnconfigure(1, weight=1)
+        ttk.Label(section, text="Research run ID").grid(row=0, column=0, sticky="w")
+        ttk.Entry(section, textvariable=self._lesson_run_id).grid(
+            row=0, column=1, sticky="ew", padx=(8, 0)
+        )
+        run_buttons = ttk.Frame(section)
+        run_buttons.grid(row=1, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
+        commands: list[tuple[str, Callable[[], None]]] = [
+            ("Preview", self._preview_failure_lessons),
+            ("Remember", self._store_failure_lessons),
+        ]
+        # Remembering hypothesis outcomes reads the durable hypothesis store, so
+        # it is offered only where that store exists. Without it the command
+        # would refuse every time, which reads as breakage rather than as a
+        # capability this build was not given.
+        if self._hypothesis_enabled:
+            commands.append(
+                ("Remember hypothesis outcomes", self._remember_hypothesis_outcomes)
+            )
+        for column, (label, command) in enumerate(commands):
+            self._request_button(run_buttons, label, command).grid(
+                row=0, column=column, sticky="w", padx=(0 if column == 0 else 8, 0)
+            )
+
+        ttk.Separator(section).grid(
+            row=2, column=0, columnspan=2, sticky="ew", pady=(12, 8)
+        )
+        ttk.Label(section, text="Question").grid(row=3, column=0, sticky="w")
+        ttk.Entry(section, textvariable=self._lesson_question).grid(
+            row=3, column=1, sticky="ew", padx=(8, 0)
+        )
+        ttk.Label(section, text=_LESSON_ADVISORY_NOTE, wraplength=680).grid(
+            row=4, column=1, sticky="w", padx=(8, 0), pady=(6, 0)
+        )
+        recall_buttons = ttk.Frame(section)
+        recall_buttons.grid(row=5, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
+        self._request_button(
+            recall_buttons, "Recall relevant", self._recall_failure_lessons
+        ).grid(row=0, column=0, sticky="w")
+        self._request_button(
+            recall_buttons, "List lessons", self._list_failure_lessons
+        ).grid(row=0, column=1, sticky="w", padx=(8, 0))
+
+    def _learning_request(self, call: Callable[[], BrainResponse]) -> None:
+        """Run one learning request into the Learning panel's result area."""
+        self._panel_request(self._learning_status, self._learning_output, call)
+
+    def _propose_hypothesis(self) -> None:
+        self._learning_request(
+            lambda: self._controller.propose_hypothesis(
+                self._hypothesis_run_id.get(),
+                self._text_value(self._hypothesis_statement_text),
+                self._text_value(self._hypothesis_test_text),
+            )
+        )
+
+    def _support_hypothesis(self) -> None:
+        self._learning_request(
+            lambda: self._controller.support_hypothesis(
+                self._hypothesis_id.get(),
+                self._hypothesis_evidence_ids.get(),
+            )
+        )
+
+    def _oppose_hypothesis(self) -> None:
+        self._learning_request(
+            lambda: self._controller.oppose_hypothesis(
+                self._hypothesis_id.get(),
+                self._hypothesis_evidence_ids.get(),
+            )
+        )
+
+    def _withdraw_hypothesis(self) -> None:
+        self._learning_request(
+            lambda: self._controller.withdraw_hypothesis(self._hypothesis_id.get())
+        )
+
+    def _list_hypotheses(self) -> None:
+        self._learning_request(self._controller.list_hypotheses)
+
+    def _preview_failure_lessons(self) -> None:
+        self._learning_request(
+            lambda: self._controller.preview_failure_lessons(self._lesson_run_id.get())
+        )
+
+    def _store_failure_lessons(self) -> None:
+        self._learning_request(
+            lambda: self._controller.store_failure_lessons(self._lesson_run_id.get())
+        )
+
+    def _remember_hypothesis_outcomes(self) -> None:
+        self._learning_request(
+            lambda: self._controller.remember_hypothesis_outcomes(
+                self._lesson_run_id.get()
+            )
+        )
+
+    def _recall_failure_lessons(self) -> None:
+        self._learning_request(
+            lambda: self._controller.recall_failure_lessons(self._lesson_question.get())
+        )
+
+    def _list_failure_lessons(self) -> None:
+        self._learning_request(self._controller.list_failure_lessons)
+
     def _build_security_tab(self, parent: ttk.Frame) -> None:
         """Lay out the weakness taxonomy: record, relate, and look around.
 
@@ -4274,25 +4523,32 @@ class TkinterDesktopWindow:
         self._weakness_request(self._controller.list_vulnerability_families)
 
     def _weakness_request(self, call: Callable[[], BrainResponse]) -> None:
-        """Run one taxonomy request, reporting a refusal as plainly as a result.
+        """Run one taxonomy request into the Security panel's own result area."""
+        self._panel_request(self._weakness_status, self._weakness_output, call)
+
+    def _panel_request(
+        self,
+        status: tk.StringVar,
+        output: tk.Text,
+        call: Callable[[], BrainResponse],
+    ) -> None:
+        """Run one request, reporting a refusal as plainly as a result.
 
         A rejected request is shown in the panel rather than only in the status
-        line. A durable-write failure arrives here as an unsuccessful response
-        and is displayed unchanged: this surface never restates a failed write
-        as a success.
+        line. An unsuccessful response — a durable-write failure, a refusal —
+        is displayed unchanged: these surfaces repeat the runtime's answer and
+        never improve on it.
         """
         try:
             response = call()
         except ValueError as error:
-            self._weakness_status.set(str(error))
+            status.set(str(error))
             return
-        self._weakness_status.set(
-            "Done." if response.success else "That request did not complete."
-        )
-        self._weakness_output.configure(state=tk.NORMAL)
-        self._weakness_output.delete("1.0", tk.END)
-        self._weakness_output.insert(tk.END, response.message)
-        self._weakness_output.configure(state=tk.DISABLED)
+        status.set("Done." if response.success else "That request did not complete.")
+        output.configure(state=tk.NORMAL)
+        output.delete("1.0", tk.END)
+        output.insert(tk.END, response.message)
+        output.configure(state=tk.DISABLED)
         self._append_response(response)
 
     @staticmethod

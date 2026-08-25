@@ -2,6 +2,58 @@
 
 All notable project changes are recorded here.
 
+## [0.3.187] - 2026-08-26
+
+### Added
+
+- The learning loop is reachable from the application. A Learning tab proposes
+  a hypothesis with the observation that would count against it, enters
+  recorded evidence on either side, withdraws, and lists derived standing; and
+  previews, remembers, recalls, and lists failure lessons, including the
+  explicit hypothesis-outcome command. Both halves had been runtime-only.
+- `DesktopController` gained the ten corresponding commands. One typed field
+  becomes the evidence list the runtime expects, separated by commas or spaces,
+  and an incomplete entry is refused before the runtime is reached.
+
+### Fixed
+
+- Listing hypotheses now says which hypothesis each entry is. Entries had been
+  identified only by record ID, which is unreadable by anyone deciding which
+  hypothesis to act on — the reason to open the list at all. The statement is
+  shown on one bounded line, so a long or multi-line hypothesis can neither
+  forge entries nor make the catalogue unscannable.
+
+### Changed
+
+- The runtime opt-in rules moved into one module shared by the runtime and the
+  desktop. Three capabilities are opt-in and each is read twice; separate
+  copies of one environment rule eventually disagree, and the failure that
+  follows is a person entering work into a panel that quietly forgets it.
+
+### Compatibility and safety
+
+- Each half of the tab follows its own opt-in. `HYPATIA_HYPOTHESIS_ENABLED` and
+  `HYPATIA_FAILURE_MEMORY_ENABLED` are independent, a build keeping one shows
+  only the half it can honour, and remembering hypothesis outcomes appears only
+  where the durable hypothesis store exists.
+- Nothing on the tab decides that anything is true. There is no confirm control
+  and no status meaning confirmed; recall stays advisory; an unsuccessful
+  response, including a failed durable write, is displayed unchanged rather
+  than restated as success.
+- No new intent, storage schema, migration, model judgement, autonomous write,
+  tool capability, or filesystem access was added.
+
+### Verification
+
+- Coverage exercises all ten commands and their metadata, evidence-field
+  parsing and refusal, tab presence across both opt-ins independently, panel
+  handlers including a refusal and an unsuccessful response, and runtime
+  end-to-end paths — among them one that would catch a metadata key the adapter
+  and the runtime spelled differently, and one driving the whole loop from
+  proposal through opposition to a remembered lesson recalled by question.
+- Package-aware discovery passes 3,445 tests with 3 existing platform-dependent
+  skips. Black, Ruff, and source MyPy pass for this release scope.
+
 ## [0.3.186] - 2026-08-26
 
 ### Added

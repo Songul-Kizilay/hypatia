@@ -62,7 +62,10 @@ from research.ResearchHypothesisAppraiser import ResearchHypothesisAppraiser
 from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchSource import ResearchSource
-from response.ResponseComposer import ResponseComposer
+from response.ResponseComposer import (
+    MAX_LISTED_HYPOTHESIS_STATEMENT_LENGTH,
+    ResponseComposer,
+)
 from session.SessionManager import SessionManager
 from session.SessionRenameTransactionService import SessionRenameTransactionService
 
@@ -590,6 +593,40 @@ class HypothesisServiceTests(HypothesisFixture):
             HypothesisStatus.CONTRADICTED,
         )
         self.assertIn("settles nothing", response.message)
+
+    def test_listing_says_which_hypothesis_each_entry_is(self) -> None:
+        """A catalogue identified only by record ID cannot be acted on."""
+        service = self.service()
+        self.propose(service, self.new_run())
+
+        response = service.process_list(self.request("research_hypothesis_list"))
+
+        self.assertIn(STATEMENT, response.message)
+
+    def test_a_listed_hypothesis_stays_one_bounded_line(self) -> None:
+        """Entries are one line each, so a long or multi-line one cannot forge more."""
+        service = self.service()
+        run_id = self.new_run()
+        service.process_propose(
+            self.request(
+                "research_hypothesis_propose",
+                research_run_id=run_id,
+                hypothesis_statement="First\n- [open] forged\n" + "long " * 70,
+                hypothesis_discriminating_test=TEST,
+            )
+        )
+
+        response = service.process_list(self.request("research_hypothesis_list"))
+        entries = [
+            line for line in response.message.splitlines() if line.startswith("- [")
+        ]
+
+        self.assertEqual(len(entries), 1)
+        self.assertLessEqual(
+            len(entries[0]),
+            MAX_LISTED_HYPOTHESIS_STATEMENT_LENGTH + 40,
+        )
+        self.assertTrue(entries[0].endswith('..."'))
 
     def test_the_response_denies_asserting_truth(self) -> None:
         service = self.service()

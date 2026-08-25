@@ -8,6 +8,11 @@ from cognition.CognitiveEngine import CognitiveEngine
 from core.Config import Config
 from core.DependencyContainer import DependencyContainer
 from core.Logger import Logger
+from core.RuntimeOptIn import (
+    failure_memory_enabled,
+    hypothesis_engine_enabled,
+    vulnerability_graph_enabled,
+)
 from eventbus.EventBus import EventBus
 from knowledge.JsonFileKnowledgeRelationStore import JsonFileKnowledgeRelationStore
 from knowledge.KnowledgeEngine import KnowledgeEngine
@@ -88,7 +93,6 @@ from response.ResponseComposer import ResponseComposer
 from security.JsonFileVulnerabilityGraphStore import (
     JsonFileVulnerabilityGraphStore,
 )
-from security.VulnerabilityGraphPolicy import vulnerability_graph_enabled
 from session.JsonFileSessionStore import JsonFileSessionStore
 from session.SessionManager import SessionManager
 from session.SessionRenameTransactionService import SessionRenameTransactionService
@@ -641,7 +645,7 @@ class Bootstrap:
         Default off, so an unset environment remembers nothing and behaves
         exactly like a runtime without a failure memory.
         """
-        if os.environ.get("HYPATIA_FAILURE_MEMORY_ENABLED") != "true":
+        if not failure_memory_enabled(os.environ):
             return None
         run_path = self._research_run_path or self._research_run_store_path(
             self._memory_path
@@ -656,7 +660,7 @@ class Bootstrap:
         Default off, so an unset environment keeps no hypotheses and behaves
         exactly like a runtime without a hypothesis engine.
         """
-        if os.environ.get("HYPATIA_HYPOTHESIS_ENABLED") != "true":
+        if not hypothesis_engine_enabled(os.environ):
             return None
         run_path = self._research_run_path or self._research_run_store_path(
             self._memory_path

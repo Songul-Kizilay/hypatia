@@ -15,6 +15,24 @@ from research.ResearchRunMarkdownExportPreview import (
 )
 
 
+def _evidence_id_list(value: str) -> tuple[str, ...]:
+    """Read one typed field as the evidence IDs it names.
+
+    Commas and whitespace both separate, because a person copying identifiers
+    out of a list will produce either and should not have to care which. Empty
+    fragments are dropped rather than sent on as blank IDs the runtime would
+    have to refuse.
+    """
+    entries = tuple(
+        fragment.strip()
+        for fragment in value.replace(",", " ").split()
+        if fragment.strip()
+    )
+    if not entries:
+        raise ValueError("At least one recorded evidence ID is required.")
+    return entries
+
+
 class BrainProcessor(Protocol):
     """Minimum existing runtime capability needed by the desktop adapter."""
 
@@ -192,6 +210,177 @@ class DesktopController:
                     "research_plan_question": question.strip(),
                     "research_plan_steps": steps,
                 },
+            )
+        )
+
+    def propose_hypothesis(
+        self,
+        research_run_id: str,
+        statement: str,
+        discriminating_test: str,
+    ) -> BrainResponse:
+        """Propose one conjecture together with what would count against it.
+
+        The discriminating test is required here, not optional, because the
+        runtime requires it. A conjecture that names nothing capable of
+        counting against it survives any amount of evidence.
+        """
+        values = {
+            "research_run_id": research_run_id.strip(),
+            "hypothesis_statement": statement.strip(),
+            "hypothesis_discriminating_test": discriminating_test.strip(),
+        }
+        if not all(values.values()):
+            raise ValueError(
+                "A hypothesis needs a research run, a statement, and an "
+                "observation that would count against it."
+            )
+        return self._brain.process(
+            BrainRequest(
+                message="Propose research hypothesis",
+                source="desktop",
+                metadata={"intent": "research_hypothesis_propose", **values},
+            )
+        )
+
+    def support_hypothesis(
+        self,
+        hypothesis_id: str,
+        evidence_ids: str,
+    ) -> BrainResponse:
+        """Attach already-recorded evidence to the supporting side."""
+        return self._hypothesis_evidence_request(
+            "research_hypothesis_support",
+            "Support research hypothesis",
+            hypothesis_id,
+            evidence_ids,
+        )
+
+    def oppose_hypothesis(
+        self,
+        hypothesis_id: str,
+        evidence_ids: str,
+    ) -> BrainResponse:
+        """Attach already-recorded evidence to the opposing side."""
+        return self._hypothesis_evidence_request(
+            "research_hypothesis_oppose",
+            "Oppose research hypothesis",
+            hypothesis_id,
+            evidence_ids,
+        )
+
+    def withdraw_hypothesis(self, hypothesis_id: str) -> BrainResponse:
+        """Stop working on one hypothesis without deleting what it recorded."""
+        normalized_id = hypothesis_id.strip()
+        if not normalized_id:
+            raise ValueError("A hypothesis ID cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="Withdraw research hypothesis",
+                source="desktop",
+                metadata={
+                    "intent": "research_hypothesis_withdraw",
+                    "hypothesis_id": normalized_id,
+                },
+            )
+        )
+
+    def list_hypotheses(self) -> BrainResponse:
+        """Report every hypothesis with the standing derived from its evidence."""
+        return self._brain.process(
+            BrainRequest(
+                message="List research hypotheses",
+                source="desktop",
+                metadata={"intent": "research_hypothesis_list"},
+            )
+        )
+
+    def preview_failure_lessons(self, research_run_id: str) -> BrainResponse:
+        """Show what would be remembered from one run, remembering nothing."""
+        return self._failure_memory_run_request(
+            "failure_memory_preview",
+            "Preview failure lessons",
+            research_run_id,
+        )
+
+    def store_failure_lessons(self, research_run_id: str) -> BrainResponse:
+        """Remember the lessons one run's own record supports."""
+        return self._failure_memory_run_request(
+            "failure_memory_store",
+            "Remember failure lessons",
+            research_run_id,
+        )
+
+    def remember_hypothesis_outcomes(self, research_run_id: str) -> BrainResponse:
+        """Remember the durable weakened and contradicted hypotheses of one run."""
+        return self._failure_memory_run_request(
+            "failure_memory_hypothesis_store",
+            "Remember hypothesis outcomes",
+            research_run_id,
+        )
+
+    def recall_failure_lessons(self, research_question: str) -> BrainResponse:
+        """Ask which remembered lessons overlap a question. Advisory only."""
+        normalized_question = research_question.strip()
+        if not normalized_question:
+            raise ValueError("A research question cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="Recall failure lessons",
+                source="desktop",
+                metadata={
+                    "intent": "failure_memory_recall",
+                    "research_question": normalized_question,
+                },
+            )
+        )
+
+    def list_failure_lessons(self) -> BrainResponse:
+        """Report everything remembered, deriving nothing new."""
+        return self._brain.process(
+            BrainRequest(
+                message="List failure lessons",
+                source="desktop",
+                metadata={"intent": "failure_memory_list"},
+            )
+        )
+
+    def _hypothesis_evidence_request(
+        self,
+        intent: str,
+        message: str,
+        hypothesis_id: str,
+        evidence_ids: str,
+    ) -> BrainResponse:
+        normalized_id = hypothesis_id.strip()
+        if not normalized_id:
+            raise ValueError("A hypothesis ID cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message=message,
+                source="desktop",
+                metadata={
+                    "intent": intent,
+                    "hypothesis_id": normalized_id,
+                    "evidence_ids": _evidence_id_list(evidence_ids),
+                },
+            )
+        )
+
+    def _failure_memory_run_request(
+        self,
+        intent: str,
+        message: str,
+        research_run_id: str,
+    ) -> BrainResponse:
+        normalized_run_id = research_run_id.strip()
+        if not normalized_run_id:
+            raise ValueError("A research run ID cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message=message,
+                source="desktop",
+                metadata={"intent": intent, "research_run_id": normalized_run_id},
             )
         )
 

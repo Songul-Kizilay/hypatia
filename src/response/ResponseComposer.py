@@ -94,6 +94,11 @@ from session.SessionRecord import SessionRecord
 from session.SessionRenamePreview import SessionRenamePreview
 from session.SessionRenameResult import SessionRenameResult
 
+#: How much of a hypothesis a list entry shows. A hypothesis may be 400
+#: characters; a catalogue someone is scanning should stay scannable, and the
+#: full wording is one appraisal away.
+MAX_LISTED_HYPOTHESIS_STATEMENT_LENGTH = 160
+
 _WEAKNESS_CLASS_DISCLAIMER = (
     "A weakness class is a concept, not a finding. Recording or relating "
     "one says nothing about whether any system, product, or person is affected."
@@ -1576,12 +1581,20 @@ class ResponseComposer:
         request: BrainRequest,
         appraisals: tuple[HypothesisAppraisal, ...],
     ) -> BrainResponse:
-        """Render every hypothesis with its derived standing."""
+        """Render every hypothesis with its derived standing.
+
+        The statement leads. A list that identified each entry only by record
+        ID is unreadable by anyone deciding which hypothesis to act on, which
+        is the entire reason to look at the list.
+        """
         lines = [f"Research hypotheses: {len(appraisals)}"]
         for appraisal in appraisals:
+            statement = appraisal.hypothesis.one_line_statement(
+                MAX_LISTED_HYPOTHESIS_STATEMENT_LENGTH
+            )
+            lines.append(f'- [{appraisal.status.value}] "{statement}"')
             lines.append(
-                f"- {appraisal.hypothesis.hypothesis_id} "
-                f"[{appraisal.status.value}] "
+                f"  {appraisal.hypothesis.hypothesis_id} | "
                 f"for {appraisal.supporting_source_count} / "
                 f"against {appraisal.opposing_source_count} source(s); "
                 f"support trust {appraisal.supporting_assessed_source_count}/"
