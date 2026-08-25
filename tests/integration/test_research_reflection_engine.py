@@ -532,6 +532,71 @@ class ReflectionServiceTests(ReflectionFixture):
         self.assertEqual(len(service.reports()), 1)
 
 
+class FailingReportStore:
+    """A store that refuses to write, so honesty about that can be tested."""
+
+    @staticmethod
+    def load() -> list[object]:
+        return []
+
+    @staticmethod
+    def save(reports: list[object]) -> None:
+        raise ResearchError("PRIVATE-REFLECTION-PATH is unwritable.")
+
+
+class ReflectionPersistenceHonestyTests(ReflectionFixture):
+    """A kept reflection that was not written is not a kept reflection."""
+
+    def failing_service(self) -> ReflectionApplicationService:
+        return ReflectionApplicationService(
+            self.manager,
+            ResponseComposer(),
+            report_store=FailingReportStore(),  # type: ignore[arg-type]
+            event_bus=self.event_bus,
+            clock=self.clock,
+        )
+
+    def test_a_failed_write_is_not_reported_as_stored(self) -> None:
+        run_id = self.new_run()
+
+        response = self.failing_service().process_store(
+            self.request("research_reflection_store", research_run_id=run_id)
+        )
+
+        self.assertFalse(response.success)
+        self.assertIn("was not durably written", response.message)
+        self.assertIn("Restarting Hypatia may lose", response.message)
+
+    def test_a_failed_write_leaks_neither_path_nor_native_error(self) -> None:
+        run_id = self.new_run()
+
+        response = self.failing_service().process_store(
+            self.request("research_reflection_store", research_run_id=run_id)
+        )
+
+        self.assertNotIn("PRIVATE-REFLECTION-PATH", response.message)
+
+    def test_a_failed_write_keeps_the_report_for_this_session(self) -> None:
+        run_id = self.new_run()
+        service = self.failing_service()
+
+        service.process_store(
+            self.request("research_reflection_store", research_run_id=run_id)
+        )
+
+        self.assertEqual(len(service.reports()), 1)
+
+    def test_previewing_never_reports_a_write_problem(self) -> None:
+        """Preview stores nothing, so it has nothing to be dishonest about."""
+        run_id = self.new_run()
+
+        response = self.failing_service().process_preview(
+            self.request("research_reflection_preview", research_run_id=run_id)
+        )
+
+        self.assertTrue(response.success)
+
+
 class ReflectionEventTests(ReflectionFixture):
     def test_producing_and_storing_both_emit_bounded_events(self) -> None:
         run_id, _, _ = self.sourced_run()

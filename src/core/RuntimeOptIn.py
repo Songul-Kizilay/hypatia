@@ -18,6 +18,8 @@ from collections.abc import Mapping
 VULNERABILITY_GRAPH_ENABLED_VARIABLE = "HYPATIA_VULNERABILITY_GRAPH_ENABLED"
 HYPOTHESIS_ENABLED_VARIABLE = "HYPATIA_HYPOTHESIS_ENABLED"
 FAILURE_MEMORY_ENABLED_VARIABLE = "HYPATIA_FAILURE_MEMORY_ENABLED"
+REFLECTION_ENABLED_VARIABLE = "HYPATIA_REFLECTION_ENABLED"
+CURIOSITY_ENABLED_VARIABLE = "HYPATIA_CURIOSITY_ENABLED"
 
 #: The single accepted value. Anything else, including "True", "1", and "yes",
 #: leaves the capability off. An opt-in that guesses what someone meant is an
@@ -43,3 +45,13 @@ def hypothesis_engine_enabled(environment: Mapping[str, str]) -> bool:
 def failure_memory_enabled(environment: Mapping[str, str]) -> bool:
     """Return whether failure lessons are kept."""
     return opted_in(environment, FAILURE_MEMORY_ENABLED_VARIABLE)
+
+
+def reflection_enabled(environment: Mapping[str, str]) -> bool:
+    """Return whether reflection history is kept."""
+    return opted_in(environment, REFLECTION_ENABLED_VARIABLE)
+
+
+def curiosity_enabled(environment: Mapping[str, str]) -> bool:
+    """Return whether curiosity proposals are kept."""
+    return opted_in(environment, CURIOSITY_ENABLED_VARIABLE)

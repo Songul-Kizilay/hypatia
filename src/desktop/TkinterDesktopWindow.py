@@ -89,6 +89,21 @@ _HYPOTHESIS_EVIDENCE_NOTE = (
     "Evidence must already be recorded in the run. Separate several IDs with "
     "commas or spaces. The same record cannot be entered on both sides."
 )
+_REVIEW_IDLE_STATUS = "Nothing has been reviewed yet."
+_REVIEW_PANEL_NOTE = (
+    "Three ways of looking back at a run: how far each claim outruns its "
+    "evidence, how the run went, and what was never asked. None of them "
+    "changes a run, a claim, or a confidence."
+)
+_CALIBRATION_NOTE = (
+    "Calibration reports a mismatch and never adjusts one. What you are "
+    "willing to assert is your judgement; a system that quietly downgraded it "
+    "would be overruling you and calling it bookkeeping."
+)
+_CURIOSITY_RULING_NOTE = (
+    "A ruling records what you think is worth pursuing. It starts no research "
+    "and reaches no source."
+)
 _LESSON_ADVISORY_NOTE = (
     "Recall is advisory. It blocks no plan, refuses no capability, and "
     "downgrades no claim. Something failing once is not a reason not to try it."
@@ -322,6 +337,12 @@ class TkinterDesktopWindow:
     _hypothesis_enabled: bool = False
     _failure_memory_enabled: bool = False
 
+    #: Reflection and curiosity keep history, so each follows the same rule.
+    #: Calibration keeps nothing — it derives its report from the run on every
+    #: request — so it needs no opt-in and is always offered where runs exist.
+    _reflection_enabled: bool = False
+    _curiosity_enabled: bool = False
+
     def __init__(
         self,
         controller: DesktopController,
@@ -331,12 +352,16 @@ class TkinterDesktopWindow:
         weakness_graph_enabled: bool = False,
         hypothesis_enabled: bool = False,
         failure_memory_enabled: bool = False,
+        reflection_enabled: bool = False,
+        curiosity_enabled: bool = False,
     ) -> None:
         self._controller = controller
         self._tool_console = tool_console
         self._weakness_graph_enabled = weakness_graph_enabled
         self._hypothesis_enabled = hypothesis_enabled
         self._failure_memory_enabled = failure_memory_enabled
+        self._reflection_enabled = reflection_enabled
+        self._curiosity_enabled = curiosity_enabled
         self._root = root or tk.Tk()
         self._research_refresh_signal = ResearchStateRefreshSignal(event_bus)
         self._request_runner = DesktopRequestRunner()
@@ -818,6 +843,12 @@ class TkinterDesktopWindow:
             learning_tab = ttk.Frame(self._workspace_tabs, padding=10)
             self._workspace_tabs.add(learning_tab, text="Learning")
             tabs.append(learning_tab)
+        # Calibration alone earns this tab, because it stores nothing and is
+        # available wherever runs are. Reflection and curiosity each add their
+        # own section when kept.
+        review_tab = ttk.Frame(self._workspace_tabs, padding=10)
+        self._workspace_tabs.add(review_tab, text="Review")
+        tabs.append(review_tab)
         self._workspace_tabs.add(appearance_tab, text="Appearance")
         tabs.append(appearance_tab)
         for tab in tabs:
@@ -829,6 +860,7 @@ class TkinterDesktopWindow:
             self._build_security_tab(security_tab)
         if self._learning_visible:
             self._build_learning_tab(learning_tab)
+        self._build_review_tab(review_tab)
         chat_tab.rowconfigure(3, weight=1)
 
         accessibility_frame = ttk.LabelFrame(
@@ -4155,6 +4187,166 @@ class TkinterDesktopWindow:
     # console controller and renders plain data back, so this file cannot name
     # an effect or build an invocation even by mistake.
     # ------------------------------------------------------------------
+
+    def _build_review_tab(self, parent: ttk.Frame) -> None:
+        """Lay out the three ways of looking back at a run that is under way.
+
+        Calibration asks how far each claim outruns its evidence, reflection
+        asks how the run went, and curiosity asks what was never asked. None of
+        them changes a run, a claim, or a confidence: they report, and the
+        judgement stays where it was.
+        """
+        self._review_run_id = tk.StringVar()
+        self._review_status = tk.StringVar(value=_REVIEW_IDLE_STATUS)
+        parent.rowconfigure(4, weight=1)
+        ttk.Label(parent, text=_REVIEW_PANEL_NOTE, wraplength=720).grid(
+            row=0, column=0, sticky="w"
+        )
+
+        run = ttk.LabelFrame(parent, text="Research run", padding=12)
+        run.grid(row=1, column=0, sticky="ew", pady=(10, 0))
+        run.columnconfigure(1, weight=1)
+        ttk.Label(run, text="Run ID").grid(row=0, column=0, sticky="w")
+        ttk.Entry(run, textvariable=self._review_run_id).grid(
+            row=0, column=1, sticky="ew", padx=(8, 0)
+        )
+        ttk.Label(run, text=_CALIBRATION_NOTE, wraplength=680).grid(
+            row=1, column=1, sticky="w", padx=(8, 0), pady=(6, 0)
+        )
+        commands: list[tuple[str, Callable[[], None]]] = [
+            ("Calibrate claims", self._report_claim_calibration)
+        ]
+        if self._reflection_enabled:
+            commands.append(("Reflect", self._preview_reflection))
+            commands.append(("Reflect and keep", self._store_reflection))
+        if self._curiosity_enabled:
+            commands.append(("Find gaps", self._detect_curiosity_gaps))
+            commands.append(("Draft questions", self._preview_curiosity_questions))
+            commands.append(("Draft and keep", self._store_curiosity_questions))
+        buttons = ttk.Frame(run)
+        buttons.grid(row=2, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
+        for index, (label, command) in enumerate(commands):
+            self._request_button(buttons, label, command).grid(
+                row=index // 3,
+                column=index % 3,
+                sticky="w",
+                padx=(0 if index % 3 == 0 else 8, 0),
+                pady=(0 if index < 3 else 6, 0),
+            )
+
+        if self._curiosity_enabled:
+            self._build_curiosity_ruling_section(parent)
+        if self._reflection_enabled or self._curiosity_enabled:
+            self._build_review_history_section(parent)
+
+        results = ttk.LabelFrame(parent, text="Result", padding=12)
+        results.grid(row=4, column=0, sticky="nsew", pady=(10, 0))
+        results.columnconfigure(0, weight=1)
+        results.rowconfigure(1, weight=1)
+        ttk.Label(results, textvariable=self._review_status, wraplength=720).grid(
+            row=0, column=0, sticky="w"
+        )
+        self._review_output = tk.Text(results, height=14, wrap="word")
+        self._review_output.grid(row=1, column=0, sticky="nsew", pady=(6, 0))
+        self._review_output.configure(state=tk.DISABLED)
+
+    def _build_curiosity_ruling_section(self, parent: ttk.Frame) -> None:
+        """One question, one human ruling. Neither ruling starts any research."""
+        self._curiosity_question_id = tk.StringVar()
+        section = ttk.LabelFrame(parent, text="Rule on a question", padding=12)
+        section.grid(row=2, column=0, sticky="ew", pady=(10, 0))
+        section.columnconfigure(1, weight=1)
+        ttk.Label(section, text="Question ID").grid(row=0, column=0, sticky="w")
+        ttk.Entry(section, textvariable=self._curiosity_question_id).grid(
+            row=0, column=1, sticky="ew", padx=(8, 0)
+        )
+        ttk.Label(section, text=_CURIOSITY_RULING_NOTE, wraplength=680).grid(
+            row=1, column=1, sticky="w", padx=(8, 0), pady=(6, 0)
+        )
+        buttons = ttk.Frame(section)
+        buttons.grid(row=2, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
+        self._request_button(
+            buttons, "Worth pursuing", self._accept_curiosity_question
+        ).grid(row=0, column=0, sticky="w")
+        self._request_button(
+            buttons, "Not worth pursuing", self._dismiss_curiosity_question
+        ).grid(row=0, column=1, sticky="w", padx=(8, 0))
+
+    def _build_review_history_section(self, parent: ttk.Frame) -> None:
+        """Read back what was kept, producing nothing new."""
+        section = ttk.LabelFrame(parent, text="Kept", padding=12)
+        section.grid(row=3, column=0, sticky="ew", pady=(10, 0))
+        section.columnconfigure(0, weight=1)
+        buttons = ttk.Frame(section)
+        buttons.grid(row=0, column=0, sticky="w")
+        column = 0
+        if self._reflection_enabled:
+            self._request_button(
+                buttons, "List reflections", self._list_reflections
+            ).grid(row=0, column=column, sticky="w")
+            column += 1
+        if self._curiosity_enabled:
+            self._request_button(
+                buttons, "List questions", self._list_curiosity_questions
+            ).grid(row=0, column=column, sticky="w", padx=(0 if column == 0 else 8, 0))
+
+    def _review_request(self, call: Callable[[], BrainResponse]) -> None:
+        """Run one review request into the Review panel's result area."""
+        self._panel_request(self._review_status, self._review_output, call)
+
+    def _report_claim_calibration(self) -> None:
+        self._review_request(
+            lambda: self._controller.report_claim_calibration(self._review_run_id.get())
+        )
+
+    def _preview_reflection(self) -> None:
+        self._review_request(
+            lambda: self._controller.preview_reflection(self._review_run_id.get())
+        )
+
+    def _store_reflection(self) -> None:
+        self._review_request(
+            lambda: self._controller.store_reflection(self._review_run_id.get())
+        )
+
+    def _list_reflections(self) -> None:
+        self._review_request(self._controller.list_reflections)
+
+    def _detect_curiosity_gaps(self) -> None:
+        self._review_request(
+            lambda: self._controller.detect_curiosity_gaps(self._review_run_id.get())
+        )
+
+    def _preview_curiosity_questions(self) -> None:
+        self._review_request(
+            lambda: self._controller.preview_curiosity_questions(
+                self._review_run_id.get()
+            )
+        )
+
+    def _store_curiosity_questions(self) -> None:
+        self._review_request(
+            lambda: self._controller.store_curiosity_questions(
+                self._review_run_id.get()
+            )
+        )
+
+    def _list_curiosity_questions(self) -> None:
+        self._review_request(self._controller.list_curiosity_questions)
+
+    def _accept_curiosity_question(self) -> None:
+        self._review_request(
+            lambda: self._controller.accept_curiosity_question(
+                self._curiosity_question_id.get()
+            )
+        )
+
+    def _dismiss_curiosity_question(self) -> None:
+        self._review_request(
+            lambda: self._controller.dismiss_curiosity_question(
+                self._curiosity_question_id.get()
+            )
+        )
 
     @property
     def _learning_visible(self) -> bool:

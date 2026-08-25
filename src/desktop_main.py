@@ -7,8 +7,10 @@ import os
 from brain.Brain import Brain
 from core.Application import HypatiaApplication
 from core.RuntimeOptIn import (
+    curiosity_enabled,
     failure_memory_enabled,
     hypothesis_engine_enabled,
+    reflection_enabled,
     vulnerability_graph_enabled,
 )
 from desktop.DesktopController import DesktopController
@@ -83,6 +85,8 @@ def main() -> None:
             weakness_graph_enabled=vulnerability_graph_enabled(os.environ),
             hypothesis_enabled=hypothesis_engine_enabled(os.environ),
             failure_memory_enabled=failure_memory_enabled(os.environ),
+            reflection_enabled=reflection_enabled(os.environ),
+            curiosity_enabled=curiosity_enabled(os.environ),
         ).run()
     finally:
         app.stop()

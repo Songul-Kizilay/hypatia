@@ -93,7 +93,11 @@ class ReflectionApplicationService:
                 "Reflection history is full.",
             )
         self._reports[report.report_id] = report
-        self._persist()
+        if not self._persist():
+            return self._response_composer.research_reflection_persistence_failed(
+                request,
+                report,
+            )
         self._events.stored(report, len(self._reports))
         return self._response_composer.research_reflection(request, report, True)
 
@@ -118,11 +122,18 @@ class ReflectionApplicationService:
         for report in self._report_store.load():
             self._reports[report.report_id] = report
 
-    def _persist(self) -> None:
-        """Write durable reflections, never erasing them silently on failure."""
+    def _persist(self) -> bool:
+        """Write durable reflections, reporting rather than swallowing a failure.
+
+        True with no store configured is not a false claim: this runtime keeps
+        no reflection history, and the desktop offers the surface only where it
+        does. The report stays in memory either way, so a failed write costs
+        the session nothing beyond having to be told the truth about it.
+        """
         if self._report_store is None:
-            return
+            return True
         try:
             self._report_store.save(list(self._reports.values()))
         except ResearchError:
-            return
+            return False
+        return True

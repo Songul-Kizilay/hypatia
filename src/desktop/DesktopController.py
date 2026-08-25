@@ -213,6 +213,130 @@ class DesktopController:
             )
         )
 
+    def report_claim_calibration(self, research_run_id: str) -> BrainResponse:
+        """Report how far each claim outruns its evidence, adjusting none."""
+        return self._run_only_request(
+            "research_calibration_report",
+            "Report claim calibration",
+            research_run_id,
+        )
+
+    def preview_reflection(self, research_run_id: str) -> BrainResponse:
+        """Report how one run went without storing the account."""
+        return self._run_only_request(
+            "research_reflection_preview",
+            "Preview research reflection",
+            research_run_id,
+        )
+
+    def store_reflection(self, research_run_id: str) -> BrainResponse:
+        """Keep one account of how a run went, changing nothing about the run."""
+        return self._run_only_request(
+            "research_reflection_store",
+            "Store research reflection",
+            research_run_id,
+        )
+
+    def list_reflections(self) -> BrainResponse:
+        """Report stored reflections without producing a new one."""
+        return self._intent_only_request(
+            "research_reflection_list",
+            "List research reflections",
+        )
+
+    def detect_curiosity_gaps(self, research_run_id: str) -> BrainResponse:
+        """Report where one run's own record is thin, proposing nothing."""
+        return self._run_only_request(
+            "curiosity_gap_detect",
+            "Detect research gaps",
+            research_run_id,
+        )
+
+    def preview_curiosity_questions(self, research_run_id: str) -> BrainResponse:
+        """Draft and rank questions for one run without storing any."""
+        return self._run_only_request(
+            "curiosity_question_preview",
+            "Preview curiosity questions",
+            research_run_id,
+        )
+
+    def store_curiosity_questions(self, research_run_id: str) -> BrainResponse:
+        """Keep the ranked proposals for one run, deciding nothing."""
+        return self._run_only_request(
+            "curiosity_question_store",
+            "Store curiosity questions",
+            research_run_id,
+        )
+
+    def list_curiosity_questions(self) -> BrainResponse:
+        """Report every stored proposal without running anything."""
+        return self._intent_only_request(
+            "curiosity_question_list",
+            "List curiosity questions",
+        )
+
+    def accept_curiosity_question(self, question_id: str) -> BrainResponse:
+        """Record that one proposal is worth pursuing. Starts no research."""
+        return self._curiosity_ruling(
+            "curiosity_question_accept",
+            "Accept curiosity question",
+            question_id,
+        )
+
+    def dismiss_curiosity_question(self, question_id: str) -> BrainResponse:
+        """Record that one proposal is not worth pursuing."""
+        return self._curiosity_ruling(
+            "curiosity_question_dismiss",
+            "Dismiss curiosity question",
+            question_id,
+        )
+
+    def _curiosity_ruling(
+        self,
+        intent: str,
+        message: str,
+        question_id: str,
+    ) -> BrainResponse:
+        normalized_id = question_id.strip()
+        if not normalized_id:
+            raise ValueError("A curiosity question ID cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message=message,
+                source="desktop",
+                metadata={
+                    "intent": intent,
+                    "curiosity_question_id": normalized_id,
+                },
+            )
+        )
+
+    def _run_only_request(
+        self,
+        intent: str,
+        message: str,
+        research_run_id: str,
+    ) -> BrainResponse:
+        normalized_run_id = research_run_id.strip()
+        if not normalized_run_id:
+            raise ValueError("A research run ID cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message=message,
+                source="desktop",
+                metadata={"intent": intent, "research_run_id": normalized_run_id},
+            )
+        )
+
+    def _intent_only_request(self, intent: str, message: str) -> BrainResponse:
+        return self._brain.process(
+            BrainRequest(
+                message=message,
+                source="desktop",
+                metadata={"intent": intent},
+            )
+        )
+
     def propose_hypothesis(
         self,
         research_run_id: str,
@@ -297,7 +421,7 @@ class DesktopController:
 
     def preview_failure_lessons(self, research_run_id: str) -> BrainResponse:
         """Show what would be remembered from one run, remembering nothing."""
-        return self._failure_memory_run_request(
+        return self._run_only_request(
             "failure_memory_preview",
             "Preview failure lessons",
             research_run_id,
@@ -305,7 +429,7 @@ class DesktopController:
 
     def store_failure_lessons(self, research_run_id: str) -> BrainResponse:
         """Remember the lessons one run's own record supports."""
-        return self._failure_memory_run_request(
+        return self._run_only_request(
             "failure_memory_store",
             "Remember failure lessons",
             research_run_id,
@@ -313,7 +437,7 @@ class DesktopController:
 
     def remember_hypothesis_outcomes(self, research_run_id: str) -> BrainResponse:
         """Remember the durable weakened and contradicted hypotheses of one run."""
-        return self._failure_memory_run_request(
+        return self._run_only_request(
             "failure_memory_hypothesis_store",
             "Remember hypothesis outcomes",
             research_run_id,
@@ -364,23 +488,6 @@ class DesktopController:
                     "hypothesis_id": normalized_id,
                     "evidence_ids": _evidence_id_list(evidence_ids),
                 },
-            )
-        )
-
-    def _failure_memory_run_request(
-        self,
-        intent: str,
-        message: str,
-        research_run_id: str,
-    ) -> BrainResponse:
-        normalized_run_id = research_run_id.strip()
-        if not normalized_run_id:
-            raise ValueError("A research run ID cannot be empty.")
-        return self._brain.process(
-            BrainRequest(
-                message=message,
-                source="desktop",
-                metadata={"intent": intent, "research_run_id": normalized_run_id},
             )
         )
 

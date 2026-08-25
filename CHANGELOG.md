@@ -2,6 +2,57 @@
 
 All notable project changes are recorded here.
 
+## [0.3.189] - 2026-08-26
+
+### Added
+
+- Looking back at a run is reachable from the application. A Review tab reports
+  how far each claim outruns its evidence, reflects on how a run went and keeps
+  the account, finds where a run's own record is thin, drafts and keeps ranked
+  questions, rules on one proposal, and lists what was kept. All three engines
+  had been runtime-only.
+- `DesktopController` gained the ten corresponding commands, each refusing an
+  empty run or question before the runtime is reached.
+
+### Fixed
+
+- A failed durable write is no longer reported as a stored reflection. The
+  report stays in this process and the response says plainly it was not written
+  down. This is the same defect fixed for failure memory, hypotheses, and the
+  weakness taxonomy; reflection was the fourth service carrying it.
+- The same fix for curiosity, on both paths: keeping ranked proposals and
+  recording a ruling on one. Neither now claims success over a failed write.
+
+### Changed
+
+- The last two runtime opt-ins moved into the shared module. All five are now
+  read through one predicate each, and no `HYPATIA_*` variable is read in more
+  than one module.
+
+### Compatibility and safety
+
+- Calibration needs no opt-in and earns the tab on its own, because it stores
+  nothing and derives its report from the run on every request. Reflection and
+  curiosity each add their section only where their store exists.
+- Nothing on the tab adjusts what it reports on. There is no control for a
+  confidence or an epistemic state, calibration reports a mismatch and leaves
+  the judgement where it was, and a ruling records an opinion without starting
+  any research or reaching any source.
+- No new intent, storage schema, migration, model judgement, autonomous write,
+  tool capability, or filesystem access was added.
+
+### Verification
+
+- Coverage exercises all ten commands and their metadata, local refusal of an
+  empty run or question, tab and section presence across both opt-ins, panel
+  handlers including a refusal and an unsuccessful write, and runtime
+  end-to-end paths — among them one proving a run is byte-identical after being
+  calibrated, reflected on, and questioned.
+- The absence check reads the code rather than the prose around it, and now has
+  one implementation shared by the panels that need it.
+- Package-aware discovery passes 3,480 tests with 3 existing platform-dependent
+  skips. Black, Ruff, and source MyPy pass for this release scope.
+
 ## [0.3.188] - 2026-08-26
 
 ### Fixed

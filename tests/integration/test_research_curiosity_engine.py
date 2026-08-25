@@ -743,6 +743,82 @@ class CuriosityServiceTests(CuriosityFixture):
         self.assertTrue(service.questions())
 
 
+class FailingQuestionStore:
+    """A store that refuses to write, so honesty about that can be tested."""
+
+    @staticmethod
+    def load() -> list[object]:
+        return []
+
+    @staticmethod
+    def save(questions: list[object]) -> None:
+        raise ResearchError("PRIVATE-CURIOSITY-PATH is unwritable.")
+
+
+class CuriosityPersistenceHonestyTests(CuriosityFixture):
+    """A proposal or ruling that was not written is not a kept one."""
+
+    def failing_service(self) -> CuriosityApplicationService:
+        return CuriosityApplicationService(
+            self.manager,
+            ResponseComposer(),
+            question_store=FailingQuestionStore(),  # type: ignore[arg-type]
+            event_bus=self.event_bus,
+            clock=self.clock,
+        )
+
+    def stored_run(self, service: CuriosityApplicationService) -> str:
+        run_id = self.new_run()
+        service.process_question_store(
+            self.request("curiosity_question_store", research_run_id=run_id)
+        )
+        return run_id
+
+    def test_a_failed_proposal_write_is_not_reported_as_stored(self) -> None:
+        service = self.failing_service()
+        run_id = self.new_run()
+
+        response = service.process_question_store(
+            self.request("curiosity_question_store", research_run_id=run_id)
+        )
+
+        self.assertFalse(response.success)
+        self.assertIn("was not durably written", response.message)
+        self.assertNotIn("PRIVATE-CURIOSITY-PATH", response.message)
+
+    def test_a_failed_ruling_write_is_not_reported_as_decided(self) -> None:
+        service = self.failing_service()
+        self.stored_run(service)
+        question_id = service.questions()[0].question_id
+
+        response = service.process_question_accept(
+            self.request(
+                "curiosity_question_accept",
+                curiosity_question_id=question_id,
+            )
+        )
+
+        self.assertFalse(response.success)
+        self.assertIn("was not durably written", response.message)
+
+    def test_a_failed_write_keeps_the_proposals_for_this_session(self) -> None:
+        service = self.failing_service()
+
+        self.stored_run(service)
+
+        self.assertTrue(service.questions())
+
+    def test_previewing_never_reports_a_write_problem(self) -> None:
+        """Preview stores nothing, so it has nothing to be dishonest about."""
+        run_id = self.new_run()
+
+        response = self.failing_service().process_question_preview(
+            self.request("curiosity_question_preview", research_run_id=run_id)
+        )
+
+        self.assertTrue(response.success)
+
+
 class CuriosityEventTests(CuriosityFixture):
     def test_the_full_pipeline_emits_bounded_events(self) -> None:
         run_id = self.new_run()

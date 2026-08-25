@@ -732,6 +732,11 @@ than by a model, so a proposal can only ask about a claim or source the system
 already recorded. Ranking is a stated formula: gap severity dominates, recorded
 claim confidence breaks ties.
 
+With it set, the desktop's **Review** tab gains the curiosity commands: find
+gaps, draft and keep ranked questions, list them, and rule on one. A failed
+durable write is reported rather than announced as a stored proposal or a
+recorded ruling.
+
 Curiosity never acts. Detecting, previewing, storing, listing, accepting, and
 dismissing all leave the run untouched; none of them starts research, drafts a
 plan, queues a background task, or spends a network or model operation.
@@ -751,6 +756,10 @@ HYPATIA_REFLECTION_ENABLED=true
 The value must be exactly lowercase `true`. Reports are written to
 `research_reflections.json` beside the research-run store, in a separate
 versioned document.
+
+With it set, the desktop's **Review** tab gains reflection: report how a run
+went, optionally keeping the account, and list what was kept. If the durable
+write fails, the response says so instead of reporting a stored reflection.
 
 Reflection reports how a run went, in this order: what failed, what contradicted
 what, which beliefs were revised, what rests on thin evidence, what stayed
@@ -862,6 +871,10 @@ Calibration compares what a claim asserts against the evidence structure behind
 it. It needs no flag, because it writes nothing: the report is derived from
 canonical state on every request, so there is no second copy to drift from the
 record or be believed by mistake.
+
+It is reachable from the desktop's **Review** tab, and needing no flag is why
+that tab exists wherever runs do: reflection and curiosity add their sections
+when kept, and calibration is there either way.
 
 The ceilings are stated rules rather than a hidden score:
 

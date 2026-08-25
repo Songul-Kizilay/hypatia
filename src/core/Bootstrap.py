@@ -9,8 +9,10 @@ from core.Config import Config
 from core.DependencyContainer import DependencyContainer
 from core.Logger import Logger
 from core.RuntimeOptIn import (
+    curiosity_enabled,
     failure_memory_enabled,
     hypothesis_engine_enabled,
+    reflection_enabled,
     vulnerability_graph_enabled,
 )
 from eventbus.EventBus import EventBus
@@ -615,7 +617,7 @@ class Bootstrap:
         Default off, so an unset environment proposes nothing durable and
         behaves exactly like a runtime without a curiosity engine.
         """
-        if os.environ.get("HYPATIA_CURIOSITY_ENABLED") != "true":
+        if not curiosity_enabled(os.environ):
             return None
         run_path = self._research_run_path or self._research_run_store_path(
             self._memory_path
@@ -630,7 +632,7 @@ class Bootstrap:
         Default off, so an unset environment keeps no reflection history and
         behaves exactly like a runtime without a reflection engine.
         """
-        if os.environ.get("HYPATIA_REFLECTION_ENABLED") != "true":
+        if not reflection_enabled(os.environ):
             return None
         run_path = self._research_run_path or self._research_run_store_path(
             self._memory_path

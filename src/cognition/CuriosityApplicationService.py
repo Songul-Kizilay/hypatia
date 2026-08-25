@@ -115,7 +115,12 @@ class CuriosityApplicationService:
         preview = self._detect(request, generate=True)
         self._events.gaps_detected(preview)
         self._events.questions_generated(preview)
-        stored = self._store(preview.questions)
+        stored, durable = self._store(preview.questions)
+        if not durable:
+            return self._response_composer.curiosity_persistence_failed(
+                request,
+                f"{stored} proposal(s)",
+            )
         persisted = ResearchCuriosityPreview(
             run_id=preview.run_id,
             gaps=preview.gaps,
@@ -157,7 +162,11 @@ class CuriosityApplicationService:
             self._events.question_accepted(updated)
         else:
             self._events.question_dismissed(updated)
-        self._persist()
+        if not self._persist():
+            return self._response_composer.curiosity_persistence_failed(
+                request,
+                f"the ruling on {question_id}",
+            )
         return self._response_composer.curiosity_question_decided(request, updated)
 
     def _detect(
@@ -175,7 +184,10 @@ class CuriosityApplicationService:
             questions=questions,
         )
 
-    def _store(self, questions: tuple[ResearchCuriosityQuestion, ...]) -> int:
+    def _store(
+        self,
+        questions: tuple[ResearchCuriosityQuestion, ...],
+    ) -> tuple[int, bool]:
         """Add proposals that are new, never overwriting a decided one."""
         stored = 0
         for question in questions:
@@ -186,9 +198,7 @@ class CuriosityApplicationService:
                 break
             self._questions[question.question_id] = question
             stored += 1
-        if stored:
-            self._persist()
-        return stored
+        return stored, self._persist() if stored else True
 
     def _restore(self) -> None:
         if self._question_store is None:
@@ -196,14 +206,19 @@ class CuriosityApplicationService:
         for question in self._question_store.load():
             self._questions[question.question_id] = question
 
-    def _persist(self) -> None:
-        """Write durable proposals, never erasing them silently on failure."""
+    def _persist(self) -> bool:
+        """Write durable proposals, reporting rather than swallowing a failure.
+
+        True with no store configured is not a false claim: this runtime keeps
+        no proposals, and the desktop offers the surface only where it does.
+        """
         if self._question_store is None:
-            return
+            return True
         try:
             self._question_store.save(list(self._questions.values()))
         except ResearchError:
-            return
+            return False
+        return True
 
     @staticmethod
     def _required_text(request: BrainRequest, key: str, label: str) -> str:

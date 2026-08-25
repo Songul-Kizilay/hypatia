@@ -1272,6 +1272,30 @@ class ResponseComposer:
             research_reflections=reports,
         )
 
+    def research_reflection_persistence_failed(
+        self,
+        request: BrainRequest,
+        report: ResearchReflectionReport,
+    ) -> BrainResponse:
+        """Report a reflection that exists here but was not written down."""
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "This reflection was not durably written.",
+                    f"Report: {report.report_id}",
+                    "Durable write: failed.",
+                    "Restarting Hypatia may lose it.",
+                    "Reflecting on this run again retries the write.",
+                    "No research run, claim, evidence, or assessment changed.",
+                )
+            ),
+            request_id=request.request_id,
+            intent="research_reflection",
+            memory_count=0,
+            success=False,
+            research_reflection=report,
+        )
+
     def research_reflection_rejected(
         self,
         request: BrainRequest,
@@ -2053,6 +2077,30 @@ class ResponseComposer:
                 "Curiosity question not found:",
                 f"Question ID: {question_id}",
                 "No proposal with that identifier is stored.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="curiosity",
+            memory_count=0,
+            success=False,
+        )
+
+    def curiosity_persistence_failed(
+        self,
+        request: BrainRequest,
+        subject: str,
+    ) -> BrainResponse:
+        """Report proposals or a ruling that exist here but were not written."""
+        message = "\n".join(
+            (
+                "Curiosity was not durably written.",
+                f"Kept in this process: {subject}.",
+                "Durable write: failed.",
+                "Restarting Hypatia may lose it.",
+                "Repeating the request retries the write.",
+                "No research run, claim, evidence, or assessment changed.",
             )
         )
         return BrainResponse(
