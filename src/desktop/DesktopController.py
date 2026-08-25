@@ -195,6 +195,102 @@ class DesktopController:
             )
         )
 
+    def record_vulnerability_family(
+        self,
+        family_id: str,
+        name: str,
+        summary: str,
+        prevention: str,
+    ) -> BrainResponse:
+        """Record one class of weakness, asserting nothing about any system.
+
+        There is deliberately no argument for a host, a product, a version, or
+        a payload. The domain type has nowhere to put them, and this adapter
+        does not invent a place.
+        """
+        values = {
+            "family_id": family_id.strip(),
+            "family_name": name.strip(),
+            "family_summary": summary.strip(),
+            "family_prevention": prevention.strip(),
+        }
+        if not all(values.values()):
+            raise ValueError(
+                "A weakness class needs an ID, a name, a summary, and a "
+                "prevention note."
+            )
+        return self._brain.process(
+            BrainRequest(
+                message="Record vulnerability family",
+                source="desktop",
+                metadata={"intent": "vulnerability_family_record", **values},
+            )
+        )
+
+    def record_vulnerability_relation(
+        self,
+        from_family_id: str,
+        to_family_id: str,
+        relation_kind: str,
+        rationale: str,
+    ) -> BrainResponse:
+        """Relate two weakness classes, with the reason recorded alongside.
+
+        The rationale is required here rather than optional. An edge nobody
+        explained is the kind a later reader trusts without being able to
+        check it.
+        """
+        values = {
+            "from_family_id": from_family_id.strip(),
+            "to_family_id": to_family_id.strip(),
+            "relation_kind": relation_kind.strip(),
+            "relation_rationale": rationale.strip(),
+        }
+        if not all(values.values()):
+            raise ValueError(
+                "A relation needs both weakness classes, a kind, and a reason."
+            )
+        return self._brain.process(
+            BrainRequest(
+                message="Record vulnerability relation",
+                source="desktop",
+                metadata={"intent": "vulnerability_relation_record", **values},
+            )
+        )
+
+    def vulnerability_neighbourhood(
+        self,
+        family_id: str,
+        max_depth: int = 1,
+    ) -> BrainResponse:
+        """Ask what else is worth reading about near one weakness class."""
+        normalized_id = family_id.strip()
+        if not normalized_id:
+            raise ValueError("A weakness class ID cannot be empty.")
+        if isinstance(max_depth, bool) or not isinstance(max_depth, int):
+            raise ValueError("Traversal depth must be a whole number.")
+        return self._brain.process(
+            BrainRequest(
+                message="Report vulnerability neighbourhood",
+                source="desktop",
+                metadata={
+                    "intent": "vulnerability_family_neighbourhood",
+                    "family_id": normalized_id,
+                    "max_depth": max_depth,
+                },
+            )
+        )
+
+    def list_vulnerability_families(self) -> BrainResponse:
+        """List every recorded weakness class without traversing anything."""
+        return self._brain.process(
+            BrainRequest(
+                message="List vulnerability families",
+                source="desktop",
+                metadata={"intent": "vulnerability_family_list"},
+            )
+        )
+
     def audit_learned_memory(self) -> BrainResponse:
         """Request the read-only learned-memory health report without writing."""
         return self._brain.process(

@@ -979,6 +979,14 @@ The value must be exactly lowercase `true`. It is written to
 `vulnerability_families.json` beside the research-run store, in a separate
 versioned document.
 
+With it set, the desktop grows a **Security** tab: record a class, relate two
+classes with a required reason, and ask what lies around one. Without it the tab
+is absent rather than disabled, on the same rule the Tools tab follows — a form
+that accepted weakness classes and forgot them at the next restart would be
+worse than no form, because the work would look saved. For the same reason a
+failed durable write is reported as a failure and the entry is kept for the
+session, rather than being announced as recorded.
+
 The graph answers one defensive question: given a class of weakness, what else
 is worth thinking about? The usual mistake in security work is treating one
 finding as one problem and missing the four siblings that come from the same

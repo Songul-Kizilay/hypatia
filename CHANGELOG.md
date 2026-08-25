@@ -2,6 +2,53 @@
 
 All notable project changes are recorded here.
 
+## [0.3.186] - 2026-08-26
+
+### Added
+
+- The weakness taxonomy is reachable from the application. A Security tab
+  records a class of weakness, relates two classes with a required reason, and
+  reports what else shares a root cause, is prevented by the same control, or
+  tends to follow from one. The graph had been complete, tested, and callable
+  only from tests since it was built.
+- `DesktopController` gained the four corresponding commands, each refusing an
+  incomplete entry before the runtime is reached.
+
+### Fixed
+
+- A failed durable write to the weakness taxonomy is no longer reported as a
+  successful recording. The entry stays in this process and the response says
+  plainly that it was not written down; recording it again retries the write,
+  and because the store rewrites the whole document, a later success carries
+  the earlier entry too.
+
+### Compatibility and safety
+
+- The Security tab appears only where the taxonomy is durable, following the
+  Tools tab rule: absent rather than present-and-forgetful. The opt-in is the
+  existing `HYPATIA_VULNERABILITY_GRAPH_ENABLED` variable, now read through one
+  shared predicate so the runtime and the desktop cannot disagree about it.
+- Nothing on the panel names a system. There is no field for a host, a product,
+  an affected version, a payload, or a proof of concept, matching domain types
+  that have nowhere to put them, and nothing on the tab scans, probes, or
+  reaches anything.
+- Relations remain authored and explained. Nothing infers an edge, and an edge
+  without a reason is still refused.
+- No new intent, storage schema, migration, model judgement, tool capability,
+  or filesystem access was added.
+
+### Verification
+
+- Coverage exercises the four commands and their metadata, local refusal of
+  incomplete entries, every relation kind, tab presence in both states, panel
+  handlers including a refusal and an unsuccessful write, the opt-in predicate,
+  and a runtime end-to-end path that would catch a metadata key the adapter and
+  the service spelled differently.
+- Absence checks read the code rather than the prose around it, and are pinned
+  in both directions so they can still fail.
+- Package-aware discovery passes 3,415 tests with 3 existing platform-dependent
+  skips. Black, Ruff, and source MyPy pass for this release scope.
+
 ## [0.3.185] - 2026-08-25
 
 ### Added

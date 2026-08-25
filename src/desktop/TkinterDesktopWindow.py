@@ -65,6 +65,20 @@ from research.ResearchSourceComparisonNoteRecord import (
 from research.ResearchSourceRecord import ResearchSourceRecord
 from research.SourceLoadStage import SourceLoadStage
 from response.ResponseLanguage import ResponseLanguage, detect_response_language
+from security.VulnerabilityFamilyGraph import MAX_TRAVERSAL_DEPTH
+from security.VulnerabilityRelationKind import VulnerabilityRelationKind
+
+_WEAKNESS_PANEL_NOTE = (
+    "A weakness class is a concept, never a finding. There is nowhere here to "
+    "name a host, a product, a version, or a payload, and nothing on this tab "
+    "scans, probes, or reaches any system."
+)
+_WEAKNESS_IDLE_STATUS = "Nothing has been recorded or looked up yet."
+_WEAKNESS_RELATION_NOTE = (
+    "Every relation is authored with a reason. Nothing here infers an edge "
+    "from similar names, so the graph only ever holds connections a person "
+    "was willing to explain."
+)
 
 _TOOL_IDLE_STATUS = "Nothing has been run yet."
 _TOOL_NO_SELECTION = "Choose a capability first."
@@ -276,15 +290,23 @@ class TkinterDesktopWindow:
     _tool_console: ToolConsoleController | None = None
     _tool_entries: tuple[ToolConsoleEntry, ...] = ()
 
+    #: True only when this installation keeps a durable weakness taxonomy. The
+    #: Security tab follows the same rule as the Tools tab: absent rather than
+    #: present-and-forgetful, because a panel that records classes into a store
+    #: that does not exist would lose them at the next restart without saying so.
+    _weakness_graph_enabled: bool = False
+
     def __init__(
         self,
         controller: DesktopController,
         root: tk.Tk | None = None,
         event_bus: EventBus | None = None,
         tool_console: ToolConsoleController | None = None,
+        weakness_graph_enabled: bool = False,
     ) -> None:
         self._controller = controller
         self._tool_console = tool_console
+        self._weakness_graph_enabled = weakness_graph_enabled
         self._root = root or tk.Tk()
         self._research_refresh_signal = ResearchStateRefreshSignal(event_bus)
         self._request_runner = DesktopRequestRunner()
@@ -753,6 +775,12 @@ class TkinterDesktopWindow:
             tools_tab = ttk.Frame(self._workspace_tabs, padding=10)
             self._workspace_tabs.add(tools_tab, text="Tools")
             tabs.append(tools_tab)
+        # Same rule, different capability. Without a durable taxonomy the panel
+        # would accept weakness classes and forget them at the next restart.
+        if self._weakness_graph_enabled:
+            security_tab = ttk.Frame(self._workspace_tabs, padding=10)
+            self._workspace_tabs.add(security_tab, text="Security")
+            tabs.append(security_tab)
         self._workspace_tabs.add(appearance_tab, text="Appearance")
         tabs.append(appearance_tab)
         for tab in tabs:
@@ -760,6 +788,8 @@ class TkinterDesktopWindow:
         self._build_simple_research_tab(simple_research_tab)
         if self._tool_console is not None:
             self._build_tool_console_tab(tools_tab)
+        if self._weakness_graph_enabled:
+            self._build_security_tab(security_tab)
         chat_tab.rowconfigure(3, weight=1)
 
         accessibility_frame = ttk.LabelFrame(
@@ -4086,6 +4116,189 @@ class TkinterDesktopWindow:
     # console controller and renders plain data back, so this file cannot name
     # an effect or build an invocation even by mistake.
     # ------------------------------------------------------------------
+
+    def _build_security_tab(self, parent: ttk.Frame) -> None:
+        """Lay out the weakness taxonomy: record, relate, and look around.
+
+        The point of the graph is the third one. Recording a class is filing;
+        asking what shares its root cause or is prevented by the same control
+        is the part that catches the four siblings of a finding someone would
+        otherwise have treated as one problem.
+        """
+        self._weakness_family_id = tk.StringVar()
+        self._weakness_family_name = tk.StringVar()
+        self._weakness_relation_from = tk.StringVar()
+        self._weakness_relation_to = tk.StringVar()
+        self._weakness_relation_kind = tk.StringVar(
+            value=VulnerabilityRelationKind.SHARES_ROOT_CAUSE.value
+        )
+        self._weakness_lookup_id = tk.StringVar()
+        self._weakness_depth = tk.IntVar(value=1)
+        self._weakness_status = tk.StringVar(value=_WEAKNESS_IDLE_STATUS)
+
+        parent.rowconfigure(3, weight=1)
+        ttk.Label(parent, text=_WEAKNESS_PANEL_NOTE, wraplength=720).grid(
+            row=0, column=0, sticky="w"
+        )
+
+        record = ttk.LabelFrame(parent, text="Record a weakness class", padding=12)
+        record.grid(row=1, column=0, sticky="ew", pady=(10, 0))
+        record.columnconfigure(1, weight=1)
+        ttk.Label(record, text="ID").grid(row=0, column=0, sticky="w")
+        ttk.Entry(record, textvariable=self._weakness_family_id).grid(
+            row=0, column=1, sticky="ew", padx=(8, 0)
+        )
+        ttk.Label(record, text="Name").grid(row=1, column=0, sticky="w", pady=(6, 0))
+        ttk.Entry(record, textvariable=self._weakness_family_name).grid(
+            row=1, column=1, sticky="ew", padx=(8, 0), pady=(6, 0)
+        )
+        ttk.Label(record, text="Weakness").grid(
+            row=2, column=0, sticky="nw", pady=(6, 0)
+        )
+        self._weakness_summary_text = tk.Text(record, height=3, wrap="word")
+        self._weakness_summary_text.grid(
+            row=2, column=1, sticky="ew", padx=(8, 0), pady=(6, 0)
+        )
+        ttk.Label(record, text="Generally prevented by").grid(
+            row=3, column=0, sticky="nw", pady=(6, 0)
+        )
+        self._weakness_prevention_text = tk.Text(record, height=3, wrap="word")
+        self._weakness_prevention_text.grid(
+            row=3, column=1, sticky="ew", padx=(8, 0), pady=(6, 0)
+        )
+        self._request_button(record, "Record class", self._record_weakness_family).grid(
+            row=4, column=1, sticky="w", pady=(8, 0)
+        )
+
+        relate = ttk.LabelFrame(parent, text="Relate two classes", padding=12)
+        relate.grid(row=2, column=0, sticky="ew", pady=(10, 0))
+        relate.columnconfigure(1, weight=1)
+        ttk.Label(relate, text="From ID").grid(row=0, column=0, sticky="w")
+        ttk.Entry(relate, textvariable=self._weakness_relation_from).grid(
+            row=0, column=1, sticky="ew", padx=(8, 0)
+        )
+        ttk.Label(relate, text="To ID").grid(row=1, column=0, sticky="w", pady=(6, 0))
+        ttk.Entry(relate, textvariable=self._weakness_relation_to).grid(
+            row=1, column=1, sticky="ew", padx=(8, 0), pady=(6, 0)
+        )
+        ttk.Label(relate, text="Relation").grid(
+            row=2, column=0, sticky="w", pady=(6, 0)
+        )
+        ttk.Combobox(
+            relate,
+            textvariable=self._weakness_relation_kind,
+            state="readonly",
+            values=tuple(kind.value for kind in VulnerabilityRelationKind),
+        ).grid(row=2, column=1, sticky="ew", padx=(8, 0), pady=(6, 0))
+        ttk.Label(relate, text="Because").grid(
+            row=3, column=0, sticky="nw", pady=(6, 0)
+        )
+        self._weakness_rationale_text = tk.Text(relate, height=3, wrap="word")
+        self._weakness_rationale_text.grid(
+            row=3, column=1, sticky="ew", padx=(8, 0), pady=(6, 0)
+        )
+        ttk.Label(relate, text=_WEAKNESS_RELATION_NOTE, wraplength=680).grid(
+            row=4, column=1, sticky="w", padx=(8, 0), pady=(6, 0)
+        )
+        self._request_button(
+            relate, "Record relation", self._record_weakness_relation
+        ).grid(row=5, column=1, sticky="w", pady=(8, 0))
+
+        lookup = ttk.LabelFrame(parent, text="Look around a class", padding=12)
+        lookup.grid(row=3, column=0, sticky="nsew", pady=(10, 0))
+        lookup.columnconfigure(1, weight=1)
+        lookup.rowconfigure(3, weight=1)
+        ttk.Label(lookup, text="Class ID").grid(row=0, column=0, sticky="w")
+        ttk.Entry(lookup, textvariable=self._weakness_lookup_id).grid(
+            row=0, column=1, sticky="ew", padx=(8, 0)
+        )
+        ttk.Label(lookup, text="Depth").grid(row=1, column=0, sticky="w", pady=(6, 0))
+        ttk.Spinbox(
+            lookup,
+            from_=1,
+            to=MAX_TRAVERSAL_DEPTH,
+            textvariable=self._weakness_depth,
+            state="readonly",
+            width=5,
+        ).grid(row=1, column=1, sticky="w", padx=(8, 0), pady=(6, 0))
+        buttons = ttk.Frame(lookup)
+        buttons.grid(row=2, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
+        self._request_button(
+            buttons, "Show neighbourhood", self._show_weakness_neighbourhood
+        ).grid(row=0, column=0, sticky="w")
+        self._request_button(
+            buttons, "List recorded classes", self._list_weakness_families
+        ).grid(row=0, column=1, sticky="w", padx=(8, 0))
+        ttk.Label(lookup, textvariable=self._weakness_status, wraplength=720).grid(
+            row=3, column=0, columnspan=2, sticky="w", pady=(8, 0)
+        )
+        self._weakness_output = tk.Text(lookup, height=10, wrap="word")
+        self._weakness_output.grid(
+            row=4, column=0, columnspan=2, sticky="nsew", pady=(6, 0)
+        )
+        self._weakness_output.configure(state=tk.DISABLED)
+
+    def _record_weakness_family(self) -> None:
+        """Send one authored weakness class through the Brain boundary."""
+        self._weakness_request(
+            lambda: self._controller.record_vulnerability_family(
+                self._weakness_family_id.get(),
+                self._weakness_family_name.get(),
+                self._text_value(self._weakness_summary_text),
+                self._text_value(self._weakness_prevention_text),
+            )
+        )
+
+    def _record_weakness_relation(self) -> None:
+        """Send one authored, explained edge through the Brain boundary."""
+        self._weakness_request(
+            lambda: self._controller.record_vulnerability_relation(
+                self._weakness_relation_from.get(),
+                self._weakness_relation_to.get(),
+                self._weakness_relation_kind.get(),
+                self._text_value(self._weakness_rationale_text),
+            )
+        )
+
+    def _show_weakness_neighbourhood(self) -> None:
+        """Ask what else is worth reading near one weakness class."""
+        self._weakness_request(
+            lambda: self._controller.vulnerability_neighbourhood(
+                self._weakness_lookup_id.get(),
+                self._weakness_depth.get(),
+            )
+        )
+
+    def _list_weakness_families(self) -> None:
+        """Show every recorded class, traversing nothing."""
+        self._weakness_request(self._controller.list_vulnerability_families)
+
+    def _weakness_request(self, call: Callable[[], BrainResponse]) -> None:
+        """Run one taxonomy request, reporting a refusal as plainly as a result.
+
+        A rejected request is shown in the panel rather than only in the status
+        line. A durable-write failure arrives here as an unsuccessful response
+        and is displayed unchanged: this surface never restates a failed write
+        as a success.
+        """
+        try:
+            response = call()
+        except ValueError as error:
+            self._weakness_status.set(str(error))
+            return
+        self._weakness_status.set(
+            "Done." if response.success else "That request did not complete."
+        )
+        self._weakness_output.configure(state=tk.NORMAL)
+        self._weakness_output.delete("1.0", tk.END)
+        self._weakness_output.insert(tk.END, response.message)
+        self._weakness_output.configure(state=tk.DISABLED)
+        self._append_response(response)
+
+    @staticmethod
+    def _text_value(widget: tk.Text) -> str:
+        """Read one multi-line field as a single trimmed value."""
+        return widget.get("1.0", tk.END).strip()
 
     def _build_tool_console_tab(self, parent: ttk.Frame) -> None:
         """Lay out the operator surface for the capabilities actually present."""

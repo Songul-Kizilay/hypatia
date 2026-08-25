@@ -88,6 +88,7 @@ from response.ResponseComposer import ResponseComposer
 from security.JsonFileVulnerabilityGraphStore import (
     JsonFileVulnerabilityGraphStore,
 )
+from security.VulnerabilityGraphPolicy import vulnerability_graph_enabled
 from session.JsonFileSessionStore import JsonFileSessionStore
 from session.SessionManager import SessionManager
 from session.SessionRenameTransactionService import SessionRenameTransactionService
@@ -668,7 +669,7 @@ class Bootstrap:
         Default off, so an unset environment knows no weakness taxonomy and
         behaves exactly like a runtime without one.
         """
-        if os.environ.get("HYPATIA_VULNERABILITY_GRAPH_ENABLED") != "true":
+        if not vulnerability_graph_enabled(os.environ):
             return None
         run_path = self._research_run_path or self._research_run_store_path(
             self._memory_path

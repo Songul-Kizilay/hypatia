@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 from brain.Brain import Brain
 from core.Application import HypatiaApplication
 from desktop.DesktopController import DesktopController
@@ -9,6 +11,7 @@ from desktop.DesktopDataPaths import DesktopDataPaths
 from desktop.TkinterDesktopWindow import TkinterDesktopWindow
 from desktop.ToolConsoleController import ToolConsoleController
 from eventbus.EventBus import EventBus
+from security.VulnerabilityGraphPolicy import vulnerability_graph_enabled
 from tools.FilesystemReadTool import FilesystemReadTool
 from tools.FilesystemRoot import FilesystemRoot
 from tools.FilesystemRootPolicy import resolve_filesystem_root
@@ -70,6 +73,10 @@ def main() -> None:
             DesktopController(brain),
             event_bus=event_bus,
             tool_console=ToolConsoleController(tool_runtime, event_bus),
+            # The same predicate the runtime used to decide whether the graph
+            # is durable, so the panel cannot appear over a store that is not
+            # there.
+            weakness_graph_enabled=vulnerability_graph_enabled(os.environ),
         ).run()
     finally:
         app.stop()

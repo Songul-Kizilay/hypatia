@@ -1746,6 +1746,46 @@ class ResponseComposer:
             vulnerability_families=families,
         )
 
+    def vulnerability_graph_persistence_failed(
+        self,
+        request: BrainRequest,
+        *,
+        family: VulnerabilityFamily | None = None,
+        relation: VulnerabilityRelation | None = None,
+    ) -> BrainResponse:
+        """Report a taxonomy entry that exists here but was not written down.
+
+        The entry is kept in this process rather than discarded, so the work is
+        not lost while the session lasts. Saying it was recorded would be the
+        more comfortable answer and the wrong one: a taxonomy someone believes
+        is saved, and is not, is worse than one they know they must re-enter.
+        """
+        if family is not None:
+            subject = f"Family: {family.family_id}"
+        elif relation is not None:
+            subject = f"Relation: {relation.from_family_id} -> {relation.to_family_id}"
+        else:
+            subject = "Entry recorded in this process."
+        message = "\n".join(
+            (
+                "The vulnerability graph was not durably written.",
+                subject,
+                "Durable write: failed.",
+                "Restarting Hypatia may lose this entry.",
+                "Recording it again retries the write.",
+                _WEAKNESS_CLASS_DISCLAIMER,
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="vulnerability_graph",
+            memory_count=0,
+            success=False,
+            vulnerability_family=family,
+            vulnerability_relation=relation,
+        )
+
     def vulnerability_graph_rejected(
         self,
         request: BrainRequest,
