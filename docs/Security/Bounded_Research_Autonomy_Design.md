@@ -263,7 +263,7 @@ This is the core of the document.
 **DECIDED: today, only a human, in the running application, per approval.**
 
 No policy engine, no model, no schedule, no source, no earlier approval of
-anything else. Level 3 and above in §9 contemplate a policy boundary; it does
+anything else. Level 3 and above in §11 contemplate a policy boundary; it does
 not exist and this design does not create it.
 
 ### 5.2 What exactly is authorized
@@ -281,7 +281,7 @@ PROPOSED as a record carrying:
 | `research_run_id` | The run whose provenance the work joins |
 | `capabilities` | Frozen set of `ResearchPlanStepCapability`, drawn from the snapshot |
 | `budget` | An immutable `ResearchAutonomyBudget` |
-| `disclosure` | Remote-model disclosure decision (§7) |
+| `disclosure` | Remote-model disclosure decision (§8) |
 | `authorized_at` / `expires_at` | Bounded validity window |
 | `authorized_by` | That a human approved, not who they are |
 
@@ -301,7 +301,7 @@ without re-deriving it.
 **DECIDED: not to the question.** A question is a topic, not a scope. Two plans
 answering the same question may differ in every operation they perform.
 
-**DECIDED: not to the curiosity proposal.** §8 keeps that handoff explicit.
+**DECIDED: not to the curiosity proposal.** §10 keeps that handoff explicit.
 
 **DECIDED: not to the research run alone.** A run is long-lived and accumulates
 work; an approval must not become ambient authority over everything that run
@@ -319,14 +319,14 @@ later does.
    failed, and cancelled all consume it.
 4. **Budget exhaustion.** Per invariant 16 this ends the work; it never
    extends the approval.
-5. **Process restart.** See §11.
+5. **Process restart.** See §14.
 6. **Explicit revocation** by the operator.
 
 **Can a modified plan inherit old authorization? No.** Under §5.2 it cannot
 even be expressed: a modified plan has a different digest, and a digest
 mismatch is not a warning but a refusal. This is the answer the brief expected
 and the code currently cannot enforce, which is exactly why `plan_digest` is
-the first thing the recommended milestone in §14 has to build.
+the first thing the recommended milestone in §17 has to build.
 
 ### 5.5 What approving must not mean
 
@@ -335,11 +335,60 @@ read any local file; send local content to a remote model; spend unbounded
 tokens; execute a shell command; or continue after the approved work finishes.
 
 Four of those are currently impossible by construction (§2.2) and must stay
-that way. The other two — host scope and remote disclosure — are §6 and §7.
+that way. The other two — host scope and remote disclosure — are §7 and §8.
 
 ---
 
-## 6. Tool and filesystem boundary
+## 6. Budget contract
+
+Every bound below was read in the source. Where the repository already declares
+a truthful safe boundary it is reused rather than replaced; a number invented to
+finish a document is worse than an acknowledged gap.
+
+| Dimension | Value | Where | Status |
+| --- | --- | --- | --- |
+| Wall-clock duration | 60.0 s default, 3,600.0 s ceiling | `ResearchAutonomyBudget` | **DECIDED** — reuse |
+| Provider / network operations | 3 default, 25 ceiling | `ResearchAutonomyBudget`, charged from `ResearchCapabilityCost` | **DECIDED** — reuse |
+| Model calls | **0 default**, 25 ceiling | `ResearchAutonomyBudget` | **DECIDED** — reuse, and the default stays 0 |
+| Plan steps | 20 per plan | `MAX_RESEARCH_PLAN_STEPS` | **DECIDED** — reuse |
+| Step advances | 5 default, 50 ceiling, counting *attempted* advances | `ResearchAutonomyBudget` | **DECIDED** — reuse |
+| Discovered candidates | 10 per discovery | `MAX_DISCOVERY_CANDIDATE_LIMIT` | **DECIDED** — reuse |
+| Bytes per source | 1,000,000 | `HttpResearchSourceFetcher` | **DECIDED** — reuse |
+| Fetch timeout | 10.0 s per request | `HttpResearchSourceFetcher` | **DECIDED** — reuse |
+| Retries | 1 default, 5 ceiling | `BackgroundResearchTask` | **DECIDED** — reuse, sharing the original budget (§15) |
+| Simultaneous background jobs | 20 active default, 100 ceiling; 1 task per cycle default, 10 ceiling | `BackgroundResearchSchedulerApplicationService` | **DECIDED** — reuse |
+| Generated questions | 10 default and 20 ceiling per run; 500 stored | `DEFAULT_MAX_QUESTIONS`, `MAX_QUESTIONS_CEILING`, `MAX_CURIOSITY_STORE_QUESTIONS` | **DECIDED** — reuse |
+| Generated hypotheses | 500 stored | `MAX_HYPOTHESIS_STORE_ENTRIES` | **DECIDED** — reuse |
+| Fetched sources per authorized run | — none — | bounded indirectly by network operations | **DEFERRED** — `max_network_operations` already caps it at 3, and a second bound would be a second truth about one thing |
+| Aggregate downloaded bytes | — none declared — | 1 MB per source x 3 network operations implies about 3 MB per run; the content store caps one file at 40,000,000 bytes | **OPEN** |
+| Stored evidence records per run | — none declared — | bounded at the store: 64 MB and 20,000 collection items | **OPEN** |
+| Model input / output budget | 512 output tokens per call; no input bound | `OpenAICompatibleProvider` | **OPEN** |
+| Redirects | urllib defaults, 4 repeats and 10 chained | inherited, not repository-declared | **OPEN** |
+
+**DECIDED: budgets compose by intersection, never by union.** Where two bounds
+could apply, the smaller wins. A capability's declared cost is charged before
+the advance rather than reconciled after it.
+
+**DECIDED: this design raises no bound in the table.** Its purpose is to state
+the contract, not to widen it.
+
+### 6.1 The four OPEN items and the evidence each needs
+
+These are real gaps rather than missing formatting. Each is currently mitigated
+by an adjacent bound, which is why none is urgent — and none should be closed by
+guessing.
+
+| Open item | Current mitigation | Evidence needed |
+| --- | --- | --- |
+| Aggregate downloaded bytes | Per-source 1 MB and 3 network operations bound one run to roughly 3 MB | Measured growth across many authorized runs. A per-run bound says nothing about the hundredth run. |
+| Stored evidence records per run | Store-level caps of 64 MB and 20,000 items | Whether a single run can approach those caps in practice. A run-level bound is worth adding only if it can. |
+| Model input budget | `max_llm_operations` defaults to 0, so no autonomous model call happens at all | A foreground milestone that actually spends model calls, measured rather than estimated |
+| Redirect depth | HTTPS-only, address-pinned TLS, and validated redirects already bound where a redirect may lead | Whether the inherited urllib defaults are the intended contract or an accident. If intended, declare them explicitly instead of inheriting them silently. |
+
+Recording an inherited default as OPEN rather than DECIDED is deliberate. A
+limit nobody chose is not a limit anybody owns.
+
+## 7. Tool and filesystem boundary
 
 **DECIDED: background research inherits nothing from the Tool Console.**
 
@@ -372,7 +421,7 @@ declared cost is non-zero, and they are already the ones the budget counts.
 
 ---
 
-## 7. Remote model disclosure
+## 8. Remote model disclosure
 
 **DECIDED: readable is not sendable. These are two permissions.**
 
@@ -403,7 +452,42 @@ behaviour is not a contract.
 
 ---
 
-## 8. Curiosity handoff
+## 9. Taint and provenance chain
+
+External content is untrusted data with instruction authority `none`, and that
+label has to survive every transformation between the network and long-term
+memory. The dangerous step is never the fetch. It is a later stage that
+paraphrases the text and quietly loses its origin.
+
+| Stage | What carries provenance | Status |
+| --- | --- | --- |
+| Discovery | The candidate carries its provider and URL, and discovery cannot acquire a page | **CURRENT** |
+| Fetch | HTTPS only, address-pinned TLS, content-type allowlist, 1 MB cap | **CURRENT** |
+| Acceptance and parsing | `ResearchSourceRecord` refuses construction unless `taint_label` is `external_untrusted_data` and `instruction_authority` is `none` | **CURRENT** |
+| Evidence | Every evidence record names its source document | **CURRENT** |
+| Claim and hypothesis | Claims name their evidence; hypotheses name evidence on each side | **CURRENT** |
+| Summary | Composed from canonical records rather than from free text | **CURRENT** |
+| Reflection | Derived from the run, and stores nothing new about content | **CURRENT** |
+| Failure memory | Lessons name records by identifier and never quote them (§12.3) | **CURRENT** |
+| Long-term memory | No autonomous path exists — evidence is not memory (invariant 13) | **CURRENT**, by absence |
+
+**DECIDED: a model-generated transformation may not erase provenance.** A
+summary is not a new fact without parents. Anything derived from a source keeps
+naming the source document it came from, and no stage above permits a derived
+artifact to lose that name.
+
+**DECIDED: the taint label is enforced at construction, not checked at use.** A
+validating constructor cannot be forgotten by a later call site. This is why an
+untainted external source cannot be built at all, rather than being rejected
+somewhere downstream by a check someone has to remember to write.
+
+**OPEN — evidence required:** whether a future summarisation step that
+paraphrases several sources into one sentence can name all of its parents
+within the existing provenance bounds of 12 identifiers per lesson and 20 per
+claim. Evidence needed: one real multi-source summary, measured. Until then no
+such step is authorized.
+
+## 10. Curiosity handoff
 
 **DECIDED: acceptance stays inert, and the chain stays explicit.**
 
@@ -431,14 +515,14 @@ another run. This is invariant 9 stated at the loop level.
 
 ---
 
-## 9. Autonomy levels
+## 11. Autonomy levels
 
 Defined, not implemented.
 
 | Level | Meaning | Status |
 | --- | --- | --- |
 | **0 — Propose only** | Curiosity, hypotheses, plan drafts. No execution. | **CURRENT** — this is where Hypatia is |
-| **1 — Human-approved single run** | One exact authorized snapshot, foreground, no continuation | **PROPOSED** — §14 recommends this |
+| **1 — Human-approved single run** | One exact authorized snapshot, foreground, no continuation | **PROPOSED** — §17 recommends this |
 | **2 — Human-approved background run** | Same snapshot may continue while the UI is unfocused | Future |
 | **3 — Bounded follow-up** | A policy boundary permits one limited follow-up, no privilege expansion | Future — needs a policy object that does not exist |
 | **4 — Scheduled / recurring** | Schedule plus policy plus budget plus expiration | Future |
@@ -450,7 +534,7 @@ nothing toward level 2.
 
 ---
 
-## 10. Evidence, calibration, and failure
+## 12. Evidence, calibration, and failure
 
 ### 10.1 The epistemic chain
 
@@ -509,7 +593,39 @@ lesson names records by identifier; it does not quote them.
 
 ---
 
-## 11. Cancellation, shutdown, restart
+## 13. Background task identity
+
+A background task must never become an opaque daemon action. Every question an
+operator could reasonably ask about a running task should be answerable from the
+record rather than inferred from behaviour.
+
+| Traceable to | Today | Status |
+| --- | --- | --- |
+| Originating question | Not recorded on the task | **PROPOSED** |
+| Plan | `execution_id` only, and plan identity is a per-preview UUID (§2.3, Finding B) | **PROPOSED** — needs `plan_digest` |
+| Exact authorization snapshot | Not recorded (Finding C) | **PROPOSED** — `authorization_id` |
+| Research run | Held by the execution context, not by the task | **PROPOSED** — record it on the task |
+| Created time | `created_at`, `updated_at` | **CURRENT** |
+| Execution attempts | `retry_count`, `max_retries` | **CURRENT** |
+| Result | `status`, `outcome` | **CURRENT** |
+| Cancellation | `BackgroundResearchTaskStatus.CANCELLED`, terminal | **CURRENT** |
+| Failures | `failure_cause`, bounded to 200 characters | **CURRENT** |
+| Evidence produced | Lives in the research run and is reachable through it | **CURRENT**, indirectly |
+
+**DECIDED: the four PROPOSED fields arrive together or not at all.** Three of
+them are one gap seen from different sides: a task that cannot name what
+authorized it, what exactly was authorized, or which run the work joins. Adding
+one without the others produces a record that looks traceable and is not.
+
+**DECIDED: identity fields are identifiers and bounded enums, never content.** A
+task names the question; it does not carry the question's text a second time.
+The run already holds it, and a second copy is a second thing to keep consistent.
+
+**DECIDED: `failure_cause` stays bounded and structural.** Two hundred
+characters is enough for a classification and too short for a stack trace, which
+is exactly the right shape (invariant 14).
+
+## 14. Cancellation, shutdown, restart
 
 **DECIDED: cooperative only.** `CancellationToken` is checked at explicit
 checkpoints. This design does not claim blocking I/O can be force-killed, and
@@ -550,7 +666,7 @@ stable evidence identity — not from a claim about delivery semantics.
 
 ---
 
-## 12. Retries
+## 15. Retries
 
 **DECIDED: bounded and classification-aware. Never "it failed, try again".**
 
@@ -564,7 +680,7 @@ stable evidence identity — not from a claim about delivery semantics.
 | Budget exhausted | **No.** Invariant 16. |
 | Completed | No |
 | Cancelled | No — that was a decision |
-| Interrupted | No automatic retry; requires re-authorization (§11) |
+| Interrupted | No automatic retry; requires re-authorization (§14) |
 
 **DECIDED: retries consume the original budget.** A retry is a continuation of
 approved work, not new work, so it cannot reset counters. Otherwise "max 3
@@ -572,7 +688,7 @@ network operations, max 5 retries" quietly means fifteen.
 
 ---
 
-## 13. Observability
+## 16. Observability
 
 The operator should be able to answer: what is it doing; why; who authorized
 it; what budget remains; which source is being accessed; what evidence was
@@ -593,7 +709,7 @@ not a full URL with query, and never with fetched content.
 
 ---
 
-## 14. Recommended next implementation milestone
+## 17. Recommended next implementation milestone
 
 **Exactly one: make a plan authorizable, and nothing else.**
 
@@ -624,7 +740,7 @@ a plan; a queue; a policy engine; filesystem or shell authority; raising
 
 ---
 
-## 15. Threat model
+## 18. Threat model
 
 | # | Threat | Boundary | Preventive control | Detection | Residual risk |
 | --- | --- | --- | --- | --- | --- |
@@ -637,30 +753,30 @@ a plan; a queue; a policy engine; filesystem or shell authority; raising
 | 7 | Model invents evidence | Model → canonical state | Only a real operation reporting performed work may complete a step | `work_performed` never inferred at load | None structural |
 | 8 | Model invents completed actions | Model → status | Canonical status is derived from execution, not prose (inv. 8, 20) | Status/prose divergence visible in the record | Prose may still read misleadingly to a human |
 | 9 | Infinite planning loop | Planner | Plans are authored and finite; drafting performs no work | Step count bounded per plan | None |
-| 10 | Infinite curiosity loop | Curiosity → execution | Acceptance is inert; no auto-draft; no recursive follow-up (§8) | Ruling recorded without side effect | None while §8 holds |
-| 11 | Recursive follow-up research | Run → run | One authorization, one execution; consumption is terminal (§5.4) | Authorization state per task | Requires §14 to be enforceable |
+| 10 | Infinite curiosity loop | Curiosity → execution | Acceptance is inert; no auto-draft; no recursive follow-up (§10) | Ruling recorded without side effect | None while §10 holds |
+| 11 | Recursive follow-up research | Run → run | One authorization, one execution; consumption is terminal (§5.4) | Authorization state per task | Requires §17 to be enforceable |
 | 12 | Retry storm | Scheduler | `max_retries` default 1, ceiling 5; retries share the original budget | Attempt count on the task | None |
 | 13 | Network request storm | Autonomy | `max_network_operations` default 3, ceiling 25, charged from the cost table | Per-run operation counts | None |
 | 14 | Token / model-cost exhaustion | Autonomy | `max_llm_operations` default 0, ceiling 25 | Per-run counts | None at default |
 | 15 | Storage exhaustion | Persistence | Per-source 1 MB cap; bounded stores for lessons, questions, reports, tasks | Store sizes bounded and refused past cap | Many small runs still accumulate |
 | 16 | Duplicate-source pseudo-corroboration | Evidence | Duplicate ≠ corroboration, enforced and tested | Source identity dedup | Syndicated text from distinct hosts may still look independent |
-| 17 | Stale authorization | Time | `expires_at`, proposed 1 hour | Expiry checked at use, not at creation | Requires §14 |
-| 18 | Plan changed after authorization | Content | `plan_digest` mismatch is a refusal, not a warning | Digest recomputed at use | Requires §14 |
+| 17 | Stale authorization | Time | `expires_at`, proposed 1 hour | Expiry checked at use, not at creation | Requires §17 |
+| 18 | Plan changed after authorization | Content | `plan_digest` mismatch is a refusal, not a warning | Digest recomputed at use | Requires §17 |
 | 19 | Restart during execution | Process | Tasks → `INTERRUPTED`; restored executions readable, not advanceable; re-authorization required | Status distinguishes interrupted from failed | A network request already issued may have taken effect unobserved |
 | 20 | Cancellation race | Concurrency | Cooperative checkpoints; publication is the atomic boundary | Cancelled status is terminal and distinct | A model or network call already in flight still completes and is discarded |
 | 21 | Partial persistence | Storage | Atomic replace; acceptance completes or leaves nothing | Failed writes reported, never swallowed | None known after v0.3.189 |
 | 22 | Source changes between fetch and use | Time | Evidence names the accepted source document it came from | Fetch time recorded | The live page may no longer say what the evidence says |
-| 23 | Remote model receives undisclosed data | Disclosure | `disclosure` defaults to `none`; `remote_permitted` is a separate decision (§7) | Disclosure recorded on the authorization | Requires §14; today mitigated by 0 model calls |
+| 23 | Remote model receives undisclosed data | Disclosure | `disclosure` defaults to `none`; `remote_permitted` is a separate decision (§8) | Disclosure recorded on the authorization | Requires §17; today mitigated by 0 model calls |
 | 24 | Telemetry leaks secrets | Observability | Bounded counts and identifiers only; codec already excludes bodies and payloads | Event payload shapes are asserted in tests | A source identifier still reveals interest in a topic |
-| 25 | Task outlives its authorization | Time | Consumption plus expiry plus restart invalidation (§5.4) | Authorization state inspectable per task | Requires §14 |
-| 26 | Console capability inherited by background work | Tool Layer | No import path; invocation-scoped grants are not transferable | Isolation test | None while §6 holds |
+| 25 | Task outlives its authorization | Time | Consumption plus expiry plus restart invalidation (§5.4) | Authorization state inspectable per task | Requires §17 |
+| 26 | Console capability inherited by background work | Tool Layer | No import path; invocation-scoped grants are not transferable | Isolation test | None while §7 holds |
 
 ---
 
-## 16. Test plan
+## 19. Test plan
 
 To be written when the code they describe exists. Listed so the milestone in
-§14 cannot quietly ship without them.
+§17 cannot quietly ship without them.
 
 **Authorization** — a digest changes when the question, a step's text, a step's
 capability, or step order changes; an unchanged plan digests identically across
@@ -680,6 +796,16 @@ a budget.
 execution state; a response saying evidence was confirmed creates no evidence;
 prompt injection in a fetched source changes neither plan nor capability set.
 
+**Budgets and limits** — each bound in §6 stops work at its stated value; a
+retry consumes the original budget rather than resetting it; the retry ceiling
+is enforced; exceeding a bound stops the run rather than extending it; two
+sources carrying the same content do not count as independent corroboration
+without an explicit human assessment.
+
+**Provenance** — every stage in §9 preserves the source document a record came
+from; a derived summary names its parents; an external source cannot be
+constructed without its taint label and instruction authority.
+
 **Boundaries** — filesystem content is unreachable without separate
 authorization; no shell or process capability exists; remote model disclosure
 is separately gated; a completed run cannot start another; curiosity cannot
@@ -693,7 +819,7 @@ material.
 
 ---
 
-## 17. Decision register
+## 20. Decision register
 
 **DECIDED** — reuse existing state vocabularies; authorization is an immutable
 content-addressed snapshot; capabilities derived from the snapshot and frozen;
@@ -702,13 +828,17 @@ re-authorization; no Tool Layer seam; no filesystem or shell capability;
 initial background capability set is network research only; disclosure defaults
 to `none`; retries are classification-aware and share the original budget;
 calibration reports without mutating; failure memory records structure only;
-telemetry is bounded; autonomy levels are separately gated; the next milestone
-is plan identity and authorization *without* reachability.
+telemetry is bounded; autonomy levels are separately gated; every budget in §6
+is reused rather than raised; budgets compose by intersection; provenance
+survives every stage in §9 and no model transformation may erase it; the four
+proposed task-identity fields in §13 arrive together or not at all; the next
+milestone is plan identity and authorization *without* reachability.
 
 **DEFERRED** — the queue surface (level 2); policy-boundary authorization
 (level 3); scheduling and recurrence (level 4); a claim-revision workflow;
 allowed-host scoping beyond the existing HTTPS and content-type rules;
-per-operator authorization identity beyond "a human approved".
+per-operator authorization identity beyond "a human approved"; a separate cap on
+fetched sources per run, which `max_network_operations` already bounds.
 
 **OPEN — evidence required**
 
@@ -719,13 +849,18 @@ per-operator authorization identity beyond "a human approved".
 | Should `max_llm_operations` ever exceed 0 for background work? | A disclosure model proven in a foreground milestone first. |
 | Can syndicated duplicate content be detected across distinct hosts? | Measurement on real sources. Identity dedup catches same-document reuse, not republication. |
 | Is `BLOCKED` sufficient, or does research execution need an explicit declined/failed split like the Tool Layer? | Observed block reasons from real executions. |
+| Should aggregate downloaded bytes have their own bound? | Growth measured across many authorized runs (§6.1). |
+| Should stored evidence records be bounded per run rather than only per store? | Whether one run can approach 64 MB or 20,000 items in practice (§6.1). |
+| Is there an input-token budget, not only the 512-token output cap? | A foreground milestone that actually spends model calls (§6.1). |
+| Are the inherited urllib redirect defaults the intended contract? | A decision, then an explicit declaration replacing the inheritance (§6.1). |
+| Can a multi-source summary name all its parents within existing provenance bounds? | One real multi-source summary, measured (§9). |
 
 ---
 
-## 18. What stays unreachable
+## 21. What stays unreachable
 
 All eleven autonomy intents remain unreachable from the desktop after this
-document, and the milestone in §14 keeps them unreachable.
+document, and the milestone in §17 keeps them unreachable.
 
 That is the point. An unreachable dangerous capability is safer than a
 prematurely reachable one, and the reachability count is not a score to
