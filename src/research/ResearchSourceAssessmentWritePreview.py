@@ -9,7 +9,11 @@ from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
+from research.ResearchSourceApplicability import ResearchSourceApplicability
+from research.ResearchSourceIndependence import ResearchSourceIndependence
+from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
 from research.ResearchSourceRecord import ResearchSourceRecord
+from research.ResearchSourceUsefulness import ResearchSourceUsefulness
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,6 +29,12 @@ class ResearchSourceAssessmentWritePreview:
     reason: str
     supersedes_assessment: ResearchSourceAssessmentRecord | None = None
     information_trust: ResearchInformationTrust = ResearchInformationTrust.UNASSESSED
+    usefulness: ResearchSourceUsefulness = ResearchSourceUsefulness.UNKNOWN
+    applicability: ResearchSourceApplicability = ResearchSourceApplicability.UNKNOWN
+    independence: ResearchSourceIndependence = ResearchSourceIndependence.UNKNOWN
+    publication_status: ResearchSourcePublicationStatus = (
+        ResearchSourcePublicationStatus.UNKNOWN
+    )
 
     def __post_init__(self) -> None:
         for value, field_name in (
@@ -38,6 +48,16 @@ class ResearchSourceAssessmentWritePreview:
             raise ResearchError("Research assessment preview run status is invalid.")
         if not isinstance(self.source, ResearchSourceRecord):
             raise ResearchError("Research assessment preview source is invalid.")
+        for value, expected in (
+            (self.usefulness, ResearchSourceUsefulness),
+            (self.applicability, ResearchSourceApplicability),
+            (self.independence, ResearchSourceIndependence),
+            (self.publication_status, ResearchSourcePublicationStatus),
+        ):
+            if not isinstance(value, expected):
+                raise ResearchError(
+                    "Research assessment preview judgement is invalid."
+                )
         if not isinstance(self.evidence, tuple) or not self.evidence:
             raise ResearchError(
                 "Research assessment preview requires explicit evidence."

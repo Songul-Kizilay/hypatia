@@ -2,7 +2,8 @@
 
 **Status: DESIGN, WITH OPERATOR-CONTROLLED FOREGROUND EXECUTION IMPLEMENTED.**
 Discovery results are now ranked deterministically before a person chooses among
-them, which changed what research finds without changing what it may do.
+them, and a person can record what they concluded about a source after reading
+it. Both changed what research knows without changing what it may do.
 The execution, autonomy, and scheduling services described below are CURRENT and
 were inspected for this design. Four execution intents are reachable — start,
 status, advance, cancel — and every one of them is an act a person performs.
@@ -915,26 +916,82 @@ curiosity-to-execution; autonomous follow-up; recurring research; a policy
 authorizer; filesystem, shell, or tool authority. The same seven autonomy and
 background intents remain unreachable, and this milestone moved none of them.
 
-### 17.5 Next: let a person say what a source is worth after reading it
+### 17.5 Done: a person can say what a source is worth after reading it
 
-**Exactly one: operator source appraisal, recorded separately from relevance.**
+Implemented in v0.3.195 by extending the assessment record that already
+existed, rather than by building a second opinion about sources beside it.
 
-Ranking answers which sources to look at first. Nothing yet answers what a
-person concluded once they looked. A source is accepted or not accepted, and
-that single bit carries every judgement — that a venue is serious, that a paper
-was retracted, that a result did not replicate, that a claim was misread by
-everyone citing it. All of that is currently lost, which means the next run
-starts from the same position as the last one, and the system cannot grow.
+**Four structured answers, not one quality score.** Usefulness, applicability to
+this run's question, independence, and publication status. Each is a separate
+closed vocabulary and every one defaults to `unknown`, which is an answer rather
+than a gap: most sources are never appraised, and reading silence as anything
+else would invent a judgement nobody made. An unrecognised value is refused
+rather than folded into `unknown`, because a typo that became `unknown` would
+read as an appraisal somebody declined to make when in fact one was lost.
 
-The reason it belongs next is the reason relevance came first: a ranking that
-orders results by word overlap will keep putting a well-titled weak paper above
-a badly-titled strong one, and the only thing that can correct that is a person
-who read both. Recording appraisal is also what makes the existing reputation
-ledger mean something, since nothing currently writes to it from experience.
+**Deliberately not added: a quality or reliability grade.** `information_trust`
+already carries it, and it is the one dimension the reputation ledger counts.
+Adding a second grade would have meant two answers to one question and a silent
+choice about which one a reader believes. Also not added: an operator override
+of relevance. The point of the separation is that the lexical rank and the human
+verdict can disagree, and an override would quietly end the disagreement by
+overwriting the half that is cheap to compute.
 
-**Explicitly not in it:** using an appraisal to re-rank automatically; letting a
-model appraise a source; background scheduling; the queue; `research_autonomy_run`;
-recurrence or follow-up; new providers reached without approval; filesystem,
+**Nothing about a judgement moves anything else.** Recording one changes no
+relevance score, no relevance rank, no reputation, no evidence, no claim, no
+claim confidence, and no acceptance. The ranker cannot reach an assessment at
+all, which is asserted structurally rather than assumed. A retraction deletes no
+source and no evidence and rewrites no claim, because the value of knowing about
+a retraction is being able to see what was built on top of it — a run that
+quietly loses the retracted paper reads as though nothing ever rested on it.
+
+**Revisions keep what they revise.** The existing supersession link carries the
+new dimensions, so changing `useful` to `not_useful` leaves both records, both
+timestamps, and both sets of words in place, with exactly one standing as
+current. History stays inspectable in the panel, which labels every entry
+`[current]` or `[superseded]` and shows the dimensions that were answered.
+
+**The panel shows four answers as four answers.** Relevance, operator
+assessment, source reputation, and evidence status are rendered as separate
+labelled lines, each naming what produced it, so that `Relevance: strong` cannot
+be read as a statement that the source is sound.
+
+**Two limits, stated rather than discovered.** An appraisal names the evidence
+it was made about, so a source can only be judged after it was accepted and
+something was taken from it; a candidate somebody read and discarded without
+recording anything cannot be judged here, and doing so would need a record keyed
+on a different identity. And an assessment written by an approved plan step
+carries `unknown` on all four dimensions, because a plan's assessment
+authorization names text and trust and nothing more — which is truthful, and is
+asserted so that widening the plan surface has to be a decision.
+
+**Still not current:** learned ranking from operator feedback; semantic source
+ranking; automatic source acceptance; automatic evidence or claim changes from
+an assessment; reputation learning from repeated assessments;
+`research_autonomy_run`; background-task authorization; scheduler authority;
+automatic Curiosity follow-up; filesystem, shell, or tool authority. The same
+seven autonomy and background intents remain unreachable.
+
+This is human judgement, recorded faithfully. It is not ground truth.
+
+### 17.6 Next: let review say what the judgement implies
+
+**Exactly one: assessment-aware review and calibration warnings, read-only.**
+
+The judgement is now recorded and nothing reads it. That is the correct place to
+have stopped, and it is also the reason the next step is obvious: a run can
+currently hold a claim resting on evidence from a source its own operator marked
+retracted, and nothing anywhere says so. The information needed to raise that
+hand is now in the store; what is missing is a layer that looks.
+
+It stays a warning, not a correction. Review reports that a claim depends on a
+source judged retracted, derivative, or not useful; it changes no confidence,
+withdraws no claim, and deletes no evidence. Learning to re-rank from these
+judgements is a different milestone with its own evaluation contract.
+
+**Explicitly not in it:** re-ranking discovery from stored assessments; altering
+claim confidence automatically; reputation learning; background scheduling;
+`research_autonomy_run`; new providers reached without approval; filesystem,
 shell, or tool authority.
 
 ---

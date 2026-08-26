@@ -1730,7 +1730,9 @@ class CognitiveEngine:
     @staticmethod
     def _research_source_assessment_write_values(
         request: BrainRequest,
-    ) -> tuple[str, str, list[str], str, str | None, str] | None:
+    ) -> (
+        tuple[str, str, list[str], str, str | None, str, str, str, str, str] | None
+    ):
         run_id = request.metadata.get("research_run_id")
         document_id = request.metadata.get("research_source_document_id")
         evidence_ids = request.metadata.get("research_assessment_evidence_ids")
@@ -1742,6 +1744,17 @@ class CognitiveEngine:
             "research_information_trust",
             "unassessed",
         )
+        # Absent means the operator did not answer, which is `unknown`. It is
+        # never read as a favourable default: a request that says nothing about
+        # usefulness must not produce a record claiming the source was useful.
+        judgement = tuple(
+            request.metadata.get(f"research_source_{name}", "unknown")
+            for name in ("usefulness", "applicability", "independence")
+        ) + (request.metadata.get("research_source_publication_status", "unknown"),)
+        if not all(
+            isinstance(value, str) and value.strip() for value in judgement
+        ):
+            return None
         if (
             not isinstance(run_id, str)
             or not run_id.strip()
@@ -1773,6 +1786,7 @@ class CognitiveEngine:
             text,
             supersedes_assessment_id,
             information_trust,
+            *judgement,
         )
 
     def _process_research_run_status_preview(

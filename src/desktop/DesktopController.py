@@ -10,6 +10,10 @@ from core.CancellationSignal import CancellationToken
 from research.ResearchClaimConfidence import ResearchClaimConfidence
 from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchInformationTrust import ResearchInformationTrust
+from research.ResearchSourceApplicability import ResearchSourceApplicability
+from research.ResearchSourceIndependence import ResearchSourceIndependence
+from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
+from research.ResearchSourceUsefulness import ResearchSourceUsefulness
 from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
 )
@@ -1303,6 +1307,10 @@ class DesktopController:
         assessment_text: str,
         supersedes_assessment_id: str = "",
         information_trust: str = ResearchInformationTrust.UNASSESSED.value,
+        usefulness: str = ResearchSourceUsefulness.UNKNOWN.value,
+        applicability: str = ResearchSourceApplicability.UNKNOWN.value,
+        independence: str = ResearchSourceIndependence.UNKNOWN.value,
+        publication_status: str = ResearchSourcePublicationStatus.UNKNOWN.value,
     ) -> BrainResponse:
         """Preview an authored assessment with explicit evidence references."""
         metadata = self._research_source_assessment_write_metadata(
@@ -1312,6 +1320,10 @@ class DesktopController:
             assessment_text,
             supersedes_assessment_id,
             information_trust,
+            usefulness,
+            applicability,
+            independence,
+            publication_status,
         )
         return self._brain.process(
             BrainRequest(
@@ -1332,6 +1344,10 @@ class DesktopController:
         assessment_text: str,
         supersedes_assessment_id: str = "",
         information_trust: str = ResearchInformationTrust.UNASSESSED.value,
+        usefulness: str = ResearchSourceUsefulness.UNKNOWN.value,
+        applicability: str = ResearchSourceApplicability.UNKNOWN.value,
+        independence: str = ResearchSourceIndependence.UNKNOWN.value,
+        publication_status: str = ResearchSourcePublicationStatus.UNKNOWN.value,
     ) -> BrainResponse:
         """Submit one assessment only after the desktop confirmation step."""
         metadata = self._research_source_assessment_write_metadata(
@@ -1341,6 +1357,10 @@ class DesktopController:
             assessment_text,
             supersedes_assessment_id,
             information_trust,
+            usefulness,
+            applicability,
+            independence,
+            publication_status,
         )
         return self._brain.process(
             BrainRequest(
@@ -1361,6 +1381,10 @@ class DesktopController:
         assessment_text: str,
         supersedes_assessment_id: str = "",
         information_trust: str = ResearchInformationTrust.UNASSESSED.value,
+        usefulness: str = ResearchSourceUsefulness.UNKNOWN.value,
+        applicability: str = ResearchSourceApplicability.UNKNOWN.value,
+        independence: str = ResearchSourceIndependence.UNKNOWN.value,
+        publication_status: str = ResearchSourcePublicationStatus.UNKNOWN.value,
     ) -> dict[str, object]:
         normalized_run_id = research_run_id.strip()
         normalized_document_id = source_document_id.strip()
@@ -1372,6 +1396,23 @@ class DesktopController:
             )
         except (AttributeError, ValueError) as error:
             raise ValueError("Research source information trust is invalid.") from error
+        try:
+            normalized_judgement = {
+                "research_source_usefulness": ResearchSourceUsefulness(
+                    usefulness.strip()
+                ).value,
+                "research_source_applicability": ResearchSourceApplicability(
+                    applicability.strip()
+                ).value,
+                "research_source_independence": ResearchSourceIndependence(
+                    independence.strip()
+                ).value,
+                "research_source_publication_status": ResearchSourcePublicationStatus(
+                    publication_status.strip()
+                ).value,
+            }
+        except (AttributeError, ValueError) as error:
+            raise ValueError("Research source judgement is invalid.") from error
         normalized_evidence_ids = [
             value.strip() for value in evidence_ids.split(",") if value.strip()
         ]
@@ -1391,6 +1432,7 @@ class DesktopController:
             "research_assessment_evidence_ids": normalized_evidence_ids,
             "research_assessment_text": normalized_text,
             "research_information_trust": normalized_information_trust.value,
+            **normalized_judgement,
         }
         if normalized_superseded_id:
             metadata["research_assessment_supersedes_id"] = normalized_superseded_id

@@ -946,6 +946,13 @@ class DesktopControllerTests(unittest.TestCase):
             "research_assessment_text": "The source supports the claim.",
             "research_assessment_supersedes_id": "assessment-previous",
             "research_information_trust": "high",
+            # An unanswered dimension travels as `unknown`, never as a
+            # favourable default. A request that says nothing about usefulness
+            # must not arrive claiming the source was useful.
+            "research_source_usefulness": "unknown",
+            "research_source_applicability": "unknown",
+            "research_source_independence": "unknown",
+            "research_source_publication_status": "unknown",
         }
         self.assertEqual(
             preview_request.metadata,

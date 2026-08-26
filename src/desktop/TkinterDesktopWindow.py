@@ -58,7 +58,14 @@ from research.ResearchRunMarkdownExportPreview import (
 from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
 from research.RankedResearchSourceDiscovery import ranked_candidates
+from research.SourceIdentity import identity_of
+from research.SourceOrigin import origin_of
+from research.SourceReputationLedger import SourceReputationLedger
+from research.ResearchSourceApplicability import ResearchSourceApplicability
 from research.ResearchSourceCandidate import ResearchSourceCandidate
+from research.ResearchSourceIndependence import ResearchSourceIndependence
+from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
+from research.ResearchSourceUsefulness import ResearchSourceUsefulness
 from research.ResearchSourceComparisonNoteRecord import (
     MAX_COMPARISON_NOTE_ASSESSMENTS,
     MAX_COMPARISON_NOTE_EVIDENCE,
@@ -486,6 +493,19 @@ class TkinterDesktopWindow:
         self._research_information_trust = tk.StringVar(
             value=ResearchInformationTrust.UNASSESSED.value
         )
+        self._research_source_usefulness = tk.StringVar(
+            value=ResearchSourceUsefulness.UNKNOWN.value
+        )
+        self._research_source_applicability = tk.StringVar(
+            value=ResearchSourceApplicability.UNKNOWN.value
+        )
+        self._research_source_independence = tk.StringVar(
+            value=ResearchSourceIndependence.UNKNOWN.value
+        )
+        self._research_source_publication_status = tk.StringVar(
+            value=ResearchSourcePublicationStatus.UNKNOWN.value
+        )
+        self._research_source_dimensions = tk.StringVar(value="")
         self._research_claim_evidence_ids = tk.StringVar()
         self._research_claim_text = tk.StringVar()
         self._research_claim_epistemic_state = tk.StringVar(
@@ -2101,6 +2121,69 @@ class TkinterDesktopWindow:
             values=tuple(value.value for value in ResearchInformationTrust),
             state="readonly",
         ).grid(row=2, column=1, columnspan=3, sticky="ew", padx=(8, 0), pady=(8, 0))
+        # Four separate answers rather than one quality score. A single number
+        # would let "useful to me" and "methodologically sound" and "still
+        # published" collapse into each other, and the whole point of asking is
+        # that they are different questions with different answers.
+        for offset, (label, variable, vocabulary) in enumerate(
+            (
+                (
+                    "Usefulness (operator judgement)",
+                    self._research_source_usefulness,
+                    ResearchSourceUsefulness,
+                ),
+                (
+                    "Applicability to this question (operator judgement)",
+                    self._research_source_applicability,
+                    ResearchSourceApplicability,
+                ),
+                (
+                    "Independence (operator judgement)",
+                    self._research_source_independence,
+                    ResearchSourceIndependence,
+                ),
+                (
+                    "Publication status (operator judgement)",
+                    self._research_source_publication_status,
+                    ResearchSourcePublicationStatus,
+                ),
+            )
+        ):
+            row = 3 + offset
+            ttk.Label(research_assessment_frame, text=label).grid(
+                row=row,
+                column=0,
+                sticky="w",
+                pady=(8, 0),
+            )
+            ttk.Combobox(
+                research_assessment_frame,
+                textvariable=variable,
+                values=tuple(value.value for value in vocabulary),
+                state="readonly",
+            ).grid(
+                row=row,
+                column=1,
+                columnspan=3,
+                sticky="ew",
+                padx=(8, 0),
+                pady=(8, 0),
+            )
+        # The separation, written out where a person reads it. Each dimension is
+        # named with what produced it, because the failure this guards against
+        # is somebody reading "Relevance: strong" as "this source is sound".
+        ttk.Label(
+            research_assessment_frame,
+            textvariable=self._research_source_dimensions,
+            justify="left",
+        ).grid(
+            row=7,
+            column=0,
+            columnspan=4,
+            sticky="w",
+            padx=(8, 8),
+            pady=(8, 0),
+        )
         ttk.Label(
             research_assessment_frame,
             text="Supersedes assessment ID (optional)",
@@ -3825,6 +3908,7 @@ class TkinterDesktopWindow:
             for record in records
         )
         self._research_assessment_selector.configure(values=labels)
+        self._render_research_source_dimensions(run, source)
         if not records:
             self._research_assessment_choice.set("")
             return
@@ -3838,6 +3922,91 @@ class TkinterDesktopWindow:
         )
         self._research_assessment_selector.current(selected_index)
 
+    def _render_research_source_dimensions(
+        self,
+        run: ResearchRun,
+        source: ResearchSourceRecord,
+    ) -> None:
+        """Show relevance, judgement, reputation and acceptance as separate answers.
+
+        They are rendered together and never combined. Each line names where it
+        came from, because the failure worth preventing is somebody reading
+        `Relevance: strong` as a statement that the source is sound — the ranker
+        compared words in a title and has no opinion about soundness at all.
+        """
+        identity = identity_of(source.url)
+        relevance = "not among the latest discovered candidates"
+        provider = "unknown"
+        if run.discoveries:
+            latest = run.discoveries[-1]
+            provider = latest.provider
+            for entry in ranked_candidates(latest):
+                if identity_of(entry.candidate.url) == identity:
+                    relevance = (
+                        f"{entry.relevance.category.value} "
+                        f"({entry.relevance.score}), rank {entry.relevance_rank}, "
+                        f"provider rank {entry.provider_rank}"
+                    )
+                    break
+        current = self._current_research_assessment(run, source)
+        if current is None:
+            judgement = "none recorded"
+        else:
+            judgement = (
+                f"usefulness={current.usefulness.value}, "
+                f"applicability={current.applicability.value}, "
+                f"independence={current.independence.value}, "
+                f"publication={current.publication_status.value}, "
+                f"information trust={current.information_trust.value}"
+            )
+        reputation = SourceReputationLedger().for_origin(origin_of(source.url), [run])
+        reputation_text = (
+            "unknown"
+            if reputation is None
+            else (
+                f"{reputation.assessed_count} assessed at this origin "
+                f"(high {reputation.high_count}, medium {reputation.medium_count}, "
+                f"low {reputation.low_count})"
+            )
+        )
+        evidence_count = sum(
+            1
+            for record in run.evidence
+            if record.source_document_id == source.document_id
+        )
+        self._research_source_dimensions.set(
+            "\n".join(
+                (
+                    f"Relevance: {relevance} (deterministic lexical ranking, "
+                    f"provider {provider})",
+                    f"Operator assessment: {judgement} (human judgement)",
+                    f"Source reputation: {reputation_text} (our own past "
+                    "assessments, counted)",
+                    f"Evidence status: accepted, {evidence_count} evidence "
+                    "record(s) (separate from every line above)",
+                )
+            )
+        )
+
+    @staticmethod
+    def _current_research_assessment(
+        run: ResearchRun,
+        source: ResearchSourceRecord,
+    ) -> ResearchSourceAssessmentRecord | None:
+        """Return the assessment nothing has superseded, or nothing at all."""
+        superseded = {
+            record.supersedes_assessment_id
+            for record in run.assessments
+            if record.supersedes_assessment_id is not None
+        }
+        for record in reversed(run.assessments):
+            if (
+                record.source_document_id == source.document_id
+                and record.assessment_id not in superseded
+            ):
+                return record
+        return None
+
     @staticmethod
     def _research_assessment_label(
         record: ResearchSourceAssessmentRecord,
@@ -3849,7 +4018,18 @@ class TkinterDesktopWindow:
         if len(text) > 100:
             text = f"{text[:97]}..."
         state = "current" if is_current else "superseded"
-        return f"[{state}] {text} — {record.assessment_id}"
+        judged = ", ".join(
+            f"{name}={value}"
+            for name, value in (
+                ("usefulness", record.usefulness.value),
+                ("applicability", record.applicability.value),
+                ("independence", record.independence.value),
+                ("publication", record.publication_status.value),
+            )
+            if value != "unknown"
+        )
+        judged = f" [{judged}]" if judged else ""
+        return f"[{state}]{judged} {text} — {record.assessment_id}"
 
     def _selected_research_assessment(
         self,
@@ -5859,6 +6039,10 @@ class TkinterDesktopWindow:
             self._research_assessment_text.get(),
             self._research_assessment_supersedes_id.get(),
             self._research_information_trust.get(),
+            self._research_source_usefulness.get(),
+            self._research_source_applicability.get(),
+            self._research_source_independence.get(),
+            self._research_source_publication_status.get(),
         )
         try:
             preview_response = (

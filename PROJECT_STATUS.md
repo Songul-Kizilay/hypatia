@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.194 (Genesis)`
+`v0.3.195 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.194`** is the current source/package release line.
+- **Runtime release `v0.3.195`** is the current source/package release line.
   GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -1131,14 +1131,29 @@ question while being about something else still ranks high; the evaluation set
 contains that case and the test records the disagreement instead of reweighting
 until it disappears.
 
-Next, let a person say what a source is worth after reading it: operator source
-appraisal, recorded separately from relevance and never used to re-rank
-automatically. Acceptance is currently one bit, and it carries every judgement a
-person forms — that a venue is serious, that a paper was retracted, that a
-result did not replicate. All of it is lost today, so the next run starts where
-the last one did. A ranking based on word overlap will keep putting a
-well-titled weak paper above a badly-titled strong one, and the only thing that
-can correct that is somebody who read both.
+A person can now record what they concluded about a source after reading it.
+Four structured answers — usefulness, applicability to the question,
+independence, and publication status — sit on the assessment record that already
+existed, each defaulting to `unknown` because most sources are never appraised.
+A retraction is expressible and deletes nothing: the source, its evidence, and
+every claim that rested on it stay exactly as they were, and the assessment says
+what happened.
+
+The separation is the load-bearing part. A judgement moves no relevance score,
+no rank, no reputation, no evidence, no claim, no confidence, and no acceptance,
+and the panel shows all four dimensions as separate labelled lines so that
+`Relevance: strong` cannot be read as a verdict on the source. Two limits are
+stated rather than left to be found: an appraisal names the evidence it was made
+about, so it follows acceptance rather than preceding it, and an assessment
+written by an approved plan step carries `unknown` on all four dimensions
+because a plan authorization names text and trust and nothing more.
+
+Next, let review say what the judgement implies: assessment-aware review and
+calibration warnings, read-only. A run can currently hold a claim resting on
+evidence from a source its own operator marked retracted, and nothing anywhere
+says so. The information is now in the store; what is missing is a layer that
+looks at it — and it stays a warning rather than a correction, changing no
+confidence and withdrawing no claim.
 
 The accepted design keeps execution, autonomy, and scheduling unreachable from
 the desktop, adds no filesystem, shell, or tool authority to research, keeps the

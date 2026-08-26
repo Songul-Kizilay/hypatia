@@ -2,6 +2,49 @@
 
 All notable project changes are recorded here.
 
+## [0.3.195] - 2026-08-26
+
+### Added
+
+- Structured operator judgement of a source, recorded on the assessment record
+  that already existed rather than beside it. Four closed vocabularies —
+  usefulness, applicability to this question, independence, and publication
+  status — each defaulting to `unknown`, which means nobody was asked.
+- Publication status makes a retraction expressible. Recording one preserves the
+  source, its evidence, and every claim that rested on it, and marks the
+  assessment visibly instead.
+- Independence records what canonical identity cannot know: that a source is
+  derivative of another, or is likely the same publication under a second URL.
+- The research panel shows relevance, operator assessment, source reputation,
+  and evidence status as four separate labelled lines, each naming what produced
+  it.
+
+### Changed
+
+- The assessment history list shows which dimensions were answered alongside
+  `[current]` or `[superseded]`. An unanswered dimension is left out rather than
+  displayed as a verdict.
+- The research run store moved to schema version 11 to persist the four
+  dimensions. A version 10 assessment decodes as `unknown` on all of them, which
+  is what those records truthfully hold.
+
+### Security
+
+- A judgement changes nothing else. It moves no relevance score, no relevance
+  rank, no source reputation, no evidence, no claim, no claim confidence, and no
+  acceptance — each asserted, and the ranker's inability to reach an assessment
+  asserted structurally rather than assumed.
+- Only a person authors one. Source text asking to be marked trustworthy has
+  instruction authority `none` and changes nothing; an operator note is stored
+  as data and never becomes an instruction; Curiosity, Reflection, the
+  scheduler, and the background worker have no path to the write.
+- An unrecognised judgement is refused on write and fails the load on read,
+  rather than degrading to `unknown`. A judgement this build cannot read is one
+  somebody made, and showing it as never made would be worse than refusing to
+  open the file.
+- A retraction rewrites no history. No source is deleted, no evidence removed,
+  and no claim silently revised.
+
 ## [0.3.194] - 2026-08-26
 
 ### Added

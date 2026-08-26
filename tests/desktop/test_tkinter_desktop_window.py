@@ -5,6 +5,8 @@ from __future__ import annotations
 import sys
 import unittest
 from collections.abc import Callable
+from dataclasses import replace
+from hashlib import sha256
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
@@ -74,6 +76,9 @@ from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentReco
 from research.ResearchSourceAssessmentWritePreview import (
     ResearchSourceAssessmentWritePreview,
 )
+from research.ResearchSourceApplicability import ResearchSourceApplicability
+from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
+from research.ResearchSourceUsefulness import ResearchSourceUsefulness
 from research.ResearchSourceCandidate import ResearchSourceCandidate
 from research.ResearchSourceCandidateAcceptancePreview import (
     ResearchSourceCandidateAcceptancePreview,
@@ -89,6 +94,66 @@ from research.ResearchSourceComparisonPreview import ResearchSourceComparisonPre
 from research.ResearchSourceDiscoveryRecord import ResearchSourceDiscoveryRecord
 from research.ResearchSourceRecord import ResearchSourceRecord
 
+
+
+def _configure_source_judgement(
+    window: Any,
+    usefulness: str = "unknown",
+    applicability: str = "unknown",
+    independence: str = "unknown",
+    publication_status: str = "unknown",
+) -> None:
+    """Attach the four structured judgement inputs the assessment form reads.
+
+    They default to `unknown` because that is what an operator who answered
+    nothing has said. A fixture that defaulted them to a favourable value would
+    make every unrelated assessment test quietly assert a judgement.
+    """
+    window._research_source_usefulness = RecordingInput(usefulness)
+    window._research_source_applicability = RecordingInput(applicability)
+    window._research_source_independence = RecordingInput(independence)
+    window._research_source_publication_status = RecordingInput(publication_status)
+
+
+ASSESSMENT_NOW = datetime(2026, 8, 21, tzinfo=UTC)
+
+
+def _research_run_with(
+    sources: tuple = (),
+    assessments: tuple = (),
+    discoveries: tuple = (),
+) -> ResearchRun:
+    """Build the smallest run that can carry a source and a judgement about it."""
+    return ResearchRun(
+        run_id="run-1",
+        question="request smuggling",
+        status=ResearchRunStatus.COLLECTING,
+        sources=sources,
+        failures=(),
+        created_at=ASSESSMENT_NOW,
+        updated_at=ASSESSMENT_NOW,
+        discoveries=discoveries,
+        # A judgement has to name evidence the run actually recorded, so a run
+        # carrying one has to carry that evidence too.
+        evidence=(
+            ()
+            if not assessments
+            else (
+                ResearchEvidenceRecord(
+                    evidence_id="evidence-1",
+                    source_document_id="document-1",
+                    chunk_id="chunk-1",
+                    chunk_index=0,
+                    excerpt="Body text.",
+                    excerpt_truncated=False,
+                    chunk_sha256=sha256(b"Body text.").hexdigest(),
+                    note="A note.",
+                    recorded_at=ASSESSMENT_NOW,
+                ),
+            )
+        ),
+        assessments=assessments,
+    )
 
 class AccessibilityPreferenceTests(unittest.TestCase):
     def test_initial_window_prefers_1920_by_1080(self) -> None:
@@ -3726,6 +3791,174 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             ["Select recorded evidence first."],
         )
 
+    def test_the_panel_shows_relevance_judgement_reputation_and_acceptance_apart(
+        self,
+    ) -> None:
+        """Four lines, four labels, no arithmetic between them.
+
+        The failure this guards against is a panel that reads `Relevance:
+        strong` and lets somebody conclude the source is sound. Each line names
+        what produced it, and the operator's own verdict sits next to the
+        ranker's without either one being folded into the other.
+        """
+        window: Any = object.__new__(TkinterDesktopWindow)
+        _configure_research_assessment_selector(window)
+        source = _research_source_record("document-1", "A paper")
+        source = replace(source, url="https://doi.org/10.1000/exact")
+        assessment = ResearchSourceAssessmentRecord(
+            assessment_id="assessment-1",
+            source_document_id="document-1",
+            evidence_ids=("evidence-1",),
+            text="Weak on a second read.",
+            recorded_at=ASSESSMENT_NOW,
+            information_trust=ResearchInformationTrust.LOW,
+            usefulness=ResearchSourceUsefulness.NOT_USEFUL,
+            applicability=ResearchSourceApplicability.BACKGROUND_ONLY,
+            publication_status=ResearchSourcePublicationStatus.RETRACTED,
+        )
+        run = _research_run_with(
+            sources=(source,),
+            assessments=(assessment,),
+            discoveries=(
+                ResearchSourceDiscoveryRecord(
+                    "discovery-1",
+                    "request smuggling",
+                    "crossref-rest-v1",
+                    (
+                        ResearchSourceCandidate(
+                            url="https://doi.org/10.1000/exact",
+                            title="Request smuggling",
+                            snippet="",
+                        ),
+                    ),
+                    ASSESSMENT_NOW,
+                ),
+            ),
+        )
+
+        window._render_research_source_dimensions(run, source)
+
+        rendered = window._research_source_dimensions.get()
+        self.assertIn("Relevance:", rendered)
+        self.assertIn("deterministic lexical ranking", rendered)
+        self.assertIn("Operator assessment:", rendered)
+        self.assertIn("human judgement", rendered)
+        self.assertIn("usefulness=not_useful", rendered)
+        self.assertIn("publication=retracted", rendered)
+        self.assertIn("Source reputation:", rendered)
+        self.assertIn("Evidence status:", rendered)
+
+    def test_a_strong_relevance_line_never_speaks_for_the_operator(self) -> None:
+        """Case A on screen: the ranker says strong, the person says not useful."""
+        window: Any = object.__new__(TkinterDesktopWindow)
+        _configure_research_assessment_selector(window)
+        source = replace(
+            _research_source_record("document-1", "A paper"),
+            url="https://doi.org/10.1000/exact",
+        )
+        run = _research_run_with(
+            sources=(source,),
+            assessments=(
+                ResearchSourceAssessmentRecord(
+                    assessment_id="assessment-1",
+                    source_document_id="document-1",
+                    evidence_ids=("evidence-1",),
+                    text="Not worth citing.",
+                    recorded_at=ASSESSMENT_NOW,
+                    usefulness=ResearchSourceUsefulness.NOT_USEFUL,
+                ),
+            ),
+            discoveries=(
+                ResearchSourceDiscoveryRecord(
+                    "discovery-1",
+                    "request smuggling",
+                    "crossref-rest-v1",
+                    (
+                        ResearchSourceCandidate(
+                            url="https://doi.org/10.1000/exact",
+                            title="Request smuggling",
+                            snippet="",
+                        ),
+                    ),
+                    ASSESSMENT_NOW,
+                ),
+            ),
+        )
+
+        window._render_research_source_dimensions(run, source)
+
+        rendered = window._research_source_dimensions.get()
+        relevance_line, assessment_line = rendered.splitlines()[:2]
+        self.assertIn("strong", relevance_line)
+        self.assertIn("usefulness=not_useful", assessment_line)
+        self.assertNotIn("not_useful", relevance_line)
+
+    def test_a_source_never_discovered_says_so_rather_than_scoring_zero(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        _configure_research_assessment_selector(window)
+        source = _research_source_record("document-1", "A paper")
+        run = _research_run_with(sources=(source,))
+
+        window._render_research_source_dimensions(run, source)
+
+        self.assertIn(
+            "not among the latest discovered candidates",
+            window._research_source_dimensions.get(),
+        )
+
+    def test_the_history_list_shows_which_judgement_stands_and_what_it_said(
+        self,
+    ) -> None:
+        original = ResearchSourceAssessmentRecord(
+            assessment_id="assessment-1",
+            source_document_id="document-1",
+            evidence_ids=("evidence-1",),
+            text="Looked strong.",
+            recorded_at=ASSESSMENT_NOW,
+            usefulness=ResearchSourceUsefulness.USEFUL,
+        )
+        revised = ResearchSourceAssessmentRecord(
+            assessment_id="assessment-2",
+            source_document_id="document-1",
+            evidence_ids=("evidence-1",),
+            text="Weak after all.",
+            recorded_at=ASSESSMENT_NOW,
+            supersedes_assessment_id="assessment-1",
+            usefulness=ResearchSourceUsefulness.NOT_USEFUL,
+            publication_status=ResearchSourcePublicationStatus.RETRACTED,
+        )
+
+        superseded_label = TkinterDesktopWindow._research_assessment_label(
+            original, is_current=False
+        )
+        current_label = TkinterDesktopWindow._research_assessment_label(
+            revised, is_current=True
+        )
+
+        self.assertIn("[superseded]", superseded_label)
+        self.assertIn("usefulness=useful", superseded_label)
+        self.assertIn("[current]", current_label)
+        self.assertIn("usefulness=not_useful", current_label)
+        self.assertIn("publication=retracted", current_label)
+
+    def test_an_unanswered_dimension_is_left_out_rather_than_shown_as_a_verdict(
+        self,
+    ) -> None:
+        record = ResearchSourceAssessmentRecord(
+            assessment_id="assessment-1",
+            source_document_id="document-1",
+            evidence_ids=("evidence-1",),
+            text="Just a note.",
+            recorded_at=ASSESSMENT_NOW,
+        )
+
+        label = TkinterDesktopWindow._research_assessment_label(
+            record, is_current=True
+        )
+
+        self.assertNotIn("unknown", label)
+        self.assertIn("Just a note.", label)
+
     def test_selected_source_renders_current_and_superseded_assessments(
         self,
     ) -> None:
@@ -5130,6 +5363,12 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             "Corrected assessment.",
             "assessment-original",
             "high",
+            # The structured judgement travels with the text, and it travels
+            # exactly as chosen: two dimensions answered, two left unknown.
+            "useful",
+            "direct",
+            "unknown",
+            "unknown",
         )
         window._root = object()
         window._controller = controller
@@ -5139,6 +5378,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_assessment_text = RecordingInput(values[3])
         window._research_assessment_supersedes_id = RecordingInput(values[4])
         window._research_information_trust = RecordingInput(values[5])
+        _configure_source_judgement(window, "useful", "direct")
         window._status = RecordingStatus()
         window._append_response = responses.append
 
@@ -5198,6 +5438,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
                 window._research_assessment_text = RecordingInput("Assessment.")
                 window._research_assessment_supersedes_id = RecordingInput("")
                 window._research_information_trust = RecordingInput("medium")
+                _configure_source_judgement(window)
                 window._status = RecordingStatus()
                 window._append_response = lambda _response: None
 
@@ -5224,6 +5465,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_assessment_text = RecordingInput("Assessment.")
         window._research_assessment_supersedes_id = RecordingInput("")
         window._research_information_trust = RecordingInput("unassessed")
+        _configure_source_judgement(window)
         window._status = status
         window._append_response = lambda _response: self.fail("must not append")
 
@@ -6397,6 +6639,10 @@ class RecordingResearchSourceLoadController:
         text: str,
         supersedes_assessment_id: str = "",
         information_trust: str = "unassessed",
+        usefulness: str = "unknown",
+        applicability: str = "unknown",
+        independence: str = "unknown",
+        publication_status: str = "unknown",
     ) -> BrainResponse:
         if not evidence_ids.strip():
             raise ValueError("Research assessment evidence IDs cannot be empty.")
@@ -6407,6 +6653,10 @@ class RecordingResearchSourceLoadController:
             text,
             supersedes_assessment_id,
             information_trust,
+            usefulness,
+            applicability,
+            independence,
+            publication_status,
         )
         self.assessment_write_previews.append(values)
         return self.assessment_write_preview_response
@@ -6443,6 +6693,10 @@ class RecordingResearchSourceLoadController:
         text: str,
         supersedes_assessment_id: str = "",
         information_trust: str = "unassessed",
+        usefulness: str = "unknown",
+        applicability: str = "unknown",
+        independence: str = "unknown",
+        publication_status: str = "unknown",
     ) -> BrainResponse:
         values = (
             run_id,
@@ -6451,6 +6705,10 @@ class RecordingResearchSourceLoadController:
             text,
             supersedes_assessment_id,
             information_trust,
+            usefulness,
+            applicability,
+            independence,
+            publication_status,
         )
         self.assessment_records.append(values)
         return self.assessment_record_response
@@ -6528,6 +6786,10 @@ def _configure_research_source_coverage(window: Any) -> None:
 
 
 def _configure_research_assessment_selector(window: Any) -> None:
+    # The panel now renders relevance, judgement, reputation and acceptance as
+    # four separate lines beside the selector, so a window that can render the
+    # selector has to be able to render those too.
+    window._research_source_dimensions = RecordingVariable("")
     window._research_assessment_choice = RecordingVariable("")
     window._research_assessment_selector = RecordingCandidateSelector()
     window._research_assessment_records = ()
@@ -6656,6 +6918,7 @@ def _configure_selected_research_assessments(
     window._research_assessment_selector = RecordingCandidateSelector(
         selected_index=selected_index
     )
+    window._research_source_dimensions = RecordingVariable("")
     window._research_assessment_choice = RecordingVariable("")
 
 
