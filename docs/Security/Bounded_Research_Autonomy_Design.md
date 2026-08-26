@@ -1,9 +1,9 @@
 # Bounded Research Autonomy — Security Design
 
-**Status: DESIGN ONLY. Nothing in this document is implemented by the change
-that introduces it.** The execution, autonomy, and scheduling services described
-below are CURRENT and were inspected for this design. They remain deliberately
-unreachable from the desktop, and this document does not make them reachable.
+**Status: DESIGN, WITH ITS FIRST SLICE IMPLEMENTED.** The execution, autonomy,
+and scheduling services described below are CURRENT and were inspected for this
+design. They remain deliberately unreachable from the desktop, and neither this
+document nor anything built from it so far makes them reachable.
 
 This is a separate document from
 [Filesystem_Capability_Design.md](Filesystem_Capability_Design.md) and
@@ -11,8 +11,13 @@ This is a separate document from
 because it governs a different boundary. Those govern what Hypatia may look at.
 This one governs the moment Hypatia stops asking and starts doing.
 
-Everything marked CURRENT was read in the source at `7aa4839` (v0.3.189).
-Everything marked PROPOSED is absent and must not be cited as though it exists.
+Everything marked CURRENT was read in the source. Everything marked PROPOSED is
+absent and must not be cited as though it exists.
+
+**Implemented since this document was written:** the plan digest, the
+authorization record, and pure verification (v0.3.190). They exist as domain
+objects and nothing consults them. Nothing is persisted, nothing is enforced at
+execution, and no autonomy intent became reachable.
 
 ---
 
@@ -155,12 +160,12 @@ authority means exactly "whoever sent this `BrainRequest`". That is adequate
 while the only sender is a human pressing a button in the same process, and it
 is not adequate for anything queued, resumed, or deferred.
 
-**Finding B — plan identity is not content-derived.**
+**Finding B — plan identity is not content-derived.** *(Closed in v0.3.190.)*
 `ResearchPlanDraftService` sets `plan_id=self._id_factory()`, a fresh UUID per
 preview. Two identical plans get different identities; one plan previewed
 twice gets two. An authorization bound to `plan_id` would therefore certify
-nothing about content. This is the direct reason the answer in §5 to "can a
-modified plan inherit old authorization?" cannot currently be enforced.
+nothing about content. `plan_digest` is now the second identity and `plan_id`
+keeps its original per-preview meaning; §17.1 records what was built.
 
 **Finding C — a background task carries no authorization and no expiry.**
 `BackgroundResearchTask` holds `task_id`, `execution_id`, `budget`, timestamps,
@@ -224,7 +229,7 @@ name. Mapping them rather than adding a parallel set is the whole point:
 | --- | --- | --- |
 | PROPOSED QUESTION | `ResearchCuriosityQuestion` (proposed, undecided) | CURRENT |
 | PROPOSED PLAN | `ResearchPlanDraftPreview` with `allowed=True` | CURRENT |
-| **AUTHORIZED PLAN** | — none — | **PROPOSED** (§5) |
+| **AUTHORIZED PLAN** | `ResearchPlanAuthorization` | **CURRENT** as a record; not enforced anywhere (§5) |
 | QUEUED | `BackgroundResearchTaskStatus.PENDING` | CURRENT |
 | RUNNING | `…Status.RUNNING` (task, execution, step) | CURRENT |
 | WAITING / BLOCKED | `ResearchPlanExecutionStatus.BLOCKED` | CURRENT |
@@ -232,7 +237,7 @@ name. Mapping them rather than adding a parallel set is the whole point:
 | FAILED | `…Status.FAILED` | CURRENT |
 | DECLINED / NOT REACHED | `ToolDisposition.DECLINED` / `NOT_REACHED` | CURRENT (Tool Layer) |
 | CANCELLED | `…Status.CANCELLED` | CURRENT |
-| EXPIRED / STALE | — none — | **PROPOSED** (§5.4) |
+| EXPIRED / STALE | `ResearchPlanAuthorizationVerdict.EXPIRED` | **CURRENT** as a verdict; nothing yet asks (§5.4) |
 
 Two gaps, and they are the same gap seen twice: there is no authorization, so
 there is nothing to be authorized and nothing to expire.
@@ -272,7 +277,7 @@ not exist and this design does not create it.
 
 Finding B makes the alternative unusable: a `plan_id` is minted per preview, so
 binding an approval to one would certify nothing. The authorized object is
-PROPOSED as a record carrying:
+**CURRENT** as `ResearchPlanAuthorization`, carrying:
 
 | Field | Why |
 | --- | --- |
@@ -430,8 +435,9 @@ distinguishes loopback from non-loopback. The distinction exists; what is
 missing is that nothing currently carries a *decision* about it into
 autonomous work.
 
-PROPOSED: the authorization record carries a `disclosure` field with three
-bounded values.
+**CURRENT** as `ResearchDisclosure`, carried on the authorization record. Three
+bounded values. Nothing reads it yet: it is not wired into LLM transport, and
+this milestone deliberately did not wire it.
 
 | Value | Meaning |
 | --- | --- |
@@ -602,8 +608,8 @@ record rather than inferred from behaviour.
 | Traceable to | Today | Status |
 | --- | --- | --- |
 | Originating question | Not recorded on the task | **PROPOSED** |
-| Plan | `execution_id` only, and plan identity is a per-preview UUID (§2.3, Finding B) | **PROPOSED** — needs `plan_digest` |
-| Exact authorization snapshot | Not recorded (Finding C) | **PROPOSED** — `authorization_id` |
+| Plan | `execution_id` only; `plan_digest` now exists but the task does not carry it | **PROPOSED** — record the digest on the task |
+| Exact authorization snapshot | Not recorded (Finding C); `authorization_id` now exists on the record | **PROPOSED** — record it on the task |
 | Research run | Held by the execution context, not by the task | **PROPOSED** — record it on the task |
 | Created time | `created_at`, `updated_at` | **CURRENT** |
 | Execution attempts | `retry_count`, `max_retries` | **CURRENT** |
@@ -711,32 +717,51 @@ not a full URL with query, and never with fetched content.
 
 ## 17. Recommended next implementation milestone
 
-**Exactly one: make a plan authorizable, and nothing else.**
+### 17.1 Done: a plan is now something an approval can refer to
 
-Not "human-approved single bounded research-plan execution" — that is the right
-*second* milestone. Finding B blocks it: until a plan has a content-derived
-identity there is nothing an approval can honestly refer to, so building the
-approval flow first would produce an approval that certifies a UUID.
+Implemented in v0.3.190, all of it unreachable:
 
-The smallest truthful vertical slice is therefore:
+- **`plan_digest`** — a SHA-256 over a length-prefixed canonical encoding of the
+  plan, excluding `plan_id` and `created_at`. The encoder walks dataclass fields
+  rather than naming them, so a field added to a step or to any authorization it
+  carries enters the digest automatically instead of falling silently outside
+  approved content.
+- **`ResearchPlanAuthorization`** — frozen, with `capabilities` derived by
+  `for_plan` rather than typed alongside the plan, validity bounded by the
+  autonomy ceiling, and `disclosure` defaulting to `none`.
+- **`verify_plan_authorization`** — pure, returning one bounded verdict.
 
-1. **Content-derived plan identity.** A `plan_digest` over question, ordered
-   steps, step text, and declared capability. Deterministic, tested against
-   reordering, editing, and capability changes.
-2. **`ResearchPlanAuthorization`** — the frozen record from §5.2, with
-   derivation of `capabilities` from the snapshot, bounded validity, and a
-   `disclosure` field defaulting to `none`.
-3. **Verification, unreachable.** A pure function answering "is this
-   authorization valid for this exact plan, at this moment" — digest match,
-   expiry, consumption. No wiring to any intent. No desktop surface.
+Finding B is closed. Finding A is closed as a *record*: an approval can now name
+what it approved. Finding C is untouched — a background task still carries
+neither the digest nor an authorization.
 
-That slice adds no execution, no reachability, no scheduler, no capability, and
-no way to run anything. It is the object every later milestone needs and the
-one thing whose absence currently makes the rest unsafe to expose.
+**Still not current, and none of it should be assumed:** authorization
+persistence; a human approval surface; consumption tracking; any enforcement at
+execution; background-task binding; scheduler enforcement; desktop reachability;
+remote disclosure actually reaching LLM transport; autonomous follow-up. Nothing
+in the runtime consults the authorization record, which is asserted by a test
+rather than promised here.
 
-**Explicitly not in it:** making any of the eleven intents reachable; executing
-a plan; a queue; a policy engine; filesystem or shell authority; raising
-`max_llm_operations`; any curiosity-to-execution chain.
+### 17.2 Next: let a person create one, see it, and keep it
+
+**Exactly one: human preview, confirm, and persist for one exact plan — still
+without executing it.**
+
+The record exists but nobody can make one. That is the smallest remaining gap
+between "an approval could name its subject" and "an approval exists that a
+later execution could check". It needs a bounded store, a desktop surface that
+shows the exact digest, capability set, budget, disclosure and expiry before
+confirming, and the honest persistence-failure reporting every other store in
+this repository now has.
+
+Consumption belongs with it or immediately after: once an authorization is
+durable, "one approval permits one execution" becomes something that can
+truthfully be recorded rather than a comment.
+
+**Explicitly not in it:** executing a plan; making any of the eleven intents
+reachable; a queue or scheduler; filesystem, shell, or tool authority; raising
+`max_llm_operations`; wiring disclosure into transport; any
+curiosity-to-execution chain.
 
 ---
 

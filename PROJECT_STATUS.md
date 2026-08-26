@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.189 (Genesis)`
+`v0.3.190 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.189`** is the current source/package release line.
+- **Runtime release `v0.3.190`** is the current source/package release line.
   GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -1056,7 +1056,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 3,480 automated tests pass through package-aware discovery.
+- 3,531 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for all `src` files and the focused sensitive-path/rooted-open
   security tests. A full `src` + `tests` MyPy sweep still has separately
@@ -1098,17 +1098,19 @@ changed.
 
 ## Next Milestone
 
-Implement the first stage of the accepted bounded research-autonomy design:
-content-derived plan identity, an immutable `ResearchPlanAuthorization` record,
-and pure verification of an authorization against an exact plan. Nothing in
-that stage executes a plan, queues a task, or makes any of the eleven autonomy
-intents reachable.
+The first stage of the bounded research-autonomy design is implemented: a
+content-derived `plan_digest`, an immutable `ResearchPlanAuthorization`, and
+pure verification against one exact plan. All of it is unreachable and nothing
+in the runtime consults it, which a test asserts.
 
-That ordering is deliberate. Plan identity is currently a fresh UUID minted per
-preview, so an approval bound to a plan ID would certify nothing about the plan
-it approved. Until a plan has content-derived identity there is no object an
-approval can honestly refer to, and building the approval flow first would
-produce an approval that means less than it appears to.
+Next, let a person actually create one: preview, confirm, and persist an
+authorization for one exact plan — still without executing it. The record can
+now name what it approved, but nobody can make one, so no later execution has
+anything to check. That stage needs a bounded store, a surface showing the exact
+digest, capabilities, budget, disclosure and expiry before confirming, and the
+same honest persistence-failure reporting every other store here has. Recording
+consumption belongs with it or immediately after, since "one approval permits
+one execution" only becomes enforceable once an authorization is durable.
 
 The accepted design keeps execution, autonomy, and scheduling unreachable from
 the desktop, adds no filesystem, shell, or tool authority to research, keeps the

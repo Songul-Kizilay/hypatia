@@ -2,6 +2,55 @@
 
 All notable project changes are recorded here.
 
+## [0.3.190] - 2026-08-26
+
+### Added
+
+- A research plan now has a content identity. `plan_digest` is a SHA-256 over a
+  canonical encoding of the question, the ordered steps, and everything each
+  step declares — instruction, capability, authorized source URL, selected
+  sources, and every per-step authorization it carries. `plan_id` keeps its
+  original meaning as per-preview instance identity; the digest is a second
+  identity, not a replacement.
+- `ResearchPlanAuthorization`, an immutable record binding one approval to one
+  exact plan digest, research run, capability set, budget, disclosure decision,
+  and bounded validity window.
+- `ResearchDisclosure`, so permission to read something locally stays separate
+  from permission to send it to a model endpoint. Default `none`.
+- `ResearchAuthorizer`, with the single value that is currently true.
+- `verify_plan_authorization`, a pure function returning one bounded
+  `ResearchPlanAuthorizationVerdict`: valid, digest mismatch, run mismatch,
+  capability mismatch, or expired.
+
+### Compatibility and safety
+
+- Nothing consults any of this. No intent, service, desktop surface, or store
+  reads an authorization, and a test asserts that no other module imports one.
+  All eleven autonomy intents remain unreachable, which a test also asserts.
+- Capabilities are derived from the approved plan rather than typed alongside
+  it, so an approval cannot be constructed wider than what it approves. A
+  hand-built record that disagrees with its plan fails verification.
+- Validity is bounded by the existing 3,600-second autonomy ceiling and is
+  terminal. There is no renewal, refresh, grace period, or extension.
+- Single use is deliberately **not** implemented. Execution does not exist, so
+  nothing could truthfully mark an authorization consumed, and a flag nothing
+  set would read as a guarantee. Its absence is asserted.
+- No new capability, no filesystem or shell authority, no budget default or
+  ceiling changed, no persistence, no schema, and no migration.
+
+### Verification
+
+- The digest is tested against the failures a delimited encoding would have:
+  authored text imitating a separator, embedded newlines, and a character
+  shifted between neighbouring steps. Turkish and other Unicode text is tested
+  for determinism and for distinguishing dotted from dotless letters.
+- Coverage also proves that two independent previews of one plan digest
+  identically while their identifiers differ, that every edited part of a plan
+  changes the digest, and that verification mutates nothing and reaches no
+  store, network, model, tool, or filesystem.
+- Package-aware discovery passes 3,531 tests with 3 existing platform-dependent
+  skips. Black, Ruff, and source MyPy pass for this release scope.
+
 ## [0.3.189] - 2026-08-26
 
 ### Added
