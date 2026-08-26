@@ -47,6 +47,7 @@ from research.ResearchClaimRecord import (
     MAX_RESEARCH_CLAIM_EVIDENCE,
     ResearchClaimRecord,
 )
+from research.ResearchDisclosure import ResearchDisclosure
 from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchInformationTrust import ResearchInformationTrust
@@ -88,6 +89,13 @@ _HYPOTHESIS_DEFEATER_NOTE = (
 _HYPOTHESIS_EVIDENCE_NOTE = (
     "Evidence must already be recorded in the run. Separate several IDs with "
     "commas or spaces. The same record cannot be entered on both sides."
+)
+_APPROVAL_IDLE_STATUS = "Nothing has been approved yet."
+_APPROVAL_PANEL_NOTE = (
+    "Approving records that you permitted this exact plan. It starts no "
+    "research: nothing is fetched, no model is called, and nothing is queued. "
+    "The approval names the plan by content, so editing the plan afterwards "
+    "makes the approval refuse it rather than silently covering the change."
 )
 _REVIEW_IDLE_STATUS = "Nothing has been reviewed yet."
 _REVIEW_PANEL_NOTE = (
@@ -343,6 +351,11 @@ class TkinterDesktopWindow:
     _reflection_enabled: bool = False
     _curiosity_enabled: bool = False
 
+    #: Recording an approval starts nothing, but it is the first durable step
+    #: toward work that would. Absent unless the runtime keeps approvals, on
+    #: the same rule every other durable engine here follows.
+    _plan_authorization_enabled: bool = False
+
     def __init__(
         self,
         controller: DesktopController,
@@ -354,6 +367,7 @@ class TkinterDesktopWindow:
         failure_memory_enabled: bool = False,
         reflection_enabled: bool = False,
         curiosity_enabled: bool = False,
+        plan_authorization_enabled: bool = False,
     ) -> None:
         self._controller = controller
         self._tool_console = tool_console
@@ -362,6 +376,7 @@ class TkinterDesktopWindow:
         self._failure_memory_enabled = failure_memory_enabled
         self._reflection_enabled = reflection_enabled
         self._curiosity_enabled = curiosity_enabled
+        self._plan_authorization_enabled = plan_authorization_enabled
         self._root = root or tk.Tk()
         self._research_refresh_signal = ResearchStateRefreshSignal(event_bus)
         self._request_runner = DesktopRequestRunner()
@@ -1695,6 +1710,8 @@ class TkinterDesktopWindow:
             "No plan preview yet. Enter the authored draft and choose Preview plan.",
         )
         self._research_plan_preview.configure(state=tk.DISABLED)
+        if self._plan_authorization_enabled:
+            self._build_plan_approval_section(research_plan_frame)
         authored_claim_frame = ttk.LabelFrame(
             research_saved_records_frame,
             text="Recorded claims and contradictions",
@@ -4187,6 +4204,103 @@ class TkinterDesktopWindow:
     # console controller and renders plain data back, so this file cannot name
     # an effect or build an invocation even by mistake.
     # ------------------------------------------------------------------
+
+    def _build_plan_approval_section(self, parent: ttk.Frame) -> None:
+        """Record a human approval of the exact plan above. Run nothing.
+
+        Deliberately placed under the plan draft and using its fields, so the
+        plan being approved is the plan on screen rather than a second copy
+        someone typed twice.
+        """
+        self._plan_approval_run_id = tk.StringVar()
+        self._plan_approval_id = tk.StringVar()
+        self._plan_approval_disclosure = tk.StringVar(
+            value=ResearchDisclosure.NONE.value
+        )
+        self._plan_approval_status = tk.StringVar(value=_APPROVAL_IDLE_STATUS)
+
+        section = ttk.LabelFrame(parent, text="Plan approval", padding=8)
+        section.grid(row=7, column=0, columnspan=2, sticky="ew", pady=(10, 0))
+        section.columnconfigure(1, weight=1)
+        ttk.Label(section, text=_APPROVAL_PANEL_NOTE, wraplength=680).grid(
+            row=0, column=0, columnspan=2, sticky="w"
+        )
+        ttk.Label(section, text="Research run ID").grid(
+            row=1, column=0, sticky="w", pady=(6, 0)
+        )
+        ttk.Entry(section, textvariable=self._plan_approval_run_id).grid(
+            row=1, column=1, sticky="ew", padx=(8, 0), pady=(6, 0)
+        )
+        ttk.Label(section, text="Model disclosure").grid(
+            row=2, column=0, sticky="w", pady=(6, 0)
+        )
+        ttk.Combobox(
+            section,
+            textvariable=self._plan_approval_disclosure,
+            state="readonly",
+            values=tuple(member.value for member in ResearchDisclosure),
+        ).grid(row=2, column=1, sticky="ew", padx=(8, 0), pady=(6, 0))
+        ttk.Label(section, text="Previewed approval ID").grid(
+            row=3, column=0, sticky="w", pady=(6, 0)
+        )
+        ttk.Entry(section, textvariable=self._plan_approval_id).grid(
+            row=3, column=1, sticky="ew", padx=(8, 0), pady=(6, 0)
+        )
+        buttons = ttk.Frame(section)
+        buttons.grid(row=4, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
+        for column, (label, command) in enumerate(
+            (
+                ("Preview approval — no write", self._preview_plan_authorization),
+                ("Confirm approval", self._confirm_plan_authorization),
+                ("List approvals", self._list_plan_authorizations),
+            )
+        ):
+            self._request_button(buttons, label, command).grid(
+                row=0, column=column, sticky="w", padx=(0 if column == 0 else 8, 0)
+            )
+        ttk.Label(
+            section,
+            textvariable=self._plan_approval_status,
+            wraplength=680,
+        ).grid(row=5, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        self._plan_approval_output = tk.Text(section, height=10, wrap="word")
+        self._plan_approval_output.grid(
+            row=6, column=0, columnspan=2, sticky="ew", pady=(6, 0)
+        )
+        self._plan_approval_output.configure(state=tk.DISABLED)
+
+    def _approval_request(self, call: Callable[[], BrainResponse]) -> None:
+        """Run one approval request into the approval panel's result area."""
+        self._panel_request(
+            self._plan_approval_status,
+            self._plan_approval_output,
+            call,
+        )
+
+    def _preview_plan_authorization(self) -> None:
+        self._approval_request(
+            lambda: self._controller.preview_plan_authorization(
+                self._research_question.get(),
+                self._text_value(self._research_plan_instructions),
+                self._text_value(self._research_plan_source_ids),
+                self._plan_approval_run_id.get(),
+                self._plan_approval_disclosure.get(),
+            )
+        )
+
+    def _confirm_plan_authorization(self) -> None:
+        self._approval_request(
+            lambda: self._controller.confirm_plan_authorization(
+                self._plan_approval_id.get(),
+                self._research_question.get(),
+                self._text_value(self._research_plan_instructions),
+                self._text_value(self._research_plan_source_ids),
+                self._plan_approval_run_id.get(),
+            )
+        )
+
+    def _list_plan_authorizations(self) -> None:
+        self._approval_request(self._controller.list_plan_authorizations)
 
     def _build_review_tab(self, parent: ttk.Frame) -> None:
         """Lay out the three ways of looking back at a run that is under way.

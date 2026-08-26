@@ -665,25 +665,52 @@ class BoundaryRegressionTests(PlanFixture):
             with self.subTest(intent=intent):
                 self.assertNotIn(intent, source)
 
-    def test_nothing_consults_the_new_authorization_yet(self) -> None:
-        """Recording a decision is this milestone. Enforcing it is not."""
+    def test_no_execution_path_consults_an_authorization(self) -> None:
+        """Approvals are now created and recorded. They still enforce nothing.
+
+        This replaced a broader assertion that nothing anywhere referenced an
+        authorization. That was true while the record could not be produced;
+        an approval surface makes it false by design. The invariant that still
+        matters, and is narrower and stronger, is that no path which could
+        actually run research has learned to read one.
+        """
         from pathlib import Path
 
         root = Path(__file__).resolve().parents[2] / "src"
+        execution_modules = (
+            "ResearchPlanExecutionApplicationService.py",
+            "ResearchAutonomyApplicationService.py",
+            "BackgroundResearchSchedulerApplicationService.py",
+            "ResearchPlanExecutionState.py",
+            "BackgroundResearchTask.py",
+        )
         consumers = [
             path.name
             for path in root.rglob("*.py")
-            if "__pycache__" not in str(path)
-            and path.name
-            not in {
-                "ResearchPlanAuthorization.py",
-                "ResearchPlanAuthorizationVerdict.py",
-                "ResearchPlanAuthorizationVerifier.py",
-            }
-            and "ResearchPlanAuthorization" in path.read_text(encoding="utf-8")
+            if path.name in execution_modules
+            and "Authorization" in path.read_text(encoding="utf-8")
         ]
 
         self.assertEqual(consumers, [])
+
+    def test_the_approval_service_cannot_reach_execution(self) -> None:
+        """The other direction of the same boundary."""
+        from pathlib import Path
+
+        service = (
+            Path(__file__).resolve().parents[2]
+            / "src"
+            / "cognition"
+            / "ResearchPlanAuthorizationApplicationService.py"
+        ).read_text(encoding="utf-8")
+
+        for forbidden in (
+            "ResearchPlanExecutionApplicationService",
+            "ResearchAutonomyApplicationService",
+            "BackgroundResearchSchedulerApplicationService",
+        ):
+            with self.subTest(name=forbidden):
+                self.assertNotIn(forbidden, service)
 
     def test_plan_identity_remains_a_per_preview_value(self) -> None:
         """The digest is a second identity, not a replacement for the first."""

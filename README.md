@@ -931,6 +931,44 @@ quoted later without its sample size.
 
 ---
 
+## Research plan approval
+
+Recording approvals is disabled by default. To keep them, set:
+
+```text
+HYPATIA_PLAN_AUTHORIZATION_ENABLED=true
+```
+
+The value must be exactly lowercase `true`. Approvals are written to
+`research_plan_authorizations.json` beside the research-run store, in a separate
+versioned document bounded to 500 records.
+
+With it set, the Research (Advanced) plan area gains an approval section that
+uses the plan already on screen. Preview shows exactly what confirming would
+record and writes nothing; confirming records that exact approval; listing
+reports what has been approved and whether each is still valid.
+
+An approval names the plan by content rather than by identifier. `plan_id` is
+the preview someone is looking at and changes every time; `plan_digest` is the
+question, the ordered steps, and everything each step declares. Both are shown
+together, because approving one plan while believing you approved another is the
+failure this whole boundary exists to prevent. Edit the plan after previewing
+and confirmation refuses it rather than silently covering the change.
+
+Confirming records permission. It does not exercise it. No research is started,
+no source is fetched, no model is called, and nothing is queued — and nothing in
+the runtime reads an approval, so no execution can happen because one exists.
+Approvals expire, are never renewed, and are not consumed, because there is
+still no execution to consume one. An expired approval stays listed for audit
+and can never verify as valid.
+
+The model-disclosure decision is recorded on every approval and defaults to
+`none`. Being allowed to read something locally is not being allowed to send it
+to a model endpoint. Nothing reads that decision yet: it is not wired into LLM
+transport.
+
+---
+
 ## Hypotheses
 
 Hypotheses are disabled by default. To keep them, set:

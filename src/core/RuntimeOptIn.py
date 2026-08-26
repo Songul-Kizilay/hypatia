@@ -20,6 +20,11 @@ HYPOTHESIS_ENABLED_VARIABLE = "HYPATIA_HYPOTHESIS_ENABLED"
 FAILURE_MEMORY_ENABLED_VARIABLE = "HYPATIA_FAILURE_MEMORY_ENABLED"
 REFLECTION_ENABLED_VARIABLE = "HYPATIA_REFLECTION_ENABLED"
 CURIOSITY_ENABLED_VARIABLE = "HYPATIA_CURIOSITY_ENABLED"
+RESEARCH_EXECUTION_PERSISTENCE_ENABLED_VARIABLE = (
+    "HYPATIA_RESEARCH_EXECUTION_PERSISTENCE_ENABLED"
+)
+BACKGROUND_RESEARCH_ENABLED_VARIABLE = "HYPATIA_BACKGROUND_RESEARCH_ENABLED"
+PLAN_AUTHORIZATION_ENABLED_VARIABLE = "HYPATIA_PLAN_AUTHORIZATION_ENABLED"
 
 #: The single accepted value. Anything else, including "True", "1", and "yes",
 #: leaves the capability off. An opt-in that guesses what someone meant is an
@@ -55,3 +60,23 @@ def reflection_enabled(environment: Mapping[str, str]) -> bool:
 def curiosity_enabled(environment: Mapping[str, str]) -> bool:
     """Return whether curiosity proposals are kept."""
     return opted_in(environment, CURIOSITY_ENABLED_VARIABLE)
+
+
+def research_execution_persistence_enabled(environment: Mapping[str, str]) -> bool:
+    """Return whether plan-execution snapshots are kept."""
+    return opted_in(environment, RESEARCH_EXECUTION_PERSISTENCE_ENABLED_VARIABLE)
+
+
+def background_research_enabled(environment: Mapping[str, str]) -> bool:
+    """Return whether background research tasks are kept."""
+    return opted_in(environment, BACKGROUND_RESEARCH_ENABLED_VARIABLE)
+
+
+def plan_authorization_enabled(environment: Mapping[str, str]) -> bool:
+    """Return whether human plan approvals are recorded durably.
+
+    Off by default. Recording an approval starts nothing, but it is the first
+    durable step toward work that would, and a capability nobody switched on is
+    a capability nobody has to reason about yet.
+    """
+    return opted_in(environment, PLAN_AUTHORIZATION_ENABLED_VARIABLE)

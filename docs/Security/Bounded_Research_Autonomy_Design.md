@@ -15,9 +15,14 @@ Everything marked CURRENT was read in the source. Everything marked PROPOSED is
 absent and must not be cited as though it exists.
 
 **Implemented since this document was written:** the plan digest, the
-authorization record, and pure verification (v0.3.190). They exist as domain
-objects and nothing consults them. Nothing is persisted, nothing is enforced at
-execution, and no autonomy intent became reachable.
+authorization record, and pure verification (v0.3.190); human preview, explicit
+confirmation, a bounded durable store, and listing (v0.3.191). A person can now
+approve one exact plan and read back what they approved.
+
+Nothing enforces any of it. No execution path reads an authorization, no
+approval is consumed, no autonomy intent became reachable, and disclosure is
+recorded without reaching LLM transport. Approving remains a record rather than
+permission anything acts on.
 
 ---
 
@@ -229,7 +234,7 @@ name. Mapping them rather than adding a parallel set is the whole point:
 | --- | --- | --- |
 | PROPOSED QUESTION | `ResearchCuriosityQuestion` (proposed, undecided) | CURRENT |
 | PROPOSED PLAN | `ResearchPlanDraftPreview` with `allowed=True` | CURRENT |
-| **AUTHORIZED PLAN** | `ResearchPlanAuthorization` | **CURRENT** as a record; not enforced anywhere (§5) |
+| **AUTHORIZED PLAN** | `ResearchPlanAuthorization`, created by human confirmation and stored | **CURRENT** as a record; not enforced anywhere (§5) |
 | QUEUED | `BackgroundResearchTaskStatus.PENDING` | CURRENT |
 | RUNNING | `…Status.RUNNING` (task, execution, step) | CURRENT |
 | WAITING / BLOCKED | `ResearchPlanExecutionStatus.BLOCKED` | CURRENT |
@@ -435,9 +440,10 @@ distinguishes loopback from non-loopback. The distinction exists; what is
 missing is that nothing currently carries a *decision* about it into
 autonomous work.
 
-**CURRENT** as `ResearchDisclosure`, carried on the authorization record. Three
-bounded values. Nothing reads it yet: it is not wired into LLM transport, and
-this milestone deliberately did not wire it.
+**CURRENT** as `ResearchDisclosure`, carried on the authorization record and
+chosen by the person approving. Three bounded values, defaulting to `none`.
+Nothing reads it yet: it is not wired into LLM transport, and no milestone so
+far has wired it.
 
 | Value | Meaning |
 | --- | --- |
@@ -717,7 +723,7 @@ not a full URL with query, and never with fetched content.
 
 ## 17. Recommended next implementation milestone
 
-### 17.1 Done: a plan is now something an approval can refer to
+### 17.1 Done: a plan can be named, approved, and the approval kept
 
 Implemented in v0.3.190, all of it unreachable:
 
@@ -735,33 +741,61 @@ Finding B is closed. Finding A is closed as a *record*: an approval can now name
 what it approved. Finding C is untouched — a background task still carries
 neither the digest nor an authorization.
 
-**Still not current, and none of it should be assumed:** authorization
-persistence; a human approval surface; consumption tracking; any enforcement at
-execution; background-task binding; scheduler enforcement; desktop reachability;
-remote disclosure actually reaching LLM transport; autonomous follow-up. Nothing
-in the runtime consults the authorization record, which is asserted by a test
-rather than promised here.
+Implemented in v0.3.191, behind an opt-in and reaching no execution:
 
-### 17.2 Next: let a person create one, see it, and keep it
+- **Preview** — shows the exact approval confirming would record: both
+  identities side by side, the derived capabilities, the budget, the disclosure
+  decision, the authorizer, and the validity window. It writes nothing.
+- **Confirmation** — bound to the previewed approval rather than to a
+  description of it. Confirming names that preview and re-supplies the plan, and
+  the same pure verifier decides whether they still agree. An edited plan,
+  another run, or an expired preview is refused and records nothing.
+- **A bounded durable store** — versioned, capped at 500 approvals and 4 MB,
+  validated back through the domain constructor on load, and failing closed on
+  a malformed or unsupported document. A failed write is reported as a failure.
+- **Listing** — every recorded approval with its standing at the moment of
+  asking.
 
-**Exactly one: human preview, confirm, and persist for one exact plan — still
-without executing it.**
+Findings A and B are closed. Finding C is untouched: a background task still
+carries neither the digest nor an authorization.
 
-The record exists but nobody can make one. That is the smallest remaining gap
-between "an approval could name its subject" and "an approval exists that a
-later execution could check". It needs a bounded store, a desktop surface that
-shows the exact digest, capability set, budget, disclosure and expiry before
-confirming, and the honest persistence-failure reporting every other store in
-this repository now has.
+**Still not current, and none of it should be assumed:** consumption tracking;
+any enforcement at execution; execution binding; background-task binding;
+scheduler enforcement; desktop autonomy reachability; remote disclosure
+actually reaching LLM transport; automatic curiosity-to-approval; automatic
+renewal; autonomous follow-up.
 
-Consumption belongs with it or immediately after: once an authorization is
-durable, "one approval permits one execution" becomes something that can
-truthfully be recorded rather than a comment.
+Two of those deserve naming rather than listing. **No execution path reads an
+authorization** — asserted by a test over the execution, autonomy and scheduler
+modules, in both directions. And **no approval is consumed**: one approval is
+meant to permit one execution, but there is still no execution, so a consumed
+flag would record something nobody could establish.
 
-**Explicitly not in it:** executing a plan; making any of the eleven intents
-reachable; a queue or scheduler; filesystem, shell, or tool authority; raising
-`max_llm_operations`; wiring disclosure into transport; any
-curiosity-to-execution chain.
+### 17.2 Next: let one approval actually permit one execution
+
+**Exactly one: bind a durable approval to one foreground plan execution and
+enforce single use — with no background scheduling and no recursive autonomy.**
+
+Everything needed to check an approval now exists, and nothing checks one. That
+is the whole remaining gap between "a person permitted this" and "this ran
+because a person permitted it".
+
+That slice would: require a valid authorization before a foreground execution
+may start; verify it against the exact plan at the moment of starting rather
+than at the moment it was given; record consumption when execution begins, so
+"one approval, one execution" stops being a comment and becomes a fact; and
+refuse an expired, consumed, mismatched, or absent approval as not-reached
+rather than failed.
+
+It is also where two currently-safe absences become real risks for the first
+time, so it needs its own review rather than being treated as wiring:
+capabilities move from *recorded* to *enforced*, and disclosure moves from
+*recorded* to *consulted*.
+
+**Explicitly not in it:** background scheduling; the queue; recurring or
+follow-up research; raising `max_llm_operations`; filesystem, shell, or tool
+authority; wiring disclosure into transport beyond refusing what it forbids;
+any curiosity-to-execution chain.
 
 ---
 

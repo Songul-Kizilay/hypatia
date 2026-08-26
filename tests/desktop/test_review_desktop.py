@@ -49,7 +49,7 @@ from research.ResearchRunManager import ResearchRunManager
 from response.ResponseComposer import ResponseComposer
 from session.SessionManager import SessionManager
 from session.SessionRenameTransactionService import SessionRenameTransactionService
-from tests.desktop.SourceVocabulary import mentions, working_vocabulary
+from tests.SourceVocabulary import mentions, working_vocabulary
 
 WINDOW_SOURCE = (SRC_DIR / "desktop" / "TkinterDesktopWindow.py").read_text(
     encoding="utf-8"

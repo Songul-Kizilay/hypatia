@@ -46,6 +46,13 @@ from research.ResearchCuriosityPreview import ResearchCuriosityPreview
 from research.ResearchCuriosityQuestion import ResearchCuriosityQuestion
 from research.ResearchEvidenceIntegrityStatus import ResearchEvidenceIntegrityStatus
 from research.ResearchFailureLesson import ResearchFailureLesson
+from research.ResearchPlanAuthorization import ResearchPlanAuthorization
+from research.ResearchPlanAuthorizationPreview import (
+    ResearchPlanAuthorizationPreview,
+)
+from research.ResearchPlanAuthorizationVerdict import (
+    ResearchPlanAuthorizationVerdict,
+)
 from research.ResearchPlanDraftPreview import ResearchPlanDraftPreview
 from research.ResearchPlanExecutionSnapshot import (
     ResearchPlanExecutionSnapshot,
@@ -98,6 +105,33 @@ from session.SessionRenameResult import SessionRenameResult
 #: characters; a catalogue someone is scanning should stay scannable, and the
 #: full wording is one appraisal away.
 MAX_LISTED_HYPOTHESIS_STATEMENT_LENGTH = 160
+
+#: Said on every approval response. The whole risk of recording permission is
+#: that recording it reads like using it.
+NO_RESEARCH_STARTED_NOTICE = (
+    "No research execution was started. Nothing was fetched, no model was "
+    "called, and no background work was queued."
+)
+
+#: One bounded note per verdict, for a person rather than for a parser. Nothing
+#: reads these back; the verdict itself is the structured value.
+_AUTHORIZATION_VERDICT_NOTES: dict[ResearchPlanAuthorizationVerdict, str] = {
+    ResearchPlanAuthorizationVerdict.VALID: "This approval covers exactly this plan.",
+    ResearchPlanAuthorizationVerdict.DIGEST_MISMATCH: (
+        "The plan changed after it was previewed, so the approval no longer "
+        "describes it. Preview the new plan and approve that instead."
+    ),
+    ResearchPlanAuthorizationVerdict.RUN_MISMATCH: (
+        "This approval was given for a different research run."
+    ),
+    ResearchPlanAuthorizationVerdict.CAPABILITY_MISMATCH: (
+        "The approval grants capabilities this plan does not declare."
+    ),
+    ResearchPlanAuthorizationVerdict.EXPIRED: (
+        "This approval has expired. Approvals are not renewed; preview the "
+        "plan again to give a new one."
+    ),
+}
 
 _WEAKNESS_CLASS_DISCLAIMER = (
     "A weakness class is a concept, not a finding. Recording or relating "
@@ -1784,6 +1818,194 @@ class ResponseComposer:
             intent="vulnerability_graph",
             memory_count=0,
             vulnerability_families=families,
+        )
+
+    def research_plan_authorization_preview(
+        self,
+        request: BrainRequest,
+        preview: ResearchPlanAuthorizationPreview,
+    ) -> BrainResponse:
+        """Show exactly what confirming would record, having recorded nothing."""
+        if preview.authorization is None:
+            return BrainResponse(
+                message="\n".join(
+                    (
+                        "Research plan approval preview:",
+                        f"Reason: {preview.reason}",
+                        "Nothing was approved and no research was started.",
+                    )
+                ),
+                request_id=request.request_id,
+                intent="research_plan_authorization",
+                memory_count=0,
+                success=False,
+            )
+        authorization = preview.authorization
+        lines = [
+            "Research plan approval preview:",
+            f"Approval ID: {authorization.authorization_id}",
+            "",
+            # Both identities, adjacent and labelled. Someone approving needs
+            # to see that the preview they are looking at is not the thing
+            # being approved.
+            f"Plan (this preview): {preview.plan_id}",
+            f"Plan content approved: {authorization.plan_digest}",
+            f"Research run: {authorization.research_run_id}",
+            "",
+            *self._authorization_terms(authorization),
+            "",
+            "Nothing is recorded until you confirm this exact approval.",
+            preview.reason,
+        ]
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_plan_authorization",
+            memory_count=0,
+            research_plan_authorization=authorization,
+        )
+
+    def research_plan_authorization_confirmed(
+        self,
+        request: BrainRequest,
+        authorization: ResearchPlanAuthorization,
+    ) -> BrainResponse:
+        """Report one durably recorded approval that started nothing."""
+        lines = [
+            "Research plan approval recorded.",
+            f"Approval ID: {authorization.authorization_id}",
+            f"Plan content approved: {authorization.plan_digest}",
+            f"Research run: {authorization.research_run_id}",
+            "",
+            *self._authorization_terms(authorization),
+            "",
+            NO_RESEARCH_STARTED_NOTICE,
+        ]
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_plan_authorization",
+            memory_count=0,
+            research_plan_authorization=authorization,
+        )
+
+    def research_plan_authorization_write_failed(
+        self,
+        request: BrainRequest,
+        authorization: ResearchPlanAuthorization,
+    ) -> BrainResponse:
+        """Report an approval kept here but not written down."""
+        lines = [
+            "This approval was not durably recorded.",
+            f"Approval ID: {authorization.authorization_id}",
+            "Durable write: failed.",
+            "Restarting Hypatia may lose it.",
+            "Approving the same plan again retries the write.",
+            NO_RESEARCH_STARTED_NOTICE,
+        ]
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_plan_authorization",
+            memory_count=0,
+            success=False,
+            research_plan_authorization=authorization,
+        )
+
+    def research_plan_authorization_refused(
+        self,
+        request: BrainRequest,
+        verdict: ResearchPlanAuthorizationVerdict,
+    ) -> BrainResponse:
+        """Report why a previewed approval no longer covers this work."""
+        message = "\n".join(
+            (
+                "That approval was not recorded.",
+                f"Verification: {verdict.value}",
+                _AUTHORIZATION_VERDICT_NOTES[verdict],
+                "Nothing was approved and no research was started.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="research_plan_authorization",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_plan_authorization_rejected(
+        self,
+        request: BrainRequest,
+        reason: str,
+    ) -> BrainResponse:
+        """Report one bounded refusal without recording anything."""
+        message = "\n".join(
+            (
+                "Research plan approval request rejected:",
+                f"Reason: {reason}",
+                "Nothing was approved and no research was started.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="research_plan_authorization",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_plan_authorization_list(
+        self,
+        request: BrainRequest,
+        authorizations: tuple[ResearchPlanAuthorization, ...],
+        moment: datetime,
+    ) -> BrainResponse:
+        """Report recorded approvals and whether each is still valid now."""
+        lines = [f"Recorded research plan approvals: {len(authorizations)}"]
+        for authorization in authorizations:
+            standing = (
+                "expired" if authorization.has_expired_at(moment) else "valid now"
+            )
+            lines.append(
+                f"- [{standing}] {authorization.authorization_id} "
+                f"({authorization.disclosure.value})"
+            )
+            lines.append(
+                f"  plan {authorization.plan_digest} in run "
+                f"{authorization.research_run_id}"
+            )
+        lines.append(
+            "An approval is a record, not standing permission. "
+            + NO_RESEARCH_STARTED_NOTICE
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_plan_authorization",
+            memory_count=0,
+            research_plan_authorizations=authorizations,
+        )
+
+    @staticmethod
+    def _authorization_terms(
+        authorization: ResearchPlanAuthorization,
+    ) -> tuple[str, ...]:
+        """Render the exact terms being approved, in one bounded block."""
+        capabilities = ", ".join(
+            sorted(capability.value for capability in authorization.capabilities)
+        )
+        budget = authorization.budget
+        return (
+            f"Capabilities: {capabilities}",
+            f"Budget: {budget.max_step_advances} step(s), "
+            f"{budget.max_network_operations} network operation(s), "
+            f"{budget.max_llm_operations} model call(s), "
+            f"{budget.max_seconds:g} second(s)",
+            f"Model disclosure: {authorization.disclosure.value}",
+            f"Authorized by: {authorization.authorized_by.value}",
+            f"Approved at: {authorization.authorized_at.isoformat()}",
+            f"Expires at: {authorization.expires_at.isoformat()}",
         )
 
     def vulnerability_graph_persistence_failed(

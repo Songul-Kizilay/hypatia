@@ -2,6 +2,66 @@
 
 All notable project changes are recorded here.
 
+## [0.3.191] - 2026-08-26
+
+### Added
+
+- A person can approve one exact research plan and keep the approval. Preview
+  shows what confirming would record — both plan identities side by side, the
+  derived capabilities, the budget, the model-disclosure decision, the
+  authorizer, and the validity window — and writes nothing. Confirming records
+  that exact approval. Listing reports what has been approved and whether each
+  approval is still valid.
+- Three intents, named for approval and nothing else:
+  `research_plan_authorization_preview`, `..._confirm`, and `..._list`.
+- A bounded versioned approval store, capped at 500 records and 4 MB, validated
+  back through the domain constructor on load and failing closed on a malformed
+  or unsupported document.
+- An approval section in the Research (Advanced) plan area, using the plan
+  already on screen rather than a second copy, gated on
+  `HYPATIA_PLAN_AUTHORIZATION_ENABLED`.
+
+### Changed
+
+- The two remaining runtime opt-ins that were still read inline —
+  `HYPATIA_RESEARCH_EXECUTION_PERSISTENCE_ENABLED` and
+  `HYPATIA_BACKGROUND_RESEARCH_ENABLED` — moved into the shared module
+  alongside the new one.
+
+### Compatibility and safety
+
+- Nothing executes. The approval service imports no execution, autonomy, or
+  scheduler service; no execution path reads an authorization; and both
+  directions of that boundary are asserted by tests. All eleven autonomy
+  intents remain unreachable.
+- Confirmation is bound to a preview rather than a description. An edited plan,
+  a different run, or an expired preview is refused and records nothing, and a
+  refused preview cannot be retried.
+- Approval identity and plan identity stay distinct: two approvals of the same
+  plan coexist rather than overwriting one another.
+- Loading renews nothing. An expired approval stays expired, remains listed for
+  audit, and cannot verify as valid.
+- Disclosure is recorded and still unwired. It defaults to `none`, is bounded to
+  the existing enum, and reaches no LLM transport.
+- Single use remains **unenforced**. Nothing marks an approval consumed, because
+  no execution exists to consume one, and its absence is asserted rather than
+  explained.
+- No new capability, no filesystem or shell authority, no budget default or
+  ceiling changed, and no migration.
+
+### Verification
+
+- Coverage proves that instruction text asking to authorize a plan, enable a
+  capability, raise the budget, allow remote disclosure, or start background
+  research changes none of those things.
+- Also covered: preview writes nothing, confirmation records exactly what was
+  previewed, persistence survives restart without extending expiry, malformed
+  and unsupported documents fail closed, the store bound and duplicate
+  identities are enforced, and a failed write is reported as a failure in both
+  the response and telemetry.
+- Package-aware discovery passes 3,582 tests with 3 existing platform-dependent
+  skips. Black, Ruff, and source MyPy pass for this release scope.
+
 ## [0.3.190] - 2026-08-26
 
 ### Added

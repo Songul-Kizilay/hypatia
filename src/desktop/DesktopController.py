@@ -15,6 +15,35 @@ from research.ResearchRunMarkdownExportPreview import (
 )
 
 
+def _plan_step_drafts(
+    instruction_lines: str,
+    source_id_lines: str,
+) -> tuple[tuple[object, ...], ...]:
+    """Shape typed plan rows into the positional drafts the runtime accepts.
+
+    Shared by plan preview and approval so both send byte-identical steps. Two
+    copies of this shaping would eventually disagree, and a plan that digests
+    differently depending on which button produced it would make an approval
+    refuse the plan it was given for.
+    """
+    instructions = instruction_lines.splitlines()
+    source_rows = source_id_lines.splitlines()
+    row_count = max(len(instructions), len(source_rows))
+    return tuple(
+        (
+            instructions[index].strip() if index < len(instructions) else "",
+            tuple(
+                source_id.strip()
+                for source_id in (
+                    source_rows[index].split(",") if index < len(source_rows) else ()
+                )
+                if source_id.strip()
+            ),
+        )
+        for index in range(row_count)
+    )
+
+
 def _evidence_id_list(value: str) -> tuple[str, ...]:
     """Read one typed field as the evidence IDs it names.
 
@@ -183,24 +212,6 @@ class DesktopController:
             for value in (question, instruction_lines, source_id_lines)
         ):
             raise ValueError("Research plan draft fields must be text.")
-        instructions = instruction_lines.splitlines()
-        source_rows = source_id_lines.splitlines()
-        row_count = max(len(instructions), len(source_rows))
-        steps = tuple(
-            (
-                instructions[index].strip() if index < len(instructions) else "",
-                tuple(
-                    source_id.strip()
-                    for source_id in (
-                        source_rows[index].split(",")
-                        if index < len(source_rows)
-                        else ()
-                    )
-                    if source_id.strip()
-                ),
-            )
-            for index in range(row_count)
-        )
         return self._brain.process(
             BrainRequest(
                 message="Preview explicit authored research plan",
@@ -208,9 +219,101 @@ class DesktopController:
                 metadata={
                     "intent": "research_plan_draft_preview",
                     "research_plan_question": question.strip(),
-                    "research_plan_steps": steps,
+                    "research_plan_steps": _plan_step_drafts(
+                        instruction_lines,
+                        source_id_lines,
+                    ),
                 },
             )
+        )
+
+    def preview_plan_authorization(
+        self,
+        question: str,
+        instruction_lines: str,
+        source_id_lines: str,
+        research_run_id: str,
+        disclosure: str = "none",
+    ) -> BrainResponse:
+        """Show the approval this plan would record. Records nothing."""
+        return self._plan_authorization_request(
+            "research_plan_authorization_preview",
+            "Preview research plan approval",
+            question,
+            instruction_lines,
+            source_id_lines,
+            research_run_id,
+            extra={"research_disclosure": disclosure.strip() or "none"},
+        )
+
+    def confirm_plan_authorization(
+        self,
+        authorization_id: str,
+        question: str,
+        instruction_lines: str,
+        source_id_lines: str,
+        research_run_id: str,
+    ) -> BrainResponse:
+        """Record exactly one previewed approval. Starts no research.
+
+        The plan is re-sent rather than remembered here, so the runtime checks
+        the approval against the plan as it stands now instead of trusting what
+        this surface last displayed.
+        """
+        normalized_id = authorization_id.strip()
+        if not normalized_id:
+            raise ValueError("A previewed approval ID is required.")
+        return self._plan_authorization_request(
+            "research_plan_authorization_confirm",
+            "Confirm research plan approval",
+            question,
+            instruction_lines,
+            source_id_lines,
+            research_run_id,
+            extra={"authorization_id": normalized_id},
+        )
+
+    def list_plan_authorizations(self) -> BrainResponse:
+        """Report recorded approvals without approving or running anything."""
+        return self._intent_only_request(
+            "research_plan_authorization_list",
+            "List research plan approvals",
+        )
+
+    def _plan_authorization_request(
+        self,
+        intent: str,
+        message: str,
+        question: str,
+        instruction_lines: str,
+        source_id_lines: str,
+        research_run_id: str,
+        *,
+        extra: dict[str, object],
+    ) -> BrainResponse:
+        if not all(
+            isinstance(value, str)
+            for value in (question, instruction_lines, source_id_lines)
+        ):
+            raise ValueError("Research plan approval fields must be text.")
+        normalized_question = question.strip()
+        normalized_run_id = research_run_id.strip()
+        if not normalized_question:
+            raise ValueError("A research question cannot be empty.")
+        if not normalized_run_id:
+            raise ValueError("A research run ID cannot be empty.")
+        metadata: dict[str, object] = {
+            "intent": intent,
+            "research_run_id": normalized_run_id,
+            "research_plan_question": normalized_question,
+            "research_plan_steps": _plan_step_drafts(
+                instruction_lines,
+                source_id_lines,
+            ),
+        }
+        metadata.update(extra)
+        return self._brain.process(
+            BrainRequest(message=message, source="desktop", metadata=metadata)
         )
 
     def report_claim_calibration(self, research_run_id: str) -> BrainResponse:

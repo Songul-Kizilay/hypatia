@@ -53,6 +53,9 @@ from cognition.ResearchHonestyApplicationService import (
 from cognition.ResearchOverviewApplicationService import (
     ResearchOverviewApplicationService,
 )
+from cognition.ResearchPlanAuthorizationApplicationService import (
+    ResearchPlanAuthorizationApplicationService,
+)
 from cognition.ResearchPlanExecutionApplicationService import (
     ResearchPlanExecutionApplicationService,
 )
@@ -146,6 +149,9 @@ from research.ResearchClaimRecord import ResearchClaimRecord
 from research.ResearchEvidenceIntegrityAuditor import ResearchEvidenceIntegrityAuditor
 from research.ResearchExecutionStore import ResearchExecutionStore
 from research.ResearchFailureLesson import ResearchFailureLesson
+from research.ResearchPlanAuthorizationStore import (
+    ResearchPlanAuthorizationStore,
+)
 from research.ResearchPlanDraftService import ResearchPlanDraftService
 from research.ResearchPlanOperationRegistry import (
     ResearchPlanOperationRegistry,
@@ -224,6 +230,7 @@ class CognitiveEngine:
         reflection_report_store: ReflectionReportStore | None = None,
         failure_lesson_store: FailureLessonStore | None = None,
         hypothesis_store: HypothesisStore | None = None,
+        plan_authorization_store: ResearchPlanAuthorizationStore | None = None,
         vulnerability_graph_store: VulnerabilityGraphStore | None = None,
         research_source_discovery_provider: (
             ResearchSourceDiscoveryProvider | None
@@ -427,6 +434,21 @@ class CognitiveEngine:
                 hypothesis_store=hypothesis_store,
                 event_bus=event_bus,
             )
+        # Approval is a separate service from execution on purpose. It
+        # imports no execution or scheduling service, so it has no way to start
+        # the work it records permission for.
+        self._plan_authorization_service: (
+            ResearchPlanAuthorizationApplicationService | None
+        ) = None
+        if research_run_manager is not None:
+            self._plan_authorization_service = (
+                ResearchPlanAuthorizationApplicationService(
+                    research_run_manager,
+                    response_composer,
+                    authorization_store=plan_authorization_store,
+                    event_bus=event_bus,
+                )
+            )
         self._calibration_service: CalibrationApplicationService | None = None
         if research_run_manager is not None:
             self._calibration_service = CalibrationApplicationService(
@@ -566,6 +588,9 @@ class CognitiveEngine:
 
         if self._is_failure_memory_request(request):
             return self._process_failure_memory(request)
+
+        if self._is_plan_authorization_request(request):
+            return self._process_plan_authorization(request)
 
         if CalibrationApplicationService.is_report_request(request):
             return self._process_calibration(request)
@@ -3422,6 +3447,36 @@ class CognitiveEngine:
             return service.process_report(request)
         except ResearchError as error:
             return self._response_composer.research_calibration_rejected(
+                request,
+                str(error),
+            )
+
+    @staticmethod
+    def _is_plan_authorization_request(request: BrainRequest) -> bool:
+        """Return whether this request addresses recording a human approval."""
+        service = ResearchPlanAuthorizationApplicationService
+        return (
+            service.is_preview_request(request)
+            or service.is_confirm_request(request)
+            or service.is_list_request(request)
+        )
+
+    def _process_plan_authorization(self, request: BrainRequest) -> BrainResponse:
+        """Route one approval intent. Nothing here starts research."""
+        service = self._plan_authorization_service
+        if service is None:
+            return self._response_composer.research_plan_authorization_rejected(
+                request,
+                "Research plan approval is unavailable.",
+            )
+        try:
+            if service.is_preview_request(request):
+                return service.process_preview(request)
+            if service.is_confirm_request(request):
+                return service.process_confirm(request)
+            return service.process_list(request)
+        except ResearchError as error:
+            return self._response_composer.research_plan_authorization_rejected(
                 request,
                 str(error),
             )

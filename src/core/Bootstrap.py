@@ -9,10 +9,13 @@ from core.Config import Config
 from core.DependencyContainer import DependencyContainer
 from core.Logger import Logger
 from core.RuntimeOptIn import (
+    background_research_enabled,
     curiosity_enabled,
     failure_memory_enabled,
     hypothesis_engine_enabled,
+    plan_authorization_enabled,
     reflection_enabled,
+    research_execution_persistence_enabled,
     vulnerability_graph_enabled,
 )
 from eventbus.EventBus import EventBus
@@ -75,6 +78,9 @@ from research.JsonFileReflectionReportStore import (
 )
 from research.JsonFileResearchExecutionStore import (
     JsonFileResearchExecutionStore,
+)
+from research.JsonFileResearchPlanAuthorizationStore import (
+    JsonFileResearchPlanAuthorizationStore,
 )
 from research.JsonFileResearchRunStore import JsonFileResearchRunStore
 from research.JsonFileResearchSourceContentStore import (
@@ -424,6 +430,7 @@ class Bootstrap:
         reflection_report_store = self._reflection_report_store()
         failure_lesson_store = self._failure_lesson_store()
         hypothesis_store = self._hypothesis_store()
+        plan_authorization_store = self._plan_authorization_store()
         vulnerability_graph_store = self._vulnerability_graph_store()
         research_source_content_store = JsonFileResearchSourceContentStore(
             self._research_source_content_path
@@ -490,6 +497,7 @@ class Bootstrap:
             reflection_report_store=reflection_report_store,
             failure_lesson_store=failure_lesson_store,
             hypothesis_store=hypothesis_store,
+            plan_authorization_store=plan_authorization_store,
             vulnerability_graph_store=vulnerability_graph_store,
             research_source_discovery_provider=(
                 self._research_source_discovery_provider
@@ -587,7 +595,7 @@ class Bootstrap:
         Default off, so an unset environment keeps execution state ephemeral and
         behavior identical to a runtime without this store.
         """
-        if os.environ.get("HYPATIA_RESEARCH_EXECUTION_PERSISTENCE_ENABLED") != "true":
+        if not research_execution_persistence_enabled(os.environ):
             return None
         run_path = self._research_run_path or self._research_run_store_path(
             self._memory_path
@@ -602,7 +610,7 @@ class Bootstrap:
         Default off, so an unset environment schedules nothing and behaves
         exactly like a runtime without a scheduler.
         """
-        if os.environ.get("HYPATIA_BACKGROUND_RESEARCH_ENABLED") != "true":
+        if not background_research_enabled(os.environ):
             return None
         run_path = self._research_run_path or self._research_run_store_path(
             self._memory_path
@@ -654,6 +662,23 @@ class Bootstrap:
         )
         return JsonFileFailureLessonStore(
             run_path.with_name("research_failure_lessons.json")
+        )
+
+    def _plan_authorization_store(
+        self,
+    ) -> JsonFileResearchPlanAuthorizationStore | None:
+        """Create the approval store only when plan authorization is opted in.
+
+        Default off, so an unset environment records no approvals and behaves
+        exactly like a runtime without an approval surface.
+        """
+        if not plan_authorization_enabled(os.environ):
+            return None
+        run_path = self._research_run_path or self._research_run_store_path(
+            self._memory_path
+        )
+        return JsonFileResearchPlanAuthorizationStore(
+            run_path.with_name("research_plan_authorizations.json")
         )
 
     def _hypothesis_store(self) -> JsonFileHypothesisStore | None:

@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.190 (Genesis)`
+`v0.3.191 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.190`** is the current source/package release line.
+- **Runtime release `v0.3.191`** is the current source/package release line.
   GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -1056,7 +1056,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 3,531 automated tests pass through package-aware discovery.
+- 3,582 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for all `src` files and the focused sensitive-path/rooted-open
   security tests. A full `src` + `tests` MyPy sweep still has separately
@@ -1098,19 +1098,20 @@ changed.
 
 ## Next Milestone
 
-The first stage of the bounded research-autonomy design is implemented: a
-content-derived `plan_digest`, an immutable `ResearchPlanAuthorization`, and
-pure verification against one exact plan. All of it is unreachable and nothing
-in the runtime consults it, which a test asserts.
+A person can now approve one exact research plan and keep the approval:
+content-derived `plan_digest`, an immutable `ResearchPlanAuthorization`, pure
+verification, human preview and confirmation, a bounded durable store, and
+listing. Nothing enforces any of it — no execution path reads an authorization,
+and both directions of that boundary are asserted by tests.
 
-Next, let a person actually create one: preview, confirm, and persist an
-authorization for one exact plan — still without executing it. The record can
-now name what it approved, but nobody can make one, so no later execution has
-anything to check. That stage needs a bounded store, a surface showing the exact
-digest, capabilities, budget, disclosure and expiry before confirming, and the
-same honest persistence-failure reporting every other store here has. Recording
-consumption belongs with it or immediately after, since "one approval permits
-one execution" only becomes enforceable once an authorization is durable.
+Next, let one approval actually permit one execution: bind a durable approval to
+one foreground plan execution and enforce single use, with no background
+scheduling and no recursive autonomy. Everything needed to check an approval now
+exists and nothing checks one, which is the whole remaining gap between "a
+person permitted this" and "this ran because a person permitted it". That stage
+is also where capabilities move from recorded to enforced and disclosure moves
+from recorded to consulted, so it needs its own review rather than being treated
+as wiring.
 
 The accepted design keeps execution, autonomy, and scheduling unreachable from
 the desktop, adds no filesystem, shell, or tool authority to research, keeps the
