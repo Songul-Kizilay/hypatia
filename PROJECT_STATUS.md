@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.198 (Genesis)`
+`v0.3.199 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.198`** is the current source/package release line.
+- **Runtime release `v0.3.199`** is the current source/package release line.
   GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -1194,14 +1194,30 @@ data and an `unknown` answer is an unanswered question. The report states in its
 own text that these figures are observational and selection-biased, because the
 operator chose the provider, the candidate, the acceptance and the appraisal.
 
-Next, let the operator compare two providers on the same question. The limit of
-this report is that it can only describe what happened to differ: one provider
-is chosen per discovery, so the two have almost never been asked the same thing,
-and each profile is drawn from a different set of questions. A surface that lets
-a person deliberately put the same question to both — two separate approved
-discoveries in one run — would make the samples comparable for once, using the
-machinery that already exists and without anything ever choosing a provider on
-its own.
+The operator can now put one question to both providers. A comparison turned out
+to be two ordinary discovery steps in one plan: the question already belongs to
+the run rather than to a step, so both sides ask the same thing by construction;
+the provider was already digest-bound; a discovery step already cost one network
+operation; and one advance already attempted one step. No comparison execution
+engine exists because none was needed.
+
+The pair is covered by one digest, costs two network operations, and takes two
+separate presses of Advance. The Compare button reaches a preview and never a
+provider. The two result sets are shown side by side, each ranked within its own
+provider and never merged, with provider rank travelling alongside relevance
+rank. A side nobody advanced reads as pending rather than as an empty result.
+
+One limitation is stated rather than hidden: a failed discovery is recorded
+without naming the provider that failed, so an attempted-and-errored side is
+indistinguishable from an unadvanced one. Both read as pending and the run's
+failure count is reported separately.
+
+Next, measure the paired comparisons that were actually run. The provider-quality
+report describes each provider over whatever questions it happened to be asked,
+and pairing finally removes that cause — when both providers answer one question,
+the two samples line up and the operator's appraisals of each side become
+directly comparable. Nothing reads them that way yet: the one genuinely
+comparable slice of the data is still averaged in with everything else.
 
 The accepted design keeps execution, autonomy, and scheduling unreachable from
 the desktop, adds no filesystem, shell, or tool authority to research, keeps the

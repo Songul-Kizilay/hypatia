@@ -72,6 +72,9 @@ from cognition.SourceIngestionEvents import (
     IngestionFailureKind,
     SourceIngestionEvents,
 )
+from cognition.ProviderComparisonApplicationService import (
+    ProviderComparisonApplicationService,
+)
 from cognition.ProviderQualityApplicationService import (
     ProviderQualityApplicationService,
 )
@@ -482,6 +485,9 @@ class CognitiveEngine:
         self._provider_quality_service: (
             ProviderQualityApplicationService | None
         ) = None
+        self._provider_comparison_service: (
+            ProviderComparisonApplicationService | None
+        ) = None
         if research_run_manager is not None:
             self._source_reputation_service = SourceReputationApplicationService(
                 research_run_manager,
@@ -489,6 +495,11 @@ class CognitiveEngine:
                 event_bus=event_bus,
             )
             self._provider_quality_service = ProviderQualityApplicationService(
+                research_run_manager,
+                response_composer,
+                event_bus=event_bus,
+            )
+            self._provider_comparison_service = ProviderComparisonApplicationService(
                 research_run_manager,
                 response_composer,
                 event_bus=event_bus,
@@ -630,6 +641,11 @@ class CognitiveEngine:
             and self._provider_quality_service.is_report_request(request)
         ):
             return self._provider_quality_service.process_report(request)
+        if (
+            self._provider_comparison_service is not None
+            and self._provider_comparison_service.is_report_request(request)
+        ):
+            return self._provider_comparison_service.process_report(request)
 
         if self._is_hypothesis_request(request):
             return self._process_hypothesis(request)

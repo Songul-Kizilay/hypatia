@@ -123,6 +123,12 @@ _REVIEW_PANEL_NOTE = (
     "evidence, how the run went, and what was never asked. None of them "
     "changes a run, a claim, or a confidence."
 )
+_PROVIDER_COMPARISON_NOTE = (
+    "Provider comparison shows the two result sets for this run's question side "
+    "by side, each ranked within its own provider. It contacts nobody, merges "
+    "no ranking, and names no winner: asking both providers takes one approved "
+    "plan and two separate presses of Advance."
+)
 _PROVIDER_QUALITY_NOTE = (
     "Provider quality describes sources you chose to ask for, accept and "
     "assess. It selects no provider, changes no default, alters no ranking and "
@@ -1733,6 +1739,14 @@ class TkinterDesktopWindow:
             text="Preview plan — no write",
             command=self._preview_research_plan_draft,
         ).grid(row=4, column=1, sticky="e", pady=(8, 8))
+        # Reaches the same preview as the button above and nothing else. There
+        # is no shortcut here: approving the plan and pressing Advance twice is
+        # still what turns this into two requests.
+        ttk.Button(
+            research_plan_frame,
+            text="Compare Crossref + NVD — preview only",
+            command=self._preview_provider_comparison_plan,
+        ).grid(row=4, column=0, sticky="w", pady=(8, 8))
         ttk.Label(research_plan_frame, text="Complete preview or rejection").grid(
             row=5,
             column=0,
@@ -2857,6 +2871,21 @@ class TkinterDesktopWindow:
         self._append_response(response)
         if response.success and response.research_runs:
             self._render_research_run_selector(response.research_runs)
+
+    def _preview_provider_comparison_plan(self) -> None:
+        """Draft the two-step comparison plan. Contact no provider.
+
+        The comparison is two ordinary discovery steps in one plan, so it goes
+        through the same preview, the same approval and the same two explicit
+        advances as anything else. Pressing this reaches a preview.
+        """
+        self._start_request(
+            lambda: self._controller.preview_provider_comparison_plan(
+                self._research_question.get()
+            ),
+            self._complete_research_plan_draft_preview,
+            "provider comparison plan preview",
+        )
 
     def _preview_research_plan_draft(self) -> None:
         """Send only the explicit no-write plan-preview request."""
@@ -4671,11 +4700,15 @@ class TkinterDesktopWindow:
         ttk.Label(run, text=_PROVIDER_QUALITY_NOTE, wraplength=680).grid(
             row=3, column=1, sticky="w", padx=(8, 0), pady=(6, 0)
         )
+        ttk.Label(run, text=_PROVIDER_COMPARISON_NOTE, wraplength=680).grid(
+            row=4, column=1, sticky="w", padx=(8, 0), pady=(6, 0)
+        )
         commands: list[tuple[str, Callable[[], None]]] = [
             ("Calibrate claims", self._report_claim_calibration),
             # Not run-scoped like the others: provider experience accumulates
             # across every run, and one run is never a sample.
             ("Provider quality", self._report_provider_quality),
+            ("Provider comparison", self._report_provider_comparison),
         ]
         if self._reflection_enabled:
             commands.append(("Reflect", self._preview_reflection))
@@ -4754,6 +4787,14 @@ class TkinterDesktopWindow:
     def _review_request(self, call: Callable[[], BrainResponse]) -> None:
         """Run one review request into the Review panel's result area."""
         self._panel_request(self._review_status, self._review_output, call)
+
+    def _report_provider_comparison(self) -> None:
+        """Show one run's two provider result sets. Contact no provider."""
+        self._review_request(
+            lambda: self._controller.report_provider_comparison(
+                self._review_run_id.get()
+            )
+        )
 
     def _report_provider_quality(self) -> None:
         """Describe provider samples. Change no provider, default, or ranking."""

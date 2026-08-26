@@ -8,7 +8,9 @@ reach vulnerability records rather than only scholarly papers, and the record of
 how each provider's assessed samples turned out can be described. All five
 changed what research knows without changing what it may do — the provider a
 plan will contact is bound into the approval that authorizes it, and measuring
-provider performance is deliberately not the same thing as choosing a provider.
+provider performance is deliberately not the same thing as choosing a provider,
+and the operator can now put one question to both providers as two ordinary
+approved steps.
 The execution, autonomy, and scheduling services described below are CURRENT and
 were inspected for this design. Four execution intents are reachable — start,
 status, advance, cancel — and every one of them is an act a person performs.
@@ -1165,26 +1167,93 @@ reranking; unbiased benchmarking; autonomous multi-provider research; background
 research; scheduler authority. The same seven autonomy and background intents
 remain unreachable.
 
-### 17.9 Next: let the operator compare two providers on the same question
+### 17.9 Done: the operator can put one question to both providers
 
-**Exactly one: a side-by-side provider comparison the operator drives.**
+Implemented in v0.3.199, and the notable result is how little it required.
 
-The report now describes what has happened, and the immediate limit is that it
-can only describe what happened to differ. The operator picks one provider per
-discovery, so the two providers have almost never been asked the same question,
-and every profile is drawn from a different set of questions. Comparing them is
-therefore comparing two samples that were never comparable.
+**A comparison turned out to be two ordinary discovery steps in one plan.** The
+question already belongs to the research run rather than to a step, so two
+discovery steps in one run ask the same question by construction — there is no
+arrangement in which one side quietly searches for something else, and nothing
+had to enforce it. The provider has been bound into the plan digest since
+v0.3.197. A discovery step has always cost one network operation. One advance has
+always attempted exactly one step. So no comparison execution engine exists,
+because none was needed, and a test asserts that no such module was created.
 
-The fix is not a policy and not a learner. It is a surface that lets a person ask
-both providers the same question deliberately — two separate approved discoveries
-against one run — so that for once the samples line up, and then reads the
-existing report over that pair. That turns an observational record into something
-closer to a controlled one, using the machinery that already exists, without any
-component ever choosing a provider on its own.
+**Two steps, two approvals under one digest, two charges, two presses.** The
+digest covers both provider steps: swapping the providers, changing the
+question, dropping a side, or replacing one provider all change it, so an
+approval for Crossref-then-NVD cannot be spent on anything else. The pair costs
+two network operations because each step costs one, and nothing in the
+comparison path can widen a budget. Advancing runs one provider; the second
+needs another press.
 
-**Explicitly not in it:** automatic multi-provider querying; provider selection;
-learned routing; reranking; reputation learning; background scheduling;
-`research_autonomy_run`; filesystem, shell, or tool authority.
+**The Compare button reaches a preview and nothing else.** It drafts the
+two-step plan and hands it to the ordinary preview, which names both providers
+and the shared question in words. Approval and two advances still stand between
+pressing it and any request, and a test reads the handler's actual calls rather
+than its prose to prove it.
+
+**Side by side, never merged.** Each provider's candidates are ranked by the
+common ranker within that provider only. There is no rank across providers,
+because a number one spanning both would be a verdict about providers wearing a
+sort order. Provider rank travels alongside relevance rank on every row, and
+provider-specific metadata stays on the side that has it: a vulnerability record
+appears under NVD and no empty CVE column appears beside a scholarly paper.
+
+**Partial is reported as partial.** One side complete and the other pending is
+the ordinary state between two advances, and a pending side says so rather than
+rendering an empty result — being asked and answering nothing is a finding,
+while not being asked is not. Re-asking a provider replaces its side rather than
+adding a column; the older discovery stays in the run and stays auditable.
+
+**One limitation is stated rather than left to be found.** A failed discovery is
+recorded against the run without naming which provider failed, so a side that
+was attempted and errored is indistinguishable here from one nobody advanced.
+Both read as pending, the run's failed-discovery count is reported separately,
+and no failure is attributed to a side. Overloading an existing audit field to
+make one test pass would have satisfied the test rather than the record.
+
+**Nothing decides.** No winner field, no preferred or recommended provider, no
+provider score; the report says in its own text that neither provider was judged
+better and that no default changed. Viewing a comparison contacts nobody, calls
+no model, spends nothing, writes nothing, and creates no assessment — the
+service holds no provider and has no write path. Only the operator's own action
+builds a comparison request: a test enumerates every file that mentions the type
+and finds exactly two.
+
+This is an operator-driven paired comparison. It is not a controlled benchmark,
+and the sources on either side are still ones a person chose to accept and
+appraise.
+
+**Still not current:** automatic provider selection; automatic dual-provider
+discovery; learned provider routing; provider winner scoring; global
+cross-provider relevance ranking; semantic reranking; a CISA provider; a GitHub
+Advisory provider; background autonomy; scheduler authority. The same seven
+autonomy and background intents remain unreachable.
+
+### 17.10 Next: measure the paired comparisons the operator actually ran
+
+**Exactly one: paired-comparison evaluation from recorded operator assessments.**
+
+The provider-quality report describes each provider over whatever questions it
+happened to be asked, and that was its stated limit. Pairing now removes the
+cause: when both providers answer one question, the two samples finally line up,
+and the operator's own appraisals of the sources on each side are directly
+comparable in a way they have never been.
+
+Nothing reads them that way yet. The quality report sees the new discoveries
+because they are ordinary records, which is right, but it still aggregates them
+into per-provider profiles across unrelated questions — so the one genuinely
+comparable slice of the data is averaged away with everything else.
+
+It stays descriptive and stays read-only: report, per paired question, what the
+operator concluded about each side, with both denominators and the sample band
+visible, and without ever producing a winner.
+
+**Explicitly not in it:** provider selection or routing; reranking; reputation
+learning; new providers; background scheduling; `research_autonomy_run`;
+filesystem, shell, or tool authority.
 
 ---
 

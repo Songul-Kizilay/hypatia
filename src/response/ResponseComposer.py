@@ -49,6 +49,9 @@ from research.ResearchExecutionAllowance import ResearchExecutionAllowance
 from research.ResearchFailureLesson import ResearchFailureLesson
 from research.ResearchPlanAuthorization import ResearchPlanAuthorization
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
+from research.ResearchProviderComparisonReport import (
+    ResearchProviderComparisonReport,
+)
 from research.ResearchProviderQualityReport import (
     ResearchProviderQualityReport,
 )
@@ -1609,6 +1612,40 @@ class ResponseComposer:
             message=message,
             request_id=request.request_id,
             intent="research_calibration",
+            memory_count=0,
+            success=False,
+        )
+
+    def provider_comparison(
+        self,
+        request: BrainRequest,
+        report: ResearchProviderComparisonReport,
+    ) -> BrainResponse:
+        """Render both provider result sets, preferring neither."""
+        return BrainResponse(
+            message="\n".join(report.lines()),
+            request_id=request.request_id,
+            intent="provider_comparison",
+            memory_count=0,
+            research_provider_comparison=report,
+        )
+
+    def provider_comparison_rejected(
+        self,
+        request: BrainRequest,
+        reason: str,
+    ) -> BrainResponse:
+        """Explain why there is nothing to compare, having compared nothing."""
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Provider comparison rejected:",
+                    f"Reason: {reason}",
+                    "No provider was contacted and nothing was changed.",
+                )
+            ),
+            request_id=request.request_id,
+            intent="provider_comparison",
             memory_count=0,
             success=False,
         )

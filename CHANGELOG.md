@@ -2,6 +2,43 @@
 
 All notable project changes are recorded here.
 
+## [0.3.199] - 2026-08-27
+
+### Added
+
+- Operator-driven paired provider comparison. One button drafts a two-step plan
+  — one Crossref discovery, one NVD discovery — and hands it to the ordinary
+  preview. Approval and two separate presses of Advance still stand between that
+  and any request.
+- A derived side-by-side report for one run: each provider's candidates ranked
+  within that provider, with provider rank and relevance rank both visible, and
+  vulnerability metadata shown only on the side that has it.
+- Partial comparison states. A side nobody advanced reads as pending rather than
+  as an empty result, and a provider that answered with nothing says so.
+
+### Changed
+
+- Nothing. A comparison is two ordinary discovery steps, so no execution path,
+  budget rule, or persistence schema changed.
+
+### Security
+
+- The pair is covered by one plan digest. Swapping the providers, changing the
+  question, dropping a side, or replacing one provider all change it, so an
+  approval for one pair cannot authorize another.
+- Two providers mean two network operations, because each discovery step costs
+  one. Nothing performs two requests under one charge and nothing widens a
+  budget.
+- The Compare button reaches a preview and never a provider; the comparison
+  service holds no provider, no write path, and no execution path.
+- The two result sets are never merged into one ranking, and no field names a
+  winner, a preferred provider, or a provider score.
+- A discovery failure is not attributed to a provider, because the audit record
+  does not name one. Both unattempted and failed sides read as pending and the
+  run's failure count is reported separately.
+- Only the operator builds a comparison. Curiosity, reflection, calibration, the
+  provider-quality report and the scheduler have no path to it.
+
 ## [0.3.198] - 2026-08-27
 
 ### Added

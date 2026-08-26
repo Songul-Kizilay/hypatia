@@ -9,6 +9,7 @@ from brain.BrainResponse import BrainResponse
 from core.CancellationSignal import CancellationToken
 from research.ResearchClaimConfidence import ResearchClaimConfidence
 from research.ResearchEpistemicState import ResearchEpistemicState
+from research.ProviderComparisonRequest import ProviderComparisonRequest
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchSourceApplicability import ResearchSourceApplicability
@@ -394,6 +395,35 @@ class DesktopController:
         metadata.update(extra)
         return self._brain.process(
             BrainRequest(message=message, source="desktop", metadata=metadata)
+        )
+
+    def preview_provider_comparison_plan(self, question: str) -> BrainResponse:
+        """Preview the two-step plan a comparison asks for. Contact nobody.
+
+        This is the ordinary plan preview with the two discovery steps a
+        comparison needs. It reaches no provider: approval and two explicit
+        advances still stand between this and any request.
+        """
+        if not isinstance(question, str) or not question.strip():
+            raise ValueError("A research question cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="Preview provider comparison plan",
+                source="desktop",
+                metadata={
+                    "intent": "research_plan_draft_preview",
+                    "research_plan_question": question.strip(),
+                    "research_plan_steps": ProviderComparisonRequest().step_drafts(),
+                },
+            )
+        )
+
+    def report_provider_comparison(self, research_run_id: str) -> BrainResponse:
+        """Show one run's two provider result sets side by side."""
+        return self._run_only_request(
+            "provider_comparison_report",
+            "Report provider comparison",
+            research_run_id,
         )
 
     def report_provider_quality(self) -> BrainResponse:
