@@ -125,7 +125,11 @@ _REVIEW_PANEL_NOTE = (
 _CALIBRATION_NOTE = (
     "Calibration reports a mismatch and never adjusts one. What you are "
     "willing to assert is your judgement; a system that quietly downgraded it "
-    "would be overruling you and calling it bookkeeping."
+    "would be overruling you and calling it bookkeeping. It also reports where "
+    "a claim rests on a source you yourself marked retracted, unrelated, "
+    "useless or derivative, and it changes nothing about those either. A claim "
+    "with no warnings has not been checked and found sound; it may simply rest "
+    "on sources nobody has assessed."
 )
 _CURIOSITY_RULING_NOTE = (
     "A ruling records what you think is worth pursuing. It starts no research "

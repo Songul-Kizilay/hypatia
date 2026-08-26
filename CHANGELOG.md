@@ -2,6 +2,44 @@
 
 All notable project changes are recorded here.
 
+## [0.3.196] - 2026-08-26
+
+### Added
+
+- Assessment-aware calibration warnings. A claim resting on a source the
+  operator marked retracted, withdrawn, corrected, not useful, unrelated,
+  background-only, or not independent is now reported as such, with the source
+  and the assessment that raised it named.
+- A separate claim-level warning when several sources appear to corroborate a
+  claim but at least one was judged to repeat another. Two witnesses and one
+  witness twice look identical from the outside.
+- Three bounded attention levels — info, review, high attention — with
+  retraction and withdrawal the only two that reach the top.
+
+### Changed
+
+- The calibration report shows warnings under each claim, alongside the verdict
+  rather than folded into it, and states plainly that nothing was corrected. A
+  claim with no warnings is shown as having none, never as verified.
+- Calibration telemetry carries bounded warning counts and kind codes. It
+  carries no note text, no source title, and no assessment prose.
+
+### Security
+
+- Warnings are read-only. Generating them changes no claim, confidence,
+  epistemic state, evidence, source, assessment, reputation, relevance score or
+  relevance rank; reaches no network and no model; accepts nothing; creates no
+  evidence, claim, hypothesis or curiosity question; schedules nothing; and
+  spends no budget.
+- Only structured fields produce warnings. An operator note worrying that a
+  paper might be retracted produces nothing, and neither does a source whose own
+  title claims to be retracted. `publication_status = retracted` is the only
+  thing that does.
+- Unknown is never treated as negative. An unassessed source, an unanswered
+  dimension, and a record predating these fields all warn about nothing.
+- Warnings are derived and have no store, so a revised assessment cannot leave a
+  stale warning behind claiming otherwise.
+
 ## [0.3.195] - 2026-08-26
 
 ### Added

@@ -184,6 +184,11 @@ class NothingHereAdjustsAnythingTests(unittest.TestCase):
         self.assertIn("never adjusts one", WINDOW_SOURCE)
         self.assertIn("starts no research", WINDOW_SOURCE)
 
+    def test_the_panel_promises_warnings_without_promising_correction(self) -> None:
+        """It now reads a second thing, and must disclaim that one too."""
+        self.assertIn("changes nothing about those either", WINDOW_SOURCE)
+        self.assertIn("has not been checked and found sound", WINDOW_SOURCE)
+
 
 class TabPresenceTests(unittest.TestCase):
     def test_calibration_alone_earns_the_tab(self) -> None:

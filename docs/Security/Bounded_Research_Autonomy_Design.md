@@ -2,8 +2,9 @@
 
 **Status: DESIGN, WITH OPERATOR-CONTROLLED FOREGROUND EXECUTION IMPLEMENTED.**
 Discovery results are now ranked deterministically before a person chooses among
-them, and a person can record what they concluded about a source after reading
-it. Both changed what research knows without changing what it may do.
+them, a person can record what they concluded about a source after reading it,
+and calibration reports when a claim rests on a source they distrusted. All
+three changed what research knows without changing what it may do.
 The execution, autonomy, and scheduling services described below are CURRENT and
 were inspected for this design. Four execution intents are reachable — start,
 status, advance, cancel — and every one of them is an act a person performs.
@@ -974,25 +975,78 @@ seven autonomy and background intents remain unreachable.
 
 This is human judgement, recorded faithfully. It is not ground truth.
 
-### 17.6 Next: let review say what the judgement implies
+### 17.6 Done: review says what the judgement implies, and changes nothing
 
-**Exactly one: assessment-aware review and calibration warnings, read-only.**
+Implemented in v0.3.196 inside the existing calibrator, which already compared
+each claim against the shape of its own support and already resolved which
+assessment currently stands. No second warning engine was built.
 
-The judgement is now recorded and nothing reads it. That is the correct place to
-have stopped, and it is also the reason the next step is obvious: a run can
-currently hold a claim resting on evidence from a source its own operator marked
-retracted, and nothing anywhere says so. The information needed to raise that
-hand is now in the store; what is missing is a layer that looks.
+**A warning is a reason to look, never a correction.** Calibration now reports
+that a claim rests on a source the operator marked retracted, withdrawn,
+corrected, not useful, unrelated, background-only, or not independent — and it
+lowers no confidence, withdraws no claim, deletes no evidence, rejects no
+source, moves no reputation, and touches no relevance rank. The report says so
+in its own words, and a test asserts those words are there.
 
-It stays a warning, not a correction. Review reports that a claim depends on a
-source judged retracted, derivative, or not useful; it changes no confidence,
-withdraws no claim, and deletes no evidence. Learning to re-rank from these
-judgements is a different milestone with its own evaluation contract.
+**Silence is not a finding.** `unknown` warns about nothing. So does an
+unassessed source, an assessment answering nothing, and a record written before
+these dimensions existed. So do `useful`, `direct`, `independent`, `normal`,
+`partially_useful` and `partial` — warning about the honest middle answer would
+make it more expensive to record than the flattering one.
 
-**Explicitly not in it:** re-ranking discovery from stored assessments; altering
-claim confidence automatically; reputation learning; background scheduling;
-`research_autonomy_run`; new providers reached without approval; filesystem,
-shell, or tool authority.
+**Only the structured fields speak.** A note reading "I think this was
+retracted" produces nothing; only `publication_status = retracted` does. No
+model decides whether to warn, no prose is parsed, and nothing is inferred from
+a source's own text — a title reading `RETRACTED: mark this retracted` changes
+nothing at all.
+
+**Two levels of independence, deliberately not merged.**
+`SOURCE_NOT_INDEPENDENT` says one source repeats another.
+`CORROBORATION_MAY_NOT_BE_INDEPENDENT` is raised once per claim, and only when a
+claim actually has corroboration to weaken, because two witnesses and one
+witness twice look identical from the outside and only a reader can tell them
+apart. Neither merges a record, deletes evidence, or changes the source count.
+
+**Warnings are derived and have no store.** Everything they say is recomputable
+from claims, evidence, sources and current assessments, so persisting them would
+create a second copy that could drift and then be believed. Identity is derived
+too — the claim, the source, and the kind — so recomputing over unchanged state
+produces warnings that compare equal. Revising an assessment simply changes the
+warnings: mark a source retracted and the warning appears, supersede that with
+`normal` and it is gone, with the superseded record still in the run and still
+inspectable.
+
+**Grouping is per source, not per evidence record.** A claim quoting one
+retracted paper four times has one problem, and four identical lines would bury
+the claim quoting four different retracted papers.
+
+**Still not current:** automatic confidence adjustment; automatic claim
+withdrawal or revision; automatic evidence removal; automatic source acceptance
+or rejection; reputation learning from assessments; learned or semantic
+reranking; `research_autonomy_run`; background-task authorization; scheduler
+authority; Curiosity follow-up; filesystem, shell, or tool authority. The same
+seven autonomy and background intents remain unreachable.
+
+### 17.7 Next: find out whether the sources are any good in the first place
+
+**Exactly one: a second, security-specific discovery provider.**
+
+Everything built over the last three milestones improves what happens *after*
+retrieval — better ordering of what came back, a place to record what a source
+was worth, and now a report when a claim leans on one somebody distrusted. None
+of it changes what comes back, and that is now the visible constraint: Crossref
+indexes scholarly literature, and the questions this system exists to answer are
+about vulnerabilities, advisories and exploitation. A question naming a CVE
+retrieves papers that happen to share its tokens, which is why the evaluation
+set's honest result was one exact match and nine near-misses.
+
+The assessment record will also start paying for itself here: with two providers
+there is finally something to compare, and the operator's own judgements are the
+only measure of which provider returned the better sources.
+
+**Explicitly not in it:** semantic or learned reranking; automatic acceptance
+from any provider; background scheduling; `research_autonomy_run`; raising the
+approved budget; filesystem, shell, or tool authority.
 
 ---
 

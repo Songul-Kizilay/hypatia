@@ -131,13 +131,19 @@ class CalibrationFixture(unittest.TestCase):
         document_id: str,
         evidence_id: str,
         trust: ResearchInformationTrust,
+        **judgement: str,
     ) -> None:
         self.manager.record_source_assessment(
             run_id,
             document_id,
             [evidence_id],
             "Assessed for the calibration test.",
-            information_trust=trust,
+            None,
+            trust,
+            judgement.get("usefulness", "unknown"),
+            judgement.get("applicability", "unknown"),
+            judgement.get("independence", "unknown"),
+            judgement.get("publication_status", "unknown"),
         )
 
     def claim(
@@ -164,6 +170,125 @@ class CalibrationFixture(unittest.TestCase):
                 "research_run_id": run_id,
             },
         )
+
+
+class AssessmentWarningReportTests(CalibrationFixture):
+    """What the operator actually reads when a judgement conflicts with a claim."""
+
+    def _run_with(self, **judgement: str) -> str:
+        run_id = self.new_run()
+        document_id = self.accept_source(run_id, "one")
+        evidence_id = self.add_evidence(run_id, document_id)
+        self.assess(
+            run_id,
+            document_id,
+            evidence_id,
+            ResearchInformationTrust.HIGH,
+            **judgement,
+        )
+        self.claim(
+            run_id,
+            [evidence_id],
+            ResearchEpistemicState.LIKELY,
+            ResearchClaimConfidence.HIGH,
+        )
+        return run_id
+
+    def test_the_report_shows_the_warning_beside_the_verdict(self) -> None:
+        run_id = self._run_with(publication_status="retracted")
+
+        response = self.service().process_report(self.request(run_id))
+
+        self.assertIn("source_retracted", response.message)
+        self.assertIn("high_attention", response.message)
+        self.assertIn("Claims with source warnings: 1", response.message)
+
+    def test_the_report_says_plainly_that_nothing_was_corrected(self) -> None:
+        """The whole risk of a warning is that it reads as a correction."""
+        run_id = self._run_with(publication_status="retracted")
+
+        message = self.service().process_report(self.request(run_id)).message
+
+        self.assertIn("Warnings are warnings only", message)
+        self.assertIn("no confidence was lowered", message)
+        self.assertIn("no claim withdrawn", message)
+
+    def test_a_claim_without_warnings_is_never_called_verified(self) -> None:
+        """It may simply be resting on sources nobody has looked at."""
+        run_id = self._run_with()
+
+        message = self.service().process_report(self.request(run_id)).message
+
+        self.assertIn("No assessment-aware warnings.", message)
+        # The only sentence allowed to use the word says the opposite of what a
+        # reader might assume: silence is not verification. Remove it and no
+        # affirmative claim of verification may remain anywhere.
+        self.assertIn("has not been verified", message)
+        remainder = message.casefold().replace(
+            "a claim with no warnings has not been verified", ""
+        )
+        self.assertNotIn("verified", remainder)
+
+    def test_the_claim_is_untouched_after_the_report_is_read(self) -> None:
+        run_id = self._run_with(publication_status="retracted")
+        before = self.manager.get(run_id)
+
+        self.service().process_report(self.request(run_id))
+
+        after = self.manager.get(run_id)
+        self.assertEqual(after.claims, before.claims)
+        self.assertEqual(after.claims[0].confidence, ResearchClaimConfidence.HIGH)
+        self.assertEqual(after.evidence, before.evidence)
+        self.assertEqual(after.sources, before.sources)
+        self.assertEqual(after.assessments, before.assessments)
+
+    def test_the_event_carries_counts_and_codes_and_no_prose(self) -> None:
+        run_id = self._run_with(publication_status="retracted")
+
+        self.service().process_report(self.request(run_id))
+
+        [event] = [
+            event for event in self.events if event.name == "calibration.reported"
+        ]
+        self.assertEqual(event.payload["warning_count"], 1)
+        self.assertEqual(event.payload["warned_claim_count"], 1)
+        self.assertEqual(event.payload["warning_kinds"], {"source_retracted": 1})
+        self.assertEqual(event.payload["claims_modified"], 0)
+        self.assertNotIn("Assessed for the calibration test.", str(event.payload))
+
+    def test_reporting_twice_produces_the_same_warnings(self) -> None:
+        """Derived means recomputed, and recomputed means stable."""
+        run_id = self._run_with(usefulness="not_useful")
+        service = self.service()
+
+        first = service.process_report(self.request(run_id))
+        second = service.process_report(self.request(run_id))
+
+        self.assertEqual(first.message, second.message)
+
+    def test_revising_the_judgement_changes_the_report_with_no_stale_warning(
+        self,
+    ) -> None:
+        run_id = self._run_with(publication_status="retracted")
+        run = self.manager.get(run_id)
+        self.manager.record_source_assessment(
+            run_id,
+            run.sources[0].document_id,
+            [run.evidence[0].evidence_id],
+            "Checked the journal: it stands.",
+            run.assessments[0].assessment_id,
+            "high",
+            "unknown",
+            "unknown",
+            "unknown",
+            "normal",
+        )
+
+        message = self.service().process_report(self.request(run_id)).message
+
+        self.assertNotIn("source_retracted", message)
+        self.assertIn("No assessment-aware warnings.", message)
+        self.assertEqual(len(self.manager.get(run_id).assessments), 2)
 
 
 class SupportCeilingTests(CalibrationFixture):

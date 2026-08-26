@@ -1536,6 +1536,8 @@ class ResponseComposer:
             f"Run ID: {report.run_id}",
             f"Claims: {len(report.calibrations)}",
             f"Needing a second look: {len(report.needing_attention)}",
+            f"Claims with source warnings: {len(report.warned)} "
+            f"({report.warning_count} warning(s))",
             "",
         ]
         for entry in report.calibrations:
@@ -1546,6 +1548,14 @@ class ResponseComposer:
                 f"evidence {entry.profile.evidence_count}, "
                 f"assessed {entry.profile.assessed_source_count}"
             )
+            # The warnings are listed under the claim but never folded into its
+            # verdict. They answer a different question: not whether the claim
+            # outruns its support, but whether somebody who read one of those
+            # sources wrote down a reason to look again.
+            for warning in entry.warnings:
+                lines.append(f"  ! {warning.summary()}")
+            if not entry.warnings:
+                lines.append("  No assessment-aware warnings.")
         if not report.calibrations:
             lines.append("This run has no active claims to calibrate.")
         lines.extend(
@@ -1555,6 +1565,14 @@ class ResponseComposer:
                 "record can carry, not a verdict on the claim: meeting it does "
                 "not make a claim true, and exceeding it does not make one "
                 "false. Understating is never reported as a problem.",
+                "",
+                "Warnings are warnings only. Nothing was corrected: no "
+                "confidence was lowered, no claim withdrawn, no evidence "
+                "removed, and no source rejected. They report what a person "
+                "recorded about a source, which is a reason to look rather "
+                "than a finding that the claim is wrong. A claim with no "
+                "warnings has not been verified — it may simply be resting on "
+                "sources nobody has assessed yet.",
             )
         )
         return BrainResponse(

@@ -30,6 +30,13 @@ class CalibrationEvents:
                 "attention_count": len(report.needing_attention),
                 "overstated_count": len(report.overstated),
                 "verdicts": report.counts(),
+                # Counts and bounded kind codes only. A warning names a source
+                # and an assessment, and neither belongs in telemetry: the
+                # payload says how many concerns were raised and of what kind,
+                # never what anybody wrote about which paper.
+                "warned_claim_count": len(report.warned),
+                "warning_count": report.warning_count,
+                "warning_kinds": report.warning_kind_counts(),
                 "claims_modified": 0,
                 "executed": False,
             },

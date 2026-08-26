@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 from core.Exceptions import ResearchError
 from research.CalibrationVerdict import CalibrationVerdict
+from research.AssessmentWarningKind import AssessmentWarningKind
 from research.ResearchClaimCalibration import ResearchClaimCalibration
 
 
@@ -38,6 +39,35 @@ class ResearchCalibrationReport:
     def overstated(self) -> tuple[ResearchClaimCalibration, ...]:
         """Return the claims asserting more than the record can carry."""
         return tuple(entry for entry in self.calibrations if entry.verdict.overstated)
+
+    @property
+    def warned(self) -> tuple[ResearchClaimCalibration, ...]:
+        """Return the claims whose sources carry a recorded concern.
+
+        Separate from `needing_attention`, which is about the fit between a
+        claim and its support. A claim can sit comfortably inside what its
+        record can carry and still rest entirely on a paper the person who read
+        it later found retracted, and collapsing the two would hide exactly that
+        case.
+        """
+        return tuple(entry for entry in self.calibrations if entry.warnings)
+
+    @property
+    def warning_count(self) -> int:
+        """Return how many warnings this report raised in total."""
+        return sum(len(entry.warnings) for entry in self.calibrations)
+
+    def warning_kind_counts(self) -> dict[str, int]:
+        """Return bounded per-kind counts suitable for an event payload."""
+        counts: dict[str, int] = {}
+        for entry in self.calibrations:
+            for warning in entry.warnings:
+                counts[warning.kind.value] = counts.get(warning.kind.value, 0) + 1
+        return {
+            kind.value: counts[kind.value]
+            for kind in AssessmentWarningKind
+            if kind.value in counts
+        }
 
     def counts(self) -> dict[str, int]:
         """Return bounded per-verdict counts suitable for an event payload."""
