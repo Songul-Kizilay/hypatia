@@ -273,6 +273,33 @@ class DesktopController:
             extra={"authorization_id": normalized_id},
         )
 
+    def start_authorized_execution(
+        self,
+        authorization_id: str,
+        question: str,
+        instruction_lines: str,
+        source_id_lines: str,
+        research_run_id: str,
+    ) -> BrainResponse:
+        """Spend one recorded approval on one foreground execution start.
+
+        Sends no budget and no disclosure. Starting spends neither, and a field
+        the surface could widen is a field somebody eventually widens; the
+        approved bounds stand as recorded.
+        """
+        normalized_id = authorization_id.strip()
+        if not normalized_id:
+            raise ValueError("A recorded approval ID is required.")
+        return self._plan_authorization_request(
+            "research_plan_execution_start",
+            "Start one authorized research plan execution",
+            question,
+            instruction_lines,
+            source_id_lines,
+            research_run_id,
+            extra={"authorization_id": normalized_id},
+        )
+
     def list_plan_authorizations(self) -> BrainResponse:
         """Report recorded approvals without approving or running anything."""
         return self._intent_only_request(

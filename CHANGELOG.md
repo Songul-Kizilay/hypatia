@@ -2,6 +2,67 @@
 
 All notable project changes are recorded here.
 
+## [0.3.192] - 2026-08-26
+
+### Added
+
+- One human-approved foreground execution is enforceable. Starting a research
+  plan now requires one exact valid approval for that plan and run, and spends
+  it. `research_plan_execution_start` is reachable for the first time, and only
+  because starting costs an approval.
+- Single-use consumption. An approval carries at most one consumption naming
+  the execution it was spent on and when, the transition is one-way, and a
+  consumed approval can never cover anything again. Listing reports it.
+- Five verdicts for what the store and the request can decide beyond the pure
+  verifier: `unknown`, `already_consumed`, `budget_exceeded`,
+  `disclosure_unsatisfied`, and `not_recorded`.
+
+### Changed
+
+- Authorization store schema version 2 records consumption. Version 1 documents
+  still load, as unconsumed, which is what they truthfully were — nothing could
+  spend an approval when they were written. Anything newer fails closed.
+- The pure verifier now refuses an approval that has already been spent, which
+  the record itself can answer.
+
+### Compatibility and safety
+
+- An authorization problem is *not reached*, never failed. No execution object
+  is created, so nothing records a research failure for research that never
+  began.
+- **The handoff is not atomic and is not claimed to be.** The approval store and
+  the execution store are separate files with no transaction spanning them.
+  Everything is checked, the approval is durably written as spent, and only then
+  does runnable execution state exist. A crash can leave an approval spent with
+  no execution; it cannot leave a running execution whose approval is still
+  available to spend again. That asymmetry is deliberate and asserted by test.
+- A failed consumption write prevents the start entirely. There is no
+  session-only spend that could execute anyway and still be available after a
+  restart.
+- Nothing refunds. An attempt that failed, blocked, was cancelled, or died still
+  spent the approval, because the approval was for the attempt.
+- Capabilities, budget, and disclosure are enforced as upper bounds, compared
+  component-wise and by rank, never widened by union. Starting requests neither
+  a budget nor a disclosure, so the surface cannot widen either.
+- Ten of the eleven autonomy intents remain unreachable. The autonomy loop and
+  the scheduler cannot reach an approval at all, and a background task still
+  carries none — that binding is deliberately still open.
+- No new capability, no filesystem, shell, or tool authority, no budget default
+  or ceiling changed, and `max_llm_operations` still defaults to 0.
+
+### Verification
+
+- Coverage proves that a missing, unknown, expired, mismatched, or already-spent
+  approval refuses without creating an execution or spending anything; that one
+  approval cannot start two executions across a restart; that consumption is
+  monotonic; and that the consumed event precedes the started event, which is
+  the ordering the crash-window argument rests on.
+- Composition is tested as the security claim it is: the consumer is attached
+  exactly when approvals are kept, and the surface and the enforcement share one
+  opt-in rather than two.
+- Package-aware discovery passes 3,624 tests with 3 existing platform-dependent
+  skips. Black, Ruff, and source MyPy pass for this release scope.
+
 ## [0.3.191] - 2026-08-26
 
 ### Added

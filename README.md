@@ -955,12 +955,20 @@ together, because approving one plan while believing you approved another is the
 failure this whole boundary exists to prevent. Edit the plan after previewing
 and confirmation refuses it rather than silently covering the change.
 
-Confirming records permission. It does not exercise it. No research is started,
-no source is fetched, no model is called, and nothing is queued — and nothing in
-the runtime reads an approval, so no execution can happen because one exists.
-Approvals expire, are never renewed, and are not consumed, because there is
-still no execution to consume one. An expired approval stays listed for audit
-and can never verify as valid.
+Confirming records permission. It does not exercise it: nothing is fetched, no
+model is called, and nothing is queued. Starting is a separate, explicit act.
+
+Starting one foreground execution spends one approval, permanently. The approval
+is checked against the exact plan, run, capabilities, budget and disclosure at
+the moment of starting, and is then written as used before any execution exists.
+An attempt that fails, blocks, is cancelled, or dies still spent it — the
+approval was for the attempt, not for its success — and nothing refunds or
+renews one. An expired or spent approval stays listed for audit and can never
+cover anything again.
+
+Starting is the only execution control there is. Nothing schedules, repeats, or
+follows up, no background work is queued, and one execution cannot start
+another.
 
 The model-disclosure decision is recorded on every approval and defaults to
 `none`. Being allowed to read something locally is not being allowed to send it

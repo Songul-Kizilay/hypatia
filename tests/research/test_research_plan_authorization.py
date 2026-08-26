@@ -634,8 +634,11 @@ class VerifierIsInertTests(PlanFixture):
 class BoundaryRegressionTests(PlanFixture):
     """What this milestone must not have changed."""
 
+    #: `research_plan_execution_start` is deliberately absent from this list.
+    #: It became reachable when starting began to require spending one exact
+    #: human approval; the ten below did not, and none of them consults an
+    #: approval at all.
     AUTONOMY_INTENTS = (
-        "research_plan_execution_start",
         "research_plan_execution_advance",
         "research_plan_execution_status",
         "research_plan_execution_cancel",
@@ -658,27 +661,29 @@ class BoundaryRegressionTests(PlanFixture):
             if "__pycache__" not in str(path)
         )
 
-    def test_every_autonomy_intent_remains_unreachable(self) -> None:
+    def test_only_authorized_start_became_reachable(self) -> None:
+        """One intent crossed, and it is the one that now requires an approval."""
         source = self.desktop_source()
 
+        self.assertIn("research_plan_execution_start", source)
         for intent in self.AUTONOMY_INTENTS:
             with self.subTest(intent=intent):
                 self.assertNotIn(intent, source)
 
-    def test_no_execution_path_consults_an_authorization(self) -> None:
-        """Approvals are now created and recorded. They still enforce nothing.
+    def test_only_execution_start_consults_an_authorization(self) -> None:
+        """Enforcement arrived, and it arrived in exactly one place.
 
-        This replaced a broader assertion that nothing anywhere referenced an
-        authorization. That was true while the record could not be produced;
-        an approval surface makes it false by design. The invariant that still
-        matters, and is narrower and stronger, is that no path which could
-        actually run research has learned to read one.
+        This narrowed twice. It began as "nothing anywhere references an
+        approval", true while none could be made. It then became "no execution
+        path reads one", true while none could be spent. Now one path does, and
+        the invariant worth keeping is that it is the only one: autonomy and
+        the scheduler still cannot reach an approval, so neither can grant
+        itself permission by looping over a path that can.
         """
         from pathlib import Path
 
         root = Path(__file__).resolve().parents[2] / "src"
-        execution_modules = (
-            "ResearchPlanExecutionApplicationService.py",
+        must_not_read = (
             "ResearchAutonomyApplicationService.py",
             "BackgroundResearchSchedulerApplicationService.py",
             "ResearchPlanExecutionState.py",
@@ -687,11 +692,28 @@ class BoundaryRegressionTests(PlanFixture):
         consumers = [
             path.name
             for path in root.rglob("*.py")
-            if path.name in execution_modules
+            if path.name in must_not_read
             and "Authorization" in path.read_text(encoding="utf-8")
         ]
 
         self.assertEqual(consumers, [])
+
+    def test_execution_reaches_approval_only_through_the_narrow_port(self) -> None:
+        """It may spend an approval. It may not preview, list, or create one."""
+        from pathlib import Path
+
+        execution = (
+            Path(__file__).resolve().parents[2]
+            / "src"
+            / "cognition"
+            / "ResearchPlanExecutionApplicationService.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("ResearchPlanAuthorizationConsumer", execution)
+        self.assertNotIn("ResearchPlanAuthorizationApplicationService", execution)
+        self.assertNotIn("ResearchPlanAuthorizationStore", execution)
+        self.assertNotIn("process_preview", execution)
+        self.assertNotIn("process_confirm", execution)
 
     def test_the_approval_service_cannot_reach_execution(self) -> None:
         """The other direction of the same boundary."""

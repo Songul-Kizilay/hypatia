@@ -131,6 +131,24 @@ _AUTHORIZATION_VERDICT_NOTES: dict[ResearchPlanAuthorizationVerdict, str] = {
         "This approval has expired. Approvals are not renewed; preview the "
         "plan again to give a new one."
     ),
+    ResearchPlanAuthorizationVerdict.UNKNOWN: (
+        "No recorded approval was named, or none with that identity exists."
+    ),
+    ResearchPlanAuthorizationVerdict.ALREADY_CONSUMED: (
+        "This approval has already been used. One approval permits one "
+        "attempt, whether or not that attempt succeeded."
+    ),
+    ResearchPlanAuthorizationVerdict.BUDGET_EXCEEDED: (
+        "This work asks for a wider budget than was approved."
+    ),
+    ResearchPlanAuthorizationVerdict.DISCLOSURE_UNSATISFIED: (
+        "This work asks to disclose more to a model than was approved."
+    ),
+    ResearchPlanAuthorizationVerdict.NOT_RECORDED: (
+        "The approval could not be durably written as used, so nothing was "
+        "started. An approval that is not recorded as spent would still be "
+        "available after a restart."
+    ),
 }
 
 _WEAKNESS_CLASS_DISCLAIMER = (
@@ -1964,9 +1982,13 @@ class ResponseComposer:
         """Report recorded approvals and whether each is still valid now."""
         lines = [f"Recorded research plan approvals: {len(authorizations)}"]
         for authorization in authorizations:
-            standing = (
-                "expired" if authorization.has_expired_at(moment) else "valid now"
-            )
+            consumption = authorization.consumption
+            if consumption is not None:
+                standing = "used"
+            elif authorization.has_expired_at(moment):
+                standing = "expired"
+            else:
+                standing = "valid now"
             lines.append(
                 f"- [{standing}] {authorization.authorization_id} "
                 f"({authorization.disclosure.value})"
@@ -1975,6 +1997,13 @@ class ResponseComposer:
                 f"  plan {authorization.plan_digest} in run "
                 f"{authorization.research_run_id}"
             )
+            if consumption is None:
+                lines.append("  unused")
+            else:
+                lines.append(
+                    f"  used by {consumption.execution_id} "
+                    f"at {consumption.consumed_at.isoformat()}"
+                )
         lines.append(
             "An approval is a record, not standing permission. "
             + NO_RESEARCH_STARTED_NOTICE
@@ -2462,6 +2491,34 @@ class ResponseComposer:
                 "This process holds no execution state for that plan.",
                 "Execution state is in-memory only and is lost when Hypatia exits.",
                 "It is not resumed after a restart.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="research_plan_execution",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_plan_execution_unauthorized(
+        self,
+        request: BrainRequest,
+        verdict: ResearchPlanAuthorizationVerdict,
+    ) -> BrainResponse:
+        """Report work that was never reached, rather than work that failed.
+
+        An execution that was not permitted to begin has no state, no steps,
+        and no result. Calling it a failure would put a research failure in the
+        record for something research never attempted.
+        """
+        message = "\n".join(
+            (
+                "Research plan execution was not authorized.",
+                f"Authorization: {verdict.value}",
+                _AUTHORIZATION_VERDICT_NOTES[verdict],
+                "Execution: not reached",
+                "No approval was spent, no step ran, and nothing was written.",
             )
         )
         return BrainResponse(

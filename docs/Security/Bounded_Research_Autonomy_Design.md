@@ -1,9 +1,10 @@
 # Bounded Research Autonomy — Security Design
 
-**Status: DESIGN, WITH ITS FIRST SLICE IMPLEMENTED.** The execution, autonomy,
+**Status: DESIGN, WITH ITS FIRST SLICES IMPLEMENTED.** The execution, autonomy,
 and scheduling services described below are CURRENT and were inspected for this
-design. They remain deliberately unreachable from the desktop, and neither this
-document nor anything built from it so far makes them reachable.
+design. One of their intents — starting an authorized foreground execution — is
+now reachable, and only because starting costs one exact human approval. The
+autonomy loop and the scheduler remain unreachable and cannot reach an approval.
 
 This is a separate document from
 [Filesystem_Capability_Design.md](Filesystem_Capability_Design.md) and
@@ -16,13 +17,14 @@ absent and must not be cited as though it exists.
 
 **Implemented since this document was written:** the plan digest, the
 authorization record, and pure verification (v0.3.190); human preview, explicit
-confirmation, a bounded durable store, and listing (v0.3.191). A person can now
-approve one exact plan and read back what they approved.
+confirmation, a bounded durable store, and listing (v0.3.191); single-use
+consumption and one authorization-bound foreground execution start (v0.3.192).
 
-Nothing enforces any of it. No execution path reads an authorization, no
-approval is consumed, no autonomy intent became reachable, and disclosure is
-recorded without reaching LLM transport. Approving remains a record rather than
-permission anything acts on.
+**One human-approved foreground execution is enforceable.** That is the whole
+claim. Starting a plan requires one exact valid approval for that plan and run,
+and spends it permanently. Autonomy is not enabled: no background scheduling, no
+recurrence, no follow-up, no curiosity-to-execution chain, and neither the
+autonomy loop nor the scheduler can reach an approval at all.
 
 ---
 
@@ -70,9 +72,11 @@ tested, and composed into `CognitiveEngine`:
 | `ResearchAutonomyApplicationService` | Loops that service under a hard budget | **CURRENT** |
 | `BackgroundResearchSchedulerApplicationService` | Queues, pauses, retries, recovers tasks | **CURRENT** |
 
-What is absent is the desktop reachability. Of 40 named intent constants in
-`src/cognition/`, 25 are reachable from `src/desktop/` and 15 are not. Eleven of
-those fifteen are this cluster:
+What was absent, when this section was measured, was the desktop reachability:
+of 40 named intent constants in `src/cognition/`, 25 were reachable and 15 were
+not, eleven of them this cluster. One has since crossed — `research_plan_execution_start`,
+in v0.3.192, once starting required spending an approval (§17.2). The other ten
+have not.
 
 ```
 research_plan_execution_start     background_research_task_create
@@ -234,7 +238,7 @@ name. Mapping them rather than adding a parallel set is the whole point:
 | --- | --- | --- |
 | PROPOSED QUESTION | `ResearchCuriosityQuestion` (proposed, undecided) | CURRENT |
 | PROPOSED PLAN | `ResearchPlanDraftPreview` with `allowed=True` | CURRENT |
-| **AUTHORIZED PLAN** | `ResearchPlanAuthorization`, created by human confirmation and stored | **CURRENT** as a record; not enforced anywhere (§5) |
+| **AUTHORIZED PLAN** | `ResearchPlanAuthorization`, created by human confirmation, stored, and spent by starting | **CURRENT** and enforced at foreground start (§5, §17.2) |
 | QUEUED | `BackgroundResearchTaskStatus.PENDING` | CURRENT |
 | RUNNING | `…Status.RUNNING` (task, execution, step) | CURRENT |
 | WAITING / BLOCKED | `ResearchPlanExecutionStatus.BLOCKED` | CURRENT |
@@ -771,31 +775,64 @@ modules, in both directions. And **no approval is consumed**: one approval is
 meant to permit one execution, but there is still no execution, so a consumed
 flag would record something nobody could establish.
 
-### 17.2 Next: let one approval actually permit one execution
+### 17.2 Done: one approval permits one attempt
 
-**Exactly one: bind a durable approval to one foreground plan execution and
-enforce single use — with no background scheduling and no recursive autonomy.**
+Implemented in v0.3.192, behind the same opt-in that makes the approval surface
+exist:
 
-Everything needed to check an approval now exists, and nothing checks one. That
-is the whole remaining gap between "a person permitted this" and "this ran
-because a person permitted it".
+- **Enforcement at start.** `process_start` requires an approval naming this
+  exact plan and run, and refuses without one. Every refusal is *not reached*
+  rather than failed: no execution object is created, so nothing records a
+  research failure for research that never began.
+- **Single use, monotonically.** An approval carries at most one consumption
+  naming the execution it was spent on and when. There is no reset, refund, or
+  renewal, and an attempt that failed, blocked, was cancelled, or died still
+  spent it.
+- **Capabilities enforced.** The derived set must equal the plan's, checked by
+  the same pure verifier, so an approval can no longer grant more than its plan
+  declares even in principle.
+- **Budget and disclosure as upper bounds.** Both are compared component-wise
+  and by rank; neither may be exceeded and neither is ever widened by union.
+  Starting requests neither, so the surface cannot widen either.
 
-That slice would: require a valid authorization before a foreground execution
-may start; verify it against the exact plan at the moment of starting rather
-than at the moment it was given; record consumption when execution begins, so
-"one approval, one execution" stops being a comment and becomes a fact; and
-refuse an expired, consumed, mismatched, or absent approval as not-reached
-rather than failed.
+**The handoff is not atomic and this document does not claim it is.** The
+approval store and the execution store are separate files with no transaction
+spanning them. The ordering is: build the plan, take every cheap refusal, write
+the approval as spent, and only then create runnable execution state. A crash
+can therefore leave an approval spent with no execution behind it. It cannot
+leave a running execution whose approval is still available to spend again.
+Duplicate authority is the more dangerous failure, so the harmless asymmetry is
+the one left possible — and it is asserted by test rather than described here.
 
-It is also where two currently-safe absences become real risks for the first
-time, so it needs its own review rather than being treated as wiring:
-capabilities move from *recorded* to *enforced*, and disclosure moves from
-*recorded* to *consulted*.
+**Still not current:** background-task binding; scheduler authorization;
+`research_autonomy_run`; recursive execution; curiosity-to-execution; automatic
+follow-up; recurring scheduling; a policy authorizer; broader autonomy. Ten of
+the eleven autonomy intents remain unreachable; only `research_plan_execution_start`
+crossed, and only because starting now costs an approval.
 
-**Explicitly not in it:** background scheduling; the queue; recurring or
-follow-up research; raising `max_llm_operations`; filesystem, shell, or tool
-authority; wiring disclosure into transport beyond refusing what it forbids;
-any curiosity-to-execution chain.
+Finding C remains deliberately open: a background task still carries neither a
+digest nor an authorization, and nothing in this milestone gave it one.
+
+### 17.3 Next: make a started execution answerable
+
+**Exactly one: bounded foreground observability, advance, and cancel for an
+execution that has already been authorized.**
+
+Starting now costs an approval and produces an execution that does nothing
+further. A person can begin work they cannot watch, step, or stop, which is a
+worse shape than not being able to begin it. The advance, status, and cancel
+intents exist and are unreachable; making them reachable inside an execution
+whose approval was already spent adds no new authority, because the approval
+was for the attempt.
+
+That slice must decide one thing carefully: whether each advance stays inside
+the already-spent approval, or whether stepping is itself bounded by the
+approved budget. The budget exists and nothing spends it yet, so this is where
+budget stops being a recorded number and starts being enforced arithmetic.
+
+**Explicitly not in it:** background scheduling; the queue; `research_autonomy_run`;
+recurrence or follow-up; raising `max_llm_operations`; filesystem, shell, or tool
+authority; any second approval minted by the system.
 
 ---
 

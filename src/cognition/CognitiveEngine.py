@@ -385,11 +385,35 @@ class CognitiveEngine:
                         research_run_manager,
                     ),
                 )
+        # Built before execution so it can be handed over as the narrow
+        # consumption port. Approval still imports no execution or scheduling
+        # service: the dependency runs one way, from execution to approval.
+        self._plan_authorization_service: (
+            ResearchPlanAuthorizationApplicationService | None
+        ) = None
+        if research_run_manager is not None:
+            self._plan_authorization_service = (
+                ResearchPlanAuthorizationApplicationService(
+                    research_run_manager,
+                    response_composer,
+                    authorization_store=plan_authorization_store,
+                    event_bus=event_bus,
+                )
+            )
+
         self._research_plan_execution_service = ResearchPlanExecutionApplicationService(
             response_composer,
             operation_registry=operation_registry,
             event_bus=event_bus,
             execution_store=research_execution_store,
+            # Attached wherever approvals are kept, which is the same condition
+            # under which any start control exists. With approvals kept, a plan
+            # can only start by spending one.
+            authorization_consumer=(
+                self._plan_authorization_service
+                if plan_authorization_store is not None
+                else None
+            ),
         )
         self._research_autonomy_service = ResearchAutonomyApplicationService(
             self._research_plan_execution_service,
@@ -433,21 +457,6 @@ class CognitiveEngine:
                 lesson_store=failure_lesson_store,
                 hypothesis_store=hypothesis_store,
                 event_bus=event_bus,
-            )
-        # Approval is a separate service from execution on purpose. It
-        # imports no execution or scheduling service, so it has no way to start
-        # the work it records permission for.
-        self._plan_authorization_service: (
-            ResearchPlanAuthorizationApplicationService | None
-        ) = None
-        if research_run_manager is not None:
-            self._plan_authorization_service = (
-                ResearchPlanAuthorizationApplicationService(
-                    research_run_manager,
-                    response_composer,
-                    authorization_store=plan_authorization_store,
-                    event_bus=event_bus,
-                )
             )
         self._calibration_service: CalibrationApplicationService | None = None
         if research_run_manager is not None:

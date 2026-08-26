@@ -21,6 +21,18 @@ research evidence pipeline, which remains unconnected here.
 State lives here, not in CognitiveEngine, and is lost when the process exits.
 That loss is reported explicitly rather than presented as a finished or
 resumable execution.
+
+When an authorization consumer is composed in, starting requires one durable
+human approval for this exact plan and run, and spends it. Ordering is the
+safety property: the plan is built, every cheap refusal is checked, and only
+then is the approval spent — and only a successful durable write produces a
+runnable execution. A crash can therefore leave an approval spent with no
+execution, and cannot leave an execution running on an approval still available
+to spend again.
+
+Without a consumer the service behaves as it always has. That shape is
+composition, not a bypass: the runtime attaches a consumer wherever approvals
+are kept, which is the same condition under which any start control exists.
 """
 
 from __future__ import annotations
@@ -39,6 +51,12 @@ from core.Exceptions import ResearchError
 from eventbus.EventBus import EventBus
 from research.ResearchExecutionStore import ResearchExecutionStore
 from research.ResearchPlan import ResearchPlan
+from research.ResearchPlanAuthorizationConsumer import (
+    ResearchPlanAuthorizationConsumer,
+)
+from research.ResearchPlanAuthorizationVerdict import (
+    ResearchPlanAuthorizationVerdict,
+)
 from research.ResearchPlanDraftService import (
     ResearchPlanDraftService,
     ResearchPlanStepDraft,
@@ -71,6 +89,7 @@ class ResearchPlanExecutionApplicationService:
         operation_registry: ResearchPlanOperationRegistry | None = None,
         event_bus: EventBus | None = None,
         execution_store: ResearchExecutionStore | None = None,
+        authorization_consumer: ResearchPlanAuthorizationConsumer | None = None,
         clock: Callable[[], datetime] | None = None,
         max_active_executions: int = MAX_ACTIVE_RESEARCH_PLAN_EXECUTIONS,
     ) -> None:
@@ -91,6 +110,7 @@ class ResearchPlanExecutionApplicationService:
         self._plans: dict[str, ResearchPlan] = {}
         self._contexts: dict[str, ResearchPlanExecutionContext] = {}
         self._execution_store = execution_store
+        self._authorization_consumer = authorization_consumer
         self._clock = clock or (lambda: datetime.now(UTC))
         self._restored: dict[str, ResearchPlanExecutionSnapshot] = {}
         self._restore()
@@ -148,6 +168,16 @@ class ResearchPlanExecutionApplicationService:
                 str(error),
             )
 
+        # The identifier is allocated by building the plan, before anything is
+        # runnable. Naming an execution is not starting one, and the approval
+        # has to be spent against a name that already exists.
+        verdict = self._authorize(request, plan, context)
+        if verdict is not None:
+            return self._response_composer.research_plan_execution_unauthorized(
+                request,
+                verdict,
+            )
+
         state = ResearchPlanExecutionState.prepare(plan).start()
         self._executions[plan.plan_id] = state
         self._plans[plan.plan_id] = plan
@@ -155,6 +185,38 @@ class ResearchPlanExecutionApplicationService:
         self._events.started(state, context.has_research_run)
         self._persist(plan.plan_id)
         return self._response_composer.research_plan_execution_status(request, state)
+
+    def _authorize(
+        self,
+        request: BrainRequest,
+        plan: ResearchPlan,
+        context: ResearchPlanExecutionContext,
+    ) -> ResearchPlanAuthorizationVerdict | None:
+        """Spend one approval, returning a verdict only when refusing.
+
+        Called at the last moment before anything becomes runnable, so no
+        refusal can leave a half-started execution behind and no approval is
+        spent on work another check would have rejected.
+        """
+        if self._authorization_consumer is None:
+            return None
+        authorization_id = request.metadata.get("authorization_id")
+        if not isinstance(authorization_id, str) or not authorization_id.strip():
+            return ResearchPlanAuthorizationVerdict.UNKNOWN
+        research_run_id = context.research_run_id
+        if research_run_id is None:
+            # An approval names a run, so a start that names none can never
+            # match one. Refused as unknown rather than run-mismatched: there
+            # is nothing to compare against.
+            return ResearchPlanAuthorizationVerdict.UNKNOWN
+        decision = self._authorization_consumer.consume_for_execution(
+            authorization_id,
+            plan,
+            research_run_id,
+            plan.plan_id,
+            self._clock(),
+        )
+        return None if decision.permits_start else decision.verdict
 
     def live_execution(self, plan_id: str) -> ResearchPlanExecutionState | None:
         """Return live execution state for a caller that only reads it."""

@@ -13,6 +13,7 @@ reason a plan needed a content identity before it could be approved.
 
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 import unittest
@@ -454,13 +455,34 @@ class PersistenceTests(AuthorizationFixture):
             self.store().load()
 
     def test_an_unsupported_schema_version_fails_closed(self) -> None:
+        """Newer than this build understands is refused, not guessed at."""
         self.store_path.write_text(
-            '{"schema_version": 2, "authorizations": []}',
+            '{"schema_version": 3, "authorizations": []}',
             encoding="utf-8",
         )
 
         with self.assertRaises(ResearchError):
             self.store().load()
+
+    def test_a_version_one_document_still_loads_as_unconsumed(self) -> None:
+        """Refusing it would make an existing store unreadable at startup.
+
+        Reading it as unconsumed is not a migration of meaning: nothing could
+        spend an approval when version 1 was written, so unconsumed is what
+        those records truthfully were.
+        """
+        service = self.service()
+        self.approved(service)
+        document = json.loads(self.store_path.read_text(encoding="utf-8"))
+        for entry in document["authorizations"]:
+            entry.pop("consumption")
+        document["schema_version"] = 1
+        self.store_path.write_text(json.dumps(document), encoding="utf-8")
+
+        loaded = self.store().load()
+
+        self.assertEqual(len(loaded), 1)
+        self.assertFalse(loaded[0].is_consumed)
 
     def test_a_widened_capability_in_the_file_still_loads_as_written(self) -> None:
         """The store preserves; the verifier is what refuses a widened set."""
@@ -726,8 +748,11 @@ class EngineRoutingTests(AuthorizationFixture):
 class BoundaryTests(unittest.TestCase):
     """What approving must still be unable to do."""
 
+    #: `research_plan_execution_start` is deliberately absent from this list.
+    #: It became reachable when starting began to require spending one exact
+    #: human approval; the ten below did not, and none of them consults an
+    #: approval at all.
     AUTONOMY_INTENTS = (
-        "research_plan_execution_start",
         "research_plan_execution_advance",
         "research_plan_execution_status",
         "research_plan_execution_cancel",
@@ -754,9 +779,11 @@ class BoundaryTests(unittest.TestCase):
         )
         return module.read_text(encoding="utf-8")
 
-    def test_every_autonomy_intent_remains_unreachable(self) -> None:
+    def test_only_authorized_start_became_reachable(self) -> None:
+        """One intent crossed, and it is the one that now requires an approval."""
         source = self.desktop_source()
 
+        self.assertIn("research_plan_execution_start", source)
         for intent in self.AUTONOMY_INTENTS:
             with self.subTest(intent=intent):
                 self.assertNotIn(intent, source)
@@ -811,11 +838,14 @@ class BoundaryTests(unittest.TestCase):
             with self.subTest(name=forbidden):
                 self.assertNotIn(forbidden, section)
 
-    def test_the_desktop_says_approval_starts_nothing(self) -> None:
+    def test_the_desktop_separates_approving_from_starting(self) -> None:
+        """Approving and starting are two acts, and the panel says which is which."""
         source = self.desktop_source()
 
         self.assertIn("It starts no ", source)
-        self.assertIn("nothing is fetched, no model is called", source)
+        self.assertIn("Starting is a separate, explicit act", source)
+        self.assertIn("uses up one approval", source)
+        self.assertIn("Nothing is scheduled, nothing repeats", source)
 
     def test_the_approval_surface_is_gated(self) -> None:
         window: Any = object.__new__(

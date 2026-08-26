@@ -19,6 +19,11 @@ from research.ResearchPlanAuthorization import ResearchPlanAuthorization
 AUTHORIZATION_PREVIEWED = "research_plan_authorization.previewed"
 AUTHORIZATION_CONFIRMED = "research_plan_authorization.confirmed"
 AUTHORIZATION_REFUSED = "research_plan_authorization.refused"
+AUTHORIZATION_CONSUMPTION_ATTEMPTED = (
+    "research_plan_authorization.consumption_attempted"
+)
+AUTHORIZATION_CONSUMED = "research_plan_authorization.consumed"
+AUTHORIZATION_CONSUMPTION_REFUSED = "research_plan_authorization.consumption_refused"
 
 EVENT_SOURCE = "research.plan_authorization"
 
@@ -50,6 +55,28 @@ class ResearchPlanAuthorizationEvents:
 
     def refused(self, verdict: str) -> None:
         self._emit(AUTHORIZATION_REFUSED, {"verdict": verdict, "stored": False})
+
+    def consumption_attempted(self, authorization: ResearchPlanAuthorization) -> None:
+        payload = self._payload(authorization)
+        payload["execution_id"] = self._execution_id(authorization)
+        self._emit(AUTHORIZATION_CONSUMPTION_ATTEMPTED, payload)
+
+    def consumed(self, authorization: ResearchPlanAuthorization) -> None:
+        payload = self._payload(authorization)
+        payload["execution_id"] = self._execution_id(authorization)
+        payload["stored"] = True
+        self._emit(AUTHORIZATION_CONSUMED, payload)
+
+    def consumption_refused(self, verdict: str) -> None:
+        self._emit(
+            AUTHORIZATION_CONSUMPTION_REFUSED,
+            {"verdict": verdict, "consumed": False, "execution_started": False},
+        )
+
+    @staticmethod
+    def _execution_id(authorization: ResearchPlanAuthorization) -> str:
+        consumption = authorization.consumption
+        return "" if consumption is None else consumption.execution_id
 
     @staticmethod
     def _payload(authorization: ResearchPlanAuthorization) -> dict[str, object]:

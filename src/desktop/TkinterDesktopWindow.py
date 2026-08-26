@@ -93,9 +93,13 @@ _HYPOTHESIS_EVIDENCE_NOTE = (
 _APPROVAL_IDLE_STATUS = "Nothing has been approved yet."
 _APPROVAL_PANEL_NOTE = (
     "Approving records that you permitted this exact plan. It starts no "
-    "research: nothing is fetched, no model is called, and nothing is queued. "
-    "The approval names the plan by content, so editing the plan afterwards "
-    "makes the approval refuse it rather than silently covering the change."
+    "research on its own. The approval names the plan by content, so editing "
+    "the plan afterwards makes the approval refuse it rather than silently "
+    "covering the change.\n"
+    "Starting is a separate, explicit act. It uses up one approval to begin "
+    "one execution, which then does nothing further until you advance it. "
+    "Nothing is scheduled, nothing repeats, and one execution cannot start "
+    "another."
 )
 _REVIEW_IDLE_STATUS = "Nothing has been reviewed yet."
 _REVIEW_PANEL_NOTE = (
@@ -4253,6 +4257,7 @@ class TkinterDesktopWindow:
                 ("Preview approval — no write", self._preview_plan_authorization),
                 ("Confirm approval", self._confirm_plan_authorization),
                 ("List approvals", self._list_plan_authorizations),
+                ("Use approval to start once", self._start_authorized_execution),
             )
         ):
             self._request_button(buttons, label, command).grid(
@@ -4292,6 +4297,41 @@ class TkinterDesktopWindow:
         self._approval_request(
             lambda: self._controller.confirm_plan_authorization(
                 self._plan_approval_id.get(),
+                self._research_question.get(),
+                self._text_value(self._research_plan_instructions),
+                self._text_value(self._research_plan_source_ids),
+                self._plan_approval_run_id.get(),
+            )
+        )
+
+    def _start_authorized_execution(self) -> None:
+        """Spend one approval on one foreground start, after saying so plainly.
+
+        The dialog names the approval and states both halves of what happens:
+        the approval is used up, and one execution begins. An operator who
+        expects only one of those has been told the wrong thing.
+        """
+        authorization_id = self._plan_approval_id.get().strip()
+        if not authorization_id:
+            self._plan_approval_status.set("A recorded approval ID is required.")
+            return
+        if not messagebox.askyesno(
+            "Use this approval?",
+            (
+                f"Approval: {authorization_id}\n\n"
+                "This will use up this approval and start one foreground "
+                "execution of the plan above.\n\n"
+                "The approval cannot be used again, even if the execution "
+                "fails, blocks, or is cancelled. Nothing is scheduled and "
+                "nothing continues on its own."
+            ),
+            parent=self._root,
+        ):
+            self._plan_approval_status.set("Not started. The approval is unused.")
+            return
+        self._approval_request(
+            lambda: self._controller.start_authorized_execution(
+                authorization_id,
                 self._research_question.get(),
                 self._text_value(self._research_plan_instructions),
                 self._text_value(self._research_plan_source_ids),

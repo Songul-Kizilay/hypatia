@@ -17,15 +17,16 @@ Validity is bounded and terminal. There is no renewal, no refresh, no grace
 period, and no extension, because each of those is a way for one approval to
 outlive the moment it described.
 
-Single use is NOT enforced here. One authorization is meant to permit one
-execution, but execution does not exist yet, so nothing could truthfully mark
-this consumed. A `consumed` flag that nothing ever set would look like a
-guarantee and be a decoration. That enforcement is execution-bound future work.
+Single use is now real. An approval carries at most one consumption naming the
+exact execution it was spent on, the transition is one-way, and a consumed
+approval can never verify as covering anything again. Nothing refunds it: an
+attempt that failed, blocked, was cancelled, or died mid-flight still spent the
+approval, because the approval was for the attempt.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 
 from core.Exceptions import ResearchError
@@ -36,6 +37,9 @@ from research.ResearchAutonomyBudget import (
 )
 from research.ResearchDisclosure import ResearchDisclosure
 from research.ResearchPlan import ResearchPlan
+from research.ResearchPlanAuthorizationConsumption import (
+    ResearchPlanAuthorizationConsumption,
+)
 from research.ResearchPlanDigest import is_plan_digest, plan_digest
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 
@@ -61,6 +65,7 @@ class ResearchPlanAuthorization:
     expires_at: datetime
     disclosure: ResearchDisclosure = ResearchDisclosure.NONE
     authorized_by: ResearchAuthorizer = ResearchAuthorizer.HUMAN
+    consumption: ResearchPlanAuthorizationConsumption | None = None
 
     def __post_init__(self) -> None:
         authorization_id = self._bounded_text(
@@ -96,6 +101,10 @@ class ResearchPlanAuthorization:
             raise ResearchError("Research plan authorization disclosure is invalid.")
         if not isinstance(self.authorized_by, ResearchAuthorizer):
             raise ResearchError("Research plan authorization authority is invalid.")
+        if self.consumption is not None and not isinstance(
+            self.consumption, ResearchPlanAuthorizationConsumption
+        ):
+            raise ResearchError("Research plan authorization consumption is invalid.")
         self._validate_window()
         object.__setattr__(self, "authorization_id", authorization_id)
         object.__setattr__(self, "research_run_id", research_run_id)
@@ -131,6 +140,32 @@ class ResearchPlanAuthorization:
             authorized_at=authorized_at,
             expires_at=expires_at,
             disclosure=disclosure,
+        )
+
+    @property
+    def is_consumed(self) -> bool:
+        """Return whether this approval has already been spent."""
+        return self.consumption is not None
+
+    def consumed_for(
+        self,
+        execution_id: str,
+        moment: datetime,
+    ) -> ResearchPlanAuthorization:
+        """Spend this approval on exactly one execution, once and for good.
+
+        Refuses a second consumption rather than overwriting the first. An
+        approval that could be re-consumed would let one permission authorize
+        two attempts, which is the failure this whole boundary exists to stop.
+        """
+        if self.is_consumed:
+            raise ResearchError("This approval has already been used.")
+        return replace(
+            self,
+            consumption=ResearchPlanAuthorizationConsumption(
+                execution_id=execution_id,
+                consumed_at=moment,
+            ),
         )
 
     @property

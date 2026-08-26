@@ -18,6 +18,12 @@ Every field is validated on the way back in through the same domain
 constructor, so a hand-edited file cannot widen a capability set, alter a
 disclosure decision, extend an expiry, or substitute a digest. A malformed
 document fails closed rather than being repaired into something plausible.
+
+Version 2 adds consumption. Version 1 documents are still read, as unconsumed,
+because that is what they truthfully were: nothing could spend an approval when
+they were written. Refusing them would not be safer — it would make an existing
+store unreadable at startup, which is a worse failure than accepting a fact that
+is already true. Anything newer than this file understands fails closed.
 """
 
 from __future__ import annotations
@@ -34,6 +40,9 @@ from research.ResearchAuthorizer import ResearchAuthorizer
 from research.ResearchAutonomyBudget import ResearchAutonomyBudget
 from research.ResearchDisclosure import ResearchDisclosure
 from research.ResearchPlanAuthorization import ResearchPlanAuthorization
+from research.ResearchPlanAuthorizationConsumption import (
+    ResearchPlanAuthorizationConsumption,
+)
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 
 MAX_AUTHORIZATION_STORE_BYTES = 4 * 1024 * 1024
@@ -43,7 +52,8 @@ MAX_AUTHORIZATION_STORE_BYTES = 4 * 1024 * 1024
 #: review — which is the number that matters, not what the disk could hold.
 MAX_AUTHORIZATION_STORE_ENTRIES = 500
 
-_SCHEMA_VERSION = 1
+_SCHEMA_VERSION = 2
+_READABLE_SCHEMA_VERSIONS = frozenset({1, 2})
 _DOCUMENT_FIELDS = frozenset({"schema_version", "authorizations"})
 _ENTRY_FIELDS = frozenset(
     {
@@ -56,8 +66,12 @@ _ENTRY_FIELDS = frozenset(
         "authorized_by",
         "authorized_at",
         "expires_at",
+        "consumption",
     }
 )
+#: Version 1 wrote every field above except the last.
+_ENTRY_FIELDS_V1 = _ENTRY_FIELDS - {"consumption"}
+_CONSUMPTION_FIELDS = frozenset({"execution_id", "consumed_at"})
 _BUDGET_FIELDS = frozenset(
     {
         "max_step_advances",
@@ -168,12 +182,20 @@ class JsonFileResearchPlanAuthorizationStore:
             "authorized_by": entry.authorized_by.value,
             "authorized_at": entry.authorized_at.isoformat(),
             "expires_at": entry.expires_at.isoformat(),
+            "consumption": (
+                None
+                if entry.consumption is None
+                else {
+                    "execution_id": entry.consumption.execution_id,
+                    "consumed_at": entry.consumption.consumed_at.isoformat(),
+                }
+            ),
         }
 
     def _parse_document(self, document: object) -> list[ResearchPlanAuthorization]:
         if not isinstance(document, dict) or set(document) != _DOCUMENT_FIELDS:
             raise ResearchError("The authorization document is invalid.")
-        if document["schema_version"] != _SCHEMA_VERSION:
+        if document["schema_version"] not in _READABLE_SCHEMA_VERSIONS:
             raise ResearchError(
                 "The authorization store schema version is not supported."
             )
@@ -188,7 +210,10 @@ class JsonFileResearchPlanAuthorizationStore:
 
     @staticmethod
     def _parse_entry(document: object) -> ResearchPlanAuthorization:
-        if not isinstance(document, dict) or set(document) != _ENTRY_FIELDS:
+        if not isinstance(document, dict) or set(document) not in (
+            _ENTRY_FIELDS,
+            _ENTRY_FIELDS_V1,
+        ):
             raise ResearchError("An authorization document is invalid.")
         store = JsonFileResearchPlanAuthorizationStore
         return ResearchPlanAuthorization(
@@ -209,6 +234,22 @@ class JsonFileResearchPlanAuthorizationStore:
             ),
             authorized_at=store._timestamp(document["authorized_at"]),
             expires_at=store._timestamp(document["expires_at"]),
+            consumption=store._consumption(document.get("consumption")),
+        )
+
+    @staticmethod
+    def _consumption(
+        value: object,
+    ) -> ResearchPlanAuthorizationConsumption | None:
+        """Read a consumption record, refusing a partial or unknown shape."""
+        if value is None:
+            return None
+        if not isinstance(value, dict) or set(value) != _CONSUMPTION_FIELDS:
+            raise ResearchError("An authorization consumption record is invalid.")
+        store = JsonFileResearchPlanAuthorizationStore
+        return ResearchPlanAuthorizationConsumption(
+            execution_id=store._text(value["execution_id"]),
+            consumed_at=store._timestamp(value["consumed_at"]),
         )
 
     @staticmethod

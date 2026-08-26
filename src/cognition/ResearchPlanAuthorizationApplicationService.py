@@ -14,9 +14,17 @@ would use decides whether the two still agree. Rebuilding the approval at
 confirmation time would mean the thing recorded was never the thing anyone
 looked at.
 
-Nothing marks an approval consumed. One approval is meant to permit one
-execution, but no execution exists, so a consumption flag would record a fact
-nobody could establish. Persistence is real here; enforcement is not.
+Consumption lives here too, behind a narrow port. Execution asks one question —
+may this exact execution begin — and the answer, if yes, is returned only after
+the approval has been durably written as spent. Verifying and then consuming as
+two steps would leave a window where an approval had been approved and not yet
+spent, and a crash in that window turns one permission into two attempts.
+
+The write happens before the caller is told yes, so the conservative direction
+is chosen deliberately: a crash can leave an approval spent with no execution
+behind it, and cannot leave an execution running on an approval still available
+to spend again. Duplicate authority is the more dangerous failure, so the
+harmless one is the one that stays possible.
 """
 
 from __future__ import annotations
@@ -37,6 +45,9 @@ from research.ResearchPlan import ResearchPlan
 from research.ResearchPlanAuthorization import (
     MAX_AUTHORIZATION_VALIDITY_SECONDS,
     ResearchPlanAuthorization,
+)
+from research.ResearchPlanAuthorizationDecision import (
+    ResearchPlanAuthorizationDecision,
 )
 from research.ResearchPlanAuthorizationPreview import ResearchPlanAuthorizationPreview
 from research.ResearchPlanAuthorizationStore import ResearchPlanAuthorizationStore
@@ -216,6 +227,58 @@ class ResearchPlanAuthorizationApplicationService:
             self._clock(),
         )
 
+    def consume_for_execution(
+        self,
+        authorization_id: str,
+        plan: ResearchPlan,
+        research_run_id: str,
+        execution_id: str,
+        moment: datetime,
+        *,
+        budget: ResearchAutonomyBudget | None = None,
+        disclosure: ResearchDisclosure | None = None,
+    ) -> ResearchPlanAuthorizationDecision:
+        """Spend one approval on one execution, or refuse and spend nothing.
+
+        Ordering is the whole safety property. Everything is checked first,
+        then the spent record is written, and only a successful write produces
+        a permitting answer. A caller therefore cannot be told yes on the
+        strength of a consumption that exists only in this process.
+        """
+        recorded = self._authorizations.get(authorization_id.strip())
+        if recorded is None:
+            return self._refuse(ResearchPlanAuthorizationVerdict.UNKNOWN)
+        verdict = verify_plan_authorization(recorded, plan, research_run_id, moment)
+        if verdict is not ResearchPlanAuthorizationVerdict.VALID:
+            return self._refuse(verdict)
+        if budget is not None and not _within(budget, recorded.budget):
+            return self._refuse(ResearchPlanAuthorizationVerdict.BUDGET_EXCEEDED)
+        if disclosure is not None and not _permitted_disclosure(
+            disclosure,
+            recorded.disclosure,
+        ):
+            return self._refuse(ResearchPlanAuthorizationVerdict.DISCLOSURE_UNSATISFIED)
+
+        spent = recorded.consumed_for(execution_id, moment)
+        previous = self._authorizations[recorded.authorization_id]
+        self._authorizations[recorded.authorization_id] = spent
+        self._events.consumption_attempted(spent)
+        if not self._persist():
+            # Fail closed. An approval that could not be written as spent is an
+            # approval that would still be available after a restart, so the
+            # in-process change is rolled back and nothing is permitted.
+            self._authorizations[recorded.authorization_id] = previous
+            return self._refuse(ResearchPlanAuthorizationVerdict.NOT_RECORDED)
+        self._events.consumed(spent)
+        return ResearchPlanAuthorizationDecision.permitted(spent)
+
+    def _refuse(
+        self,
+        verdict: ResearchPlanAuthorizationVerdict,
+    ) -> ResearchPlanAuthorizationDecision:
+        self._events.consumption_refused(verdict.value)
+        return ResearchPlanAuthorizationDecision.refused(verdict)
+
     def _plan(self, request: BrainRequest) -> ResearchPlan | None:
         """Rebuild the exact plan from the authored draft, or refuse it."""
         question = request.metadata.get("research_plan_question")
@@ -271,3 +334,40 @@ class ResearchPlanAuthorizationApplicationService:
         except ResearchError:
             return False
         return True
+
+
+def _within(
+    requested: ResearchAutonomyBudget,
+    authorized: ResearchAutonomyBudget,
+) -> bool:
+    """Return whether every requested bound stays inside the approved one.
+
+    Component-wise, never by union and never by total. A request that asked for
+    fewer network calls and more model calls than approved has still asked for
+    something nobody approved.
+    """
+    return (
+        requested.max_step_advances <= authorized.max_step_advances
+        and requested.max_network_operations <= authorized.max_network_operations
+        and requested.max_llm_operations <= authorized.max_llm_operations
+        and requested.max_seconds <= authorized.max_seconds
+    )
+
+
+def _permitted_disclosure(
+    requested: ResearchDisclosure,
+    authorized: ResearchDisclosure,
+) -> bool:
+    """Return whether the approved disclosure covers what is being asked for.
+
+    Ordered rather than compared for equality, so an execution asking for less
+    than was approved is fine and one asking for more never is. Nothing here
+    consults the endpoint: an endpoint being local is a fact about deployment,
+    not a decision anybody made about disclosure.
+    """
+    ranking = {
+        ResearchDisclosure.NONE: 0,
+        ResearchDisclosure.LOCAL_ONLY: 1,
+        ResearchDisclosure.REMOTE_PERMITTED: 2,
+    }
+    return ranking[requested] <= ranking[authorized]

@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.191 (Genesis)`
+`v0.3.192 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.191`** is the current source/package release line.
+- **Runtime release `v0.3.192`** is the current source/package release line.
   GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -1056,7 +1056,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 3,582 automated tests pass through package-aware discovery.
+- 3,624 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for all `src` files and the focused sensitive-path/rooted-open
   security tests. A full `src` + `tests` MyPy sweep still has separately
@@ -1098,20 +1098,23 @@ changed.
 
 ## Next Milestone
 
-A person can now approve one exact research plan and keep the approval:
-content-derived `plan_digest`, an immutable `ResearchPlanAuthorization`, pure
-verification, human preview and confirmation, a bounded durable store, and
-listing. Nothing enforces any of it — no execution path reads an authorization,
-and both directions of that boundary are asserted by tests.
+One human-approved foreground execution is enforceable. Starting a research plan
+requires one exact valid approval for that plan and run and spends it
+permanently; capabilities, budget, and disclosure are enforced as upper bounds;
+and an authorization problem is reported as not reached rather than as a failed
+execution. The approval-to-execution handoff is not atomic and is not claimed to
+be: a crash can leave an approval spent with no execution, and cannot leave an
+execution running on an approval still available to spend again.
 
-Next, let one approval actually permit one execution: bind a durable approval to
-one foreground plan execution and enforce single use, with no background
-scheduling and no recursive autonomy. Everything needed to check an approval now
-exists and nothing checks one, which is the whole remaining gap between "a
-person permitted this" and "this ran because a person permitted it". That stage
-is also where capabilities move from recorded to enforced and disclosure moves
-from recorded to consulted, so it needs its own review rather than being treated
-as wiring.
+Autonomy is not enabled. Ten of the eleven autonomy intents remain unreachable,
+the autonomy loop and the scheduler cannot reach an approval, and no background
+task carries one.
+
+Next, make a started execution answerable: bounded foreground observability,
+advance, and cancel for an execution whose approval was already spent. Starting
+currently produces an execution a person can neither watch, step, nor stop,
+which is a worse shape than not being able to begin it. That stage is where the
+approved budget stops being a recorded number and becomes enforced arithmetic.
 
 The accepted design keeps execution, autonomy, and scheduling unreachable from
 the desktop, adds no filesystem, shell, or tool authority to research, keeps the

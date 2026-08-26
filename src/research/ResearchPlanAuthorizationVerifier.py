@@ -11,9 +11,11 @@ present to notice. Deriving again and comparing costs nothing and closes the one
 route by which an approval could grant more than the plan it approved.
 
 Check order is fixed and tested: is this the same plan, is it the same run, does
-it grant only what the plan declares, and is it still valid. Identity before
-validity, because "you edited the plan" is more useful to a reader than "and
-also it expired".
+it grant only what the plan declares, has it already been spent, and is it still
+valid. Identity before validity, because "you edited the plan" is more useful to
+a reader than "and also it expired"; spent before expired for the same reason,
+since an approval that was already used will never be usable again whatever the
+clock says.
 """
 
 from __future__ import annotations
@@ -54,6 +56,8 @@ def verify_plan_authorization(
         return ResearchPlanAuthorizationVerdict.RUN_MISMATCH
     if authorization.capabilities != capabilities_of(plan):
         return ResearchPlanAuthorizationVerdict.CAPABILITY_MISMATCH
+    if authorization.is_consumed:
+        return ResearchPlanAuthorizationVerdict.ALREADY_CONSUMED
     if authorization.has_expired_at(moment):
         return ResearchPlanAuthorizationVerdict.EXPIRED
     return ResearchPlanAuthorizationVerdict.VALID
