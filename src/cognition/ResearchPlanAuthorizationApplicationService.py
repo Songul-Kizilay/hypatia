@@ -155,7 +155,20 @@ class ResearchPlanAuthorizationApplicationService:
         self._events.previewed(authorization)
         return self._response_composer.research_plan_authorization_preview(
             request,
-            ResearchPlanAuthorizationPreview.ready(plan.plan_id, authorization),
+            ResearchPlanAuthorizationPreview.ready(
+                plan.plan_id,
+                authorization,
+                # Named here rather than left inside the digest bytes. A person
+                # approving a plan has to be able to see which host it will
+                # contact; a digest they cannot read is not disclosure.
+                tuple(
+                    dict.fromkeys(
+                        step.discovery_provider
+                        for step in plan.steps
+                        if step.discovery_provider is not None
+                    )
+                ),
+            ),
         )
 
     def process_confirm(self, request: BrainRequest) -> BrainResponse:

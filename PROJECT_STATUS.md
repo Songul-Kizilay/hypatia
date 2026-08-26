@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.196 (Genesis)`
+`v0.3.197 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.196`** is the current source/package release line.
+- **Runtime release `v0.3.197`** is the current source/package release line.
   GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -1162,14 +1162,29 @@ nothing, and a claim with no warnings is never shown as verified. Only the
 structured fields speak, so a note worrying that a paper might be retracted
 produces nothing, and neither does a source whose own title says it was.
 
-Next, find out whether the sources are any good in the first place: a second,
-security-specific discovery provider. Three milestones have improved what
-happens after retrieval and none has changed what comes back. Crossref indexes
-scholarly literature while the questions this system exists for are about
-vulnerabilities and advisories, which is why the ranking evaluation's honest
-result was one exact match and nine near-misses. With two providers there is
-finally something to compare, and the operator's own recorded judgements are the
-only honest measure of which one returned the better sources.
+Research can now reach vulnerability records. The NVD CVE API 2.0 is a second
+discovery provider, verified against the live service rather than from
+documentation: an exact CVE lookup returns the vulnerability itself, and
+anything else becomes one bounded keyword search. Structured metadata comes with
+it — record status, CWE identifiers, every CVSS metric kept with its own scorer
+rather than collapsed into a maximum, bounded references, and the CISA
+known-exploited fields when they are actually there.
+
+The provider is part of what an approval covers. A plan aimed at Crossref and
+the same plan aimed at NVD digest differently, so an approval for one cannot be
+spent on the other, and the digest schema moved to v2 so that approvals recorded
+before provider binding fail closed rather than quietly matching a plan whose
+meaning changed. Both previews name the provider in words. One approved
+discovery makes one request: no pagination, no retry, no sleep, and no silent
+fallback to the other provider. References are stored and never fetched.
+
+Next, find out which provider is actually earning its place: provider-quality
+evaluation from recorded operator assessments, read-only. Adding NVD made its
+own weakness visible — a live keyword search for `Craft CMS remote code
+execution` returned an unrelated 2009 colour-management flaw first, because NVD
+orders by publication date. Which provider returned sources a person found
+useful is already recorded on both sides and nothing joins them, so the choice
+between providers is currently a matter of taste rather than of evidence.
 
 The accepted design keeps execution, autonomy, and scheduling unreachable from
 the desktop, adds no filesystem, shell, or tool authority to research, keeps the

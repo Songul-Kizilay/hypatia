@@ -38,6 +38,7 @@ class ResearchPlanStepDraftInput:
     selected_source_document_ids: tuple[str, ...] = ()
     capability: str | None = None
     authorized_source_url: str = ""
+    discovery_provider: str | None = None
     evidence_authorization: ResearchEvidenceAuthorization | None = None
     assessment_authorization: ResearchAssessmentAuthorization | None = None
     claim_authorization: ResearchClaimAuthorization | None = None

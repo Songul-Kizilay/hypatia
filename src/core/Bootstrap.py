@@ -60,6 +60,10 @@ from planner.Planner import Planner
 from research.CrossrefResearchSourceDiscoveryProvider import (
     CrossrefResearchSourceDiscoveryProvider,
 )
+from research.NvdResearchSourceDiscoveryProvider import (
+    NvdResearchSourceDiscoveryProvider,
+)
+from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.HttpResearchSourceFetcher import HttpResearchSourceFetcher
 from research.JsonFileBackgroundTaskStore import (
     JsonFileBackgroundTaskStore,
@@ -131,6 +135,9 @@ class Bootstrap:
         research_source_discovery_provider: (
             ResearchSourceDiscoveryProvider | None
         ) = None,
+        research_source_discovery_providers: (
+            dict[ResearchDiscoveryProviderName, ResearchSourceDiscoveryProvider] | None
+        ) = None,
         research_claim_contradiction_proposal_provider: (
             ResearchClaimContradictionProposalProvider | None
         ) = None,
@@ -153,6 +160,9 @@ class Bootstrap:
         self._chat_semantic_memory_enabled = chat_semantic_memory_enabled
         self._research_source_fetcher = research_source_fetcher
         self._research_source_discovery_provider = research_source_discovery_provider
+        self._research_source_discovery_providers = (
+            research_source_discovery_providers or {}
+        )
         self._research_claim_contradiction_proposal_provider = (
             research_claim_contradiction_proposal_provider
         )
@@ -197,24 +207,79 @@ class Bootstrap:
             semantic_memory_index_runtime=semantic_memory_index_runtime,
             chat_semantic_memory_enabled=chat_semantic_memory_enabled,
             research_source_discovery_provider=research_source_discovery_provider,
+            research_source_discovery_providers=(
+                Bootstrap._load_process_research_source_discovery_providers()
+            ),
         )
 
     @staticmethod
     def _load_process_research_source_discovery_provider() -> (
         ResearchSourceDiscoveryProvider | None
     ):
+        """Return the provider a step uses when it names none of its own.
+
+        Plans approved before providers were nameable meant this one, so it
+        stays the default rather than becoming a second way to choose. Setting
+        it to `disabled` removes discovery entirely, which also removes every
+        provider: there is no arrangement where turning discovery off leaves one
+        of them reachable.
+        """
         provider_name = os.environ.get(
             "HYPATIA_RESEARCH_SOURCE_DISCOVERY_PROVIDER",
             "crossref",
         )
         if provider_name == "crossref":
             return CrossrefResearchSourceDiscoveryProvider()
+        if provider_name == "nvd":
+            return NvdResearchSourceDiscoveryProvider(
+                api_key=Bootstrap._load_process_nvd_api_key()
+            )
         if provider_name == "disabled":
             return None
         raise ValueError(
             "HYPATIA_RESEARCH_SOURCE_DISCOVERY_PROVIDER must be "
-            "'crossref' or 'disabled'."
+            "'crossref', 'nvd', or 'disabled'."
         )
+
+    @staticmethod
+    def _load_process_research_source_discovery_providers() -> (
+        dict[ResearchDiscoveryProviderName, ResearchSourceDiscoveryProvider]
+    ):
+        """Return every provider an approved step may name.
+
+        Both are constructed when discovery is enabled at all, because which one
+        a step contacts is decided by the plan the operator approved rather than
+        by process configuration. Registering only the default would mean an
+        approval naming the other one failed for a reason that had nothing to do
+        with what was authorized.
+        """
+        if (
+            os.environ.get("HYPATIA_RESEARCH_SOURCE_DISCOVERY_PROVIDER", "crossref")
+            == "disabled"
+        ):
+            return {}
+        return {
+            ResearchDiscoveryProviderName.CROSSREF: (
+                CrossrefResearchSourceDiscoveryProvider()
+            ),
+            ResearchDiscoveryProviderName.NVD: NvdResearchSourceDiscoveryProvider(
+                api_key=Bootstrap._load_process_nvd_api_key()
+            ),
+        }
+
+    @staticmethod
+    def _load_process_nvd_api_key() -> str | None:
+        """Read the optional NVD key from one place and nowhere else.
+
+        A key is not a feature flag, so it does not live with the opt-ins. NVD
+        answers unauthenticated requests at a lower allowance, so an absent key
+        is a working configuration rather than a broken one — and the value is
+        never stored, logged, displayed, or put in a URL.
+        """
+        raw_key = os.environ.get("HYPATIA_NVD_API_KEY")
+        if raw_key is None or not raw_key.strip():
+            return None
+        return raw_key.strip()
 
     @staticmethod
     def _load_process_learned_memory_context_limit() -> int | None:
@@ -501,6 +566,9 @@ class Bootstrap:
             vulnerability_graph_store=vulnerability_graph_store,
             research_source_discovery_provider=(
                 self._research_source_discovery_provider
+            ),
+            research_source_discovery_providers=(
+                self._research_source_discovery_providers
             ),
             research_claim_contradiction_proposal_provider=(
                 research_claim_contradiction_proposal_provider

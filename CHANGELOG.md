@@ -2,6 +2,52 @@
 
 All notable project changes are recorded here.
 
+## [0.3.197] - 2026-08-27
+
+### Added
+
+- A second discovery provider: the official NVD CVE API 2.0. A question naming
+  exactly one well-formed CVE becomes an exact `cveId` lookup; anything else
+  becomes one bounded `keywordSearch`. An exact request is never degraded into a
+  keyword search.
+- Structured vulnerability metadata on discovered candidates: CVE identifier,
+  record status, reporting source, last-modified time, CWE identifiers, every
+  CVSS metric with its own version and scorer, bounded references with their
+  tags, and the CISA known-exploited fields when the response carries them.
+- An explicit provider choice. The audit discovery panel offers Crossref or NVD,
+  and the plan step that will do the discovering can name which one.
+- `HYPATIA_NVD_API_KEY`, optional. NVD answers unauthenticated requests at a
+  lower allowance, so an absent key is a working configuration.
+
+### Changed
+
+- The research plan digest schema moved to v2 because a step can now name a
+  discovery provider. Approvals recorded under v1 no longer verify.
+- The research run store moved to schema 12 to persist the vulnerability record.
+  A candidate written earlier decodes with none.
+- Plan preview and approval preview both name the discovery provider in words.
+
+### Security
+
+- Provider identity is bound into the approved plan. The same plan aimed at
+  Crossref and at NVD digests differently, so an approval for one cannot be
+  spent on the other, and an approval predating provider binding fails closed.
+- A provider name is a closed vocabulary and never a URL, at the draft boundary,
+  the request boundary, and process configuration. A step naming an unavailable
+  provider fails rather than substituting another.
+- The NVD endpoint is fixed in code and reuses the existing pinned transport,
+  redirect revalidation, and address checks. HTTPS only, one host, one path,
+  bounded timeout, bounded response size.
+- One approved discovery performs at most one request. No pagination, no retry,
+  no sleep, and no fallback to the other provider. A rate-limit refusal is
+  reported rather than slept through.
+- References are metadata and are never fetched, followed, or granted authority.
+  A link-local or loopback address in a response is stored and left alone.
+- The API key travels only in the official `apiKey` header — never in a URL,
+  never persisted, never in telemetry, never in an error message.
+- Severity, known exploitation, and provider provenance change no relevance
+  rank, no source reputation, no operator assessment, and no claim confidence.
+
 ## [0.3.196] - 2026-08-26
 
 ### Added

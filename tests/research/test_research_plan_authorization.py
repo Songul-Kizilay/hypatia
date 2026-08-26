@@ -301,11 +301,19 @@ class AdversarialEncodingTests(PlanFixture):
         )
 
     def test_the_canonical_form_carries_a_schema_marker(self) -> None:
-        """A future encoding change must not collide with this one."""
-        self.assertIn(
-            b"hypatia:research-plan-digest:v1",
-            canonical_plan_bytes(self.plan()),
-        )
+        """A future encoding change must not collide with this one.
+
+        The marker moved to v2 when a step gained the discovery provider, and
+        the old marker has to be gone rather than merely joined: an approval
+        recorded under v1 described a plan that could not name a network
+        provider, so it must fail to verify against a plan that can. Failing
+        closed is the point — the alternative is a stored approval for a
+        scholarly search quietly matching a plan aimed somewhere else.
+        """
+        canonical = canonical_plan_bytes(self.plan())
+
+        self.assertIn(b"hypatia:research-plan-digest:v2", canonical)
+        self.assertNotIn(b"hypatia:research-plan-digest:v1", canonical)
 
     def test_the_encoding_names_every_field_it_covers(self) -> None:
         canonical = canonical_plan_bytes(self.plan())

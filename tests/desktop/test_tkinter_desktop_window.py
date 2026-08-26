@@ -5996,6 +5996,7 @@ class RecordingResearchSourceLoadController:
         self.list_calls = 0
         self.export_previews: list[str] = []
         self.discovery_calls: list[str] = []
+        self.discovery_providers: list[str] = []
         self.discovery_cancellation_tokens: list[CancellationToken | None] = []
         self.export_saves: list[tuple[ResearchRunMarkdownExportPreview, str]] = []
         self.export_verifications: list[tuple[str, str]] = []
@@ -6493,11 +6494,13 @@ class RecordingResearchSourceLoadController:
     def discover_research_sources(
         self,
         run_id: str,
+        provider: str = "",
         *,
         cancellation_token: CancellationToken | None = None,
     ) -> BrainResponse:
         if not run_id.strip():
             raise ValueError("A research run ID cannot be empty.")
+        self.discovery_providers.append(provider)
         self.discovery_calls.append(run_id)
         self.discovery_cancellation_tokens.append(cancellation_token)
         return self.discovery_response
@@ -7139,6 +7142,9 @@ class RecordingRequestRoot:
 
 
 def _configure_request_boundary(window: Any) -> None:
+    # Discovery now asks which provider to contact before it contacts one, so a
+    # window that can issue a request has to be able to answer that.
+    window._research_discovery_provider = RecordingInput("crossref")
     window._request_runner = ImmediateRequestRunner()
     window._request_completion_handler = None
     window._request_controls = []

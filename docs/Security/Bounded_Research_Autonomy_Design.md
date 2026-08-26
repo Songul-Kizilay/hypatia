@@ -1,10 +1,12 @@
 # Bounded Research Autonomy — Security Design
 
 **Status: DESIGN, WITH OPERATOR-CONTROLLED FOREGROUND EXECUTION IMPLEMENTED.**
-Discovery results are now ranked deterministically before a person chooses among
+Discovery results are ranked deterministically before a person chooses among
 them, a person can record what they concluded about a source after reading it,
-and calibration reports when a claim rests on a source they distrusted. All
-three changed what research knows without changing what it may do.
+calibration reports when a claim rests on a source they distrusted, and research
+can now reach vulnerability records rather than only scholarly papers. All four
+changed what research knows without changing what it may do — the provider a
+plan will contact is bound into the approval that authorizes it.
 The execution, autonomy, and scheduling services described below are CURRENT and
 were inspected for this design. Four execution intents are reachable — start,
 status, advance, cancel — and every one of them is an act a person performs.
@@ -1027,26 +1029,101 @@ reranking; `research_autonomy_run`; background-task authorization; scheduler
 authority; Curiosity follow-up; filesystem, shell, or tool authority. The same
 seven autonomy and background intents remain unreachable.
 
-### 17.7 Next: find out whether the sources are any good in the first place
+### 17.7 Done: research can reach vulnerability records, not only papers
 
-**Exactly one: a second, security-specific discovery provider.**
+Implemented in v0.3.197. Two providers now exist and neither is comprehensive.
 
-Everything built over the last three milestones improves what happens *after*
-retrieval — better ordering of what came back, a place to record what a source
-was worth, and now a report when a claim leans on one somebody distrusted. None
-of it changes what comes back, and that is now the visible constraint: Crossref
-indexes scholarly literature, and the questions this system exists to answer are
-about vulnerabilities, advisories and exploitation. A question naming a CVE
-retrieves papers that happen to share its tokens, which is why the evaluation
-set's honest result was one exact match and nine near-misses.
+**NVD CVE API 2.0, verified against the live service rather than from memory.**
+The endpoint, the `cveId` and `keywordSearch` parameters, `noRejected`, the
+`resultsPerPage`/`startIndex`/`totalResults` envelope, and the item shape —
+`descriptions` with language codes, `published`, `lastModified`, `vulnStatus`,
+`sourceIdentifier`, `weaknesses`, `metrics`, `references`, and the four `cisa*`
+fields — were all confirmed against real responses on 26 August 2026. Results
+come back in publication order, not relevance order, which is why the provider's
+own position is preserved as provenance and ranking happens locally afterwards.
 
-The assessment record will also start paying for itself here: with two providers
-there is finally something to compare, and the operator's own judgements are the
-only measure of which provider returned the better sources.
+**The provider is part of what an approval covers.** Provider choice decides
+which host is contacted, so it is bound into the plan step and therefore into
+the plan digest: the same plan aimed at Crossref and at NVD produces two
+different digests, and an approval recorded for one cannot be spent on the
+other. The digest schema moved to v2 for the same reason — every approval
+recorded under v1 now fails to verify rather than quietly continuing to match a
+plan whose meaning has changed. Both the plan preview and the approval preview
+name the provider in words, because a digest nobody can read is not disclosure.
 
-**Explicitly not in it:** semantic or learned reranking; automatic acceptance
-from any provider; background scheduling; `research_autonomy_run`; raising the
-approved budget; filesystem, shell, or tool authority.
+**A provider name is never a URL.** It resolves through a closed vocabulary at
+the draft boundary, at the request boundary, and at process configuration.
+Nothing accepts a host from a model, from a response, or from free text, and a
+step naming a provider this build cannot reach fails rather than falling back —
+silently searching somewhere the operator did not choose is worse than not
+searching.
+
+**One approved discovery makes one request.** No pagination, no retry, no sleep,
+and no second provider after the first disappoints. A query matching ten
+thousand vulnerabilities retrieves one bounded page. A rate-limit refusal is
+reported as one, because a retry inside a single advance would be a network
+operation the approved budget never accounted for.
+
+**References are inert.** A CVE lists where it was discussed, and that list
+arrives from the network in exactly the shape of a request to go somewhere.
+Discovery never fetches one, never follows a redirect to one, and grants a later
+fetch no authority it would not otherwise have had. A reference reading
+`http://169.254.169.254/` is stored, displayed, and left alone.
+
+**Severity is not relevance, and known exploitation is not either.** Every CVSS
+metric is kept with its own version and its own scorer rather than collapsed
+into a maximum called "the CVSS", because those numbers disagree by design.
+Entries that carry no score — the live response includes `ssvcV203` — are
+skipped rather than defaulted. Nothing about a score, a CISA listing, or the
+provider's institutional standing moves a relevance rank, a source reputation,
+an operator assessment, or a claim's confidence.
+
+**Provider data is not operator judgement.** NVD's `vulnStatus` says what NIST
+concluded about its own record; the operator's publication status says what a
+person concluded after reading the source. They are deliberately not mapped onto
+each other, and a rejected CVE stays visible and stays labelled rather than
+being dropped.
+
+The research run store moved to schema 12 to persist the structured record.
+Bounded fields only — never the provider's raw document — and a candidate
+written before version 12 decodes with no vulnerability record, which is what it
+has.
+
+**Still not current:** automatic multi-provider research; a CISA KEV provider; a
+GitHub Security Advisories provider; vendor advisory providers; semantic or
+learned reranking; learned provider selection; automatic source acceptance;
+autonomous discovery; background research; scheduler authority; recursive
+follow-up. The same seven autonomy and background intents remain unreachable.
+
+Two providers are not comprehensive vulnerability intelligence, and this
+document does not claim otherwise.
+
+### 17.8 Next: find out which provider is actually earning its place
+
+**Exactly one: provider-quality evaluation from recorded operator assessments.**
+
+The honest result of adding NVD is that it is clearly better at one thing and
+visibly worse at another. An exact CVE lookup returns the vulnerability itself,
+which Crossref could never do. A keyword query returns publication-ordered
+results that frequently share only a word with the question — a live search for
+`Craft CMS remote code execution` returned an unrelated colour-management flaw
+from 2009 first, because that is what publication order gives.
+
+Nothing measures that. Which provider returned sources a person found useful is
+already recorded — usefulness, applicability, independence and publication
+status have been stored per source since v0.3.195, and the discovery record
+already names the provider — and no layer joins the two. Until something does,
+the choice between providers is a matter of taste, and any future work on
+ranking or provider selection would be tuning against an outcome nobody has
+measured.
+
+It stays read-only and stays descriptive: report which provider produced sources
+the operator judged useful, per question kind, with the sample size visible. No
+automatic provider selection, no reranking, and no reputation learning.
+
+**Explicitly not in it:** learned or automatic provider selection; semantic
+reranking; reputation mutation; new providers; background scheduling;
+`research_autonomy_run`; filesystem, shell, or tool authority.
 
 ---
 

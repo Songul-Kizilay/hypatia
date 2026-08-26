@@ -16,6 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from core.Exceptions import ResearchError
+from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchPlanAuthorization import ResearchPlanAuthorization
 
 MAX_AUTHORIZATION_PREVIEW_REASON_CHARACTERS = 500
@@ -36,6 +37,7 @@ class ResearchPlanAuthorizationPreview:
     reason: str
     plan_id: str
     authorization: ResearchPlanAuthorization | None
+    discovery_providers: tuple[ResearchDiscoveryProviderName, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.allowed, bool):
@@ -63,6 +65,7 @@ class ResearchPlanAuthorizationPreview:
         cls,
         plan_id: str,
         authorization: ResearchPlanAuthorization,
+        discovery_providers: tuple[ResearchDiscoveryProviderName, ...] = (),
     ) -> ResearchPlanAuthorizationPreview:
         """Show exactly what confirming would record."""
         return cls(

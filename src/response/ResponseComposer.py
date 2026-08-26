@@ -48,6 +48,7 @@ from research.ResearchEvidenceIntegrityStatus import ResearchEvidenceIntegritySt
 from research.ResearchExecutionAllowance import ResearchExecutionAllowance
 from research.ResearchFailureLesson import ResearchFailureLesson
 from research.ResearchPlanAuthorization import ResearchPlanAuthorization
+from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchPlanAuthorizationPreview import (
     ResearchPlanAuthorizationPreview,
 )
@@ -938,6 +939,11 @@ class ResponseComposer:
                         f"   Selected sources: {selected_sources or 'none'}",
                     )
                 )
+                if step.discovery_provider is not None:
+                    lines.append(
+                        "   Source discovery provider: "
+                        f"{step.discovery_provider.label}"
+                    )
             lines.extend(
                 (
                     f"Plan ID: {plan.plan_id}",
@@ -1902,6 +1908,7 @@ class ResponseComposer:
             f"Research run: {authorization.research_run_id}",
             "",
             *self._authorization_terms(authorization),
+            *_discovery_provider_lines(preview.discovery_providers),
             "",
             "Nothing is recorded until you confirm this exact approval.",
             preview.reason,
@@ -4495,3 +4502,23 @@ class ResponseComposer:
             f"{index}. {session.session_id} — {count} "
             f"{conversation_label}{active_marker}"
         )
+
+
+def _discovery_provider_lines(
+    providers: tuple[ResearchDiscoveryProviderName, ...],
+) -> tuple[str, ...]:
+    """Name the providers this approval would let a plan contact.
+
+    Said out loud rather than left implicit. Approving a plan approves a network
+    destination, and `none named` is worth stating too: it means a discovery
+    step would use whichever provider this installation was configured with,
+    which is a different and weaker thing to have agreed to.
+    """
+    if not providers:
+        return (
+            "Source discovery provider: none named "
+            "(a discovery step would use the configured default)",
+        )
+    return tuple(
+        f"Source discovery provider: {provider.label}" for provider in providers
+    )

@@ -7,6 +7,13 @@ One step performs exactly one bounded provider query with no retry, no
 crawling, and no link following. Cancellation is checked before the query and
 again before the audit record is written.
 
+Which provider is contacted comes from the approved step, not from how this
+operation was wired. That matters because the provider decides the network
+target: an approval to search scholarly literature must not be spendable on a
+different host, so the provider travels inside the plan digest and a step naming
+a provider nobody registered fails rather than falling back to whichever one
+happens to be available.
+
 Discovery deliberately proves very little:
 
 - a candidate source is not an accepted source
@@ -22,6 +29,7 @@ claim here.
 from __future__ import annotations
 
 from core.Exceptions import ResearchError
+from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchPlanExecutionContext import ResearchPlanExecutionContext
 from research.ResearchPlanStep import ResearchPlanStep
 from research.ResearchPlanStepOperationResult import ResearchPlanStepOperationResult
@@ -47,6 +55,8 @@ class SourceDiscoveryStepOperation:
         research_run_manager: ResearchRunManager,
         *,
         candidate_limit: int = DEFAULT_DISCOVERY_CANDIDATE_LIMIT,
+        providers: dict[ResearchDiscoveryProviderName, ResearchSourceDiscoveryProvider]
+        | None = None,
     ) -> None:
         if (
             isinstance(candidate_limit, bool)
@@ -54,9 +64,35 @@ class SourceDiscoveryStepOperation:
             or not 1 <= candidate_limit <= MAX_DISCOVERY_CANDIDATE_LIMIT
         ):
             raise ResearchError("Research discovery candidate limit is invalid.")
+        if providers is not None and not all(
+            isinstance(name, ResearchDiscoveryProviderName) for name in providers
+        ):
+            raise ResearchError("A registered discovery provider name is invalid.")
         self._discovery_provider = discovery_provider
+        self._providers = dict(providers or {})
         self._research_run_manager = research_run_manager
         self._candidate_limit = candidate_limit
+
+    def _provider_for(
+        self,
+        step: ResearchPlanStep,
+    ) -> ResearchSourceDiscoveryProvider:
+        """Return the provider this exact step was approved to contact.
+
+        A step that names none keeps the provider this operation was wired with,
+        which is what every plan approved before providers were nameable meant.
+        A step that names one this build cannot reach fails: quietly substituting
+        another would spend an approval on a host the operator never saw.
+        """
+        chosen = step.discovery_provider
+        if chosen is None:
+            return self._discovery_provider
+        provider = self._providers.get(chosen)
+        if provider is None:
+            raise ResearchError(
+                f"Source discovery provider '{chosen.value}' is not available."
+            )
+        return provider
 
     @property
     def operation_name(self) -> str:
@@ -68,7 +104,7 @@ class SourceDiscoveryStepOperation:
         context: ResearchPlanExecutionContext,
     ) -> ResearchPlanStepOperationResult:
         """Perform one bounded discovery query, or fail honestly."""
-        del step
+        provider = self._provider_for(step)
         run_id = context.research_run_id
         if run_id is None:
             raise ResearchError("Source discovery requires a bound research run.")
@@ -80,7 +116,7 @@ class SourceDiscoveryStepOperation:
         self._raise_if_cancelled(context)
 
         try:
-            candidates = self._discovery_provider.discover(
+            candidates = provider.discover(
                 run.question,
                 limit=self._candidate_limit,
             )
@@ -93,10 +129,10 @@ class SourceDiscoveryStepOperation:
         updated = self._research_run_manager.add_discovery(
             run_id,
             run.question,
-            self._discovery_provider.provider_name,
+            provider.provider_name,
             candidates,
         )
-        provider_name = self._discovery_provider.provider_name
+        provider_name = provider.provider_name
         summary = (
             f"Source discovery via '{provider_name}' returned "
             f"{len(candidates)} candidate(s) for run {updated.run_id}."

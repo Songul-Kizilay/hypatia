@@ -40,7 +40,12 @@ from research.ResearchPlan import ResearchPlan
 
 #: Included in the hashed payload so a future encoding change cannot silently
 #: produce the same digest for a plan it would now describe differently.
-CANONICAL_SCHEMA = "hypatia:research-plan-digest:v1"
+#: Version 2 added the discovery provider to what a step describes. The schema
+#: string moves with it deliberately: every stored v1 approval now fails to
+#: verify, loudly and by design, rather than quietly continuing to match a plan
+#: whose meaning has changed. An approval for a Crossref search must never
+#: silently become an approval to contact a different host.
+CANONICAL_SCHEMA = "hypatia:research-plan-digest:v2"
 
 #: Instance bookkeeping, deliberately outside the approved content. `plan_id`
 #: is random per preview and `created_at` is the moment of previewing; neither

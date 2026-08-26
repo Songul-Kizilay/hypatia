@@ -168,6 +168,7 @@ from research.ResearchSourceContentRestorationStatus import (
     ResearchSourceContentRestorationStatus,
 )
 from research.ResearchSourceContentStore import ResearchSourceContentStore
+from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchSourceDiscoveryProvider import ResearchSourceDiscoveryProvider
 from research.ResearchSourceFetcher import ResearchSourceFetcher
 from research.SourceAcceptStepOperation import SourceAcceptStepOperation
@@ -235,6 +236,9 @@ class CognitiveEngine:
         research_source_discovery_provider: (
             ResearchSourceDiscoveryProvider | None
         ) = None,
+        research_source_discovery_providers: (
+            dict[ResearchDiscoveryProviderName, ResearchSourceDiscoveryProvider] | None
+        ) = None,
         research_claim_contradiction_proposal_provider: (
             ResearchClaimContradictionProposalProvider | None
         ) = None,
@@ -294,6 +298,9 @@ class CognitiveEngine:
         )
         self._research_run_manager = research_run_manager
         self._research_source_discovery_provider = research_source_discovery_provider
+        self._research_source_discovery_providers = (
+            research_source_discovery_providers or {}
+        )
         self._research_claim_contradiction_proposal_provider = (
             research_claim_contradiction_proposal_provider
         )
@@ -367,6 +374,7 @@ class CognitiveEngine:
                     SourceDiscoveryStepOperation(
                         research_source_discovery_provider,
                         research_run_manager,
+                        providers=research_source_discovery_providers,
                     ),
                 )
             if research_source_fetcher is not None:
@@ -1727,6 +1735,36 @@ class CognitiveEngine:
             run,
         )
 
+    def _selected_discovery_provider(
+        self,
+        request: BrainRequest,
+    ) -> ResearchSourceDiscoveryProvider:
+        """Return the provider this request explicitly named, or the default.
+
+        The name is resolved through a closed vocabulary and nothing else. A
+        provider is a network destination, so a request naming one this build
+        cannot reach fails rather than falling back: silently searching
+        somewhere the operator did not choose is worse than not searching.
+
+        There is no automatic second attempt against the other provider either.
+        If NVD refuses, that is reported as NVD refusing — hiding it behind a
+        Crossref result would answer a question nobody asked.
+        """
+        requested = request.metadata.get("research_discovery_provider")
+        if requested is None:
+            assert self._research_source_discovery_provider is not None
+            return self._research_source_discovery_provider
+        if not isinstance(requested, str):
+            raise ResearchError("Research discovery provider must be text.")
+        try:
+            name = ResearchDiscoveryProviderName(requested)
+        except ValueError as error:
+            raise ResearchError("Research discovery provider is unknown.") from error
+        provider = self._research_source_discovery_providers.get(name)
+        if provider is None:
+            raise ResearchError("Research discovery provider is not available.")
+        return provider
+
     @staticmethod
     def _research_source_assessment_write_values(
         request: BrainRequest,
@@ -1905,7 +1943,13 @@ class CognitiveEngine:
                 "Research run is closed and cannot discover new sources.",
             )
 
-        provider = self._research_source_discovery_provider
+        try:
+            provider = self._selected_discovery_provider(request)
+        except ResearchError:
+            return self._response_composer.research_source_discovery_failure(
+                request,
+                "Research source discovery provider is unavailable.",
+            )
         if self._request_cancelled(request):
             return self._response_composer.research_source_discovery_failure(
                 request,

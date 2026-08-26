@@ -58,6 +58,7 @@ from research.ResearchRunMarkdownExportPreview import (
 from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
 from research.RankedResearchSourceDiscovery import ranked_candidates
+from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.SourceIdentity import identity_of
 from research.SourceOrigin import origin_of
 from research.SourceReputationLedger import SourceReputationLedger
@@ -510,6 +511,9 @@ class TkinterDesktopWindow:
             value=ResearchSourcePublicationStatus.UNKNOWN.value
         )
         self._research_source_dimensions = tk.StringVar(value="")
+        self._research_discovery_provider = tk.StringVar(
+            value=ResearchDiscoveryProviderName.CROSSREF.value
+        )
         self._research_claim_evidence_ids = tk.StringVar()
         self._research_claim_text = tk.StringVar()
         self._research_claim_epistemic_state = tk.StringVar(
@@ -1877,6 +1881,20 @@ class TkinterDesktopWindow:
             sticky="w",
             pady=(8, 0),
         )
+        # The choice is the operator's and it is made before the search, not
+        # inferred from the question afterwards. Nothing queries both providers
+        # and nothing falls back from one to the other: a provider that refuses
+        # is reported as refusing, because a silent second search answers a
+        # question the person did not ask.
+        ttk.Combobox(
+            research_sources_frame,
+            textvariable=self._research_discovery_provider,
+            values=tuple(
+                provider.value for provider in ResearchDiscoveryProviderName
+            ),
+            state="readonly",
+            width=10,
+        ).grid(row=3, column=2, sticky="ew", padx=(8, 0), pady=(8, 0))
         self._request_button(
             research_sources_frame,
             text="Find sources",
@@ -5829,6 +5847,7 @@ class TkinterDesktopWindow:
         self._start_request(
             lambda: self._controller.discover_research_sources(
                 run_id,
+                self._research_discovery_provider.get(),
                 cancellation_token=cancellation_signal,
             ),
             self._complete_research_source_discovery,
@@ -5870,6 +5889,7 @@ class TkinterDesktopWindow:
                 else ""
             )
             + f") {entry.candidate.title} — {entry.candidate.url}"
+            + _vulnerability_label(entry.candidate)
             + (
                 f" [{', '.join(reason.value for reason in entry.relevance.reasons)}]"
                 if entry.relevance.reasons
@@ -6588,3 +6608,33 @@ def _preview_and_confirm_session_rename(
     if not preview.success or not confirm(preview):
         return preview, None
     return preview, controller.rename_session(source_session_id, target_session_id)
+
+
+def _vulnerability_label(candidate: ResearchSourceCandidate) -> str:
+    """Render the structured vulnerability facts a candidate carries, if any.
+
+    Bounded fields, never the provider's raw document. Severity and known
+    exploitation are shown because a person deciding what to read wants them,
+    and they are shown as what they are: each metric attributed to whoever
+    scored it, and neither one folded into the relevance score sitting next to
+    them on the same line.
+    """
+    record = candidate.vulnerability
+    if record is None:
+        return ""
+    parts = [record.cve_id]
+    if record.status:
+        parts.append(f"status {record.status}")
+    if record.weaknesses:
+        parts.append(",".join(record.weaknesses))
+    if record.metrics:
+        parts.append(
+            "severity " + " / ".join(metric.summary() for metric in record.metrics)
+        )
+    if record.known_exploited:
+        parts.append("CISA known-exploited")
+    parts.append(
+        f"{len(record.references)}/{record.reference_total} reference(s), "
+        "none fetched"
+    )
+    return " {" + "; ".join(parts) + "}"

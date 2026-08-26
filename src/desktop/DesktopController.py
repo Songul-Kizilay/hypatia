@@ -9,6 +9,7 @@ from brain.BrainResponse import BrainResponse
 from core.CancellationSignal import CancellationToken
 from research.ResearchClaimConfidence import ResearchClaimConfidence
 from research.ResearchEpistemicState import ResearchEpistemicState
+from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchSourceApplicability import ResearchSourceApplicability
 from research.ResearchSourceIndependence import ResearchSourceIndependence
@@ -862,6 +863,7 @@ class DesktopController:
     def discover_research_sources(
         self,
         research_run_id: str,
+        provider: str = "",
         *,
         cancellation_token: CancellationToken | None = None,
     ) -> BrainResponse:
@@ -869,14 +871,25 @@ class DesktopController:
         normalized_run_id = research_run_id.strip()
         if not normalized_run_id:
             raise ValueError("A research run ID cannot be empty.")
+        metadata: dict[str, object] = {
+            "intent": "research_source_discover",
+            "research_run_id": normalized_run_id,
+        }
+        # Resolved here so a name that is not a provider never reaches the
+        # request at all. Anything outside the closed vocabulary is refused
+        # rather than passed along to be interpreted somewhere else.
+        if provider.strip():
+            try:
+                metadata["research_discovery_provider"] = (
+                    ResearchDiscoveryProviderName(provider.strip()).value
+                )
+            except ValueError as error:
+                raise ValueError("Research discovery provider is unknown.") from error
         return self._brain.process(
             BrainRequest(
                 message="Discover candidate research sources",
                 source="desktop",
-                metadata={
-                    "intent": "research_source_discover",
-                    "research_run_id": normalized_run_id,
-                },
+                metadata=metadata,
                 cancellation_token=cancellation_token,
             )
         )

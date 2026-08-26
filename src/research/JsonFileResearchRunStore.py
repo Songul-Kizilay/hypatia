@@ -26,6 +26,9 @@ from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentReco
 from research.ResearchSourceIndependence import ResearchSourceIndependence
 from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
 from research.ResearchSourceUsefulness import ResearchSourceUsefulness
+from research.ResearchVulnerabilityMetric import ResearchVulnerabilityMetric
+from research.ResearchVulnerabilityRecord import ResearchVulnerabilityRecord
+from research.ResearchVulnerabilityReference import ResearchVulnerabilityReference
 from research.ResearchSourceCandidate import ResearchSourceCandidate
 from research.ResearchSourceComparisonNoteRecord import (
     ResearchSourceComparisonNoteRecord,
@@ -84,8 +87,8 @@ class _CollectionBudget:
 class JsonFileResearchRunStore:
     """Load and atomically replace a strict versioned research-run document."""
 
-    _SCHEMA_VERSION = 11
-    _SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}
+    _SCHEMA_VERSION = 12
+    _SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}
     _DOCUMENT_FIELDS = {"schema_version", "runs"}
     _RUN_FIELDS_V1 = {
         "run_id",
@@ -141,6 +144,25 @@ class JsonFileResearchRunStore:
     #: they were discarded before it was written, and inventing a year for an
     #: old record is exactly the failure this field exists to prevent.
     _CANDIDATE_FIELDS_V10 = _CANDIDATE_FIELDS_V1 | {"container", "published_year"}
+    #: Version 12 carries the structured vulnerability record a security
+    #: provider returns. A scholarly candidate stores `null` there and a record
+    #: written before version 12 decodes with none, which is what it has: no
+    #: provider had ever returned one.
+    _CANDIDATE_FIELDS_V12 = _CANDIDATE_FIELDS_V10 | {"vulnerability"}
+    _VULNERABILITY_FIELDS = {
+        "cve_id",
+        "status",
+        "source_identifier",
+        "last_modified",
+        "weaknesses",
+        "metrics",
+        "references",
+        "reference_total",
+        "known_exploited_at",
+        "known_exploited_name",
+    }
+    _VULNERABILITY_METRIC_FIELDS = {"version", "source", "score", "severity"}
+    _VULNERABILITY_REFERENCE_FIELDS = {"url", "source", "tags"}
     _ASSESSMENT_FIELDS_V4 = {
         "assessment_id",
         "source_document_id",
@@ -290,6 +312,8 @@ class JsonFileResearchRunStore:
             # 11 changed the shape of an assessment, for the same reason.
             10: self._RUN_FIELDS_V9,
             11: self._RUN_FIELDS_V9,
+            # Version 12 changed the shape of a candidate again, not the run.
+            12: self._RUN_FIELDS_V9,
         }[schema_version]
         if not isinstance(value, dict) or set(value) != expected_fields:
             raise ResearchError("Research run store contains an invalid run record.")
@@ -448,6 +472,7 @@ class JsonFileResearchRunStore:
         if not isinstance(value, dict) or set(value) not in (
             JsonFileResearchRunStore._CANDIDATE_FIELDS_V1,
             JsonFileResearchRunStore._CANDIDATE_FIELDS_V10,
+            JsonFileResearchRunStore._CANDIDATE_FIELDS_V12,
         ):
             raise ResearchError(
                 "Research run store contains an invalid source candidate."
@@ -468,7 +493,9 @@ class JsonFileResearchRunStore:
             snippet=value["snippet"],
             container=container,
             published_year=year,
+            vulnerability=_parse_vulnerability(value.get("vulnerability")),
         )
+
 
     def _parse_assessment(
         self,
@@ -730,6 +757,9 @@ class JsonFileResearchRunStore:
                             "snippet": candidate.snippet,
                             "container": candidate.container,
                             "published_year": candidate.published_year,
+                            "vulnerability": _encoded_vulnerability(
+                                candidate.vulnerability
+                            ),
                         }
                         for candidate in discovery.candidates
                     ],
@@ -859,3 +889,140 @@ class JsonFileResearchRunStore:
             path.unlink(missing_ok=True)
         except OSError:
             pass
+
+
+def _encoded_vulnerability(
+    record: ResearchVulnerabilityRecord | None,
+) -> dict[str, Any] | None:
+    """Render one vulnerability record as bounded fields, never as raw JSON.
+
+    Only the values the domain already validated are written. Keeping the
+    provider's original document instead would mean storing an unbounded blob
+    whose shape nothing in this system controls, and re-reading structure out of
+    it later would be trusting a response we never checked.
+    """
+    if record is None:
+        return None
+    return {
+        "cve_id": record.cve_id,
+        "status": record.status,
+        "source_identifier": record.source_identifier,
+        "last_modified": (
+            None if record.last_modified is None else record.last_modified.isoformat()
+        ),
+        "weaknesses": list(record.weaknesses),
+        "metrics": [
+            {
+                "version": metric.version,
+                "source": metric.source,
+                "score": metric.score,
+                "severity": metric.severity,
+            }
+            for metric in record.metrics
+        ],
+        "references": [
+            {
+                "url": reference.url,
+                "source": reference.source,
+                "tags": list(reference.tags),
+            }
+            for reference in record.references
+        ],
+        "reference_total": record.reference_total,
+        "known_exploited_at": record.known_exploited_at,
+        "known_exploited_name": record.known_exploited_name,
+    }
+
+
+def _parse_vulnerability(value: Any) -> ResearchVulnerabilityRecord | None:
+    """Decode one stored vulnerability record, or refuse the document.
+
+    Absent means absent — a Crossref candidate never had one. A present but
+    unreadable one fails the load rather than degrading to `None`, because a
+    record this build cannot decode is one somebody discovered, and showing it
+    as never found would be worse than refusing to open the file.
+    """
+    if value is None:
+        return None
+    if (
+        not isinstance(value, dict)
+        or set(value) != JsonFileResearchRunStore._VULNERABILITY_FIELDS
+    ):
+        raise ResearchError(
+            "Research run store contains an invalid vulnerability record."
+        )
+    try:
+        return ResearchVulnerabilityRecord(
+            cve_id=value["cve_id"],
+            status=value["status"],
+            source_identifier=value["source_identifier"],
+            last_modified=_parse_vulnerability_time(value["last_modified"]),
+            weaknesses=tuple(value["weaknesses"]),
+            metrics=tuple(
+                _parse_vulnerability_metric(item) for item in value["metrics"]
+            ),
+            references=tuple(
+                _parse_vulnerability_reference(item) for item in value["references"]
+            ),
+            reference_total=value["reference_total"],
+            known_exploited_at=value["known_exploited_at"],
+            known_exploited_name=value["known_exploited_name"],
+        )
+    except (TypeError, KeyError) as error:
+        raise ResearchError(
+            "Research run store contains an invalid vulnerability record."
+        ) from error
+
+
+def _parse_vulnerability_time(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ResearchError(
+            "Research run store vulnerability time must be ISO-8601 text."
+        )
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError as error:
+        raise ResearchError(
+            "Research run store vulnerability time is invalid."
+        ) from error
+    if parsed.tzinfo is None:
+        raise ResearchError(
+            "Research run store vulnerability time must carry an offset."
+        )
+    return parsed
+
+
+def _parse_vulnerability_metric(value: Any) -> ResearchVulnerabilityMetric:
+    if (
+        not isinstance(value, dict)
+        or set(value) != JsonFileResearchRunStore._VULNERABILITY_METRIC_FIELDS
+    ):
+        raise ResearchError(
+            "Research run store contains an invalid vulnerability metric."
+        )
+    return ResearchVulnerabilityMetric(
+        version=value["version"],
+        source=value["source"],
+        score=value["score"],
+        severity=value["severity"],
+    )
+
+
+def _parse_vulnerability_reference(value: Any) -> ResearchVulnerabilityReference:
+    if (
+        not isinstance(value, dict)
+        or set(value) != JsonFileResearchRunStore._VULNERABILITY_REFERENCE_FIELDS
+    ):
+        raise ResearchError(
+            "Research run store contains an invalid vulnerability reference."
+        )
+    tags = value["tags"]
+    if not isinstance(tags, list):
+        raise ResearchError(
+            "Research run store contains an invalid vulnerability reference."
+        )
+    return ResearchVulnerabilityReference(
+        url=value["url"], source=value["source"], tags=tuple(tags)
+    )

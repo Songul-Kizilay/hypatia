@@ -28,6 +28,7 @@ from research.ResearchContradictionAuthorization import (
     ResearchContradictionAuthorization,
 )
 from research.ResearchEvidenceAuthorization import ResearchEvidenceAuthorization
+from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 
 MAX_RESEARCH_PLAN_STEP_ID_CHARACTERS = 200
@@ -46,6 +47,7 @@ class ResearchPlanStep:
     selected_source_document_ids: tuple[str, ...] = ()
     capability: ResearchPlanStepCapability = ResearchPlanStepCapability.NONE
     authorized_source_url: str = ""
+    discovery_provider: ResearchDiscoveryProviderName | None = None
     evidence_authorization: ResearchEvidenceAuthorization | None = None
     assessment_authorization: ResearchAssessmentAuthorization | None = None
     claim_authorization: ResearchClaimAuthorization | None = None
@@ -90,6 +92,20 @@ class ResearchPlanStep:
             self.completion_authorization, ResearchCompletionAuthorization
         ):
             raise ResearchError("Research plan completion authorization is invalid.")
+        if self.discovery_provider is not None and not isinstance(
+            self.discovery_provider, ResearchDiscoveryProviderName
+        ):
+            raise ResearchError("Research plan discovery provider is invalid.")
+        # A provider named on a step that will never discover anything would be
+        # an authorization for a network target the step cannot reach, which is
+        # exactly the kind of approval nobody can reason about.
+        if (
+            self.discovery_provider is not None
+            and self.capability is not ResearchPlanStepCapability.SOURCE_DISCOVERY
+        ):
+            raise ResearchError(
+                "Only a source discovery step may name a discovery provider."
+            )
         if not isinstance(self.authorized_source_url, str):
             raise ResearchError("Research plan authorized source URL must be text.")
         authorized_source_url = self.authorized_source_url.strip()
