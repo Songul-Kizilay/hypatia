@@ -1098,12 +1098,29 @@ changed.
 
 ## Next Milestone
 
-Implement the accepted restart-bound desktop workspace-selection design in
-small stages, beginning with the bounded strict preference record and immutable
-types only. The accepted design preserves environment precedence, startup-only
-authority, local-NTFS proof, exact single-use confirmation, fail-closed invalid
-state, and a visible active-versus-next-start distinction. It does not permit a
-live root hot-swap or automatic relaunch.
+Implement the first stage of the accepted bounded research-autonomy design:
+content-derived plan identity, an immutable `ResearchPlanAuthorization` record,
+and pure verification of an authorization against an exact plan. Nothing in
+that stage executes a plan, queues a task, or makes any of the eleven autonomy
+intents reachable.
+
+That ordering is deliberate. Plan identity is currently a fresh UUID minted per
+preview, so an approval bound to a plan ID would certify nothing about the plan
+it approved. Until a plan has content-derived identity there is no object an
+approval can honestly refer to, and building the approval flow first would
+produce an approval that means less than it appears to.
+
+The accepted design keeps execution, autonomy, and scheduling unreachable from
+the desktop, adds no filesystem, shell, or tool authority to research, keeps the
+default model-operation budget at zero, and treats remote-model disclosure as a
+permission separate from local readability. An unreachable dangerous capability
+is preferable to a prematurely reachable one, and the unreachable-intent count
+is not a number to improve for its own sake.
+
+The restart-bound desktop workspace-selection design remains accepted and
+unimplemented. Its staged implementation, beginning with the bounded strict
+preference record and immutable types only, follows this milestone rather than
+being mixed into it.
 
 Do not wire content into model context, memory, research, evidence,
 persistence, exports, clipboard, remote disclosure, automatic continuation,
