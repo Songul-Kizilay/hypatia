@@ -966,8 +966,20 @@ approval was for the attempt, not for its success — and nothing refunds or
 renews one. An expired or spent approval stays listed for audit and can never
 cover anything again.
 
-Starting is the only execution control there is. Nothing schedules, repeats, or
-follows up, no background work is queued, and one execution cannot start
+A started execution can then be watched, stepped, and stopped. Refresh reports
+its canonical state, what the next step would use, and how much of the approved
+budget remains. Advance attempts exactly one step and stops; the next step needs
+another press. Cancel is final and returns neither the approval nor the budget
+already spent.
+
+Every advance is checked against the approved budget before anything is
+attempted, and charged at the attempt boundary, so a step nobody can afford runs
+nothing and a step that failed is not refunded. Time is counted inside attempts
+rather than since the execution began, because an execution stepped by a person
+is idle between presses and idle entirely while Hypatia is closed.
+
+Nothing advances unless you ask. There is no loop, nothing schedules, repeats,
+or follows up, no background work is queued, and one execution cannot start
 another.
 
 The model-disclosure decision is recorded on every approval and defaults to

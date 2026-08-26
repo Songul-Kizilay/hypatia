@@ -300,6 +300,54 @@ class DesktopController:
             extra={"authorization_id": normalized_id},
         )
 
+    def research_execution_status(self, execution_id: str) -> BrainResponse:
+        """Read one execution's canonical state. Advances nothing."""
+        return self._execution_request(
+            "research_plan_execution_status",
+            "Report research plan execution status",
+            execution_id,
+        )
+
+    def advance_research_execution(self, execution_id: str) -> BrainResponse:
+        """Attempt exactly one step. Never two, and never a loop.
+
+        One call, one attempt. The operator asks again for the next step,
+        which is the difference between stepping and autonomy.
+        """
+        return self._execution_request(
+            "research_plan_execution_advance",
+            "Advance one research plan execution step",
+            execution_id,
+        )
+
+    def cancel_research_execution(self, execution_id: str) -> BrainResponse:
+        """Stop one execution. Refunds neither approval nor spent budget."""
+        return self._execution_request(
+            "research_plan_execution_cancel",
+            "Cancel one research plan execution",
+            execution_id,
+        )
+
+    def _execution_request(
+        self,
+        intent: str,
+        message: str,
+        execution_id: str,
+    ) -> BrainResponse:
+        normalized_id = execution_id.strip()
+        if not normalized_id:
+            raise ValueError("An execution ID cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message=message,
+                source="desktop",
+                metadata={
+                    "intent": intent,
+                    "research_plan_id": normalized_id,
+                },
+            )
+        )
+
     def list_plan_authorizations(self) -> BrainResponse:
         """Report recorded approvals without approving or running anything."""
         return self._intent_only_request(

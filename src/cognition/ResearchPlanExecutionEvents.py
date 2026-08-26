@@ -25,6 +25,7 @@ EXECUTION_STEP_BLOCKED = "research.plan.execution.step_blocked"
 EXECUTION_CANCELLED = "research.plan.execution.cancelled"
 EXECUTION_RESTORED = "research.plan.execution.restored"
 EXECUTION_PERSISTENCE_FAILED = "research.plan.execution.persistence_failed"
+EXECUTION_BUDGET_REFUSED = "research.plan.execution.budget_refused"
 
 EVENT_SOURCE = "research.execution"
 
@@ -51,6 +52,24 @@ class ResearchPlanExecutionEvents:
                 "plan_id": state.plan_id,
                 "steps": len(state.steps),
                 "bound_research_run": bound_run,
+            },
+        )
+
+    def budget_refused(
+        self,
+        plan_id: str,
+        step_id: str,
+        capability: str,
+    ) -> None:
+        """Report an advance refused before anything was attempted."""
+        self._emit(
+            EXECUTION_BUDGET_REFUSED,
+            {
+                "plan_id": plan_id,
+                "step_id": step_id,
+                "capability": capability,
+                "attempted": False,
+                "charged": False,
             },
         )
 

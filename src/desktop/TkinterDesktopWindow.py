@@ -90,6 +90,13 @@ _HYPOTHESIS_EVIDENCE_NOTE = (
     "Evidence must already be recorded in the run. Separate several IDs with "
     "commas or spaces. The same record cannot be entered on both sides."
 )
+_EXECUTION_PANEL_NOTE = (
+    "An execution that has already been started. Refresh shows its canonical "
+    "state and what remains of the approved budget. Advance attempts exactly "
+    "one step and then stops; it never continues to the next step by itself. "
+    "Cancelling is final, and returns neither the approval nor the budget "
+    "already spent."
+)
 _APPROVAL_IDLE_STATUS = "Nothing has been approved yet."
 _APPROVAL_PANEL_NOTE = (
     "Approving records that you permitted this exact plan. It starts no "
@@ -1716,6 +1723,7 @@ class TkinterDesktopWindow:
         self._research_plan_preview.configure(state=tk.DISABLED)
         if self._plan_authorization_enabled:
             self._build_plan_approval_section(research_plan_frame)
+            self._build_execution_control_section(research_plan_frame)
         authored_claim_frame = ttk.LabelFrame(
             research_saved_records_frame,
             text="Recorded claims and contradictions",
@@ -4273,6 +4281,90 @@ class TkinterDesktopWindow:
             row=6, column=0, columnspan=2, sticky="ew", pady=(6, 0)
         )
         self._plan_approval_output.configure(state=tk.DISABLED)
+
+    def _build_execution_control_section(self, parent: ttk.Frame) -> None:
+        """Watch, step, and stop one already-authorized execution.
+
+        Placed beside the approval it was started with, because the two are one
+        story: the approval was spent to begin this, and everything below stays
+        inside what it approved.
+        """
+        self._execution_id = tk.StringVar()
+
+        section = ttk.LabelFrame(parent, text="Started execution", padding=8)
+        section.grid(row=8, column=0, columnspan=2, sticky="ew", pady=(10, 0))
+        section.columnconfigure(1, weight=1)
+        ttk.Label(section, text=_EXECUTION_PANEL_NOTE, wraplength=680).grid(
+            row=0, column=0, columnspan=2, sticky="w"
+        )
+        ttk.Label(section, text="Execution ID").grid(
+            row=1, column=0, sticky="w", pady=(6, 0)
+        )
+        ttk.Entry(section, textvariable=self._execution_id).grid(
+            row=1, column=1, sticky="ew", padx=(8, 0), pady=(6, 0)
+        )
+        buttons = ttk.Frame(section)
+        buttons.grid(row=2, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
+        for column, (label, command) in enumerate(
+            (
+                ("Refresh status", self._refresh_execution_status),
+                ("Advance one step", self._advance_execution_one_step),
+                ("Cancel execution", self._cancel_execution),
+            )
+        ):
+            self._request_button(buttons, label, command).grid(
+                row=0, column=column, sticky="w", padx=(0 if column == 0 else 8, 0)
+            )
+
+    def _refresh_execution_status(self) -> None:
+        self._approval_request(
+            lambda: self._controller.research_execution_status(self._execution_id.get())
+        )
+
+    def _advance_execution_one_step(self) -> None:
+        """Attempt one step, after showing what that step would cost."""
+        execution_id = self._execution_id.get().strip()
+        if not execution_id:
+            self._plan_approval_status.set("An execution ID is required.")
+            return
+        if not messagebox.askyesno(
+            "Advance one step?",
+            (
+                f"Execution: {execution_id}\n\n"
+                "This attempts exactly one step and then stops. It does not "
+                "continue to the next step on its own.\n\n"
+                "The attempt is charged against the approved budget whether or "
+                "not it succeeds. Choose Refresh status first to see what "
+                "remains and what the next step would use."
+            ),
+            parent=self._root,
+        ):
+            self._plan_approval_status.set("Not advanced. Nothing was attempted.")
+            return
+        self._approval_request(
+            lambda: self._controller.advance_research_execution(execution_id)
+        )
+
+    def _cancel_execution(self) -> None:
+        execution_id = self._execution_id.get().strip()
+        if not execution_id:
+            self._plan_approval_status.set("An execution ID is required.")
+            return
+        if not messagebox.askyesno(
+            "Cancel this execution?",
+            (
+                f"Execution: {execution_id}\n\n"
+                "Cancelling stops this execution for good. The approval it "
+                "used stays used and the budget already spent stays spent; "
+                "neither comes back."
+            ),
+            parent=self._root,
+        ):
+            self._plan_approval_status.set("Not cancelled.")
+            return
+        self._approval_request(
+            lambda: self._controller.cancel_research_execution(execution_id)
+        )
 
     def _approval_request(self, call: Callable[[], BrainResponse]) -> None:
         """Run one approval request into the approval panel's result area."""

@@ -45,6 +45,7 @@ from research.ResearchClaimWritePreview import ResearchClaimWritePreview
 from research.ResearchCuriosityPreview import ResearchCuriosityPreview
 from research.ResearchCuriosityQuestion import ResearchCuriosityQuestion
 from research.ResearchEvidenceIntegrityStatus import ResearchEvidenceIntegrityStatus
+from research.ResearchExecutionAllowance import ResearchExecutionAllowance
 from research.ResearchFailureLesson import ResearchFailureLesson
 from research.ResearchPlanAuthorization import ResearchPlanAuthorization
 from research.ResearchPlanAuthorizationPreview import (
@@ -1007,6 +1008,8 @@ class ResponseComposer:
         self,
         request: BrainRequest,
         state: ResearchPlanExecutionState,
+        allowance: ResearchExecutionAllowance | None = None,
+        next_capability: str = "",
     ) -> BrainResponse:
         """Render bounded execution state without implying performed research."""
         lines = [
@@ -1018,6 +1021,16 @@ class ResponseComposer:
             f"Pending steps: {state.pending_steps}",
             f"Running step: {state.running_step_id or 'none'}",
         ]
+        if next_capability:
+            lines.append(f"Next step capability: {next_capability}")
+        if allowance is not None:
+            lines.append("")
+            lines.extend(allowance.lines())
+            lines.append(
+                "Another advance is allowed: "
+                + ("yes" if not allowance.exhausted else "no, the budget is spent")
+            )
+            lines.append("")
         for index, step in enumerate(state.steps, start=1):
             detail = f" | {step.detail}" if step.detail else ""
             operation = f" | operation: {step.operation}" if step.operation else ""
@@ -2495,6 +2508,38 @@ class ResponseComposer:
         )
         return BrainResponse(
             message=message,
+            request_id=request.request_id,
+            intent="research_plan_execution",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_plan_execution_budget_refused(
+        self,
+        request: BrainRequest,
+        plan_id: str,
+        capability: str,
+        allowance: ResearchExecutionAllowance,
+    ) -> BrainResponse:
+        """Report an advance refused before anything was attempted or charged.
+
+        Not a failure. The step was never begun, so nothing spent a network
+        call, nothing ran, and the budget below is exactly what it was before
+        the request arrived.
+        """
+        lines = [
+            "Research plan execution was not advanced.",
+            "Reason: the approved budget does not cover the next step.",
+            f"Execution: {plan_id}",
+            f"Next step capability: {capability}",
+            "",
+            *allowance.lines(),
+            "",
+            "Execution: not reached",
+            "Nothing was attempted, charged, fetched, or written.",
+        ]
+        return BrainResponse(
+            message="\n".join(lines),
             request_id=request.request_id,
             intent="research_plan_execution",
             memory_count=0,

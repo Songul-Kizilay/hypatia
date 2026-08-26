@@ -1,10 +1,11 @@
 # Bounded Research Autonomy — Security Design
 
-**Status: DESIGN, WITH ITS FIRST SLICES IMPLEMENTED.** The execution, autonomy,
-and scheduling services described below are CURRENT and were inspected for this
-design. One of their intents — starting an authorized foreground execution — is
-now reachable, and only because starting costs one exact human approval. The
-autonomy loop and the scheduler remain unreachable and cannot reach an approval.
+**Status: DESIGN, WITH OPERATOR-CONTROLLED FOREGROUND EXECUTION IMPLEMENTED.**
+The execution, autonomy, and scheduling services described below are CURRENT and
+were inspected for this design. Four execution intents are reachable — start,
+status, advance, cancel — and every one of them is an act a person performs.
+The autonomy loop and the scheduler remain unreachable and cannot reach an
+approval. This is not autonomous research.
 
 This is a separate document from
 [Filesystem_Capability_Design.md](Filesystem_Capability_Design.md) and
@@ -20,11 +21,16 @@ authorization record, and pure verification (v0.3.190); human preview, explicit
 confirmation, a bounded durable store, and listing (v0.3.191); single-use
 consumption and one authorization-bound foreground execution start (v0.3.192).
 
-**One human-approved foreground execution is enforceable.** That is the whole
-claim. Starting a plan requires one exact valid approval for that plan and run,
-and spends it permanently. Autonomy is not enabled: no background scheduling, no
-recurrence, no follow-up, no curiosity-to-execution chain, and neither the
-autonomy loop nor the scheduler can reach an approval at all.
+**Operator-controlled bounded foreground execution is enforceable.** That is the
+whole claim. Starting a plan requires one exact valid approval and spends it
+permanently; the operator can then watch it, step it one attempt at a time, and
+stop it, and every advance is checked against the approved budget before
+anything is attempted.
+
+Autonomy is not enabled. Nothing advances unless a person asks, there is no
+loop, no scheduling, no recurrence, no follow-up, and no curiosity-to-execution
+chain. The autonomy loop and the scheduler remain unreachable and cannot reach
+an approval at all.
 
 ---
 
@@ -813,26 +819,63 @@ crossed, and only because starting now costs an approval.
 Finding C remains deliberately open: a background task still carries neither a
 digest nor an authorization, and nothing in this milestone gave it one.
 
-### 17.3 Next: make a started execution answerable
+### 17.3 Done: a started execution is answerable
 
-**Exactly one: bounded foreground observability, advance, and cancel for an
-execution that has already been authorized.**
+Implemented in v0.3.193, behind the same opt-in:
 
-Starting now costs an approval and produces an execution that does nothing
-further. A person can begin work they cannot watch, step, or stop, which is a
-worse shape than not being able to begin it. The advance, status, and cancel
-intents exist and are unreachable; making them reachable inside an execution
-whose approval was already spent adds no new authority, because the approval
-was for the attempt.
+- **Status** reads canonical state: overall status, per-step status, what the
+  next step's capability would be, and the approved, spent, and remaining
+  budget. It advances nothing and spends nothing, which is asserted by running
+  it repeatedly and checking the counters have not moved.
+- **Advance** attempts exactly one step and stops. There is no loop in the code
+  and a test asserts that `process_advance` names itself exactly once — in its
+  own definition. The next step needs another press.
+- **Cancel** is final. It refunds neither the approval nor the budget already
+  spent, creates no replacement, and queues nothing.
 
-That slice must decide one thing carefully: whether each advance stays inside
-the already-spent approval, or whether stepping is itself bounded by the
-approved budget. The budget exists and nothing spends it yet, so this is where
-budget stops being a recorded number and starts being enforced arithmetic.
+**Budget became arithmetic.** Every advance costs one step advance plus the
+declared cost of the step's capability, taken from the existing closed cost
+table rather than from instruction text. The check happens *before* the attempt,
+so an unaffordable step performs no operation at all; the charge happens at the
+attempt boundary, so a failure refunds nothing. A budget that came back after a
+failure could be spent twice by failing once.
+
+**Wall-clock is time inside attempts**, not time since the execution started. An
+execution stepped by a person is idle between advances and idle entirely while
+the application is closed, and charging that would exhaust a budget nobody
+spent. The limitation is stated rather than hidden: idle time is invisible to
+this counter, which is the only span the state can truthfully observe.
+
+The execution store moved to schema version 2 to persist the allowance. Version
+1 records decode with no allowance — what they truthfully had, since nothing
+enforced a budget when they were written. Defaulting them to a full budget would
+be the dangerous direction.
+
+**Still not current:** `research_autonomy_run`; background-task authorization;
+scheduler authority; automatic advancing; automatic retry loops;
+curiosity-to-execution; autonomous follow-up; recurring research; a policy
+authorizer; filesystem, shell, or tool authority. Seven autonomy and background
+intents remain unreachable.
+
+### 17.4 Next: make research find better sources before it finds more of them
+
+**Exactly one: source discovery relevance and ranking, with no new autonomy.**
+
+The honest reading of the system now is that a person can approve one plan, step
+it, watch the budget, and stop — and that what those steps actually retrieve is
+the weakest part of the chain. Discovery returns up to ten candidates from one
+fixed provider with no relevance ordering, and every downstream judgement rests
+on which of those a person happened to accept.
+
+Adding background continuation would multiply that weakness rather than fix it:
+more runs of a retrieval step whose results are not ranked is more evidence of
+unknown quality, gathered while nobody is watching. The autonomy code exists and
+is tested, which is exactly why the decision to defer it should be deliberate
+rather than default.
 
 **Explicitly not in it:** background scheduling; the queue; `research_autonomy_run`;
-recurrence or follow-up; raising `max_llm_operations`; filesystem, shell, or tool
-authority; any second approval minted by the system.
+recurrence or follow-up; raising `max_llm_operations`; new providers reached
+without approval; filesystem, shell, or tool authority.
 
 ---
 

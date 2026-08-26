@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.192 (Genesis)`
+`v0.3.193 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.192`** is the current source/package release line.
+- **Runtime release `v0.3.193`** is the current source/package release line.
   GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -1056,7 +1056,7 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 3,624 automated tests pass through package-aware discovery.
+- 3,659 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
 - MyPy passes for all `src` files and the focused sensitive-path/rooted-open
   security tests. A full `src` + `tests` MyPy sweep still has separately
@@ -1110,11 +1110,19 @@ Autonomy is not enabled. Ten of the eleven autonomy intents remain unreachable,
 the autonomy loop and the scheduler cannot reach an approval, and no background
 task carries one.
 
-Next, make a started execution answerable: bounded foreground observability,
-advance, and cancel for an execution whose approval was already spent. Starting
-currently produces an execution a person can neither watch, step, nor stop,
-which is a worse shape than not being able to begin it. That stage is where the
-approved budget stops being a recorded number and becomes enforced arithmetic.
+A started execution is now answerable: the operator can read its canonical
+state and remaining budget, advance it exactly one step at a time, and cancel
+it. The approved budget is enforced arithmetic — checked before each attempt,
+charged at the attempt boundary, and never refunded when an attempt fails.
+
+Next, make research find better sources before it finds more of them: relevance
+and ranking for source discovery, with no new autonomy. Discovery returns up to
+ten candidates from one fixed provider with no relevance ordering, and every
+downstream judgement rests on which of those a person happened to accept. Adding
+background continuation would multiply that weakness rather than fix it — more
+runs of an unranked retrieval step, gathered while nobody is watching. The
+autonomy code exists and is tested, which is exactly why deferring it should be
+a deliberate decision rather than a default.
 
 The accepted design keeps execution, autonomy, and scheduling unreachable from
 the desktop, adds no filesystem, shell, or tool authority to research, keeps the

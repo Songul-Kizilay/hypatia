@@ -118,7 +118,7 @@ class JsonFileResearchExecutionStoreTests(unittest.TestCase):
 
         document = json.loads(self.path.read_text(encoding="utf-8"))
 
-        self.assertEqual(document["schema_version"], 1)
+        self.assertEqual(document["schema_version"], 2)
         self.assertEqual(set(document), {"schema_version", "executions"})
 
     def test_corrupted_json_fails_safely(self) -> None:
@@ -128,10 +128,30 @@ class JsonFileResearchExecutionStoreTests(unittest.TestCase):
             self.store.load()
 
     def test_unknown_schema_version_is_rejected(self) -> None:
-        self._write({"schema_version": 2, "executions": []})
+        """Newer than this build understands is refused, not guessed at."""
+        self._write({"schema_version": 3, "executions": []})
 
         with self.assertRaises(ResearchError):
             self.store.load()
+
+    def test_a_version_one_document_loads_as_budget_unenforced(self) -> None:
+        """Reading a missing allowance as a full budget is the dangerous way.
+
+        A version 1 record was written before any budget was enforced, so it
+        truthfully had none. Defaulting it to a fresh full allowance would make
+        an old execution look like it had everything left.
+        """
+        self.store.save([snapshot()])
+        document = json.loads(self.path.read_text(encoding="utf-8"))
+        for entry in document["executions"]:
+            entry.pop("allowance")
+        document["schema_version"] = 1
+        self._write(document)
+
+        loaded = self.store.load()
+
+        self.assertEqual(len(loaded), 1)
+        self.assertIsNone(loaded[0].allowance)
 
     def test_unexpected_document_fields_are_rejected(self) -> None:
         self._write({"schema_version": 1, "executions": [], "extra": 1})

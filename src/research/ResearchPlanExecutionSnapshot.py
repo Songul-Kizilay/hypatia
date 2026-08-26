@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from core.Exceptions import ResearchError
+from research.ResearchExecutionAllowance import ResearchExecutionAllowance
 from research.ResearchPlanExecutionState import ResearchPlanExecutionState
 from research.ResearchPlanExecutionStatus import ResearchPlanExecutionStatus
 from research.ResearchPlanStep import ResearchPlanStep
@@ -76,10 +77,15 @@ class ResearchPlanExecutionSnapshot:
     recorded_at: datetime
     detail: str = ""
     research_run_id: str | None = None
+    allowance: ResearchExecutionAllowance | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.plan_id, str) or not self.plan_id.strip():
             raise ResearchError("Execution snapshot plan ID cannot be empty.")
+        if self.allowance is not None and not isinstance(
+            self.allowance, ResearchExecutionAllowance
+        ):
+            raise ResearchError("Execution snapshot allowance is invalid.")
         if not isinstance(self.question, str) or not self.question.strip():
             raise ResearchError("Execution snapshot question cannot be empty.")
         if len(self.question.strip()) > MAX_SNAPSHOT_QUESTION_CHARACTERS:
@@ -123,6 +129,7 @@ class ResearchPlanExecutionSnapshot:
         steps: tuple[ResearchPlanStep, ...],
         recorded_at: datetime,
         research_run_id: str | None = None,
+        allowance: ResearchExecutionAllowance | None = None,
     ) -> ResearchPlanExecutionSnapshot:
         """Capture the current state, pairing each step with its capability."""
         capabilities = {step.step_id: step.capability for step in steps}
@@ -132,6 +139,7 @@ class ResearchPlanExecutionSnapshot:
             status=state.status,
             detail=state.detail,
             research_run_id=research_run_id,
+            allowance=allowance,
             recorded_at=recorded_at,
             steps=tuple(
                 ResearchPlanExecutionStepSnapshot(

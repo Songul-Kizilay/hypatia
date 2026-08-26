@@ -33,6 +33,17 @@ to spend again.
 Without a consumer the service behaves as it always has. That shape is
 composition, not a bypass: the runtime attaches a consumer wherever approvals
 are kept, which is the same condition under which any start control exists.
+
+The approved budget stops being a recorded number here. Every advance costs one
+step advance plus whatever the step's declared capability costs, checked against
+what remains *before* the attempt and charged at the attempt boundary. Nothing
+is refunded when an operation fails or blocks: the attempt was made, and a
+budget that came back after a failure could be spent twice by failing once.
+
+Wall-clock is counted as time inside attempts, not time since the execution
+started. An execution stepped by a person is idle between advances and idle
+entirely while the application is closed; charging that would exhaust a budget
+nobody spent.
 """
 
 from __future__ import annotations
@@ -49,10 +60,15 @@ from cognition.ResearchPlanExecutionEvents import (
 )
 from core.Exceptions import ResearchError
 from eventbus.EventBus import EventBus
+from research.ResearchCapabilityCost import cost_for
+from research.ResearchExecutionAllowance import ResearchExecutionAllowance
 from research.ResearchExecutionStore import ResearchExecutionStore
 from research.ResearchPlan import ResearchPlan
 from research.ResearchPlanAuthorizationConsumer import (
     ResearchPlanAuthorizationConsumer,
+)
+from research.ResearchPlanAuthorizationDecision import (
+    ResearchPlanAuthorizationDecision,
 )
 from research.ResearchPlanAuthorizationVerdict import (
     ResearchPlanAuthorizationVerdict,
@@ -111,6 +127,7 @@ class ResearchPlanExecutionApplicationService:
         self._contexts: dict[str, ResearchPlanExecutionContext] = {}
         self._execution_store = execution_store
         self._authorization_consumer = authorization_consumer
+        self._allowances: dict[str, ResearchExecutionAllowance] = {}
         self._clock = clock or (lambda: datetime.now(UTC))
         self._restored: dict[str, ResearchPlanExecutionSnapshot] = {}
         self._restore()
@@ -171,11 +188,18 @@ class ResearchPlanExecutionApplicationService:
         # The identifier is allocated by building the plan, before anything is
         # runnable. Naming an execution is not starting one, and the approval
         # has to be spent against a name that already exists.
-        verdict = self._authorize(request, plan, context)
-        if verdict is not None:
+        decision = self._authorize(request, plan, context)
+        if decision is not None and not decision.permits_start:
             return self._response_composer.research_plan_execution_unauthorized(
                 request,
-                verdict,
+                decision.verdict,
+            )
+        if decision is not None and decision.authorization is not None:
+            # The approved budget becomes this execution's allowance. Nothing
+            # else may set it, so an advance can never be measured against a
+            # bound nobody approved.
+            self._allowances[plan.plan_id] = ResearchExecutionAllowance(
+                budget=decision.authorization.budget
             )
 
         state = ResearchPlanExecutionState.prepare(plan).start()
@@ -191,7 +215,7 @@ class ResearchPlanExecutionApplicationService:
         request: BrainRequest,
         plan: ResearchPlan,
         context: ResearchPlanExecutionContext,
-    ) -> ResearchPlanAuthorizationVerdict | None:
+    ) -> ResearchPlanAuthorizationDecision | None:
         """Spend one approval, returning a verdict only when refusing.
 
         Called at the last moment before anything becomes runnable, so no
@@ -202,21 +226,24 @@ class ResearchPlanExecutionApplicationService:
             return None
         authorization_id = request.metadata.get("authorization_id")
         if not isinstance(authorization_id, str) or not authorization_id.strip():
-            return ResearchPlanAuthorizationVerdict.UNKNOWN
+            return ResearchPlanAuthorizationDecision.refused(
+                ResearchPlanAuthorizationVerdict.UNKNOWN
+            )
         research_run_id = context.research_run_id
         if research_run_id is None:
             # An approval names a run, so a start that names none can never
             # match one. Refused as unknown rather than run-mismatched: there
             # is nothing to compare against.
-            return ResearchPlanAuthorizationVerdict.UNKNOWN
-        decision = self._authorization_consumer.consume_for_execution(
+            return ResearchPlanAuthorizationDecision.refused(
+                ResearchPlanAuthorizationVerdict.UNKNOWN
+            )
+        return self._authorization_consumer.consume_for_execution(
             authorization_id,
             plan,
             research_run_id,
             plan.plan_id,
             self._clock(),
         )
-        return None if decision.permits_start else decision.verdict
 
     def live_execution(self, plan_id: str) -> ResearchPlanExecutionState | None:
         """Return live execution state for a caller that only reads it."""
@@ -248,7 +275,27 @@ class ResearchPlanExecutionApplicationService:
                 request,
                 plan_id,
             )
-        return self._response_composer.research_plan_execution_status(request, state)
+        return self._response_composer.research_plan_execution_status(
+            request,
+            state,
+            self._allowances.get(plan_id),
+            self._next_capability(plan_id, state),
+        )
+
+    def _next_capability(
+        self,
+        plan_id: str,
+        state: ResearchPlanExecutionState,
+    ) -> str:
+        """Name the capability the next advance would use, or nothing."""
+        plan = self._plans.get(plan_id)
+        step_id = state.next_pending_step_id
+        if plan is None or step_id is None:
+            return ""
+        for step in plan.steps:
+            if step.step_id == step_id:
+                return step.capability.value
+        return ""
 
     def process_cancel(self, request: BrainRequest) -> BrainResponse:
         """Cancel unfinished steps while preserving completed-step history."""
@@ -316,6 +363,19 @@ class ResearchPlanExecutionApplicationService:
                 ExecutionBlockReason.UNREGISTERED_CAPABILITY,
             )
 
+        allowance = self._allowances.get(plan_id)
+        cost = cost_for(step.capability)
+        if allowance is not None and not allowance.affords(cost):
+            # Refused before the attempt, so nothing is charged and no
+            # operation runs. Pressing the button again cannot get past this.
+            self._events.budget_refused(plan_id, step_id, step.capability.value)
+            return self._response_composer.research_plan_execution_budget_refused(
+                request,
+                plan_id,
+                step.capability.value,
+                allowance,
+            )
+
         try:
             running = state.start_step(step_id)
         except ResearchError as error:
@@ -323,6 +383,11 @@ class ResearchPlanExecutionApplicationService:
                 request,
                 str(error),
             )
+        # The attempt boundary. From here the advance is spent whatever the
+        # operation goes on to do.
+        attempt_started_at = self._clock()
+        if allowance is not None:
+            self._allowances[plan_id] = allowance.charged(cost)
         self._events.step_started(
             plan_id,
             step_id,
@@ -339,6 +404,7 @@ class ResearchPlanExecutionApplicationService:
                 ),
             )
         except ResearchError as error:
+            self._charge_elapsed(plan_id, attempt_started_at)
             failed = running.fail_step(step_id, str(error))
             self._executions[plan_id] = failed
             self._events.step_failed(
@@ -352,7 +418,10 @@ class ResearchPlanExecutionApplicationService:
             return self._response_composer.research_plan_execution_status(
                 request,
                 failed,
+                self._allowances.get(plan_id),
+                self._next_capability(plan_id, failed),
             )
+        self._charge_elapsed(plan_id, attempt_started_at)
         if not result.performed:
             return self._blocked(
                 request,
@@ -381,6 +450,8 @@ class ResearchPlanExecutionApplicationService:
             return self._response_composer.research_plan_execution_status(
                 request,
                 failed,
+                self._allowances.get(plan_id),
+                self._next_capability(plan_id, failed),
             )
         completed = running.complete_step(
             step_id,
@@ -394,6 +465,8 @@ class ResearchPlanExecutionApplicationService:
         return self._response_composer.research_plan_execution_status(
             request,
             completed,
+            self._allowances.get(plan_id),
+            self._next_capability(plan_id, completed),
         )
 
     def _restore(self) -> None:
@@ -418,6 +491,22 @@ class ResearchPlanExecutionApplicationService:
                 ),
             )
 
+    def _charge_elapsed(self, plan_id: str, started_at: datetime) -> None:
+        """Add the wall-clock spent inside one attempt to its allowance.
+
+        Charged after the operation resolves, on every path, because time was
+        spent whether it succeeded, blocked, or raised.
+        """
+        allowance = self._allowances.get(plan_id)
+        if allowance is None:
+            return
+        elapsed = (self._clock() - started_at).total_seconds()
+        self._allowances[plan_id] = allowance.with_elapsed(elapsed)
+
+    def allowance(self, plan_id: str) -> ResearchExecutionAllowance | None:
+        """Return what one execution was approved and has spent, read-only."""
+        return self._allowances.get(plan_id)
+
     def _persist(self, plan_id: str) -> None:
         """Write durable state, never erasing it silently on failure."""
         if self._execution_store is None:
@@ -440,6 +529,7 @@ class ResearchPlanExecutionApplicationService:
                     plan_id,
                     ResearchPlanExecutionContext(),
                 ).research_run_id,
+                self._allowances.get(plan_id),
             )
             for plan_id, state in self._executions.items()
         ]

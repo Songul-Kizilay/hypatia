@@ -32,7 +32,8 @@ from research.ResearchPlanExecutionSnapshot import ResearchPlanExecutionSnapshot
 MAX_RESEARCH_EXECUTION_STORE_BYTES = 8 * 1024 * 1024
 MAX_RESEARCH_EXECUTION_STORE_EXECUTIONS = 1_000
 
-_SCHEMA_VERSION = 1
+_SCHEMA_VERSION = 2
+_READABLE_SCHEMA_VERSIONS = frozenset({1, 2})
 _DOCUMENT_FIELDS = frozenset({"schema_version", "executions"})
 
 
@@ -141,7 +142,7 @@ class JsonFileResearchExecutionStore:
             raise ResearchError(
                 f"Research execution store '{self._path}' document is invalid."
             )
-        if document["schema_version"] != _SCHEMA_VERSION:
+        if document["schema_version"] not in _READABLE_SCHEMA_VERSIONS:
             raise ResearchError(
                 f"Research execution store '{self._path}' schema version "
                 "is not supported."

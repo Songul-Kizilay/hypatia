@@ -656,6 +656,12 @@ class CompositionTests(AuthorizedStartFixture):
 
 
 class BoundaryTests(AuthorizedStartFixture):
+    #: The four foreground execution intents are deliberately absent. All of
+    #: them are reachable, and every one of them is an act the operator has to
+    #: perform: start spends an approval, advance attempts exactly one step,
+    #: status reads, cancel stops. The seven below are the ones that would run
+    #: research without anybody asking each time, and none of them can reach an
+    #: approval at all.
     AUTONOMY_INTENTS = (
         "research_autonomy_run",
         "background_research_task_create",
@@ -664,9 +670,6 @@ class BoundaryTests(AuthorizedStartFixture):
         "background_research_task_resume",
         "background_research_task_cancel",
         "background_research_worker_cycle",
-        "research_plan_execution_advance",
-        "research_plan_execution_status",
-        "research_plan_execution_cancel",
     )
 
     def desktop_source(self) -> str:
@@ -676,12 +679,27 @@ class BoundaryTests(AuthorizedStartFixture):
             if "__pycache__" not in str(path)
         )
 
-    def test_only_the_start_intent_became_reachable(self) -> None:
+    def test_only_operator_driven_execution_became_reachable(self) -> None:
+        """Every reachable execution intent is something a person has to press.
+
+        This narrowed as each milestone earned it: first nothing was reachable,
+        then start alone once it cost an approval, and now the three controls
+        that let a person watch, step, and stop what they started. What has
+        never crossed is anything that would advance research without being
+        asked each time.
+        """
         source = self.desktop_source()
 
-        self.assertIn("research_plan_execution_start", source)
+        for intent in (
+            "research_plan_execution_start",
+            "research_plan_execution_status",
+            "research_plan_execution_advance",
+            "research_plan_execution_cancel",
+        ):
+            with self.subTest(reachable=intent):
+                self.assertIn(intent, source)
         for intent in self.AUTONOMY_INTENTS:
-            with self.subTest(intent=intent):
+            with self.subTest(unreachable=intent):
                 self.assertNotIn(intent, source)
 
     def test_one_execution_cannot_start_another(self) -> None:

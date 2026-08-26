@@ -13,6 +13,12 @@ second store of the same facts.
 
 `work_performed` is never inferred at load time. A record claiming performed
 work without naming its operation is invalid, exactly as in memory.
+
+Version 2 adds the approved budget and what was spent against it. Version 1
+records decode with no allowance, which is what they truthfully had: nothing
+enforced a budget when they were written. Reading a missing allowance as a full
+fresh budget would be the dangerous direction, because an old execution would
+appear to have everything left.
 """
 
 from __future__ import annotations
@@ -20,6 +26,9 @@ from __future__ import annotations
 from typing import Any
 
 from core.Exceptions import ResearchError
+from research.ResearchAutonomyBudget import ResearchAutonomyBudget
+from research.ResearchExecutionAllowance import ResearchExecutionAllowance
+from research.ResearchExecutionSpend import ResearchExecutionSpend
 from research.ResearchPlanExecutionSnapshot import (
     MAX_SNAPSHOT_DETAIL_CHARACTERS,
     MAX_SNAPSHOT_STEPS,
@@ -39,6 +48,26 @@ _EXECUTION_FIELDS = frozenset(
         "research_run_id",
         "recorded_at",
         "steps",
+        "allowance",
+    }
+)
+#: Version 1 wrote every field above except the last.
+_EXECUTION_FIELDS_V1 = _EXECUTION_FIELDS - {"allowance"}
+_ALLOWANCE_FIELDS = frozenset({"budget", "spend"})
+_BUDGET_FIELDS = frozenset(
+    {
+        "max_step_advances",
+        "max_network_operations",
+        "max_llm_operations",
+        "max_seconds",
+    }
+)
+_SPEND_FIELDS = frozenset(
+    {
+        "step_advances",
+        "network_operations",
+        "llm_operations",
+        "active_seconds",
     }
 )
 _STEP_FIELDS = frozenset(
@@ -66,6 +95,7 @@ def encode_execution_snapshot(
         "detail": snapshot.detail,
         "research_run_id": snapshot.research_run_id,
         "recorded_at": snapshot.recorded_at.isoformat(),
+        "allowance": _encode_allowance(snapshot.allowance),
         "steps": [
             {
                 "step_id": step.step_id,
@@ -82,7 +112,10 @@ def encode_execution_snapshot(
 
 def decode_execution_snapshot(document: object) -> ResearchPlanExecutionSnapshot:
     """Return one validated snapshot, or refuse a malformed document."""
-    if not isinstance(document, dict) or set(document) != _EXECUTION_FIELDS:
+    if not isinstance(document, dict) or set(document) not in (
+        _EXECUTION_FIELDS,
+        _EXECUTION_FIELDS_V1,
+    ):
         raise ResearchError("Execution snapshot document is invalid.")
     steps_value = document["steps"]
     if not isinstance(steps_value, list) or not steps_value:
@@ -103,8 +136,73 @@ def decode_execution_snapshot(document: object) -> ResearchPlanExecutionSnapshot
         detail=_detail(document["detail"]),
         research_run_id=run_id,
         recorded_at=_timestamp(document["recorded_at"]),
+        allowance=_decode_allowance(document.get("allowance")),
         steps=tuple(_decode_step(value) for value in steps_value),
     )
+
+
+def _encode_allowance(
+    allowance: ResearchExecutionAllowance | None,
+) -> dict[str, Any] | None:
+    """Return the document form of one allowance, or null when unenforced."""
+    if allowance is None:
+        return None
+    budget = allowance.budget
+    spend = allowance.spend
+    return {
+        "budget": {
+            "max_step_advances": budget.max_step_advances,
+            "max_network_operations": budget.max_network_operations,
+            "max_llm_operations": budget.max_llm_operations,
+            "max_seconds": budget.max_seconds,
+        },
+        "spend": {
+            "step_advances": spend.step_advances,
+            "network_operations": spend.network_operations,
+            "llm_operations": spend.llm_operations,
+            "active_seconds": spend.active_seconds,
+        },
+    }
+
+
+def _decode_allowance(value: object) -> ResearchExecutionAllowance | None:
+    """Return one validated allowance, refusing a partial or unknown shape."""
+    if value is None:
+        return None
+    if not isinstance(value, dict) or set(value) != _ALLOWANCE_FIELDS:
+        raise ResearchError("Execution snapshot allowance is invalid.")
+    budget_value = value["budget"]
+    spend_value = value["spend"]
+    if not isinstance(budget_value, dict) or set(budget_value) != _BUDGET_FIELDS:
+        raise ResearchError("Execution snapshot budget is invalid.")
+    if not isinstance(spend_value, dict) or set(spend_value) != _SPEND_FIELDS:
+        raise ResearchError("Execution snapshot spend is invalid.")
+    return ResearchExecutionAllowance(
+        budget=ResearchAutonomyBudget(
+            max_step_advances=_count(budget_value["max_step_advances"]),
+            max_network_operations=_count(budget_value["max_network_operations"]),
+            max_llm_operations=_count(budget_value["max_llm_operations"]),
+            max_seconds=_seconds(budget_value["max_seconds"]),
+        ),
+        spend=ResearchExecutionSpend(
+            step_advances=_count(spend_value["step_advances"]),
+            network_operations=_count(spend_value["network_operations"]),
+            llm_operations=_count(spend_value["llm_operations"]),
+            active_seconds=_seconds(spend_value["active_seconds"]),
+        ),
+    )
+
+
+def _count(value: object) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ResearchError("Execution snapshot budget value is invalid.")
+    return value
+
+
+def _seconds(value: object) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ResearchError("Execution snapshot budget seconds are invalid.")
+    return float(value)
 
 
 def _decode_step(document: object) -> ResearchPlanExecutionStepSnapshot:

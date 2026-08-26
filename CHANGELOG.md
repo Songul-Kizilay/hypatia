@@ -2,6 +2,64 @@
 
 All notable project changes are recorded here.
 
+## [0.3.193] - 2026-08-26
+
+### Added
+
+- Operator-controlled bounded foreground execution. A started execution can be
+  inspected, advanced one step at a time, and cancelled. `status`, `advance`,
+  and `cancel` are reachable; every one of them is an act a person performs.
+- Status reports canonical state alongside the approved, spent, and remaining
+  budget, and names the capability the next advance would use — including
+  whether it costs a network operation.
+- The approved budget became enforced arithmetic. Each advance costs one step
+  advance plus the declared cost of the step's capability, taken from the
+  existing closed cost table.
+
+### Changed
+
+- Execution store schema version 2 persists the approved budget and what was
+  spent against it. Version 1 records decode with no allowance, which is what
+  they truthfully had; defaulting them to a full fresh budget would make an old
+  execution look like it had everything left.
+
+### Compatibility and safety
+
+- One advance attempts at most one step and then stops. There is no loop, and a
+  test asserts that `process_advance` names itself exactly once — in its own
+  definition. The next step requires another explicit press.
+- The budget check happens *before* the attempt, so an unaffordable step
+  performs no operation at all. The charge happens at the attempt boundary, so
+  nothing is refunded when an operation fails, blocks, or is cancelled: a budget
+  that came back after a failure could be spent twice by failing once.
+- Wall-clock counts time inside attempts, not time since the execution started.
+  An execution stepped by a person is idle between advances and idle entirely
+  while the application is closed. The limitation is stated rather than hidden:
+  idle time is invisible to this counter, which is the only span the state can
+  truthfully observe.
+- Reading status advances nothing and spends nothing, asserted by repeating it
+  and checking the counters have not moved.
+- Cancelling is final and refunds neither the approval nor the spent budget,
+  creates no replacement, and queues nothing.
+- Restored executions remain read-only. Restarting resumes nothing, returns no
+  approval, and resets no counter.
+- Seven autonomy and background intents remain unreachable; neither the autonomy
+  loop nor the scheduler can reach an approval. No new capability, no
+  filesystem, shell, or tool authority, and `max_llm_operations` still defaults
+  to 0.
+
+### Verification
+
+- One end-to-end test proves exact arithmetic against the real cost table: with
+  three advances and one network operation approved, a local step and a network
+  step both run, the second network step is refused before it is attempted, and
+  the counters agree afterwards.
+- Also covered: a refusal before the attempt charges nothing, a failed attempt
+  is not refunded, spent budget survives a restart, and the allowance type
+  refuses to represent an over-spend at all.
+- Package-aware discovery passes 3,659 tests with 3 existing platform-dependent
+  skips. Black, Ruff, and source MyPy pass for this release scope.
+
 ## [0.3.192] - 2026-08-26
 
 ### Added
