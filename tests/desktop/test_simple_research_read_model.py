@@ -261,6 +261,101 @@ class SourceCardTests(unittest.TestCase):
         sites = [card.site for card in model.candidate_cards()]
         self.assertEqual(sites, ["portswigger.net"])
 
+    def test_the_list_a_person_reads_first_is_in_relevance_order(self) -> None:
+        """Provider order put the vague result first; the panel must not."""
+        discovery = ResearchSourceDiscoveryRecord(
+            "discovery-1",
+            "request smuggling",
+            "test-provider",
+            (
+                _candidate("https://doi.org/10.1/survey", title="A general survey"),
+                _candidate("https://doi.org/10.1/exact", title="Request smuggling"),
+            ),
+            NOW,
+        )
+        model = SimpleResearchReadModel(run=_run(discoveries=(discovery,)))
+
+        self.assertEqual(
+            [card.heading for card in model.candidate_cards()],
+            ["Request smuggling", "A general survey"],
+        )
+
+    def test_a_card_says_how_well_it_matched_in_ordinary_words(self) -> None:
+        discovery = ResearchSourceDiscoveryRecord(
+            "discovery-1",
+            "request smuggling",
+            "test-provider",
+            (_candidate("https://doi.org/10.1/exact", title="Request smuggling"),),
+            NOW,
+        )
+        model = SimpleResearchReadModel(run=_run(discoveries=(discovery,)))
+
+        card = model.candidate_cards()[0]
+        self.assertEqual(card.relevance_text, phrase("relevance_strong", _EN))
+        self.assertNotIn("score", card.relevance_text.casefold())
+
+    def test_matching_well_is_never_worded_as_being_reliable(self) -> None:
+        """The whole risk of a score is that it reads as a verdict on the source."""
+        for key in (
+            "relevance_strong",
+            "relevance_moderate",
+            "relevance_weak",
+            "relevance_unrelated",
+            "relevance_unmeasured",
+        ):
+            with self.subTest(key=key):
+                words = phrase(key, _EN).casefold()
+                for forbidden in ("reliable", "true", "correct", "trust", "verified"):
+                    self.assertNotIn(forbidden, words)
+
+    def test_a_card_names_the_journal_when_the_record_carries_one(self) -> None:
+        """Every DOI result shares one host, so the host distinguishes nothing."""
+        discovery = ResearchSourceDiscoveryRecord(
+            "discovery-1",
+            "web application security",
+            "test-provider",
+            (
+                ResearchSourceCandidate(
+                    url="https://doi.org/10.1/paper",
+                    title="A paper",
+                    snippet="USENIX Security · 2025",
+                    container="USENIX Security",
+                    published_year=2025,
+                ),
+            ),
+            NOW,
+        )
+        model = SimpleResearchReadModel(run=_run(discoveries=(discovery,)))
+
+        self.assertEqual(model.candidate_cards()[0].site, "USENIX Security")
+
+    def test_a_record_without_a_venue_falls_back_to_its_host(self) -> None:
+        model = SimpleResearchReadModel(run=_run(discoveries=(_discovery(),)))
+
+        self.assertEqual(model.candidate_cards()[0].site, "portswigger.net")
+
+    def test_the_venue_is_never_recovered_by_splitting_the_snippet(self) -> None:
+        """A parsed display string is a guess wearing the clothes of a fact."""
+        discovery = ResearchSourceDiscoveryRecord(
+            "discovery-1",
+            "web application security",
+            "test-provider",
+            (
+                ResearchSourceCandidate(
+                    url="https://doi.org/10.1/paper",
+                    title="A paper",
+                    snippet="Journal of Invented Facts · 1999",
+                    container="",
+                ),
+            ),
+            NOW,
+        )
+        model = SimpleResearchReadModel(run=_run(discoveries=(discovery,)))
+
+        card = model.candidate_cards()[0]
+        self.assertNotIn("Invented", card.site)
+        self.assertNotIn("1999", card.site)
+
     def test_a_card_cannot_claim_acceptance_without_a_document(self) -> None:
         from core.Exceptions import ResearchError
 
@@ -455,12 +550,11 @@ _EN = ResponseLanguage.ENGLISH
 _TR = ResponseLanguage.TURKISH
 
 
-def _candidate(url: str = CANDIDATE_URL) -> ResearchSourceCandidate:
-    return ResearchSourceCandidate(
-        url,
-        "Modern web application security in practice",
-        "A bounded snippet.",
-    )
+def _candidate(
+    url: str = CANDIDATE_URL,
+    title: str = "Modern web application security in practice",
+) -> ResearchSourceCandidate:
+    return ResearchSourceCandidate(url, title, "A bounded snippet.")
 
 
 def _discovery(

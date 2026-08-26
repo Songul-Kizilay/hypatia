@@ -1,6 +1,8 @@
 # Bounded Research Autonomy — Security Design
 
 **Status: DESIGN, WITH OPERATOR-CONTROLLED FOREGROUND EXECUTION IMPLEMENTED.**
+Discovery results are now ranked deterministically before a person chooses among
+them, which changed what research finds without changing what it may do.
 The execution, autonomy, and scheduling services described below are CURRENT and
 were inspected for this design. Four execution intents are reachable — start,
 status, advance, cancel — and every one of them is an act a person performs.
@@ -857,25 +859,83 @@ curiosity-to-execution; autonomous follow-up; recurring research; a policy
 authorizer; filesystem, shell, or tool authority. Seven autonomy and background
 intents remain unreachable.
 
-### 17.4 Next: make research find better sources before it finds more of them
+### 17.4 Done: research finds better sources before it finds more of them
 
-**Exactly one: source discovery relevance and ranking, with no new autonomy.**
+Implemented in v0.3.194, with no new authority of any kind.
 
-The honest reading of the system now is that a person can approve one plan, step
-it, watch the budget, and stop — and that what those steps actually retrieve is
-the weakest part of the chain. Discovery returns up to ten candidates from one
-fixed provider with no relevance ordering, and every downstream judgement rests
-on which of those a person happened to accept.
+**Deterministic relevance ranking**, and the name is literal. Discovery results
+are ordered by comparing the words of the question against the words of the
+record: how much of the question a title covers, weighted so that an identifier
+counts for more than a common word; whether two query words appear next to each
+other; whether the venue mentions the subject; and, only when the question asked
+for recent work, how the publication years compare within that one set of
+results. There is no model in this path — not an optional one and not a
+fallback — so ranking runs with no key configured, no endpoint reachable, and
+no budget to spend, and returns the same order every time.
 
-Adding background continuation would multiply that weakness rather than fix it:
-more runs of a retrieval step whose results are not ranked is more evidence of
-unknown quality, gathered while nobody is watching. The autonomy code exists and
-is tested, which is exactly why the decision to defer it should be deliberate
-rather than default.
+**Query normalisation stops well short of where text search usually goes.**
+Case is folded and surrounding punctuation is trimmed. Nothing else. No
+stemming, no splitting on interior dots or slashes, no dropping of short
+tokens, because `CVE-2026-12345`, `Next.js`, `ASP.NET`, `HTTP/2` and `C++` are
+exactly the tokens an aggressive normaliser destroys first, and they are the
+most specific thing a security question contains.
 
-**Explicitly not in it:** background scheduling; the queue; `research_autonomy_run`;
-recurrence or follow-up; raising `max_llm_operations`; new providers reached
-without approval; filesystem, shell, or tool authority.
+**Relevance is not truth, and the vocabulary keeps them apart.** A score says
+the question's words are in the title. It says nothing about whether the
+publication is reputable, whether its claims hold, whether anything corroborates
+it, or what confidence a conclusion drawn from it deserves. The score is an
+annotation on a record the provider already returned: it rewrites no
+provenance, creates no evidence, accepts nothing, fetches nothing, and costs
+nothing to compute.
+
+**Two limitations are recorded rather than discovered later.** Ranking is
+lexical, so a paper about the same attack under a different name does not score
+for the name it does not use — a low score is a reason to look further down the
+list, not proof that nothing below is relevant. And a title that matches the
+one distinctive token of a question while being about something else entirely
+still ranks high; the hand-judged evaluation set contains exactly that case,
+and the test records the disagreement instead of reweighting until it
+disappears.
+
+**Metadata the provider already returned stopped being discarded.** Crossref is
+asked for the DOI, title, container title, and publication date, and until now
+the venue and year were flattened into a display snippet and lost. They are now
+kept as fields, so nothing has to recover them by splitting a string on a
+separator. The run store moved to schema version 10 to persist them; a version 9
+candidate decodes with no venue and no year, which is what it truthfully has.
+
+**Duplicates are marked, never merged by resemblance.** Two results are the same
+resource when their canonical identities agree, which for this provider means
+the same DOI. Titles are never compared, because similar text is not identity,
+and a wrong merge silently discards a genuinely independent source.
+
+**Still not current:** `research_autonomy_run`; background-task authorization;
+scheduler authority; automatic advancing; automatic retry loops;
+curiosity-to-execution; autonomous follow-up; recurring research; a policy
+authorizer; filesystem, shell, or tool authority. The same seven autonomy and
+background intents remain unreachable, and this milestone moved none of them.
+
+### 17.5 Next: let a person say what a source is worth after reading it
+
+**Exactly one: operator source appraisal, recorded separately from relevance.**
+
+Ranking answers which sources to look at first. Nothing yet answers what a
+person concluded once they looked. A source is accepted or not accepted, and
+that single bit carries every judgement — that a venue is serious, that a paper
+was retracted, that a result did not replicate, that a claim was misread by
+everyone citing it. All of that is currently lost, which means the next run
+starts from the same position as the last one, and the system cannot grow.
+
+The reason it belongs next is the reason relevance came first: a ranking that
+orders results by word overlap will keep putting a well-titled weak paper above
+a badly-titled strong one, and the only thing that can correct that is a person
+who read both. Recording appraisal is also what makes the existing reputation
+ledger mean something, since nothing currently writes to it from experience.
+
+**Explicitly not in it:** using an appraisal to re-rank automatically; letting a
+model appraise a source; background scheduling; the queue; `research_autonomy_run`;
+recurrence or follow-up; new providers reached without approval; filesystem,
+shell, or tool authority.
 
 ---
 

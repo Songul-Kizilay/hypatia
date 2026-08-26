@@ -56,6 +56,15 @@ _ENGLISH: dict[str, str] = {
         "The search ran and returned no sources. Nothing was fetched."
     ),
     "candidate_discovered": "Discovered",
+    "relevance_strong": "Closely matches your question",
+    "relevance_moderate": "Partly matches your question",
+    "relevance_weak": "Barely matches your question",
+    "relevance_unrelated": "Does not match your question",
+    "relevance_unmeasured": "Not compared to your question",
+    "relevance_meaning": (
+        "Matching means your words appear in the title. It does not mean the "
+        "source is reliable or correct."
+    ),
     "candidate_accepted": "Accepted for research",
     "candidate_not_fetched": (
         "Discovered means proposed, not fetched. Nothing has been downloaded yet."
@@ -137,6 +146,15 @@ _TURKISH: dict[str, str] = {
         "Arama çalıştı ve hiç kaynak dönmedi. Hiçbir şey indirilmedi."
     ),
     "candidate_discovered": "Bulundu",
+    "relevance_strong": "Sorunla yakından eşleşiyor",
+    "relevance_moderate": "Sorunla kısmen eşleşiyor",
+    "relevance_weak": "Sorunla zar zor eşleşiyor",
+    "relevance_unrelated": "Sorunla eşleşmiyor",
+    "relevance_unmeasured": "Sorunla karşılaştırılmadı",
+    "relevance_meaning": (
+        "Eşleşme, kelimelerinin başlıkta geçtiği anlamına gelir. Kaynağın "
+        "güvenilir ya da doğru olduğu anlamına gelmez."
+    ),
     "candidate_accepted": "Araştırmaya kabul edildi",
     "candidate_not_fetched": (
         "Bulundu, önerildi demektir; indirildi demek değildir. Henüz hiçbir şey "

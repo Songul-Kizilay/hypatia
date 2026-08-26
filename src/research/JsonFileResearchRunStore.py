@@ -80,8 +80,8 @@ class _CollectionBudget:
 class JsonFileResearchRunStore:
     """Load and atomically replace a strict versioned research-run document."""
 
-    _SCHEMA_VERSION = 9
-    _SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5, 6, 7, 8, 9}
+    _SCHEMA_VERSION = 10
+    _SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
     _DOCUMENT_FIELDS = {"schema_version", "runs"}
     _RUN_FIELDS_V1 = {
         "run_id",
@@ -131,7 +131,12 @@ class JsonFileResearchRunStore:
         "candidates",
         "discovered_at",
     }
-    _CANDIDATE_FIELDS = {"url", "title", "snippet"}
+    _CANDIDATE_FIELDS_V1 = {"url", "title", "snippet"}
+    #: Version 10 keeps the venue and year the provider already received. A
+    #: version 9 record decodes without them, which is what it truthfully has:
+    #: they were discarded before it was written, and inventing a year for an
+    #: old record is exactly the failure this field exists to prevent.
+    _CANDIDATE_FIELDS_V10 = _CANDIDATE_FIELDS_V1 | {"container", "published_year"}
     _ASSESSMENT_FIELDS_V4 = {
         "assessment_id",
         "source_document_id",
@@ -267,6 +272,9 @@ class JsonFileResearchRunStore:
             7: self._RUN_FIELDS_V7,
             8: self._RUN_FIELDS_V8,
             9: self._RUN_FIELDS_V9,
+            # Version 10 changed the shape of a candidate, not the shape of a
+            # run, so a version 10 run record is a version 9 run record.
+            10: self._RUN_FIELDS_V9,
         }[schema_version]
         if not isinstance(value, dict) or set(value) != expected_fields:
             raise ResearchError("Research run store contains an invalid run record.")
@@ -422,10 +430,20 @@ class JsonFileResearchRunStore:
 
     @staticmethod
     def _parse_candidate(value: Any) -> ResearchSourceCandidate:
-        if (
-            not isinstance(value, dict)
-            or set(value) != JsonFileResearchRunStore._CANDIDATE_FIELDS
+        if not isinstance(value, dict) or set(value) not in (
+            JsonFileResearchRunStore._CANDIDATE_FIELDS_V1,
+            JsonFileResearchRunStore._CANDIDATE_FIELDS_V10,
         ):
+            raise ResearchError(
+                "Research run store contains an invalid source candidate."
+            )
+        year = value.get("published_year")
+        if year is not None and (isinstance(year, bool) or not isinstance(year, int)):
+            raise ResearchError(
+                "Research run store contains an invalid source candidate."
+            )
+        container = value.get("container", "")
+        if not isinstance(container, str):
             raise ResearchError(
                 "Research run store contains an invalid source candidate."
             )
@@ -433,6 +451,8 @@ class JsonFileResearchRunStore:
             url=value["url"],
             title=value["title"],
             snippet=value["snippet"],
+            container=container,
+            published_year=year,
         )
 
     def _parse_assessment(
@@ -653,6 +673,8 @@ class JsonFileResearchRunStore:
                             "url": candidate.url,
                             "title": candidate.title,
                             "snippet": candidate.snippet,
+                            "container": candidate.container,
+                            "published_year": candidate.published_year,
                         }
                         for candidate in discovery.candidates
                     ],

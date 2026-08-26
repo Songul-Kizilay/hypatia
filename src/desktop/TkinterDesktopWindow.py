@@ -57,6 +57,7 @@ from research.ResearchRunMarkdownExportPreview import (
 )
 from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
+from research.RankedResearchSourceDiscovery import ranked_candidates
 from research.ResearchSourceCandidate import ResearchSourceCandidate
 from research.ResearchSourceComparisonNoteRecord import (
     MAX_COMPARISON_NOTE_ASSESSMENTS,
@@ -5670,10 +5671,27 @@ class TkinterDesktopWindow:
         self._research_candidate_run_id = selected_run_id
         discovery = selected_runs[0].discoveries[-1]
         self._research_candidate_discovery_id = discovery.discovery_id
-        self._research_candidates = discovery.candidates
+        # Relevance order is the default, and the provider's own position
+        # travels with each row. The audit view shows the exact codes rather
+        # than a phrase: a person reading this panel is the person who needs to
+        # know that `technical_identifier_missing` is why something sank.
+        ranked = ranked_candidates(discovery)
+        self._research_candidates = tuple(entry.candidate for entry in ranked)
         labels = tuple(
-            f"{index}. {candidate.title} — {candidate.url}"
-            for index, candidate in enumerate(self._research_candidates, start=1)
+            f"{entry.relevance_rank}. [{entry.relevance.category.value} "
+            f"{entry.relevance.score}] (provider #{entry.provider_rank}"
+            + (
+                f", duplicate of #{entry.duplicate_of_rank}"
+                if entry.duplicate_of_rank is not None
+                else ""
+            )
+            + f") {entry.candidate.title} — {entry.candidate.url}"
+            + (
+                f" [{', '.join(reason.value for reason in entry.relevance.reasons)}]"
+                if entry.relevance.reasons
+                else ""
+            )
+            for entry in ranked
         )
         self._research_candidate_selector.configure(values=labels)
         if labels:

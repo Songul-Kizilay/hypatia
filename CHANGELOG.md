@@ -2,6 +2,54 @@
 
 All notable project changes are recorded here.
 
+## [0.3.194] - 2026-08-26
+
+### Added
+
+- Deterministic relevance ranking of discovered sources. Results are ordered by
+  how much of the question a title covers, weighted so an identifier counts for
+  more than a common word, plus adjacent query words, a venue mention, and —
+  only when the question asks for recent work — how the years compare within
+  that one set of results.
+- Every score keeps the parts that produced it and a closed vocabulary of
+  reason codes, so an order can be interrogated rather than trusted. Simple mode
+  shows the band in ordinary words; the audit view shows the exact codes.
+- Query normalisation that keeps technical identifiers intact. `CVE-2026-12345`,
+  `Next.js`, `ASP.NET`, `HTTP/2` and `C++` survive as single terms; nothing is
+  stemmed to a root.
+- The venue and publication year Crossref already returned are kept as fields
+  instead of being flattened into a display snippet and lost. Source cards name
+  the journal, which for a DOI provider is the only thing that tells two results
+  apart.
+
+### Changed
+
+- Discovery lists are shown in relevance order by default, in both the simple
+  panel and the audit view. The provider's own position travels with every row,
+  so a fault in ranking stays distinguishable from a fault upstream.
+- A result that repeats an earlier one is marked and sorted last rather than
+  removed. Identity is the canonical resource identity; titles are never
+  compared, because similar text is not identity.
+- The research run store moved to schema version 10 to persist the venue and
+  year. Version 9 candidates decode with neither, which is what they truthfully
+  have.
+
+### Security
+
+- Ranking gained no authority. It accepts nothing, fetches nothing, records no
+  evidence, rewrites no provenance, reaches no network, consults no model, and
+  costs nothing from a research budget. A relevance score is a derived
+  annotation on a record that already existed.
+- Relevance is kept apart from truth in the vocabulary itself. A band says the
+  question's words are in the title and never that the source is reliable,
+  correct, or verified, and the phrasebook is asserted against those words.
+- A venue that does not mention the subject is not penalised. Subtracting for it
+  would systematically favour narrowly named journals over the venues serious
+  work actually appears in.
+- Recency applies only when the question asks for it, and is measured within the
+  results rather than against a clock. The paper that first described an attack
+  is usually the oldest one.
+
 ## [0.3.193] - 2026-08-26
 
 ### Added

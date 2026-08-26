@@ -4787,16 +4787,30 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         self.assertIsNotNone(controller.discovery_cancellation_tokens[0])
         self.assertEqual(controller.sources, [])
         self.assertEqual(responses, [controller.discovery_response])
-        self.assertEqual(window._research_candidates, controller.candidates)
-        self.assertEqual(window._research_candidate_run_id, "run-123")
         self.assertEqual(
-            selector.values,
-            (
-                "1. First paper — https://doi.org/10.1000/first",
-                "2. Second paper — https://doi.org/10.1000/second",
-            ),
+            set(window._research_candidates), set(controller.candidates)
         )
+        self.assertEqual(window._research_candidate_run_id, "run-123")
+        # The exact label text is no longer asserted, because the list is now
+        # ordered by relevance rather than by arrival and the label carries the
+        # score that produced the order. What has to stay true is what this
+        # test is named for: every discovered candidate is offered, each row
+        # still shows its title and its URL, and nothing was fetched.
+        self.assertEqual(len(selector.values), len(controller.candidates))
+        for candidate in controller.candidates:
+            with self.subTest(candidate=candidate.url):
+                self.assertTrue(
+                    any(
+                        candidate.title in label and candidate.url in label
+                        for label in selector.values
+                    )
+                )
+        for position, label in enumerate(selector.values, start=1):
+            with self.subTest(row=position):
+                self.assertTrue(label.startswith(f"{position}. "))
+                self.assertIn("provider #", label)
         self.assertEqual(selector.selected_index, 0)
+        self.assertEqual(controller.sources, [])
 
     def test_selected_candidate_only_copies_its_url_until_load_is_separate(
         self,

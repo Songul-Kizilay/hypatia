@@ -27,6 +27,8 @@ from desktop.SimpleResearchActivity import SimpleResearchActivity
 from desktop.SimpleResearchPhrasebook import phrase, stage_phrase
 from desktop.SimpleResearchStep import SimpleResearchStep
 from desktop.SimpleSourceCard import SimpleSourceCard
+from research.RankedResearchSourceDiscovery import ranked_candidates
+from research.ResearchRelevanceCategory import ResearchRelevanceCategory
 from research.ResearchRun import ResearchRun
 from research.ResearchSourceCandidate import ResearchSourceCandidate
 from research.SourceIdentity import identity_of
@@ -121,12 +123,19 @@ class SimpleResearchReadModel:
         documents = self._documents_by_identity()
         cards: list[SimpleSourceCard] = []
         seen: set[str] = set()
-        for candidate in latest.candidates:
-            identity = identity_of(candidate.url)
+        for ranked in ranked_candidates(latest):
+            identity = identity_of(ranked.candidate.url)
             if identity in seen:
                 continue
             seen.add(identity)
-            cards.append(self._card(candidate, identity in accepted, documents))
+            cards.append(
+                self._card(
+                    ranked.candidate,
+                    identity in accepted,
+                    documents,
+                    ranked.relevance.category,
+                )
+            )
         return tuple(cards)
 
     def accepted_cards(self) -> tuple[SimpleSourceCard, ...]:
@@ -199,28 +208,45 @@ class SimpleResearchReadModel:
         candidate: ResearchSourceCandidate,
         accepted: bool,
         documents: dict[str, str],
+        category: ResearchRelevanceCategory | None = None,
     ) -> SimpleSourceCard:
         identity = identity_of(candidate.url)
         return SimpleSourceCard(
             title=candidate.title,
-            site=self.site_of(candidate.url),
+            site=self.venue_of(candidate),
             status_text=self.say(
                 "candidate_accepted" if accepted else "candidate_discovered"
             ),
             accepted=accepted,
             url=candidate.url,
             document_id=documents.get(identity, "") if accepted else "",
+            relevance_text=(
+                "" if category is None else self.say(f"relevance_{category.value}")
+            ),
         )
+
+    def venue_of(self, candidate: ResearchSourceCandidate) -> str:
+        """Return where a candidate was published, falling back to its host.
+
+        The venue is read from the field that carries it, never recovered by
+        splitting the display snippet. Every result from a DOI provider shares
+        one host, so the host alone distinguishes nothing; the journal name is
+        the fact a person actually uses to tell two results apart.
+        """
+        if not isinstance(candidate, ResearchSourceCandidate):
+            return ""
+        venue = " ".join(candidate.container.split())
+        return venue or self.site_of(candidate.url)
 
     @staticmethod
     def site_of(url: str) -> str:
         """Return the readable host of a URL, or nothing when it has none.
 
-        The host is the only publication-like fact available. A candidate
-        carries a title, a URL, and a snippet, so a journal name or a year would
-        have to be guessed at, and a guessed publication year on a research
-        source is precisely the kind of confident detail that is worth nothing
-        and looks like everything.
+        Used when a candidate carries no venue of its own. A guess is still
+        never made: an absent journal name renders as the host, and an absent
+        host renders as nothing, because a guessed publication detail on a
+        research source is precisely the kind of confident fact that is worth
+        nothing and looks like everything.
         """
         if not isinstance(url, str) or not url.strip():
             return ""

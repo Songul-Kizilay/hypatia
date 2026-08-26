@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.193 (Genesis)`
+`v0.3.194 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.193`** is the current source/package release line.
+- **Runtime release `v0.3.194`** is the current source/package release line.
   GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -1115,14 +1115,30 @@ state and remaining budget, advance it exactly one step at a time, and cancel
 it. The approved budget is enforced arithmetic — checked before each attempt,
 charged at the attempt boundary, and never refunded when an attempt fails.
 
-Next, make research find better sources before it finds more of them: relevance
-and ranking for source discovery, with no new autonomy. Discovery returns up to
-ten candidates from one fixed provider with no relevance ordering, and every
-downstream judgement rests on which of those a person happened to accept. Adding
-background continuation would multiply that weakness rather than fix it — more
-runs of an unranked retrieval step, gathered while nobody is watching. The
-autonomy code exists and is tested, which is exactly why deferring it should be
-a deliberate decision rather than a default.
+Discovery results are now ranked before a person chooses among them.
+Deterministic relevance ranking compares the words of the question against the
+words of the record — weighted so an identifier counts for more than a common
+word — and keeps the parts and reason codes that produced each score. There is
+no model in the path, no network call, and no budget cost, so the same inputs
+give the same order on any machine. Relevance stays separate from truth: a score
+says the question's words are in the title, and never that the source is
+reliable or correct.
+
+Two limitations are recorded rather than left to be discovered. Matching is
+lexical, so a paper about the same attack under another name does not score for
+the name it does not use. And a title matching the one distinctive token of a
+question while being about something else still ranks high; the evaluation set
+contains that case and the test records the disagreement instead of reweighting
+until it disappears.
+
+Next, let a person say what a source is worth after reading it: operator source
+appraisal, recorded separately from relevance and never used to re-rank
+automatically. Acceptance is currently one bit, and it carries every judgement a
+person forms — that a venue is serious, that a paper was retracted, that a
+result did not replicate. All of it is lost today, so the next run starts where
+the last one did. A ranking based on word overlap will keep putting a
+well-titled weak paper above a badly-titled strong one, and the only thing that
+can correct that is somebody who read both.
 
 The accepted design keeps execution, autonomy, and scheduling unreachable from
 the desktop, adds no filesystem, shell, or tool authority to research, keeps the

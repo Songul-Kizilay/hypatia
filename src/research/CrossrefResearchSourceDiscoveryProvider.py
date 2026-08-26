@@ -244,23 +244,36 @@ def _candidate_from_item(value: Any) -> ResearchSourceCandidate | None:
     if not title:
         return None
     url = f"https://doi.org/{quote(doi.strip(), safe='/():._-;')}"
-    snippet = _bibliographic_snippet(value)
+    container = _container_title(value)
+    year = _published_year(value.get("published"))
     try:
-        return ResearchSourceCandidate(url=url, title=title, snippet=snippet)
+        return ResearchSourceCandidate(
+            url=url,
+            title=title,
+            snippet=_bibliographic_snippet(container, year),
+            container=container,
+            published_year=year,
+        )
     except ResearchError:
         return None
 
 
-def _bibliographic_snippet(value: dict[str, Any]) -> str:
-    parts: list[str] = []
+def _container_title(value: dict[str, Any]) -> str:
     containers = value.get("container-title")
     if isinstance(containers, list) and containers and isinstance(containers[0], str):
-        container = _normalized_bounded_text(containers[0], 700)
-        if container:
-            parts.append(container)
-    year = _published_year(value.get("published"))
-    if year is not None:
-        parts.append(str(year))
+        return _normalized_bounded_text(containers[0], 700)
+    return ""
+
+
+def _bibliographic_snippet(container: str, year: int | None) -> str:
+    """Render the venue and year for display, from the values already parsed.
+
+    The snippet stays a display string and nothing reads structure back out of
+    it. Whatever needs the venue or the year takes them from the fields that now
+    carry them.
+    """
+    rendered_year = str(year) if year is not None else ""
+    parts = [part for part in (container, rendered_year) if part]
     return _normalized_bounded_text(" · ".join(parts), 1_000)
 
 

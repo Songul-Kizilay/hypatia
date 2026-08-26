@@ -31,6 +31,7 @@ class SimpleSourceCard:
     accepted: bool
     url: str
     document_id: str = ""
+    relevance_text: str = ""
 
     def __post_init__(self) -> None:
         if not isinstance(self.title, str) or not self.title.strip():
@@ -47,6 +48,8 @@ class SimpleSourceCard:
             raise ResearchError(
                 "A card that the run did not accept cannot claim a document ID."
             )
+        if not isinstance(self.relevance_text, str):
+            raise ResearchError("A source card relevance line must be text.")
 
     @property
     def heading(self) -> str:

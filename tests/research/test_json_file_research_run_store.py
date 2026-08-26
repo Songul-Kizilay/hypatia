@@ -147,7 +147,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
 
     def test_rejects_unknown_fields_schema_and_duplicate_ids(self) -> None:
         for document in (
-            {"schema_version": 10, "runs": []},
+            {"schema_version": 11, "runs": []},
             {"schema_version": True, "runs": []},
             {"schema_version": 1, "runs": [], "unexpected": True},
         ):
@@ -168,7 +168,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
         with self.assertRaisesRegex(ResearchError, "duplicate run IDs"):
             self.store.save([run, run])
 
-    def test_loads_v1_without_new_collections_and_rewrites_as_v9(self) -> None:
+    def test_loads_v1_without_new_collections_and_rewrites_as_v10(self) -> None:
         legacy_document = {
             "schema_version": 1,
             "runs": [
@@ -193,7 +193,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
         self.assertEqual(runs[0].assessments, ())
         self.assertEqual(runs[0].comparison_notes, ())
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 9)
+        self.assertEqual(rewritten["schema_version"], 10)
         self.assertEqual(rewritten["runs"][0]["evidence"], [])
         self.assertEqual(rewritten["runs"][0]["discoveries"], [])
         self.assertEqual(rewritten["runs"][0]["assessments"], [])
@@ -201,7 +201,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
         self.assertEqual(rewritten["runs"][0]["claims"], [])
         self.assertEqual(rewritten["runs"][0]["claim_contradictions"], [])
 
-    def test_loads_v2_without_discoveries_and_rewrites_as_v9(self) -> None:
+    def test_loads_v2_without_discoveries_and_rewrites_as_v10(self) -> None:
         legacy_document = {
             "schema_version": 2,
             "runs": [
@@ -224,14 +224,14 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
 
         self.assertEqual(runs[0].discoveries, ())
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 9)
+        self.assertEqual(rewritten["schema_version"], 10)
         self.assertEqual(rewritten["runs"][0]["discoveries"], [])
         self.assertEqual(rewritten["runs"][0]["assessments"], [])
         self.assertEqual(rewritten["runs"][0]["comparison_notes"], [])
         self.assertEqual(rewritten["runs"][0]["claims"], [])
         self.assertEqual(rewritten["runs"][0]["claim_contradictions"], [])
 
-    def test_loads_v3_without_assessments_and_rewrites_as_v9(self) -> None:
+    def test_loads_v3_without_assessments_and_rewrites_as_v10(self) -> None:
         legacy_document = {
             "schema_version": 3,
             "runs": [
@@ -255,13 +255,13 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
 
         self.assertEqual(runs[0].assessments, ())
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 9)
+        self.assertEqual(rewritten["schema_version"], 10)
         self.assertEqual(rewritten["runs"][0]["assessments"], [])
         self.assertEqual(rewritten["runs"][0]["comparison_notes"], [])
         self.assertEqual(rewritten["runs"][0]["claims"], [])
         self.assertEqual(rewritten["runs"][0]["claim_contradictions"], [])
 
-    def test_loads_v4_assessments_without_supersession_and_rewrites_as_v9(
+    def test_loads_v4_assessments_without_supersession_and_rewrites_as_v10(
         self,
     ) -> None:
         legacy_document = {
@@ -323,7 +323,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
         self.assertEqual(runs[0].sources[0].taint_label, "external_untrusted_data")
         self.assertEqual(runs[0].sources[0].instruction_authority, "none")
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 9)
+        self.assertEqual(rewritten["schema_version"], 10)
         self.assertIsNone(
             rewritten["runs"][0]["assessments"][0]["supersedes_assessment_id"]
         )
@@ -343,7 +343,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
         self.assertEqual(rewritten["runs"][0]["claims"], [])
         self.assertEqual(rewritten["runs"][0]["claim_contradictions"], [])
 
-    def test_loads_v5_without_comparison_notes_and_rewrites_as_v9(self) -> None:
+    def test_loads_v5_without_comparison_notes_and_rewrites_as_v10(self) -> None:
         legacy_document = {
             "schema_version": 5,
             "runs": [
@@ -368,12 +368,12 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
 
         self.assertEqual(runs[0].comparison_notes, ())
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 9)
+        self.assertEqual(rewritten["schema_version"], 10)
         self.assertEqual(rewritten["runs"][0]["comparison_notes"], [])
         self.assertEqual(rewritten["runs"][0]["claims"], [])
         self.assertEqual(rewritten["runs"][0]["claim_contradictions"], [])
 
-    def test_loads_v6_without_trust_metadata_and_rewrites_as_v9(self) -> None:
+    def test_loads_v6_without_trust_metadata_and_rewrites_as_v10(self) -> None:
         legacy_document = {
             "schema_version": 6,
             "runs": [
@@ -436,7 +436,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
             ResearchInformationTrust.UNASSESSED,
         )
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 9)
+        self.assertEqual(rewritten["schema_version"], 10)
         self.assertEqual(
             rewritten["runs"][0]["sources"][0]["taint_label"],
             "external_untrusted_data",
@@ -452,7 +452,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
         self.assertEqual(rewritten["runs"][0]["claims"], [])
         self.assertEqual(rewritten["runs"][0]["claim_contradictions"], [])
 
-    def test_loads_v7_without_claims_and_rewrites_as_v9(self) -> None:
+    def test_loads_v7_without_claims_and_rewrites_as_v10(self) -> None:
         run = self._minimal_run()
         self.store.save([run])
         legacy_document = json.loads(self.path.read_text(encoding="utf-8"))
@@ -466,11 +466,11 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
 
         self.assertEqual(runs[0].claims, ())
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 9)
+        self.assertEqual(rewritten["schema_version"], 10)
         self.assertEqual(rewritten["runs"][0]["claims"], [])
         self.assertEqual(rewritten["runs"][0]["claim_contradictions"], [])
 
-    def test_loads_v8_without_claim_contradictions_and_rewrites_as_v9(self) -> None:
+    def test_loads_v8_without_claim_contradictions_and_rewrites_as_v10(self) -> None:
         run = self._minimal_run()
         self.store.save([run])
         legacy_document = json.loads(self.path.read_text(encoding="utf-8"))
@@ -484,8 +484,86 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
         self.assertEqual(runs[0].claims, run.claims)
         self.assertEqual(runs[0].claim_contradictions, ())
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 9)
+        self.assertEqual(rewritten["schema_version"], 10)
         self.assertEqual(rewritten["runs"][0]["claim_contradictions"], [])
+
+    def test_v10_keeps_the_venue_and_year_a_candidate_was_discovered_with(
+        self,
+    ) -> None:
+        run = self._minimal_run()
+        discovery = ResearchSourceDiscoveryRecord(
+            "discovery-1",
+            "web application security",
+            "crossref-rest-v1",
+            (
+                ResearchSourceCandidate(
+                    url="https://doi.org/10.1/paper",
+                    title="A paper",
+                    snippet="USENIX Security · 2025",
+                    container="USENIX Security",
+                    published_year=2025,
+                ),
+            ),
+            self.now,
+        )
+        stored = replace(run, discoveries=(discovery,))
+        self.store.save([stored])
+
+        [loaded] = self.store.load()
+
+        candidate = loaded.discoveries[0].candidates[0]
+        self.assertEqual(candidate.container, "USENIX Security")
+        self.assertEqual(candidate.published_year, 2025)
+
+    def test_a_v9_candidate_loads_without_a_year_being_invented_for_it(self) -> None:
+        """It truthfully has none: the field was discarded before it was written."""
+        run = self._minimal_run()
+        discovery = ResearchSourceDiscoveryRecord(
+            "discovery-1",
+            "web application security",
+            "crossref-rest-v1",
+            (
+                ResearchSourceCandidate(
+                    url="https://doi.org/10.1/paper",
+                    title="A paper",
+                    snippet="USENIX Security · 2025",
+                    container="USENIX Security",
+                    published_year=2025,
+                ),
+            ),
+            self.now,
+        )
+        self.store.save([replace(run, discoveries=(discovery,))])
+        legacy_document = json.loads(self.path.read_text(encoding="utf-8"))
+        legacy_document["schema_version"] = 9
+        legacy_candidate = legacy_document["runs"][0]["discoveries"][0]["candidates"][0]
+        legacy_candidate.pop("container")
+        legacy_candidate.pop("published_year")
+        self.path.write_text(json.dumps(legacy_document), encoding="utf-8")
+
+        [loaded] = self.store.load()
+
+        candidate = loaded.discoveries[0].candidates[0]
+        self.assertIsNone(candidate.published_year)
+        self.assertEqual(candidate.container, "")
+        self.assertEqual(candidate.snippet, "USENIX Security · 2025")
+
+    def test_a_candidate_carrying_an_implausible_year_is_refused(self) -> None:
+        run = self._minimal_run()
+        discovery = ResearchSourceDiscoveryRecord(
+            "discovery-1",
+            "web application security",
+            "crossref-rest-v1",
+            (ResearchSourceCandidate("https://doi.org/10.1/p", "A paper", ""),),
+            self.now,
+        )
+        self.store.save([replace(run, discoveries=(discovery,))])
+        document = json.loads(self.path.read_text(encoding="utf-8"))
+        document["runs"][0]["discoveries"][0]["candidates"][0]["published_year"] = True
+        self.path.write_text(json.dumps(document), encoding="utf-8")
+
+        with self.assertRaises(ResearchError):
+            self.store.load()
 
     def test_v9_rejects_mutable_source_authority_and_invalid_trust_labels(
         self,
