@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.197 (Genesis)`
+`v0.3.198 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.197`** is the current source/package release line.
+- **Runtime release `v0.3.198`** is the current source/package release line.
   GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -1178,13 +1178,30 @@ meaning changed. Both previews name the provider in words. One approved
 discovery makes one request: no pagination, no retry, no sleep, and no silent
 fallback to the other provider. References are stored and never fetched.
 
-Next, find out which provider is actually earning its place: provider-quality
-evaluation from recorded operator assessments, read-only. Adding NVD made its
-own weakness visible — a live keyword search for `Craft CMS remote code
-execution` returned an unrelated 2009 colour-management flaw first, because NVD
-orders by publication date. Which provider returned sources a person found
-useful is already recorded on both sides and nothing joins them, so the choice
-between providers is currently a matter of taste rather than of evidence.
+Provider experience can now be described. For each provider and question
+category the report shows the funnel — discovery operations, candidates,
+accepted sources, sources with evidence, assessed sources — and then what the
+operator concluded across usefulness, applicability, independence and
+publication status. The join runs through canonical resource identity, the same
+one the panel uses to decide whether a discovered candidate was accepted, and a
+resource both providers returned is credited to neither.
+
+There is no provider score, no winner, and no recommendation. Every ratio shows
+its numerator and denominator, every profile carries a sample band whose largest
+value is still only `descriptive`, and an empty history says so instead of
+showing 0%. Silence is never a negative vote: an unassessed source is missing
+data and an `unknown` answer is an unanswered question. The report states in its
+own text that these figures are observational and selection-biased, because the
+operator chose the provider, the candidate, the acceptance and the appraisal.
+
+Next, let the operator compare two providers on the same question. The limit of
+this report is that it can only describe what happened to differ: one provider
+is chosen per discovery, so the two have almost never been asked the same thing,
+and each profile is drawn from a different set of questions. A surface that lets
+a person deliberately put the same question to both — two separate approved
+discoveries in one run — would make the samples comparable for once, using the
+machinery that already exists and without anything ever choosing a provider on
+its own.
 
 The accepted design keeps execution, autonomy, and scheduling unreachable from
 the desktop, adds no filesystem, shell, or tool authority to research, keeps the

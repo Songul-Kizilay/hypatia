@@ -72,6 +72,9 @@ from cognition.SourceIngestionEvents import (
     IngestionFailureKind,
     SourceIngestionEvents,
 )
+from cognition.ProviderQualityApplicationService import (
+    ProviderQualityApplicationService,
+)
 from cognition.SourceReputationApplicationService import (
     SourceReputationApplicationService,
 )
@@ -476,8 +479,16 @@ class CognitiveEngine:
         self._source_reputation_service: SourceReputationApplicationService | None = (
             None
         )
+        self._provider_quality_service: (
+            ProviderQualityApplicationService | None
+        ) = None
         if research_run_manager is not None:
             self._source_reputation_service = SourceReputationApplicationService(
+                research_run_manager,
+                response_composer,
+                event_bus=event_bus,
+            )
+            self._provider_quality_service = ProviderQualityApplicationService(
                 research_run_manager,
                 response_composer,
                 event_bus=event_bus,
@@ -614,6 +625,11 @@ class CognitiveEngine:
 
         if SourceReputationApplicationService.is_report_request(request):
             return self._process_source_reputation(request)
+        if (
+            self._provider_quality_service is not None
+            and self._provider_quality_service.is_report_request(request)
+        ):
+            return self._provider_quality_service.process_report(request)
 
         if self._is_hypothesis_request(request):
             return self._process_hypothesis(request)

@@ -25,6 +25,7 @@ from research.KnowledgeReconciliationReport import (
 )
 from research.ResearchAutonomyResult import ResearchAutonomyResult
 from research.ResearchCalibrationReport import ResearchCalibrationReport
+from research.ResearchProviderQualityReport import ResearchProviderQualityReport
 from research.ResearchClaimContradictionPreview import (
     ResearchClaimContradictionPreview,
 )
@@ -147,6 +148,7 @@ class BrainResponse:
     research_reflections: tuple[ResearchReflectionReport, ...] = ()
     failure_lessons: tuple[ResearchFailureLesson, ...] = ()
     research_calibration: ResearchCalibrationReport | None = None
+    research_provider_quality: ResearchProviderQualityReport | None = None
     research_plan_authorization: ResearchPlanAuthorization | None = None
     research_plan_authorizations: tuple[ResearchPlanAuthorization, ...] = ()
     source_reputations: tuple[SourceReputation, ...] = ()

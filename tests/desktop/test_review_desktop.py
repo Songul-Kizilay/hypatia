@@ -180,6 +180,28 @@ class NothingHereAdjustsAnythingTests(unittest.TestCase):
             with self.subTest(name=forbidden):
                 self.assertEqual(mentions(vocabulary, forbidden), [])
 
+    def test_the_panel_offers_provider_quality_without_promising_a_choice(
+        self,
+    ) -> None:
+        """The one thing a provider statistic must never quietly become."""
+        self.assertIn(
+            '("Provider quality", self._report_provider_quality)', WINDOW_SOURCE
+        )
+        self.assertIn("selects no provider", WINDOW_SOURCE)
+        self.assertIn("changes no default", WINDOW_SOURCE)
+        self.assertIn("updates no reputation", WINDOW_SOURCE)
+
+    def test_the_panel_promises_every_denominator(self) -> None:
+        self.assertIn("shows every denominator", WINDOW_SOURCE)
+
+    def test_provider_quality_is_not_scoped_to_one_run(self) -> None:
+        """Provider experience accumulates; one run is never a sample."""
+        start = WINDOW_SOURCE.index("def _report_provider_quality")
+        end = WINDOW_SOURCE.index("def ", start + 10)
+        handler = WINDOW_SOURCE[start:end]
+
+        self.assertNotIn("_review_run_id", handler)
+
     def test_the_panel_says_what_calibration_will_not_do(self) -> None:
         self.assertIn("never adjusts one", WINDOW_SOURCE)
         self.assertIn("starts no research", WINDOW_SOURCE)

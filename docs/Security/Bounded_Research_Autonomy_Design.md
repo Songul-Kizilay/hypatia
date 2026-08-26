@@ -3,10 +3,12 @@
 **Status: DESIGN, WITH OPERATOR-CONTROLLED FOREGROUND EXECUTION IMPLEMENTED.**
 Discovery results are ranked deterministically before a person chooses among
 them, a person can record what they concluded about a source after reading it,
-calibration reports when a claim rests on a source they distrusted, and research
-can now reach vulnerability records rather than only scholarly papers. All four
+calibration reports when a claim rests on a source they distrusted, research can
+reach vulnerability records rather than only scholarly papers, and the record of
+how each provider's assessed samples turned out can be described. All five
 changed what research knows without changing what it may do — the provider a
-plan will contact is bound into the approval that authorizes it.
+plan will contact is bound into the approval that authorizes it, and measuring
+provider performance is deliberately not the same thing as choosing a provider.
 The execution, autonomy, and scheduling services described below are CURRENT and
 were inspected for this design. Four execution intents are reachable — start,
 status, advance, cancel — and every one of them is an act a person performs.
@@ -1098,31 +1100,90 @@ follow-up. The same seven autonomy and background intents remain unreachable.
 Two providers are not comprehensive vulnerability intelligence, and this
 document does not claim otherwise.
 
-### 17.8 Next: find out which provider is actually earning its place
+### 17.8 Done: provider experience can be described, and still not obeyed
 
-**Exactly one: provider-quality evaluation from recorded operator assessments.**
+Implemented in v0.3.198 as a derived report with no store and no write path.
 
-The honest result of adding NVD is that it is clearly better at one thing and
-visibly worse at another. An exact CVE lookup returns the vulnerability itself,
-which Crossref could never do. A keyword query returns publication-ordered
-results that frequently share only a word with the question — a live search for
-`Craft CMS remote code execution` returned an unrelated colour-management flaw
-from 2009 first, because that is what publication order gives.
+**The join was the whole problem.** Both halves were already recorded — a
+discovery names the provider that produced it, an assessment names what a person
+concluded after reading a source — and nothing connected them, because no
+accepted source carries a foreign key back to the discovery that proposed it.
+The bridge is canonical resource identity, `identity_of(candidate.url)` against
+`identity_of(source.url)`: not a domain guess and not invented here, but the same
+function the panel already uses to decide whether a discovered candidate was
+accepted. From the accepted source onward the join is by exact document
+identifier.
 
-Nothing measures that. Which provider returned sources a person found useful is
-already recorded — usefulness, applicability, independence and publication
-status have been stored per source since v0.3.195, and the discovery record
-already names the provider — and no layer joins the two. Until something does,
-the choice between providers is a matter of taste, and any future work on
-ranking or provider selection would be tuning against an outcome nobody has
-measured.
+**What cannot be attributed is counted apart rather than guessed.** A resource
+both providers returned has no single provider to credit and is excluded from
+every profile; an assessed source no discovery proposed was added by hand and is
+excluded too. Both counts are reported.
 
-It stays read-only and stays descriptive: report which provider produced sources
-the operator judged useful, per question kind, with the sample size visible. No
-automatic provider selection, no reranking, and no reputation learning.
+**The funnel is reported, never divided across.** Discovery operations,
+candidates discovered, accepted sources, sources with evidence, and assessed
+sources are five different populations. A usefulness rate is taken over assessed
+sources and says so; assessment coverage is reported as `assessed / evidence
+bearing` beside it, so a high percentage over two sources cannot be mistaken for
+a finding.
 
-**Explicitly not in it:** learned or automatic provider selection; semantic
-reranking; reputation mutation; new providers; background scheduling;
+**Silence never becomes a negative vote.** An unassessed source is missing data,
+not a bad source. `unknown` on a dimension means the question was not answered:
+it is counted and shown, and excluded from the rate. Zero assessed samples
+renders as `No assessed provider samples yet`, never as 0%.
+
+**There is no provider score, and no winner.** No field names a better provider,
+a preferred provider, or a recommendation, and a test asserts that no such name
+exists in the report's code. Every ratio carries its numerator and denominator,
+and every profile carries a sample band — `no_data`, `very_small`, `limited`,
+`descriptive` — whose largest value is still called descriptive.
+
+**Query category is decided from the question, never from the provider.** A
+question naming exactly one well-formed CVE is an exact lookup; everything else
+is a keyword search, judged by the same strict parser the NVD provider uses. A
+`security keyword` category was considered and rejected: nothing here can tell
+one deterministically, and the invented list would end up deciding the
+statistics. The split earns its place because the providers differ sharply
+across it, and averaging them would hide the only thing the data shows.
+
+**These figures are observational and selection-biased, and say so in their own
+text.** The operator chose which provider to ask, which candidate to open, which
+source to accept, and which of those to appraise. This is descriptive evidence
+from actual use. It does not establish causal provider quality and does not
+claim to.
+
+**Nothing reads it to decide anything.** The report changes no provider default,
+no plan draft, no ranking, no ranking weight, no reputation, no assessment, no
+claim and no confidence; it opens no socket, calls no model, advances no
+execution and spends no budget. A test enumerates every file that so much as
+mentions the report type, and the list is five: the response that carries it, the
+events that count it, the evaluator that builds it, the module that defines it,
+and the composer that renders it.
+
+**Still not current:** automatic or learned provider selection; provider routing
+policy; provider reputation learning; ranking weight adaptation; semantic
+reranking; unbiased benchmarking; autonomous multi-provider research; background
+research; scheduler authority. The same seven autonomy and background intents
+remain unreachable.
+
+### 17.9 Next: let the operator compare two providers on the same question
+
+**Exactly one: a side-by-side provider comparison the operator drives.**
+
+The report now describes what has happened, and the immediate limit is that it
+can only describe what happened to differ. The operator picks one provider per
+discovery, so the two providers have almost never been asked the same question,
+and every profile is drawn from a different set of questions. Comparing them is
+therefore comparing two samples that were never comparable.
+
+The fix is not a policy and not a learner. It is a surface that lets a person ask
+both providers the same question deliberately — two separate approved discoveries
+against one run — so that for once the samples line up, and then reads the
+existing report over that pair. That turns an observational record into something
+closer to a controlled one, using the machinery that already exists, without any
+component ever choosing a provider on its own.
+
+**Explicitly not in it:** automatic multi-provider querying; provider selection;
+learned routing; reranking; reputation learning; background scheduling;
 `research_autonomy_run`; filesystem, shell, or tool authority.
 
 ---

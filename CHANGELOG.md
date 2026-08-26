@@ -2,6 +2,50 @@
 
 All notable project changes are recorded here.
 
+## [0.3.198] - 2026-08-27
+
+### Added
+
+- A read-only provider quality report. For each provider and question category
+  it describes the funnel — discovery operations, candidates discovered,
+  accepted sources, sources with evidence, assessed sources — and then the
+  operator's own judgements across usefulness, applicability, independence and
+  publication status.
+- Deterministic question categories: exact CVE lookup or keyword search, decided
+  from the question by the same strict parser the NVD provider uses, never from
+  the provider that answered it.
+- A sample-size vocabulary — no data, very small, limited, descriptive — carried
+  beside every profile, whose largest band is still only descriptive.
+- A `Provider quality` button in Review. Unlike the others it is not scoped to
+  one run, because provider experience accumulates and one run is never a
+  sample.
+
+### Changed
+
+- Nothing. The report reads persisted runs and adds no field, no store, and no
+  schema version.
+
+### Security
+
+- Measurement is not policy. The report selects no provider, changes no default,
+  alters no ranking or ranking weight, updates no reputation, touches no
+  assessment, evidence, claim or confidence, and creates no authorization.
+- It performs no network request, no model call, no source fetch, no execution
+  advance and no budget spend, and constructs no provider.
+- There is no provider score and no winner. Every ratio carries its numerator
+  and denominator; a report with no assessed samples says so rather than
+  showing 0%.
+- Silence is never a negative vote. An unassessed source is missing data and an
+  `unknown` dimension is an unanswered question; both are shown and neither
+  enters a rate.
+- Attribution that cannot be made is reported rather than guessed. A resource
+  both providers returned, and an assessed source no discovery proposed, are
+  each counted apart from every profile.
+- The report states in its own text that the figures are observational and
+  selection-biased, because the number and the caveat have to travel together.
+- Telemetry carries structural counts only: no question text, no source title,
+  no assessment prose, no document identifier.
+
 ## [0.3.197] - 2026-08-27
 
 ### Added

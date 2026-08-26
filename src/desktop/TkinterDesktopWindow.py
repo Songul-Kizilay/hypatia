@@ -123,6 +123,12 @@ _REVIEW_PANEL_NOTE = (
     "evidence, how the run went, and what was never asked. None of them "
     "changes a run, a claim, or a confidence."
 )
+_PROVIDER_QUALITY_NOTE = (
+    "Provider quality describes sources you chose to ask for, accept and "
+    "assess. It selects no provider, changes no default, alters no ranking and "
+    "updates no reputation, and it shows every denominator so a percentage over "
+    "three sources cannot be mistaken for a measurement."
+)
 _CALIBRATION_NOTE = (
     "Calibration reports a mismatch and never adjusts one. What you are "
     "willing to assert is your judgement; a system that quietly downgraded it "
@@ -4662,8 +4668,14 @@ class TkinterDesktopWindow:
         ttk.Label(run, text=_CALIBRATION_NOTE, wraplength=680).grid(
             row=1, column=1, sticky="w", padx=(8, 0), pady=(6, 0)
         )
+        ttk.Label(run, text=_PROVIDER_QUALITY_NOTE, wraplength=680).grid(
+            row=3, column=1, sticky="w", padx=(8, 0), pady=(6, 0)
+        )
         commands: list[tuple[str, Callable[[], None]]] = [
-            ("Calibrate claims", self._report_claim_calibration)
+            ("Calibrate claims", self._report_claim_calibration),
+            # Not run-scoped like the others: provider experience accumulates
+            # across every run, and one run is never a sample.
+            ("Provider quality", self._report_provider_quality),
         ]
         if self._reflection_enabled:
             commands.append(("Reflect", self._preview_reflection))
@@ -4742,6 +4754,10 @@ class TkinterDesktopWindow:
     def _review_request(self, call: Callable[[], BrainResponse]) -> None:
         """Run one review request into the Review panel's result area."""
         self._panel_request(self._review_status, self._review_output, call)
+
+    def _report_provider_quality(self) -> None:
+        """Describe provider samples. Change no provider, default, or ranking."""
+        self._review_request(self._controller.report_provider_quality)
 
     def _report_claim_calibration(self) -> None:
         self._review_request(

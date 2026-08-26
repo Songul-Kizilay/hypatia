@@ -396,6 +396,16 @@ class DesktopController:
             BrainRequest(message=message, source="desktop", metadata=metadata)
         )
 
+    def report_provider_quality(self) -> BrainResponse:
+        """Describe how assessed provider samples performed, across every run."""
+        return self._brain.process(
+            BrainRequest(
+                message="Report provider quality",
+                source="desktop",
+                metadata={"intent": "provider_quality_report"},
+            )
+        )
+
     def report_claim_calibration(self, research_run_id: str) -> BrainResponse:
         """Report how far each claim outruns its evidence, adjusting none."""
         return self._run_only_request(
