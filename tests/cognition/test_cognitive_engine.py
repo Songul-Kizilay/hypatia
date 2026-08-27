@@ -6101,6 +6101,7 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(updated.discoveries, ())
         self.assertEqual(len(updated.failures), 1)
         self.assertEqual(updated.failures[0].stage, "source_discovery")
+        self.assertEqual(updated.failures[0].provider, provider.provider_name)
         self.assertNotIn(secret, repr(updated))
 
     def test_discovery_rejects_provider_contract_overflow_as_audited_failure(

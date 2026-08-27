@@ -535,8 +535,28 @@ class PartialStateTests(unittest.TestCase):
         )
 
         rendered = "\n".join(report.lines())
-        self.assertIn("does not say which provider", rendered)
+        self.assertIn("provider is unavailable in legacy audit records", rendered)
         self.assertIn("nvd: pending", rendered)
+
+    def test_a_provider_attributed_failure_marks_only_that_side_failed(self) -> None:
+        report = self.builder.build(
+            run(
+                discovery(1, "crossref", KEYWORD_QUESTION),
+                failures=(
+                    ResearchFailureRecord(
+                        stage="source_discovery",
+                        reason="Research source discovery failed.",
+                        occurred_at=NOW,
+                        provider="nvd",
+                    ),
+                ),
+            )
+        )
+
+        self.assertTrue(side_of(report, "nvd").failed)
+        self.assertFalse(side_of(report, "crossref").failed)
+        self.assertIn("nvd: failed", "\n".join(report.lines()))
+        self.assertEqual(report.unattributed_failed_discovery_count, 0)
 
     def test_neither_side_run_reads_as_not_started(self) -> None:
         report = self.builder.build(run())

@@ -87,8 +87,8 @@ class _CollectionBudget:
 class JsonFileResearchRunStore:
     """Load and atomically replace a strict versioned research-run document."""
 
-    _SCHEMA_VERSION = 12
-    _SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}
+    _SCHEMA_VERSION = 13
+    _SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13}
     _DOCUMENT_FIELDS = {"schema_version", "runs"}
     _RUN_FIELDS_V1 = {
         "run_id",
@@ -119,7 +119,8 @@ class JsonFileResearchRunStore:
         "taint_label",
         "instruction_authority",
     }
-    _FAILURE_FIELDS = {"stage", "reason", "occurred_at"}
+    _FAILURE_FIELDS_V1_V12 = {"stage", "reason", "occurred_at"}
+    _FAILURE_FIELDS_V13 = _FAILURE_FIELDS_V1_V12 | {"provider"}
     _EVIDENCE_FIELDS = {
         "evidence_id",
         "source_document_id",
@@ -314,6 +315,8 @@ class JsonFileResearchRunStore:
             11: self._RUN_FIELDS_V9,
             # Version 12 changed the shape of a candidate again, not the run.
             12: self._RUN_FIELDS_V9,
+            # Version 13 added optional provider provenance to failures.
+            13: self._RUN_FIELDS_V9,
         }[schema_version]
         if not isinstance(value, dict) or set(value) != expected_fields:
             raise ResearchError("Research run store contains an invalid run record.")
@@ -362,7 +365,9 @@ class JsonFileResearchRunStore:
             sources=tuple(
                 self._parse_source(item, schema_version) for item in sources_data
             ),
-            failures=tuple(self._parse_failure(item) for item in failures_data),
+            failures=tuple(
+                self._parse_failure(item, schema_version) for item in failures_data
+            ),
             created_at=self._parse_datetime(value["created_at"], "created_at"),
             updated_at=self._parse_datetime(value["updated_at"], "updated_at"),
             evidence=tuple(self._parse_evidence(item) for item in evidence_data),
@@ -413,8 +418,13 @@ class JsonFileResearchRunStore:
             ),
         )
 
-    def _parse_failure(self, value: Any) -> ResearchFailureRecord:
-        if not isinstance(value, dict) or set(value) != self._FAILURE_FIELDS:
+    def _parse_failure(self, value: Any, schema_version: int) -> ResearchFailureRecord:
+        expected_fields = (
+            self._FAILURE_FIELDS_V13
+            if schema_version >= 13
+            else self._FAILURE_FIELDS_V1_V12
+        )
+        if not isinstance(value, dict) or set(value) != expected_fields:
             raise ResearchError(
                 "Research run store contains an invalid failure record."
             )
@@ -422,6 +432,7 @@ class JsonFileResearchRunStore:
             stage=value["stage"],
             reason=value["reason"],
             occurred_at=self._parse_datetime(value["occurred_at"], "occurred_at"),
+            provider=value["provider"] if schema_version >= 13 else None,
         )
 
     def _parse_evidence(self, value: Any) -> ResearchEvidenceRecord:
@@ -727,6 +738,7 @@ class JsonFileResearchRunStore:
                     "stage": failure.stage,
                     "reason": failure.reason,
                     "occurred_at": failure.occurred_at.isoformat(),
+                    "provider": failure.provider,
                 }
                 for failure in run.failures
             ],

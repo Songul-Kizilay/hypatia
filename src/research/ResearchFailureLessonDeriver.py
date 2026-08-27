@@ -235,17 +235,23 @@ class ResearchFailureLessonDeriver:
         recorded_at: datetime,
     ) -> list[ResearchFailureLesson]:
         """Each recorded failure is a lesson about how the work goes wrong."""
-        return [
-            self._lesson(
-                run,
-                FailureLessonKind.OPERATION_FAILURE,
-                f"{record.stage}:{record.occurred_at.isoformat()}",
-                f"The {record.stage} stage failed here: {record.reason}",
-                (f"failure:{record.stage}:{record.occurred_at.isoformat()}",),
-                recorded_at,
+        lessons: list[ResearchFailureLesson] = []
+        for record in run.failures:
+            provider = f" for {record.provider}" if record.provider else ""
+            identity = f"{record.stage}:{record.occurred_at.isoformat()}"
+            if record.provider:
+                identity = f"{identity}:{record.provider}"
+            lessons.append(
+                self._lesson(
+                    run,
+                    FailureLessonKind.OPERATION_FAILURE,
+                    identity,
+                    f"The {record.stage} stage{provider} failed here: {record.reason}",
+                    (f"failure:{identity}",),
+                    recorded_at,
+                )
             )
-            for record in run.failures
-        ]
+        return lessons
 
     @staticmethod
     def _lesson(

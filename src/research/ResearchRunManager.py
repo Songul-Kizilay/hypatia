@@ -376,7 +376,14 @@ class ResearchRunManager:
             self._runs = candidate_tuple
         return updated
 
-    def record_failure(self, run_id: str, stage: str, reason: str) -> ResearchRun:
+    def record_failure(
+        self,
+        run_id: str,
+        stage: str,
+        reason: str,
+        *,
+        provider: str | None = None,
+    ) -> ResearchRun:
         """Persist a safe bounded failure without retaining rejected URL input."""
         normalized_id = self._normalize_run_id(run_id)
         with self._lock:
@@ -390,7 +397,7 @@ class ResearchRunManager:
                 sources=run.sources,
                 failures=(
                     *run.failures,
-                    ResearchFailureRecord(stage, reason, now),
+                    ResearchFailureRecord(stage, reason, now, provider),
                 ),
                 created_at=run.created_at,
                 updated_at=now,

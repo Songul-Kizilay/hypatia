@@ -123,7 +123,7 @@ class SourceDiscoveryStepOperation:
             )
             self._validate(candidates)
         except ResearchError:
-            self._record_failure(run_id)
+            self._record_failure(run_id, provider.provider_name)
             raise
 
         self._raise_if_cancelled(context)
@@ -159,13 +159,14 @@ class SourceDiscoveryStepOperation:
                 "Research source discovery provider returned invalid candidates."
             )
 
-    def _record_failure(self, run_id: str) -> None:
+    def _record_failure(self, run_id: str, provider: str) -> None:
         """Preserve the failure in the run audit without masking the error."""
         try:
             self._research_run_manager.record_failure(
                 run_id,
                 "source_discovery",
                 "Research source discovery failed.",
+                provider=provider,
             )
         except ResearchError:
             return

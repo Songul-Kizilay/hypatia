@@ -487,6 +487,31 @@ class ResearchRunManagerTests(unittest.TestCase):
         self.assertEqual(updated.failures[0].reason, reason)
         self.assertNotIn("http://secret@example.com", repr(updated))
 
+    def test_record_failure_preserves_bounded_provider_provenance(self) -> None:
+        run = self.manager.create("Question")
+
+        updated = self.manager.record_failure(
+            run.run_id,
+            "source_discovery",
+            "Research source discovery failed.",
+            provider=" nvd ",
+        )
+
+        self.assertEqual(updated.failures[0].provider, "nvd")
+
+    def test_invalid_failure_provider_changes_nothing(self) -> None:
+        run = self.manager.create("Question")
+
+        with self.assertRaises(ResearchError):
+            self.manager.record_failure(
+                run.run_id,
+                "source_discovery",
+                "Research source discovery failed.",
+                provider="nvd\nforged",
+            )
+
+        self.assertEqual(self.manager.get(run.run_id).failures, ())
+
     def test_add_discovery_persists_ordered_unaccepted_candidates(self) -> None:
         run = self.manager.create("  Find trustworthy evidence  ")
         candidate = ResearchSourceCandidate(

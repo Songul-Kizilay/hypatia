@@ -121,6 +121,10 @@ To create the world's most capable personal AI research companion.
   operation and requires its own Advance action. Read-only provider-quality,
   side-by-side result, and same-question paired-quality views remain
   descriptive: they choose no provider and alter no routing or ranking.
+- New discovery failures retain the selected provider beside the same generic
+  safe reason. This lets comparison and Failure Memory distinguish an attempted
+  failed side from a pending side without storing raw provider errors; legacy
+  records remain explicitly unattributed.
 - A separate, versioned and atomically replaced accepted-source content store
   with exact UTF-8 byte count/SHA-256 validation, duplicate and storage bounds.
   Physical reads use the opened file descriptor and stop at 40,000,001 bytes;

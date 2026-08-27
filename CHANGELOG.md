@@ -2,6 +2,39 @@
 
 All notable project changes are recorded here.
 
+## [0.3.201] - 2026-08-27
+
+### Added
+
+- Optional bounded provider provenance on research failure audit records. New
+  source-discovery failures record the exact provider selected by the approved
+  step or explicit desktop request.
+- Provider-aware comparison failure states. A failed NVD or Crossref attempt is
+  shown on that side while a successful other side remains intact.
+- Provider-aware Failure Memory lessons. A discovery failure lesson now names
+  its recorded provider and includes that provider in its stable subject and
+  provenance identity.
+
+### Changed
+
+- Research-run persistence is schema v13. Legacy v1-v12 failures load with no
+  provider rather than receiving invented provenance; the optional field is
+  written only on a later successful snapshot replacement.
+- A provider-attributed failure is distinct from a pending side. Legacy
+  provider-less discovery failures remain separately counted and unattributed.
+
+### Security
+
+- Provider provenance is captured from the already selected typed provider at
+  the failure boundary, never parsed from an exception message or inferred from
+  execution order, candidates, or later state.
+- Raw provider errors remain absent. The stored reason stays the existing
+  generic bounded message, and provider text is bounded, stripped, and rejects
+  control characters.
+- Cancellation before or after provider work still creates no discovery-failure
+  record. No retry, routing, preference, automatic provider choice, or new
+  network operation was added.
+
 ## [0.3.200] - 2026-08-27
 
 ### Added

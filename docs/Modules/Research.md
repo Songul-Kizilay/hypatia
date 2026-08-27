@@ -192,7 +192,7 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
   SHA-256 values with an exact match flag. A mismatch does not import or repair
   the file. Unexpected input is bounded to 64 MiB, while an authentic larger
   run export remains eligible up to its exact expected length.
-- The research-run JSON snapshot keeps schema v8 and legacy v1-v7 loading while
+- The research-run JSON snapshot keeps schema v13 and legacy v1-v12 loading while
   limiting the complete UTF-8 file to 64 MiB and all nested list entries to an
   aggregate 20,000 items. Reads stop before oversized JSON decoding; writes
   count exact UTF-8 bytes in a temporary file and publish only a complete

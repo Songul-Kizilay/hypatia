@@ -15,7 +15,8 @@ order.
 
 A side that has not run yet says so. It is not an empty result set: nobody has
 asked, and rendering "0 candidates" for a step nobody advanced would report a
-finding where there is only a pending press.
+finding where there is only a pending press. A provider-attributed failure is a
+third state: attempted but without a discovery result.
 """
 
 from __future__ import annotations
@@ -37,6 +38,7 @@ class ResearchProviderComparisonSide:
     ranked: tuple[RankedResearchSourceCandidate, ...] = ()
     accepted_count: int = 0
     assessed_count: int = 0
+    failed: bool = False
 
     def __post_init__(self) -> None:
         if not isinstance(self.provider, str) or not self.provider.strip():
@@ -57,9 +59,13 @@ class ResearchProviderComparisonSide:
                 raise ResearchError(f"A comparison side {name} must be whole.")
         if self.assessed_count > self.accepted_count:
             raise ResearchError("More sources were assessed than accepted.")
+        if not isinstance(self.failed, bool):
+            raise ResearchError("A comparison side failure flag must be boolean.")
         # A side with candidates but no discovery would be results from nowhere.
         if self.ranked and not self.discovery_id.strip():
             raise ResearchError("A comparison side must name its discovery.")
+        if self.failed and self.discovery_id.strip():
+            raise ResearchError("A comparison side cannot be complete and failed.")
         object.__setattr__(self, "provider", self.provider.strip())
         object.__setattr__(self, "discovery_id", self.discovery_id.strip())
 
@@ -76,6 +82,11 @@ class ResearchProviderComparisonSide:
     def lines(self) -> tuple[str, ...]:
         """Render this side, provenance intact, without a cross-provider rank."""
         if not self.completed:
+            if self.failed:
+                return (
+                    f"{self.provider}: failed — this provider was attempted but "
+                    "did not produce a discovery record.",
+                )
             return (
                 f"{self.provider}: pending — this step has not been advanced yet, "
                 "which is not the same as returning nothing.",

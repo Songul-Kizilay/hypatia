@@ -1214,6 +1214,11 @@ Both read as pending, the run's failed-discovery count is reported separately,
 and no failure is attributed to a side. Overloading an existing audit field to
 make one test pass would have satisfied the test rather than the record.
 
+That was the honest v0.3.199 boundary. v0.3.201 later adds a dedicated optional
+provider field to the failure audit record; it does not reinterpret `stage` or
+infer provenance. New provider-attributed failures can therefore mark the exact
+side failed, while legacy failures remain explicitly unattributed.
+
 **Nothing decides.** No winner field, no preferred or recommended provider, no
 provider score; the report says in its own text that neither provider was judged
 better and that no default changed. Viewing a comparison contacts nobody, calls
@@ -1242,7 +1247,7 @@ cause: when both providers answer one question, the two samples finally line up,
 and the operator's own appraisals of the sources on each side are directly
 comparable in a way they have never been.
 
-Nothing reads them that way yet. The quality report sees the new discoveries
+Before v0.3.200, nothing read them that way. The quality report saw the new discoveries
 because they are ordinary records, which is right, but it still aggregates them
 into per-provider profiles across unrelated questions — so the one genuinely
 comparable slice of the data is averaged away with everything else.
@@ -1277,6 +1282,33 @@ reputation.
 **Explicitly not in it:** provider selection or routing; reranking; reputation
 learning; new providers; background scheduling; `research_autonomy_run`;
 filesystem, shell, or tool authority.
+
+### 17.11 Done: preserve provider provenance on discovery failure
+
+Implemented in v0.3.201. A source-discovery failure now carries one optional,
+bounded provider name captured from the provider that the already approved step
+or explicit request selected. It is not parsed from exception text and it is not
+inferred from execution order, candidate state, or which comparison side happens
+to be empty.
+
+**The safe reason stays generic.** Provider exceptions still do not enter the
+research-run record. The provider name is stripped, bounded to 200 characters,
+and rejects control characters; the reason remains `Research source discovery
+failed.`
+
+**Persistence is schema v13 and legacy truth is preserved.** v1-v12 failure
+records load with `provider=None`. They stay visibly unattributed until a later
+successful snapshot replacement writes the current schema; no migration invents
+which provider failed.
+
+**Comparison and Failure Memory consume only recorded provenance.** A new
+provider-attributed failure marks that exact comparison side `failed`; the other
+side's successful discovery remains intact. An operation-failure lesson names
+the recorded provider and includes it in its stable subject/provenance identity.
+Legacy failures remain generic in both places.
+
+**Still not current:** automatic retry, provider fallback, learned routing,
+provider preference, failure-based ranking changes, or autonomous execution.
 
 ---
 

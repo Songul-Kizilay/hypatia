@@ -58,19 +58,35 @@ class ResearchProviderComparisonBuilder:
         }
         assessed = _assessed_documents(run)
         latest = _latest_discovery_by_provider(run)
+        failed_providers = {
+            failure.provider
+            for failure in run.failures
+            if failure.stage == DISCOVERY_FAILURE_STAGE and failure.provider is not None
+        }
 
         return ResearchProviderComparisonReport(
             run_id=run.run_id,
             question=run.question,
             category=category_of(run.question),
             sides=tuple(
-                _side(provider.value, latest.get(provider.value), accepted, assessed)
+                _side(
+                    provider.value,
+                    latest.get(provider.value),
+                    accepted,
+                    assessed,
+                    failed=provider.value in failed_providers,
+                )
                 for provider in providers
             ),
             failed_discovery_count=sum(
                 1
                 for failure in run.failures
                 if failure.stage == DISCOVERY_FAILURE_STAGE
+            ),
+            unattributed_failed_discovery_count=sum(
+                1
+                for failure in run.failures
+                if failure.stage == DISCOVERY_FAILURE_STAGE and failure.provider is None
             ),
         )
 
@@ -110,9 +126,11 @@ def _side(
     discovery: ResearchSourceDiscoveryRecord | None,
     accepted: dict[str, str],
     assessed: set[str],
+    *,
+    failed: bool = False,
 ) -> ResearchProviderComparisonSide:
     if discovery is None:
-        return ResearchProviderComparisonSide(provider=provider)
+        return ResearchProviderComparisonSide(provider=provider, failed=failed)
     ranked = ranked_candidates(discovery)[:MAX_COMPARISON_SIDE_CANDIDATES]
     documents = [
         accepted[identity]

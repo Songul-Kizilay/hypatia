@@ -2035,6 +2035,7 @@ class CognitiveEngine:
                     normalized_run_id,
                     "source_discovery",
                     "Research source discovery failed.",
+                    provider=provider.provider_name,
                 )
             except ResearchError:
                 return self._response_composer.research_source_discovery_failure(

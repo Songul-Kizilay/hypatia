@@ -12,13 +12,9 @@ so that the verdict stays with the person reading it.
 
 A partial comparison is reported as partial. One side complete and the other
 pending is the ordinary state between two advances, and neither an empty result
-set nor a failure is invented to fill the gap.
-
-One limitation is stated rather than left to be discovered. A discovery that
-failed is recorded against the run without naming the provider that failed, so a
-side which was attempted and errored is indistinguishable here from one nobody
-advanced. Both read as pending, the run's failure count is reported separately,
-and this report does not guess which provider it belongs to.
+set nor a failure is invented to fill the gap. New discovery failures carry
+their recorded provider and can mark that exact side failed. Legacy failures
+without provider provenance remain separately counted and unattributed.
 """
 
 from __future__ import annotations
@@ -50,6 +46,7 @@ class ResearchProviderComparisonReport:
     category: ResearchQueryCategory
     sides: tuple[ResearchProviderComparisonSide, ...]
     failed_discovery_count: int = 0
+    unattributed_failed_discovery_count: int = 0
 
     def __post_init__(self) -> None:
         for name in ("run_id", "question"):
@@ -67,22 +64,27 @@ class ResearchProviderComparisonReport:
         providers = [side.provider for side in self.sides]
         if len(providers) != len(set(providers)):
             raise ResearchError("A provider comparison reports one side twice.")
-        if (
-            isinstance(self.failed_discovery_count, bool)
-            or not isinstance(self.failed_discovery_count, int)
-            or self.failed_discovery_count < 0
+        for name in (
+            "failed_discovery_count",
+            "unattributed_failed_discovery_count",
         ):
-            raise ResearchError("A failed discovery count must be whole.")
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise ResearchError("A failed discovery count must be whole.")
+        if self.unattributed_failed_discovery_count > self.failed_discovery_count:
+            raise ResearchError("Unattributed failures exceed all discovery failures.")
 
     @property
     def complete(self) -> bool:
-        """Say whether both providers have actually been asked."""
+        """Say whether both providers produced a discovery record."""
         return all(side.completed for side in self.sides)
 
     @property
     def partial(self) -> bool:
-        """Say whether some but not all sides have run."""
-        return not self.complete and any(side.completed for side in self.sides)
+        """Say whether some side completed or verifiably failed."""
+        return not self.complete and any(
+            side.completed or side.failed for side in self.sides
+        )
 
     def counts(self) -> dict[str, int]:
         """Return bounded structural counts suitable for an event payload."""
@@ -93,6 +95,9 @@ class ResearchProviderComparisonReport:
             "accepted_count": sum(side.accepted_count for side in self.sides),
             "assessed_count": sum(side.assessed_count for side in self.sides),
             "failed_discovery_count": self.failed_discovery_count,
+            "unattributed_failed_discovery_count": (
+                self.unattributed_failed_discovery_count
+            ),
         }
 
     def lines(self) -> tuple[str, ...]:
@@ -112,12 +117,11 @@ class ResearchProviderComparisonReport:
         for side in self.sides:
             rendered.extend(side.lines())
             rendered.append("")
-        if self.failed_discovery_count:
+        if self.unattributed_failed_discovery_count:
             rendered.append(
-                f"Discovery attempts recorded as failed in this run: "
-                f"{self.failed_discovery_count}. The audit record does not say "
-                "which provider each failure belongs to, so none is attributed "
-                "to a side here."
+                "Discovery failures whose provider is unavailable in legacy audit "
+                f"records: {self.unattributed_failed_discovery_count}. None is "
+                "attributed to a side here."
             )
             rendered.append("")
         rendered.extend((SEPARATE_RANKING_NOTICE, "", NO_WINNER_NOTICE))

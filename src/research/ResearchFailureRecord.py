@@ -15,6 +15,7 @@ class ResearchFailureRecord:
     stage: str
     reason: str
     occurred_at: datetime
+    provider: str | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.stage, str) or not self.stage.strip():
@@ -28,5 +29,14 @@ class ResearchFailureRecord:
             or self.occurred_at.utcoffset() is None
         ):
             raise ResearchError("Research failure time must be timezone-aware.")
+        if self.provider is not None:
+            if (
+                not isinstance(self.provider, str)
+                or not self.provider.strip()
+                or len(self.provider.strip()) > 200
+                or any(character in self.provider for character in ("\r", "\n", "\t"))
+            ):
+                raise ResearchError("Research failure provider is invalid.")
+            object.__setattr__(self, "provider", self.provider.strip())
         object.__setattr__(self, "stage", self.stage.strip())
         object.__setattr__(self, "reason", self.reason.strip())

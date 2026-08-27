@@ -143,6 +143,7 @@ class SourceDiscoveryStepOperationTests(unittest.TestCase):
         run = self.manager.get(run_id)
         self.assertEqual(len(run.failures), 1)
         self.assertEqual(run.failures[0].stage, "source_discovery")
+        self.assertEqual(run.failures[0].provider, "recording_provider")
         self.assertEqual(run.discoveries, ())
 
     def test_oversized_provider_result_is_rejected(self) -> None:

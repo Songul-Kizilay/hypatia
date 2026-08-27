@@ -524,6 +524,21 @@ class LessonDerivationTests(FailureMemoryFixture):
             [lesson.lesson_id for lesson in second],
         )
 
+    def test_a_discovery_failure_lesson_names_its_recorded_provider(self) -> None:
+        run_id = self.new_run()
+        self.manager.record_failure(
+            run_id,
+            "source_discovery",
+            "Research source discovery failed.",
+            provider="nvd",
+        )
+
+        [lesson] = self.of_kind(run_id, FailureLessonKind.OPERATION_FAILURE)
+
+        self.assertIn("source_discovery stage for nvd failed", lesson.statement)
+        self.assertIn(":nvd", lesson.subject_id)
+        self.assertIn(":nvd", lesson.provenance[0])
+
     def test_the_lesson_count_is_bounded(self) -> None:
         run_id = self.new_run()
         for index in range(5):
