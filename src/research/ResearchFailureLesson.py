@@ -18,6 +18,7 @@ from datetime import UTC, datetime
 from core.Exceptions import ResearchError
 from research.DisplayText import one_line
 from research.FailureLessonKind import FailureLessonKind
+from research.FailureMemoryTokens import failure_memory_tokens
 
 MAX_LESSON_STATEMENT_LENGTH = 300
 MAX_LESSON_CONTEXT_LENGTH = 200
@@ -89,8 +90,7 @@ class ResearchFailureLesson:
 
     def tokens(self) -> frozenset[str]:
         """Return the lowercase words recall matches against."""
-        words = f"{self.context} {self.statement}".casefold().split()
-        return frozenset(word.strip(".,;:()[]\"'") for word in words if len(word) > 3)
+        return failure_memory_tokens(f"{self.context} {self.statement}")
 
 
 def lesson_identity(run_id: str, kind: FailureLessonKind, subject_id: str) -> str:

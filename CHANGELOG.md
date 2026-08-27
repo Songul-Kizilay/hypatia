@@ -2,6 +2,22 @@
 
 All notable project changes are recorded here.
 
+## [0.3.202] - 2026-08-27
+
+### Fixed
+
+- Failure Memory now applies the same bounded lexical normalization to a new
+  question and to stored lesson context. Trailing punctuation can no longer
+  hide an otherwise relevant two-token lesson.
+- Punctuation-only fragments are discarded after normalization instead of
+  becoming meaningless recall tokens.
+
+### Security
+
+- Recall remains advisory, deterministic, local, bounded, and model-free. The
+  change does not block research, store new information, alter lesson weights,
+  or lower the existing two-shared-token threshold.
+
 ## [0.3.201] - 2026-08-27
 
 ### Added

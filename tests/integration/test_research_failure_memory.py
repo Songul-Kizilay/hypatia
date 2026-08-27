@@ -807,6 +807,39 @@ class RecallIsAdvisoryTests(FailureMemoryFixture):
             (lesson,),
         )
 
+    def test_recall_normalizes_edge_punctuation_on_both_sides(self) -> None:
+        """A question mark in stored context may not hide a relevant lesson."""
+        lesson = ResearchFailureLesson(
+            lesson_id="lesson:run-1:operation_failure:ring-search",
+            kind=FailureLessonKind.OPERATION_FAILURE,
+            run_id="run-1",
+            subject_id="ring-search",
+            statement="Rings failed.",
+            provenance=("failure:ring-search",),
+            context="Which Saturn?",
+            recorded_at=START,
+        )
+
+        self.assertEqual(
+            FailureMemoryAdvisor().relevant("Saturn rings?", [lesson]),
+            (lesson,),
+        )
+
+    def test_recall_discards_punctuation_only_fragments(self) -> None:
+        lesson = ResearchFailureLesson(
+            lesson_id="lesson:run-1:operation_failure:punctuation",
+            kind=FailureLessonKind.OPERATION_FAILURE,
+            run_id="run-1",
+            subject_id="punctuation",
+            statement="**** .... !!!!",
+            provenance=("failure:punctuation",),
+            context="",
+            recorded_at=START,
+        )
+
+        self.assertEqual(lesson.tokens(), frozenset())
+        self.assertEqual(FailureMemoryAdvisor().relevant("**** ....", [lesson]), ())
+
     def test_an_empty_question_recalls_nothing(self) -> None:
         self.assertEqual(FailureMemoryAdvisor().relevant("", []), ())
         self.assertEqual(FailureMemoryAdvisor().relevant("a bc", []), ())

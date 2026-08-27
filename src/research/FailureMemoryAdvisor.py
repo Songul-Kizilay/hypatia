@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+from research.FailureMemoryTokens import failure_memory_tokens
 from research.ResearchFailureLesson import ResearchFailureLesson
 
 DEFAULT_RECALL_LIMIT = 5
@@ -47,7 +48,7 @@ class FailureMemoryAdvisor:
         lessons: Iterable[ResearchFailureLesson],
     ) -> tuple[ResearchFailureLesson, ...]:
         """Return lessons sharing wording with the question, heaviest first."""
-        wanted = _tokens(question)
+        wanted = failure_memory_tokens(question)
         if not wanted:
             return ()
         scored: list[tuple[int, int, str, ResearchFailureLesson]] = []
@@ -58,11 +59,3 @@ class FailureMemoryAdvisor:
             scored.append((-shared, -lesson.weight, lesson.lesson_id, lesson))
         scored.sort(key=lambda entry: entry[:3])
         return tuple(entry[3] for entry in scored[: self._limit])
-
-
-def _tokens(value: str) -> frozenset[str]:
-    """Return the lowercase words long enough to be worth matching on."""
-    if not isinstance(value, str):
-        return frozenset()
-    words = value.casefold().split()
-    return frozenset(word.strip(".,;:()[]\"'?!") for word in words if len(word) > 3)
