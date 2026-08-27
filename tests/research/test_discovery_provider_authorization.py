@@ -14,8 +14,7 @@ from __future__ import annotations
 
 import sys
 import unittest
-from dataclasses import replace
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -138,9 +137,7 @@ class ProviderVocabularyTests(unittest.TestCase):
                 preview = self.draft(name)
                 self.assertTrue(preview.allowed)
                 assert preview.plan is not None
-                self.assertEqual(
-                    preview.plan.steps[0].discovery_provider.value, name
-                )
+                self.assertEqual(preview.plan.steps[0].discovery_provider.value, name)
 
     def test_a_url_is_never_a_provider(self) -> None:
         """The field decides a network destination, so it is never free text."""
@@ -229,9 +226,7 @@ class ExecutionRoutingTests(unittest.TestCase):
         """Never both, and never a second one after the first disappoints."""
         self.operation.run(self.step(ResearchDiscoveryProviderName.NVD), _context())
 
-        self.assertEqual(
-            len(self.nvd.queries) + len(self.crossref.queries), 1
-        )
+        self.assertEqual(len(self.nvd.queries) + len(self.crossref.queries), 1)
 
 
 class _RecordingRunManager:

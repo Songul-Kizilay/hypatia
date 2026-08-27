@@ -50,9 +50,7 @@ _CAUTION = {
         "Very small sample — descriptive only, and one more judgement would "
         "move it noticeably."
     ),
-    ProviderSampleSize.LIMITED: (
-        "Limited sample — descriptive only."
-    ),
+    ProviderSampleSize.LIMITED: ("Limited sample — descriptive only."),
     ProviderSampleSize.DESCRIPTIVE: (
         "Descriptive only: these are sources the operator chose to inspect, "
         "not a measured sample of what the provider returns."

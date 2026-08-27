@@ -8,8 +8,8 @@ from core.Exceptions import ResearchError
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRunStatus import ResearchRunStatus
-from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
 from research.ResearchSourceApplicability import ResearchSourceApplicability
+from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
 from research.ResearchSourceIndependence import ResearchSourceIndependence
 from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
 from research.ResearchSourceRecord import ResearchSourceRecord
@@ -55,9 +55,7 @@ class ResearchSourceAssessmentWritePreview:
             (self.publication_status, ResearchSourcePublicationStatus),
         ):
             if not isinstance(value, expected):
-                raise ResearchError(
-                    "Research assessment preview judgement is invalid."
-                )
+                raise ResearchError("Research assessment preview judgement is invalid.")
         if not isinstance(self.evidence, tuple) or not self.evidence:
             raise ResearchError(
                 "Research assessment preview requires explicit evidence."

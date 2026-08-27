@@ -38,6 +38,12 @@ from cognition.LearnedMemoryContextService import LearnedMemoryContextService
 from cognition.LLMConversationHistoryBuilder import (
     build_llm_conversation_history,
 )
+from cognition.ProviderComparisonApplicationService import (
+    ProviderComparisonApplicationService,
+)
+from cognition.ProviderQualityApplicationService import (
+    ProviderQualityApplicationService,
+)
 from cognition.ReflectionApplicationService import (
     ReflectionApplicationService,
 )
@@ -71,12 +77,6 @@ from cognition.SecurityAgentApplicationService import (
 from cognition.SourceIngestionEvents import (
     IngestionFailureKind,
     SourceIngestionEvents,
-)
-from cognition.ProviderComparisonApplicationService import (
-    ProviderComparisonApplicationService,
-)
-from cognition.ProviderQualityApplicationService import (
-    ProviderQualityApplicationService,
 )
 from cognition.SourceReputationApplicationService import (
     SourceReputationApplicationService,
@@ -152,6 +152,7 @@ from research.ResearchClaimContradictionProposalProvider import (
     ResearchClaimContradictionProposalProvider,
 )
 from research.ResearchClaimRecord import ResearchClaimRecord
+from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchEvidenceIntegrityAuditor import ResearchEvidenceIntegrityAuditor
 from research.ResearchExecutionStore import ResearchExecutionStore
 from research.ResearchFailureLesson import ResearchFailureLesson
@@ -174,7 +175,6 @@ from research.ResearchSourceContentRestorationStatus import (
     ResearchSourceContentRestorationStatus,
 )
 from research.ResearchSourceContentStore import ResearchSourceContentStore
-from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchSourceDiscoveryProvider import ResearchSourceDiscoveryProvider
 from research.ResearchSourceFetcher import ResearchSourceFetcher
 from research.SourceAcceptStepOperation import SourceAcceptStepOperation
@@ -482,9 +482,7 @@ class CognitiveEngine:
         self._source_reputation_service: SourceReputationApplicationService | None = (
             None
         )
-        self._provider_quality_service: (
-            ProviderQualityApplicationService | None
-        ) = None
+        self._provider_quality_service: ProviderQualityApplicationService | None = None
         self._provider_comparison_service: (
             ProviderComparisonApplicationService | None
         ) = None
@@ -1800,9 +1798,7 @@ class CognitiveEngine:
     @staticmethod
     def _research_source_assessment_write_values(
         request: BrainRequest,
-    ) -> (
-        tuple[str, str, list[str], str, str | None, str, str, str, str, str] | None
-    ):
+    ) -> tuple[str, str, list[str], str, str | None, str, str, str, str, str] | None:
         run_id = request.metadata.get("research_run_id")
         document_id = request.metadata.get("research_source_document_id")
         evidence_ids = request.metadata.get("research_assessment_evidence_ids")
@@ -1820,10 +1816,10 @@ class CognitiveEngine:
         judgement = tuple(
             request.metadata.get(f"research_source_{name}", "unknown")
             for name in ("usefulness", "applicability", "independence")
-        ) + (request.metadata.get("research_source_publication_status", "unknown"),)
-        if not all(
-            isinstance(value, str) and value.strip() for value in judgement
-        ):
+        ) + (
+            request.metadata.get("research_source_publication_status", "unknown"),
+        )
+        if not all(isinstance(value, str) and value.strip() for value in judgement):
             return None
         if (
             not isinstance(run_id, str)

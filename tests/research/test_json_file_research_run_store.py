@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import json
-from hashlib import sha256
 import tempfile
 import unittest
 from dataclasses import replace
 from datetime import UTC, datetime
+from hashlib import sha256
 from pathlib import Path
 from unittest.mock import patch
 
@@ -26,18 +26,18 @@ from research.ResearchRun import ResearchRun
 from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSourceApplicability import ResearchSourceApplicability
 from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
-from research.ResearchSourceIndependence import ResearchSourceIndependence
-from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
-from research.ResearchSourceUsefulness import ResearchSourceUsefulness
-from research.ResearchVulnerabilityMetric import ResearchVulnerabilityMetric
-from research.ResearchVulnerabilityRecord import ResearchVulnerabilityRecord
-from research.ResearchVulnerabilityReference import ResearchVulnerabilityReference
 from research.ResearchSourceCandidate import ResearchSourceCandidate
 from research.ResearchSourceComparisonNoteRecord import (
     ResearchSourceComparisonNoteRecord,
 )
 from research.ResearchSourceDiscoveryRecord import ResearchSourceDiscoveryRecord
+from research.ResearchSourceIndependence import ResearchSourceIndependence
+from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
 from research.ResearchSourceRecord import ResearchSourceRecord
+from research.ResearchSourceUsefulness import ResearchSourceUsefulness
+from research.ResearchVulnerabilityMetric import ResearchVulnerabilityMetric
+from research.ResearchVulnerabilityRecord import ResearchVulnerabilityRecord
+from research.ResearchVulnerabilityReference import ResearchVulnerabilityReference
 
 
 class JsonFileResearchRunStoreTests(unittest.TestCase):
@@ -641,9 +641,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
         self.assertEqual(
             assessment.applicability, ResearchSourceApplicability.BACKGROUND_ONLY
         )
-        self.assertEqual(
-            assessment.independence, ResearchSourceIndependence.DERIVATIVE
-        )
+        self.assertEqual(assessment.independence, ResearchSourceIndependence.DERIVATIVE)
         self.assertEqual(
             assessment.publication_status,
             ResearchSourcePublicationStatus.RETRACTED,
@@ -671,9 +669,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
 
         assessment = loaded.assessments[0]
         self.assertEqual(assessment.usefulness, ResearchSourceUsefulness.UNKNOWN)
-        self.assertEqual(
-            assessment.applicability, ResearchSourceApplicability.UNKNOWN
-        )
+        self.assertEqual(assessment.applicability, ResearchSourceApplicability.UNKNOWN)
         self.assertEqual(assessment.independence, ResearchSourceIndependence.UNKNOWN)
         self.assertEqual(
             assessment.publication_status, ResearchSourcePublicationStatus.UNKNOWN

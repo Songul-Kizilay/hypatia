@@ -19,14 +19,6 @@ confidence than they want.
 from __future__ import annotations
 
 from core.Exceptions import ResearchError
-from research.CalibrationVerdict import CalibrationVerdict
-from research.EvidenceSupportProfile import EvidenceSupportProfile
-from research.ResearchClaimCalibration import ResearchClaimCalibration
-from research.ResearchClaimConfidence import ResearchClaimConfidence
-from research.ResearchClaimRecord import ResearchClaimRecord
-from research.ResearchEpistemicState import ResearchEpistemicState
-from research.ResearchInformationTrust import ResearchInformationTrust
-from research.ResearchRun import ResearchRun
 from research.AssessmentWarningRules import (
     APPLICABILITY_RULES,
     CORROBORATION_RULE,
@@ -34,9 +26,16 @@ from research.AssessmentWarningRules import (
     PUBLICATION_RULES,
     USEFULNESS_RULES,
 )
+from research.CalibrationVerdict import CalibrationVerdict
+from research.EvidenceSupportProfile import EvidenceSupportProfile
 from research.ResearchAssessmentWarning import ResearchAssessmentWarning
+from research.ResearchClaimCalibration import ResearchClaimCalibration
+from research.ResearchClaimConfidence import ResearchClaimConfidence
+from research.ResearchClaimRecord import ResearchClaimRecord
+from research.ResearchEpistemicState import ResearchEpistemicState
+from research.ResearchInformationTrust import ResearchInformationTrust
+from research.ResearchRun import ResearchRun
 from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
-from research.ResearchSourceIndependence import ResearchSourceIndependence
 from research.SourceIdentity import identity_of
 
 _STATE_RANK: dict[ResearchEpistemicState, int] = {
@@ -107,9 +106,7 @@ class ResearchClaimCalibrator:
                     contradicted=claim.claim_id in contradicted,
                 ),
             )
-            for warnings in (
-                self._warnings(claim, profile, evidence_sources, active),
-            )
+            for warnings in (self._warnings(claim, profile, evidence_sources, active),)
         )
 
     def _calibrate(
@@ -166,13 +163,13 @@ class ResearchClaimCalibrator:
                 continue
             if assessment.independence in INDEPENDENCE_RULES:
                 not_independent += 1
-            for value, table in (
-                (assessment.publication_status, PUBLICATION_RULES),
-                (assessment.usefulness, USEFULNESS_RULES),
-                (assessment.applicability, APPLICABILITY_RULES),
-                (assessment.independence, INDEPENDENCE_RULES),
-            ):
-                rule = table.get(value)
+            rules = (
+                PUBLICATION_RULES.get(assessment.publication_status),
+                USEFULNESS_RULES.get(assessment.usefulness),
+                APPLICABILITY_RULES.get(assessment.applicability),
+                INDEPENDENCE_RULES.get(assessment.independence),
+            )
+            for rule in rules:
                 if rule is None:
                     continue
                 kind, attention = rule
@@ -183,9 +180,7 @@ class ResearchClaimCalibrator:
                         attention=attention,
                         source_document_id=document_id,
                         assessment_id=assessment.assessment_id,
-                        evidence_ids=tuple(
-                            evidence_by_document.get(document_id, ())
-                        ),
+                        evidence_ids=tuple(evidence_by_document.get(document_id, ())),
                     )
                 )
         # Said once, and only when there is corroboration to be weakened. On a

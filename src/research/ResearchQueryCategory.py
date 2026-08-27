@@ -56,9 +56,7 @@ def category_of(query: object) -> ResearchQueryCategory:
     if not isinstance(query, str):
         return ResearchQueryCategory.KEYWORD
     identifiers = {
-        token
-        for raw in query.split()
-        if is_cve_id(token := raw.strip(_TRIM).upper())
+        token for raw in query.split() if is_cve_id(token := raw.strip(_TRIM).upper())
     }
     return (
         ResearchQueryCategory.EXACT_CVE

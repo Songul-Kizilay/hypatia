@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from dataclasses import FrozenInstanceError
 
 from core.Exceptions import ResearchError
 from research.ResearchRelevanceCategory import ResearchRelevanceCategory
@@ -64,7 +65,7 @@ class ResearchRelevanceWeightTests(unittest.TestCase):
             ResearchRelevanceWeights(strong_score=140)
 
     def test_weights_are_frozen_against_being_retuned_in_place(self) -> None:
-        with self.assertRaises(Exception):
+        with self.assertRaises(FrozenInstanceError):
             DEFAULT_RELEVANCE_WEIGHTS.title_coverage = 1.0  # type: ignore[misc]
 
     def test_an_unknown_component_has_no_weight_to_look_up(self) -> None:

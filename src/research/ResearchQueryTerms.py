@@ -222,9 +222,7 @@ def normalized_terms(value: str) -> tuple[str, ...]:
     if not isinstance(value, str):
         return ()
     return tuple(
-        folded
-        for token in value.split()
-        if (folded := token.strip(_TRIM).casefold())
+        folded for token in value.split() if (folded := token.strip(_TRIM).casefold())
     )
 
 

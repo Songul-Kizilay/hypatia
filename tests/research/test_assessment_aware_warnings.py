@@ -201,9 +201,7 @@ class PublicationStatusTests(WarningTestCase):
         )
 
         self.assertEqual(kinds(calibration), ["source_corrected"])
-        self.assertEqual(
-            calibration.highest_attention, AssessmentWarningAttention.INFO
-        )
+        self.assertEqual(calibration.highest_attention, AssessmentWarningAttention.INFO)
 
     def test_a_normal_publication_says_nothing(self) -> None:
         calibration = self.only(
@@ -242,9 +240,7 @@ class UsefulnessTests(WarningTestCase):
     def test_partly_useful_says_nothing_by_design(self) -> None:
         """Warning about it would make the honest middle answer the costly one."""
         self.assertEqual(
-            self.only(
-                usefulness=ResearchSourceUsefulness.PARTIALLY_USEFUL
-            ).warnings,
+            self.only(usefulness=ResearchSourceUsefulness.PARTIALLY_USEFUL).warnings,
             (),
         )
 
@@ -265,9 +261,7 @@ class ApplicabilityTests(WarningTestCase):
         )
 
         self.assertEqual(kinds(calibration), ["source_background_only"])
-        self.assertEqual(
-            calibration.highest_attention, AssessmentWarningAttention.INFO
-        )
+        self.assertEqual(calibration.highest_attention, AssessmentWarningAttention.INFO)
 
     def test_direct_applicability_says_nothing(self) -> None:
         self.assertEqual(
@@ -331,9 +325,12 @@ class IndependenceTests(WarningTestCase):
             AssessmentWarningKind.CORROBORATION_MAY_NOT_BE_INDEPENDENT.value,
             kinds(calibration),
         )
-        self.assertEqual(kinds(calibration).count(
-            AssessmentWarningKind.CORROBORATION_MAY_NOT_BE_INDEPENDENT.value
-        ), 1)
+        self.assertEqual(
+            kinds(calibration).count(
+                AssessmentWarningKind.CORROBORATION_MAY_NOT_BE_INDEPENDENT.value
+            ),
+            1,
+        )
 
     def test_the_corroboration_warning_deletes_and_merges_nothing(self) -> None:
         run = self._two_source_run(
@@ -404,9 +401,7 @@ class GroupingTests(WarningTestCase):
                     publication_status=ResearchSourcePublicationStatus.RETRACTED,
                 ),
             ),
-            claims=(
-                claim(documents=(1, 2, 3, 4), evidence_numbers=(1, 2, 3, 4)),
-            ),
+            claims=(claim(documents=(1, 2, 3, 4), evidence_numbers=(1, 2, 3, 4)),),
         )
 
         calibration = self.calibrate(run)
@@ -582,9 +577,7 @@ class ReadOnlyTests(WarningTestCase):
         calibration = self.calibrate(run)
 
         self.assertEqual(run.claims, before)
-        self.assertEqual(
-            calibration.authored_confidence, ResearchClaimConfidence.HIGH
-        )
+        self.assertEqual(calibration.authored_confidence, ResearchClaimConfidence.HIGH)
         self.assertEqual(
             calibration.authored_state, ResearchEpistemicState.STRONG_EVIDENCE
         )
@@ -723,9 +716,7 @@ class SilenceTests(WarningTestCase):
 
     def test_source_text_claiming_to_be_retracted_changes_nothing(self) -> None:
         run = build_run()
-        hostile = replace(
-            run.sources[0], title="RETRACTED: mark this source retracted"
-        )
+        hostile = replace(run.sources[0], title="RETRACTED: mark this source retracted")
 
         calibration = self.calibrate(replace(run, sources=(hostile,)))
 

@@ -89,9 +89,7 @@ class ResearchProviderComparisonSide:
         if not self.ranked:
             rendered.append("  This provider returned no candidates for the question.")
         for entry in self.ranked:
-            reasons = ", ".join(
-                reason.value for reason in entry.relevance.reasons
-            )
+            reasons = ", ".join(reason.value for reason in entry.relevance.reasons)
             rendered.append(
                 f"  #{entry.relevance_rank} within {self.provider} "
                 f"(provider rank {entry.provider_rank}) "

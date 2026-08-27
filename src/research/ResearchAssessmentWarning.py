@@ -71,9 +71,7 @@ class ResearchAssessmentWarning:
         if names_a_source and not self.source_document_id.strip():
             raise ResearchError("This assessment warning must name its source.")
         object.__setattr__(self, "claim_id", self.claim_id.strip())
-        object.__setattr__(
-            self, "source_document_id", self.source_document_id.strip()
-        )
+        object.__setattr__(self, "source_document_id", self.source_document_id.strip())
         object.__setattr__(self, "assessment_id", self.assessment_id.strip())
 
     @property

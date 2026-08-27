@@ -119,9 +119,7 @@ class ResearchQueryTermTests(unittest.TestCase):
     def test_phrases_are_the_adjacent_pairs_of_the_question(self) -> None:
         terms = ResearchQueryTerms.of("http request smuggling")
 
-        self.assertEqual(
-            terms.phrases, (("http", "request"), ("request", "smuggling"))
-        )
+        self.assertEqual(terms.phrases, (("http", "request"), ("request", "smuggling")))
 
     def test_surrounding_punctuation_is_trimmed_but_interior_is_kept(self) -> None:
         terms = ResearchQueryTerms.of('"Next.js", (CVE-2026-12345);')

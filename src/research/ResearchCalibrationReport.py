@@ -10,8 +10,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from core.Exceptions import ResearchError
-from research.CalibrationVerdict import CalibrationVerdict
 from research.AssessmentWarningKind import AssessmentWarningKind
+from research.CalibrationVerdict import CalibrationVerdict
 from research.ResearchClaimCalibration import ResearchClaimCalibration
 
 

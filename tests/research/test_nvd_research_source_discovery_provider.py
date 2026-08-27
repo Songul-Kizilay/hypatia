@@ -345,9 +345,7 @@ class ApiKeyTests(unittest.TestCase):
         instance.discover("Next.js middleware", limit=5)
 
         [(request, _)] = opener.requests
-        self.assertEqual(
-            request.headers.get(NVD_API_KEY_HEADER.capitalize()), self.KEY
-        )
+        self.assertEqual(request.headers.get(NVD_API_KEY_HEADER.capitalize()), self.KEY)
 
     def test_a_key_never_reaches_the_url(self) -> None:
         """A key in a URL is a key in a log, a referrer, and an error message."""
@@ -478,9 +476,7 @@ class ParsingTests(unittest.TestCase):
         self.assertEqual(candidate.snippet, "Next.js middleware authorization bypass.")
 
     def test_a_record_with_no_english_description_fabricates_none(self) -> None:
-        candidate = self.one(
-            descriptions=[{"lang": "es", "value": "Solo en espanol."}]
-        )
+        candidate = self.one(descriptions=[{"lang": "es", "value": "Solo en espanol."}])
 
         self.assertEqual(candidate.snippet, "")
         self.assertEqual(candidate.title, "CVE-2025-29927")
@@ -788,9 +784,7 @@ class RankingSeparationTests(unittest.TestCase):
             "Next.js middleware authorization bypass", candidates
         )
 
-        self.assertEqual(
-            ranked[0].relevance.score, ranked[1].relevance.score
-        )
+        self.assertEqual(ranked[0].relevance.score, ranked[1].relevance.score)
 
     def test_known_exploitation_alone_does_not_improve_relevance(self) -> None:
         plain = vulnerability(id="CVE-2024-51479")
@@ -827,9 +821,7 @@ class RankingSeparationTests(unittest.TestCase):
 
         self.assertEqual(ranked[0].provider_rank, 2)
         self.assertEqual(ranked[0].relevance_rank, 1)
-        self.assertEqual(
-            sorted(entry.provider_rank for entry in ranked), [1, 2]
-        )
+        self.assertEqual(sorted(entry.provider_rank for entry in ranked), [1, 2])
 
 
 class SeparationTests(unittest.TestCase):

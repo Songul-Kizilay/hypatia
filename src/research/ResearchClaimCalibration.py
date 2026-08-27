@@ -22,9 +22,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from core.Exceptions import ResearchError
+from research.AssessmentWarningAttention import AssessmentWarningAttention
 from research.CalibrationVerdict import CalibrationVerdict
 from research.EvidenceSupportProfile import EvidenceSupportProfile
-from research.AssessmentWarningAttention import AssessmentWarningAttention
 from research.ResearchAssessmentWarning import ResearchAssessmentWarning
 from research.ResearchClaimConfidence import ResearchClaimConfidence
 from research.ResearchEpistemicState import ResearchEpistemicState
@@ -47,8 +47,7 @@ class ResearchClaimCalibration:
         if not self.claim_id.strip():
             raise ResearchError("Claim calibration requires a claim ID.")
         if not isinstance(self.warnings, tuple) or not all(
-            isinstance(warning, ResearchAssessmentWarning)
-            for warning in self.warnings
+            isinstance(warning, ResearchAssessmentWarning) for warning in self.warnings
         ):
             raise ResearchError("Claim calibration warnings are invalid.")
         if any(warning.claim_id != self.claim_id.strip() for warning in self.warnings):

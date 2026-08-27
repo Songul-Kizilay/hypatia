@@ -6,8 +6,8 @@ import sys
 import unittest
 from collections.abc import Callable
 from dataclasses import replace
-from hashlib import sha256
 from datetime import UTC, datetime, timedelta
+from hashlib import sha256
 from pathlib import Path
 from typing import Any, Literal
 from unittest.mock import Mock, patch
@@ -71,14 +71,12 @@ from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchRunStatusTransitionPreview import (
     ResearchRunStatusTransitionPreview,
 )
+from research.ResearchSourceApplicability import ResearchSourceApplicability
 from research.ResearchSourceAssessmentPreview import ResearchSourceAssessmentPreview
 from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
 from research.ResearchSourceAssessmentWritePreview import (
     ResearchSourceAssessmentWritePreview,
 )
-from research.ResearchSourceApplicability import ResearchSourceApplicability
-from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
-from research.ResearchSourceUsefulness import ResearchSourceUsefulness
 from research.ResearchSourceCandidate import ResearchSourceCandidate
 from research.ResearchSourceCandidateAcceptancePreview import (
     ResearchSourceCandidateAcceptancePreview,
@@ -92,8 +90,9 @@ from research.ResearchSourceComparisonNoteWritePreview import (
 )
 from research.ResearchSourceComparisonPreview import ResearchSourceComparisonPreview
 from research.ResearchSourceDiscoveryRecord import ResearchSourceDiscoveryRecord
+from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
 from research.ResearchSourceRecord import ResearchSourceRecord
-
+from research.ResearchSourceUsefulness import ResearchSourceUsefulness
 
 
 def _configure_source_judgement(
@@ -154,6 +153,7 @@ def _research_run_with(
         ),
         assessments=assessments,
     )
+
 
 class AccessibilityPreferenceTests(unittest.TestCase):
     def test_initial_window_prefers_1920_by_1080(self) -> None:
@@ -3952,9 +3952,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             recorded_at=ASSESSMENT_NOW,
         )
 
-        label = TkinterDesktopWindow._research_assessment_label(
-            record, is_current=True
-        )
+        label = TkinterDesktopWindow._research_assessment_label(record, is_current=True)
 
         self.assertNotIn("unknown", label)
         self.assertIn("Just a note.", label)
@@ -5020,9 +5018,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         self.assertIsNotNone(controller.discovery_cancellation_tokens[0])
         self.assertEqual(controller.sources, [])
         self.assertEqual(responses, [controller.discovery_response])
-        self.assertEqual(
-            set(window._research_candidates), set(controller.candidates)
-        )
+        self.assertEqual(set(window._research_candidates), set(controller.candidates))
         self.assertEqual(window._research_candidate_run_id, "run-123")
         # The exact label text is no longer asserted, because the list is now
         # ordered by relevance rather than by arrival and the label carries the

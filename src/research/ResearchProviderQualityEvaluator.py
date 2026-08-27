@@ -97,15 +97,15 @@ class ResearchProviderQualityEvaluator:
             current = _current_assessments(run)
 
             for document_id, identity in documents.items():
-                keys = proposed_by.get(identity, set())
-                if len(keys) != 1:
+                attribution_keys = proposed_by.get(identity, set())
+                if len(attribution_keys) != 1:
                     if document_id in current:
-                        if keys:
+                        if attribution_keys:
                             ambiguous += 1
                         else:
                             unattributed += 1
                     continue
-                [key] = tuple(keys)
+                [key] = tuple(attribution_keys)
                 accepted.setdefault(key, set()).add(document_id)
                 if document_id not in with_evidence:
                     continue
@@ -114,7 +114,7 @@ class ResearchProviderQualityEvaluator:
                 if assessment is not None:
                     assessed.setdefault(key, []).append((document_id, assessment))
 
-        keys = sorted(
+        profile_keys = sorted(
             set(discovery_counts) | set(candidates) | set(assessed),
             key=lambda key: (key[0], key[1].value),
         )[:MAX_REPORTED_PROFILES]
@@ -128,7 +128,7 @@ class ResearchProviderQualityEvaluator:
                     evidence_bearing.get(key, set()),
                     assessed.get(key, []),
                 )
-                for key in keys
+                for key in profile_keys
             ),
             ambiguous_attribution_count=ambiguous,
             unattributed_assessed_count=unattributed,
@@ -176,26 +176,28 @@ def _profile(
         evidence_bearing_count=len(evidence_bearing),
         assessed_count=len(assessed),
         usefulness=_counts(
-            ResearchSourceUsefulness,
+            list(ResearchSourceUsefulness),
             [assessment.usefulness for _, assessment in assessed],
         ),
         applicability=_counts(
-            ResearchSourceApplicability,
+            list(ResearchSourceApplicability),
             [assessment.applicability for _, assessment in assessed],
         ),
         independence=_counts(
-            ResearchSourceIndependence,
+            list(ResearchSourceIndependence),
             [assessment.independence for _, assessment in assessed],
         ),
         publication=_counts(
-            ResearchSourcePublicationStatus,
+            list(ResearchSourcePublicationStatus),
             [assessment.publication_status for _, assessment in assessed],
         ),
         sample_document_ids=samples[:MAX_REPORTED_SAMPLE_IDS],
     )
 
 
-def _counts(vocabulary: type, values: list[object]) -> dict:
+def _counts[Answer](
+    vocabulary: Iterable[Answer], values: Iterable[Answer]
+) -> dict[Answer, int]:
     """Count each recorded answer, including the ones that answered nothing."""
     counts = {member: 0 for member in vocabulary}
     for value in values:

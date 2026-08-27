@@ -13,7 +13,7 @@ from __future__ import annotations
 import ast
 import sys
 import unittest
-from dataclasses import replace
+from dataclasses import FrozenInstanceError
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -25,7 +25,6 @@ for entry in (SRC_DIR, ROOT_DIR):
 
 from core.Exceptions import ResearchError
 from knowledge.Chunk import Chunk
-from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRun import ResearchRun
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchSource import ResearchSource
@@ -40,9 +39,9 @@ from research.ResearchSourceUsefulness import ResearchSourceUsefulness
 from research.SourceReputationLedger import SourceReputationLedger
 from tests.SourceVocabulary import mentions, working_vocabulary
 
-RECORD_SOURCE = (
-    SRC_DIR / "research" / "ResearchSourceAssessmentRecord.py"
-).read_text(encoding="utf-8")
+RECORD_SOURCE = (SRC_DIR / "research" / "ResearchSourceAssessmentRecord.py").read_text(
+    encoding="utf-8"
+)
 
 START = datetime(2026, 8, 26, 12, 0, tzinfo=UTC)
 
@@ -127,7 +126,7 @@ class AssessmentDomainTests(OperatorAssessmentTestCase):
     def test_a_recorded_judgement_cannot_be_edited_in_place(self) -> None:
         record = self.assess(usefulness="useful")
 
-        with self.assertRaises(Exception):
+        with self.assertRaises(FrozenInstanceError):
             record.usefulness = (  # type: ignore[misc]
                 ResearchSourceUsefulness.NOT_USEFUL
             )
@@ -214,9 +213,7 @@ class SeparationTests(OperatorAssessmentTestCase):
         """The exact-match paper stays first even after being called useless."""
         before = self._relevance()
 
-        record = self.assess(
-            usefulness="not_useful", applicability="background_only"
-        )
+        record = self.assess(usefulness="not_useful", applicability="background_only")
 
         self.assertEqual(self._relevance(), before)
         self.assertEqual(record.usefulness, ResearchSourceUsefulness.NOT_USEFUL)
@@ -321,9 +318,7 @@ class SeparationTests(OperatorAssessmentTestCase):
         self.assertEqual(self.manager.get(self.run_id).sources, before)
 
     def test_recording_a_judgement_fetches_nothing_and_calls_no_model(self) -> None:
-        vocabulary = working_vocabulary(
-            RECORD_SOURCE, *_function_names(RECORD_SOURCE)
-        )
+        vocabulary = working_vocabulary(RECORD_SOURCE, *_function_names(RECORD_SOURCE))
 
         for forbidden in (
             "fetch",
@@ -700,18 +695,14 @@ class BoundaryTests(unittest.TestCase):
                 self.assertNotIn(intent, source)
 
     def test_no_tool_filesystem_or_shell_authority_was_added(self) -> None:
-        vocabulary = working_vocabulary(
-            RECORD_SOURCE, *_function_names(RECORD_SOURCE)
-        )
+        vocabulary = working_vocabulary(RECORD_SOURCE, *_function_names(RECORD_SOURCE))
 
         for forbidden in ("subprocess", "os", "shell", "ToolRuntime", "open"):
             with self.subTest(forbidden=forbidden):
                 self.assertEqual(mentions(vocabulary, forbidden), [])
 
     def test_the_assessment_module_spends_no_execution_budget(self) -> None:
-        vocabulary = working_vocabulary(
-            RECORD_SOURCE, *_function_names(RECORD_SOURCE)
-        )
+        vocabulary = working_vocabulary(RECORD_SOURCE, *_function_names(RECORD_SOURCE))
 
         for forbidden in ("budget", "allowance", "spend", "capability"):
             with self.subTest(forbidden=forbidden):

@@ -267,9 +267,7 @@ def _matched(term: str, tokens: set[str]) -> bool:
         return True
     if any(character.isdigit() for character in term) or not term.isalpha():
         return False
-    return any(
-        candidate in tokens for candidate in (term + "s", term + "es")
-    ) or any(
+    return any(candidate in tokens for candidate in (term + "s", term + "es")) or any(
         term == token.removesuffix("s") or term == token.removesuffix("es")
         for token in tokens
         if token.isalpha()
@@ -325,7 +323,9 @@ def _recency(
     return (
         value,
         True,
-        ResearchRelevanceReason.NEWER_THAN_OTHER_RESULTS
-        if value > 0.5
-        else ResearchRelevanceReason.OLDER_THAN_OTHER_RESULTS,
+        (
+            ResearchRelevanceReason.NEWER_THAN_OTHER_RESULTS
+            if value > 0.5
+            else ResearchRelevanceReason.OLDER_THAN_OTHER_RESULTS
+        ),
     )

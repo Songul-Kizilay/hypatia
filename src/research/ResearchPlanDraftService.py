@@ -7,9 +7,9 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from core.Exceptions import ResearchError
+from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchPlan import ResearchPlan
 from research.ResearchPlanDraftPreview import ResearchPlanDraftPreview
-from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchPlanStep import ResearchPlanStep
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 from research.ResearchPlanStepDraftInput import ResearchPlanStepDraftInput

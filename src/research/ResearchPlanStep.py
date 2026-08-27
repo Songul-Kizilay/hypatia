@@ -27,8 +27,8 @@ from research.ResearchCompletionAuthorization import (
 from research.ResearchContradictionAuthorization import (
     ResearchContradictionAuthorization,
 )
-from research.ResearchEvidenceAuthorization import ResearchEvidenceAuthorization
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
+from research.ResearchEvidenceAuthorization import ResearchEvidenceAuthorization
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 
 MAX_RESEARCH_PLAN_STEP_ID_CHARACTERS = 200

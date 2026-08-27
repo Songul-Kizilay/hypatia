@@ -87,9 +87,7 @@ class RelevanceRankingTests(unittest.TestCase):
             [candidate("Unrelated work"), candidate("SQL injection defences")],
         )
 
-        self.assertEqual(
-            sorted(entry.provider_rank for entry in results), [1, 2]
-        )
+        self.assertEqual(sorted(entry.provider_rank for entry in results), [1, 2])
         self.assertEqual([entry.relevance_rank for entry in results], [1, 2])
 
     def test_matching_a_technical_identifier_beats_matching_common_words(self) -> None:
@@ -154,9 +152,7 @@ class RelevanceRankingTests(unittest.TestCase):
         )
 
         self.assertEqual(with_venue.relevance.score, without_venue.relevance.score)
-        self.assertFalse(
-            without_venue.relevance.component("venue_terms").applicable
-        )
+        self.assertFalse(without_venue.relevance.component("venue_terms").applicable)
 
     def test_newer_is_not_rewarded_when_recency_was_not_asked_for(self) -> None:
         """The paper that first described an attack is usually the oldest one."""
@@ -366,9 +362,7 @@ class RelevanceSecurityRegressionTests(unittest.TestCase):
     def test_case_c_ranking_consults_no_model(self) -> None:
         """Ranking that needed a model would be ranking that could be skipped."""
         for name, source in (("ranker", RANKER_SOURCE), ("terms", TERMS_SOURCE)):
-            vocabulary = working_vocabulary(
-                source, *_function_names(source)
-            )
+            vocabulary = working_vocabulary(source, *_function_names(source))
             for forbidden in ("llm", "model", "prompt", "completion", "temperature"):
                 with self.subTest(source=name, forbidden=forbidden):
                     self.assertEqual(mentions(vocabulary, forbidden), [])
@@ -501,9 +495,11 @@ class RankedDiscoveryTests(unittest.TestCase):
 
         self.assertEqual(
             titles(ranked_candidates(discovery)),
-            titles(ResearchSourceRelevanceRanker().rank(
-                discovery.query, discovery.candidates
-            )),
+            titles(
+                ResearchSourceRelevanceRanker().rank(
+                    discovery.query, discovery.candidates
+                )
+            ),
         )
 
     def test_a_stored_discovery_can_never_carry_an_unrankable_query(self) -> None:

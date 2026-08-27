@@ -30,6 +30,7 @@ from research.ResearchProviderComparisonSide import (
 from research.ResearchQueryCategory import category_of
 from research.ResearchRun import ResearchRun
 from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
+from research.ResearchSourceDiscoveryRecord import ResearchSourceDiscoveryRecord
 from research.SourceIdentity import identity_of
 
 DISCOVERY_FAILURE_STAGE = "source_discovery"
@@ -74,14 +75,16 @@ class ResearchProviderComparisonBuilder:
         )
 
 
-def _latest_discovery_by_provider(run: ResearchRun) -> dict[str, object]:
+def _latest_discovery_by_provider(
+    run: ResearchRun,
+) -> dict[str, ResearchSourceDiscoveryRecord]:
     """Return each provider's most recent discovery in this run.
 
     The most recent, because re-asking a provider replaces what it last said
     rather than adding a second column. Older discoveries stay in the run and
     stay auditable; they simply are not this comparison.
     """
-    latest: dict[str, object] = {}
+    latest: dict[str, ResearchSourceDiscoveryRecord] = {}
     for discovery in run.discoveries:
         latest[discovery.provider] = discovery
     return latest
@@ -104,7 +107,7 @@ def _assessed_documents(run: ResearchRun) -> set[str]:
 
 def _side(
     provider: str,
-    discovery: object,
+    discovery: ResearchSourceDiscoveryRecord | None,
     accepted: dict[str, str],
     assessed: set[str],
 ) -> ResearchProviderComparisonSide:

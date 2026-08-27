@@ -17,7 +17,6 @@ from __future__ import annotations
 import ast
 import sys
 import unittest
-from dataclasses import replace
 from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
@@ -54,9 +53,9 @@ EVALUATOR_SOURCE = (
 REPORT_SOURCE = (SRC_DIR / "research" / "ResearchProviderQualityReport.py").read_text(
     encoding="utf-8"
 )
-PROFILE_SOURCE = (
-    SRC_DIR / "research" / "ResearchProviderQualityProfile.py"
-).read_text(encoding="utf-8")
+PROFILE_SOURCE = (SRC_DIR / "research" / "ResearchProviderQualityProfile.py").read_text(
+    encoding="utf-8"
+)
 SERVICE_SOURCE = (
     SRC_DIR / "cognition" / "ProviderQualityApplicationService.py"
 ).read_text(encoding="utf-8")
@@ -192,9 +191,7 @@ class EvaluationFixture(unittest.TestCase):
             question="CVE-2025-29927",
             sources=(source(1, NVD_ONE), source(2, NVD_TWO)),
             evidence_records=(evidence(1), evidence(2)),
-            discoveries=(
-                discovery(1, "nvd", "CVE-2025-29927", (NVD_ONE, NVD_TWO)),
-            ),
+            discoveries=(discovery(1, "nvd", "CVE-2025-29927", (NVD_ONE, NVD_TWO)),),
             assessments=(
                 assessment(
                     1,
@@ -402,9 +399,7 @@ class AttributionTests(EvaluationFixture):
                         discovery(1, "nvd", "keyword", ("https://example.test/paper",)),
                     ),
                     assessments=(
-                        assessment(
-                            1, 1, usefulness=ResearchSourceUsefulness.USEFUL
-                        ),
+                        assessment(1, 1, usefulness=ResearchSourceUsefulness.USEFUL),
                     ),
                 )
             ]
@@ -421,9 +416,7 @@ class SupersessionTests(EvaluationFixture):
 
         assert profile is not None
         self.assertEqual(profile.assessed_count, 2)
-        self.assertEqual(
-            profile.usefulness.get(ResearchSourceUsefulness.NOT_USEFUL), 1
-        )
+        self.assertEqual(profile.usefulness.get(ResearchSourceUsefulness.NOT_USEFUL), 1)
         self.assertEqual(profile.usefulness.get(ResearchSourceUsefulness.USEFUL), 1)
 
     def test_changing_your_mind_does_not_produce_a_second_sample(self) -> None:
@@ -447,9 +440,7 @@ class DimensionTests(EvaluationFixture):
         profile = profile_of(self.report, "nvd", ResearchQueryCategory.KEYWORD)
 
         assert profile is not None
-        self.assertEqual(
-            profile.usefulness.get(ResearchSourceUsefulness.NOT_USEFUL), 1
-        )
+        self.assertEqual(profile.usefulness.get(ResearchSourceUsefulness.NOT_USEFUL), 1)
         self.assertEqual(
             profile.usefulness.get(ResearchSourceUsefulness.PARTIALLY_USEFUL), 1
         )
@@ -468,9 +459,7 @@ class DimensionTests(EvaluationFixture):
 
     def test_independence_counts_are_exact(self) -> None:
         keyword = profile_of(self.report, "nvd", ResearchQueryCategory.KEYWORD)
-        scholarly = profile_of(
-            self.report, "crossref", ResearchQueryCategory.KEYWORD
-        )
+        scholarly = profile_of(self.report, "crossref", ResearchQueryCategory.KEYWORD)
 
         assert keyword is not None and scholarly is not None
         self.assertEqual(
@@ -530,14 +519,10 @@ class DimensionTests(EvaluationFixture):
 
 class QueryCategoryTests(unittest.TestCase):
     def test_an_exact_cve_question_is_classified_as_one(self) -> None:
-        self.assertIs(
-            category_of("CVE-2025-29927"), ResearchQueryCategory.EXACT_CVE
-        )
+        self.assertIs(category_of("CVE-2025-29927"), ResearchQueryCategory.EXACT_CVE)
 
     def test_case_does_not_change_the_category(self) -> None:
-        self.assertIs(
-            category_of("cve-2025-29927"), ResearchQueryCategory.EXACT_CVE
-        )
+        self.assertIs(category_of("cve-2025-29927"), ResearchQueryCategory.EXACT_CVE)
 
     def test_a_malformed_identifier_is_not_an_exact_lookup(self) -> None:
         for query in ("CVE-25-1234", "CVE-2025-", "CVE2025-29927", "CVE-2025-ABC"):
@@ -577,9 +562,9 @@ class QueryCategoryTests(unittest.TestCase):
         )
 
     def test_no_model_classifies_a_question(self) -> None:
-        category_source = (
-            SRC_DIR / "research" / "ResearchQueryCategory.py"
-        ).read_text(encoding="utf-8")
+        category_source = (SRC_DIR / "research" / "ResearchQueryCategory.py").read_text(
+            encoding="utf-8"
+        )
         vocabulary = working_vocabulary(category_source, "category_of")
 
         for forbidden in ("llm", "model", "prompt", "classify_with"):
@@ -620,9 +605,7 @@ class SampleSizeTests(unittest.TestCase):
                     evidence_records=(evidence(1),),
                     discoveries=(discovery(1, "nvd", "keyword", (NVD_ONE,)),),
                     assessments=(
-                        assessment(
-                            1, 1, usefulness=ResearchSourceUsefulness.USEFUL
-                        ),
+                        assessment(1, 1, usefulness=ResearchSourceUsefulness.USEFUL),
                     ),
                 )
             ]
@@ -672,9 +655,9 @@ class ReportShapeTests(EvaluationFixture):
             for node in ast.walk(tree)
             if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name)
         }
-        names = {
-            node.id for node in ast.walk(tree) if isinstance(node, ast.Name)
-        } | {node.attr for node in ast.walk(tree) if isinstance(node, ast.Attribute)}
+        names = {node.id for node in ast.walk(tree) if isinstance(node, ast.Name)} | {
+            node.attr for node in ast.walk(tree) if isinstance(node, ast.Attribute)
+        }
 
         for forbidden in ("winner", "best", "preferred", "recommended", "ranking"):
             with self.subTest(forbidden=forbidden):
@@ -689,8 +672,7 @@ class ReportShapeTests(EvaluationFixture):
             fields = {
                 node.target.id
                 for node in ast.walk(ast.parse(text))
-                if isinstance(node, ast.AnnAssign)
-                and isinstance(node.target, ast.Name)
+                if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name)
             }
             with self.subTest(module=name):
                 self.assertNotIn("score", fields)

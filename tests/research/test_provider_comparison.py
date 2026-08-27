@@ -31,6 +31,7 @@ from core.Exceptions import ResearchError
 from research.ProviderComparisonRequest import ProviderComparisonRequest
 from research.ResearchCapabilityCost import cost_for
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
+from research.ResearchFailureRecord import ResearchFailureRecord
 from research.ResearchPlanDigest import canonical_plan_bytes, plan_digest
 from research.ResearchPlanDraftService import ResearchPlanDraftService
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
@@ -44,7 +45,6 @@ from research.ResearchProviderComparisonSide import ResearchProviderComparisonSi
 from research.ResearchQueryCategory import ResearchQueryCategory
 from research.ResearchRun import ResearchRun
 from research.ResearchRunStatus import ResearchRunStatus
-from research.ResearchFailureRecord import ResearchFailureRecord
 from research.ResearchSourceCandidate import ResearchSourceCandidate
 from research.ResearchSourceDiscoveryRecord import ResearchSourceDiscoveryRecord
 from tests.SourceVocabulary import mentions, working_vocabulary
@@ -275,11 +275,11 @@ class AuthorizationTests(unittest.TestCase):
         self.assertNotEqual(both, plan_digest(doubled_nvd.plan))
 
     def test_the_preview_names_both_providers_and_the_question(self) -> None:
-        from response.ResponseComposer import ResponseComposer
         from brain.BrainRequest import BrainRequest
         from cognition.ResearchPlanPreviewApplicationService import (
             ResearchPlanPreviewApplicationService,
         )
+        from response.ResponseComposer import ResponseComposer
 
         service = ResearchPlanPreviewApplicationService(ResponseComposer())
         response = service.process_draft_preview(
@@ -463,9 +463,7 @@ class PartialStateTests(unittest.TestCase):
         self.builder = ResearchProviderComparisonBuilder()
 
     def test_only_crossref_complete_reads_as_partial(self) -> None:
-        report = self.builder.build(
-            run(discovery(1, "crossref", KEYWORD_QUESTION))
-        )
+        report = self.builder.build(run(discovery(1, "crossref", KEYWORD_QUESTION)))
 
         self.assertTrue(report.partial)
         self.assertFalse(report.complete)
@@ -576,22 +574,23 @@ class NoWinnerTests(unittest.TestCase):
     def test_no_winner_field_exists_in_the_report_or_the_side(self) -> None:
         for name, text in (
             ("report", REPORT_SOURCE),
-            ("side", (SRC_DIR / "research" / "ResearchProviderComparisonSide.py")
-             .read_text(encoding="utf-8")),
+            (
+                "side",
+                (SRC_DIR / "research" / "ResearchProviderComparisonSide.py").read_text(
+                    encoding="utf-8"
+                ),
+            ),
         ):
             tree = ast.parse(text)
             fields = {
                 node.target.id
                 for node in ast.walk(tree)
-                if isinstance(node, ast.AnnAssign)
-                and isinstance(node.target, ast.Name)
+                if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name)
             }
             names = {
                 node.id for node in ast.walk(tree) if isinstance(node, ast.Name)
             } | {
-                node.attr
-                for node in ast.walk(tree)
-                if isinstance(node, ast.Attribute)
+                node.attr for node in ast.walk(tree) if isinstance(node, ast.Attribute)
             }
             for forbidden in ("winner", "best", "preferred", "recommended"):
                 with self.subTest(module=name, forbidden=forbidden):

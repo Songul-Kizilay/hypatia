@@ -518,9 +518,11 @@ def _references(value: Any) -> tuple[ResearchVulnerabilityReference, ...]:
                 ResearchVulnerabilityReference(
                     url=entry["url"],
                     source=_text(entry.get("source")),
-                    tags=tuple(tag for tag in tags if isinstance(tag, str))
-                    if isinstance(tags, list)
-                    else (),
+                    tags=(
+                        tuple(tag for tag in tags if isinstance(tag, str))
+                        if isinstance(tags, list)
+                        else ()
+                    ),
                 )
             )
         except ResearchError:

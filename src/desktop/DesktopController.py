@@ -7,18 +7,18 @@ from typing import Protocol
 from brain.BrainRequest import BrainRequest
 from brain.BrainResponse import BrainResponse
 from core.CancellationSignal import CancellationToken
-from research.ResearchClaimConfidence import ResearchClaimConfidence
-from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ProviderComparisonRequest import ProviderComparisonRequest
+from research.ResearchClaimConfidence import ResearchClaimConfidence
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
+from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchInformationTrust import ResearchInformationTrust
+from research.ResearchRunMarkdownExportPreview import (
+    ResearchRunMarkdownExportPreview,
+)
 from research.ResearchSourceApplicability import ResearchSourceApplicability
 from research.ResearchSourceIndependence import ResearchSourceIndependence
 from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
 from research.ResearchSourceUsefulness import ResearchSourceUsefulness
-from research.ResearchRunMarkdownExportPreview import (
-    ResearchRunMarkdownExportPreview,
-)
 
 
 def _plan_step_drafts(
@@ -920,9 +920,9 @@ class DesktopController:
         # rather than passed along to be interpreted somewhere else.
         if provider.strip():
             try:
-                metadata["research_discovery_provider"] = (
-                    ResearchDiscoveryProviderName(provider.strip()).value
-                )
+                metadata["research_discovery_provider"] = ResearchDiscoveryProviderName(
+                    provider.strip()
+                ).value
             except ValueError as error:
                 raise ValueError("Research discovery provider is unknown.") from error
         return self._brain.process(

@@ -160,14 +160,22 @@ class ResearchProviderQualityProfile:
                 f"    {value.value}: {count} / {judged}"
                 + (f" ({round(100 * count / judged)}%)" if judged else "")
             )
-        for name, vocabulary, counts in (
-            ("applicability", ResearchSourceApplicability, self.applicability),
-            ("independence", ResearchSourceIndependence, self.independence),
-            ("publication status", ResearchSourcePublicationStatus, self.publication),
-        ):
-            rendered.append(f"  {name} (of {self.assessed_count} assessed):")
-            for value in vocabulary:
-                rendered.append(
-                    f"    {value.value}: {counts.get(value, 0)} / {self.assessed_count}"
-                )
+        rendered.append(f"  applicability (of {self.assessed_count} assessed):")
+        for applicability_value in ResearchSourceApplicability:
+            count = self.applicability.get(applicability_value, 0)
+            rendered.append(
+                f"    {applicability_value.value}: {count} / {self.assessed_count}"
+            )
+        rendered.append(f"  independence (of {self.assessed_count} assessed):")
+        for independence_value in ResearchSourceIndependence:
+            count = self.independence.get(independence_value, 0)
+            rendered.append(
+                f"    {independence_value.value}: {count} / {self.assessed_count}"
+            )
+        rendered.append(f"  publication status (of {self.assessed_count} assessed):")
+        for publication_value in ResearchSourcePublicationStatus:
+            count = self.publication.get(publication_value, 0)
+            rendered.append(
+                f"    {publication_value.value}: {count} / {self.assessed_count}"
+            )
         return tuple(rendered)

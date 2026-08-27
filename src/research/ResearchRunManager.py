@@ -37,10 +37,6 @@ from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchFailureRecord import ResearchFailureRecord
 from research.ResearchInformationTrust import ResearchInformationTrust
-from research.ResearchSourceApplicability import ResearchSourceApplicability
-from research.ResearchSourceIndependence import ResearchSourceIndependence
-from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
-from research.ResearchSourceUsefulness import ResearchSourceUsefulness
 from research.ResearchRun import ResearchRun
 from research.ResearchRunMarkdownExportPreview import (
     MAX_MARKDOWN_EXPORT_PREVIEW_CHARACTERS,
@@ -60,6 +56,7 @@ from research.ResearchRunStatusTransitionPreview import (
 )
 from research.ResearchRunStore import ResearchRunStore
 from research.ResearchSource import ResearchSource
+from research.ResearchSourceApplicability import ResearchSourceApplicability
 from research.ResearchSourceAssessmentPreview import ResearchSourceAssessmentPreview
 from research.ResearchSourceAssessmentRecord import (
     MAX_SOURCE_ASSESSMENT_CHARACTERS,
@@ -93,7 +90,10 @@ from research.ResearchSourceComparisonPreview import (
     ResearchSourceComparisonPreview,
 )
 from research.ResearchSourceDiscoveryRecord import ResearchSourceDiscoveryRecord
+from research.ResearchSourceIndependence import ResearchSourceIndependence
+from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
 from research.ResearchSourceRecord import ResearchSourceRecord
+from research.ResearchSourceUsefulness import ResearchSourceUsefulness
 
 
 class ResearchRunManager:

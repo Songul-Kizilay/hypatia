@@ -36,6 +36,7 @@ from desktop.ToolConsoleEntry import ToolConsoleEntry
 from desktop.ToolRunView import ToolRunView
 from eventbus.EventBus import EventBus
 from knowledge.KnowledgeCitation import KnowledgeCitation
+from research.RankedResearchSourceDiscovery import ranked_candidates
 from research.ResearchClaimConfidence import ResearchClaimConfidence
 from research.ResearchClaimContradictionCandidate import (
     ResearchClaimContradictionCandidate,
@@ -48,6 +49,7 @@ from research.ResearchClaimRecord import (
     ResearchClaimRecord,
 )
 from research.ResearchDisclosure import ResearchDisclosure
+from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchInformationTrust import ResearchInformationTrust
@@ -56,24 +58,22 @@ from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
 )
 from research.ResearchRunStatus import ResearchRunStatus
-from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
-from research.RankedResearchSourceDiscovery import ranked_candidates
-from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
-from research.SourceIdentity import identity_of
-from research.SourceOrigin import origin_of
-from research.SourceReputationLedger import SourceReputationLedger
 from research.ResearchSourceApplicability import ResearchSourceApplicability
+from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
 from research.ResearchSourceCandidate import ResearchSourceCandidate
-from research.ResearchSourceIndependence import ResearchSourceIndependence
-from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
-from research.ResearchSourceUsefulness import ResearchSourceUsefulness
 from research.ResearchSourceComparisonNoteRecord import (
     MAX_COMPARISON_NOTE_ASSESSMENTS,
     MAX_COMPARISON_NOTE_EVIDENCE,
     ResearchSourceComparisonNoteRecord,
 )
+from research.ResearchSourceIndependence import ResearchSourceIndependence
+from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
 from research.ResearchSourceRecord import ResearchSourceRecord
+from research.ResearchSourceUsefulness import ResearchSourceUsefulness
+from research.SourceIdentity import identity_of
 from research.SourceLoadStage import SourceLoadStage
+from research.SourceOrigin import origin_of
+from research.SourceReputationLedger import SourceReputationLedger
 from response.ResponseLanguage import ResponseLanguage, detect_response_language
 from security.VulnerabilityFamilyGraph import MAX_TRAVERSAL_DEPTH
 from security.VulnerabilityRelationKind import VulnerabilityRelationKind
@@ -1909,9 +1909,7 @@ class TkinterDesktopWindow:
         ttk.Combobox(
             research_sources_frame,
             textvariable=self._research_discovery_provider,
-            values=tuple(
-                provider.value for provider in ResearchDiscoveryProviderName
-            ),
+            values=tuple(provider.value for provider in ResearchDiscoveryProviderName),
             state="readonly",
             width=10,
         ).grid(row=3, column=2, sticky="ew", padx=(8, 0), pady=(8, 0))

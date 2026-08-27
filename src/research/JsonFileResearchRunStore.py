@@ -23,22 +23,22 @@ from research.ResearchRun import ResearchRun
 from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSourceApplicability import ResearchSourceApplicability
 from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
-from research.ResearchSourceIndependence import ResearchSourceIndependence
-from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
-from research.ResearchSourceUsefulness import ResearchSourceUsefulness
-from research.ResearchVulnerabilityMetric import ResearchVulnerabilityMetric
-from research.ResearchVulnerabilityRecord import ResearchVulnerabilityRecord
-from research.ResearchVulnerabilityReference import ResearchVulnerabilityReference
 from research.ResearchSourceCandidate import ResearchSourceCandidate
 from research.ResearchSourceComparisonNoteRecord import (
     ResearchSourceComparisonNoteRecord,
 )
 from research.ResearchSourceDiscoveryRecord import ResearchSourceDiscoveryRecord
+from research.ResearchSourceIndependence import ResearchSourceIndependence
+from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
 from research.ResearchSourceRecord import (
     EXTERNAL_SOURCE_INSTRUCTION_AUTHORITY,
     EXTERNAL_SOURCE_TAINT_LABEL,
     ResearchSourceRecord,
 )
+from research.ResearchSourceUsefulness import ResearchSourceUsefulness
+from research.ResearchVulnerabilityMetric import ResearchVulnerabilityMetric
+from research.ResearchVulnerabilityRecord import ResearchVulnerabilityRecord
+from research.ResearchVulnerabilityReference import ResearchVulnerabilityReference
 
 MAX_RESEARCH_RUN_STORE_BYTES = 64 * 1024 * 1024
 MAX_RESEARCH_RUN_STORE_COLLECTION_ITEMS = 20_000
@@ -495,7 +495,6 @@ class JsonFileResearchRunStore:
             published_year=year,
             vulnerability=_parse_vulnerability(value.get("vulnerability")),
         )
-
 
     def _parse_assessment(
         self,

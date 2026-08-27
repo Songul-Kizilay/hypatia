@@ -55,8 +55,9 @@ class SourceDiscoveryStepOperation:
         research_run_manager: ResearchRunManager,
         *,
         candidate_limit: int = DEFAULT_DISCOVERY_CANDIDATE_LIMIT,
-        providers: dict[ResearchDiscoveryProviderName, ResearchSourceDiscoveryProvider]
-        | None = None,
+        providers: (
+            dict[ResearchDiscoveryProviderName, ResearchSourceDiscoveryProvider] | None
+        ) = None,
     ) -> None:
         if (
             isinstance(candidate_limit, bool)

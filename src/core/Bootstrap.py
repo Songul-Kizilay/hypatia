@@ -60,10 +60,6 @@ from planner.Planner import Planner
 from research.CrossrefResearchSourceDiscoveryProvider import (
     CrossrefResearchSourceDiscoveryProvider,
 )
-from research.NvdResearchSourceDiscoveryProvider import (
-    NvdResearchSourceDiscoveryProvider,
-)
-from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.HttpResearchSourceFetcher import HttpResearchSourceFetcher
 from research.JsonFileBackgroundTaskStore import (
     JsonFileBackgroundTaskStore,
@@ -93,9 +89,13 @@ from research.JsonFileResearchSourceContentStore import (
 from research.LLMResearchClaimContradictionProposalProvider import (
     LLMResearchClaimContradictionProposalProvider,
 )
+from research.NvdResearchSourceDiscoveryProvider import (
+    NvdResearchSourceDiscoveryProvider,
+)
 from research.ResearchClaimContradictionProposalProvider import (
     ResearchClaimContradictionProposalProvider,
 )
+from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchEvidenceIntegrityAuditor import ResearchEvidenceIntegrityAuditor
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchSourceContentRestorer import ResearchSourceContentRestorer

@@ -25,10 +25,6 @@ from research.KnowledgeReconciliationReport import (
 )
 from research.ResearchAutonomyResult import ResearchAutonomyResult
 from research.ResearchCalibrationReport import ResearchCalibrationReport
-from research.ResearchProviderComparisonReport import (
-    ResearchProviderComparisonReport,
-)
-from research.ResearchProviderQualityReport import ResearchProviderQualityReport
 from research.ResearchClaimContradictionPreview import (
     ResearchClaimContradictionPreview,
 )
@@ -47,6 +43,10 @@ from research.ResearchFailureLesson import ResearchFailureLesson
 from research.ResearchPlanAuthorization import ResearchPlanAuthorization
 from research.ResearchPlanDraftPreview import ResearchPlanDraftPreview
 from research.ResearchPlanExecutionState import ResearchPlanExecutionState
+from research.ResearchProviderComparisonReport import (
+    ResearchProviderComparisonReport,
+)
+from research.ResearchProviderQualityReport import ResearchProviderQualityReport
 from research.ResearchReflectionReport import ResearchReflectionReport
 from research.ResearchRun import ResearchRun
 from research.ResearchRunMarkdownExportPreview import (

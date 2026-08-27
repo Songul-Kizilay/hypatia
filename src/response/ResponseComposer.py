@@ -44,17 +44,11 @@ from research.ResearchClaimPreview import ResearchClaimPreview
 from research.ResearchClaimWritePreview import ResearchClaimWritePreview
 from research.ResearchCuriosityPreview import ResearchCuriosityPreview
 from research.ResearchCuriosityQuestion import ResearchCuriosityQuestion
+from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchEvidenceIntegrityStatus import ResearchEvidenceIntegrityStatus
 from research.ResearchExecutionAllowance import ResearchExecutionAllowance
 from research.ResearchFailureLesson import ResearchFailureLesson
 from research.ResearchPlanAuthorization import ResearchPlanAuthorization
-from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
-from research.ResearchProviderComparisonReport import (
-    ResearchProviderComparisonReport,
-)
-from research.ResearchProviderQualityReport import (
-    ResearchProviderQualityReport,
-)
 from research.ResearchPlanAuthorizationPreview import (
     ResearchPlanAuthorizationPreview,
 )
@@ -67,6 +61,12 @@ from research.ResearchPlanExecutionSnapshot import (
 )
 from research.ResearchPlanExecutionState import ResearchPlanExecutionState
 from research.ResearchPlanStepStatus import ResearchPlanStepStatus
+from research.ResearchProviderComparisonReport import (
+    ResearchProviderComparisonReport,
+)
+from research.ResearchProviderQualityReport import (
+    ResearchProviderQualityReport,
+)
 from research.ResearchReflectionReport import ResearchReflectionReport
 from research.ResearchRun import ResearchRun
 from research.ResearchRunMarkdownExportPreview import (
