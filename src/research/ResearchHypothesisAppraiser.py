@@ -123,17 +123,28 @@ class ResearchHypothesisAppraiser:
 
     @staticmethod
     def _active_trust(run: ResearchRun) -> dict[str, ResearchInformationTrust]:
-        """Return the newest active authored trust for every source record."""
+        """Return the least-trusting active judgement for every source record.
+
+        More than one non-superseded assessment can exist for a source. Their
+        insertion order is not an epistemic rule, so a later high label must
+        not silently erase an earlier active low label. An explicit correction
+        still wins because its predecessor is removed by the supersession set.
+        """
         superseded = {
             assessment.supersedes_assessment_id
             for assessment in run.assessments
             if assessment.supersedes_assessment_id
         }
-        return {
-            assessment.source_document_id: assessment.information_trust
-            for assessment in run.assessments
-            if assessment.assessment_id not in superseded
-        }
+        trust: dict[str, ResearchInformationTrust] = {}
+        for assessment in run.assessments:
+            if assessment.assessment_id in superseded:
+                continue
+            current = trust.get(assessment.source_document_id)
+            if current is None or ResearchHypothesisAppraiser._trust_rank(
+                assessment.information_trust
+            ) < ResearchHypothesisAppraiser._trust_rank(current):
+                trust[assessment.source_document_id] = assessment.information_trust
+        return trust
 
     @staticmethod
     def _trust_rank(value: ResearchInformationTrust) -> int:

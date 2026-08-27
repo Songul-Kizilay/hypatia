@@ -2,6 +2,21 @@
 
 All notable project changes are recorded here.
 
+## [0.3.204] - 2026-08-27
+
+### Fixed
+
+- Hypothesis appraisal no longer lets insertion order choose between multiple
+  active trust assessments for one source. It conservatively keeps the lowest
+  authored trust until an explicit superseding correction removes it.
+
+### Security
+
+- A later parallel high-trust assessment can no longer silently mask an active
+  low-trust assessment and move a hypothesis to `supported`. No assessment is
+  rewritten, merged, or inferred, and explicit supersession behavior is
+  unchanged.
+
 ## [0.3.203] - 2026-08-27
 
 ### Changed

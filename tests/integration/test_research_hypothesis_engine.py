@@ -402,6 +402,28 @@ class AppraisalTests(HypothesisFixture):
 
         self.assertIs(status, HypothesisStatus.SUPPORTED)
 
+    def test_multiple_active_assessments_keep_the_least_trusting_label(self) -> None:
+        service = self.service()
+        run_id = self.new_run()
+        hypothesis_id = self.propose(service, run_id)
+        first = self.evidence(run_id, "a")
+        second = self.evidence(run_id, "b")
+        self.assess(run_id, first, ResearchInformationTrust.LOW)
+        self.assess(run_id, first, ResearchInformationTrust.HIGH)
+        self.assess(run_id, second, ResearchInformationTrust.MEDIUM)
+
+        status = self.enter(service, hypothesis_id, [first, second], True)
+
+        self.assertIs(status, HypothesisStatus.OPEN)
+        appraisal = self.appraiser.appraise(
+            service.hypotheses()[0],
+            self.manager.get(run_id),
+        )
+        self.assertIs(
+            appraisal.lowest_supporting_trust,
+            ResearchInformationTrust.LOW,
+        )
+
     def test_appraisal_reports_authored_trust_coverage(self) -> None:
         service = self.service()
         run_id = self.new_run()
