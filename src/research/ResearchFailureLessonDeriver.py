@@ -261,11 +261,16 @@ class ResearchFailureLessonDeriver:
     ) -> list[ResearchFailureLesson]:
         """Each recorded failure is a lesson about how the work goes wrong."""
         lessons: list[ResearchFailureLesson] = []
+        occurrences: dict[str, int] = {}
         for record in run.failures:
             provider = f" for {record.provider}" if record.provider else ""
             identity = f"{record.stage}:{record.occurred_at.isoformat()}"
             if record.provider:
                 identity = f"{identity}:{record.provider}"
+            occurrence = occurrences.get(identity, 0) + 1
+            occurrences[identity] = occurrence
+            if occurrence > 1:
+                identity = f"{identity}:occurrence-{occurrence}"
             lessons.append(
                 self._lesson(
                     run,

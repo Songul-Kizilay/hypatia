@@ -596,6 +596,19 @@ class LessonDerivationTests(FailureMemoryFixture):
         self.assertIn(":nvd", lesson.subject_id)
         self.assertIn(":nvd", lesson.provenance[0])
 
+    def test_same_time_failure_records_keep_unique_lesson_identities(self) -> None:
+        with patch.object(self.manager, "_clock", lambda: START):
+            run_id = self.new_run()
+            self.manager.record_failure(run_id, "source_fetch", "Timed out.")
+            self.manager.record_failure(run_id, "source_fetch", "Connection reset.")
+
+        lessons = self.of_kind(run_id, FailureLessonKind.OPERATION_FAILURE)
+
+        self.assertEqual(len(lessons), 2)
+        self.assertEqual(len({lesson.lesson_id for lesson in lessons}), 2)
+        self.assertNotIn("occurrence-", lessons[0].subject_id)
+        self.assertIn("occurrence-2", lessons[1].subject_id)
+
     def test_the_lesson_count_is_bounded(self) -> None:
         run_id = self.new_run()
         for index in range(5):
@@ -1025,6 +1038,21 @@ class FailureMemoryServiceTests(FailureMemoryFixture):
         self.assertTrue(response.success)
         self.assertEqual(len(service.lessons()), 3)
         self.assertEqual(len(self.service().lessons()), 3)
+
+    def test_same_time_failures_store_as_distinct_lessons(self) -> None:
+        with patch.object(self.manager, "_clock", lambda: START):
+            run_id = self.new_run()
+            self.manager.record_failure(run_id, "source_fetch", "Timed out.")
+            self.manager.record_failure(run_id, "source_fetch", "Connection reset.")
+        service = self.service()
+
+        response = service.process_store(
+            self.request("failure_memory_store", research_run_id=run_id)
+        )
+
+        self.assertTrue(response.success)
+        self.assertEqual(len(service.lessons()), 2)
+        self.assertEqual(len(self.service().lessons()), 2)
 
     def test_storing_twice_remembers_nothing_new(self) -> None:
         run_id = self.failing_run()

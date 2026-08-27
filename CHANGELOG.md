@@ -2,6 +2,22 @@
 
 All notable project changes are recorded here.
 
+## [0.3.212] - 2026-08-27
+
+### Fixed
+
+- Failure Memory now keeps distinct lessons when multiple recorded operation
+  failures share the same stage, timestamp, and provider. The original stable
+  identity remains unchanged for the first record; only later collisions gain
+  a deterministic occurrence suffix, preventing duplicate lesson IDs and
+  durable-store rejection.
+
+### Security
+
+- Failure reasons remain bounded safe diagnostics and are not embedded in
+  lesson identities. Derivation stays local, deterministic, read-only, and
+  advisory, and it performs no retry or research operation.
+
 ## [0.3.211] - 2026-08-27
 
 ### Fixed
