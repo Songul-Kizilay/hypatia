@@ -208,29 +208,50 @@ class ResearchFailureLessonDeriver:
             if record.assessment_id not in superseded
             and record.information_trust is ResearchInformationTrust.LOW
         ]
-        # Parallel assessments are legitimate, but a lesson is identified by
-        # source. Keep one lesson per source and let the newest active record
-        # provide its exact provenance instead of manufacturing duplicate IDs.
-        latest_by_source: dict[str, ResearchSourceAssessmentRecord] = {}
+        # Parallel assessments and duplicate stored records are legitimate, but
+        # a lesson is identified by canonical resource. Keep the first accepted
+        # document as the stable subject while the newest active low assessment
+        # provides its exact provenance.
+        resource_by_document: dict[str, str] = {}
+        canonical_document_by_resource: dict[str, str] = {}
+        for source in run.sources:
+            resource = identity_of(source.url) or source.document_id
+            resource_by_document[source.document_id] = resource
+            canonical_document_by_resource.setdefault(resource, source.document_id)
+        latest_by_resource: dict[str, ResearchSourceAssessmentRecord] = {}
         for record in active_low:
-            current = latest_by_source.get(record.source_document_id)
+            resource = resource_by_document.get(
+                record.source_document_id,
+                record.source_document_id,
+            )
+            current = latest_by_resource.get(resource)
             if current is None or (record.recorded_at, record.assessment_id) > (
                 current.recorded_at,
                 current.assessment_id,
             ):
-                latest_by_source[record.source_document_id] = record
+                latest_by_resource[resource] = record
         return [
             self._lesson(
                 run,
                 FailureLessonKind.FALSE_POSITIVE,
-                record.source_document_id,
+                canonical_document_by_resource.get(
+                    resource,
+                    record.source_document_id,
+                ),
                 "This source was accepted and then assessed as low trust. "
                 "Acceptance is not a judgement of quality, and here the two "
                 "diverged.",
-                (record.source_document_id, record.assessment_id),
+                (
+                    canonical_document_by_resource.get(
+                        resource,
+                        record.source_document_id,
+                    ),
+                    record.source_document_id,
+                    record.assessment_id,
+                ),
                 recorded_at,
             )
-            for record in latest_by_source.values()
+            for resource, record in latest_by_resource.items()
         ]
 
     def _unused_discoveries(

@@ -497,6 +497,45 @@ class LessonDerivationTests(FailureMemoryFixture):
         self.assertEqual(lessons[0].provenance, (document_id, second.assessment_id))
         self.assertNotIn(first.assessment_id, lessons[0].provenance)
 
+    def test_duplicate_source_records_make_one_false_positive_lesson(self) -> None:
+        run_id = self.new_run()
+        documents: list[str] = []
+        assessments = []
+        for url, title in (
+            ("https://www.example.test/shared", "Shared record one"),
+            ("https://example.test/shared/", "Shared record two"),
+        ):
+            result = self.acceptance.accept(
+                ResearchSource(
+                    url=url,
+                    title=title,
+                    content=f"{title} discusses the measured age of Saturn's rings.",
+                    content_type="text/html",
+                    fetched_at=FETCHED,
+                ),
+                run_id,
+            )
+            assert result.document_id is not None
+            documents.append(result.document_id)
+            evidence_id = self.add_evidence(run_id, result.document_id)
+            assessment = self.manager.record_source_assessment(
+                run_id,
+                result.document_id,
+                [evidence_id],
+                "The duplicate record is still low trust.",
+                information_trust=ResearchInformationTrust.LOW,
+            ).assessments[-1]
+            assessments.append(assessment)
+
+        lessons = self.of_kind(run_id, FailureLessonKind.FALSE_POSITIVE)
+
+        self.assertEqual(len(lessons), 1)
+        self.assertEqual(lessons[0].subject_id, documents[0])
+        self.assertEqual(
+            lessons[0].provenance,
+            (documents[0], documents[1], assessments[1].assessment_id),
+        )
+
     def test_a_barren_discovery_becomes_an_ineffective_strategy(self) -> None:
         run_id = self.new_run()
         self.manager.add_discovery(

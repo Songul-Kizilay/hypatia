@@ -2,6 +2,24 @@
 
 All notable project changes are recorded here.
 
+## [0.3.221] - 2026-08-27
+
+### Fixed
+
+- Failure Memory now derives at most one false-positive lesson for multiple
+  accepted document records that resolve to the same canonical resource. A
+  duplicated low-trust page can no longer inflate one source-quality mistake
+  into several remembered failures.
+- The first accepted document remains the stable lesson subject, while the
+  newest active low-trust assessment and its actual document remain in the
+  lesson provenance for inspection.
+
+### Security
+
+- No source, assessment, evidence, or persisted research-run record is
+  rewritten. The change only makes pure lesson derivation identity-aware and
+  leaves recall advisory.
+
 ## [0.3.220] - 2026-08-27
 
 ### Fixed
