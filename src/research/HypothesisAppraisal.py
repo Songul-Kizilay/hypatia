@@ -73,6 +73,22 @@ class HypothesisAppraisal:
         ):
             if not isinstance(trust, ResearchInformationTrust):
                 raise ResearchError("Hypothesis source trust must be a bounded label.")
+        for assessed, trust, side in (
+            (
+                self.supporting_assessed_source_count,
+                self.lowest_supporting_trust,
+                "supporting",
+            ),
+            (
+                self.opposing_assessed_source_count,
+                self.lowest_opposing_trust,
+                "opposing",
+            ),
+        ):
+            if assessed == 0 and trust is not ResearchInformationTrust.UNASSESSED:
+                raise ResearchError(
+                    f"Hypothesis {side} trust requires an assessed source."
+                )
 
     @property
     def corroborated(self) -> bool:

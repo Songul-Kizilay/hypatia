@@ -2,6 +2,22 @@
 
 All notable project changes are recorded here.
 
+## [0.3.203] - 2026-08-27
+
+### Changed
+
+- Evidence support profiles now reject impossible trust summaries: trust with
+  no assessed source, a lowest trust above the highest trust, and non-boolean
+  contradiction or supersession states.
+- Hypothesis appraisals now reject supporting or opposing trust labels when no
+  source on that side has an authored assessment.
+
+### Security
+
+- These checks harden derived Evidence & Confidence records at their domain
+  boundary. They do not change authored claims, source assessments, confidence
+  ceilings, hypothesis status rules, or any stored research state.
+
 ## [0.3.202] - 2026-08-27
 
 ### Fixed

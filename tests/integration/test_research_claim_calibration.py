@@ -566,6 +566,27 @@ class CalibrationProfileTests(unittest.TestCase):
         with self.assertRaises(ResearchError):
             EvidenceSupportProfile(source_count=-1)
 
+    def test_a_profile_rejects_trust_without_an_assessed_source(self) -> None:
+        with self.assertRaisesRegex(ResearchError, "requires an assessed source"):
+            EvidenceSupportProfile(
+                source_count=1,
+                lowest_trust=ResearchInformationTrust.HIGH,
+                highest_trust=ResearchInformationTrust.HIGH,
+            )
+
+    def test_a_profile_rejects_a_reversed_trust_range(self) -> None:
+        with self.assertRaisesRegex(ResearchError, "range is reversed"):
+            EvidenceSupportProfile(
+                source_count=2,
+                assessed_source_count=2,
+                lowest_trust=ResearchInformationTrust.HIGH,
+                highest_trust=ResearchInformationTrust.LOW,
+            )
+
+    def test_a_profile_rejects_non_boolean_states(self) -> None:
+        with self.assertRaisesRegex(ResearchError, "states must be boolean"):
+            EvidenceSupportProfile(contradicted="yes")  # type: ignore[arg-type]
+
     def test_corroboration_needs_more_than_one_source(self) -> None:
         self.assertFalse(EvidenceSupportProfile(source_count=1).corroborated)
         self.assertTrue(EvidenceSupportProfile(source_count=2).corroborated)

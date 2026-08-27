@@ -51,6 +51,7 @@ from eventbus.EventBus import EventBus
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from memory.MemoryManager import MemoryManager
 from planner.Planner import Planner
+from research.HypothesisAppraisal import HypothesisAppraisal
 from research.HypothesisStatus import HypothesisStatus
 from research.JsonFileHypothesisStore import (
     MAX_HYPOTHESIS_STORE_ENTRIES,
@@ -304,6 +305,25 @@ class DiscriminatingTestTests(unittest.TestCase):
 
 
 class AppraisalTests(HypothesisFixture):
+    def test_an_appraisal_rejects_trust_without_an_assessed_source(self) -> None:
+        hypothesis = ResearchHypothesis(
+            hypothesis_id="hypothesis-1",
+            run_id="run-1",
+            statement=STATEMENT,
+            discriminating_test=TEST,
+            created_at=START,
+            updated_at=START,
+        )
+
+        with self.assertRaisesRegex(ResearchError, "requires an assessed source"):
+            HypothesisAppraisal(
+                hypothesis=hypothesis,
+                status=HypothesisStatus.OPEN,
+                supporting_source_count=1,
+                opposing_source_count=0,
+                lowest_supporting_trust=ResearchInformationTrust.HIGH,
+            )
+
     def test_a_new_hypothesis_is_open(self) -> None:
         service = self.service()
         run_id = self.new_run()

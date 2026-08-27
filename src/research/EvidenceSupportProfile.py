@@ -17,6 +17,13 @@ from dataclasses import dataclass
 from core.Exceptions import ResearchError
 from research.ResearchInformationTrust import ResearchInformationTrust
 
+_TRUST_RANK = {
+    ResearchInformationTrust.UNASSESSED: 0,
+    ResearchInformationTrust.LOW: 1,
+    ResearchInformationTrust.MEDIUM: 2,
+    ResearchInformationTrust.HIGH: 3,
+}
+
 
 @dataclass(frozen=True, slots=True)
 class EvidenceSupportProfile:
@@ -43,6 +50,17 @@ class EvidenceSupportProfile:
         for trust in (self.lowest_trust, self.highest_trust):
             if not isinstance(trust, ResearchInformationTrust):
                 raise ResearchError("Evidence trust must be a bounded label.")
+        if not isinstance(self.contradicted, bool) or not isinstance(
+            self.superseded, bool
+        ):
+            raise ResearchError("Evidence profile states must be boolean.")
+        if self.assessed_source_count == 0 and (
+            self.lowest_trust is not ResearchInformationTrust.UNASSESSED
+            or self.highest_trust is not ResearchInformationTrust.UNASSESSED
+        ):
+            raise ResearchError("Evidence trust requires an assessed source.")
+        if _TRUST_RANK[self.lowest_trust] > _TRUST_RANK[self.highest_trust]:
+            raise ResearchError("Evidence trust range is reversed.")
 
     @property
     def corroborated(self) -> bool:
