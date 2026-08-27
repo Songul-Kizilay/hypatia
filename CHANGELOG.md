@@ -2,6 +2,23 @@
 
 All notable project changes are recorded here.
 
+## [0.3.217] - 2026-08-27
+
+### Fixed
+
+- Advanced Research now re-reads the canonical persisted run catalog after a
+  confirmed source-load attempt. A successfully attached candidate therefore
+  appears immediately in the selected run's source count and accepted-source
+  selector instead of leaving the pre-load snapshot on screen.
+- The same refresh also exposes canonical failure records while preserving the
+  exact selected run. It performs no second discovery or provider request.
+
+### Security
+
+- Candidate preview, explicit confirmation, exact run/discovery/URL binding,
+  cancellation, and the guarded loader remain unchanged. The completion path
+  only performs a local read of persisted research state.
+
 ## [0.3.216] - 2026-08-27
 
 ### Fixed

@@ -2856,6 +2856,12 @@ class TkinterDesktopWindow:
     def _complete_research_source_load(self, response: BrainResponse) -> None:
         """Present an accepted network source only on the Tkinter event thread."""
         self._append_response(response)
+        try:
+            canonical_response = self._controller.list_research_runs()
+        except ValueError:
+            canonical_response = None
+        if canonical_response is not None and canonical_response.success:
+            self._render_research_run_selector(tuple(canonical_response.research_runs))
         self._capture_accepted_research_source(response)
 
     def _create_research_run(self) -> None:

@@ -6059,6 +6059,83 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         )
         confirm.assert_called_once()
 
+    def test_accepted_candidate_refreshes_the_selected_run_from_canonical_state(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchSourceLoadController()
+        responses: list[BrainResponse] = []
+        rendered_runs: list[tuple[ResearchRun, ...]] = []
+        now = datetime(2026, 8, 20, tzinfo=UTC)
+        accepted_source = ResearchSourceRecord(
+            "document-accepted",
+            controller.candidates[0].url,
+            "Accepted candidate",
+            "text/plain",
+            now,
+            now,
+        )
+        accepted_run = replace(
+            controller.list_response.research_runs[0], sources=(accepted_source,)
+        )
+        controller.candidate_accept_response = BrainResponse(
+            message="Candidate accepted.",
+            request_id="candidate-accept",
+            intent="research_source_candidate_accept",
+            memory_count=0,
+            knowledge_documents=[
+                KnowledgeDocumentReference(
+                    "document-accepted",
+                    "Accepted candidate",
+                    controller.candidates[0].url,
+                    DocumentType.WEB,
+                    1,
+                )
+            ],
+            research_runs=[accepted_run],
+        )
+        controller.list_response = replace(
+            controller.list_response,
+            research_runs=[accepted_run],
+        )
+        window._root = object()
+        window._controller = controller
+        window._research_run_id = RecordingInput("run-123")
+        window._research_candidate_run_id = "run-123"
+        window._research_candidate_discovery_id = "discovery-1"
+        window._research_candidate_discovery_ids = ("discovery-1",)
+        window._research_candidates = controller.candidates
+        window._research_candidate_selector = RecordingCandidateSelector(0)
+        window._research_source_document_id = RecordingVariable("")
+        window._status = RecordingStatus()
+        window._append_response = responses.append
+        window._render_research_run_selector = lambda runs: rendered_runs.append(
+            tuple(runs)
+        )
+        _configure_request_boundary(window)
+
+        with patch(
+            "desktop.TkinterDesktopWindow.messagebox.askyesno", return_value=True
+        ):
+            window._preview_and_accept_research_candidate()
+        window._poll_requests()
+
+        self.assertEqual(
+            controller.candidate_accepts,
+            [("run-123", "discovery-1", controller.candidates[0].url)],
+        )
+        self.assertEqual(controller.list_calls, 1)
+        self.assertEqual(rendered_runs, [(accepted_run,)])
+        self.assertEqual(window._research_run_id.get(), "run-123")
+        self.assertEqual(window._research_source_document_id.get(), "document-accepted")
+        self.assertEqual(
+            responses,
+            [
+                controller.candidate_preview_response,
+                controller.candidate_accept_response,
+            ],
+        )
+
     def test_declined_candidate_preview_does_not_accept(self) -> None:
         window: Any = object.__new__(TkinterDesktopWindow)
         controller = RecordingResearchSourceLoadController()
