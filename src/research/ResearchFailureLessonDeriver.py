@@ -28,6 +28,7 @@ from research.ResearchFailureLesson import (
 )
 from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRun import ResearchRun
+from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
 
 MAX_LESSONS_PER_RUN = 40
 
@@ -190,6 +191,23 @@ class ResearchFailureLessonDeriver:
             for record in run.assessments
             if record.supersedes_assessment_id
         }
+        active_low = [
+            record
+            for record in run.assessments
+            if record.assessment_id not in superseded
+            and record.information_trust is ResearchInformationTrust.LOW
+        ]
+        # Parallel assessments are legitimate, but a lesson is identified by
+        # source. Keep one lesson per source and let the newest active record
+        # provide its exact provenance instead of manufacturing duplicate IDs.
+        latest_by_source: dict[str, ResearchSourceAssessmentRecord] = {}
+        for record in active_low:
+            current = latest_by_source.get(record.source_document_id)
+            if current is None or (record.recorded_at, record.assessment_id) > (
+                current.recorded_at,
+                current.assessment_id,
+            ):
+                latest_by_source[record.source_document_id] = record
         return [
             self._lesson(
                 run,
@@ -201,9 +219,7 @@ class ResearchFailureLessonDeriver:
                 (record.source_document_id, record.assessment_id),
                 recorded_at,
             )
-            for record in run.assessments
-            if record.assessment_id not in superseded
-            and record.information_trust is ResearchInformationTrust.LOW
+            for record in latest_by_source.values()
         ]
 
     def _unused_discoveries(

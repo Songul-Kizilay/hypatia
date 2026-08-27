@@ -440,6 +440,29 @@ class LessonDerivationTests(FailureMemoryFixture):
         self.assertEqual(len(lessons), 1)
         self.assertIn("Acceptance is not a judgement of quality", lessons[0].statement)
 
+    def test_parallel_low_trust_assessments_make_one_source_lesson(self) -> None:
+        run_id, document_id, evidence_id = self.sourced_run()
+        first = self.manager.record_source_assessment(
+            run_id,
+            document_id,
+            [evidence_id],
+            "Self-published.",
+            information_trust=ResearchInformationTrust.LOW,
+        ).assessments[-1]
+        second = self.manager.record_source_assessment(
+            run_id,
+            document_id,
+            [evidence_id],
+            "No independent review.",
+            information_trust=ResearchInformationTrust.LOW,
+        ).assessments[-1]
+
+        lessons = self.of_kind(run_id, FailureLessonKind.FALSE_POSITIVE)
+
+        self.assertEqual(len(lessons), 1)
+        self.assertEqual(lessons[0].provenance, (document_id, second.assessment_id))
+        self.assertNotIn(first.assessment_id, lessons[0].provenance)
+
     def test_a_barren_discovery_becomes_an_ineffective_strategy(self) -> None:
         run_id = self.new_run()
         self.manager.add_discovery(
@@ -921,6 +944,26 @@ class FailureMemoryServiceTests(FailureMemoryFixture):
             [lesson.lesson_id for lesson in second.lessons()],
             [lesson.lesson_id for lesson in first.lessons()],
         )
+
+    def test_parallel_low_trust_assessments_store_as_one_source_lesson(self) -> None:
+        run_id, document_id, evidence_id = self.sourced_run()
+        for text in ("Self-published.", "No independent review."):
+            self.manager.record_source_assessment(
+                run_id,
+                document_id,
+                [evidence_id],
+                text,
+                information_trust=ResearchInformationTrust.LOW,
+            )
+        service = self.service()
+
+        response = service.process_store(
+            self.request("failure_memory_store", research_run_id=run_id)
+        )
+
+        self.assertTrue(response.success)
+        self.assertEqual(len(service.lessons()), 1)
+        self.assertEqual(len(self.service().lessons()), 1)
 
     def test_storing_twice_remembers_nothing_new(self) -> None:
         run_id = self.failing_run()

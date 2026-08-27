@@ -2,6 +2,22 @@
 
 All notable project changes are recorded here.
 
+## [0.3.210] - 2026-08-27
+
+### Fixed
+
+- Failure Memory now derives one low-trust false-positive lesson per accepted
+  source when several parallel active assessments judge that source low trust.
+  The newest active low-trust assessment provides the lesson's exact
+  provenance, so legitimate parallel judgements no longer manufacture
+  duplicate lesson IDs or prevent durable storage.
+
+### Security
+
+- Explicit supersession remains the only correction mechanism. Lesson
+  derivation stays local, deterministic, read-only, and advisory; it changes no
+  assessment, source, claim, provider choice, or research execution.
+
 ## [0.3.209] - 2026-08-27
 
 ### Fixed
