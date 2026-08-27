@@ -556,6 +556,28 @@ class LessonDerivationTests(FailureMemoryFixture):
             (),
         )
 
+    def test_canonical_acceptance_prevents_a_false_ineffective_lesson(self) -> None:
+        run_id = self.new_run()
+        document_id = self.accept_source(run_id, "used")
+        self.assertTrue(document_id)
+        self.manager.add_discovery(
+            run_id,
+            QUESTION,
+            "crossref",
+            [
+                ResearchSourceCandidate(
+                    url="https://WWW.EXAMPLE.TEST:443/used/",
+                    title="The accepted resource with an equivalent URL",
+                    snippet="",
+                )
+            ],
+        )
+
+        self.assertEqual(
+            self.of_kind(run_id, FailureLessonKind.INEFFECTIVE_STRATEGY),
+            (),
+        )
+
     def test_a_clean_run_leaves_no_lessons(self) -> None:
         run_id, _, _ = self.sourced_run()
 

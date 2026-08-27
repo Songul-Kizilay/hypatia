@@ -33,6 +33,7 @@ from research.ResearchFailureRecord import ResearchFailureRecord
 from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRun import ResearchRun
 from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
+from research.SourceIdentity import identity_of
 
 MAX_LESSONS_PER_RUN = 40
 
@@ -238,7 +239,7 @@ class ResearchFailureLessonDeriver:
         recorded_at: datetime,
     ) -> list[ResearchFailureLesson]:
         """A discovery that yielded no accepted source did not pay off here."""
-        accepted = {source.url for source in run.sources}
+        accepted = {identity_of(source.url) for source in run.sources}
         return [
             self._lesson(
                 run,
@@ -251,7 +252,10 @@ class ResearchFailureLessonDeriver:
                 recorded_at,
             )
             for record in run.discoveries
-            if not any(candidate.url in accepted for candidate in record.candidates)
+            if not any(
+                identity_of(candidate.url) in accepted
+                for candidate in record.candidates
+            )
         ]
 
     def _operation_failures(

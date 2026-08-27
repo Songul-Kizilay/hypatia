@@ -2,6 +2,21 @@
 
 All notable project changes are recorded here.
 
+## [0.3.220] - 2026-08-27
+
+### Fixed
+
+- Failure Memory now matches accepted research sources to discovery candidates
+  by canonical resource identity. Equivalent HTTPS URLs that differ only by a
+  `www` prefix, default port, host casing, or trailing slash no longer create a
+  false ineffective-strategy lesson after the source was actually accepted.
+
+### Security
+
+- The correction is local, deterministic, and advisory-only. It does not fetch
+  a source, change provider selection, suppress a real zero-result discovery,
+  mutate research records, or turn a recalled lesson into an enforcement rule.
+
 ## [0.3.219] - 2026-08-27
 
 ### Fixed
