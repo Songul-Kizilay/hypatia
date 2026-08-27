@@ -2,6 +2,22 @@
 
 All notable project changes are recorded here.
 
+## [0.3.208] - 2026-08-27
+
+### Fixed
+
+- Source reputation now keeps the lowest active authored trust when one source
+  has parallel assessments. A later high-trust entry no longer hides an active
+  low-trust judgement merely because it was appended later.
+- Explicit supersession remains the only way a correction removes the earlier
+  trust label from the derived reputation.
+
+### Security
+
+- Reputation remains read-only and advisory. This change alters no assessment,
+  source, ranking, provider choice, or network behavior; it only prevents record
+  order from making a derived origin history look safer than its active inputs.
+
 ## [0.3.207] - 2026-08-27
 
 ### Fixed

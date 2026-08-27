@@ -123,7 +123,7 @@ class SourceReputationLedger:
 
     @staticmethod
     def _active_trust(run: ResearchRun) -> dict[str, ResearchInformationTrust]:
-        """Return the trust label of each source's newest active assessment."""
+        """Return each source's least-trusting active authored assessment."""
         superseded = {
             assessment.supersedes_assessment_id
             for assessment in run.assessments
@@ -133,5 +133,18 @@ class SourceReputationLedger:
         for assessment in run.assessments:
             if assessment.assessment_id in superseded:
                 continue
-            trust[assessment.source_document_id] = assessment.information_trust
+            current = trust.get(assessment.source_document_id)
+            if current is None or SourceReputationLedger._trust_rank(
+                assessment.information_trust
+            ) < SourceReputationLedger._trust_rank(current):
+                trust[assessment.source_document_id] = assessment.information_trust
         return trust
+
+    @staticmethod
+    def _trust_rank(value: ResearchInformationTrust) -> int:
+        return {
+            ResearchInformationTrust.UNASSESSED: 0,
+            ResearchInformationTrust.LOW: 1,
+            ResearchInformationTrust.MEDIUM: 2,
+            ResearchInformationTrust.HIGH: 3,
+        }[value]

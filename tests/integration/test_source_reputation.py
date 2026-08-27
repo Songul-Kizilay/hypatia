@@ -317,6 +317,31 @@ class ReputationLedgerTests(ReputationLedgerFixture):
         self.assertEqual(reputation.low_count, 0)
         self.assertEqual(reputation.high_count, 1)
 
+    def test_parallel_high_trust_does_not_hide_an_active_low_assessment(self) -> None:
+        run_id = self.new_run()
+        document_id = self.accept(run_id, "https://mixed.test/a")
+        evidence_id = self.add_evidence(run_id, document_id)
+        self.assess(
+            run_id,
+            document_id,
+            evidence_id,
+            ResearchInformationTrust.LOW,
+        )
+        self.assess(
+            run_id,
+            document_id,
+            evidence_id,
+            ResearchInformationTrust.HIGH,
+        )
+
+        reputation = next(
+            entry for entry in self.build() if entry.origin == "mixed.test"
+        )
+
+        self.assertEqual(reputation.assessed_count, 1)
+        self.assertEqual(reputation.low_count, 1)
+        self.assertEqual(reputation.high_count, 0)
+
     def test_reputation_accumulates_across_runs(self) -> None:
         for index in range(MIN_ASSESSMENTS_FOR_STANDING):
             run_id = self.new_run()
