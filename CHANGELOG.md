@@ -2,6 +2,23 @@
 
 All notable project changes are recorded here.
 
+## [0.3.219] - 2026-08-27
+
+### Fixed
+
+- Claim calibration now measures assessment coverage per canonical resource
+  identity rather than per stored document. Multiple records of one page can no
+  longer hide a different, unassessed source and falsely satisfy the
+  fully-assessed evidence ceiling.
+- When multiple assessed records resolve to the same resource, the resource's
+  most cautious active trust value remains visible to the support calculation.
+
+### Security
+
+- The change is local, deterministic, and read-only. It does not alter authored
+  assessments, evidence, claims, source records, provider routing, network use,
+  or tool authorization.
+
 ## [0.3.218] - 2026-08-27
 
 ### Fixed

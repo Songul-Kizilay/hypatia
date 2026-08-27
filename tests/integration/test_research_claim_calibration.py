@@ -292,6 +292,58 @@ class AssessmentWarningReportTests(CalibrationFixture):
 
 
 class SupportCeilingTests(CalibrationFixture):
+    def test_duplicate_records_do_not_hide_an_unassessed_resource(self) -> None:
+        run_id = self.new_run()
+        documents: list[str] = []
+        for url, title in (
+            ("https://www.example.test/shared", "Shared record one"),
+            ("https://example.test/shared/", "Shared record two"),
+            ("https://other.test/distinct", "Distinct resource"),
+        ):
+            result = self.acceptance.accept(
+                ResearchSource(
+                    url=url,
+                    title=title,
+                    content=f"{title} discusses the measured age of Saturn's rings.",
+                    content_type="text/html",
+                    fetched_at=FETCHED,
+                ),
+                run_id,
+            )
+            assert result.document_id is not None
+            documents.append(result.document_id)
+
+        evidence_ids = [
+            self.add_evidence(run_id, document_id) for document_id in documents
+        ]
+        for document_id, evidence_id in zip(
+            documents[:2], evidence_ids[:2], strict=True
+        ):
+            self.assess(
+                run_id,
+                document_id,
+                evidence_id,
+                ResearchInformationTrust.HIGH,
+            )
+        self.claim(
+            run_id,
+            evidence_ids,
+            ResearchEpistemicState.STRONG_EVIDENCE,
+            ResearchClaimConfidence.HIGH,
+        )
+
+        [calibration] = self.calibrator.calibrate(self.manager.get(run_id))
+
+        self.assertEqual(calibration.profile.source_count, 2)
+        self.assertEqual(calibration.profile.assessed_source_count, 1)
+        self.assertFalse(calibration.profile.fully_assessed)
+        self.assertIs(calibration.supported_state, ResearchEpistemicState.LIKELY)
+        self.assertIs(
+            calibration.supported_confidence,
+            ResearchClaimConfidence.MEDIUM,
+        )
+        self.assertIs(calibration.verdict, CalibrationVerdict.OVERSTATED_BOTH)
+
     def test_one_unassessed_source_cannot_carry_a_fact(self) -> None:
         run_id = self.new_run()
         document_id = self.accept_source(run_id, "a")

@@ -308,19 +308,28 @@ class ResearchClaimCalibrator:
         }
         documents.update(claim.source_document_ids)
         resources = {identities.get(document) or document for document in documents}
-        assessed = [trust[document] for document in documents if document in trust]
+        trust_by_resource: dict[str, list[ResearchInformationTrust]] = {}
+        for document in documents:
+            if document not in trust:
+                continue
+            resource = identities.get(document) or document
+            trust_by_resource.setdefault(resource, []).append(trust[document])
+        assessed_resources = [
+            min(values, key=lambda value: _TRUST_RANK[value])
+            for values in trust_by_resource.values()
+        ]
         return EvidenceSupportProfile(
             source_count=len(resources),
             evidence_count=len(claim.evidence_ids),
-            assessed_source_count=min(len(assessed), len(resources)),
+            assessed_source_count=len(assessed_resources),
             lowest_trust=(
-                min(assessed, key=lambda value: _TRUST_RANK[value])
-                if assessed
+                min(assessed_resources, key=lambda value: _TRUST_RANK[value])
+                if assessed_resources
                 else ResearchInformationTrust.UNASSESSED
             ),
             highest_trust=(
-                max(assessed, key=lambda value: _TRUST_RANK[value])
-                if assessed
+                max(assessed_resources, key=lambda value: _TRUST_RANK[value])
+                if assessed_resources
                 else ResearchInformationTrust.UNASSESSED
             ),
             contradicted=contradicted,
