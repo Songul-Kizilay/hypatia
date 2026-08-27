@@ -19,6 +19,8 @@ confidence than they want.
 from __future__ import annotations
 
 from core.Exceptions import ResearchError
+from research.AssessmentWarningAttention import AssessmentWarningAttention
+from research.AssessmentWarningKind import AssessmentWarningKind
 from research.AssessmentWarningRules import (
     APPLICABILITY_RULES,
     CORROBORATION_RULE,
@@ -90,8 +92,11 @@ class ResearchClaimCalibrator:
         # below is a lookup rather than a rescan of every judgement in the run.
         active = self._active_assessments(run)
         trust = {
-            document_id: assessment.information_trust
-            for document_id, assessment in active.items()
+            document_id: min(
+                (assessment.information_trust for assessment in assessments),
+                key=lambda value: _TRUST_RANK[value],
+            )
+            for document_id, assessments in active.items()
         }
         return tuple(
             self._calibrate(claim, profile, warnings)
@@ -134,7 +139,7 @@ class ResearchClaimCalibrator:
         claim: ResearchClaimRecord,
         profile: EvidenceSupportProfile,
         evidence_sources: dict[str, str],
-        active: dict[str, ResearchSourceAssessmentRecord],
+        active: dict[str, tuple[ResearchSourceAssessmentRecord, ...]],
     ) -> tuple[ResearchAssessmentWarning, ...]:
         """Report what the recorded judgements say about this claim's sources.
 
@@ -158,21 +163,39 @@ class ResearchClaimCalibrator:
         warnings: list[ResearchAssessmentWarning] = []
         not_independent = 0
         for document_id in sorted(documents):
-            assessment = active.get(document_id)
-            if assessment is None:
+            assessments = active.get(document_id, ())
+            if not assessments:
                 continue
-            if assessment.independence in INDEPENDENCE_RULES:
+            if any(
+                assessment.independence in INDEPENDENCE_RULES
+                for assessment in assessments
+            ):
                 not_independent += 1
-            rules = (
-                PUBLICATION_RULES.get(assessment.publication_status),
-                USEFULNESS_RULES.get(assessment.usefulness),
-                APPLICABILITY_RULES.get(assessment.applicability),
-                INDEPENDENCE_RULES.get(assessment.independence),
-            )
-            for rule in rules:
-                if rule is None:
-                    continue
-                kind, attention = rule
+            per_kind: dict[
+                AssessmentWarningKind,
+                tuple[AssessmentWarningAttention, ResearchSourceAssessmentRecord],
+            ] = {}
+            for assessment in assessments:
+                rules = (
+                    PUBLICATION_RULES.get(assessment.publication_status),
+                    USEFULNESS_RULES.get(assessment.usefulness),
+                    APPLICABILITY_RULES.get(assessment.applicability),
+                    INDEPENDENCE_RULES.get(assessment.independence),
+                )
+                for rule in rules:
+                    if rule is None:
+                        continue
+                    kind, attention = rule
+                    current = per_kind.get(kind)
+                    if current is None or (
+                        assessment.recorded_at,
+                        assessment.assessment_id,
+                    ) > (
+                        current[1].recorded_at,
+                        current[1].assessment_id,
+                    ):
+                        per_kind[kind] = (attention, assessment)
+            for kind, (attention, assessment) in per_kind.items():
                 warnings.append(
                     ResearchAssessmentWarning(
                         claim_id=claim.claim_id,
@@ -307,22 +330,34 @@ class ResearchClaimCalibrator:
     @staticmethod
     def _active_assessments(
         run: ResearchRun,
-    ) -> dict[str, ResearchSourceAssessmentRecord]:
-        """Return each source's current assessment, ignoring superseded ones.
+    ) -> dict[str, tuple[ResearchSourceAssessmentRecord, ...]]:
+        """Return every current assessment, grouped by source.
 
-        Only the standing judgement is read. A source once marked retracted and
-        later corrected back to normal warns about nothing, because the person
-        changed their mind and the record says so; the earlier assessment stays
-        in the run and stays inspectable, but it no longer speaks.
+        Explicitly superseded judgements no longer speak. Parallel active
+        judgements all do: insertion order is not permission for one authored
+        assessment to erase another. Group ordering is deterministic so a
+        repeated calibration over unchanged state produces the same warning
+        provenance.
         """
         superseded = {
             assessment.supersedes_assessment_id
             for assessment in run.assessments
             if assessment.supersedes_assessment_id
         }
-        active: dict[str, ResearchSourceAssessmentRecord] = {}
+        active: dict[str, list[ResearchSourceAssessmentRecord]] = {}
         for assessment in run.assessments:
             if assessment.assessment_id in superseded:
                 continue
-            active[assessment.source_document_id] = assessment
-        return active
+            active.setdefault(assessment.source_document_id, []).append(assessment)
+        return {
+            document_id: tuple(
+                sorted(
+                    assessments,
+                    key=lambda assessment: (
+                        assessment.recorded_at,
+                        assessment.assessment_id,
+                    ),
+                )
+            )
+            for document_id, assessments in active.items()
+        }

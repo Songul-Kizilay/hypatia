@@ -2,6 +2,24 @@
 
 All notable project changes are recorded here.
 
+## [0.3.209] - 2026-08-27
+
+### Fixed
+
+- Claim calibration now reads every active assessment for a source instead of
+  letting the last appended record replace the others. Its evidence profile
+  uses the lowest active authored trust, so a parallel high-trust judgement can
+  no longer raise a claim's support ceiling over an unresolved low-trust one.
+- Structured assessment warnings from parallel active judgements remain
+  visible. The same warning kind is still grouped once per claim and source,
+  with deterministic provenance from the newest active record carrying it.
+
+### Security
+
+- Explicit supersession remains the only correction mechanism. Calibration is
+  still derived, read-only, local, deterministic, and unable to rewrite claims,
+  assessments, confidence, provider choice, or research execution.
+
 ## [0.3.208] - 2026-08-27
 
 ### Fixed

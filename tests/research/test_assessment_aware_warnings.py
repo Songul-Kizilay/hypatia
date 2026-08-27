@@ -552,6 +552,48 @@ class SupersessionTests(WarningTestCase):
         self.assertNotIn("source_not_useful", kinds(calibration))
 
 
+class ParallelAssessmentTests(WarningTestCase):
+    def test_a_parallel_normal_assessment_does_not_hide_a_retraction(self) -> None:
+        run = build_run(
+            assessments=(
+                assessment(
+                    1,
+                    publication_status=ResearchSourcePublicationStatus.RETRACTED,
+                ),
+                assessment(
+                    2,
+                    document=1,
+                    publication_status=ResearchSourcePublicationStatus.NORMAL,
+                ),
+            )
+        )
+
+        calibration = self.calibrate(run)
+
+        self.assertEqual(kinds(calibration), ["source_retracted"])
+        self.assertEqual(calibration.warnings[0].assessment_id, "assessment-1")
+
+    def test_same_parallel_concern_is_grouped_once_per_source(self) -> None:
+        run = build_run(
+            assessments=(
+                assessment(
+                    1,
+                    publication_status=ResearchSourcePublicationStatus.RETRACTED,
+                ),
+                assessment(
+                    2,
+                    document=1,
+                    publication_status=ResearchSourcePublicationStatus.RETRACTED,
+                ),
+            )
+        )
+
+        calibration = self.calibrate(run)
+
+        self.assertEqual(kinds(calibration), ["source_retracted"])
+        self.assertEqual(calibration.warnings[0].assessment_id, "assessment-2")
+
+
 class ReadOnlyTests(WarningTestCase):
     def _rich_run(self) -> ResearchRun:
         return build_run(

@@ -385,6 +385,37 @@ class SupportCeilingTests(CalibrationFixture):
 
         self.assertIs(self.verdict(run_id), CalibrationVerdict.OVERSTATED_BOTH)
 
+    def test_parallel_high_trust_does_not_hide_active_low_trust(self) -> None:
+        run_id = self.new_run()
+        document_id = self.accept_source(run_id, "a")
+        evidence_id = self.add_evidence(run_id, document_id)
+        self.assess(
+            run_id,
+            document_id,
+            evidence_id,
+            ResearchInformationTrust.LOW,
+        )
+        self.assess(
+            run_id,
+            document_id,
+            evidence_id,
+            ResearchInformationTrust.HIGH,
+        )
+        self.claim(
+            run_id,
+            [evidence_id],
+            ResearchEpistemicState.LIKELY,
+            ResearchClaimConfidence.MEDIUM,
+        )
+
+        [calibration] = self.calibrator.calibrate(self.manager.get(run_id))
+
+        self.assertIs(
+            calibration.profile.lowest_trust,
+            ResearchInformationTrust.LOW,
+        )
+        self.assertIs(calibration.verdict, CalibrationVerdict.OVERSTATED_BOTH)
+
     def test_a_contradicted_claim_carries_nothing(self) -> None:
         run_id = self.new_run()
         document_id = self.accept_source(run_id, "a")
