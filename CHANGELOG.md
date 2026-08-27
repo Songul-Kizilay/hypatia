@@ -2,6 +2,23 @@
 
 All notable project changes are recorded here.
 
+## [0.3.215] - 2026-08-27
+
+### Fixed
+
+- Failure Memory recall now preserves short technical vocabulary such as
+  `XSS`, `SQL`, `C++`, and `C#`. A prior lesson and a new question that share
+  two such identifiers can now be matched instead of losing the most specific
+  terms before relevance is measured.
+- Closed-list function words and generic medium names remain excluded from the
+  short-token path, and the existing two-shared-token threshold still applies.
+
+### Security
+
+- Recall remains deterministic, local, bounded, and advisory. The tokenizer
+  performs no semantic inference, model call, research action, or automatic
+  plan change; every surfaced lesson can still be ignored.
+
 ## [0.3.214] - 2026-08-27
 
 ### Fixed

@@ -956,6 +956,66 @@ class RecallIsAdvisoryTests(FailureMemoryFixture):
             (lesson,),
         )
 
+    def test_recall_keeps_short_security_identifiers(self) -> None:
+        lesson = ResearchFailureLesson(
+            lesson_id="lesson:run-1:operation_failure:security-search",
+            kind=FailureLessonKind.OPERATION_FAILURE,
+            run_id="run-1",
+            subject_id="security-search",
+            statement="The attempted payload analysis did not complete.",
+            provenance=("failure:security-search",),
+            context="How do XSS and SQL payloads interact?",
+            recorded_at=START,
+        )
+
+        self.assertEqual(
+            FailureMemoryAdvisor().relevant(
+                "Which XSS and SQL defenses should be tested?",
+                [lesson],
+            ),
+            (lesson,),
+        )
+
+    def test_recall_keeps_short_punctuated_identifiers(self) -> None:
+        lesson = ResearchFailureLesson(
+            lesson_id="lesson:run-1:operation_failure:language-search",
+            kind=FailureLessonKind.OPERATION_FAILURE,
+            run_id="run-1",
+            subject_id="language-search",
+            statement="The compiler security comparison did not complete.",
+            provenance=("failure:language-search",),
+            context="Compare C++ and C# memory safety.",
+            recorded_at=START,
+        )
+
+        self.assertEqual(
+            FailureMemoryAdvisor().relevant(
+                "Which C++ and C# mitigations should be compared?",
+                [lesson],
+            ),
+            (lesson,),
+        )
+
+    def test_short_function_words_do_not_manufacture_recall(self) -> None:
+        lesson = ResearchFailureLesson(
+            lesson_id="lesson:run-1:operation_failure:function-words",
+            kind=FailureLessonKind.OPERATION_FAILURE,
+            run_id="run-1",
+            subject_id="function-words",
+            statement="One unrelated investigation did not complete.",
+            provenance=("failure:function-words",),
+            context="The rules for one grammar family.",
+            recorded_at=START,
+        )
+
+        self.assertEqual(
+            FailureMemoryAdvisor().relevant(
+                "The evidence for another hypothesis.",
+                [lesson],
+            ),
+            (),
+        )
+
     def test_recall_discards_punctuation_only_fragments(self) -> None:
         lesson = ResearchFailureLesson(
             lesson_id="lesson:run-1:operation_failure:punctuation",
