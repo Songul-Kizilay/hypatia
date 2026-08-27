@@ -251,8 +251,7 @@ class ResearchFailureLessonDeriver:
                 recorded_at,
             )
             for record in run.discoveries
-            if record.candidates
-            and not any(candidate.url in accepted for candidate in record.candidates)
+            if not any(candidate.url in accepted for candidate in record.candidates)
         ]
 
     def _operation_failures(

@@ -2,6 +2,21 @@
 
 All notable project changes are recorded here.
 
+## [0.3.214] - 2026-08-27
+
+### Fixed
+
+- Failure Memory now records an ineffective-strategy lesson when a successful
+  source discovery returns zero candidates. A zero-result search is no longer
+  silently omitted from what Hypatia can remember about approaches that did not
+  pay off for the exact question.
+
+### Security
+
+- The lesson is derived only from the persisted discovery audit record and
+  explicitly remains about that query, not the provider in general. It performs
+  no retry, provider selection, network request, or research-state mutation.
+
 ## [0.3.213] - 2026-08-27
 
 ### Fixed

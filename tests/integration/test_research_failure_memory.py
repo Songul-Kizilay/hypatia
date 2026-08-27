@@ -517,6 +517,23 @@ class LessonDerivationTests(FailureMemoryFixture):
         self.assertEqual(len(lessons), 1)
         self.assertIn("not about the provider", lessons[0].statement)
 
+    def test_a_zero_result_discovery_becomes_an_ineffective_strategy(self) -> None:
+        run_id = self.new_run()
+        discovery = self.manager.add_discovery(
+            run_id,
+            QUESTION,
+            "nvd",
+            [],
+        ).discoveries[-1]
+
+        lessons = self.of_kind(run_id, FailureLessonKind.INEFFECTIVE_STRATEGY)
+
+        self.assertEqual(len(lessons), 1)
+        self.assertEqual(lessons[0].subject_id, discovery.discovery_id)
+        self.assertEqual(lessons[0].provenance, (discovery.discovery_id,))
+        self.assertIn("returned 0 candidate(s)", lessons[0].statement)
+        self.assertIn("not about the provider", lessons[0].statement)
+
     def test_a_discovery_that_led_to_acceptance_produces_no_lesson(self) -> None:
         run_id = self.new_run()
         document_id = self.accept_source(run_id, "used")
@@ -1094,6 +1111,20 @@ class FailureMemoryServiceTests(FailureMemoryFixture):
         self.assertTrue(response.success)
         self.assertEqual(len(service.lessons()), 3)
         self.assertEqual(len(self.service().lessons()), 3)
+
+    def test_a_zero_result_discovery_is_stored_as_a_durable_lesson(self) -> None:
+        run_id = self.new_run()
+        self.manager.add_discovery(run_id, QUESTION, "nvd", [])
+        service = self.service()
+
+        response = service.process_store(
+            self.request("failure_memory_store", research_run_id=run_id)
+        )
+
+        self.assertTrue(response.success)
+        [lesson] = service.lessons()
+        self.assertEqual(lesson.kind, FailureLessonKind.INEFFECTIVE_STRATEGY)
+        self.assertEqual(self.service().lessons(), (lesson,))
 
     def test_storing_twice_remembers_nothing_new(self) -> None:
         run_id = self.failing_run()
