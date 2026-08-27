@@ -2,6 +2,20 @@
 
 All notable project changes are recorded here.
 
+## [0.3.205] - 2026-08-27
+
+### Changed
+
+- Failure Memory recall now prefers the newer lesson only when two lessons have
+  exactly the same lexical overlap and lesson-kind weight. Stable lesson ID
+  ordering remains the final deterministic tie-breaker.
+
+### Security
+
+- Recency cannot make a less relevant or lighter lesson outrank a stronger
+  match. Recall remains bounded, advisory, local, model-free, and unable to
+  block or modify research.
+
 ## [0.3.204] - 2026-08-27
 
 ### Fixed

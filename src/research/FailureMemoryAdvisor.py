@@ -8,9 +8,10 @@ and the caller is free to ignore every one.
 
 Matching is deliberately dumb: shared words between the new question and the
 lesson's own wording, weighted by how much the lesson kind is worth
-remembering. A smarter matcher would be a model deciding which past failures
-apply to present work, which is exactly the kind of confident, unauditable
-judgement this project keeps out of the loop.
+remembering. Recency breaks only an otherwise exact tie. A smarter matcher
+would be a model deciding which past failures apply to present work, which is
+exactly the kind of confident, unauditable judgement this project keeps out of
+the loop.
 
 Dumb is not the same as indiscriminate. Every lesson carries some shared
 vocabulary simply by being a lesson, so a single overlapping word says almost
@@ -51,11 +52,16 @@ class FailureMemoryAdvisor:
         wanted = failure_memory_tokens(question)
         if not wanted:
             return ()
-        scored: list[tuple[int, int, str, ResearchFailureLesson]] = []
+        scored: list[tuple[int, int, ResearchFailureLesson]] = []
         for lesson in lessons:
             shared = len(wanted & lesson.tokens())
             if shared < MIN_SHARED_TOKENS:
                 continue
-            scored.append((-shared, -lesson.weight, lesson.lesson_id, lesson))
-        scored.sort(key=lambda entry: entry[:3])
-        return tuple(entry[3] for entry in scored[: self._limit])
+            scored.append((shared, lesson.weight, lesson))
+        # Stable passes keep the final lesson-ID tie-break deterministic while
+        # making overlap, kind weight, and then recency descend in that order.
+        scored.sort(key=lambda entry: entry[2].lesson_id)
+        scored.sort(key=lambda entry: entry[2].recorded_at, reverse=True)
+        scored.sort(key=lambda entry: entry[1], reverse=True)
+        scored.sort(key=lambda entry: entry[0], reverse=True)
+        return tuple(entry[2] for entry in scored[: self._limit])

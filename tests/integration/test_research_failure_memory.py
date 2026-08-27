@@ -771,6 +771,29 @@ class RecallIsAdvisoryTests(FailureMemoryFixture):
 
         self.assertEqual(relevant[0].lesson_id, "heavy")
 
+    def test_a_newer_lesson_breaks_an_exact_relevance_tie(self) -> None:
+        def lesson(name: str, recorded_at: datetime) -> ResearchFailureLesson:
+            return ResearchFailureLesson(
+                lesson_id=name,
+                kind=FailureLessonKind.OPERATION_FAILURE,
+                run_id=f"run-{name}",
+                subject_id=name,
+                statement="Saturn rings research failed.",
+                provenance=(f"failure:{name}",),
+                context="",
+                recorded_at=recorded_at,
+            )
+
+        relevant = FailureMemoryAdvisor().relevant(
+            "Saturn rings research",
+            [
+                lesson("older", START),
+                lesson("newer", START + timedelta(days=1)),
+            ],
+        )
+
+        self.assertEqual([entry.lesson_id for entry in relevant], ["newer", "older"])
+
     def test_a_single_shared_word_is_not_enough_to_recall(self) -> None:
         """Lessons share vocabulary just by being lessons.
 
