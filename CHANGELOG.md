@@ -2,6 +2,22 @@
 
 All notable project changes are recorded here.
 
+## [0.3.206] - 2026-08-27
+
+### Fixed
+
+- Research gap detection now keeps a low-trust source gap visible while that
+  low assessment remains active, even if a separate later assessment labels
+  the same source high trust.
+- An explicit superseding correction still removes the earlier assessment from
+  the active trust view and can resolve the gap.
+
+### Security
+
+- Assessment insertion order can no longer hide a recorded weakness from the
+  Curiosity Engine. The detector remains read-only and cannot change trust,
+  create research, or act on a gap.
+
 ## [0.3.205] - 2026-08-27
 
 ### Changed

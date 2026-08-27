@@ -257,6 +257,28 @@ class KnowledgeGapDetectionTests(CuriosityFixture):
             self.kinds(run_id),
         )
 
+    def test_a_parallel_high_assessment_does_not_hide_active_low_trust(self) -> None:
+        run_id, document_id, evidence_id = self.sourced_run()
+        self.manager.record_source_assessment(
+            run_id,
+            document_id,
+            [evidence_id],
+            "Self-published and unreviewed.",
+            information_trust=ResearchInformationTrust.LOW,
+        )
+        self.manager.record_source_assessment(
+            run_id,
+            document_id,
+            [evidence_id],
+            "A separate reading considered it strong.",
+            information_trust=ResearchInformationTrust.HIGH,
+        )
+
+        self.assertIn(
+            ResearchKnowledgeGapKind.LOW_TRUST_SOURCE,
+            self.kinds(run_id),
+        )
+
     def test_a_hypothesis_claim_is_reported_as_unresolved(self) -> None:
         run_id, _, evidence_id = self.sourced_run()
         self.manager.record_claim(
