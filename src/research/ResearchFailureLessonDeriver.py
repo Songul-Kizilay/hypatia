@@ -29,6 +29,7 @@ from research.ResearchFailureLesson import (
     ResearchFailureLesson,
     lesson_identity,
 )
+from research.ResearchFailureRecord import ResearchFailureRecord
 from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRun import ResearchRun
 from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
@@ -261,16 +262,23 @@ class ResearchFailureLessonDeriver:
     ) -> list[ResearchFailureLesson]:
         """Each recorded failure is a lesson about how the work goes wrong."""
         lessons: list[ResearchFailureLesson] = []
+        base_identities = [self._failure_identity(record) for record in run.failures]
+        reserved = set(base_identities)
+        used: set[str] = set()
         occurrences: dict[str, int] = {}
-        for record in run.failures:
+        for record, base_identity in zip(run.failures, base_identities, strict=True):
             provider = f" for {record.provider}" if record.provider else ""
-            identity = f"{record.stage}:{record.occurred_at.isoformat()}"
-            if record.provider:
-                identity = f"{identity}:{record.provider}"
-            occurrence = occurrences.get(identity, 0) + 1
-            occurrences[identity] = occurrence
-            if occurrence > 1:
-                identity = f"{identity}:occurrence-{occurrence}"
+            occurrence = occurrences.get(base_identity, 0) + 1
+            occurrences[base_identity] = occurrence
+            identity = base_identity
+            if identity in used:
+                while True:
+                    candidate = f"{base_identity}:occurrence-{occurrence}"
+                    occurrence += 1
+                    if candidate not in reserved and candidate not in used:
+                        identity = candidate
+                        break
+            used.add(identity)
             lessons.append(
                 self._lesson(
                     run,
@@ -282,6 +290,11 @@ class ResearchFailureLessonDeriver:
                 )
             )
         return lessons
+
+    @staticmethod
+    def _failure_identity(record: ResearchFailureRecord) -> str:
+        identity = f"{record.stage}:{record.occurred_at.isoformat()}"
+        return f"{identity}:{record.provider}" if record.provider else identity
 
     @staticmethod
     def _lesson(

@@ -2,6 +2,21 @@
 
 All notable project changes are recorded here.
 
+## [0.3.213] - 2026-08-27
+
+### Fixed
+
+- Simultaneous failure lesson disambiguation now reserves every raw failure
+  identity before adding occurrence suffixes. A provider name that itself ends
+  in an occurrence-shaped segment can no longer collide with the suffix used
+  for another record, so all lessons remain distinct and durably storable.
+
+### Security
+
+- The collision check uses only already-persisted bounded failure metadata and
+  performs no inference, retry, or provider selection. Failure Memory remains
+  deterministic, local, read-only, and advisory.
+
 ## [0.3.212] - 2026-08-27
 
 ### Fixed

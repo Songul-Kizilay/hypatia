@@ -609,6 +609,27 @@ class LessonDerivationTests(FailureMemoryFixture):
         self.assertNotIn("occurrence-", lessons[0].subject_id)
         self.assertIn("occurrence-2", lessons[1].subject_id)
 
+    def test_occurrence_suffix_cannot_collide_with_a_provider_identity(self) -> None:
+        with patch.object(self.manager, "_clock", lambda: START):
+            run_id = self.new_run()
+            self.manager.record_failure(
+                run_id, "source_discovery", "First.", provider="nvd"
+            )
+            self.manager.record_failure(
+                run_id, "source_discovery", "Second.", provider="nvd"
+            )
+            self.manager.record_failure(
+                run_id,
+                "source_discovery",
+                "Third.",
+                provider="nvd:occurrence-2",
+            )
+
+        lessons = self.of_kind(run_id, FailureLessonKind.OPERATION_FAILURE)
+
+        self.assertEqual(len(lessons), 3)
+        self.assertEqual(len({lesson.lesson_id for lesson in lessons}), 3)
+
     def test_the_lesson_count_is_bounded(self) -> None:
         run_id = self.new_run()
         for index in range(5):
@@ -1053,6 +1074,26 @@ class FailureMemoryServiceTests(FailureMemoryFixture):
         self.assertTrue(response.success)
         self.assertEqual(len(service.lessons()), 2)
         self.assertEqual(len(self.service().lessons()), 2)
+
+    def test_provider_shaped_like_a_suffix_does_not_block_storage(self) -> None:
+        with patch.object(self.manager, "_clock", lambda: START):
+            run_id = self.new_run()
+            for provider in ("nvd", "nvd", "nvd:occurrence-2"):
+                self.manager.record_failure(
+                    run_id,
+                    "source_discovery",
+                    "Discovery failed.",
+                    provider=provider,
+                )
+        service = self.service()
+
+        response = service.process_store(
+            self.request("failure_memory_store", research_run_id=run_id)
+        )
+
+        self.assertTrue(response.success)
+        self.assertEqual(len(service.lessons()), 3)
+        self.assertEqual(len(self.service().lessons()), 3)
 
     def test_storing_twice_remembers_nothing_new(self) -> None:
         run_id = self.failing_run()
