@@ -17,6 +17,9 @@ from datetime import datetime
 
 from core.Exceptions import ResearchError
 from research.FailureLessonKind import FailureLessonKind
+from research.ResearchClaimContradictionRecord import (
+    ResearchClaimContradictionRecord,
+)
 from research.ResearchClaimRecord import ResearchClaimRecord
 from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchFailureLesson import (
@@ -68,22 +71,28 @@ class ResearchFailureLessonDeriver:
         recorded_at: datetime,
     ) -> list[ResearchFailureLesson]:
         """A claim named in a contradiction is one we can no longer simply hold."""
-        lessons: list[ResearchFailureLesson] = []
+        latest_by_claim: dict[str, ResearchClaimContradictionRecord] = {}
         for record in run.claim_contradictions:
             for claim_id in record.claim_ids:
-                lessons.append(
-                    self._lesson(
-                        run,
-                        FailureLessonKind.DISPROVING_EVIDENCE,
-                        claim_id,
-                        "This claim was recorded as contradicting another, so it "
-                        "cannot simply be held. Which one survives is not settled "
-                        "here.",
-                        (claim_id, record.contradiction_id, *record.evidence_ids),
-                        recorded_at,
-                    )
-                )
-        return lessons
+                current = latest_by_claim.get(claim_id)
+                if current is None or (record.recorded_at, record.contradiction_id) > (
+                    current.recorded_at,
+                    current.contradiction_id,
+                ):
+                    latest_by_claim[claim_id] = record
+        return [
+            self._lesson(
+                run,
+                FailureLessonKind.DISPROVING_EVIDENCE,
+                claim_id,
+                "This claim was recorded as contradicting another, so it "
+                "cannot simply be held. Which one survives is not settled "
+                "here.",
+                (claim_id, record.contradiction_id, *record.evidence_ids),
+                recorded_at,
+            )
+            for claim_id, record in latest_by_claim.items()
+        ]
 
     def _superseded_claims(
         self,

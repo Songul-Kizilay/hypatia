@@ -2,6 +2,22 @@
 
 All notable project changes are recorded here.
 
+## [0.3.211] - 2026-08-27
+
+### Fixed
+
+- Failure Memory now derives one disproving-evidence lesson per claim when that
+  claim participates in several distinct contradiction records. The newest
+  recorded contradiction supplies exact provenance, so a legitimate
+  many-claim conflict no longer creates duplicate lesson IDs or blocks durable
+  lesson storage.
+
+### Security
+
+- Contradictions remain explicit operator-authored records. Lesson derivation
+  stays local, deterministic, read-only, and advisory; it does not decide which
+  claim survives or rewrite claims, evidence, confidence, or research state.
+
 ## [0.3.210] - 2026-08-27
 
 ### Fixed

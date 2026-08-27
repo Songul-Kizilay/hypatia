@@ -402,6 +402,40 @@ class LessonDerivationTests(FailureMemoryFixture):
         for lesson in lessons:
             self.assertIn("Which one survives is not settled here", lesson.statement)
 
+    def test_one_claim_in_parallel_contradictions_makes_one_lesson(self) -> None:
+        run_id, _, evidence_id = self.sourced_run()
+        claim_ids: list[str] = []
+        for text in (
+            "The rings are young.",
+            "The rings are ancient.",
+            "The ring age is unresolved.",
+        ):
+            run = self.manager.record_claim(
+                run_id,
+                [evidence_id],
+                text,
+                ResearchEpistemicState.HYPOTHESIS,
+            )
+            claim_ids.append(run.claims[-1].claim_id)
+        first = self.manager.record_claim_contradiction(
+            run_id,
+            [claim_ids[0], claim_ids[1]],
+            "The age conclusions conflict.",
+        ).claim_contradictions[-1]
+        second = self.manager.record_claim_contradiction(
+            run_id,
+            [claim_ids[0], claim_ids[2]],
+            "The certainty conclusions conflict.",
+        ).claim_contradictions[-1]
+
+        lessons = self.of_kind(run_id, FailureLessonKind.DISPROVING_EVIDENCE)
+        shared = next(lesson for lesson in lessons if lesson.subject_id == claim_ids[0])
+
+        self.assertEqual(len(lessons), 3)
+        self.assertEqual(len({lesson.lesson_id for lesson in lessons}), 3)
+        self.assertIn(second.contradiction_id, shared.provenance)
+        self.assertNotIn(first.contradiction_id, shared.provenance)
+
     def test_a_revised_assessment_becomes_an_invalid_assumption(self) -> None:
         run_id, document_id, evidence_id = self.sourced_run()
         run = self.manager.record_source_assessment(
@@ -964,6 +998,33 @@ class FailureMemoryServiceTests(FailureMemoryFixture):
         self.assertTrue(response.success)
         self.assertEqual(len(service.lessons()), 1)
         self.assertEqual(len(self.service().lessons()), 1)
+
+    def test_parallel_claim_contradictions_store_as_unique_lessons(self) -> None:
+        run_id, _, evidence_id = self.sourced_run()
+        claim_ids: list[str] = []
+        for text in ("Young rings.", "Ancient rings.", "Unknown ring age."):
+            run = self.manager.record_claim(
+                run_id,
+                [evidence_id],
+                text,
+                ResearchEpistemicState.HYPOTHESIS,
+            )
+            claim_ids.append(run.claims[-1].claim_id)
+        for other_claim_id in claim_ids[1:]:
+            self.manager.record_claim_contradiction(
+                run_id,
+                [claim_ids[0], other_claim_id],
+                "These conclusions conflict.",
+            )
+        service = self.service()
+
+        response = service.process_store(
+            self.request("failure_memory_store", research_run_id=run_id)
+        )
+
+        self.assertTrue(response.success)
+        self.assertEqual(len(service.lessons()), 3)
+        self.assertEqual(len(self.service().lessons()), 3)
 
     def test_storing_twice_remembers_nothing_new(self) -> None:
         run_id = self.failing_run()
