@@ -656,6 +656,37 @@ class HypothesisServiceTests(HypothesisFixture):
 
         self.assertEqual(second.hypotheses()[0].discriminating_test, TEST)
 
+    def test_a_proposal_id_collision_never_replaces_the_existing_hypothesis(
+        self,
+    ) -> None:
+        run_id = self.new_run()
+        service = HypothesisApplicationService(
+            self.manager,
+            ResponseComposer(),
+            hypothesis_store=JsonFileHypothesisStore(self.hypothesis_path),
+            event_bus=self.event_bus,
+            clock=self.clock,
+            id_factory=lambda: "hypothesis-fixed",
+        )
+        self.propose(service, run_id)
+        before = service.hypotheses()
+
+        with self.assertRaisesRegex(ResearchError, "identifier already exists"):
+            service.process_propose(
+                self.request(
+                    "research_hypothesis_propose",
+                    research_run_id=run_id,
+                    hypothesis_statement="A different hypothesis must not replace it.",
+                    hypothesis_discriminating_test=(
+                        "A different observation would count against it."
+                    ),
+                )
+            )
+
+        self.assertEqual(service.hypotheses(), before)
+        self.assertEqual(self.service().hypotheses(), before)
+        self.assertEqual(len(self.named(HYPOTHESIS_PROPOSED)), 1)
+
     def test_listing_reports_derived_standing(self) -> None:
         service = self.service()
         run_id = self.new_run()

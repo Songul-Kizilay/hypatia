@@ -118,9 +118,12 @@ class HypothesisApplicationService:
                 request,
                 "Hypothesis capacity is full.",
             )
+        hypothesis_id = self._id_factory()
+        if hypothesis_id in self._hypotheses:
+            raise ResearchError("A hypothesis with that identifier already exists.")
         now = self._clock()
         hypothesis = ResearchHypothesis(
-            hypothesis_id=self._id_factory(),
+            hypothesis_id=hypothesis_id,
             run_id=run.run_id,
             statement=statement,
             discriminating_test=test,

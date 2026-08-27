@@ -2,6 +2,20 @@
 
 All notable project changes are recorded here.
 
+## [0.3.218] - 2026-08-27
+
+### Fixed
+
+- Hypothesis proposal now refuses an identifier already present in the active
+  hypothesis catalogue. A repeated injected or restored ID can no longer
+  silently replace an earlier conjecture and its discriminating test.
+
+### Security
+
+- Collision refusal happens before in-memory mutation, event publication, or
+  durable persistence. The existing hypothesis remains byte-for-byte unchanged,
+  and no claim, research run, provider, network, or tool path is involved.
+
 ## [0.3.217] - 2026-08-27
 
 ### Fixed
