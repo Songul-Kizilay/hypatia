@@ -543,6 +543,7 @@ class TkinterDesktopWindow:
         self._relation_target_id = tk.StringVar()
         self._session_summaries: list[SessionSummary] = []
         self._research_candidates: tuple[ResearchSourceCandidate, ...] = ()
+        self._research_candidate_discovery_ids: tuple[str, ...] = ()
         self._research_runs: tuple[ResearchRun, ...] = ()
         self._visible_research_runs: tuple[ResearchRun, ...] = ()
         self._research_source_catalog: tuple[ResearchSourceRecord, ...] = ()
@@ -3250,6 +3251,7 @@ class TkinterDesktopWindow:
         self._research_run_id.set(selected_run.run_id)
         if previous_run_id != selected_run.run_id:
             self._clear_research_run_dependent_presentations()
+        self._show_research_run_candidates(selected_run)
         self._render_research_source_selector(selected_run)
         self._render_research_claim_selector(selected_run)
         self._render_research_persisted_contradiction_selector(selected_run)
@@ -5921,7 +5923,7 @@ class TkinterDesktopWindow:
         self._render_research_candidates(response)
 
     def _render_research_candidates(self, response: BrainResponse) -> None:
-        """Replace stale candidate choices with the latest successful discovery."""
+        """Replace stale candidate choices with this run's recorded discoveries."""
         self._clear_research_candidates()
         if not response.success:
             return
@@ -5929,40 +5931,68 @@ class TkinterDesktopWindow:
         selected_runs = [
             run for run in response.research_runs if run.run_id == selected_run_id
         ]
-        if not selected_runs or not selected_runs[0].discoveries:
+        if not selected_runs:
             return
-        self._research_candidate_run_id = selected_run_id
-        discovery = selected_runs[0].discoveries[-1]
-        self._research_candidate_discovery_id = discovery.discovery_id
-        # Relevance order is the default, and the provider's own position
-        # travels with each row. The audit view shows the exact codes rather
-        # than a phrase: a person reading this panel is the person who needs to
-        # know that `technical_identifier_missing` is why something sank.
-        ranked = ranked_candidates(discovery)
-        self._research_candidates = tuple(entry.candidate for entry in ranked)
-        labels = tuple(
-            f"{entry.relevance_rank}. [{entry.relevance.category.value} "
-            f"{entry.relevance.score}] (provider #{entry.provider_rank}"
-            + (
-                f", duplicate of #{entry.duplicate_of_rank}"
-                if entry.duplicate_of_rank is not None
-                else ""
-            )
-            + f") {entry.candidate.title} — {entry.candidate.url}"
-            + _vulnerability_label(entry.candidate)
-            + (
-                f" [{', '.join(reason.value for reason in entry.relevance.reasons)}]"
-                if entry.relevance.reasons
-                else ""
-            )
-            for entry in ranked
-        )
-        self._research_candidate_selector.configure(values=labels)
+        self._show_research_run_candidates(selected_runs[0])
+
+    def _show_research_run_candidates(self, run: ResearchRun) -> None:
+        """Offer every recorded discovery's candidates, not only the newest one.
+
+        A paired comparison records one discovery per provider, so listing only
+        the most recent left the other provider's candidates readable in the
+        comparison report and impossible to accept. A paired run could then only
+        ever be assessed on one half, which is exactly the half of the data the
+        measurement was for.
+
+        Each discovery is still ranked on its own. The lists are shown together
+        because they are one run's work, not because they are one ranking:
+        every row names the provider it came from and keeps that provider's own
+        position, and no row is ranked against a row from the other side.
+        """
+        self._clear_research_candidates()
+        if not run.discoveries:
+            return
+        self._research_candidate_run_id = run.run_id
+        candidates: list[ResearchSourceCandidate] = []
+        discovery_ids: list[str] = []
+        labels: list[str] = []
+        for discovery in run.discoveries:
+            # Relevance order is the default, and the provider's own position
+            # travels with each row. The audit view shows the exact codes rather
+            # than a phrase: a person reading this panel is the person who needs
+            # to know that `technical_identifier_missing` is why something sank.
+            for entry in ranked_candidates(discovery):
+                candidates.append(entry.candidate)
+                discovery_ids.append(discovery.discovery_id)
+                labels.append(
+                    f"{discovery.provider} {entry.relevance_rank}. "
+                    f"[{entry.relevance.category.value} {entry.relevance.score}] "
+                    f"(provider #{entry.provider_rank}"
+                    + (
+                        f", duplicate of #{entry.duplicate_of_rank}"
+                        if entry.duplicate_of_rank is not None
+                        else ""
+                    )
+                    + f") {entry.candidate.title} — {entry.candidate.url}"
+                    + _vulnerability_label(entry.candidate)
+                    + (
+                        " ["
+                        + ", ".join(reason.value for reason in entry.relevance.reasons)
+                        + "]"
+                        if entry.relevance.reasons
+                        else ""
+                    )
+                )
+        self._research_candidates = tuple(candidates)
+        self._research_candidate_discovery_ids = tuple(discovery_ids)
+        self._research_candidate_selector.configure(values=tuple(labels))
         if labels:
             self._research_candidate_selector.current(0)
+            self._research_candidate_discovery_id = discovery_ids[0]
 
     def _clear_research_candidates(self) -> None:
         self._research_candidates = ()
+        self._research_candidate_discovery_ids = ()
         self._research_candidate_run_id = ""
         self._research_candidate_discovery_id = ""
         self._research_candidate.set("")
@@ -5991,9 +6021,12 @@ class TkinterDesktopWindow:
             or not 0 <= selected_index < len(self._research_candidates)
         ):
             return None
+        # The discovery is read per candidate. One list can hold both sides of
+        # a paired run, and accepting a Crossref candidate against the NVD
+        # discovery would file it under a search that never returned it.
         return (
             run_id,
-            self._research_candidate_discovery_id,
+            self._research_candidate_discovery_ids[selected_index],
             self._research_candidates[selected_index],
         )
 

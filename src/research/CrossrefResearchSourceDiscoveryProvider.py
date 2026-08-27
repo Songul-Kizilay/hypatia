@@ -18,11 +18,19 @@ from research.PublicHttpsUrlValidator import (
     PublicHttpsUrlValidator,
     ValidatedPublicHttpsDestination,
 )
+from research.ResearchDiscoveryProviderName import (
+    ResearchDiscoveryProviderName,
+)
 from research.ResearchSourceCandidate import ResearchSourceCandidate
 
 CROSSREF_API_ORIGIN = "https://api.crossref.org"
 CROSSREF_WORKS_ENDPOINT = f"{CROSSREF_API_ORIGIN}/v1/works"
-CROSSREF_PROVIDER_NAME = "crossref-rest-v1"
+#: Derived from the closed vocabulary rather than written out, exactly as the
+#: NVD provider does. When these were two independent strings the discovery
+#: record said `crossref-rest-v1` while the comparison and paired-quality
+#: reports looked for `crossref`, so a Crossref search that genuinely ran
+#: was reported as never having happened.
+CROSSREF_PROVIDER_NAME = ResearchDiscoveryProviderName.CROSSREF.value
 CROSSREF_USER_AGENT = f"Hypatia/{VERSION.short} research-source-discovery"
 _CROSSREF_HOST = "api.crossref.org"
 _DEFAULT_TIMEOUT_SECONDS = 10.0

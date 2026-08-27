@@ -2,6 +2,32 @@
 
 All notable project changes are recorded here.
 
+## [0.3.207] - 2026-08-27
+
+### Fixed
+
+- A Crossref discovery recorded itself as `crossref-rest-v1` while the provider
+  comparison and paired-quality reports looked for `crossref`, the name the
+  closed vocabulary and the plan digest use. A Crossref search that had genuinely
+  run was therefore reported as never having happened: the comparison showed
+  that side as pending with no candidates, and no run ever became an eligible
+  same-question pair. Both provider names now derive from the closed vocabulary,
+  so the identity a plan authorizes is the identity a discovery records.
+- Only the newest discovery in a run could be selected. A paired comparison
+  records one discovery per provider, so the other provider's candidates were
+  readable in the comparison report and impossible to accept — a paired run
+  could only ever be assessed on one half, which is the half the measurement
+  needs both of. Every recorded discovery's candidates are now offered, each row
+  naming the provider that returned it, and selecting a run offers them without
+  a further network request.
+
+### Changed
+
+- Each candidate carries the discovery that returned it, so accepting a Crossref
+  candidate cannot file it under an NVD search. The two sides are still ranked
+  separately: one list is not one ranking, and no row is ranked against a row
+  from the other provider.
+
 ## [0.3.206] - 2026-08-27
 
 ### Fixed

@@ -503,7 +503,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
         discovery = ResearchSourceDiscoveryRecord(
             "discovery-1",
             "web application security",
-            "crossref-rest-v1",
+            "crossref",
             (
                 ResearchSourceCandidate(
                     url="https://doi.org/10.1/paper",
@@ -530,7 +530,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
         discovery = ResearchSourceDiscoveryRecord(
             "discovery-1",
             "web application security",
-            "crossref-rest-v1",
+            "crossref",
             (
                 ResearchSourceCandidate(
                     url="https://doi.org/10.1/paper",
@@ -565,7 +565,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
         discovery = ResearchSourceDiscoveryRecord(
             "discovery-1",
             "web application security",
-            "crossref-rest-v1",
+            "crossref",
             (ResearchSourceCandidate("https://doi.org/10.1/p", "A paper", ""),),
             self.now,
         )

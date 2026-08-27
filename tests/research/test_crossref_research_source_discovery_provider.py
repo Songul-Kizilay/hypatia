@@ -102,7 +102,7 @@ class CrossrefResearchSourceDiscoveryProviderTests(unittest.TestCase):
 
         candidates = provider.discover("  local AI safety  ", limit=2)
 
-        self.assertEqual(provider.provider_name, "crossref-rest-v1")
+        self.assertEqual(provider.provider_name, "crossref")
         self.assertEqual(
             [candidate.url for candidate in candidates],
             [

@@ -482,7 +482,7 @@ class RankedDiscoveryTests(unittest.TestCase):
         return ResearchSourceDiscoveryRecord(
             discovery_id="discovery-1",
             query=query,
-            provider="crossref-rest-v1",
+            provider="crossref",
             candidates=tuple(candidates),
             discovered_at=datetime(2026, 8, 26, 12, 0, tzinfo=UTC),
         )

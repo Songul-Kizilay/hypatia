@@ -590,6 +590,93 @@ class PartialStateTests(unittest.TestCase):
         self.assertEqual(crossref.discovery_id, "discovery-2")
 
 
+class ProviderProvenanceNameTests(unittest.TestCase):
+    """A discovery must be found under the name the plan authorized.
+
+    The provider name written into a discovery record and the name the closed
+    vocabulary uses are the same identity, and they were briefly two different
+    strings: Crossref recorded `crossref-rest-v1` while the comparison and
+    paired-quality reports looked for `crossref`. A Crossref search that had
+    genuinely run was therefore reported as never having happened, which would
+    have quietly emptied the measurement this whole evaluation depends on.
+    """
+
+    def test_each_provider_records_itself_under_its_authorized_name(self) -> None:
+        from research.CrossrefResearchSourceDiscoveryProvider import (
+            CROSSREF_PROVIDER_NAME,
+        )
+        from research.NvdResearchSourceDiscoveryProvider import NVD_PROVIDER_NAME
+
+        self.assertEqual(
+            CROSSREF_PROVIDER_NAME, ResearchDiscoveryProviderName.CROSSREF.value
+        )
+        self.assertEqual(NVD_PROVIDER_NAME, ResearchDiscoveryProviderName.NVD.value)
+
+    def test_a_real_crossref_discovery_is_found_by_the_comparison(self) -> None:
+        from research.CrossrefResearchSourceDiscoveryProvider import (
+            CROSSREF_PROVIDER_NAME,
+        )
+        from research.NvdResearchSourceDiscoveryProvider import NVD_PROVIDER_NAME
+
+        report = ResearchProviderComparisonBuilder().build(
+            run(
+                discovery(
+                    1,
+                    CROSSREF_PROVIDER_NAME,
+                    KEYWORD_QUESTION,
+                    candidate("https://doi.org/10.1/a", "A paper"),
+                ),
+                discovery(
+                    2,
+                    NVD_PROVIDER_NAME,
+                    KEYWORD_QUESTION,
+                    candidate(
+                        "https://nvd.nist.gov/vuln/detail/CVE-1", "A vulnerability"
+                    ),
+                ),
+            )
+        )
+
+        self.assertTrue(report.complete)
+        for provider in ("crossref", "nvd"):
+            with self.subTest(provider=provider):
+                self.assertTrue(side_of(report, provider).completed)
+                self.assertEqual(side_of(report, provider).candidate_count, 1)
+
+    def test_a_real_paired_run_is_eligible_for_paired_quality(self) -> None:
+        from research.CrossrefResearchSourceDiscoveryProvider import (
+            CROSSREF_PROVIDER_NAME,
+        )
+        from research.NvdResearchSourceDiscoveryProvider import NVD_PROVIDER_NAME
+        from research.ResearchPairedProviderQualityEvaluator import (
+            ResearchPairedProviderQualityEvaluator,
+        )
+
+        report = ResearchPairedProviderQualityEvaluator().evaluate(
+            [
+                run(
+                    discovery(
+                        1,
+                        CROSSREF_PROVIDER_NAME,
+                        KEYWORD_QUESTION,
+                        candidate("https://doi.org/10.1/a", "A paper"),
+                    ),
+                    discovery(
+                        2,
+                        NVD_PROVIDER_NAME,
+                        KEYWORD_QUESTION,
+                        candidate(
+                            "https://nvd.nist.gov/vuln/detail/CVE-1",
+                            "A vulnerability",
+                        ),
+                    ),
+                )
+            ]
+        )
+
+        self.assertEqual(report.eligible_pair_count, 1)
+
+
 class NoWinnerTests(unittest.TestCase):
     def test_no_winner_field_exists_in_the_report_or_the_side(self) -> None:
         for name, text in (

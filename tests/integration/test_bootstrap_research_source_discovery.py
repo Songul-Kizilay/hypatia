@@ -34,7 +34,7 @@ class BootstrapResearchSourceDiscoveryTests(unittest.TestCase):
                 CrossrefResearchSourceDiscoveryProvider
             )
 
-        self.assertEqual(provider.provider_name, "crossref-rest-v1")
+        self.assertEqual(provider.provider_name, "crossref")
 
     def test_process_environment_can_disable_network_discovery(self) -> None:
         with (

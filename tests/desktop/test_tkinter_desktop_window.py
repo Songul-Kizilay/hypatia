@@ -155,6 +155,58 @@ def _research_run_with(
     )
 
 
+def _configure_research_candidate_selector(window: Any) -> None:
+    """Attach the state the candidate list needs, and nothing that acts."""
+    window._research_candidate = RecordingVariable("")
+    window._research_candidate_selector = RecordingCandidateSelector()
+    window._research_candidates = ()
+    window._research_candidate_discovery_ids = ()
+    window._research_candidate_run_id = ""
+    window._research_candidate_discovery_id = ""
+    window._research_candidate_discovery_ids = ()
+    window._research_run_id = RecordingInput("run-1")
+
+
+def _paired_run() -> ResearchRun:
+    """One run holding both halves of a paired comparison."""
+    return _research_run_with(
+        sources=(),
+        discoveries=(
+            ResearchSourceDiscoveryRecord(
+                "discovery-crossref",
+                "request smuggling",
+                "crossref",
+                (
+                    ResearchSourceCandidate(
+                        url="https://doi.org/10.1/smuggling",
+                        title="HTTP request smuggling defences",
+                        snippet="",
+                    ),
+                    ResearchSourceCandidate(
+                        url="https://doi.org/10.1/unrelated",
+                        title="A general survey",
+                        snippet="",
+                    ),
+                ),
+                ASSESSMENT_NOW,
+            ),
+            ResearchSourceDiscoveryRecord(
+                "discovery-nvd",
+                "request smuggling",
+                "nvd",
+                (
+                    ResearchSourceCandidate(
+                        url="https://nvd.nist.gov/vuln/detail/CVE-2005-2088",
+                        title="CVE-2005-2088: request smuggling in Apache",
+                        snippet="",
+                    ),
+                ),
+                ASSESSMENT_NOW,
+            ),
+        ),
+    )
+
+
 class AccessibilityPreferenceTests(unittest.TestCase):
     def test_initial_window_prefers_1920_by_1080(self) -> None:
         self.assertEqual(_initial_window_size(1920, 1080), (1920, 1080))
@@ -1294,6 +1346,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_candidates = ()
         window._research_candidate_run_id = ""
         window._research_candidate_discovery_id = ""
+        window._research_candidate_discovery_ids = ()
         window._research_claim_contradiction_proposal = RecordingVariable("")
         window._research_claim_contradiction_proposal_selector = (
             RecordingCandidateSelector()
@@ -2270,6 +2323,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_candidates = ()
         window._research_candidate_run_id = "old-run"
         window._research_candidate_discovery_id = "discovery-1"
+        window._research_candidate_discovery_ids = ("discovery-1",)
         window._research_claim_contradiction_proposal = RecordingVariable(
             "Old proposal"
         )
@@ -3823,7 +3877,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
                 ResearchSourceDiscoveryRecord(
                     "discovery-1",
                     "request smuggling",
-                    "crossref-rest-v1",
+                    "crossref",
                     (
                         ResearchSourceCandidate(
                             url="https://doi.org/10.1000/exact",
@@ -3872,7 +3926,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
                 ResearchSourceDiscoveryRecord(
                     "discovery-1",
                     "request smuggling",
-                    "crossref-rest-v1",
+                    "crossref",
                     (
                         ResearchSourceCandidate(
                             url="https://doi.org/10.1000/exact",
@@ -4993,6 +5047,102 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
 
         self.assertEqual(controller.export_verifications, [])
 
+    def test_both_sides_of_a_paired_run_can_be_selected(self) -> None:
+        """The blocker this fixes: only the newest discovery used to be offered.
+
+        A paired comparison records one discovery per provider. Listing only
+        the most recent left the other provider's candidates readable in the
+        comparison report and impossible to accept, so a paired run could only
+        ever be assessed on one half — which is the half the measurement needs
+        both of.
+        """
+        window: Any = object.__new__(TkinterDesktopWindow)
+        _configure_research_candidate_selector(window)
+        run = _paired_run()
+
+        window._show_research_run_candidates(run)
+
+        labels = window._research_candidate_selector.values
+        self.assertEqual(len(labels), 3)
+        self.assertTrue(any(label.startswith("crossref ") for label in labels))
+        self.assertTrue(any(label.startswith("nvd ") for label in labels))
+
+    def test_each_candidate_keeps_the_discovery_that_returned_it(self) -> None:
+        """Accepting a Crossref candidate must not file it under NVD's search."""
+        window: Any = object.__new__(TkinterDesktopWindow)
+        _configure_research_candidate_selector(window)
+        window._show_research_run_candidates(_paired_run())
+
+        self.assertEqual(
+            window._research_candidate_discovery_ids,
+            ("discovery-crossref", "discovery-crossref", "discovery-nvd"),
+        )
+
+    def test_selecting_a_crossref_candidate_reports_the_crossref_discovery(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        _configure_research_candidate_selector(window)
+        window._show_research_run_candidates(_paired_run())
+        window._research_candidate_selector.current(0)
+
+        selected = window._selected_research_candidate()
+
+        assert selected is not None
+        run_id, discovery_id, candidate = selected
+        self.assertEqual(run_id, "run-1")
+        self.assertEqual(discovery_id, "discovery-crossref")
+        self.assertIn("doi.org", candidate.url)
+
+    def test_selecting_an_nvd_candidate_reports_the_nvd_discovery(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        _configure_research_candidate_selector(window)
+        window._show_research_run_candidates(_paired_run())
+        window._research_candidate_selector.current(2)
+
+        selected = window._selected_research_candidate()
+
+        assert selected is not None
+        _, discovery_id, candidate = selected
+        self.assertEqual(discovery_id, "discovery-nvd")
+        self.assertIn("nvd.nist.gov", candidate.url)
+
+    def test_each_side_is_still_ranked_within_its_own_discovery(self) -> None:
+        """One list is not one ranking: no row is ranked against the other side."""
+        window: Any = object.__new__(TkinterDesktopWindow)
+        _configure_research_candidate_selector(window)
+
+        window._show_research_run_candidates(_paired_run())
+
+        labels = window._research_candidate_selector.values
+        self.assertTrue(labels[0].startswith("crossref 1."))
+        self.assertTrue(labels[1].startswith("crossref 2."))
+        self.assertTrue(labels[2].startswith("nvd 1."))
+
+    def test_a_run_with_no_discoveries_offers_nothing_rather_than_failing(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        _configure_research_candidate_selector(window)
+
+        window._show_research_run_candidates(
+            _research_run_with(sources=(), discoveries=())
+        )
+
+        self.assertEqual(window._research_candidate_selector.values, ())
+        self.assertEqual(window._research_candidates, ())
+
+    def test_showing_candidates_accepts_nothing_and_requests_nothing(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        _configure_research_candidate_selector(window)
+        controller = RecordingResearchSourceLoadController()
+        window._controller = controller
+
+        window._show_research_run_candidates(_paired_run())
+
+        self.assertEqual(controller.discovery_calls, [])
+        self.assertEqual(controller.sources, [])
+
     def test_discovery_renders_unaccepted_candidates_without_loading_them(
         self,
     ) -> None:
@@ -5034,9 +5184,14 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
                         for label in selector.values
                     )
                 )
-        for position, label in enumerate(selector.values, start=1):
-            with self.subTest(row=position):
-                self.assertTrue(label.startswith(f"{position}. "))
+        # A row now leads with the provider that returned it. It has to: one
+        # list can hold both halves of a paired run, and a bare position would
+        # not say which search a candidate came from.
+        for label in selector.values:
+            with self.subTest(row=label[:24]):
+                provider, _, remainder = label.partition(" ")
+                self.assertIn(provider, {"crossref", "nvd", "test-provider"})
+                self.assertRegex(remainder, r"^\d+\. ")
                 self.assertIn("provider #", label)
         self.assertEqual(selector.selected_index, 0)
         self.assertEqual(controller.sources, [])
@@ -5877,6 +6032,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_id = RecordingInput("run-123")
         window._research_candidate_run_id = "run-123"
         window._research_candidate_discovery_id = "discovery-1"
+        window._research_candidate_discovery_ids = ("discovery-1",)
         window._research_candidates = controller.candidates
         window._research_candidate_selector = RecordingCandidateSelector(0)
         window._status = RecordingStatus()
@@ -5912,6 +6068,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_id = RecordingInput("run-123")
         window._research_candidate_run_id = "run-123"
         window._research_candidate_discovery_id = "discovery-1"
+        window._research_candidate_discovery_ids = ("discovery-1",)
         window._research_candidates = controller.candidates
         window._research_candidate_selector = RecordingCandidateSelector(0)
         window._status = status
@@ -5933,6 +6090,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_id = RecordingInput("other-run")
         window._research_candidate_run_id = "run-123"
         window._research_candidate_discovery_id = "discovery-1"
+        window._research_candidate_discovery_ids = ("discovery-1",)
         window._research_candidates = controller.candidates
         window._research_candidate_selector = RecordingCandidateSelector(0)
         window._status = status
@@ -6059,7 +6217,7 @@ class RecordingResearchSourceLoadController:
                 ResearchSourceDiscoveryRecord(
                     discovery_id="discovery-1",
                     query=run.question,
-                    provider="crossref-rest-v1",
+                    provider="crossref",
                     candidates=self.candidates,
                     discovered_at=now,
                 ),
@@ -6747,7 +6905,19 @@ class RecordingResearchSourceLoadController:
         return self.candidate_accept_response
 
 
+def _configure_research_run_candidates(window: Any) -> None:
+    """Attach the candidate state selecting a run now fills."""
+    window._research_candidate = RecordingVariable("")
+    window._research_candidate_selector = RecordingCandidateSelector()
+    window._research_candidates = ()
+    window._research_candidate_discovery_ids = ()
+    window._research_candidate_run_id = ""
+    window._research_candidate_discovery_id = ""
+    window._research_candidate_discovery_ids = ()
+
+
 def _configure_research_evidence_selector(window: Any) -> None:
+    _configure_research_run_candidates(window)
     _configure_research_source_coverage(window)
     window._research_evidence_choice = RecordingVariable("")
     window._research_evidence_selector = RecordingCandidateSelector()

@@ -187,7 +187,7 @@ class SeparationTests(OperatorAssessmentTestCase):
         discovery = ResearchSourceDiscoveryRecord(
             "discovery-1",
             "HTTP request smuggling in Next.js middleware",
-            "crossref-rest-v1",
+            "crossref",
             (
                 ResearchSourceCandidate(
                     url="https://doi.org/10.1000/exact",
@@ -222,7 +222,7 @@ class SeparationTests(OperatorAssessmentTestCase):
         discovery = ResearchSourceDiscoveryRecord(
             "discovery-1",
             "HTTP request smuggling in Next.js middleware",
-            "crossref-rest-v1",
+            "crossref",
             (
                 ResearchSourceCandidate(
                     url="https://doi.org/10.1000/exact",
