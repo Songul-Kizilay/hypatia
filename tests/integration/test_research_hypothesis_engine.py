@@ -526,6 +526,41 @@ class AppraisalTests(HypothesisFixture):
         with self.assertRaises(ResearchError):
             self.appraiser.appraise(hypothesis, "run-1")  # type: ignore[arg-type]
 
+    def test_appraisal_rejects_a_hypothesis_from_another_run(self) -> None:
+        first_run_id = self.new_run()
+        second_run_id = self.new_run()
+        hypothesis = ResearchHypothesis(
+            hypothesis_id="hypothesis-cross-run",
+            run_id=first_run_id,
+            statement=STATEMENT,
+            discriminating_test=TEST,
+            created_at=START,
+            updated_at=START,
+        )
+
+        with self.assertRaisesRegex(ResearchError, "do not match"):
+            self.appraiser.appraise(hypothesis, self.manager.get(second_run_id))
+
+    def test_appraisal_rejects_evidence_missing_from_either_side(self) -> None:
+        run_id = self.new_run()
+        hypothesis = ResearchHypothesis(
+            hypothesis_id="hypothesis-missing-evidence",
+            run_id=run_id,
+            statement=STATEMENT,
+            discriminating_test=TEST,
+            created_at=START,
+            updated_at=START,
+        )
+
+        for side in ("supporting_evidence_ids", "opposing_evidence_ids"):
+            with self.subTest(side=side):
+                broken = replace(
+                    hypothesis,
+                    **{side: ("evidence-never-recorded",)},
+                )
+                with self.assertRaisesRegex(ResearchError, "evidence was not found"):
+                    self.appraiser.appraise(broken, self.manager.get(run_id))
+
 
 class HypothesisServiceTests(HypothesisFixture):
     def test_there_is_no_confirm_intent(self) -> None:

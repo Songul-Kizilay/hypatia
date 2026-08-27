@@ -2,6 +2,23 @@
 
 All notable project changes are recorded here.
 
+## [0.3.216] - 2026-08-27
+
+### Fixed
+
+- Hypothesis appraisal now refuses a hypothesis paired with a different
+  research run. Evidence identifiers can no longer be interpreted against the
+  wrong run merely because their text happens to overlap.
+- Supporting and opposing evidence identifiers must all exist in the bound
+  research run. Missing provenance is surfaced as an error instead of being
+  silently omitted and making a damaged hypothesis appear open.
+
+### Security
+
+- Appraisal remains local, deterministic, and read-only. The new checks fail
+  closed on broken canonical relationships and do not rewrite hypotheses,
+  evidence, trust assessments, claims, or research status.
+
 ## [0.3.215] - 2026-08-27
 
 ### Fixed

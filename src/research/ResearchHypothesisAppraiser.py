@@ -39,12 +39,22 @@ class ResearchHypothesisAppraiser:
             raise ResearchError("Appraisal requires a hypothesis.")
         if not isinstance(run, ResearchRun):
             raise ResearchError("Appraisal requires a research run.")
+        if hypothesis.run_id != run.run_id:
+            raise ResearchError("Hypothesis and research run do not match.")
         identities = {
             source.document_id: identity_of(source.url) for source in run.sources
         }
         evidence_documents = {
             record.evidence_id: record.source_document_id for record in run.evidence
         }
+        evidence_ids = (
+            *hypothesis.supporting_evidence_ids,
+            *hypothesis.opposing_evidence_ids,
+        )
+        if any(evidence_id not in evidence_documents for evidence_id in evidence_ids):
+            raise ResearchError(
+                "Hypothesis evidence was not found in its research run."
+            )
         trust = self._active_trust(run)
         supporting = self._profile(
             hypothesis.supporting_evidence_ids,
