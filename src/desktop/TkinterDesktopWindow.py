@@ -4706,6 +4706,7 @@ class TkinterDesktopWindow:
             # Not run-scoped like the others: provider experience accumulates
             # across every run, and one run is never a sample.
             ("Provider quality", self._report_provider_quality),
+            ("Paired quality", self._report_paired_provider_quality),
             ("Provider comparison", self._report_provider_comparison),
         ]
         if self._reflection_enabled:
@@ -4797,6 +4798,10 @@ class TkinterDesktopWindow:
     def _report_provider_quality(self) -> None:
         """Describe provider samples. Change no provider, default, or ranking."""
         self._review_request(self._controller.report_provider_quality)
+
+    def _report_paired_provider_quality(self) -> None:
+        """Describe aligned provider samples. Select and change nothing."""
+        self._review_request(self._controller.report_paired_provider_quality)
 
     def _report_claim_calibration(self) -> None:
         self._review_request(

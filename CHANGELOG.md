@@ -2,6 +2,39 @@
 
 All notable project changes are recorded here.
 
+## [0.3.200] - 2026-08-27
+
+### Added
+
+- A read-only paired provider quality report. It includes only research runs
+  where Crossref and NVD each recorded a discovery for the run's exact same
+  canonical question, then shows the two assessment funnels separately.
+- A `Paired quality` action in Review. It reads every persisted run, reports up
+  to 40 qualifying same-question pairs, and exposes the complete qualifying
+  count when the bounded view omits older pairs.
+- Structural telemetry for report size only: paired-run, displayed-pair, and
+  assessed-sample counts, with no question, provider result, document ID, or
+  assessment content.
+
+### Changed
+
+- Nothing in persistence or execution. The report is derived from existing
+  discovery, accepted-source, evidence, and current assessment records.
+
+### Security
+
+- Merely seeing both provider names in a run is insufficient. Each provider's
+  recorded query must exactly equal the run's canonical question before the run
+  is called a same-question pair.
+- A source returned by both providers is excluded from both sides instead of
+  being credited by order; an assessed source returned by neither is likewise
+  reported separately rather than guessed.
+- Aligned questions remove question-sample mismatch, but not operator selection
+  bias. Every side retains its funnel denominators and sample-size caution.
+- No winner, score, preferred provider, recommendation, routing, default,
+  ranking, reputation, network, model, execution, authorization, or write path
+  was added.
+
 ## [0.3.199] - 2026-08-27
 
 ### Added

@@ -40,6 +40,9 @@ from research.ResearchCuriosityPreview import ResearchCuriosityPreview
 from research.ResearchCuriosityQuestion import ResearchCuriosityQuestion
 from research.ResearchEvidenceIntegrityStatus import ResearchEvidenceIntegrityStatus
 from research.ResearchFailureLesson import ResearchFailureLesson
+from research.ResearchPairedProviderQualityReport import (
+    ResearchPairedProviderQualityReport,
+)
 from research.ResearchPlanAuthorization import ResearchPlanAuthorization
 from research.ResearchPlanDraftPreview import ResearchPlanDraftPreview
 from research.ResearchPlanExecutionState import ResearchPlanExecutionState
@@ -152,6 +155,7 @@ class BrainResponse:
     failure_lessons: tuple[ResearchFailureLesson, ...] = ()
     research_calibration: ResearchCalibrationReport | None = None
     research_provider_quality: ResearchProviderQualityReport | None = None
+    research_paired_provider_quality: ResearchPairedProviderQualityReport | None = None
     research_provider_comparison: ResearchProviderComparisonReport | None = None
     research_plan_authorization: ResearchPlanAuthorization | None = None
     research_plan_authorizations: tuple[ResearchPlanAuthorization, ...] = ()

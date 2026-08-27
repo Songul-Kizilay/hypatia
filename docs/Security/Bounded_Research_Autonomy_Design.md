@@ -1232,7 +1232,7 @@ cross-provider relevance ranking; semantic reranking; a CISA provider; a GitHub
 Advisory provider; background autonomy; scheduler authority. The same seven
 autonomy and background intents remain unreachable.
 
-### 17.10 Next: measure the paired comparisons the operator actually ran
+### 17.10 Done: measure the paired comparisons the operator actually ran
 
 **Exactly one: paired-comparison evaluation from recorded operator assessments.**
 
@@ -1247,9 +1247,32 @@ because they are ordinary records, which is right, but it still aggregates them
 into per-provider profiles across unrelated questions — so the one genuinely
 comparable slice of the data is averaged away with everything else.
 
-It stays descriptive and stays read-only: report, per paired question, what the
-operator concluded about each side, with both denominators and the sample band
-visible, and without ever producing a winner.
+Implemented in v0.3.200. It stays descriptive and stays read-only: the report
+shows, per paired question, what the operator concluded about each side, with
+both denominators and the sample band visible, and without ever producing a
+winner.
+
+**Alignment is proved from canonical text, not inferred from provider presence.**
+A run qualifies only when Crossref and NVD each hold a discovery whose exact
+recorded query equals the run's canonical question. Two provider names beside
+different queries are not presented as a pair.
+
+**The old attribution rules remain intact inside each pair.** A resource both
+providers returned is excluded from both funnels rather than credited by
+execution order, and an assessed source no discovery proposed is reported as
+unattributed. Superseded assessments remain history rather than extra samples.
+
+**The view is bounded without hiding the denominator.** At most 40 paired
+questions are rendered, in deterministic run order, while the report carries
+the complete number of eligible pairs. Telemetry carries only eligible-pair,
+reported-pair, and assessed-sample counts; it carries no question, provider
+result, document identity, or judgement content.
+
+**Question alignment is not a benchmark.** The operator still chose which
+candidates to accept, which accepted sources became evidence, and which sources
+to assess. The report says so next to the numbers. Nothing reads the result to
+select a provider, draft a plan, change a default, alter a ranking, or update a
+reputation.
 
 **Explicitly not in it:** provider selection or routing; reranking; reputation
 learning; new providers; background scheduling; `research_autonomy_run`;

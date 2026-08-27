@@ -436,6 +436,16 @@ class DesktopController:
             )
         )
 
+    def report_paired_provider_quality(self) -> BrainResponse:
+        """Compare only runs where both providers answered the same question."""
+        return self._brain.process(
+            BrainRequest(
+                message="Report paired provider quality",
+                source="desktop",
+                metadata={"intent": "paired_provider_quality_report"},
+            )
+        )
+
     def report_claim_calibration(self, research_run_id: str) -> BrainResponse:
         """Report how far each claim outruns its evidence, adjusting none."""
         return self._run_only_request(

@@ -126,6 +126,10 @@ class ListingCommandTests(ControllerFixture):
         for method, intent in (
             (self.controller.list_reflections, "research_reflection_list"),
             (self.controller.list_curiosity_questions, "curiosity_question_list"),
+            (
+                self.controller.report_paired_provider_quality,
+                "paired_provider_quality_report",
+            ),
         ):
             with self.subTest(intent=intent):
                 method()
@@ -187,6 +191,9 @@ class NothingHereAdjustsAnythingTests(unittest.TestCase):
         self.assertIn(
             '("Provider quality", self._report_provider_quality)', WINDOW_SOURCE
         )
+        self.assertIn(
+            '("Paired quality", self._report_paired_provider_quality)', WINDOW_SOURCE
+        )
         self.assertIn("selects no provider", WINDOW_SOURCE)
         self.assertIn("changes no default", WINDOW_SOURCE)
         self.assertIn("updates no reputation", WINDOW_SOURCE)
@@ -197,6 +204,13 @@ class NothingHereAdjustsAnythingTests(unittest.TestCase):
     def test_provider_quality_is_not_scoped_to_one_run(self) -> None:
         """Provider experience accumulates; one run is never a sample."""
         start = WINDOW_SOURCE.index("def _report_provider_quality")
+        end = WINDOW_SOURCE.index("def ", start + 10)
+        handler = WINDOW_SOURCE[start:end]
+
+        self.assertNotIn("_review_run_id", handler)
+
+    def test_paired_quality_is_not_scoped_to_one_selected_run(self) -> None:
+        start = WINDOW_SOURCE.index("def _report_paired_provider_quality")
         end = WINDOW_SOURCE.index("def ", start + 10)
         handler = WINDOW_SOURCE[start:end]
 
@@ -351,6 +365,13 @@ class EndToEndTests(unittest.TestCase):
         ):
             with self.subTest(method=method.__name__):
                 self.assertTrue(method(run_id).success, method.__name__)
+
+    def test_paired_provider_quality_reaches_its_read_only_service(self) -> None:
+        response = self.controller.report_paired_provider_quality()
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.intent, "paired_provider_quality")
+        self.assertIsNotNone(response.research_paired_provider_quality)
 
     def test_an_unknown_run_is_refused_by_the_runtime(self) -> None:
         """A misspelled key would be refused for lacking a run ID instead."""

@@ -48,6 +48,9 @@ from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchEvidenceIntegrityStatus import ResearchEvidenceIntegrityStatus
 from research.ResearchExecutionAllowance import ResearchExecutionAllowance
 from research.ResearchFailureLesson import ResearchFailureLesson
+from research.ResearchPairedProviderQualityReport import (
+    ResearchPairedProviderQualityReport,
+)
 from research.ResearchPlanAuthorization import ResearchPlanAuthorization
 from research.ResearchPlanAuthorizationPreview import (
     ResearchPlanAuthorizationPreview,
@@ -1664,6 +1667,22 @@ class ResponseComposer:
             intent="provider_quality",
             memory_count=0,
             research_provider_quality=report,
+        )
+
+    def paired_provider_quality(
+        self,
+        request: BrainRequest,
+        report: ResearchPairedProviderQualityReport,
+    ) -> BrainResponse:
+        """Render aligned same-question observations, choosing nothing."""
+        return BrainResponse(
+            message="\n".join(
+                ("Paired provider quality — descriptive only:", "", *report.lines())
+            ),
+            request_id=request.request_id,
+            intent="paired_provider_quality",
+            memory_count=0,
+            research_paired_provider_quality=report,
         )
 
     def source_reputation(

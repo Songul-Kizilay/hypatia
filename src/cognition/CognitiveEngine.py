@@ -38,6 +38,9 @@ from cognition.LearnedMemoryContextService import LearnedMemoryContextService
 from cognition.LLMConversationHistoryBuilder import (
     build_llm_conversation_history,
 )
+from cognition.PairedProviderQualityApplicationService import (
+    PairedProviderQualityApplicationService,
+)
 from cognition.ProviderComparisonApplicationService import (
     ProviderComparisonApplicationService,
 )
@@ -483,6 +486,9 @@ class CognitiveEngine:
             None
         )
         self._provider_quality_service: ProviderQualityApplicationService | None = None
+        self._paired_provider_quality_service: (
+            PairedProviderQualityApplicationService | None
+        ) = None
         self._provider_comparison_service: (
             ProviderComparisonApplicationService | None
         ) = None
@@ -496,6 +502,13 @@ class CognitiveEngine:
                 research_run_manager,
                 response_composer,
                 event_bus=event_bus,
+            )
+            self._paired_provider_quality_service = (
+                PairedProviderQualityApplicationService(
+                    research_run_manager,
+                    response_composer,
+                    event_bus=event_bus,
+                )
             )
             self._provider_comparison_service = ProviderComparisonApplicationService(
                 research_run_manager,
@@ -639,6 +652,11 @@ class CognitiveEngine:
             and self._provider_quality_service.is_report_request(request)
         ):
             return self._provider_quality_service.process_report(request)
+        if (
+            self._paired_provider_quality_service is not None
+            and self._paired_provider_quality_service.is_report_request(request)
+        ):
+            return self._paired_provider_quality_service.process_report(request)
         if (
             self._provider_comparison_service is not None
             and self._provider_comparison_service.is_report_request(request)

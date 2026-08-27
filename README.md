@@ -116,6 +116,11 @@ To create the world's most capable personal AI research companion.
   scholarly-metadata provider used only after an explicit action. Its fixed
   endpoint and redirects use the same public-address-pinned, hostname-verified
   TLS transport as explicit page loading
+- Explicit Crossref and NVD discovery can be placed in one approved two-step
+  plan for the same run question. Each provider still costs one network
+  operation and requires its own Advance action. Read-only provider-quality,
+  side-by-side result, and same-question paired-quality views remain
+  descriptive: they choose no provider and alter no routing or ranking.
 - A separate, versioned and atomically replaced accepted-source content store
   with exact UTF-8 byte count/SHA-256 validation, duplicate and storage bounds.
   Physical reads use the opened file descriptor and stop at 40,000,001 bytes;
