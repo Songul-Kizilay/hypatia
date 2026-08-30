@@ -6136,6 +6136,138 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             ],
         )
 
+    def _refused_load_window(self, controller: Any) -> tuple[Any, list[str]]:
+        """Build a window whose refresh writes a status, exactly as the real one does.
+
+        `_render_research_run_selector` ends by reselecting the run, and
+        `_select_research_run` finishes by setting the status to "no action
+        started". A stub that only records the runs would therefore prove
+        nothing about the bug being guarded here, so this one writes the same
+        status the real reselect writes.
+        """
+        window: Any = object.__new__(TkinterDesktopWindow)
+        status = RecordingStatus()
+        window._root = object()
+        window._controller = controller
+        window._research_run_id = RecordingInput("run-123")
+        window._research_candidate_run_id = "run-123"
+        window._research_candidate_discovery_id = "discovery-1"
+        window._research_candidate_discovery_ids = ("discovery-1",)
+        window._research_candidates = controller.candidates
+        window._research_candidate_selector = RecordingCandidateSelector(0)
+        window._research_source_document_id = RecordingVariable("")
+        window._status = status
+        window._append_response = lambda _response: None
+
+        def render(runs: object) -> None:
+            status.set("research run selected: run-123; no action started")
+
+        window._render_research_run_selector = render
+        _configure_request_boundary(window)
+        return window, status.values
+
+    def test_a_refused_load_is_not_relabelled_as_no_action_started(self) -> None:
+        """The reported symptom: confirming appeared to do nothing at all.
+
+        A fetch that is refused is a real, reportable outcome. It was reported,
+        and then the canonical re-read that follows overwrote the report with a
+        line saying no action had been started — beside a source count that had
+        legitimately not moved. The operator was left with no evidence that
+        their confirmation had been acted on.
+        """
+        controller = RecordingResearchSourceLoadController()
+        controller.candidate_accept_response = BrainResponse(
+            message=(
+                "Research source could not be loaded: Research source did not "
+                "contain readable text."
+            ),
+            request_id="candidate-accept",
+            intent="research_source_candidate_accept",
+            memory_count=0,
+            success=False,
+        )
+        window, statuses = self._refused_load_window(controller)
+
+        with patch(
+            "desktop.TkinterDesktopWindow.messagebox.askyesno", return_value=True
+        ):
+            window._preview_and_accept_research_candidate()
+        window._poll_requests()
+
+        self.assertEqual(
+            statuses[-1], "research candidate load: failed; no source was attached"
+        )
+        self.assertNotIn("no action started", statuses[-1])
+
+    def test_a_refused_load_attaches_no_source_and_keeps_the_same_run(self) -> None:
+        controller = RecordingResearchSourceLoadController()
+        controller.candidate_accept_response = BrainResponse(
+            message="Research source could not be loaded.",
+            request_id="candidate-accept",
+            intent="research_source_candidate_accept",
+            memory_count=0,
+            success=False,
+        )
+        window, _statuses = self._refused_load_window(controller)
+
+        with patch(
+            "desktop.TkinterDesktopWindow.messagebox.askyesno", return_value=True
+        ):
+            window._preview_and_accept_research_candidate()
+        window._poll_requests()
+
+        self.assertEqual(
+            controller.candidate_accepts,
+            [("run-123", "discovery-1", controller.candidates[0].url)],
+        )
+        self.assertEqual(controller.list_calls, 1)
+        self.assertEqual(controller.discovery_calls, [])
+        self.assertEqual(window._research_run_id.get(), "run-123")
+        self.assertEqual(window._research_source_document_id.get(), "")
+
+    def test_an_accepted_load_reports_the_attachment_last(self) -> None:
+        """Success is stated after the refresh too, for the same reason."""
+        controller = RecordingResearchSourceLoadController()
+        now = datetime(2026, 8, 20, tzinfo=UTC)
+        accepted_source = ResearchSourceRecord(
+            "document-accepted",
+            controller.candidates[0].url,
+            "Accepted candidate",
+            "text/plain",
+            now,
+            now,
+        )
+        accepted_run = replace(
+            controller.list_response.research_runs[0], sources=(accepted_source,)
+        )
+        controller.candidate_accept_response = BrainResponse(
+            message="Candidate accepted.",
+            request_id="candidate-accept",
+            intent="research_source_candidate_accept",
+            memory_count=0,
+            knowledge_documents=[
+                KnowledgeDocumentReference(
+                    "document-accepted",
+                    "Accepted candidate",
+                    controller.candidates[0].url,
+                    DocumentType.WEB,
+                    1,
+                )
+            ],
+            research_runs=[accepted_run],
+        )
+        window, statuses = self._refused_load_window(controller)
+
+        with patch(
+            "desktop.TkinterDesktopWindow.messagebox.askyesno", return_value=True
+        ):
+            window._preview_and_accept_research_candidate()
+        window._poll_requests()
+
+        self.assertEqual(statuses[-1], "research candidate load: source attached")
+        self.assertEqual(window._research_source_document_id.get(), "document-accepted")
+        self.assertEqual(len(controller.candidate_accepts), 1)
+
     def test_declined_candidate_preview_does_not_accept(self) -> None:
         window: Any = object.__new__(TkinterDesktopWindow)
         controller = RecordingResearchSourceLoadController()

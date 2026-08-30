@@ -2854,7 +2854,20 @@ class TkinterDesktopWindow:
         )
 
     def _complete_research_source_load(self, response: BrainResponse) -> None:
-        """Present an accepted network source only on the Tkinter event thread."""
+        """Present an accepted network source only on the Tkinter event thread.
+
+        The canonical re-read below reselects the run, and reselecting a run
+        writes its own status line — "no action started" — which is precisely
+        wrong after a load that was started and refused. The refused fetch was
+        therefore reported for one instant and then relabelled as nothing having
+        happened, leaving an operator watching an unchanged source count with no
+        indication that their confirmation had been acted on at all.
+
+        The outcome of this attempt is therefore restated last, after every
+        refresh that could overwrite it. The refresh itself is kept: a refused
+        load records a failure on the run, and that is a real change the
+        operator should see counted.
+        """
         self._append_response(response)
         try:
             canonical_response = self._controller.list_research_runs()
@@ -2863,6 +2876,11 @@ class TkinterDesktopWindow:
         if canonical_response is not None and canonical_response.success:
             self._render_research_run_selector(tuple(canonical_response.research_runs))
         self._capture_accepted_research_source(response)
+        self._status.set(
+            "research candidate load: source attached"
+            if response.success
+            else "research candidate load: failed; no source was attached"
+        )
 
     def _create_research_run(self) -> None:
         """Create a persistent run and select its returned identifier."""

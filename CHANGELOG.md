@@ -2,6 +2,21 @@
 
 All notable project changes are recorded here.
 
+## [0.3.222] - 2026-08-30
+
+### Fixed
+
+- Confirming "Preview & load" appeared to do nothing. The load ran, and a
+  refused fetch was reported for one instant before the canonical re-read that
+  follows reselected the run and overwrote the report with "no action started" —
+  beside a source count that had legitimately not moved. An operator therefore
+  saw an unchanged run and a status line stating that nothing had been started,
+  with no indication that their confirmation had been acted on at all. The
+  outcome of the attempt is now restated after every refresh that could
+  overwrite it, for successful and refused loads alike. The refresh itself is
+  kept: a refused load records a failure on the run, which is a real change the
+  operator should see counted.
+
 ## [0.3.221] - 2026-08-27
 
 ### Fixed
