@@ -2,6 +2,38 @@
 
 All notable project changes are recorded here.
 
+## [0.3.234] - 2026-08-31
+
+### Fixed
+
+- A guard asserting that the provider comparison request reaches no provider
+  collected only attribute calls, so a bare-name reference to `open` could sit
+  in the module while the test passed. Proven by mutation before and after: the
+  same insertion passed the old guard and fails the repaired one, which now
+  collects bare names alongside attribute calls. It was the difference between
+  checking that nothing is reached and checking that nothing is reached through
+  an attribute.
+
+### Tests
+
+- The two guard helpers are now tested directly, since several dozen invariant
+  guards are only as good as what they collect. `module_vocabulary` is pinned on
+  collecting bare identifiers, attribute names, imports, definitions, keywords
+  and string constants while excluding docstrings, and on never being silently
+  empty for real code. Attribute collection is asserted explicitly because a
+  guard saying a module never reads a field is worthless against
+  `object.field` if the collector only sees bare names.
+- The v0.3.233 vacuity is pinned rather than quietly patched:
+  `working_vocabulary` with no function names still collects nothing, which is
+  the honest answer to a question nobody asked, and a suite-wide check now fails
+  if any test returns to that form.
+- Five security-sensitive guards were proven capable of failing by inserting the
+  exact prohibited construct into the module each one inspects and confirming
+  the test fails for the intended reason: network reachability, retry and fetch
+  absence, timestamp recency in reasoning code, process execution in the
+  filesystem tool, and prose matching in the hypothesis model. Every production
+  file was restored and verified byte-identical.
+
 ## [0.3.233] - 2026-08-31
 
 ### Added

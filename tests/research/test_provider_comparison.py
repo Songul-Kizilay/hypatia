@@ -189,11 +189,16 @@ class PlanningTests(unittest.TestCase):
         the approved step will later do. What must be absent is a call.
         """
         tree = ast.parse(REQUEST_SOURCE)
+        # Both call shapes, and the bare names themselves. Collecting only
+        # attribute calls let `open` reach this module as a plain reference
+        # without the guard noticing, which is the difference between checking
+        # that nothing is reached and checking that nothing is reached *through
+        # an attribute*.
         called = {
             node.func.attr
             for node in ast.walk(tree)
             if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
-        }
+        } | {node.id for node in ast.walk(tree) if isinstance(node, ast.Name)}
         imported = {
             item.name.split(".")[0]
             for node in ast.walk(tree)
