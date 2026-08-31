@@ -608,6 +608,8 @@ class CognitiveEngine:
         if self._research_plan_execution_service.is_cancel_request(request):
             return self._research_plan_execution_service.process_cancel(request)
 
+        if self._research_plan_execution_service.is_continue_request(request):
+            return self._research_plan_execution_service.process_continue(request)
         if self._research_plan_execution_service.is_recover_request(request):
             return self._research_plan_execution_service.process_recover(request)
         if self._research_plan_execution_service.is_resolve_request(request):

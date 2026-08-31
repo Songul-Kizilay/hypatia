@@ -398,6 +398,35 @@ class DesktopController:
             )
         )
 
+    def continue_research_execution(
+        self,
+        execution_id: str,
+        max_steps: str,
+    ) -> BrainResponse:
+        """Run the ordinary one-step advance, at most this many times.
+
+        Both the execution and the bound come from the operator. There is no
+        reading of a missing bound as "as many as it takes": an unusable one is
+        passed through and refused rather than replaced with a guess.
+        """
+        normalized_execution = execution_id.strip()
+        normalized_steps = str(max_steps).strip()
+        if not normalized_execution:
+            raise ValueError("An execution ID cannot be empty.")
+        if not normalized_steps:
+            raise ValueError("A step count cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="Continue research plan execution within a bound",
+                source="desktop",
+                metadata={
+                    "intent": "research_plan_execution_continue",
+                    "research_plan_id": normalized_execution,
+                    "max_steps": normalized_steps,
+                },
+            )
+        )
+
     def cancel_research_execution(self, execution_id: str) -> BrainResponse:
         """Stop one execution. Refunds neither approval nor spent budget."""
         return self._execution_request(

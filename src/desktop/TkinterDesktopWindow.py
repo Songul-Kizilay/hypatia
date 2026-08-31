@@ -4645,6 +4645,20 @@ class TkinterDesktopWindow:
                 row=0, column=column, sticky="w", padx=(0 if column == 0 else 8, 0)
             )
 
+        #: A bound the operator types, never defaulted to "as many as it takes".
+        self._continuation_steps = tk.StringVar(value="1")
+        ttk.Label(section, text="Continue at most (steps)").grid(
+            row=11, column=0, sticky="w", pady=(10, 0)
+        )
+        ttk.Entry(section, textvariable=self._continuation_steps).grid(
+            row=11, column=1, sticky="ew", padx=(8, 0), pady=(10, 0)
+        )
+        self._request_button(
+            section,
+            "Continue bounded",
+            self._continue_execution_bounded,
+        ).grid(row=12, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
+
         buttons = ttk.Frame(section)
         buttons.grid(row=2, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
         commands: list[tuple[str, Callable[[], None]]] = [
@@ -4824,6 +4838,41 @@ class TkinterDesktopWindow:
                 decision.value,
                 self._recovery_summary.get(),
                 self._recovery_claimed_operation.get(),
+            )
+        )
+
+    def _continue_execution_bounded(self) -> None:
+        """Run at most the number of steps the operator typed, then stop.
+
+        The dialog names the bound and says what ends the run early, because
+        "continue" is the word most likely to be read as "finish this for me".
+        """
+        execution_id = self._execution_id.get().strip()
+        steps = self._continuation_steps.get().strip()
+        if not execution_id or not steps:
+            self._plan_approval_status.set(
+                "An execution ID and a step count are both required."
+            )
+            return
+        if not messagebox.askyesno(
+            "Continue within this bound?",
+            (
+                f"Execution: {execution_id}\n\n"
+                f"Run at most {steps} foreground research steps. Each step uses "
+                "the existing budget and capability checks, exactly as pressing "
+                "Advance once does.\n\n"
+                "Execution stops early on failure, block, interruption, "
+                "cancellation or budget limit. Nothing runs in the background "
+                "and nothing continues after this returns."
+            ),
+            parent=self._root,
+        ):
+            self._plan_approval_status.set("Not continued. Nothing was attempted.")
+            return
+        self._approval_request(
+            lambda: self._controller.continue_research_execution(
+                execution_id,
+                steps,
             )
         )
 

@@ -2,6 +2,38 @@
 
 All notable project changes are recorded here.
 
+## [0.3.245] - 2026-08-31
+
+### Added
+
+- An operator can ask for a bounded foreground continuation: run at most N
+  research steps, where N is explicit and at most ten. It is a loop around the
+  existing one-step advance and nothing else, so every budget check, capability
+  check, durable attempt checkpoint and refusal is the one a single press gets.
+- The result is structured rather than prose: execution identity, steps
+  requested, steps attempted and their IDs in order, final status, a bounded
+  stop reason, the next pending step and the remaining allowance.
+- The desktop offers a typed step count and a "Continue bounded" control beside
+  the existing Advance and Cancel, with a confirmation naming the bound and what
+  ends the run early.
+
+### Security
+
+- A bound is a maximum, never a target, and a missing bound is refused rather
+  than read as unlimited. Zero, negative, malformed and above-maximum are all
+  refused before anything runs.
+- It stops at the first problem and never steps over one. Completion, failure,
+  blocking, interruption, cancellation, an unaffordable next step or any
+  ordinary advance refusal ends the run where it stands.
+- Nothing is retried and nothing is repaired. A failed or interrupted step ends
+  the run; resolving or abandoning it remains an explicit human decision made
+  afterwards.
+- No budget is pre-charged, reserved or refunded in aggregate. Each step is
+  charged by the ordinary one-step path, which decides affordability before its
+  own attempt, and no capability is widened because more steps were requested.
+- Each step keeps its own durable attempt checkpoint, so a crash mid-run leaves
+  exactly the state a crash during a single advance would.
+
 ## [0.3.244] - 2026-08-31
 
 ### Added

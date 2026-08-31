@@ -44,6 +44,9 @@ from research.ResearchClaimWritePreview import ResearchClaimWritePreview
 from research.ResearchCuriosityPreview import ResearchCuriosityPreview
 from research.ResearchCuriosityQuestion import ResearchCuriosityQuestion
 from research.ResearchEvidenceIntegrityStatus import ResearchEvidenceIntegrityStatus
+from research.ResearchExecutionContinuation import (
+    ResearchExecutionContinuation,
+)
 from research.ResearchFailureLesson import ResearchFailureLesson
 from research.ResearchPairedProviderQualityReport import (
     ResearchPairedProviderQualityReport,
@@ -148,6 +151,7 @@ class BrainResponse:
     research_plan_draft_preview: ResearchPlanDraftPreview | None = None
     learned_memory_audit: LearnedMemoryAuditReport | None = None
     research_plan_execution: ResearchPlanExecutionState | None = None
+    research_execution_continuation: ResearchExecutionContinuation | None = None
     research_autonomy: ResearchAutonomyResult | None = None
     background_research_task: BackgroundResearchTask | None = None
     research_curiosity: ResearchCuriosityPreview | None = None

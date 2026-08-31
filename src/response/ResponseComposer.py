@@ -53,6 +53,9 @@ from research.ResearchCuriosityQuestion import ResearchCuriosityQuestion
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchEvidenceIntegrityStatus import ResearchEvidenceIntegrityStatus
 from research.ResearchExecutionAllowance import ResearchExecutionAllowance
+from research.ResearchExecutionContinuation import (
+    ResearchExecutionContinuation,
+)
 from research.ResearchFailureLesson import ResearchFailureLesson
 from research.ResearchPairedProviderQualityReport import (
     ResearchPairedProviderQualityReport,
@@ -2928,6 +2931,46 @@ class ResponseComposer:
             intent="research_plan_execution",
             memory_count=0,
             success=False,
+        )
+
+    def research_plan_execution_continued(
+        self,
+        request: BrainRequest,
+        continuation: ResearchExecutionContinuation,
+        state: ResearchPlanExecutionState,
+    ) -> BrainResponse:
+        """Report what a bounded continuation did, counted rather than described.
+
+        Requested and attempted are shown side by side on purpose. They differ
+        whenever something stopped the run early, and that gap is the first
+        thing an operator needs to see.
+        """
+        lines = [
+            "Bounded foreground continuation finished.",
+            f"Execution ID: {continuation.execution_id}",
+            f"Steps requested: {continuation.requested_max_steps}",
+            f"Steps attempted: {continuation.attempted_steps}",
+            "Steps attempted in order: "
+            + (", ".join(continuation.attempted_step_ids) or "none"),
+            f"Stopped because: {continuation.stop_reason.value}",
+            f"Execution status: {continuation.final_status.value}",
+            f"Next pending step: {continuation.next_step_id or 'none'}",
+        ]
+        if continuation.allowance is not None:
+            lines.append("")
+            lines.extend(continuation.allowance.lines())
+        lines.append("")
+        lines.append(
+            "Nothing continues on its own. Any further step needs another "
+            "explicit action."
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_plan_execution_continue",
+            memory_count=0,
+            research_plan_execution=state,
+            research_execution_continuation=continuation,
         )
 
     def research_plan_execution_rejected(

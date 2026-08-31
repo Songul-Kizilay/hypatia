@@ -28,6 +28,7 @@ import sys
 import unittest
 from contextlib import ExitStack
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
 
@@ -528,6 +529,62 @@ class ResearchCommandBindingTests(unittest.TestCase):
         ):
             window._abandon_step()
         self.assertEqual(len(requested), 1)
+
+    def test_the_bounded_continuation_control_is_its_own_handler(self) -> None:
+        _window, widgets = build_real_window(plan_authorization_enabled=True)
+        by_label = {
+            widget.text: getattr(widget.command, "__name__", "")
+            for widget in widgets
+            if widget.command is not None
+        }
+
+        self.assertEqual(
+            by_label.get("Continue bounded"), "_continue_execution_bounded"
+        )
+        self.assertEqual(
+            by_label.get("Advance one step"), "_advance_execution_one_step"
+        )
+        self.assertEqual(by_label.get("Cancel execution"), "_cancel_execution")
+
+    def test_no_control_offers_unlimited_continuation(self) -> None:
+        """A bound is always typed; there is no "until done"."""
+        _window, widgets = build_real_window(plan_authorization_enabled=True)
+        labels = [
+            widget.text.casefold()
+            for widget in widgets
+            if widget.command is not None and isinstance(widget.text, str)
+        ]
+
+        for forbidden in ("until done", "run all", "complete all", "unlimited"):
+            with self.subTest(name=forbidden):
+                self.assertEqual([label for label in labels if forbidden in label], [])
+
+    def test_continuing_uses_the_named_execution_and_typed_bound(self) -> None:
+        window, _widgets = build_real_window(plan_authorization_enabled=True)
+        window._execution_id.set("plan-many")
+        window._continuation_steps.set("3")
+        recorded: list[tuple[str, str]] = []
+        window._approval_request = lambda call: recorded.append(call())
+        window._controller = SimpleNamespace(
+            continue_research_execution=lambda execution_id, steps: (
+                execution_id,
+                steps,
+            )
+        )
+
+        with patch(
+            "desktop.TkinterDesktopWindow.messagebox.askyesno",
+            return_value=False,
+        ):
+            window._continue_execution_bounded()
+        self.assertEqual(recorded, [])
+
+        with patch(
+            "desktop.TkinterDesktopWindow.messagebox.askyesno",
+            return_value=True,
+        ):
+            window._continue_execution_bounded()
+        self.assertEqual(recorded, [("plan-many", "3")])
 
     def test_the_comparison_controls_are_bound_to_their_own_handlers(self) -> None:
         self._assert_bound("Compare sources", "_preview_research_source_comparison")

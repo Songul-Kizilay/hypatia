@@ -67,7 +67,14 @@ from research.ResearchAttemptRecoveryDecision import (
 )
 from research.ResearchAttemptResolution import ResearchAttemptResolution
 from research.ResearchCapabilityCost import cost_for
+from research.ResearchContinuationStopReason import (
+    ResearchContinuationStopReason,
+)
 from research.ResearchExecutionAllowance import ResearchExecutionAllowance
+from research.ResearchExecutionContinuation import (
+    MAX_FOREGROUND_CONTINUATION_STEPS,
+    ResearchExecutionContinuation,
+)
 from research.ResearchExecutionStore import ResearchExecutionStore
 from research.ResearchPlan import ResearchPlan
 from research.ResearchPlanAuthorizationConsumer import (
@@ -99,6 +106,7 @@ RESEARCH_PLAN_EXECUTION_START_INTENT = "research_plan_execution_start"
 RESEARCH_PLAN_EXECUTION_STATUS_INTENT = "research_plan_execution_status"
 RESEARCH_PLAN_EXECUTION_RESOLVE_INTENT = "research_plan_execution_resolve"
 RESEARCH_PLAN_EXECUTION_RECOVER_INTENT = "research_plan_execution_recover"
+RESEARCH_PLAN_EXECUTION_CONTINUE_INTENT = "research_plan_execution_continue"
 RESEARCH_PLAN_EXECUTION_CANCEL_INTENT = "research_plan_execution_cancel"
 RESEARCH_PLAN_EXECUTION_ADVANCE_INTENT = "research_plan_execution_advance"
 
@@ -605,6 +613,136 @@ class ResearchPlanExecutionApplicationService:
             self._next_capability(plan_id, recovered),
         )
 
+    def is_continue_request(self, request: BrainRequest) -> bool:
+        return request.metadata.get("intent") == RESEARCH_PLAN_EXECUTION_CONTINUE_INTENT
+
+    def process_continue(self, request: BrainRequest) -> BrainResponse:
+        """Run the ordinary one-step advance, at most this many times.
+
+        Deliberately nothing more than a loop around `process_advance`. Every
+        budget check, capability check, durable attempt checkpoint and refusal
+        is the one an operator pressing the button once would get, because it
+        is literally that code being called again. Nothing here reaches an
+        operation, charges anything, or writes execution state itself.
+
+        It stops at the first sign that carrying on is not obviously safe, and
+        never steps over a problem to find a step it likes better. A blocked or
+        interrupted step ends the run where it is, and what to do about it stays
+        an explicit human decision made afterwards.
+        """
+        plan_id = self._normalized_plan_id(request)
+        bound = self._continuation_bound(request)
+        if bound is None:
+            return self._response_composer.research_plan_execution_rejected(
+                request,
+                "Continuing needs an explicit step count from 1 to "
+                f"{MAX_FOREGROUND_CONTINUATION_STEPS}.",
+            )
+        if self._executions.get(plan_id) is None:
+            return self._response_composer.research_plan_execution_missing(
+                request,
+                plan_id,
+            )
+        attempted: list[str] = []
+        reason = ResearchContinuationStopReason.BOUND_REACHED
+        while len(attempted) < bound:
+            state = self._executions[plan_id]
+            halted = self._continuation_halt(state)
+            if halted is not None:
+                reason = halted
+                break
+            step_id = state.next_pending_step_id
+            if step_id is None:
+                reason = ResearchContinuationStopReason.NO_PENDING_STEP
+                break
+            response = self.process_advance(request)
+            after = self._executions[plan_id]
+            if self._step_status(after, step_id) is not ResearchPlanStepStatus.PENDING:
+                attempted.append(step_id)
+            halted = self._continuation_halt(after)
+            if halted is not None:
+                reason = halted
+                break
+            if not response.success or step_id == after.next_pending_step_id:
+                reason = self._refusal_reason(plan_id, after)
+                break
+        final = self._executions[plan_id]
+        continuation = ResearchExecutionContinuation(
+            execution_id=plan_id,
+            requested_max_steps=bound,
+            final_status=final.status,
+            stop_reason=reason,
+            attempted_step_ids=tuple(attempted),
+            next_step_id=final.next_pending_step_id or "",
+            allowance=self._allowances.get(plan_id),
+        )
+        return self._response_composer.research_plan_execution_continued(
+            request,
+            continuation,
+            final,
+        )
+
+    @staticmethod
+    def _continuation_bound(request: BrainRequest) -> int | None:
+        """Return the operator's explicit bound, or nothing when unusable.
+
+        Absent is never taken to mean unlimited. A bound is something somebody
+        chose, and no reading of a missing field produces one.
+        """
+        raw = request.metadata.get("max_steps")
+        if isinstance(raw, bool) or not isinstance(raw, (int, str)):
+            return None
+        try:
+            bound = int(raw)
+        except TypeError, ValueError:
+            return None
+        if bound < 1 or bound > MAX_FOREGROUND_CONTINUATION_STEPS:
+            return None
+        return bound
+
+    @staticmethod
+    def _continuation_halt(
+        state: ResearchPlanExecutionState,
+    ) -> ResearchContinuationStopReason | None:
+        """Return why this state stops a continuation, or nothing if it does not."""
+        return _CONTINUATION_HALTS.get(state.status)
+
+    @staticmethod
+    def _step_status(
+        state: ResearchPlanExecutionState,
+        step_id: str,
+    ) -> ResearchPlanStepStatus | None:
+        for step in state.steps:
+            if step.step_id == step_id:
+                return step.status
+        return None
+
+    def _refusal_reason(
+        self,
+        plan_id: str,
+        state: ResearchPlanExecutionState,
+    ) -> ResearchContinuationStopReason:
+        """Name why an advance changed nothing, without re-deciding anything.
+
+        The allowance is only read here, to tell an operator out of budget from
+        an operator refused for some other reason. Whether a step may run was
+        already settled inside the one-step path.
+        """
+        allowance = self._allowances.get(plan_id)
+        step_id = state.next_pending_step_id
+        if allowance is not None and step_id is not None:
+            step = next(
+                (
+                    candidate
+                    for candidate in self._plans[plan_id].steps
+                    if candidate.step_id == step_id
+                ),
+                None,
+            )
+            if step is not None and not allowance.affords(cost_for(step.capability)):
+                return ResearchContinuationStopReason.BUDGET_EXHAUSTED
+        return ResearchContinuationStopReason.ADVANCE_REFUSED
+
     def process_advance(self, request: BrainRequest) -> BrainResponse:
         """Run one real research operation for the next pending step."""
         plan_id = self._normalized_plan_id(request)
@@ -920,3 +1058,18 @@ _RESUMABLE_EXECUTION_STATUSES = frozenset(
         ResearchPlanExecutionStatus.INTERRUPTED,
     }
 )
+
+
+#: The statuses that end a continuation on sight. Running is absent because it
+#: is the only one that means carrying on is still an option; ready is absent
+#: because an unstarted execution has nothing to continue and is refused by the
+#: ordinary advance instead.
+_CONTINUATION_HALTS = {
+    ResearchPlanExecutionStatus.COMPLETED: (ResearchContinuationStopReason.COMPLETED),
+    ResearchPlanExecutionStatus.FAILED: ResearchContinuationStopReason.FAILED,
+    ResearchPlanExecutionStatus.BLOCKED: ResearchContinuationStopReason.BLOCKED,
+    ResearchPlanExecutionStatus.INTERRUPTED: (
+        ResearchContinuationStopReason.INTERRUPTED
+    ),
+    ResearchPlanExecutionStatus.CANCELLED: (ResearchContinuationStopReason.CANCELLED),
+}
