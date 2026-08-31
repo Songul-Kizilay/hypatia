@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections import Counter
 
 from eventbus.EventBus import EventBus
+from research.CuriosityResearchProposal import CuriosityResearchProposal
 from research.ResearchCuriosityPreview import ResearchCuriosityPreview
 from research.ResearchCuriosityQuestion import ResearchCuriosityQuestion
 
@@ -19,6 +20,7 @@ QUESTIONS_GENERATED = "curiosity.questions_generated"
 QUESTIONS_STORED = "curiosity.questions_stored"
 QUESTION_ACCEPTED = "curiosity.question_accepted"
 QUESTION_DISMISSED = "curiosity.question_dismissed"
+PROPOSAL_PREVIEWED = "curiosity.proposal_previewed"
 
 EVENT_SOURCE = "research.curiosity"
 
@@ -72,6 +74,26 @@ class CuriosityEvents:
 
     def question_accepted(self, question: ResearchCuriosityQuestion) -> None:
         self._emit(QUESTION_ACCEPTED, self._decision_payload(question))
+
+    def proposal_previewed(self, proposal: CuriosityResearchProposal) -> None:
+        """Announce that a proposal was drafted, and that nothing ran.
+
+        Counts and identifiers only, as everywhere else. The step count is the
+        useful number precisely because it is a count of work described rather
+        than work done.
+        """
+        self._emit(
+            PROPOSAL_PREVIEWED,
+            {
+                "curiosity_question_id": proposal.curiosity_question_id,
+                "knowledge_gap_id": proposal.knowledge_gap_id,
+                "run_id": proposal.run_id,
+                "gap_kind": proposal.gap_kind.value,
+                "proposed_step_count": proposal.step_count,
+                "authorized": proposal.authorized,
+                "started": proposal.started,
+            },
+        )
 
     def question_dismissed(self, question: ResearchCuriosityQuestion) -> None:
         self._emit(QUESTION_DISMISSED, self._decision_payload(question))

@@ -342,6 +342,40 @@ class ResearchCommandBindingTests(unittest.TestCase):
         self.assertEqual(bound, expected)
         self.assertEqual(len(set(bound.values())), len(expected))
 
+    def test_the_curiosity_proposal_control_is_bound_and_stands_alone(self) -> None:
+        """Preparing a proposal is its own decision, so it is its own control.
+
+        Bound to the accept handler it would collapse two operator decisions
+        into one, which is the distinction this capability exists to keep.
+        """
+        _window, widgets = build_real_window(curiosity_enabled=True)
+        by_label = {
+            widget.text: getattr(widget.command, "__name__", "")
+            for widget in widgets
+            if widget.command is not None
+        }
+
+        self.assertEqual(
+            by_label.get("Prepare research proposal"),
+            "_prepare_curiosity_research_proposal",
+        )
+        self.assertEqual(by_label.get("Worth pursuing"), "_accept_curiosity_question")
+        # Scoped to proposal actions. "Start research" is a pre-existing control
+        # that creates a research run and has nothing to do with proposals; what
+        # this milestone must not add is a way to approve or run one.
+        proposal_handlers = {
+            handler
+            for label, handler in by_label.items()
+            if "proposal" in label.casefold()
+        }
+        self.assertEqual(proposal_handlers, {"_prepare_curiosity_research_proposal"})
+        for forbidden in ("approve", "authorize", "run_proposal", "execute"):
+            with self.subTest(absent=forbidden):
+                self.assertNotIn(
+                    forbidden,
+                    " ".join(by_label.values()).casefold(),
+                )
+
     def test_the_comparison_controls_are_bound_to_their_own_handlers(self) -> None:
         self._assert_bound("Compare sources", "_preview_research_source_comparison")
         self._assert_bound(

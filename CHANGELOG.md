@@ -2,6 +2,48 @@
 
 All notable project changes are recorded here.
 
+## [0.3.235] - 2026-08-31
+
+### Added
+
+- An accepted curiosity question can be turned into a research proposal an
+  operator can read. Curiosity could notice a gap and propose a question, and a
+  person could keep it; there it stopped. This adds the next step and stops
+  again.
+- The proposal is an ordinary research plan — the same model an approved plan
+  uses, drafted by the same service, carrying the same content digest — plus the
+  curiosity provenance explaining why it is being shown. No second planning
+  system exists, and no second digest scheme was invented.
+- Two operator decisions stay separate. Accepting a question says it is worth
+  keeping and remains entirely inert; preparing a proposal is a second explicit
+  action naming one exact question by identifier. There is no "latest accepted"
+  shortcut, and an ineligible question is refused rather than quietly accepted.
+- The gap is re-derived from current state at preview time rather than trusted
+  from the stored question. An accepted question outlives the situation that
+  produced it, so a gap somebody has since closed — by recording the very
+  evidence it was about — refuses the proposal instead of drafting work nobody
+  needs.
+- Provenance is carried, never reconstructed: the question, its gap, the run,
+  and for a hypothesis gap the hypothesis and the discriminating test it named.
+  Nothing is inferred from the wording of anything.
+- The desktop Review surface gains one read-only "Prepare research proposal"
+  control beside the existing keep and dismiss actions.
+
+### Security
+
+- A proposal holds no permission. `authorized` and `started` are properties that
+  return False and cannot be set, because a proposal able to describe itself as
+  authorized would be one keystroke from being believed. Execution still
+  requires a separate human authorization against the plan's digest, which this
+  preview neither creates, requests, nor implies.
+- Preparing a proposal contacts no provider, loads no source, runs no tool,
+  calls no model, and advances no plan. The steps describe future discovery and
+  perform none of it, and the service holds nothing it could reach with.
+- A failed acquisition does not become a proposal to try again, and a hypothesis
+  gap does not become a proposal to run the discriminating test. The first
+  proposes finding another source; the second proposes finding evidence someone
+  could judge. Neither claims the hypothesis is true, false, or exploitable.
+
 ## [0.3.234] - 2026-08-31
 
 ### Fixed

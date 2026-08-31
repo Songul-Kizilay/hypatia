@@ -21,6 +21,8 @@ from brain.BrainResponse import BrainResponse
 from cognition.CuriosityEvents import CuriosityEvents
 from core.Exceptions import ResearchError
 from eventbus.EventBus import EventBus
+from research.CuriosityProposalBuilder import CuriosityProposalBuilder
+from research.CuriosityQuestionStatus import CuriosityQuestionStatus
 from research.CuriosityQuestionStore import CuriosityQuestionStore
 from research.HypothesisStore import HypothesisStore
 from research.JsonFileCuriosityQuestionStore import MAX_CURIOSITY_STORE_QUESTIONS
@@ -31,6 +33,7 @@ from research.ResearchCuriosityQuestionGenerator import (
 )
 from research.ResearchHypothesis import ResearchHypothesis
 from research.ResearchKnowledgeGapDetector import ResearchKnowledgeGapDetector
+from research.ResearchPlanDraftService import ResearchPlanDraftService
 from research.ResearchRunManager import ResearchRunManager
 from response.ResponseComposer import ResponseComposer
 
@@ -40,6 +43,7 @@ CURIOSITY_QUESTION_STORE_INTENT = "curiosity_question_store"
 CURIOSITY_QUESTION_LIST_INTENT = "curiosity_question_list"
 CURIOSITY_QUESTION_ACCEPT_INTENT = "curiosity_question_accept"
 CURIOSITY_QUESTION_DISMISS_INTENT = "curiosity_question_dismiss"
+CURIOSITY_PREPARE_PROPOSAL_INTENT = "curiosity_prepare_proposal"
 
 
 class CuriosityApplicationService:
@@ -54,6 +58,7 @@ class CuriosityApplicationService:
         generator: ResearchCuriosityQuestionGenerator | None = None,
         question_store: CuriosityQuestionStore | None = None,
         hypothesis_store: HypothesisStore | None = None,
+        draft_service: ResearchPlanDraftService | None = None,
         event_bus: EventBus | None = None,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
@@ -63,6 +68,10 @@ class CuriosityApplicationService:
         self._generator = generator or ResearchCuriosityQuestionGenerator()
         self._question_store = question_store
         self._hypothesis_store = hypothesis_store
+        # Injected so a preview's plan identity and time are deterministic in
+        # tests. The digest ignores both, so a default service still previews
+        # the same plan content twice.
+        self._draft_service = draft_service or ResearchPlanDraftService()
         self._events = CuriosityEvents(event_bus)
         self._clock = clock or (lambda: datetime.now(UTC))
         self._questions: dict[str, ResearchCuriosityQuestion] = {}
@@ -87,6 +96,10 @@ class CuriosityApplicationService:
     @staticmethod
     def is_question_accept_request(request: BrainRequest) -> bool:
         return request.metadata.get("intent") == CURIOSITY_QUESTION_ACCEPT_INTENT
+
+    @staticmethod
+    def is_prepare_proposal_request(request: BrainRequest) -> bool:
+        return request.metadata.get("intent") == CURIOSITY_PREPARE_PROPOSAL_INTENT
 
     @staticmethod
     def is_question_dismiss_request(request: BrainRequest) -> bool:
@@ -140,6 +153,59 @@ class CuriosityApplicationService:
             request,
             self.questions(),
         )
+
+    def process_prepare_proposal(self, request: BrainRequest) -> BrainResponse:
+        """Draft an inert plan for one accepted question, starting nothing.
+
+        A second, separate operator decision. Accepting a question says it is
+        worth keeping; this says a proposal for it is worth reading, and neither
+        says anything may run. Nothing here reaches a provider, a source, a tool
+        or a model — the plan describes future discovery and performs none of it.
+
+        The gap is re-derived from current state rather than trusted from the
+        stored question, because an accepted question outlives the situation
+        that produced it. Somebody may have recorded the very evidence the gap
+        was about between accepting and asking, and drafting research for a gap
+        that has since closed would propose work nobody needs.
+        """
+        question_id = self._required_text(request, "curiosity_question_id", "question")
+        question = self._questions.get(question_id)
+        if question is None:
+            return self._response_composer.curiosity_question_missing(
+                request,
+                question_id,
+            )
+        if question.status is not CuriosityQuestionStatus.ACCEPTED:
+            return self._response_composer.curiosity_rejected(
+                request,
+                "A research proposal needs an accepted curiosity question; this "
+                f"one is {question.status.value}.",
+            )
+        try:
+            run = self._run_manager.get(question.run_id)
+        except ResearchError as error:
+            return self._response_composer.curiosity_rejected(request, str(error))
+        hypotheses = self._hypotheses_for(run.run_id)
+        current = {
+            gap.gap_id for gap in self._detector.detect(run, self._clock(), hypotheses)
+        }
+        if question.gap_id not in current:
+            return self._response_composer.curiosity_rejected(
+                request,
+                "Research proposal not prepared: the originating knowledge gap "
+                "is no longer current for this run.",
+            )
+        try:
+            proposal = CuriosityProposalBuilder().build(
+                question,
+                run,
+                self._draft_service,
+                hypotheses,
+            )
+        except ResearchError as error:
+            return self._response_composer.curiosity_rejected(request, str(error))
+        self._events.proposal_previewed(proposal)
+        return self._response_composer.curiosity_proposal(request, proposal)
 
     def process_question_accept(self, request: BrainRequest) -> BrainResponse:
         return self._decide(request, accept=True)

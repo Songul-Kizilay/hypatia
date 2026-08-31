@@ -4791,6 +4791,11 @@ class TkinterDesktopWindow:
         self._request_button(
             buttons, "Not worth pursuing", self._dismiss_curiosity_question
         ).grid(row=0, column=1, sticky="w", padx=(8, 0))
+        self._request_button(
+            buttons,
+            "Prepare research proposal",
+            self._prepare_curiosity_research_proposal,
+        ).grid(row=0, column=2, sticky="w", padx=(8, 0))
 
     def _build_review_history_section(self, parent: ttk.Frame) -> None:
         """Read back what was kept, producing nothing new."""
@@ -4873,6 +4878,21 @@ class TkinterDesktopWindow:
     def _accept_curiosity_question(self) -> None:
         self._review_request(
             lambda: self._controller.accept_curiosity_question(
+                self._curiosity_question_id.get()
+            )
+        )
+
+    def _prepare_curiosity_research_proposal(self) -> None:
+        """Preview what the selected accepted question would research.
+
+        Reads the identifier when the control is pressed, so it follows the
+        operator's current selection rather than whichever question was newest.
+        Nothing is accepted, authorized, or started here; an ineligible question
+        comes back as an explicit refusal rather than being quietly accepted
+        first.
+        """
+        self._review_request(
+            lambda: self._controller.prepare_curiosity_research_proposal(
                 self._curiosity_question_id.get()
             )
         )

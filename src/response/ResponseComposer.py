@@ -25,6 +25,7 @@ from memory.MemoryRecord import MemoryRecord
 from planner.Plan import Plan
 from research.BackgroundResearchTask import BackgroundResearchTask
 from research.CanonicalResearchSummary import CanonicalResearchSummary
+from research.CuriosityResearchProposal import CuriosityResearchProposal
 from research.HypothesisAppraisal import HypothesisAppraisal
 from research.HypothesisHistoryView import HypothesisHistoryView
 from research.KnowledgeReconciliationReport import (
@@ -2488,6 +2489,20 @@ class ResponseComposer:
             intent="curiosity",
             memory_count=0,
             success=False,
+        )
+
+    def curiosity_proposal(
+        self,
+        request: BrainRequest,
+        proposal: CuriosityResearchProposal,
+    ) -> BrainResponse:
+        """Render one inert proposal, authorizing and starting nothing."""
+        return BrainResponse(
+            message="\n".join(proposal.lines()),
+            request_id=request.request_id,
+            intent="curiosity_prepare_proposal",
+            memory_count=0,
+            curiosity_proposal=proposal,
         )
 
     def curiosity_rejected(

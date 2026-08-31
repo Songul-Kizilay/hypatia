@@ -516,6 +516,22 @@ class DesktopController:
             question_id,
         )
 
+    def prepare_curiosity_research_proposal(
+        self,
+        question_id: str,
+    ) -> BrainResponse:
+        """Draft an inert research proposal for one accepted question.
+
+        A second explicit decision, separate from accepting the question. It
+        reads what would be researched and authorizes none of it: no provider is
+        contacted, no source is loaded, and no approval is created or implied.
+        """
+        return self._curiosity_ruling(
+            "curiosity_prepare_proposal",
+            "Prepare research proposal for curiosity question",
+            question_id,
+        )
+
     def dismiss_curiosity_question(self, question_id: str) -> BrainResponse:
         """Record that one proposal is not worth pursuing."""
         return self._curiosity_ruling(

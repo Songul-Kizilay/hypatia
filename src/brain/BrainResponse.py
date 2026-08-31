@@ -19,6 +19,7 @@ from knowledge.KnowledgeRelationRevocationPreview import (
 from memory.LearnedMemoryAuditReport import LearnedMemoryAuditReport
 from research.BackgroundResearchTask import BackgroundResearchTask
 from research.CanonicalResearchSummary import CanonicalResearchSummary
+from research.CuriosityResearchProposal import CuriosityResearchProposal
 from research.HypothesisAppraisal import HypothesisAppraisal
 from research.HypothesisHistoryView import HypothesisHistoryView
 from research.KnowledgeReconciliationReport import (
@@ -147,6 +148,7 @@ class BrainResponse:
     research_autonomy: ResearchAutonomyResult | None = None
     background_research_task: BackgroundResearchTask | None = None
     research_curiosity: ResearchCuriosityPreview | None = None
+    curiosity_proposal: CuriosityResearchProposal | None = None
     canonical_research_summary: CanonicalResearchSummary | None = None
     live_information_request: LiveInformationRequestKind | None = None
     curiosity_question: ResearchCuriosityQuestion | None = None
