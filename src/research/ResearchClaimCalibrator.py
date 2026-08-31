@@ -123,6 +123,9 @@ class ResearchClaimCalibrator:
         supported_state, supported_confidence = self._ceilings(profile)
         return ResearchClaimCalibration(
             claim_id=claim.claim_id,
+            claim_text=claim.text,
+            evidence_ids=claim.evidence_ids,
+            source_document_ids=claim.source_document_ids,
             authored_state=claim.epistemic_state,
             authored_confidence=claim.confidence,
             supported_state=supported_state,

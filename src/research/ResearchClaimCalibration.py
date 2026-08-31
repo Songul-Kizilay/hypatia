@@ -35,6 +35,9 @@ class ResearchClaimCalibration:
     """Compare one authored claim against the support its record provides."""
 
     claim_id: str
+    claim_text: str
+    evidence_ids: tuple[str, ...]
+    source_document_ids: tuple[str, ...]
     authored_state: ResearchEpistemicState
     authored_confidence: ResearchClaimConfidence
     supported_state: ResearchEpistemicState
@@ -46,6 +49,13 @@ class ResearchClaimCalibration:
     def __post_init__(self) -> None:
         if not self.claim_id.strip():
             raise ResearchError("Claim calibration requires a claim ID.")
+        if not isinstance(self.claim_text, str) or not self.claim_text.strip():
+            raise ResearchError("Claim calibration requires claim text.")
+        evidence_ids = self._normalize_ids(self.evidence_ids, "evidence")
+        source_document_ids = self._normalize_ids(
+            self.source_document_ids,
+            "source document",
+        )
         if not isinstance(self.warnings, tuple) or not all(
             isinstance(warning, ResearchAssessmentWarning) for warning in self.warnings
         ):
@@ -74,6 +84,22 @@ class ResearchClaimCalibration:
             raise ResearchError("Claim calibration requires an evidence profile.")
         if not isinstance(self.verdict, CalibrationVerdict):
             raise ResearchError("Calibration verdict must be a bounded category.")
+        object.__setattr__(self, "claim_id", self.claim_id.strip())
+        object.__setattr__(self, "claim_text", self.claim_text.strip())
+        object.__setattr__(self, "evidence_ids", evidence_ids)
+        object.__setattr__(self, "source_document_ids", source_document_ids)
+
+    @staticmethod
+    def _normalize_ids(values: tuple[str, ...], label: str) -> tuple[str, ...]:
+        """Keep the exact, immutable provenance carried by the authored claim."""
+        if not isinstance(values, tuple) or not values:
+            raise ResearchError(f"Claim calibration requires {label} IDs.")
+        if not all(isinstance(value, str) and value.strip() for value in values):
+            raise ResearchError(f"Claim calibration {label} IDs are invalid.")
+        normalized = tuple(value.strip() for value in values)
+        if len(normalized) != len(set(normalized)):
+            raise ResearchError(f"Claim calibration repeats a {label} ID.")
+        return normalized
 
     @property
     def needs_attention(self) -> bool:

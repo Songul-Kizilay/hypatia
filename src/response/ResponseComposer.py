@@ -1559,7 +1559,13 @@ class ResponseComposer:
         ]
         for entry in report.calibrations:
             lines.append(f"- {entry.claim_id} [{entry.verdict.value}]")
+            lines.append("  Claim:")
+            lines.extend(f"    {line}" for line in entry.claim_text.splitlines())
             lines.append(f"  {entry.summary()}")
+            lines.append(f"  evidence IDs: {', '.join(entry.evidence_ids)}")
+            lines.append(
+                "  source document IDs: " f"{', '.join(entry.source_document_ids)}"
+            )
             lines.append(
                 f"  sources {entry.profile.source_count}, "
                 f"evidence {entry.profile.evidence_count}, "

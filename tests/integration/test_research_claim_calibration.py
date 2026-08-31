@@ -203,6 +203,32 @@ class AssessmentWarningReportTests(CalibrationFixture):
         self.assertIn("high_attention", response.message)
         self.assertIn("Claims with source warnings: 1", response.message)
 
+    def test_the_report_identifies_the_exact_claim_and_its_provenance(self) -> None:
+        run_id = self.new_run()
+        document_id = self.accept_source(run_id, "exact")
+        evidence_id = self.add_evidence(run_id, document_id)
+        claim_text = "The rings have a measurable age."
+        claim_id = self.claim(
+            run_id,
+            [evidence_id],
+            ResearchEpistemicState.FACT,
+            ResearchClaimConfidence.HIGH,
+            claim_text,
+        )
+
+        response = self.service().process_report(self.request(run_id))
+
+        assert response.research_calibration is not None
+        [calibration] = response.research_calibration.calibrations
+        self.assertEqual(calibration.claim_id, claim_id)
+        self.assertEqual(calibration.claim_text, claim_text)
+        self.assertEqual(calibration.evidence_ids, (evidence_id,))
+        self.assertEqual(calibration.source_document_ids, (document_id,))
+        self.assertIn(f"- {claim_id} [overstated_both]", response.message)
+        self.assertIn(f"    {claim_text}", response.message)
+        self.assertIn(f"evidence IDs: {evidence_id}", response.message)
+        self.assertIn(f"source document IDs: {document_id}", response.message)
+
     def test_the_report_says_plainly_that_nothing_was_corrected(self) -> None:
         """The whole risk of a warning is that it reads as a correction."""
         run_id = self._run_with(publication_status="retracted")

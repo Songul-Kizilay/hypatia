@@ -2,6 +2,29 @@
 
 All notable project changes are recorded here.
 
+## [0.3.238] - 2026-08-31
+
+### Added
+
+- Claim calibration now identifies every active claim by both its durable ID
+  and its exact authored text, so an operator can understand which statement a
+  verdict concerns without cross-referencing a separate claim-history view.
+- Each calibration carries and renders the exact evidence IDs and source
+  document IDs already attached to the authored claim. Counts still describe
+  the support profile, while the added identifiers make that profile auditable
+  against canonical run state.
+
+### Security
+
+- Calibration remains derived and read-only. The added provenance creates no
+  claim revision, confidence adjustment, source decision, plan, authorization,
+  execution, provider request, network operation, tool call, model call, or
+  background work.
+- Claim text and provenance are shown only in the operator-facing response.
+  Calibration telemetry remains bounded to run ID, counts, verdict categories,
+  and warning kinds; it still carries no claim text, evidence ID, source ID,
+  question, URL, or assessment content.
+
 ## [0.3.237] - 2026-08-31
 
 ### Added
