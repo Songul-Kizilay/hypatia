@@ -2,6 +2,37 @@
 
 All notable project changes are recorded here.
 
+## [0.3.226] - 2026-08-31
+
+### Tests
+
+- The paired operator journey is now driven through the desktop controls
+  themselves rather than service by service: a real window wired to a real
+  controller over a real cognitive engine and real stores, with only the two
+  discovery providers and the source fetcher faked. The tests press the methods
+  the buttons are bound to, in the order a person presses them — discover
+  Crossref, discover NVD, select a candidate, preview, confirm, accept, refresh,
+  select the other provider, accept again, use for assessment, record evidence,
+  author a claim, read the comparison.
+- This closes the two limitations left open by the previous milestone: the
+  journey had never been driven as one integrated desktop flow, and paired
+  provider quality had only been exercised at the comparison-builder join rather
+  than through a complete two-provider run with both sides accepted and assessed.
+- Both halves of a paired run stay reachable and stay distinct. Neither
+  candidate can be accepted under the other provider's discovery, the second
+  acceptance neither hides nor replaces nor duplicates the first, the selected
+  run never changes underneath the operator, and each provider keeps its own
+  funnel with no winner, no recommendation and no combined score.
+- A refused second side leaves the first source attached, records a visible
+  failure, and is neither retried nor substituted — a failed provider is a
+  failed provider, not a reason to undo the other one.
+- Restoration is asserted across the paired journey: both sources come back,
+  Crossref keeps its ordinary HTTPS acquisition, and the accepted CVE keeps both
+  its API acquisition and its content resource.
+- No production code changed. Nothing in the journey was defective, and the
+  harness was verified to fail when the desktop's outcome reporting is removed,
+  so the coverage is real rather than incidental.
+
 ## [0.3.225] - 2026-08-31
 
 ### Fixed
