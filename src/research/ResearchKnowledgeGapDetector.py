@@ -15,6 +15,7 @@ from datetime import datetime
 
 from core.Exceptions import ResearchError
 from research.ResearchClaimRecord import ResearchClaimRecord
+from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchKnowledgeGap import MAX_GAP_SUMMARY_LENGTH, ResearchKnowledgeGap
@@ -24,6 +25,11 @@ from research.SourceIdentity import identity_of
 
 MAX_GAPS_PER_RUN = 50
 RUN_SUBJECT = ""
+
+#: The acquisition stages a run records when a source could not be obtained.
+#: Read rather than retried: a failure says something is missing, and what to do
+#: about that is a person's decision.
+ACQUISITION_FAILURE_STAGES = frozenset(("source_load", "source_discovery"))
 
 UNRESOLVED_STATES = frozenset(
     (
@@ -63,6 +69,8 @@ class ResearchKnowledgeGapDetector:
             *self._question_gaps(run, detected_at),
             *self._claim_gaps(run, detected_at),
             *self._source_gaps(run, detected_at),
+            *self._acquisition_gaps(run, detected_at),
+            *self._coverage_gaps(run, detected_at),
         ]
         gaps.sort(key=lambda gap: (-gap.severity, gap.kind.value, gap.subject_id))
         return tuple(gaps[: self._max_gaps])
@@ -187,6 +195,75 @@ class ResearchKnowledgeGapDetector:
                     )
                 )
         return gaps
+
+    def _acquisition_gaps(
+        self,
+        run: ResearchRun,
+        detected_at: datetime,
+    ) -> list[ResearchKnowledgeGap]:
+        """Report what a refused acquisition left missing, never what to retry.
+
+        Grouped by the provider the failure was attributed to, so ten refusals
+        from one provider are one gap rather than ten copies of it, and so a
+        gap keeps the same identity while the same thing keeps failing.
+
+        Legacy failures carry no provider. They are reported under their stage
+        instead of being dropped or guessed at, because a failure whose origin
+        was never recorded is still a hole in the record.
+        """
+        subjects: dict[str, str] = {}
+        for failure in run.failures:
+            if failure.stage not in ACQUISITION_FAILURE_STAGES:
+                continue
+            subjects.setdefault(failure.provider or failure.stage, failure.stage)
+        return [
+            self._gap(
+                run,
+                ResearchKnowledgeGapKind.FAILED_ACQUISITION,
+                subject,
+                "An attempt to acquire a source here did not succeed, so "
+                "whatever it would have supported is still missing.",
+                detected_at,
+            )
+            for subject in sorted(subjects)
+        ]
+
+    def _coverage_gaps(
+        self,
+        run: ResearchRun,
+        detected_at: datetime,
+    ) -> list[ResearchKnowledgeGap]:
+        """Note a question put to one provider when the run could ask another.
+
+        Only when at least one provider was actually asked. A run that has
+        searched nowhere is already an unsupported question, and saying it also
+        has a coverage gap would be two names for one emptiness.
+
+        Nothing here prefers the provider that was not asked. Which results are
+        better is exactly the judgement the comparison report refuses to make,
+        and a gap that implied it would be that judgement wearing a question
+        mark.
+        """
+        asked = {discovery.provider for discovery in run.discoveries}
+        if not asked:
+            return []
+        unasked = sorted(
+            provider.value
+            for provider in ResearchDiscoveryProviderName
+            if provider.value not in asked
+        )
+        if not unasked:
+            return []
+        return [
+            self._gap(
+                run,
+                ResearchKnowledgeGapKind.PROVIDER_COVERAGE_GAP,
+                RUN_SUBJECT,
+                "This question has been put to some of the available providers "
+                f"and not to {', '.join(unasked)}.",
+                detected_at,
+            )
+        ]
 
     @staticmethod
     def _is_contradicted(

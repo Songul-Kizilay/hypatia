@@ -7,6 +7,13 @@ own evidence*, never about whether a claim is true.
 The ordering below is the ranking order. A contradiction outranks an unresolved
 claim because holding two incompatible beliefs is worse than holding one
 uncertain belief, and both outrank a merely thin source record.
+
+Two of these describe an attempt rather than a record. A refused acquisition is
+a hole with a known cause, ranked above a source we merely distrust because
+there is nothing there at all; and a question put to one provider when two were
+available is the thinnest kind of incompleteness, because the run may be
+perfectly well supported and simply narrow. Neither says the other provider
+would have done better, and neither is a proposal to try again.
 """
 
 from __future__ import annotations
@@ -21,7 +28,9 @@ class ResearchKnowledgeGapKind(StrEnum):
     UNRESOLVED_CLAIM = "unresolved_claim"
     SINGLE_SOURCE_CLAIM = "single_source_claim"
     UNSUPPORTED_QUESTION = "unsupported_question"
+    FAILED_ACQUISITION = "failed_acquisition"
     LOW_TRUST_SOURCE = "low_trust_source"
+    PROVIDER_COVERAGE_GAP = "provider_coverage_gap"
     UNASSESSED_SOURCE = "unassessed_source"
     UNUSED_SOURCE = "unused_source"
 
@@ -33,15 +42,27 @@ class ResearchKnowledgeGapKind(StrEnum):
     @property
     def subject_required(self) -> bool:
         """Return whether this kind must name a claim or source it is about."""
-        return self is not ResearchKnowledgeGapKind.UNSUPPORTED_QUESTION
+        return self not in _RUN_SCOPED_KINDS
 
+
+#: Kinds that are about the run as a whole rather than about one stored record.
+#: An unsupported question and a single-provider run both describe the run
+#: itself, so neither can name a claim or source it is about.
+_RUN_SCOPED_KINDS = frozenset(
+    (
+        ResearchKnowledgeGapKind.UNSUPPORTED_QUESTION,
+        ResearchKnowledgeGapKind.PROVIDER_COVERAGE_GAP,
+    )
+)
 
 _SEVERITIES: dict[ResearchKnowledgeGapKind, int] = {
     ResearchKnowledgeGapKind.CONTRADICTED_CLAIM: 70,
     ResearchKnowledgeGapKind.UNRESOLVED_CLAIM: 60,
     ResearchKnowledgeGapKind.SINGLE_SOURCE_CLAIM: 50,
     ResearchKnowledgeGapKind.UNSUPPORTED_QUESTION: 40,
+    ResearchKnowledgeGapKind.FAILED_ACQUISITION: 35,
     ResearchKnowledgeGapKind.LOW_TRUST_SOURCE: 30,
+    ResearchKnowledgeGapKind.PROVIDER_COVERAGE_GAP: 25,
     ResearchKnowledgeGapKind.UNASSESSED_SOURCE: 20,
     ResearchKnowledgeGapKind.UNUSED_SOURCE: 10,
 }

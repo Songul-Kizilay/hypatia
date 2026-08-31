@@ -39,6 +39,19 @@ _TEMPLATES: dict[ResearchKnowledgeGapKind, str] = {
     ResearchKnowledgeGapKind.UNSUPPORTED_QUESTION: (
         "Which sources could begin to answer this unsupported question: {subject}?"
     ),
+    # Deliberately about the missing information rather than the failed attempt.
+    # "Try that again" is not a question, and a run whose acquisition failed
+    # once has no new reason to expect a different answer.
+    ResearchKnowledgeGapKind.FAILED_ACQUISITION: (
+        "What information is still missing because a source could not be "
+        "acquired from {subject}?"
+    ),
+    # Coverage, not preference. Asking what another provider would add says
+    # nothing about which provider answers better, which is a judgement the
+    # comparison report exists to leave with a person.
+    ResearchKnowledgeGapKind.PROVIDER_COVERAGE_GAP: (
+        "What would the providers not yet asked add to this run's coverage?"
+    ),
     ResearchKnowledgeGapKind.LOW_TRUST_SOURCE: (
         "Which higher-trust source covers the same ground as this one: {subject}?"
     ),
@@ -76,7 +89,7 @@ class ResearchCuriosityQuestionGenerator:
         """Return ranked candidate questions, highest rank first."""
         subjects = self._subjects(run)
         questions = [
-            self._question(run, gap, subjects.get(gap.subject_id, run.question))
+            self._question(run, gap, self._subject_for(run, subjects, gap))
             for gap in gaps
             if gap.kind in _TEMPLATES
         ]
@@ -103,6 +116,26 @@ class ResearchCuriosityQuestionGenerator:
             rank_score=self._rank(run, gap),
             generated_at=gap.detected_at,
         )
+
+    @staticmethod
+    def _subject_for(
+        run: ResearchRun,
+        subjects: dict[str, str],
+        gap: ResearchKnowledgeGap,
+    ) -> str:
+        """Say what a gap is about, in the run's own words wherever it has any.
+
+        A gap naming no subject is about the run, so the run's question stands
+        in for it. A gap naming a claim or source uses that record's own
+        wording. Anything else names something the run recorded without storing
+        a title for it — the provider an acquisition was attributed to, say —
+        and the identifier is then the most truthful label available, where
+        falling back to the run's question would have described the wrong thing
+        entirely.
+        """
+        if not gap.subject_id:
+            return run.question
+        return subjects.get(gap.subject_id, gap.subject_id)
 
     @staticmethod
     def _rank(run: ResearchRun, gap: ResearchKnowledgeGap) -> int:

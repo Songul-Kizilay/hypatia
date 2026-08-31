@@ -2,6 +2,36 @@
 
 All notable project changes are recorded here.
 
+## [0.3.228] - 2026-08-31
+
+### Added
+
+- Curiosity now reads two things a run *attempted*, having previously read only
+  what it holds. A refused source acquisition becomes a `failed_acquisition`
+  gap, and a question put to some of the available providers and not the rest
+  becomes a `provider_coverage_gap`. Both were already recorded on the run —
+  in `failures` and `discoveries` — and neither needed a new aggregate, a new
+  store, or a model to see.
+- Neither gap becomes advice. A failed acquisition asks what information is
+  still missing rather than proposing the same attempt again, and a
+  single-provider run asks what other coverage would add rather than which
+  provider answers better — that judgement belongs to the person reading the
+  comparison, and a question implying it would be that judgement wearing a
+  question mark. No retry, no fallback, and no provider preference is
+  introduced anywhere.
+- Failures are grouped by the provider they were attributed to, so repeated
+  refusals are one gap that keeps one identity while the same thing keeps
+  failing. A legacy failure carrying no provider is reported under its stage
+  rather than dropped or guessed at.
+
+### Fixed
+
+- A generated question about a subject the run records without a title — the
+  provider an acquisition was attributed to, for instance — fell back to the
+  run's own question and so described the wrong thing entirely. The identifier
+  is now used as the label when no recorded wording exists, while a gap naming
+  no subject at all still speaks for the run.
+
 ## [0.3.227] - 2026-08-31
 
 ### Tests
