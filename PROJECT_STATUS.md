@@ -910,7 +910,7 @@ with optional OpenAI-compatible LLM conversation support.
   mode; every non-local endpoint still requires an API key and HTTPS.
 - Chat-completion timeout is configurable through
   `HYPATIA_LLM_TIMEOUT_SECONDS`. Without an override, explicitly loopback
-  endpoints such as local Ollama receive 120 seconds while non-local endpoints
+  endpoints such as local Ollama receive 300 seconds while non-local endpoints
   retain the 30-second default.
 - An explicit `ask knowledge <query>` local-RAG flow. It sends only up to three
   cited chunks to an enabled local LLM runtime, bounds each source chunk in the

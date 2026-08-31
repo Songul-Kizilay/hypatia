@@ -12,7 +12,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 from llm.OpenAICompatibleProvider import ChatCompletionResponse
 
 DEFAULT_TIMEOUT_SECONDS = 30.0
-LOCAL_DEFAULT_TIMEOUT_SECONDS = 120.0
+LOCAL_DEFAULT_TIMEOUT_SECONDS = 300.0
 
 
 class _ReadableResponse(Protocol):

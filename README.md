@@ -615,7 +615,7 @@ HYPATIA_LLM_TIMEOUT_SECONDS=<positive finite seconds>
 
 If `HYPATIA_LLM_SYSTEM_PROMPT` is absent, Hypatia uses its default system prompt.
 If `HYPATIA_LLM_HISTORY_MAX_TURNS` is absent, the default is 8 conversation turns.
-If `HYPATIA_LLM_TIMEOUT_SECONDS` is absent, chat requests use 120 seconds for an
+If `HYPATIA_LLM_TIMEOUT_SECONDS` is absent, chat requests use 300 seconds for an
 explicit loopback endpoint such as local Ollama and 30 seconds for a non-local
 endpoint. A configured positive finite value overrides either default.
 A positive history limit sends only the most recent N structured turns from the

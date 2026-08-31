@@ -2,6 +2,24 @@
 
 All notable project changes are recorded here.
 
+## [0.3.246] - 2026-09-01
+
+### Changed
+
+- Local loopback chat-completion endpoints such as Ollama now receive a
+  300-second default request timeout, allowing slower long-form generation to
+  finish on modest local hardware. The non-local default remains 30 seconds.
+- A positive finite `HYPATIA_LLM_TIMEOUT_SECONDS` value still overrides either
+  endpoint default, so operators retain explicit control over the request
+  boundary.
+
+### Security
+
+- The change widens only the duration of an already authorized local
+  chat-completion request. Endpoint validation, redirect rejection, keyless
+  loopback-only policy, response parsing, model selection, and provider
+  architecture are unchanged.
+
 ## [0.3.245] - 2026-08-31
 
 ### Added
