@@ -84,6 +84,7 @@ from research.ResearchPlanExecutionSnapshot import (
 from research.ResearchPlanExecutionState import ResearchPlanExecutionState
 from research.ResearchPlanOperationRegistry import ResearchPlanOperationRegistry
 from research.ResearchPlanStepStatus import ResearchPlanStepStatus
+from research.StartsResearchPlanExecution import ResearchPlanExecutionStartRefusal
 from response.ResponseComposer import ResponseComposer
 
 RESEARCH_PLAN_EXECUTION_START_INTENT = "research_plan_execution_start"
@@ -209,6 +210,67 @@ class ResearchPlanExecutionApplicationService:
         self._events.started(state, context.has_research_run)
         self._persist(plan.plan_id)
         return self._response_composer.research_plan_execution_status(request, state)
+
+    def start_for_plan(
+        self,
+        plan: ResearchPlan,
+        research_run_id: str,
+        authorization_id: str,
+    ) -> ResearchPlanExecutionState | ResearchPlanExecutionStartRefusal:
+        """Begin one already-derived plan, spending exactly one approval.
+
+        The same start as any other: the same capacity check, the same
+        approval consumer, the same allowance, the same state transition, the
+        same event and the same durable write. What differs is only where the
+        plan came from — a caller that derived and validated it — so it is not
+        rebuilt from a message on the way in.
+
+        Zero steps run. `start()` moves a prepared plan to running without
+        beginning one, which is the boundary this whole chain has been built
+        toward: the approval is now spent, and the first actual step still
+        waits for a person to ask for it.
+        """
+        if plan.plan_id in self._executions:
+            return ResearchPlanExecutionStartRefusal(
+                "Research plan already has execution state in this process."
+            )
+        if len(self._executions) >= self._max_active_executions:
+            return ResearchPlanExecutionStartRefusal(
+                "Research plan execution capacity is full in this process."
+            )
+        try:
+            context = ResearchPlanExecutionContext(research_run_id=research_run_id)
+        except ResearchError as error:
+            return ResearchPlanExecutionStartRefusal(str(error))
+        if self._authorization_consumer is None:
+            return ResearchPlanExecutionStartRefusal(
+                "Research plan approval is unavailable, so nothing was started."
+            )
+        # Spent at the last moment, exactly as the authored-plan path spends it:
+        # after every check that could refuse, so no approval is used on work
+        # something else would have turned away.
+        decision = self._authorization_consumer.consume_for_execution(
+            authorization_id,
+            plan,
+            research_run_id,
+            plan.plan_id,
+            self._clock(),
+        )
+        if not decision.permits_start:
+            return ResearchPlanExecutionStartRefusal(
+                f"That approval does not permit starting: {decision.verdict.value}."
+            )
+        if decision.authorization is not None:
+            self._allowances[plan.plan_id] = ResearchExecutionAllowance(
+                budget=decision.authorization.budget
+            )
+        state = ResearchPlanExecutionState.prepare(plan).start()
+        self._executions[plan.plan_id] = state
+        self._plans[plan.plan_id] = plan
+        self._contexts[plan.plan_id] = context
+        self._events.started(state, context.has_research_run)
+        self._persist(plan.plan_id)
+        return state
 
     def _authorize(
         self,

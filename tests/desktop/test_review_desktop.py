@@ -18,7 +18,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 SRC_DIR = ROOT_DIR / "src"
@@ -157,6 +157,36 @@ class RulingCommandTests(ControllerFixture):
 
         self.assertEqual(self.brain.requests, [])
 
+    def test_starting_an_authorized_proposal_carries_only_exact_identities(
+        self,
+    ) -> None:
+        self.controller.start_authorized_curiosity_research_proposal(
+            " q-1 ",
+            f" {'a' * 64} ",
+            " approval-1 ",
+        )
+
+        self.assertEqual(
+            self.last.metadata,
+            {
+                "intent": "curiosity_start_authorized_proposal",
+                "curiosity_question_id": "q-1",
+                "expected_plan_digest": "a" * 64,
+                "authorization_id": "approval-1",
+            },
+        )
+
+    def test_start_refuses_any_missing_identity_before_reaching_the_brain(self) -> None:
+        for values in (
+            ("", "a" * 64, "approval-1"),
+            ("q-1", "", "approval-1"),
+            ("q-1", "a" * 64, ""),
+        ):
+            with self.subTest(values=values), self.assertRaises(ValueError):
+                self.controller.start_authorized_curiosity_research_proposal(*values)
+
+        self.assertEqual(self.brain.requests, [])
+
 
 class NothingHereAdjustsAnythingTests(unittest.TestCase):
     """The panel reports. It has no control that changes what it reports on."""
@@ -268,6 +298,11 @@ class PanelBehaviourTests(unittest.TestCase):
         self.window._review_run_id.get.return_value = "run-1"
         self.window._curiosity_question_id = Mock()
         self.window._curiosity_question_id.get.return_value = "q-1"
+        self.window._curiosity_plan_digest = Mock()
+        self.window._curiosity_plan_digest.get.return_value = "a" * 64
+        self.window._curiosity_authorization_id = Mock()
+        self.window._curiosity_authorization_id.get.return_value = "approval-1"
+        self.window._root = Mock()
 
     def test_calibration_passes_the_run(self) -> None:
         self.window._report_claim_calibration()
@@ -280,6 +315,47 @@ class PanelBehaviourTests(unittest.TestCase):
         self.window._accept_curiosity_question()
 
         self.window._controller.accept_curiosity_question.assert_called_once_with("q-1")
+
+    @patch("desktop.TkinterDesktopWindow.messagebox.askyesno", return_value=False)
+    def test_declining_start_keeps_the_approval_unused(self, _ask: Mock) -> None:
+        self.window._start_authorized_curiosity_research_proposal()
+
+        self.window._controller.start_authorized_curiosity_research_proposal.assert_not_called()
+        self.window._review_status.set.assert_called_once_with(
+            "curiosity proposal: not started; approval remains unused"
+        )
+
+    @patch("desktop.TkinterDesktopWindow.messagebox.askyesno", return_value=True)
+    def test_confirming_start_sends_one_zero_step_start_request(
+        self,
+        _ask: Mock,
+    ) -> None:
+        self.window._review_request = Mock(side_effect=lambda call: call())
+
+        self.window._start_authorized_curiosity_research_proposal()
+
+        self.window._controller.start_authorized_curiosity_research_proposal.assert_called_once_with(
+            "q-1",
+            "a" * 64,
+            "approval-1",
+        )
+
+    @patch("desktop.TkinterDesktopWindow.messagebox.askyesno", return_value=True)
+    def test_authorizing_captures_the_exact_returned_approval_id(
+        self,
+        _ask: Mock,
+    ) -> None:
+        authorization = Mock()
+        authorization.authorization_id = "approval-returned"
+        response = Mock()
+        response.research_plan_authorization = authorization
+        self.window._review_request = Mock(return_value=response)
+
+        self.window._authorize_curiosity_research_proposal()
+
+        self.window._curiosity_authorization_id.set.assert_called_once_with(
+            "approval-returned"
+        )
 
     def test_a_local_refusal_is_shown_and_reaches_no_transcript(self) -> None:
         self.window._controller.preview_reflection.side_effect = ValueError(

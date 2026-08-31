@@ -1,10 +1,11 @@
-"""Bounded curiosity: detect gaps, propose questions, and stop there.
+"""Bounded curiosity: notice, propose, and cross only explicit human gates.
 
 The pipeline is deliberately short of acting. Detection reads a run, generation
 drafts questions from templates, ranking orders them, and preview reports them.
 Storing a question records a proposal; accepting one records that a human thinks
-it is worth pursuing. None of those steps starts research, drafts a plan, queues
-a background task, or spends a network or model operation.
+it is worth pursuing. Preparing, authorizing, and starting remain three separate
+operator acts. Even the last act is zero-step: it spends one approval and creates
+foreground execution state, but contacts no provider and performs no operation.
 
 That separation is the point. A system that automatically chased everything it
 noticed would convert idle curiosity into unbounded work, and would quietly
@@ -41,6 +42,10 @@ from research.ResearchPlanDigest import is_plan_digest
 from research.ResearchPlanDraftService import ResearchPlanDraftService
 from research.ResearchRun import ResearchRun
 from research.ResearchRunManager import ResearchRunManager
+from research.StartsResearchPlanExecution import (
+    ResearchPlanExecutionStartRefusal,
+    StartsResearchPlanExecution,
+)
 from response.ResponseComposer import ResponseComposer
 
 CURIOSITY_GAP_DETECT_INTENT = "curiosity_gap_detect"
@@ -51,10 +56,11 @@ CURIOSITY_QUESTION_ACCEPT_INTENT = "curiosity_question_accept"
 CURIOSITY_QUESTION_DISMISS_INTENT = "curiosity_question_dismiss"
 CURIOSITY_PREPARE_PROPOSAL_INTENT = "curiosity_prepare_proposal"
 CURIOSITY_AUTHORIZE_PROPOSAL_INTENT = "curiosity_authorize_proposal"
+CURIOSITY_START_AUTHORIZED_PROPOSAL_INTENT = "curiosity_start_authorized_proposal"
 
 
 class CuriosityApplicationService:
-    """Detect knowledge gaps and propose ranked questions, without acting."""
+    """Detect gaps, propose questions, and honor only explicit human gates."""
 
     def __init__(
         self,
@@ -67,6 +73,7 @@ class CuriosityApplicationService:
         hypothesis_store: HypothesisStore | None = None,
         draft_service: ResearchPlanDraftService | None = None,
         authorization_service: RecordsResearchPlanAuthorization | None = None,
+        execution_starter: StartsResearchPlanExecution | None = None,
         event_bus: EventBus | None = None,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
@@ -84,6 +91,10 @@ class CuriosityApplicationService:
         # approval itself, so there is no second kind of approval to reason
         # about, and where the service is absent no proposal can be approved.
         self._authorization_service = authorization_service
+        # A deliberately narrower boundary than the ordinary execution
+        # application service. Curiosity can ask to start only the exact plan
+        # it just re-derived; it cannot advance a step or reach an operation.
+        self._execution_starter = execution_starter
         self._events = CuriosityEvents(event_bus)
         self._clock = clock or (lambda: datetime.now(UTC))
         self._questions: dict[str, ResearchCuriosityQuestion] = {}
@@ -112,6 +123,12 @@ class CuriosityApplicationService:
     @staticmethod
     def is_authorize_proposal_request(request: BrainRequest) -> bool:
         return request.metadata.get("intent") == CURIOSITY_AUTHORIZE_PROPOSAL_INTENT
+
+    @staticmethod
+    def is_start_authorized_proposal_request(request: BrainRequest) -> bool:
+        return (
+            request.metadata.get("intent") == CURIOSITY_START_AUTHORIZED_PROPOSAL_INTENT
+        )
 
     @staticmethod
     def is_prepare_proposal_request(request: BrainRequest) -> bool:
@@ -227,6 +244,65 @@ class CuriosityApplicationService:
             request,
             proposal,
             authorization,
+        )
+
+    def process_start_authorized_proposal(
+        self,
+        request: BrainRequest,
+    ) -> BrainResponse:
+        """Spend one exact approval on a zero-step foreground start.
+
+        The request carries only identities the operator was shown. The plan
+        itself is rebuilt from the accepted question and current run state,
+        then checked against the displayed digest before the existing approval
+        consumer sees it. A successful start creates RUNNING execution state;
+        it never advances that state, so every authored step remains pending.
+        """
+        if self._execution_starter is None:
+            return self._response_composer.curiosity_rejected(
+                request,
+                "Research plan execution is unavailable.",
+            )
+        expected = self._required_text(
+            request,
+            "expected_plan_digest",
+            "expected plan digest",
+        )
+        if not is_plan_digest(expected):
+            return self._response_composer.curiosity_rejected(
+                request,
+                "That is not a research plan digest, so nothing was started.",
+            )
+        authorization_id = self._required_text(
+            request,
+            "authorization_id",
+            "authorization",
+        )
+        derived = self._derive_proposal(request)
+        if isinstance(derived, BrainResponse):
+            return derived
+        proposal, run = derived
+        if proposal.digest != expected:
+            return self._response_composer.curiosity_rejected(
+                request,
+                "Proposal changed since preview. Prepare and authorize a new "
+                "preview before starting.",
+            )
+        started = self._execution_starter.start_for_plan(
+            proposal.plan,
+            run.run_id,
+            authorization_id,
+        )
+        if isinstance(started, ResearchPlanExecutionStartRefusal):
+            return self._response_composer.curiosity_rejected(
+                request,
+                started.reason,
+            )
+        return self._response_composer.curiosity_proposal_execution_started(
+            request,
+            proposal,
+            authorization_id,
+            started,
         )
 
     def process_prepare_proposal(self, request: BrainRequest) -> BrainResponse:

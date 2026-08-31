@@ -561,6 +561,35 @@ class DesktopController:
             )
         )
 
+    def start_authorized_curiosity_research_proposal(
+        self,
+        question_id: str,
+        expected_plan_digest: str,
+        authorization_id: str,
+    ) -> BrainResponse:
+        """Spend one approval on a zero-step foreground execution start."""
+        normalized_question = question_id.strip()
+        normalized_digest = expected_plan_digest.strip()
+        normalized_authorization = authorization_id.strip()
+        if not normalized_question:
+            raise ValueError("A curiosity question ID cannot be empty.")
+        if not normalized_digest:
+            raise ValueError("An expected plan digest cannot be empty.")
+        if not normalized_authorization:
+            raise ValueError("A recorded approval ID cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="Start authorized curiosity research proposal",
+                source="desktop",
+                metadata={
+                    "intent": "curiosity_start_authorized_proposal",
+                    "curiosity_question_id": normalized_question,
+                    "expected_plan_digest": normalized_digest,
+                    "authorization_id": normalized_authorization,
+                },
+            )
+        )
+
     def dismiss_curiosity_question(self, question_id: str) -> BrainResponse:
         """Record that one proposal is not worth pursuing."""
         return self._curiosity_ruling(

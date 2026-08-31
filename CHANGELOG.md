@@ -2,6 +2,38 @@
 
 All notable project changes are recorded here.
 
+## [0.3.237] - 2026-08-31
+
+### Added
+
+- An operator can now start one exact, already-authorized Curiosity research
+  proposal through a separate "Start authorized proposal" action. The request
+  names the accepted question, the displayed plan digest, and the durable
+  approval ID; no plan content or "latest approval" shortcut is accepted.
+- Start re-derives the proposal from current canonical run state, repeats the
+  staleness and digest checks, and then delegates to the ordinary foreground
+  execution service. The existing approval consumer verifies and spends the
+  exact human approval, and the existing execution store records the resulting
+  state.
+- The desktop keeps the returned approval ID in a read-only field and confirms
+  the irreversible consumption before sending one start request. The result
+  names the approval, execution, zero completed steps, and the separate action
+  required before any actual research can occur.
+
+### Security
+
+- Start preserves the canonical zero-step boundary: execution becomes
+  `RUNNING`, every authored step remains `PENDING`, and no provider, source,
+  network operation, tool, model, Ollama call, or background task is reached.
+  The first operation still requires a separate explicit Advance action.
+- A malformed or changed digest, stale gap, unknown/expired/consumed approval,
+  unavailable execution boundary, duplicate execution, or capacity refusal
+  creates no new execution. Checks that can refuse run before approval
+  consumption, and a successful approval is single-use.
+- Curiosity receives only a narrow start port. It has no advance method and no
+  operation registry, so this connection cannot silently turn a start into an
+  executed research step.
+
 ## [0.3.236] - 2026-08-31
 
 ### Added

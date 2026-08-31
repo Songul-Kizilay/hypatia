@@ -2540,6 +2540,39 @@ class ResponseComposer:
             research_plan_authorization=authorization,
         )
 
+    def curiosity_proposal_execution_started(
+        self,
+        request: BrainRequest,
+        proposal: CuriosityResearchProposal,
+        authorization_id: str,
+        state: ResearchPlanExecutionState,
+    ) -> BrainResponse:
+        """Report one approved foreground start without implying a step ran."""
+        lines = [
+            "AUTHORIZED CURIOSITY PROPOSAL STARTED — running, zero steps run",
+            f"Curiosity question: {proposal.question}",
+            f"Question ID: {proposal.curiosity_question_id}",
+            f"Plan digest: {proposal.digest}",
+            f"Approval ID used: {authorization_id}",
+            f"Execution ID: {state.plan_id}",
+            f"Execution status: {state.status.value}",
+            f"Completed steps: {state.completed_steps}",
+            f"Pending steps: {state.pending_steps}",
+            "Research operations performed: 0",
+            "",
+            "The approval is now used. No provider was contacted and no "
+            "research step ran. The first step still requires a separate "
+            "explicit Advance action.",
+        ]
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="curiosity_start_authorized_proposal",
+            memory_count=0,
+            curiosity_proposal=proposal,
+            research_plan_execution=state,
+        )
+
     def curiosity_rejected(
         self,
         request: BrainRequest,

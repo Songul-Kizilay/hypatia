@@ -33,13 +33,18 @@ for entry in (SRC_DIR, ROOT_DIR):
         sys.path.append(str(entry))
 
 from brain.BrainRequest import BrainRequest
+from cognition.CognitiveEngine import CognitiveEngine
 from cognition.CuriosityApplicationService import (
     CURIOSITY_AUTHORIZE_PROPOSAL_INTENT,
     CURIOSITY_PREPARE_PROPOSAL_INTENT,
+    CURIOSITY_START_AUTHORIZED_PROPOSAL_INTENT,
     CuriosityApplicationService,
 )
 from cognition.ResearchPlanAuthorizationApplicationService import (
     ResearchPlanAuthorizationApplicationService,
+)
+from cognition.ResearchPlanExecutionApplicationService import (
+    ResearchPlanExecutionApplicationService,
 )
 from core.Exceptions import ResearchError
 from knowledge.Chunk import Chunk
@@ -56,6 +61,8 @@ from research.ResearchPlanAuthorizationVerdict import (
 )
 from research.ResearchPlanAuthorizationVerifier import verify_plan_authorization
 from research.ResearchPlanDraftService import ResearchPlanDraftService
+from research.ResearchPlanExecutionStatus import ResearchPlanExecutionStatus
+from research.ResearchPlanStepStatus import ResearchPlanStepStatus
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchSource import ResearchSource
 from response.ResponseComposer import ResponseComposer
@@ -108,6 +115,11 @@ class AuthorizationFixture(unittest.TestCase):
         )
         self.hypothesis_store = StubHypothesisStore([self.hypothesis])
         self.authorization_service = self._authorization_service()
+        self.execution_service = ResearchPlanExecutionApplicationService(
+            ResponseComposer(),
+            authorization_consumer=self.authorization_service,
+            clock=lambda: NOW,
+        )
         self.service = self._service()
         self.question = self._question(HYPOTHESIS_GAP)
 
@@ -151,6 +163,7 @@ class AuthorizationFixture(unittest.TestCase):
             ResponseComposer(),
             hypothesis_store=self.hypothesis_store,
             authorization_service=self.authorization_service,
+            execution_starter=self.execution_service,
             draft_service=ResearchPlanDraftService(
                 id_factory=lambda: "plan-1", clock=lambda: NOW
             ),
@@ -197,6 +210,21 @@ class AuthorizationFixture(unittest.TestCase):
     def _accepted_digest(self) -> str:
         self._accept()
         return self._preview().curiosity_proposal.digest
+
+    def _start(
+        self,
+        digest: str,
+        authorization_id: str,
+        question_id: str | None = None,
+    ):
+        return self.service.process_start_authorized_proposal(
+            self._request(
+                CURIOSITY_START_AUTHORIZED_PROPOSAL_INTENT,
+                curiosity_question_id=question_id or self.question.question_id,
+                expected_plan_digest=digest,
+                authorization_id=authorization_id,
+            )
+        )
 
     def _stored(self):
         return JsonFileResearchPlanAuthorizationStore(self.authorization_path).load()
@@ -509,6 +537,134 @@ class AuthorizationRecordTests(AuthorizationFixture):
         self.assertIn("not authorized", message)
 
 
+class ExplicitForegroundStartTests(AuthorizationFixture):
+    def _authorized(self):
+        digest = self._accepted_digest()
+        authorization = self._authorize(digest).research_plan_authorization
+        assert authorization is not None
+        return digest, authorization
+
+    def test_an_explicit_start_consumes_the_exact_approval_and_runs_zero_steps(
+        self,
+    ) -> None:
+        digest, authorization = self._authorized()
+
+        response = self._start(digest, authorization.authorization_id)
+
+        state = response.research_plan_execution
+        assert state is not None
+        self.assertIs(state.status, ResearchPlanExecutionStatus.RUNNING)
+        self.assertEqual(state.completed_steps, 0)
+        self.assertIsNone(state.running_step_id)
+        self.assertTrue(
+            all(step.status is ResearchPlanStepStatus.PENDING for step in state.steps)
+        )
+        [stored] = self._stored()
+        self.assertTrue(stored.is_consumed)
+        self.assertEqual(stored.consumption.execution_id, state.plan_id)
+
+    def test_the_success_message_says_the_approval_was_used_but_no_step_ran(
+        self,
+    ) -> None:
+        digest, authorization = self._authorized()
+
+        response = self._start(digest, authorization.authorization_id)
+
+        self.assertIn("STARTED", response.message)
+        self.assertIn("zero steps run", response.message)
+        self.assertIn("Research operations performed: 0", response.message)
+        self.assertIn("separate explicit Advance", response.message)
+        self.assertEqual(
+            response.intent,
+            CURIOSITY_START_AUTHORIZED_PROPOSAL_INTENT,
+        )
+
+    def test_a_wrong_digest_starts_nothing_and_leaves_the_approval_unused(
+        self,
+    ) -> None:
+        _digest, authorization = self._authorized()
+
+        response = self._start("b" * 64, authorization.authorization_id)
+
+        self.assertFalse(response.success)
+        self.assertIsNone(response.research_plan_execution)
+        [stored] = self._stored()
+        self.assertFalse(stored.is_consumed)
+
+    def test_an_unknown_approval_starts_nothing(self) -> None:
+        digest, authorization = self._authorized()
+
+        response = self._start(digest, "approval-missing")
+
+        self.assertFalse(response.success)
+        self.assertIsNone(response.research_plan_execution)
+        self.assertIn(
+            "That approval does not permit starting: unknown", response.message
+        )
+        [stored] = self._stored()
+        self.assertEqual(stored.authorization_id, authorization.authorization_id)
+        self.assertFalse(stored.is_consumed)
+
+    def test_a_gap_that_closed_after_authorization_starts_nothing(self) -> None:
+        digest, authorization = self._authorized()
+        self.hypothesis_store.hypotheses = [
+            self.hypothesis.addresses_test_by((self.evidence_id,), NOW)
+        ]
+
+        response = self._start(digest, authorization.authorization_id)
+
+        self.assertFalse(response.success)
+        self.assertIsNone(response.research_plan_execution)
+        self.assertIn("no longer current", response.message)
+        [stored] = self._stored()
+        self.assertFalse(stored.is_consumed)
+
+    def test_start_requires_all_three_exact_operator_identifiers(self) -> None:
+        digest, authorization = self._authorized()
+
+        for omitted in (
+            "curiosity_question_id",
+            "expected_plan_digest",
+            "authorization_id",
+        ):
+            metadata = {
+                "curiosity_question_id": self.question.question_id,
+                "expected_plan_digest": digest,
+                "authorization_id": authorization.authorization_id,
+            }
+            metadata.pop(omitted)
+            with self.subTest(omitted=omitted), self.assertRaises(ResearchError):
+                self.service.process_start_authorized_proposal(
+                    self._request(
+                        CURIOSITY_START_AUTHORIZED_PROPOSAL_INTENT, **metadata
+                    )
+                )
+
+        [stored] = self._stored()
+        self.assertFalse(stored.is_consumed)
+
+    def test_start_is_refused_when_no_execution_boundary_is_composed(self) -> None:
+        digest, authorization = self._authorized()
+        self.service._execution_starter = None
+
+        response = self._start(digest, authorization.authorization_id)
+
+        self.assertFalse(response.success)
+        self.assertIsNone(response.research_plan_execution)
+        [stored] = self._stored()
+        self.assertFalse(stored.is_consumed)
+
+    def test_the_engine_recognizes_the_exact_start_intent(self) -> None:
+        request = self._request(CURIOSITY_START_AUTHORIZED_PROPOSAL_INTENT)
+
+        self.assertTrue(CognitiveEngine._is_curiosity_request(request))
+        self.assertFalse(
+            CognitiveEngine._is_curiosity_request(
+                self._request("curiosity_start_authorized_proposal_now")
+            )
+        )
+
+
 class IsolationTests(AuthorizationFixture):
     def test_approving_touches_nothing_in_the_run(self) -> None:
         digest = self._accepted_digest()
@@ -532,7 +688,7 @@ class IsolationTests(AuthorizationFixture):
 
         self.assertEqual(len(self.hypothesis_store.hypotheses), 1)
 
-    def test_the_curiosity_service_cannot_execute_anything(self) -> None:
+    def test_the_curiosity_service_cannot_advance_or_reach_an_operation(self) -> None:
         vocabulary = module_vocabulary(CURIOSITY_SERVICE_SOURCE)
 
         for forbidden in (
@@ -544,14 +700,15 @@ class IsolationTests(AuthorizationFixture):
             "ollama",
             "process_advance",
             "advance",
-            "execution",
         ):
             with self.subTest(term=forbidden):
                 self.assertNotIn(forbidden, vocabulary)
 
-    def test_the_service_holds_no_execution_or_provider_port(self) -> None:
+    def test_the_service_holds_only_the_narrow_start_port(self) -> None:
+        self.assertIs(self.service._execution_starter, self.execution_service)
         for attribute in (
             "_execution_service",
+            "_operation_registry",
             "_research_source_fetcher",
             "_research_source_discovery_provider",
             "_llm_provider",

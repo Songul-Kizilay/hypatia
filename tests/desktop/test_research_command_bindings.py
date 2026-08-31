@@ -373,19 +373,22 @@ class ResearchCommandBindingTests(unittest.TestCase):
             {
                 "_prepare_curiosity_research_proposal",
                 "_authorize_curiosity_research_proposal",
+                "_start_authorized_curiosity_research_proposal",
             },
         )
-        # Approving is now one of the two, and stops there. What must still be
-        # absent is any way to begin the approved work from this surface.
-        for forbidden in ("start_proposal", "run_proposal", "execute_proposal"):
-            with self.subTest(absent=forbidden):
-                self.assertNotIn(
-                    forbidden,
-                    " ".join(by_label.values()).casefold(),
-                )
+        # Starting is now explicit, but it must not be collapsed with the
+        # separate step-execution boundary.
+        self.assertNotIn(
+            "advance",
+            " ".join(proposal_handlers).casefold(),
+        )
         self.assertEqual(
             by_label.get("Authorize this proposal"),
             "_authorize_curiosity_research_proposal",
+        )
+        self.assertEqual(
+            by_label.get("Start authorized proposal"),
+            "_start_authorized_curiosity_research_proposal",
         )
 
     def test_the_comparison_controls_are_bound_to_their_own_handlers(self) -> None:

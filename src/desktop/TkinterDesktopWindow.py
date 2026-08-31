@@ -4777,6 +4777,9 @@ class TkinterDesktopWindow:
         #: exact plan that was read rather than whatever the system would draft
         #: at the moment the button is pressed.
         self._curiosity_plan_digest = tk.StringVar()
+        #: The durable approval returned by the authorization response. A
+        #: start names it exactly; there is no "latest approval" lookup.
+        self._curiosity_authorization_id = tk.StringVar()
         section = ttk.LabelFrame(parent, text="Rule on a question", padding=12)
         section.grid(row=2, column=0, sticky="ew", pady=(10, 0))
         section.columnconfigure(1, weight=1)
@@ -4805,12 +4808,25 @@ class TkinterDesktopWindow:
             "Authorize this proposal",
             self._authorize_curiosity_research_proposal,
         ).grid(row=0, column=3, sticky="w", padx=(8, 0))
+        self._request_button(
+            buttons,
+            "Start authorized proposal",
+            self._start_authorized_curiosity_research_proposal,
+        ).grid(row=0, column=4, sticky="w", padx=(8, 0))
         ttk.Label(section, text="Plan digest").grid(
             row=3, column=0, sticky="w", pady=(6, 0)
         )
         ttk.Entry(
             section, textvariable=self._curiosity_plan_digest, state="readonly"
         ).grid(row=3, column=1, sticky="ew", padx=(8, 0), pady=(6, 0))
+        ttk.Label(section, text="Approval ID").grid(
+            row=4, column=0, sticky="w", pady=(6, 0)
+        )
+        ttk.Entry(
+            section,
+            textvariable=self._curiosity_authorization_id,
+            state="readonly",
+        ).grid(row=4, column=1, sticky="ew", padx=(8, 0), pady=(6, 0))
 
     def _build_review_history_section(self, parent: ttk.Frame) -> None:
         """Read back what was kept, producing nothing new."""
@@ -4930,10 +4946,49 @@ class TkinterDesktopWindow:
         ):
             self._review_status.set("curiosity proposal: not authorized")
             return
-        self._review_request(
+        response = self._review_request(
             lambda: self._controller.authorize_curiosity_research_proposal(
                 question_id,
                 digest,
+            )
+        )
+        authorization = getattr(response, "research_plan_authorization", None)
+        self._curiosity_authorization_id.set(
+            authorization.authorization_id if authorization else ""
+        )
+
+    def _start_authorized_curiosity_research_proposal(self) -> None:
+        """Spend the displayed approval on a zero-step foreground start."""
+        question_id = self._curiosity_question_id.get().strip()
+        digest = self._curiosity_plan_digest.get().strip()
+        authorization_id = self._curiosity_authorization_id.get().strip()
+        if not question_id or not digest or not authorization_id:
+            self._review_status.set(
+                "Prepare and authorize a proposal before starting it."
+            )
+            return
+        if not messagebox.askyesno(
+            "Start this authorized proposal?",
+            (
+                f"Curiosity question: {question_id}\n"
+                f"Plan digest: {digest}\n"
+                f"Approval ID: {authorization_id}\n\n"
+                "This uses up the approval and creates one foreground "
+                "execution in Running state. No provider is contacted and no "
+                "research step runs now. The first step still requires a "
+                "separate Advance action."
+            ),
+            parent=self._root,
+        ):
+            self._review_status.set(
+                "curiosity proposal: not started; approval remains unused"
+            )
+            return
+        self._review_request(
+            lambda: self._controller.start_authorized_curiosity_research_proposal(
+                question_id,
+                digest,
+                authorization_id,
             )
         )
 
@@ -4956,6 +5011,7 @@ class TkinterDesktopWindow:
         # prose. A refusal carries no proposal and clears the field.
         proposal = getattr(response, "curiosity_proposal", None)
         self._curiosity_plan_digest.set(proposal.digest if proposal else "")
+        self._curiosity_authorization_id.set("")
 
     def _dismiss_curiosity_question(self) -> None:
         self._review_request(

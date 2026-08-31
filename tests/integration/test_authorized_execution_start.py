@@ -710,7 +710,8 @@ class BoundaryTests(AuthorizedStartFixture):
 
         self.assertNotIn("process_preview", source)
         self.assertNotIn("process_confirm", source)
-        self.assertNotIn("for_plan", source)
+        self.assertNotIn("ResearchPlanAuthorization.for_plan", source)
+        self.assertNotIn(".record_for_plan(", source)
 
     def test_the_scheduler_cannot_reach_an_approval(self) -> None:
         for name in (
