@@ -307,7 +307,20 @@ class ResearchExecutionRestartTests(RestartFixture):
                 [snapshot, snapshot]
             )
 
-    def test_persistence_failure_does_not_erase_live_state(self) -> None:
+    def test_persistence_failure_refuses_the_attempt_without_erasing_state(
+        self,
+    ) -> None:
+        """A write that did not land is not a boundary an attempt may cross.
+
+        This once asserted that the advance carried on and completed the step.
+        It cannot any more: the attempt is written down before the provider is
+        reachable precisely so that a crash leaves a record, and running the
+        operation anyway would recreate the window that exists to be closed.
+
+        What the test was really protecting is unchanged and still asserted
+        here. Live state is not erased, the failure is announced rather than
+        swallowed, and nothing durable is quietly replaced by an empty record.
+        """
         runtime_a, event_bus, _ = self.build_runtime()
         plan_id = self.start(runtime_a, self.search_step())
         events: list[Event] = []
@@ -320,9 +333,11 @@ class ResearchExecutionRestartTests(RestartFixture):
         ):
             response = self.advance(runtime_a, plan_id)
 
-        self.assertTrue(response.success)
-        assert response.research_plan_execution is not None
-        self.assertEqual(response.research_plan_execution.completed_steps, 1)
+        self.assertFalse(response.success)
+        after = self.status(runtime_a, plan_id)
+        assert after.research_plan_execution is not None
+        self.assertEqual(after.research_plan_execution.completed_steps, 0)
+        self.assertEqual(after.research_plan_execution.pending_steps, 1)
         failures = [
             event
             for event in events

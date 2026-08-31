@@ -2,6 +2,34 @@
 
 All notable project changes are recorded here.
 
+## [0.3.242] - 2026-08-31
+
+### Fixed
+
+- A step attempt is now durable before it can become observable. The step is
+  marked running and the attempt is charged, and that state is written to the
+  execution store, before any provider operation is invoked. Previously nothing
+  was persisted between starting a step and recording its result, so a process
+  that died mid-attempt left the step pending and unspent even though the
+  operation may already have been performed.
+- If the pre-attempt write does not land, the advance refuses and no operation
+  runs. An attempt whose having happened could not be recorded is not one worth
+  making.
+
+### Security
+
+- A crash never refunds and never erases evidence. The persisted record after a
+  mid-attempt crash shows the step charged and running, which restores as
+  INTERRUPTED with the execution INTERRUPTED alongside it.
+- An interrupted outcome stays unknown. It is not recorded as completed, failed,
+  or untried, nothing retries it, and an ordinary advance refuses the whole
+  execution with an explicit reason rather than silently running the step again.
+- Explicit resume already supported interrupted executions and still performs no
+  operation, creates no approval, and neither refunds nor re-charges the attempt.
+- The execution status now states plainly that an attempt was interrupted, that
+  its outcome is unknown, that it was already charged, and that advancing will
+  not run it again.
+
 ## [0.3.241] - 2026-08-31
 
 ### Added

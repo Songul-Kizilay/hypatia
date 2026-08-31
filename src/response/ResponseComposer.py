@@ -1059,6 +1059,21 @@ class ResponseComposer:
             )
         if state.detail:
             lines.append(f"Detail: {state.detail}")
+        interrupted = [
+            step.step_id
+            for step in state.steps
+            if step.status is ResearchPlanStepStatus.INTERRUPTED
+        ]
+        if interrupted:
+            lines.append("")
+            lines.append(
+                "Attempt interrupted; outcome unknown: " + ", ".join(interrupted) + "."
+            )
+            lines.append(
+                "The attempt was charged and may have reached its provider "
+                "before the process ended, so whether it did anything is not "
+                "known. Advancing will not run it again."
+            )
         lines.append(f"Research operations performed: {state.steps_with_research_work}")
         if not state.performed_research_work:
             lines.append("No research work has run; this reports execution state only.")

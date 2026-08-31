@@ -481,6 +481,24 @@ class ResearchPlanExecutionApplicationService:
                 request,
                 plan_id,
             )
+        interrupted = next(
+            (
+                candidate.step_id
+                for candidate in state.steps
+                if candidate.status is ResearchPlanStepStatus.INTERRUPTED
+            ),
+            None,
+        )
+        if interrupted is not None:
+            # The attempt was charged and may have reached the provider before
+            # the process died. Whether it did is not knowable here, so this
+            # refuses rather than quietly performing it a second time.
+            return self._response_composer.research_plan_execution_rejected(
+                request,
+                f"Step '{interrupted}' was interrupted mid-attempt and its "
+                "outcome is unknown. It was already charged and may have "
+                "reached its provider, so advancing will not run it again.",
+            )
         step_id = state.next_pending_step_id
         if step_id is None:
             return self._response_composer.research_plan_execution_rejected(
@@ -538,12 +556,28 @@ class ResearchPlanExecutionApplicationService:
         attempt_started_at = self._clock()
         if allowance is not None:
             self._allowances[plan_id] = allowance.charged(cost)
+        # Written down before the provider is reachable. A crash from here on
+        # leaves a record saying this step was attempted and paid for, which is
+        # the truth; leaving it pending would say the attempt never happened.
+        self._executions[plan_id] = running
         self._events.step_started(
             plan_id,
             step_id,
             step.capability.value,
             operation.operation_name,
         )
+        if not self._persist_checkpoint(plan_id):
+            # Nothing external has happened yet, so the record from before the
+            # attempt is still the true one. Put it back rather than run an
+            # operation whose having happened no restart could discover.
+            self._executions[plan_id] = state
+            if allowance is not None:
+                self._allowances[plan_id] = allowance
+            return self._response_composer.research_plan_execution_rejected(
+                request,
+                "The attempt could not be recorded durably, so nothing was "
+                "performed and nothing was charged.",
+            )
         try:
             stored = self._contexts.get(plan_id, ResearchPlanExecutionContext())
             result = operation.run(
@@ -659,12 +693,28 @@ class ResearchPlanExecutionApplicationService:
 
     def _persist(self, plan_id: str) -> None:
         """Write durable state, never erasing it silently on failure."""
+        self._persist_checkpoint(plan_id)
+
+    def _persist_checkpoint(self, plan_id: str) -> bool:
+        """Write durable state and say whether it actually landed.
+
+        The answer only matters before an attempt: a caller about to reach a
+        provider must not do so on the strength of a write that failed. After a
+        result is in hand there is nothing better to do than report the failure,
+        which is what the plain persist does.
+
+        A service with no store answers yes. It never promised durability, so
+        refusing every advance would be inventing a guarantee rather than
+        keeping one.
+        """
         if self._execution_store is None:
-            return
+            return True
         try:
             self._execution_store.save(self._snapshots())
         except ResearchError as error:
             self._events.persistence_failed(plan_id, type(error).__name__)
+            return False
+        return True
 
     def _snapshots(self) -> list[ResearchPlanExecutionSnapshot]:
         """Capture live executions, keeping restored history alongside them."""
