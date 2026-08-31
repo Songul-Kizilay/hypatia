@@ -45,7 +45,7 @@ from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSourceCandidate import ResearchSourceCandidate
 from research.ResearchSourceDiscoveryRecord import ResearchSourceDiscoveryRecord
 from research.ResearchSourceRecord import ResearchSourceRecord
-from tests.SourceVocabulary import working_vocabulary
+from tests.SourceVocabulary import module_vocabulary
 
 NOW = datetime(2026, 8, 31, 12, 0, tzinfo=UTC)
 QUESTION = "CVE-2025-29927"
@@ -192,7 +192,7 @@ class FailedAcquisitionGapTests(unittest.TestCase):
             ("generator", GENERATOR_SOURCE),
         ):
             with self.subTest(module=name):
-                vocabulary = working_vocabulary(text)
+                vocabulary = module_vocabulary(text)
                 for forbidden in ("retry", "reattempt", "sleep", "fetch", "execute"):
                     self.assertNotIn(forbidden, vocabulary)
 

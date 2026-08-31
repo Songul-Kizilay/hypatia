@@ -47,7 +47,7 @@ from research.ResearchKnowledgeGapKind import ResearchKnowledgeGapKind
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchSource import ResearchSource
 from response.ResponseComposer import ResponseComposer
-from tests.SourceVocabulary import working_vocabulary
+from tests.SourceVocabulary import module_vocabulary
 
 NOW = datetime(2026, 8, 31, 12, 0, tzinfo=UTC)
 STATEMENT = "Authorization middleware can be bypassed before route handling."
@@ -143,7 +143,7 @@ class ModelAssociationTests(unittest.TestCase):
         """The invariant the whole design rests on."""
         for name, text in (("model", MODEL_SOURCE), ("service", SERVICE_SOURCE)):
             with self.subTest(module=name):
-                vocabulary = working_vocabulary(text)
+                vocabulary = module_vocabulary(text)
                 for forbidden in (
                     "similarity",
                     "embedding",
@@ -408,7 +408,7 @@ class LegacyStoreTests(unittest.TestCase):
         store.save([hypothesis().addresses_test_by(("evidence-1",), NOW)])
 
         document = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(document["schema_version"], 3)
+        self.assertEqual(document["schema_version"], 4)
         self.assertEqual(
             document["hypotheses"][0]["discriminating_test_evidence_ids"],
             ["evidence-1"],
@@ -416,7 +416,7 @@ class LegacyStoreTests(unittest.TestCase):
 
     def test_an_unsupported_version_is_still_refused(self) -> None:
         self.path.write_text(
-            json.dumps({"schema_version": 4, "hypotheses": []}), encoding="utf-8"
+            json.dumps({"schema_version": 5, "hypotheses": []}), encoding="utf-8"
         )
 
         with self.assertRaises(ResearchError):

@@ -59,7 +59,7 @@ from research.ResearchVulnerabilityRecord import ResearchVulnerabilityRecord
 from research.RoutedResearchSourceFetcher import RoutedResearchSourceFetcher
 from research.SourceIdentity import identity_of
 from research.SourceLoadStage import SourceLoadStage
-from tests.SourceVocabulary import working_vocabulary
+from tests.SourceVocabulary import module_vocabulary
 
 CVE = "CVE-2025-29927"
 DETAIL_URL = f"{NVD_DETAIL_PREFIX}{CVE}"
@@ -272,7 +272,7 @@ class RoutingTests(unittest.TestCase):
     def test_neither_route_can_retry_or_fall_back(self) -> None:
         for name, text in (("fetcher", FETCHER_SOURCE), ("router", ROUTER_SOURCE)):
             with self.subTest(module=name):
-                vocabulary = working_vocabulary(text)
+                vocabulary = module_vocabulary(text)
                 for forbidden in ("retry", "fallback", "sleep", "attempts"):
                     self.assertNotIn(forbidden, vocabulary)
 
@@ -404,7 +404,7 @@ class MaterializationTests(unittest.TestCase):
         self.assertIn("attacker.test", source.content)
 
     def test_the_generic_html_extractor_is_not_used(self) -> None:
-        vocabulary = working_vocabulary(FETCHER_SOURCE)
+        vocabulary = module_vocabulary(FETCHER_SOURCE)
         for forbidden in ("ResearchHtmlExtractor", "HttpResearchSourceFetcher"):
             with self.subTest(name=forbidden):
                 self.assertNotIn(forbidden, vocabulary)

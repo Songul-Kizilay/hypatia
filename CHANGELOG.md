@@ -2,6 +2,54 @@
 
 All notable project changes are recorded here.
 
+## [0.3.233] - 2026-08-31
+
+### Added
+
+- A hypothesis evidence relationship now records when it was authored. Three
+  milestones in a row had to work around the same gap: Hypatia knew when a
+  relationship was withdrawn and never when it began.
+- Membership stays where it was. The three collections remain the single answer
+  to what currently stands, and the new record only annotates them with a time,
+  so every consumer — appraiser, curiosity, events, failure lessons, history —
+  reads current state exactly as before and none of them changed.
+- Absence is represented as absence. A relationship carried forward from an
+  older file has no recorded time and reads as unknown, because no number
+  anywhere would truthfully stand in for one: the hypothesis's update time moves
+  with every later change, a retraction's time is when a statement ended rather
+  than began, and a load time is when a file was read.
+- A retraction takes the time with the statement, so an authoring time can never
+  be read for a relation that no longer stands, and a full cycle — authored,
+  withdrawn, authored again — now records all three moments.
+- The history view shows authoring times where they exist and names them as
+  unrecorded where they do not, and states plainly that no complete ordering is
+  claimed for a mixture of the two.
+
+### Changed
+
+- The hypothesis store is schema version 4. Versions 1, 2 and 3 remain readable
+  and restore with unknown authoring times; reading an older file does not
+  rewrite it.
+
+### Fixed
+
+- Seven test modules called `working_vocabulary(source)` with no function names.
+  That form returns an empty set, so every guard built on it passed without
+  checking anything — including guards asserting that no reasoning module reads
+  a timestamp and that no ingestion module can retry or fetch. A companion
+  `module_vocabulary` now reads a whole module, and the guards were switched to
+  it. Every one of them passes, so the invariants held; they were simply not
+  being tested.
+
+### Security
+
+- Timestamps are provenance and nothing else. They do not rank evidence, weight
+  confidence, decide which side of a contradiction wins, or close a research
+  gap. This is asserted as an equivalence rather than a promise: the same
+  hypothesis with and without recorded times must appraise identically and
+  produce identical curiosity, and the reasoning modules are checked not to
+  mention an assertion time at all.
+
 ## [0.3.232] - 2026-08-31
 
 ### Added

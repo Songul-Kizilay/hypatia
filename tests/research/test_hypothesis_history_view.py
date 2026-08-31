@@ -45,6 +45,7 @@ from research.HypothesisHistoryBuilder import HypothesisHistoryBuilder
 from research.HypothesisHistoryView import (
     ASSERTION_TIME_NOTICE,
     MAX_HISTORY_RETRACTIONS,
+    UNKNOWN_TIME_LABEL,
     HypothesisHistoryView,
 )
 from research.HypothesisStatus import HypothesisStatus
@@ -55,7 +56,7 @@ from research.ResearchHypothesis import ResearchHypothesis
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchSource import ResearchSource
 from response.ResponseComposer import ResponseComposer
-from tests.SourceVocabulary import working_vocabulary
+from tests.SourceVocabulary import module_vocabulary
 
 PAST = datetime.now(UTC) - timedelta(days=1)
 STATEMENT = "Authorization middleware can be bypassed before route handling."
@@ -286,19 +287,39 @@ class BoundednessTests(unittest.TestCase):
 
 
 class NoFabricationTests(unittest.TestCase):
-    def test_no_assertion_time_is_stated_or_invented(self) -> None:
-        """The limitation the previous milestone found, surfaced rather than filled."""
-        moment = PAST + timedelta(hours=2)
-        subject = hypothesis().supported_by(("evidence-1",), PAST)
+    def test_a_relation_with_no_recorded_time_is_labelled_as_such(self) -> None:
+        """Legacy relations carry no time, and the view names that rather than
+        filling it in. A hypothesis built from bare identifiers is exactly what
+        an older store file restores to."""
+        subject = hypothesis(supporting_evidence_ids=("evidence-1",))
 
-        rendered = "\n".join(
-            view_of(subject.retracted("evidence-1", SUPPORTS, moment)).lines()
+        rendered = "\n".join(view_of(subject).lines())
+
+        self.assertIsNone(subject.authored_at("evidence-1", SUPPORTS))
+        self.assertIn(UNKNOWN_TIME_LABEL, rendered)
+        self.assertIn("unknown rather than estimated", rendered)
+
+    def test_a_recorded_authoring_time_is_shown_exactly(self) -> None:
+        moment = PAST + timedelta(hours=2)
+        subject = hypothesis().supported_by(("evidence-1",), moment)
+
+        rendered = "\n".join(view_of(subject).lines())
+
+        self.assertIn(f"authored {moment.isoformat()}", rendered)
+        self.assertNotIn(UNKNOWN_TIME_LABEL, rendered)
+
+    def test_known_and_unknown_times_are_told_apart_in_one_view(self) -> None:
+        """A mixture must not read as though every relation were dated."""
+        moment = PAST + timedelta(hours=2)
+        subject = hypothesis(supporting_evidence_ids=("evidence-1",)).opposed_by(
+            ("evidence-2",), moment
         )
 
-        self.assertIn("is not recorded anywhere", rendered)
-        for invented in ("authored at", "asserted at", "added at", "created at"):
-            with self.subTest(phrase=invented):
-                self.assertNotIn(invented, rendered.casefold())
+        rendered = "\n".join(view_of(subject).lines())
+
+        self.assertIn(UNKNOWN_TIME_LABEL, rendered)
+        self.assertIn(f"authored {moment.isoformat()}", rendered)
+        self.assertIn("no complete ordering is claimed", rendered)
 
     def test_the_hypothesis_update_time_is_never_shown_as_an_assertion_time(
         self,
@@ -339,7 +360,7 @@ class NoFabricationTests(unittest.TestCase):
     def test_neither_module_infers_anything_from_text(self) -> None:
         for name, text in (("view", VIEW_SOURCE), ("builder", BUILDER_SOURCE)):
             with self.subTest(module=name):
-                vocabulary = working_vocabulary(text)
+                vocabulary = module_vocabulary(text)
                 for forbidden in (
                     "similarity",
                     "embedding",

@@ -23,6 +23,7 @@ from datetime import UTC, datetime
 
 from core.Exceptions import ResearchError
 from research.DisplayText import one_bounded_line
+from research.HypothesisEvidenceAssertion import HypothesisEvidenceAssertion
 from research.HypothesisEvidenceRelation import HypothesisEvidenceRelation
 from research.HypothesisEvidenceRetraction import (
     MAX_HYPOTHESIS_RETRACTIONS,
@@ -59,6 +60,12 @@ class ResearchHypothesis:
     #: reads as one where something was authored and withdrawn rather than one
     #: where nothing was ever said.
     retractions: tuple[HypothesisEvidenceRetraction, ...] = ()
+    #: When each currently standing relation was authored, where that is known.
+    #: Membership stays in the three collections above; this only annotates it,
+    #: so a relation carried forward from before times were kept simply has no
+    #: record here and reads as authored at an unknown time. Filling those in
+    #: would need a number nobody wrote down.
+    assertions: tuple[HypothesisEvidenceAssertion, ...] = ()
     withdrawn: bool = False
 
     def __post_init__(self) -> None:
@@ -80,6 +87,7 @@ class ResearchHypothesis:
             raise ResearchError("Hypothesis discriminating test is too long.")
         self._validate_evidence()
         self._validate_retractions()
+        self._validate_assertions()
         for moment, label in (
             (self.created_at, "creation time"),
             (self.updated_at, "update time"),
@@ -124,6 +132,58 @@ class ResearchHypothesis:
             for entry in self.retractions
         ):
             raise ResearchError("A hypothesis retraction record is invalid.")
+
+    def _validate_assertions(self) -> None:
+        """Refuse a time for a statement that does not currently stand.
+
+        The collections remain the single answer to what stands; this keeps the
+        annotation from outliving what it annotates, so an assertion time can
+        never be read for a relation that was retracted.
+        """
+        if not isinstance(self.assertions, tuple):
+            raise ResearchError("Hypothesis assertions must be an immutable tuple.")
+        if not all(
+            isinstance(entry, HypothesisEvidenceAssertion) for entry in self.assertions
+        ):
+            raise ResearchError("A hypothesis assertion record is invalid.")
+        seen: set[tuple[str, HypothesisEvidenceRelation]] = set()
+        for entry in self.assertions:
+            key = (entry.evidence_id, entry.relation)
+            if key in seen:
+                raise ResearchError("A hypothesis assertion is recorded twice.")
+            seen.add(key)
+            if entry.evidence_id not in self.active_evidence_ids(entry.relation):
+                raise ResearchError(
+                    "A hypothesis assertion names a relation that does not stand."
+                )
+
+    def authored_at(
+        self,
+        evidence_id: str,
+        relation: HypothesisEvidenceRelation,
+    ) -> datetime | None:
+        """Return when that standing relation was authored, or None if unknown.
+
+        None means nobody recorded it, never that it happened at some default
+        moment. Callers that want to say something about the time must be able
+        to say "not recorded" too.
+        """
+        for entry in self.assertions:
+            if entry.describes(evidence_id, relation):
+                return entry.authored_at
+        return None
+
+    def _asserted(
+        self,
+        added: tuple[str, ...],
+        relation: HypothesisEvidenceRelation,
+        moment: datetime,
+    ) -> tuple[HypothesisEvidenceAssertion, ...]:
+        """Return the annotations after newly authored members are timed."""
+        return (
+            *self.assertions,
+            *(HypothesisEvidenceAssertion(value, relation, moment) for value in added),
+        )
 
     def active_evidence_ids(
         self,
@@ -183,6 +243,14 @@ class ResearchHypothesis:
             supporting_evidence_ids=supporting,
             opposing_evidence_ids=opposing,
             discriminating_test_evidence_ids=addressing,
+            # The annotation goes with the statement it annotated. Keeping it
+            # would leave an authoring time attached to something that no longer
+            # stands, which is the one way this record could mislead.
+            assertions=tuple(
+                entry
+                for entry in self.assertions
+                if not entry.describes(identifier, relation)
+            ),
             retractions=(
                 *self.retractions,
                 HypothesisEvidenceRetraction(identifier, relation, moment),
@@ -263,6 +331,11 @@ class ResearchHypothesis:
                 *self.discriminating_test_evidence_ids,
                 *evidence_ids,
             ),
+            assertions=self._asserted(
+                evidence_ids,
+                HypothesisEvidenceRelation.ADDRESSES_DISCRIMINATING_TEST,
+                moment,
+            ),
             updated_at=moment,
         )
 
@@ -287,17 +360,30 @@ class ResearchHypothesis:
             self.supporting_evidence_ids if supporting else self.opposing_evidence_ids
         )
         merged = list(existing)
+        added: list[str] = []
         for value in evidence_ids:
             if value not in merged:
                 merged.append(value)
+                added.append(value)
+        relation = (
+            HypothesisEvidenceRelation.SUPPORTS
+            if supporting
+            else HypothesisEvidenceRelation.OPPOSES
+        )
+        # Only what is newly standing is timed. An identifier already in the
+        # collection keeps the time it was first given, because re-sending it
+        # authored nothing.
+        assertions = self._asserted(tuple(added), relation, moment)
         if supporting:
             return replace(
                 self,
                 updated_at=moment,
                 supporting_evidence_ids=tuple(merged),
+                assertions=assertions,
             )
         return replace(
             self,
             updated_at=moment,
             opposing_evidence_ids=tuple(merged),
+            assertions=assertions,
         )

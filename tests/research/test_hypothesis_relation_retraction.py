@@ -54,7 +54,7 @@ from research.ResearchKnowledgeGapKind import ResearchKnowledgeGapKind
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchSource import ResearchSource
 from response.ResponseComposer import ResponseComposer
-from tests.SourceVocabulary import working_vocabulary
+from tests.SourceVocabulary import module_vocabulary
 
 PAST = datetime.now(UTC) - timedelta(days=1)
 STATEMENT = "Authorization middleware can be bypassed before route handling."
@@ -248,7 +248,7 @@ class ModelRetractionTests(unittest.TestCase):
             ("service", SERVICE_SOURCE),
         ):
             with self.subTest(module=name):
-                vocabulary = working_vocabulary(text)
+                vocabulary = module_vocabulary(text)
                 for forbidden in (
                     "similarity",
                     "embedding",
@@ -665,7 +665,7 @@ class LegacyStoreTests(unittest.TestCase):
         [restored] = store.load()
 
         document = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(document["schema_version"], 3)
+        self.assertEqual(document["schema_version"], 4)
         self.assertEqual(restored.retractions, subject.retractions)
 
 

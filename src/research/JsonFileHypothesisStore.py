@@ -25,6 +25,7 @@ from tempfile import NamedTemporaryFile
 from typing import Any, Protocol
 
 from core.Exceptions import ResearchError
+from research.HypothesisEvidenceAssertion import HypothesisEvidenceAssertion
 from research.HypothesisEvidenceRelation import relation_of
 from research.HypothesisEvidenceRetraction import HypothesisEvidenceRetraction
 from research.ResearchHypothesis import ResearchHypothesis
@@ -43,8 +44,12 @@ MAX_HYPOTHESIS_STORE_ENTRIES = 500
 #: none, and the truthful reading of that is that none were taken back — their
 #: relationships were active when written and stay active on load. No retraction
 #: is invented to explain a collection that was simply never corrected.
-_SCHEMA_VERSION = 3
-_SUPPORTED_SCHEMA_VERSIONS = (1, 2, 3)
+#: Version 4 keeps when each standing relation was authored. Older files record
+#: no such time, and the honest reading is that nobody wrote one down: their
+#: relations load as standing with an unknown authoring time rather than being
+#: stamped with the moment they happened to be read.
+_SCHEMA_VERSION = 4
+_SUPPORTED_SCHEMA_VERSIONS = (1, 2, 3, 4)
 _DOCUMENT_FIELDS = frozenset({"schema_version", "hypotheses"})
 _ENTRY_FIELDS_V1 = frozenset(
     {
@@ -61,7 +66,9 @@ _ENTRY_FIELDS_V1 = frozenset(
 )
 _ENTRY_FIELDS_V2 = _ENTRY_FIELDS_V1 | {"discriminating_test_evidence_ids"}
 _ENTRY_FIELDS_V3 = _ENTRY_FIELDS_V2 | {"retractions"}
+_ENTRY_FIELDS_V4 = _ENTRY_FIELDS_V3 | {"assertions"}
 _RETRACTION_FIELDS = frozenset({"evidence_id", "relation", "retracted_at"})
+_ASSERTION_FIELDS = frozenset({"evidence_id", "relation", "authored_at"})
 
 
 class _BinaryWriter(Protocol):
@@ -163,6 +170,14 @@ class JsonFileHypothesisStore:
                 }
                 for record in entry.retractions
             ],
+            "assertions": [
+                {
+                    "evidence_id": record.evidence_id,
+                    "relation": record.relation.value,
+                    "authored_at": record.authored_at.isoformat(),
+                }
+                for record in entry.assertions
+            ],
             "withdrawn": entry.withdrawn,
             "created_at": entry.created_at.isoformat(),
             "updated_at": entry.updated_at.isoformat(),
@@ -189,6 +204,7 @@ class JsonFileHypothesisStore:
             1: _ENTRY_FIELDS_V1,
             2: _ENTRY_FIELDS_V2,
             3: _ENTRY_FIELDS_V3,
+            4: _ENTRY_FIELDS_V4,
         }[schema_version]
         if not isinstance(document, dict) or set(document) != expected:
             raise ResearchError("A hypothesis document is invalid.")
@@ -213,10 +229,38 @@ class JsonFileHypothesisStore:
                 if schema_version < 3
                 else store._retractions(document["retractions"])
             ),
+            assertions=(
+                () if schema_version < 4 else store._assertions(document["assertions"])
+            ),
             withdrawn=withdrawn,
             created_at=store._timestamp(document["created_at"]),
             updated_at=store._timestamp(document["updated_at"]),
         )
+
+    @staticmethod
+    def _assertions(value: object) -> tuple[HypothesisEvidenceAssertion, ...]:
+        """Decode recorded authoring times, refusing anything malformed."""
+        if not isinstance(value, list):
+            raise ResearchError("A hypothesis assertion list is invalid.")
+        store = JsonFileHypothesisStore
+        records: list[HypothesisEvidenceAssertion] = []
+        for entry in value:
+            if not isinstance(entry, dict) or set(entry) != _ASSERTION_FIELDS:
+                raise ResearchError("A hypothesis assertion record is invalid.")
+            try:
+                relation = relation_of(entry["relation"])
+            except ValueError as error:
+                raise ResearchError(
+                    "A hypothesis assertion names an unknown relation."
+                ) from error
+            records.append(
+                HypothesisEvidenceAssertion(
+                    evidence_id=store._text(entry["evidence_id"]),
+                    relation=relation,
+                    authored_at=store._timestamp(entry["authored_at"]),
+                )
+            )
+        return tuple(records)
 
     @staticmethod
     def _retractions(value: object) -> tuple[HypothesisEvidenceRetraction, ...]:

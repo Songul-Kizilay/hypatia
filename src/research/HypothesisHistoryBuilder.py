@@ -13,6 +13,7 @@ those were not derived rather than one that guesses at them.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import datetime
 
 from core.Exceptions import ResearchError
 from research.HypothesisEvidenceRetraction import HypothesisEvidenceRetraction
@@ -20,6 +21,7 @@ from research.HypothesisHistoryView import (
     MAX_HISTORY_RETRACTIONS,
     MAX_STATEMENT_LENGTH,
     HypothesisHistoryView,
+    _time_key,
 )
 from research.HypothesisStatus import HypothesisStatus
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
@@ -62,6 +64,7 @@ class HypothesisHistoryBuilder:
             # a moment ago is the one somebody is looking for.
             retractions=ordered[-limit:],
             total_retraction_count=len(ordered),
+            assertion_times=_assertion_times(hypothesis),
             status=status,
             evidence_gap_open=evidence_gap_open,
             evidence_notes=_notes(hypothesis, evidence),
@@ -87,6 +90,19 @@ def _ordered(
             ),
         )
     )
+
+
+def _assertion_times(hypothesis: ResearchHypothesis) -> dict[str, datetime]:
+    """Return the authoring times that exist, and no entry for those that do not.
+
+    An absent key is the honest representation of an unrecorded time. Filling
+    every standing relation with a placeholder would make the view unable to
+    tell the two apart, which is the distinction it exists to keep.
+    """
+    return {
+        _time_key(entry.evidence_id, entry.relation): entry.authored_at
+        for entry in hypothesis.assertions
+    }
 
 
 def _notes(

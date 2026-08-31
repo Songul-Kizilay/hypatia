@@ -42,6 +42,44 @@ def working_vocabulary(source: str, *function_names: str) -> set[str]:
     return vocabulary
 
 
+def module_vocabulary(source: str) -> set[str]:
+    """Return every identifier and displayed literal a whole module uses.
+
+    The companion to `working_vocabulary`, which reads only the functions it is
+    given and therefore returns nothing at all when it is given none. Calling
+    that one with no names is silently vacuous — every `assertNotIn` against an
+    empty set passes — so guards about a module as a whole belong here, where
+    there is nothing to forget to name.
+
+    Docstrings are excluded exactly as they are there, because a guard that
+    matches the prose explaining the guard is the other way these checks fail
+    without anyone noticing.
+    """
+    tree = ast.parse(source)
+    docstrings = {
+        text
+        for node in ast.walk(tree)
+        if isinstance(
+            node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+        )
+        and (text := ast.get_docstring(node, clean=False)) is not None
+    }
+    vocabulary: set[str] = set()
+    for node in ast.walk(tree):
+        match node:
+            case ast.Name(id=name) | ast.Attribute(attr=name):
+                vocabulary.add(name.casefold())
+            case ast.arg(arg=name) | ast.keyword(arg=str() as name):
+                vocabulary.add(name.casefold())
+            case ast.FunctionDef(name=name) | ast.ClassDef(name=name):
+                vocabulary.add(name.casefold())
+            case ast.alias(name=name):
+                vocabulary.add(name.casefold())
+            case ast.Constant(value=str() as text) if text not in docstrings:
+                vocabulary.add(text.casefold())
+    return vocabulary
+
+
 def mentions(vocabulary: set[str], term: str) -> list[str]:
     """Return the collected words containing this term, for a readable failure."""
     return sorted(word for word in vocabulary if term in word)

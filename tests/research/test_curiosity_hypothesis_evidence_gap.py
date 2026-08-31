@@ -50,7 +50,7 @@ from research.ResearchRun import ResearchRun
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchRunStatus import ResearchRunStatus
 from response.ResponseComposer import ResponseComposer
-from tests.SourceVocabulary import working_vocabulary
+from tests.SourceVocabulary import module_vocabulary
 
 NOW = datetime(2026, 8, 31, 12, 0, tzinfo=UTC)
 RUN_ID = "run-1"
@@ -342,7 +342,7 @@ class QuestionTests(unittest.TestCase):
             ("generator", GENERATOR_SOURCE),
         ):
             with self.subTest(module=name):
-                vocabulary = working_vocabulary(text)
+                vocabulary = module_vocabulary(text)
                 for forbidden in (
                     "search",
                     "match",

@@ -10,13 +10,18 @@ was retracted and then authored again is active — showing it as retracted
 because an older cycle ended would be a different and wronger story than showing
 nothing at all.
 
-There is one thing this cannot tell anyone, and it says so rather than
-implying otherwise. Relationships are recorded as membership in a collection,
-so nothing anywhere states when one was authored. A retraction carries its own
-time, so the record can say a relation existed and ended at T; it cannot say
-when it began. The alternatives were to leave the gap silent or to fill it with
-the hypothesis's update time, a file timestamp, or the retraction's own — each
-of which would print a number that looks like an answer and is not one.
+Authoring times are shown where they exist and named as missing where they do
+not. Relations authored since times were kept carry one; relations carried
+forward from before that do not, and there is no number anywhere that would
+truthfully fill the gap — the hypothesis's update time moves with every later
+change, a retraction's time is when a statement ended rather than began, and a
+load time is when a file was read. So the two kinds sit side by side and are
+told apart, rather than one being made to look like the other.
+
+That also means this cannot present one complete ordering. Events with known
+times can be read in order among themselves; an event with no time cannot be
+placed between them, and guessing a position would be inventing the very thing
+the record is missing.
 
 No reason is recorded either, because none is stored. A retraction says a
 statement no longer stands and nothing about why, and inventing a plausible
@@ -26,6 +31,7 @@ explanation is the one thing an audit view must never do.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 
 from core.Exceptions import ResearchError
 from research.HypothesisEvidenceRelation import HypothesisEvidenceRelation
@@ -40,17 +46,28 @@ MAX_HISTORY_RETRACTIONS = 20
 MAX_STATEMENT_LENGTH = 200
 
 ASSERTION_TIME_NOTICE = (
-    "When each relationship was authored is not recorded anywhere, so this "
-    "view does not state it. A retraction carries its own time, so a withdrawn "
-    "relationship can be shown as having existed and ended; when it began is "
-    "unknown rather than estimated."
+    "Relationships authored before this was recorded show no authoring time. "
+    "That is unknown rather than estimated, so events without a time are not "
+    "placed in order among those that have one, and no complete ordering is "
+    "claimed for a mixture of the two."
 )
+
+UNKNOWN_TIME_LABEL = "authoring time not recorded"
 
 NO_CONCLUSION_NOTICE = (
     "This describes the record, not the world. Nothing here says the "
     "hypothesis is true or false, and a retraction says only that somebody "
     "took a statement back — never why, which is not stored."
 )
+
+
+def _time_key(evidence_id: str, relation: HypothesisEvidenceRelation) -> str:
+    """Return the lookup key pairing one evidence identifier with one relation.
+
+    Keyed by both because the same evidence can stand in more than one relation
+    at once, each authored at its own moment.
+    """
+    return f"{relation.value}:{evidence_id}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,6 +83,7 @@ class HypothesisHistoryView:
     discriminating_test_evidence_ids: tuple[str, ...] = ()
     retractions: tuple[HypothesisEvidenceRetraction, ...] = ()
     total_retraction_count: int = 0
+    assertion_times: dict[str, datetime] = field(default_factory=dict)
     status: HypothesisStatus | None = None
     evidence_gap_open: bool | None = None
     evidence_notes: dict[str, str] = field(default_factory=dict)
@@ -146,7 +164,13 @@ class HypothesisHistoryView:
             current = self.current_evidence_ids(relation)
             rendered.append(
                 f"- {relation.label}: "
-                + (", ".join(self._label(value) for value in current) or "none")
+                + (
+                    ", ".join(
+                        f"{self._label(value)} [{self._authored_text(value, relation)}]"
+                        for value in current
+                    )
+                    or "none"
+                )
             )
         rendered.extend(
             (
@@ -181,6 +205,26 @@ class HypothesisHistoryView:
             )
         rendered.extend(("", ASSERTION_TIME_NOTICE, "", NO_CONCLUSION_NOTICE))
         return tuple(rendered)
+
+    def authored_at(
+        self,
+        evidence_id: str,
+        relation: HypothesisEvidenceRelation,
+    ) -> datetime | None:
+        """Return when that standing relation was authored, or None if unknown."""
+        return self.assertion_times.get(_time_key(evidence_id, relation))
+
+    def _authored_text(
+        self,
+        evidence_id: str,
+        relation: HypothesisEvidenceRelation,
+    ) -> str:
+        moment = self.authored_at(evidence_id, relation)
+        return (
+            f"authored {moment.isoformat()}"
+            if moment is not None
+            else UNKNOWN_TIME_LABEL
+        )
 
     def _gap_text(self) -> str:
         if self.evidence_gap_open is None:
