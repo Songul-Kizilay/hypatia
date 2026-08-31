@@ -2,6 +2,28 @@
 
 All notable project changes are recorded here.
 
+## [0.3.247] - 2026-09-01
+
+### Changed
+
+- An accepted Curiosity question now produces a local-first research proposal:
+  its first step searches existing local knowledge using the exact canonical
+  question, and only later steps discover outside source candidates.
+- The local search consumes no network or model budget. Each outward discovery
+  remains a separate, explicitly advanced, budgeted provider attempt.
+- Restart, failure, interruption, human resolution, and recovery records now
+  preserve the two-stage plan truthfully without replaying completed local work
+  or attributing provider outcomes to the local step.
+
+### Security
+
+- Proposal preview remains inert, authorization is still bound to the exact
+  content-addressed plan digest, starting remains zero-step, and each explicit
+  Advance performs at most one authored step.
+- The plan still stops at source discovery. It does not fetch or accept a
+  source, create evidence, judge a claim, call a model, schedule background
+  work, or retry a failed or interrupted provider attempt.
+
 ## [0.3.246] - 2026-09-01
 
 ### Changed

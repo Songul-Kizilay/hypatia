@@ -386,7 +386,7 @@ class DigestBindingTests(AuthorizationFixture):
         self.assertIsNotNone(authorization)
         self.assertEqual(
             {capability.value for capability in authorization.capabilities},
-            {"source_discovery"},
+            {"local_knowledge_search", "source_discovery"},
         )
 
     def test_no_fuzzy_or_latest_proposal_lookup_exists(self) -> None:

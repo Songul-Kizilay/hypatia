@@ -53,6 +53,9 @@ SERVICE_SOURCE = (
     SRC_DIR / "cognition" / "ResearchPlanExecutionApplicationService.py"
 ).read_text(encoding="utf-8")
 
+LOCAL_STEP_ID = "step-1"
+PROVIDER_STEP_ID = "step-2"
+
 
 class Crash(BaseException):
     """A process ending mid-call, which no `except ResearchError` will catch."""
@@ -101,7 +104,7 @@ class AttemptDurabilityFixture(ResumeFixture):
         self.execution_service._operation_registry = self._registry(operation)
         return operation
 
-    def _durable_step(self, execution_id: str, step_id: str = "step-1"):
+    def _durable_step(self, execution_id: str, step_id: str = LOCAL_STEP_ID):
         """Read one step back out of the store, as a new process would."""
         [snapshot] = [
             entry
@@ -110,6 +113,12 @@ class AttemptDurabilityFixture(ResumeFixture):
         ]
         [step] = [entry for entry in snapshot.steps if entry.step_id == step_id]
         return snapshot, step
+
+    def _at_provider(self):
+        """Start and explicitly finish the zero-cost local step."""
+        started = self._started()
+        self._advance(started.plan_id)
+        return started
 
     def _status_request(self, execution_id: str):
         from brain.BrainRequest import BrainRequest
@@ -124,7 +133,7 @@ class AttemptDurabilityFixture(ResumeFixture):
 
     def _crashed(self):
         """Start, then die inside the provider. Returns the execution."""
-        started = self._started()
+        started = self._at_provider()
         operation = self._observing(crash=True)
         with self.assertRaises(Crash):
             self._advance(started.plan_id)
@@ -134,7 +143,7 @@ class AttemptDurabilityFixture(ResumeFixture):
 
 class AttemptIsDurableBeforeTheProviderTests(AttemptDurabilityFixture):
     def test_the_step_is_already_running_on_disk_when_the_provider_runs(self) -> None:
-        started = self._started()
+        started = self._at_provider()
         operation = self._observing()
 
         self._advance(started.plan_id)
@@ -144,7 +153,7 @@ class AttemptIsDurableBeforeTheProviderTests(AttemptDurabilityFixture):
     def test_the_attempt_is_already_charged_on_disk_when_the_provider_runs(
         self,
     ) -> None:
-        started = self._started()
+        started = self._at_provider()
         fresh = self.execution_service.allowance(started.plan_id)
         operation = self._observing()
 
@@ -155,7 +164,7 @@ class AttemptIsDurableBeforeTheProviderTests(AttemptDurabilityFixture):
 
     def test_affordability_is_settled_before_any_attempt_exists(self) -> None:
         """Refused with nothing charged, nothing running and nobody called."""
-        started = self._started()
+        started = self._at_provider()
         operation = self._observing()
         allowance = self.execution_service.allowance(started.plan_id)
         cost = cost_for(ResearchPlanStepCapability.SOURCE_DISCOVERY)
@@ -165,13 +174,13 @@ class AttemptIsDurableBeforeTheProviderTests(AttemptDurabilityFixture):
 
         self._advance(started.plan_id)
 
-        _snapshot, step = self._durable_step(started.plan_id)
+        _snapshot, step = self._durable_step(started.plan_id, PROVIDER_STEP_ID)
         self.assertEqual(operation.calls, [])
         self.assertIs(step.status, ResearchPlanStepStatus.PENDING)
 
     def test_a_failed_checkpoint_stops_before_the_provider(self) -> None:
         """A write that did not land is not a boundary anything may cross."""
-        started = self._started()
+        started = self._at_provider()
         operation = self._observing()
         self.execution_service._execution_store = _RefusingStore(self.execution_store)
 
@@ -185,7 +194,7 @@ class CrashLeavesAnHonestRecordTests(AttemptDurabilityFixture):
     def test_a_crash_does_not_leave_the_step_pristine_pending(self) -> None:
         started = self._crashed()
 
-        _snapshot, step = self._durable_step(started.plan_id)
+        _snapshot, step = self._durable_step(started.plan_id, PROVIDER_STEP_ID)
 
         self.assertIsNot(step.status, ResearchPlanStepStatus.PENDING)
 
@@ -195,7 +204,9 @@ class CrashLeavesAnHonestRecordTests(AttemptDurabilityFixture):
 
         snapshot = execution.restored_execution(started.plan_id)
 
-        [step] = snapshot.steps
+        [step] = [
+            entry for entry in snapshot.steps if entry.step_id == PROVIDER_STEP_ID
+        ]
         self.assertIs(step.status, ResearchPlanStepStatus.INTERRUPTED)
         self.assertIs(snapshot.status, ResearchPlanExecutionStatus.INTERRUPTED)
 
@@ -203,7 +214,7 @@ class CrashLeavesAnHonestRecordTests(AttemptDurabilityFixture):
         started = self._crashed()
         charged = self.execution_service.allowance(started.plan_id)
 
-        snapshot, _step = self._durable_step(started.plan_id)
+        snapshot, _step = self._durable_step(started.plan_id, PROVIDER_STEP_ID)
 
         self.assertEqual(
             snapshot.allowance.remaining_network_operations,
@@ -213,7 +224,7 @@ class CrashLeavesAnHonestRecordTests(AttemptDurabilityFixture):
     def test_the_outcome_is_not_recorded_as_success_or_failure(self) -> None:
         started = self._crashed()
 
-        _snapshot, step = self._durable_step(started.plan_id)
+        _snapshot, step = self._durable_step(started.plan_id, PROVIDER_STEP_ID)
 
         self.assertNotIn(
             step.status,
@@ -226,7 +237,7 @@ class CrashLeavesAnHonestRecordTests(AttemptDurabilityFixture):
         The provider really did run, so the honest record is the same one a
         crash during the call leaves: attempted, charged, outcome unknown.
         """
-        started = self._started()
+        started = self._at_provider()
         operation = self._observing()
 
         def die(*_arguments, **_keywords):
@@ -236,8 +247,8 @@ class CrashLeavesAnHonestRecordTests(AttemptDurabilityFixture):
         with self.assertRaises(Crash):
             self._advance(started.plan_id)
 
-        _snapshot, step = self._durable_step(started.plan_id)
-        self.assertEqual(operation.calls, ["step-1"])
+        _snapshot, step = self._durable_step(started.plan_id, PROVIDER_STEP_ID)
+        self.assertEqual(operation.calls, [PROVIDER_STEP_ID])
         self.assertIs(step.status, ResearchPlanStepStatus.RUNNING)
 
 
@@ -265,7 +276,11 @@ class RestartTellsTheTruthTests(AttemptDurabilityFixture):
 
         self._resume(curiosity, started.plan_id)
 
-        [step] = execution.live_execution(started.plan_id).steps
+        [step] = [
+            entry
+            for entry in execution.live_execution(started.plan_id).steps
+            if entry.step_id == PROVIDER_STEP_ID
+        ]
         self.assertIs(step.status, ResearchPlanStepStatus.INTERRUPTED)
 
     def test_resuming_refunds_nothing(self) -> None:
@@ -335,14 +350,14 @@ class UnchangedSemanticsTests(AttemptDurabilityFixture):
 
     def test_an_ordinary_provider_failure_is_still_a_failure(self) -> None:
         """A refusing provider fails the step, which is a known outcome."""
-        started = self._started()
+        started = self._at_provider()
         self.execution_service._operation_registry = self._registry(
             _RefusingOperation()
         )
 
         self._advance(started.plan_id)
 
-        _snapshot, step = self._durable_step(started.plan_id)
+        _snapshot, step = self._durable_step(started.plan_id, PROVIDER_STEP_ID)
         self.assertIs(step.status, ResearchPlanStepStatus.FAILED)
 
     def test_cancelling_still_closes_the_execution(self) -> None:

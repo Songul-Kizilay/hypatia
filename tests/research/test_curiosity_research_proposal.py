@@ -406,11 +406,17 @@ class PlanTests(ProposalFixture):
         self._accept(question.question_id)
         return self._prepare(question.question_id).curiosity_proposal
 
-    def test_the_plan_describes_discovery_and_nothing_further(self) -> None:
+    def test_the_plan_looks_locally_then_discovers_and_nothing_further(self) -> None:
         proposal = self._proposal()
 
-        self.assertGreaterEqual(proposal.step_count, 1)
-        for step in proposal.plan.steps:
+        self.assertGreaterEqual(proposal.step_count, 2)
+        local, *outward = proposal.plan.steps
+        self.assertIs(
+            local.capability,
+            ResearchPlanStepCapability.LOCAL_KNOWLEDGE_SEARCH,
+        )
+        self.assertIn(proposal.question, local.instruction)
+        for step in outward:
             with self.subTest(step=step.step_id):
                 self.assertIs(
                     step.capability, ResearchPlanStepCapability.SOURCE_DISCOVERY

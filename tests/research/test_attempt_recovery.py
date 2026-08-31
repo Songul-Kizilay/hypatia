@@ -54,6 +54,7 @@ from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 from research.ResearchPlanStepState import ResearchPlanStepState
 from research.ResearchPlanStepStatus import ResearchPlanStepStatus
 from tests.research.test_curiosity_execution_advance import NOW, QUESTION
+from tests.research.test_execution_attempt_durability import PROVIDER_STEP_ID
 from tests.research.test_interrupted_attempt_resolution import (
     PERFORMED,
     ResolutionFixture,
@@ -78,7 +79,7 @@ class RecoveryFixture(ResolutionFixture):
         service,
         execution_id: str,
         decision,
-        step_id: str = "step-1",
+        step_id: str = PROVIDER_STEP_ID,
         summary: str = ACCOUNT,
         claimed_operation: str = "observing_source_discovery",
     ):
@@ -322,7 +323,7 @@ class NeitherPathTakesAnythingTests(RecoveryFixture):
                 metadata={
                     "intent": RESEARCH_PLAN_EXECUTION_RECOVER_INTENT,
                     "research_plan_id": execution_id,
-                    "step_id": "step-1",
+                    "step_id": PROVIDER_STEP_ID,
                     "decision": SUPPLIED.value,
                     "summary": ACCOUNT,
                     "capability": "source_discovery",
@@ -341,7 +342,7 @@ class NeitherPathTakesAnythingTests(RecoveryFixture):
         self._recover(service, execution_id, ABANDONED, summary="")
 
         self.assertEqual(self.reopened_operation.calls, [])
-        self.assertEqual(service.live_execution(execution_id).completed_steps, 0)
+        self.assertEqual(service.live_execution(execution_id).completed_steps, 1)
 
 
 class ContinuationFollowsTheStateTests(RecoveryFixture):
@@ -366,7 +367,7 @@ class ContinuationFollowsTheStateTests(RecoveryFixture):
         )
 
     def test_an_abandoned_step_is_not_advanced_into(self) -> None:
-        """The plan holds one step, so there is nothing left to advance to."""
+        """The provider step is last, so there is nothing left to advance to."""
         execution_id, service = self._blocked()
         self._recover(service, execution_id, ABANDONED, summary="")
 
@@ -376,12 +377,11 @@ class ContinuationFollowsTheStateTests(RecoveryFixture):
 
 
 class TwoStepContinuationTests(RecoveryFixture):
-    """A plan with somewhere left to go, which the curiosity plan never has.
+    """A discovery plan with work after the interrupted provider step.
 
-    A curiosity proposal authors one step, so abandoning it leaves nothing to
-    advance to and the difference between "did not advance" and "could not"
-    is invisible. These build the two-step case directly, where an automatic
-    advance would be plainly visible as the next step running by itself.
+    The ordinary Curiosity plan ends at its discovery step. These build a
+    separate two-discovery-step case where an automatic advance would be
+    plainly visible as the later provider running by itself.
     """
 
     def _two_step_blocked(self):
@@ -434,27 +434,27 @@ class TwoStepContinuationTests(RecoveryFixture):
         )
         _curiosity, service = self._restart()
         service.rebind_restored(plan, self.run_id, "plan-two")
-        self._resolve(service, "plan-two", PERFORMED)
+        self._resolve(service, "plan-two", PERFORMED, step_id="step-1")
         return service
 
     def test_recovery_does_not_advance_to_the_next_step(self) -> None:
         service = self._two_step_blocked()
 
-        self._recover(service, "plan-two", ABANDONED, summary="")
+        self._recover(service, "plan-two", ABANDONED, step_id="step-1", summary="")
 
         self.assertEqual(self.reopened_operation.calls, [])
 
     def test_supplying_information_does_not_advance_either(self) -> None:
         service = self._two_step_blocked()
 
-        self._recover(service, "plan-two", SUPPLIED)
+        self._recover(service, "plan-two", SUPPLIED, step_id="step-1")
 
         self.assertEqual(self.reopened_operation.calls, [])
 
     def test_a_later_explicit_advance_reaches_the_next_step(self) -> None:
         """Abandoning unblocks the plan; pressing Advance is still required."""
         service = self._two_step_blocked()
-        self._recover(service, "plan-two", ABANDONED, summary="")
+        self._recover(service, "plan-two", ABANDONED, step_id="step-1", summary="")
 
         self._advance_on(service, "plan-two")
 
@@ -463,7 +463,7 @@ class TwoStepContinuationTests(RecoveryFixture):
     def test_supplied_information_leaves_later_steps_unreachable(self) -> None:
         """Blocked stays blocked, because no result was ever observed."""
         service = self._two_step_blocked()
-        self._recover(service, "plan-two", SUPPLIED)
+        self._recover(service, "plan-two", SUPPLIED, step_id="step-1")
 
         self._advance_on(service, "plan-two")
 
@@ -477,7 +477,11 @@ class DecisionsSurviveRestartTests(RecoveryFixture):
 
         _curiosity, reopened = self._restart()
 
-        [step] = reopened.restored_execution(execution_id).steps
+        [step] = [
+            entry
+            for entry in reopened.restored_execution(execution_id).steps
+            if entry.step_id == PROVIDER_STEP_ID
+        ]
         self.assertEqual(step.recovery.summary, ACCOUNT)
         self.assertIs(step.recovery.decision, SUPPLIED)
         self.assertIs(step.recovery.recorded_by, ResearchAuthorizer.HUMAN)
@@ -488,7 +492,11 @@ class DecisionsSurviveRestartTests(RecoveryFixture):
 
         _curiosity, reopened = self._restart()
 
-        [step] = reopened.restored_execution(execution_id).steps
+        [step] = [
+            entry
+            for entry in reopened.restored_execution(execution_id).steps
+            if entry.step_id == PROVIDER_STEP_ID
+        ]
         self.assertIs(step.recovery.decision, ABANDONED)
         self.assertIs(step.status, ResearchPlanStepStatus.CANCELLED)
 
@@ -498,7 +506,11 @@ class DecisionsSurviveRestartTests(RecoveryFixture):
 
         _curiosity, reopened = self._restart()
 
-        [step] = reopened.restored_execution(execution_id).steps
+        [step] = [
+            entry
+            for entry in reopened.restored_execution(execution_id).steps
+            if entry.step_id == PROVIDER_STEP_ID
+        ]
         self.assertIs(
             step.resolution,
             ResearchAttemptResolution.PERFORMED_RESULT_UNKNOWN,

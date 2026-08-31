@@ -40,7 +40,10 @@ from research.ResearchAttemptResolution import ResearchAttemptResolution
 from research.ResearchAuthorizer import ResearchAuthorizer
 from research.ResearchPlanExecutionStatus import ResearchPlanExecutionStatus
 from research.ResearchPlanStepStatus import ResearchPlanStepStatus
-from tests.research.test_execution_attempt_durability import AttemptDurabilityFixture
+from tests.research.test_execution_attempt_durability import (
+    PROVIDER_STEP_ID,
+    AttemptDurabilityFixture,
+)
 
 PERFORMED = ResearchAttemptResolution.PERFORMED_RESULT_UNKNOWN
 NOT_PERFORMED = ResearchAttemptResolution.NOT_PERFORMED
@@ -63,7 +66,7 @@ class ResolutionFixture(AttemptDurabilityFixture):
         service,
         execution_id: str,
         resolution: ResearchAttemptResolution,
-        step_id: str = "step-1",
+        step_id: str = PROVIDER_STEP_ID,
     ):
         return service.process_resolve(
             BrainRequest(
@@ -81,7 +84,7 @@ class ResolutionFixture(AttemptDurabilityFixture):
             )
         )
 
-    def _step_of(self, service, execution_id: str, step_id: str = "step-1"):
+    def _step_of(self, service, execution_id: str, step_id: str = PROVIDER_STEP_ID):
         [step] = [
             entry
             for entry in service.live_execution(execution_id).steps
@@ -105,7 +108,9 @@ class NothingResolvesItselfTests(ResolutionFixture):
         _curiosity, reopened = self._restart()
 
         snapshot = reopened.restored_execution(execution_id)
-        [step] = snapshot.steps
+        [step] = [
+            entry for entry in snapshot.steps if entry.step_id == PROVIDER_STEP_ID
+        ]
         self.assertIs(step.resolution, ResearchAttemptResolution.NONE)
 
     def test_an_empty_ruling_is_refused(self) -> None:
@@ -239,7 +244,7 @@ class NotPerformedTests(ResolutionFixture):
 
         self._advance_on(service, execution_id)
 
-        self.assertEqual(self.reopened_operation.calls, ["step-1"])
+        self.assertEqual(self.reopened_operation.calls, [PROVIDER_STEP_ID])
         self.assertLess(
             service.allowance(execution_id).remaining_network_operations,
             before.remaining_network_operations,
@@ -314,7 +319,7 @@ class ResolutionCostsAndCreatesNothingTests(ResolutionFixture):
         self._resolve(service, execution_id, NOT_PERFORMED)
 
         self.assertEqual(self.reopened_operation.calls, [])
-        self.assertEqual(service.live_execution(execution_id).completed_steps, 0)
+        self.assertEqual(service.live_execution(execution_id).completed_steps, 1)
 
 
 class TheRulingSurvivesRestartTests(ResolutionFixture):
@@ -324,7 +329,11 @@ class TheRulingSurvivesRestartTests(ResolutionFixture):
 
         _curiosity, reopened = self._restart()
 
-        [step] = reopened.restored_execution(execution_id).steps
+        [step] = [
+            entry
+            for entry in reopened.restored_execution(execution_id).steps
+            if entry.step_id == PROVIDER_STEP_ID
+        ]
         self.assertIs(step.resolution, PERFORMED)
 
     def test_a_ruling_records_who_and_when(self) -> None:

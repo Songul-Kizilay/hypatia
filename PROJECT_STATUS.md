@@ -118,11 +118,15 @@ with optional OpenAI-compatible LLM conversation support.
   claims research the canonical record does not support.
 - Bounded curiosity detects seven kinds of knowledge gap in a persisted
   research run, turns each into one deterministically templated and ranked
-  question, and stops there. Behind `HYPATIA_CURIOSITY_ENABLED`, default off.
-  Nothing in the pipeline starts research, drafts a plan, or queues a task, and
-  accepting a proposal records intent only. Gaps describe what our record is
-  missing rather than what is true, and superseded claims and assessments are
-  excluded.
+  question. Behind `HYPATIA_CURIOSITY_ENABLED`, default off. Accepting a
+  question records intent only; a separate inert preview authors an exact
+  local-first plan that searches existing knowledge with the canonical question
+  before any outside source discovery. Authorization, zero-step foreground
+  start, and every one-step Advance remain separate operator actions. The local
+  step costs no network or model budget, discovery keeps its declared provider
+  cost, and the proposal never fetches, accepts, judges, retries, or queues work.
+  Gaps describe what our record is missing rather than what is true, and
+  superseded claims and assessments are excluded.
 - Background research scheduling queues approved executions behind
   `HYPATIA_BACKGROUND_RESEARCH_ENABLED`, default off. The scheduler owns
   queueing, pausing, retrying, and crash recovery only; every cycle drives the

@@ -128,12 +128,42 @@ def _steps(
 ) -> tuple[ResearchPlanStepDraftInput, ...]:
     """Return the future work this proposal describes, performing none of it.
 
-    Discovery only. A proposal stops at finding candidates because everything
-    past that point — loading a source, recording evidence, judging it — is
-    already an explicit operator action elsewhere, and a plan that quietly
-    included those steps would be asking for approval of far more than it
-    appears to.
+    Looking inward, then outward. Every proposal begins by searching what is
+    already known locally, because a gap is a claim about the record and the
+    record is the cheapest place to check it: the search reaches no network,
+    costs no part of the approved budget, and may well show that some of what
+    was about to be looked for is already here.
+
+    It stops at finding candidates. Everything past that point — loading a
+    source, accepting one, recording evidence, judging it — is an explicit
+    operator action elsewhere, and a plan that quietly included those steps
+    would be asking approval for far more than it appears to. Those steps also
+    need identifiers that do not exist yet: a source to accept is one a
+    discovery has not run to find. Authoring them would mean binding to a
+    result nobody has, which this refuses to do rather than guessing at run
+    time.
     """
+    return (_local_step(question),) + _discovery_steps(question, run)
+
+
+def _local_step(
+    question: ResearchCuriosityQuestion,
+) -> ResearchPlanStepDraftInput:
+    """Return the step that asks what is already known here, before going out."""
+    return ResearchPlanStepDraftInput(
+        instruction=(
+            "Search local knowledge for material bearing on this curiosity "
+            f"question before asking anyone outside: {question.text}"
+        ),
+        capability=ResearchPlanStepCapability.LOCAL_KNOWLEDGE_SEARCH.value,
+    )
+
+
+def _discovery_steps(
+    question: ResearchCuriosityQuestion,
+    run: ResearchRun,
+) -> tuple[ResearchPlanStepDraftInput, ...]:
+    """Return the outward-looking steps, each naming an exact provider or none."""
     if question.kind is ResearchKnowledgeGapKind.PROVIDER_COVERAGE_GAP:
         providers = _unasked_providers(run) or [
             provider.value for provider in ResearchDiscoveryProviderName

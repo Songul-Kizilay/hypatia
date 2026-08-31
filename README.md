@@ -746,11 +746,18 @@ gaps, draft and keep ranked questions, list them, and rule on one. A failed
 durable write is reported rather than announced as a stored proposal or a
 recorded ruling.
 
-Curiosity never acts. Detecting, previewing, storing, listing, accepting, and
-dismissing all leave the run untouched; none of them starts research, drafts a
-plan, queues a background task, or spends a network or model operation.
-Accepting a question records that a human thinks it worth pursuing — turning it
-into work stays a separate, explicit decision.
+Detecting, storing, listing, accepting, and dismissing a question all leave the
+run untouched. Accepting records only that a human thinks the question worth
+pursuing. A separate proposal preview deterministically authors a local-first
+plan: search existing local knowledge with the exact question, then discover
+outside source candidates. Previewing performs none of those steps.
+
+Authorization, foreground start, and execution remain separate explicit
+decisions. Authorization binds the exact plan digest; start consumes it but
+performs zero steps; each Advance performs at most one step. The local search
+uses no network or model budget. Discovery retains its ordinary provider cost,
+and the plan never silently fetches or accepts a source, creates evidence,
+judges a claim, retries work, or queues a background task.
 
 ---
 

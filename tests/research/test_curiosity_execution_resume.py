@@ -63,6 +63,7 @@ from research.ResearchPlanStepState import ResearchPlanStepState
 from research.ResearchPlanStepStatus import ResearchPlanStepStatus
 from response.ResponseComposer import ResponseComposer
 from tests.research.test_curiosity_execution_advance import (
+    CURIOSITY_PLAN_CAPABILITIES,
     NOW,
     QUESTION,
     AdvanceFixture,
@@ -98,7 +99,8 @@ class ResumeFixture(AdvanceFixture):
 
     def _registry(self, operation: object) -> ResearchPlanOperationRegistry:
         registry = ResearchPlanOperationRegistry()
-        registry.register(ResearchPlanStepCapability.SOURCE_DISCOVERY, operation)
+        for capability in CURIOSITY_PLAN_CAPABILITIES:
+            registry.register(capability, operation)
         return registry
 
     def _curiosity(
@@ -396,9 +398,10 @@ class BudgetSurvivesExactlyTests(ResumeFixture):
 
 class CompletedWorkIsNotRepeatedTests(ResumeFixture):
     def test_a_finished_execution_is_still_finished_after_the_restart(self) -> None:
-        """The one authored step ran, so the record says completed and stays so."""
+        """Every authored step ran, so the record stays completed."""
         started = self._started()
-        self._advance(started.plan_id)
+        for _step in self.plan_steps(started):
+            self._advance(started.plan_id)
         _curiosity, execution = self._restart()
 
         snapshot = execution.restored_execution(started.plan_id)
@@ -414,13 +417,14 @@ class CompletedWorkIsNotRepeatedTests(ResumeFixture):
     def test_a_finished_execution_is_never_resumed_or_rerun(self) -> None:
         """The strongest form of not repeating work: it cannot start again."""
         started = self._started()
-        self._advance(started.plan_id)
+        for _step in self.plan_steps(started):
+            self._advance(started.plan_id)
         curiosity, execution = self._restart()
 
         self._resume(curiosity, started.plan_id)
         self._advance_on(execution, started.plan_id)
 
-        self.assertEqual(len(self.operation.calls), 1)
+        self.assertEqual(len(self.operation.calls), len(self.plan_steps(started)))
         self.assertIsNone(execution.live_execution(started.plan_id))
         self.assertEqual(self.reopened_operation.calls, [])
 
@@ -532,17 +536,11 @@ class RestorationJudgesNothingNewTests(ResumeFixture):
 
 
 class PartlyFinishedExecutionTests(ResumeFixture):
-    """Two steps, one already done — the case the curiosity chain cannot reach.
+    """Two discovery steps isolate rebinding from Curiosity plan composition.
 
-    A curiosity proposal authors a single step, so finishing it finishes the
-    whole execution and a finished execution is never resumed. That leaves the
-    most important promise of this milestone untested by the chain: that a step
-    which already ran is restored as done and is not performed a second time.
-
-    So these drive the rebinding contract directly, with a two-step plan and the
-    execution record it would leave behind. Approval and digest are the
-    curiosity layer's job and are covered above; what is asked here is only what
-    rebinding itself must guarantee about recorded work.
+    Curiosity now has a local step followed by discovery. These tests retain a
+    direct two-discovery-step plan so they prove the execution layer restores
+    completed work without depending on how Curiosity currently authors plans.
     """
 
     def _partly_finished(self):

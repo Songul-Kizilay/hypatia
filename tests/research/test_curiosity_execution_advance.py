@@ -76,6 +76,11 @@ STATEMENT = "Authorization middleware can be bypassed before route handling."
 TEST = "Observe whether a protected route is reached without authorization."
 
 HYPOTHESIS_GAP = ResearchKnowledgeGapKind.HYPOTHESIS_EVIDENCE_GAP
+#: What a curiosity proposal authors today: look locally, then discover.
+CURIOSITY_PLAN_CAPABILITIES = (
+    ResearchPlanStepCapability.LOCAL_KNOWLEDGE_SEARCH,
+    ResearchPlanStepCapability.SOURCE_DISCOVERY,
+)
 
 
 class RecordingDiscoveryOperation:
@@ -91,7 +96,12 @@ class RecordingDiscoveryOperation:
     def run(self, step, context) -> ResearchPlanStepOperationResult:
         self.calls.append(step.step_id)
         self.contexts.append(context)
-        if self._fails:
+        # Failure belongs to the outward step. The opening local search reaches
+        # no provider, so there is nobody there to refuse it.
+        if (
+            self._fails
+            and step.capability is ResearchPlanStepCapability.SOURCE_DISCOVERY
+        ):
             raise ResearchError("The provider refused this discovery.")
         return ResearchPlanStepOperationResult(
             performed=True, detail="Candidates recorded.", succeeded=True
@@ -142,7 +152,10 @@ class AdvanceFixture(unittest.TestCase):
         )
         self.operation = RecordingDiscoveryOperation(fails=self.fails)
         registry = ResearchPlanOperationRegistry()
-        registry.register(ResearchPlanStepCapability.SOURCE_DISCOVERY, self.operation)
+        # A curiosity proposal now opens with a local search before it looks
+        # outward, so both authored capabilities need somewhere to go.
+        for capability in CURIOSITY_PLAN_CAPABILITIES:
+            registry.register(capability, self.operation)
         self.execution_service = ResearchPlanExecutionApplicationService(
             ResponseComposer(),
             operation_registry=registry,
@@ -242,6 +255,10 @@ class AdvanceFixture(unittest.TestCase):
             )
         )
 
+    def plan_steps(self, started) -> tuple:
+        """Return the steps the proposal actually authored for this execution."""
+        return self.execution_service.live_plan(started.plan_id).steps
+
     def _allowance(self, execution_id: str) -> ResearchExecutionAllowance:
         """Read the live allowance the start bound to this execution."""
         allowance = self.execution_service._allowances[execution_id]
@@ -318,12 +335,14 @@ class OneStepTests(AdvanceFixture):
         self.assertEqual(state.pending_steps, started.pending_steps - 1)
 
     def test_advancing_a_finished_plan_refuses_rather_than_looping(self) -> None:
+        """Two authored steps, then nothing — not a third attempt."""
         started = self._started()
-        self._advance(started.plan_id)
+        for _ in self.plan_steps(started):
+            self._advance(started.plan_id)
 
         again = self._advance(started.plan_id)
 
-        self.assertEqual(len(self.operation.calls), 1)
+        self.assertEqual(len(self.operation.calls), len(self.plan_steps(started)))
         self.assertIn("no pending step", again.message)
 
     def test_an_unknown_execution_is_refused(self) -> None:
@@ -343,17 +362,17 @@ class OneStepTests(AdvanceFixture):
 
 
 class CapabilityAndBudgetTests(AdvanceFixture):
-    def test_only_the_authorized_capability_is_executed(self) -> None:
+    def test_only_the_authored_capabilities_are_executed(self) -> None:
+        """Exactly what the proposal authors, and nothing beyond it."""
         started = self._started()
         plan = self.execution_service.live_plan(started.plan_id)
 
         self._advance(started.plan_id)
 
-        for step in plan.steps:
-            with self.subTest(step=step.step_id):
-                self.assertIs(
-                    step.capability, ResearchPlanStepCapability.SOURCE_DISCOVERY
-                )
+        self.assertEqual(
+            tuple(step.capability for step in plan.steps),
+            CURIOSITY_PLAN_CAPABILITIES,
+        )
 
     def test_the_allowance_is_the_budget_the_approval_carried(self) -> None:
         started = self._started()
@@ -365,8 +384,21 @@ class CapabilityAndBudgetTests(AdvanceFixture):
 
         self.assertEqual(allowance.budget, authorization.budget)
 
-    def test_an_attempt_is_charged_against_the_allowance(self) -> None:
+    def test_a_local_step_costs_no_network_budget(self) -> None:
+        """The opening search reaches nobody, so it is charged nothing."""
         started = self._started()
+        before = self._allowance(started.plan_id)
+
+        self._advance(started.plan_id)
+
+        self.assertEqual(
+            self._allowance(started.plan_id).remaining_network_operations,
+            before.remaining_network_operations,
+        )
+
+    def test_a_discovery_attempt_is_charged_against_the_allowance(self) -> None:
+        started = self._started()
+        self._advance(started.plan_id)
         before = self._allowance(started.plan_id)
 
         self._advance(started.plan_id)
@@ -385,15 +417,17 @@ class CapabilityAndBudgetTests(AdvanceFixture):
         applies rather than a state invented for the test.
         """
         started = self._started()
+        self._advance(started.plan_id)
         cost = cost_for(ResearchPlanStepCapability.SOURCE_DISCOVERY)
         allowance = self._allowance(started.plan_id)
         while allowance.affords(cost):
             allowance = allowance.charged(cost)
         self._set_allowance(started.plan_id, allowance)
+        reached = list(self.operation.calls)
 
         response = self._advance(started.plan_id)
 
-        self.assertEqual(self.operation.calls, [])
+        self.assertEqual(self.operation.calls, reached)
         self.assertIn("budget", response.message.casefold())
 
 
@@ -416,6 +450,14 @@ class CancelTests(AdvanceFixture):
 
 
 class FailureTests(AdvanceFixture):
+    """The outward step refuses; the local step before it does not."""
+
+    def _started(self):
+        """Start, then advance past the local step to the one that fails."""
+        started = super()._started()
+        self._advance(started.plan_id)
+        return started
+
     fails = True
 
     def test_a_provider_failure_is_recorded_rather_than_raised(self) -> None:
@@ -424,7 +466,7 @@ class FailureTests(AdvanceFixture):
         state = self._advance(started.plan_id).research_plan_execution
 
         self.assertIsNotNone(state)
-        self.assertEqual(state.completed_steps, 0)
+        self.assertEqual(state.completed_steps, 1)
 
     def test_a_failure_is_not_retried_and_does_not_advance(self) -> None:
         """One attempt is one attempt, however it turned out."""
@@ -432,7 +474,7 @@ class FailureTests(AdvanceFixture):
 
         self._advance(started.plan_id)
 
-        self.assertEqual(len(self.operation.calls), 1)
+        self.assertEqual(len(self.operation.calls), 2)
 
     def test_a_failed_attempt_still_charged_the_allowance(self) -> None:
         started = self._started()
@@ -453,7 +495,7 @@ class FailureTests(AdvanceFixture):
         state = self._advance(started.plan_id).research_plan_execution
 
         self.assertIsNone(state.running_step_id)
-        self.assertEqual(state.completed_steps, 0)
+        self.assertEqual(state.completed_steps, 1)
 
 
 class RestartTests(AdvanceFixture):
