@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from core.Exceptions import ResearchError
+from research.ResearchAttemptRecovery import ResearchAttemptRecovery
 from research.ResearchAttemptResolution import ResearchAttemptResolution
 from research.ResearchExecutionAllowance import ResearchExecutionAllowance
 from research.ResearchPlanExecutionState import ResearchPlanExecutionState
@@ -47,6 +48,9 @@ class ResearchPlanExecutionStepSnapshot:
     #: The human ruling, kept durable so a restart restores what an operator
     #: decided rather than asking them to decide it again.
     resolution: ResearchAttemptResolution = ResearchAttemptResolution.NONE
+    #: What a person did about an unseen attempt, kept so their decision and
+    #: their account of it both survive a restart.
+    recovery: ResearchAttemptRecovery | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.step_id, str) or not self.step_id.strip():
@@ -157,6 +161,7 @@ class ResearchPlanExecutionSnapshot:
                     operation=step.operation,
                     work_performed=step.work_performed,
                     resolution=step.resolution,
+                    recovery=step.recovery,
                 )
                 for step in state.steps
             ),

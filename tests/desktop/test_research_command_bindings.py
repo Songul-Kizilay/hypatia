@@ -477,6 +477,58 @@ class ResearchCommandBindingTests(unittest.TestCase):
             window._resolve_interrupted_attempt()
         self.assertEqual(len(requested), 1)
 
+    def test_the_recovery_panel_separates_human_from_provider(self) -> None:
+        """The operator is told their account is theirs before they give it."""
+        from desktop.TkinterDesktopWindow import _RECOVERY_PANEL_NOTE
+
+        note = _RECOVERY_PANEL_NOTE.casefold()
+
+        self.assertIn("never saw its result", note)
+        self.assertIn("already been charged", note)
+        self.assertIn("your account, not as something the provider returned", note)
+        self.assertIn("does not mark the step completed", note)
+        self.assertIn("without claiming it succeeded or failed", note)
+
+    def test_the_recovery_controls_are_bound_to_their_own_handlers(self) -> None:
+        _window, widgets = build_real_window(plan_authorization_enabled=True)
+        by_label = {
+            widget.text: getattr(widget.command, "__name__", "")
+            for widget in widgets
+            if widget.command is not None
+        }
+
+        self.assertEqual(
+            by_label.get("Record recovered information"),
+            "_record_recovered_information",
+        )
+        self.assertEqual(by_label.get("Abandon step"), "_abandon_step")
+        self.assertNotIn("Retry step", by_label)
+        self.assertEqual(
+            [label for label in by_label if "retry" in label.casefold()], []
+        )
+
+    def test_recording_recovered_information_requires_confirmation(self) -> None:
+        window, _widgets = build_real_window(plan_authorization_enabled=True)
+        window._execution_id.set("plan-1")
+        window._interrupted_step_id.set("step-1")
+        requested: list[Any] = []
+        window._approval_request = requested.append
+
+        with patch(
+            "desktop.TkinterDesktopWindow.messagebox.askyesno",
+            return_value=False,
+        ):
+            window._record_recovered_information()
+            window._abandon_step()
+        self.assertEqual(requested, [])
+
+        with patch(
+            "desktop.TkinterDesktopWindow.messagebox.askyesno",
+            return_value=True,
+        ):
+            window._abandon_step()
+        self.assertEqual(len(requested), 1)
+
     def test_the_comparison_controls_are_bound_to_their_own_handlers(self) -> None:
         self._assert_bound("Compare sources", "_preview_research_source_comparison")
         self._assert_bound(

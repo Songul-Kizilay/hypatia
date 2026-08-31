@@ -61,6 +61,10 @@ from cognition.ResearchPlanExecutionEvents import (
 )
 from core.Exceptions import ResearchError
 from eventbus.EventBus import EventBus
+from research.ResearchAttemptRecovery import ResearchAttemptRecovery
+from research.ResearchAttemptRecoveryDecision import (
+    ResearchAttemptRecoveryDecision,
+)
 from research.ResearchAttemptResolution import ResearchAttemptResolution
 from research.ResearchCapabilityCost import cost_for
 from research.ResearchExecutionAllowance import ResearchExecutionAllowance
@@ -94,6 +98,7 @@ from response.ResponseComposer import ResponseComposer
 RESEARCH_PLAN_EXECUTION_START_INTENT = "research_plan_execution_start"
 RESEARCH_PLAN_EXECUTION_STATUS_INTENT = "research_plan_execution_status"
 RESEARCH_PLAN_EXECUTION_RESOLVE_INTENT = "research_plan_execution_resolve"
+RESEARCH_PLAN_EXECUTION_RECOVER_INTENT = "research_plan_execution_recover"
 RESEARCH_PLAN_EXECUTION_CANCEL_INTENT = "research_plan_execution_cancel"
 RESEARCH_PLAN_EXECUTION_ADVANCE_INTENT = "research_plan_execution_advance"
 
@@ -533,6 +538,71 @@ class ResearchPlanExecutionApplicationService:
             resolved,
             self._allowances.get(plan_id),
             self._next_capability(plan_id, resolved),
+        )
+
+    def is_recover_request(self, request: BrainRequest) -> bool:
+        return request.metadata.get("intent") == RESEARCH_PLAN_EXECUTION_RECOVER_INTENT
+
+    def process_recover(self, request: BrainRequest) -> BrainResponse:
+        """Record what an operator did about a performed, unseen attempt.
+
+        The two decisions are the operator's alone. Nothing here contacts a
+        provider, so nothing is charged; the attempt was paid for when it began
+        and stays paid for. What the operator reports is kept as theirs, and no
+        part of this request can grant a capability, an approval or a budget.
+        """
+        plan_id = self._normalized_plan_id(request)
+        state = self._executions.get(plan_id)
+        if state is None:
+            return self._response_composer.research_plan_execution_missing(
+                request,
+                plan_id,
+            )
+        step_id = str(request.metadata.get("step_id", "")).strip()
+        if not step_id:
+            return self._response_composer.research_plan_execution_rejected(
+                request,
+                "Recovering an attempt needs the exact step.",
+            )
+        try:
+            recovery = ResearchAttemptRecovery(
+                decision=ResearchAttemptRecoveryDecision(
+                    str(request.metadata.get("decision", "")).strip()
+                ),
+                recorded_at=self._clock(),
+                summary=str(request.metadata.get("summary", "")),
+                claimed_operation=str(request.metadata.get("claimed_operation", "")),
+            )
+        except ValueError:
+            return self._response_composer.research_plan_execution_rejected(
+                request,
+                "That is not a recovery decision this system understands.",
+            )
+        except ResearchError as error:
+            return self._response_composer.research_plan_execution_rejected(
+                request,
+                str(error),
+            )
+        try:
+            recovered = state.recover_blocked_step(step_id, recovery)
+        except ResearchError as error:
+            return self._response_composer.research_plan_execution_rejected(
+                request,
+                str(error),
+            )
+        self._executions[plan_id] = recovered
+        self._events.step_recovered(plan_id, step_id, recovery.decision.value)
+        if not self._persist_checkpoint(plan_id):
+            self._executions[plan_id] = state
+            return self._response_composer.research_plan_execution_rejected(
+                request,
+                "The decision could not be recorded durably, so it was not kept.",
+            )
+        return self._response_composer.research_plan_execution_status(
+            request,
+            recovered,
+            self._allowances.get(plan_id),
+            self._next_capability(plan_id, recovered),
         )
 
     def process_advance(self, request: BrainRequest) -> BrainResponse:

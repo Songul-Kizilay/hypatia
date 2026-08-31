@@ -38,6 +38,9 @@ from eventbus.EventBus import EventBus
 from knowledge.KnowledgeCitation import KnowledgeCitation
 from research.HypothesisEvidenceRelation import HypothesisEvidenceRelation
 from research.RankedResearchSourceDiscovery import ranked_candidates
+from research.ResearchAttemptRecoveryDecision import (
+    ResearchAttemptRecoveryDecision,
+)
 from research.ResearchAttemptResolution import ResearchAttemptResolution
 from research.ResearchClaimConfidence import ResearchClaimConfidence
 from research.ResearchClaimContradictionCandidate import (
@@ -100,6 +103,13 @@ _HYPOTHESIS_DEFEATER_NOTE = (
 _HYPOTHESIS_EVIDENCE_NOTE = (
     "Evidence must already be recorded in the run. Separate several IDs with "
     "commas or spaces. The same record cannot be entered on both sides."
+)
+_RECOVERY_PANEL_NOTE = (
+    "This step is blocked because the operation may have run and Hypatia never "
+    "saw its result. The attempt has already been charged. Anything you record "
+    "here is kept as your account, not as something the provider returned, and "
+    "supplying it does not mark the step completed. Abandoning it stops this "
+    "step without claiming it succeeded or failed."
 )
 _INTERRUPTED_PANEL_NOTE = (
     "Previous attempt was interrupted. The external operation may have "
@@ -4606,6 +4616,35 @@ class TkinterDesktopWindow:
             self._resolve_interrupted_attempt,
         ).grid(row=6, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
 
+        self._recovery_summary = tk.StringVar()
+        self._recovery_claimed_operation = tk.StringVar()
+        ttk.Label(section, text=_RECOVERY_PANEL_NOTE, wraplength=680).grid(
+            row=7, column=0, columnspan=2, sticky="w", pady=(10, 0)
+        )
+        ttk.Label(section, text="What you found (your account)").grid(
+            row=8, column=0, sticky="w", pady=(6, 0)
+        )
+        ttk.Entry(section, textvariable=self._recovery_summary).grid(
+            row=8, column=1, sticky="ew", padx=(8, 0), pady=(6, 0)
+        )
+        ttk.Label(section, text="Operation you say produced it").grid(
+            row=9, column=0, sticky="w", pady=(6, 0)
+        )
+        ttk.Entry(section, textvariable=self._recovery_claimed_operation).grid(
+            row=9, column=1, sticky="ew", padx=(8, 0), pady=(6, 0)
+        )
+        recovery_buttons = ttk.Frame(section)
+        recovery_buttons.grid(row=10, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
+        for column, (label, command) in enumerate(
+            (
+                ("Record recovered information", self._record_recovered_information),
+                ("Abandon step", self._abandon_step),
+            )
+        ):
+            self._request_button(recovery_buttons, label, command).grid(
+                row=0, column=column, sticky="w", padx=(0 if column == 0 else 8, 0)
+            )
+
         buttons = ttk.Frame(section)
         buttons.grid(row=2, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
         commands: list[tuple[str, Callable[[], None]]] = [
@@ -4725,6 +4764,66 @@ class TkinterDesktopWindow:
                 execution_id,
                 step_id,
                 resolution,
+            )
+        )
+
+    def _record_recovered_information(self) -> None:
+        """Keep the operator's own account of an outcome Hypatia never saw."""
+        self._recover(
+            ResearchAttemptRecoveryDecision.OPERATOR_SUPPLIED_RESULT,
+            (
+                "This records what YOU found. It is stored as your account, "
+                "never as a provider result, and the step stays blocked rather "
+                "than being marked completed.\n\n"
+                "No operation runs, nothing is retried, and the charge already "
+                "made is neither refunded nor repeated."
+            ),
+        )
+
+    def _abandon_step(self) -> None:
+        """Stop pursuing one step without claiming it succeeded or failed."""
+        self._recover(
+            ResearchAttemptRecoveryDecision.ABANDONED,
+            (
+                "This step will not be pursued. It is not marked succeeded and "
+                "not marked failed, and the record still shows the operation "
+                "may have run.\n\n"
+                "Nothing is retried and the charge already made stays spent. "
+                "Later steps become available to advance explicitly."
+            ),
+        )
+
+    def _recover(
+        self,
+        decision: ResearchAttemptRecoveryDecision,
+        warning: str,
+    ) -> None:
+        """Ask once, plainly, then record one explicit operator decision."""
+        execution_id = self._execution_id.get().strip()
+        step_id = self._interrupted_step_id.get().strip()
+        if not execution_id or not step_id:
+            self._plan_approval_status.set(
+                "An execution ID and the blocked step ID are both required."
+            )
+            return
+        if not messagebox.askyesno(
+            "Record this decision?",
+            (
+                f"Execution: {execution_id}\n"
+                f"Step: {step_id}\n"
+                f"Decision: {decision.value}\n\n" + warning
+            ),
+            parent=self._root,
+        ):
+            self._plan_approval_status.set("No decision recorded.")
+            return
+        self._approval_request(
+            lambda: self._controller.recover_interrupted_attempt(
+                execution_id,
+                step_id,
+                decision.value,
+                self._recovery_summary.get(),
+                self._recovery_claimed_operation.get(),
             )
         )
 

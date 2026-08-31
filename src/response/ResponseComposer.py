@@ -1082,6 +1082,24 @@ class ResponseComposer:
         ]
         for step in ruled:
             lines.append(f"Operator ruling on {step.step_id}: {step.resolution.value}")
+        for step in state.steps:
+            recovery = step.recovery
+            if recovery is None:
+                continue
+            lines.append("")
+            lines.append(
+                f"Operator decision on {step.step_id}: {recovery.decision.value}"
+            )
+            if recovery.claimed_operation:
+                lines.append(
+                    "Operation the operator says produced it: "
+                    f"{recovery.claimed_operation} (their account, unverified)"
+                )
+            if recovery.summary:
+                lines.append(
+                    "Supplied by the operator, NOT observed by Hypatia and not a "
+                    f"provider result: {recovery.summary}"
+                )
         lines.append(f"Research operations performed: {state.steps_with_research_work}")
         if not state.performed_research_work:
             lines.append("No research work has run; this reports execution state only.")

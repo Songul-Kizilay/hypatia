@@ -6,6 +6,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 
 from core.Exceptions import ResearchError
+from research.ResearchAttemptRecovery import ResearchAttemptRecovery
 from research.ResearchAttemptResolution import ResearchAttemptResolution
 from research.ResearchAuthorizer import ResearchAuthorizer
 from research.ResearchPlanStepStatus import ResearchPlanStepStatus
@@ -28,6 +29,9 @@ class ResearchPlanStepState:
     resolution: ResearchAttemptResolution = ResearchAttemptResolution.NONE
     resolved_at: datetime | None = None
     resolved_by: ResearchAuthorizer | None = None
+    #: What a person did about an attempt that ran unseen. Absent until they
+    #: decide, and never filled in on their behalf.
+    recovery: ResearchAttemptRecovery | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.step_id, str) or not self.step_id.strip():
@@ -55,6 +59,14 @@ class ResearchPlanStepState:
             raise ResearchError("A research plan step ruling must record who.")
         if not ruled and (self.resolved_at is not None or self.resolved_by is not None):
             raise ResearchError("An unruled research plan step has no ruling record.")
+        if self.recovery is not None and not isinstance(
+            self.recovery, ResearchAttemptRecovery
+        ):
+            raise ResearchError("Research plan step recovery is invalid.")
+        if self.recovery is not None and not ruled:
+            raise ResearchError(
+                "A recovered research plan step must already carry its ruling."
+            )
         detail = self.detail.strip()
         if len(detail) > MAX_RESEARCH_PLAN_STEP_DETAIL_CHARACTERS:
             raise ResearchError("Research plan step state detail is too long.")
@@ -81,6 +93,25 @@ class ResearchPlanStepState:
             detail=detail,
             work_performed=work_performed,
             operation=operation,
+        )
+
+    def recovered(
+        self,
+        recovery: ResearchAttemptRecovery,
+        status: ResearchPlanStepStatus,
+        detail: str,
+    ) -> ResearchPlanStepState:
+        """Return this step carrying what a person decided about its attempt.
+
+        The ruling already on the step is kept rather than replaced. That it was
+        performed and unseen stays true after somebody deals with it, and a
+        reader who wants the whole story can still see both halves.
+        """
+        return replace(
+            self,
+            status=status,
+            detail=detail,
+            recovery=recovery,
         )
 
     def ruled(

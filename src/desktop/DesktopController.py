@@ -360,6 +360,44 @@ class DesktopController:
             )
         )
 
+    def recover_interrupted_attempt(
+        self,
+        execution_id: str,
+        step_id: str,
+        decision: str,
+        summary: str = "",
+        claimed_operation: str = "",
+    ) -> BrainResponse:
+        """Record what the operator did about an attempt that ran unseen.
+
+        Carries only the decision and the operator's own account of it. There is
+        deliberately nowhere here to pass a capability, an approval or a budget:
+        recovering an outcome is not a way to acquire permission.
+        """
+        normalized_execution = execution_id.strip()
+        normalized_step = step_id.strip()
+        normalized_decision = decision.strip()
+        if not normalized_execution:
+            raise ValueError("An execution ID cannot be empty.")
+        if not normalized_step:
+            raise ValueError("A step ID cannot be empty.")
+        if not normalized_decision:
+            raise ValueError("A recovery decision cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="Recover research attempt outcome",
+                source="desktop",
+                metadata={
+                    "intent": "research_plan_execution_recover",
+                    "research_plan_id": normalized_execution,
+                    "step_id": normalized_step,
+                    "decision": normalized_decision,
+                    "summary": summary.strip(),
+                    "claimed_operation": claimed_operation.strip(),
+                },
+            )
+        )
+
     def cancel_research_execution(self, execution_id: str) -> BrainResponse:
         """Stop one execution. Refunds neither approval nor spent budget."""
         return self._execution_request(

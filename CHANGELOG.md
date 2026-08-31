@@ -2,6 +2,37 @@
 
 All notable project changes are recorded here.
 
+## [0.3.244] - 2026-08-31
+
+### Added
+
+- An operator can act on a step blocked as performed-with-unknown-result, in
+  exactly two explicit ways: supply what they found by hand, or abandon the step.
+  Both are recorded as a small bounded recovery on the step, carrying the
+  decision, the moment, the human author, the operator's own account and the
+  operation they claim produced it.
+- The desktop offers both actions with confirmations that state the operation may
+  have run, that the attempt is already charged, that anything supplied is the
+  operator's account rather than a provider result, and that supplying it does
+  not complete the step. There is no retry control.
+
+### Security
+
+- Human-supplied information never acquires provider provenance. It is a
+  deliberately separate record rather than a `ResearchEvidenceRecord`, which is
+  anchored to an accepted source document and would have lent it authority it
+  does not have. The claimed operation is kept apart from the content and is
+  never matched against the operation registry or written onto the step.
+- Supplying a recovered result does not complete the step. Completion means
+  Hypatia ran an operation and saw what came back, so the step stays blocked and
+  carries the account alongside the attempt.
+- Abandoning cancels the step, which claims neither success nor failure. The
+  performed attempt, its operation and its ruling all remain observable, so the
+  record still shows something may have happened.
+- Neither decision reaches a provider, retries anything, advances anything,
+  creates an approval, or moves any budget; the interrupted attempt stays spent.
+  Nothing in the request can carry a capability, an approval or a budget.
+
 ## [0.3.243] - 2026-08-31
 
 ### Added

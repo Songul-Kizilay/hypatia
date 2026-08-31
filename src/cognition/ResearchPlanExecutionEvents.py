@@ -23,6 +23,7 @@ EXECUTION_STEP_COMPLETED = "research.plan.execution.step_completed"
 EXECUTION_STEP_FAILED = "research.plan.execution.step_failed"
 EXECUTION_STEP_BLOCKED = "research.plan.execution.step_blocked"
 EXECUTION_STEP_RESOLVED = "research.plan.execution.step_resolved"
+EXECUTION_STEP_RECOVERED = "research.plan.execution.step_recovered"
 EXECUTION_CANCELLED = "research.plan.execution.cancelled"
 EXECUTION_RESTORED = "research.plan.execution.restored"
 EXECUTION_PERSISTENCE_FAILED = "research.plan.execution.persistence_failed"
@@ -137,6 +138,22 @@ class ResearchPlanExecutionEvents:
                 "plan_id": plan_id,
                 "step_id": step_id,
                 "resolution": resolution,
+            },
+        )
+
+    def step_recovered(
+        self,
+        plan_id: str,
+        step_id: str,
+        decision: str,
+    ) -> None:
+        """Report one explicit human decision about an unseen attempt."""
+        self._emit(
+            EXECUTION_STEP_RECOVERED,
+            {
+                "plan_id": plan_id,
+                "step_id": step_id,
+                "decision": decision,
             },
         )
 

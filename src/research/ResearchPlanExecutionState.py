@@ -15,6 +15,10 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 
 from core.Exceptions import ResearchError
+from research.ResearchAttemptRecovery import ResearchAttemptRecovery
+from research.ResearchAttemptRecoveryDecision import (
+    ResearchAttemptRecoveryDecision,
+)
 from research.ResearchAttemptResolution import ResearchAttemptResolution
 from research.ResearchAuthorizer import ResearchAuthorizer
 from research.ResearchPlan import ResearchPlan
@@ -296,6 +300,63 @@ class ResearchPlanExecutionState:
         )
         steps = tuple(
             ruled if step.step_id == ruled.step_id else step for step in self.steps
+        )
+        return replace(self, steps=steps, status=status, detail="")
+
+    def recover_blocked_step(
+        self,
+        step_id: str,
+        recovery: ResearchAttemptRecovery,
+    ) -> ResearchPlanExecutionState:
+        """Record what an operator did about a performed, unseen attempt.
+
+        Only a step blocked by exactly that ruling is eligible, because this is
+        the only situation the two decisions are answers to.
+
+        Supplying a recovered result does not complete the step. Completion in
+        this system means Hypatia ran an operation and saw what came back, and
+        no amount of human testimony makes that true after the fact; the step
+        stays blocked and carries the person's account alongside the attempt.
+
+        Abandoning cancels the step, which says it will not be pursued without
+        saying it failed or succeeded. The performed attempt, its operation and
+        its ruling all remain, so the record still shows something may have
+        happened out there. The execution returns to running because the steps
+        after this one are untouched and still authorised, and stepping to them
+        needs no invented result.
+        """
+        if self.status is not ResearchPlanExecutionStatus.BLOCKED:
+            raise ResearchError(
+                "Only a blocked research plan execution can be recovered."
+            )
+        current = self._step(step_id)
+        if (
+            current.status is not ResearchPlanStepStatus.BLOCKED
+            or current.resolution
+            is not ResearchAttemptResolution.PERFORMED_RESULT_UNKNOWN
+        ):
+            raise ResearchError(
+                "Only a step blocked as performed with an unknown result can be "
+                "recovered."
+            )
+        if recovery.decision is ResearchAttemptRecoveryDecision.ABANDONED:
+            recovered = current.recovered(
+                recovery,
+                ResearchPlanStepStatus.CANCELLED,
+                "The operator abandoned this step; its outcome stays unknown.",
+            )
+            status = ResearchPlanExecutionStatus.RUNNING
+        else:
+            recovered = current.recovered(
+                recovery,
+                ResearchPlanStepStatus.BLOCKED,
+                "The operator supplied recovered information; Hypatia saw no "
+                "provider result.",
+            )
+            status = ResearchPlanExecutionStatus.BLOCKED
+        steps = tuple(
+            recovered if step.step_id == recovered.step_id else step
+            for step in self.steps
         )
         return replace(self, steps=steps, status=status, detail="")
 

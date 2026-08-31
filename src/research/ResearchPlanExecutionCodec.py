@@ -23,10 +23,16 @@ appear to have everything left.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from core.Exceptions import ResearchError
+from research.ResearchAttemptRecovery import ResearchAttemptRecovery
+from research.ResearchAttemptRecoveryDecision import (
+    ResearchAttemptRecoveryDecision,
+)
 from research.ResearchAttemptResolution import ResearchAttemptResolution
+from research.ResearchAuthorizer import ResearchAuthorizer
 from research.ResearchAutonomyBudget import ResearchAutonomyBudget
 from research.ResearchExecutionAllowance import ResearchExecutionAllowance
 from research.ResearchExecutionSpend import ResearchExecutionSpend
@@ -84,6 +90,12 @@ _STEP_FIELDS = frozenset(
 #: Records written before rulings existed carry no resolution and decode as
 #: unruled, which is what they truthfully were.
 _STEP_FIELDS_WITH_RULING = _STEP_FIELDS | {"resolution"}
+#: Records written before operators could recover an attempt carry no recovery
+#: and decode without one, which is what they truthfully had.
+_STEP_FIELDS_WITH_RECOVERY = _STEP_FIELDS_WITH_RULING | {"recovery"}
+_RECOVERY_FIELDS = frozenset(
+    {"decision", "recorded_at", "recorded_by", "summary", "claimed_operation"}
+)
 
 
 def encode_execution_snapshot(
@@ -109,6 +121,7 @@ def encode_execution_snapshot(
                 "operation": step.operation,
                 "work_performed": step.work_performed,
                 "resolution": step.resolution.value,
+                "recovery": _encoded_recovery(step.recovery),
             }
             for step in snapshot.steps
         ],
@@ -214,6 +227,7 @@ def _decode_step(document: object) -> ResearchPlanExecutionStepSnapshot:
     if not isinstance(document, dict) or set(document) not in (
         _STEP_FIELDS,
         _STEP_FIELDS_WITH_RULING,
+        _STEP_FIELDS_WITH_RECOVERY,
     ):
         raise ResearchError("Execution snapshot step document is invalid.")
     work_performed = document["work_performed"]
@@ -231,6 +245,7 @@ def _decode_step(document: object) -> ResearchPlanExecutionStepSnapshot:
         operation=_operation(document["operation"]),
         work_performed=work_performed,
         resolution=_resolution(document.get("resolution", "none")),
+        recovery=_decoded_recovery(document.get("recovery")),
     )
 
 
@@ -284,3 +299,41 @@ def _resolution(value: Any) -> ResearchAttemptResolution:
         return ResearchAttemptResolution(value)
     except ValueError as error:
         raise ResearchError("Execution snapshot step resolution is invalid.") from error
+
+
+def _encoded_recovery(recovery: ResearchAttemptRecovery | None) -> Any:
+    """Return one recovery as a document, or nothing when none was made."""
+    if recovery is None:
+        return None
+    return {
+        "decision": recovery.decision.value,
+        "recorded_at": recovery.recorded_at.isoformat(),
+        "recorded_by": recovery.recorded_by.value,
+        "summary": recovery.summary,
+        "claimed_operation": recovery.claimed_operation,
+    }
+
+
+def _decoded_recovery(document: Any) -> ResearchAttemptRecovery | None:
+    """Return one recovery, refusing a document that is not exactly one."""
+    if document is None:
+        return None
+    if not isinstance(document, dict) or set(document) != _RECOVERY_FIELDS:
+        raise ResearchError("Execution snapshot step recovery is invalid.")
+    try:
+        return ResearchAttemptRecovery(
+            decision=ResearchAttemptRecoveryDecision(document["decision"]),
+            recorded_at=_recovery_moment(document["recorded_at"]),
+            recorded_by=ResearchAuthorizer(document["recorded_by"]),
+            summary=document["summary"],
+            claimed_operation=document["claimed_operation"],
+        )
+    except (ValueError, TypeError) as error:
+        raise ResearchError("Execution snapshot step recovery is invalid.") from error
+
+
+def _recovery_moment(value: Any) -> datetime:
+    """Parse one recorded moment, refusing anything that is not one."""
+    if not isinstance(value, str):
+        raise ResearchError("Execution snapshot step recovery is invalid.")
+    return datetime.fromisoformat(value)
