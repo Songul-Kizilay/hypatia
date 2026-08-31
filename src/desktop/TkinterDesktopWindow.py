@@ -5001,13 +5001,20 @@ class TkinterDesktopWindow:
                 "curiosity proposal: not started; approval remains unused"
             )
             return
-        self._review_request(
+        response = self._review_request(
             lambda: self._controller.start_authorized_curiosity_research_proposal(
                 question_id,
                 digest,
                 authorization_id,
             )
         )
+        # The started execution's own identity, taken from the canonical
+        # response rather than typed again, so Advance and Cancel act on
+        # exactly what was started. A refusal carries no execution and clears
+        # the field, because a stale identity here would point the next advance
+        # at whatever was started before.
+        execution = getattr(response, "research_plan_execution", None)
+        self._execution_id.set(execution.plan_id if execution else "")
 
     def _prepare_curiosity_research_proposal(self) -> None:
         """Preview what the selected accepted question would research.

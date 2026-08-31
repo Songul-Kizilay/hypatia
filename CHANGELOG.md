@@ -2,6 +2,35 @@
 
 All notable project changes are recorded here.
 
+## [0.3.240] - 2026-08-31
+
+### Added
+
+- A started Curiosity execution can now be advanced one step. Start records the
+  execution's own identity in the operator's execution field, so the existing
+  "Advance one step" and "Cancel execution" controls act on exactly what was
+  started rather than on whatever was last typed. A refusal clears the field,
+  because a stale identity there would point the next advance at an earlier
+  execution.
+- No execution semantics changed. The ordinary one-step advance already
+  attempted exactly one step in authored order, checked the allowance before the
+  attempt, charged it at the attempt boundary, recorded failures structurally and
+  refused once cancelled. This milestone only connects the Curiosity-origin
+  execution to it.
+
+### Security
+
+- One operator action remains at most one step attempt. A single advance never
+  reaches the next step, never retries a refused provider, and never becomes a
+  loop; a finished plan is refused rather than restarted.
+- The step runs under the capability and budget the approval already carried. An
+  exhausted allowance is refused before the provider is reached, so nothing is
+  contacted and nothing is charged, and a cancelled execution performs no
+  operation at all.
+- Restored executions stay readable and not advanceable. Rebinding plan,
+  context, allowance and consumption provenance durably is its own milestone, so
+  the limitation is pinned by a test rather than quietly removed.
+
 ## [0.3.239] - 2026-08-31
 
 ### Added

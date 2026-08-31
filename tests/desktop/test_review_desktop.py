@@ -333,6 +333,10 @@ class PanelBehaviourTests(unittest.TestCase):
         self.window._curiosity_plan_digest.get.return_value = "a" * 64
         self.window._curiosity_authorization_id = Mock()
         self.window._curiosity_authorization_id.get.return_value = "approval-1"
+        # Starting now records the execution's own identity here, so Advance
+        # and Cancel act on exactly what was started rather than on whatever an
+        # operator last typed.
+        self.window._execution_id = Mock()
         self.window._root = Mock()
 
     def test_calibration_passes_the_run(self) -> None:

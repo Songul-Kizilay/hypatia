@@ -1,6 +1,6 @@
 [project]
 name = "hypatia"
-version = "0.3.239"
+version = "0.3.240"
 description = "A local-first AI research companion."
 requires-python = ">=3.14"
 
