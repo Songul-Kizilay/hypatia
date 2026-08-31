@@ -2,6 +2,43 @@
 
 All notable project changes are recorded here.
 
+## [0.3.236] - 2026-08-31
+
+### Added
+
+- A previewed curiosity proposal can now be approved by a person, and the
+  approval binds to the exact plan digest they were shown. This crosses the
+  authorization boundary once, deliberately, and stops before anything runs.
+- The operator supplies two things — which question, and the digest from the
+  preview — and neither is trusted as content. The proposal is derived again
+  from current canonical state by the same code that produced the preview, and
+  the digest they name has to equal the one that derivation produces. A request
+  carrying plan content cannot widen what is approved: the capabilities recorded
+  come from the re-derived plan.
+- That one comparison catches every way the plan could have moved underneath
+  them — a gap that closed, a hypothesis that gained evidence, a provider since
+  asked — and each is refused with a bounded message rather than quietly
+  approving the newer plan.
+- Approvals are the ordinary `ResearchPlanAuthorization`, built by the same
+  constructor, stored in the same store, and announced on the same event. No
+  curiosity-specific approval record exists.
+- The desktop Review surface gains a read-only plan digest field, captured from
+  the canonical response rather than parsed from rendered text, and one
+  "Authorize this proposal" control behind the established confirmation dialog,
+  which names the digest being approved.
+
+### Security
+
+- An approval is permission, not a start. Nothing is consumed on creation, no
+  execution exists, and beginning the work remains a separate action this
+  milestone does not provide. No execution control was added.
+- Approving reaches no provider, loads no source, runs no tool, and calls no
+  model. The curiosity service holds no execution or provider port to reach
+  with, and cannot write a hypothesis.
+- A question dismissed while undecided cannot be approved through an older
+  preview, and an approval names the human authorizer the existing architecture
+  already records. Curiosity does not authorize anything; a person does.
+
 ## [0.3.235] - 2026-08-31
 
 ### Added

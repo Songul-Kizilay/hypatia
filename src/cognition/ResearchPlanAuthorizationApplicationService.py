@@ -171,6 +171,54 @@ class ResearchPlanAuthorizationApplicationService:
             ),
         )
 
+    def record_for_plan(
+        self,
+        plan: ResearchPlan,
+        research_run_id: str,
+        disclosure: ResearchDisclosure = ResearchDisclosure.NONE,
+    ) -> ResearchPlanAuthorization | None:
+        """Record one human approval of an already-canonical plan.
+
+        A port for callers that derive the plan themselves rather than carrying
+        it in a request. The approval is built by the same constructor, gets the
+        same identity, budget, expiry and store, and is announced on the same
+        event as any other, so there is exactly one kind of approval in this
+        system and one place it is written.
+
+        What this does not do is decide anything. The caller has already
+        established that a person asked for this exact plan; the checks that
+        matter to *them* — whose question it was, whether it is still current,
+        whether the digest is the one they were shown — belong where that
+        context lives, not here.
+
+        Returns None when the approval could not be made durable, so a caller
+        never reports an approval that only ever existed in memory.
+        """
+        authorized_at = self._clock()
+        authorization = ResearchPlanAuthorization.for_plan(
+            authorization_id=self._id_factory(),
+            plan=plan,
+            research_run_id=research_run_id,
+            budget=ResearchAutonomyBudget(),
+            authorized_at=authorized_at,
+            expires_at=authorized_at
+            + timedelta(seconds=DEFAULT_AUTHORIZATION_VALIDITY_SECONDS),
+            disclosure=disclosure,
+        )
+        if authorization.authorization_id in self._authorizations:
+            self._events.refused("duplicate_identity")
+            return None
+        self._authorizations[authorization.authorization_id] = authorization
+        if not self._persist():
+            self._events.confirmed(
+                authorization,
+                len(self._authorizations),
+                False,
+            )
+            return None
+        self._events.confirmed(authorization, len(self._authorizations), True)
+        return authorization
+
     def process_confirm(self, request: BrainRequest) -> BrainResponse:
         """Record exactly the previewed approval, or refuse and record nothing."""
         authorization_id = self._required_text(

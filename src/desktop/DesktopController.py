@@ -532,6 +532,35 @@ class DesktopController:
             question_id,
         )
 
+    def authorize_curiosity_research_proposal(
+        self,
+        question_id: str,
+        expected_plan_digest: str,
+    ) -> BrainResponse:
+        """Approve one exact previewed proposal, starting nothing.
+
+        Carries the digest the operator was shown so the application can refuse
+        anything else. The plan itself is never sent from here: it is derived
+        again from canonical state, and this only says which one was read.
+        """
+        normalized_question = question_id.strip()
+        normalized_digest = expected_plan_digest.strip()
+        if not normalized_question:
+            raise ValueError("A curiosity question ID cannot be empty.")
+        if not normalized_digest:
+            raise ValueError("An expected plan digest cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="Authorize curiosity research proposal",
+                source="desktop",
+                metadata={
+                    "intent": "curiosity_authorize_proposal",
+                    "curiosity_question_id": normalized_question,
+                    "expected_plan_digest": normalized_digest,
+                },
+            )
+        )
+
     def dismiss_curiosity_question(self, question_id: str) -> BrainResponse:
         """Record that one proposal is not worth pursuing."""
         return self._curiosity_ruling(

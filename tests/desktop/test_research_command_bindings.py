@@ -368,13 +368,25 @@ class ResearchCommandBindingTests(unittest.TestCase):
             for label, handler in by_label.items()
             if "proposal" in label.casefold()
         }
-        self.assertEqual(proposal_handlers, {"_prepare_curiosity_research_proposal"})
-        for forbidden in ("approve", "authorize", "run_proposal", "execute"):
+        self.assertEqual(
+            proposal_handlers,
+            {
+                "_prepare_curiosity_research_proposal",
+                "_authorize_curiosity_research_proposal",
+            },
+        )
+        # Approving is now one of the two, and stops there. What must still be
+        # absent is any way to begin the approved work from this surface.
+        for forbidden in ("start_proposal", "run_proposal", "execute_proposal"):
             with self.subTest(absent=forbidden):
                 self.assertNotIn(
                     forbidden,
                     " ".join(by_label.values()).casefold(),
                 )
+        self.assertEqual(
+            by_label.get("Authorize this proposal"),
+            "_authorize_curiosity_research_proposal",
+        )
 
     def test_the_comparison_controls_are_bound_to_their_own_handlers(self) -> None:
         self._assert_bound("Compare sources", "_preview_research_source_comparison")

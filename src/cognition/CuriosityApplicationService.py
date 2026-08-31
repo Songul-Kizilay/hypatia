@@ -24,8 +24,12 @@ from eventbus.EventBus import EventBus
 from research.CuriosityProposalBuilder import CuriosityProposalBuilder
 from research.CuriosityQuestionStatus import CuriosityQuestionStatus
 from research.CuriosityQuestionStore import CuriosityQuestionStore
+from research.CuriosityResearchProposal import CuriosityResearchProposal
 from research.HypothesisStore import HypothesisStore
 from research.JsonFileCuriosityQuestionStore import MAX_CURIOSITY_STORE_QUESTIONS
+from research.RecordsResearchPlanAuthorization import (
+    RecordsResearchPlanAuthorization,
+)
 from research.ResearchCuriosityPreview import ResearchCuriosityPreview
 from research.ResearchCuriosityQuestion import ResearchCuriosityQuestion
 from research.ResearchCuriosityQuestionGenerator import (
@@ -33,7 +37,9 @@ from research.ResearchCuriosityQuestionGenerator import (
 )
 from research.ResearchHypothesis import ResearchHypothesis
 from research.ResearchKnowledgeGapDetector import ResearchKnowledgeGapDetector
+from research.ResearchPlanDigest import is_plan_digest
 from research.ResearchPlanDraftService import ResearchPlanDraftService
+from research.ResearchRun import ResearchRun
 from research.ResearchRunManager import ResearchRunManager
 from response.ResponseComposer import ResponseComposer
 
@@ -44,6 +50,7 @@ CURIOSITY_QUESTION_LIST_INTENT = "curiosity_question_list"
 CURIOSITY_QUESTION_ACCEPT_INTENT = "curiosity_question_accept"
 CURIOSITY_QUESTION_DISMISS_INTENT = "curiosity_question_dismiss"
 CURIOSITY_PREPARE_PROPOSAL_INTENT = "curiosity_prepare_proposal"
+CURIOSITY_AUTHORIZE_PROPOSAL_INTENT = "curiosity_authorize_proposal"
 
 
 class CuriosityApplicationService:
@@ -59,6 +66,7 @@ class CuriosityApplicationService:
         question_store: CuriosityQuestionStore | None = None,
         hypothesis_store: HypothesisStore | None = None,
         draft_service: ResearchPlanDraftService | None = None,
+        authorization_service: RecordsResearchPlanAuthorization | None = None,
         event_bus: EventBus | None = None,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
@@ -72,6 +80,10 @@ class CuriosityApplicationService:
         # tests. The digest ignores both, so a default service still previews
         # the same plan content twice.
         self._draft_service = draft_service or ResearchPlanDraftService()
+        # The one place approvals are written. Curiosity does not build an
+        # approval itself, so there is no second kind of approval to reason
+        # about, and where the service is absent no proposal can be approved.
+        self._authorization_service = authorization_service
         self._events = CuriosityEvents(event_bus)
         self._clock = clock or (lambda: datetime.now(UTC))
         self._questions: dict[str, ResearchCuriosityQuestion] = {}
@@ -96,6 +108,10 @@ class CuriosityApplicationService:
     @staticmethod
     def is_question_accept_request(request: BrainRequest) -> bool:
         return request.metadata.get("intent") == CURIOSITY_QUESTION_ACCEPT_INTENT
+
+    @staticmethod
+    def is_authorize_proposal_request(request: BrainRequest) -> bool:
+        return request.metadata.get("intent") == CURIOSITY_AUTHORIZE_PROPOSAL_INTENT
 
     @staticmethod
     def is_prepare_proposal_request(request: BrainRequest) -> bool:
@@ -154,6 +170,65 @@ class CuriosityApplicationService:
             self.questions(),
         )
 
+    def process_authorize_proposal(self, request: BrainRequest) -> BrainResponse:
+        """Record a human approval of one exact previewed proposal.
+
+        The operator supplies two things: which question, and the digest they
+        were shown. Neither is trusted as content. The proposal is derived again
+        from current canonical state by the same path that produced the preview,
+        and the digest they name has to equal the one that derivation produces.
+
+        That comparison is the whole safeguard. A digest is what the approval
+        will be bound to, so approving anything other than the plan the person
+        actually read would make the record a lie about what they agreed to —
+        and every way the plan could have moved underneath them is caught by the
+        same check: a gap that closed, a hypothesis that gained evidence, a
+        provider that has since been asked.
+
+        Nothing runs. An approval is permission that execution may later be
+        started against this exact plan by a separate action, and this creates
+        the permission without using it.
+        """
+        if self._authorization_service is None:
+            return self._response_composer.curiosity_rejected(
+                request,
+                "Research plan approval is unavailable.",
+            )
+        expected = self._required_text(
+            request,
+            "expected_plan_digest",
+            "expected plan digest",
+        )
+        if not is_plan_digest(expected):
+            return self._response_composer.curiosity_rejected(
+                request,
+                "That is not a research plan digest, so nothing was approved.",
+            )
+        derived = self._derive_proposal(request)
+        if isinstance(derived, BrainResponse):
+            return derived
+        proposal, run = derived
+        if proposal.digest != expected:
+            return self._response_composer.curiosity_rejected(
+                request,
+                "Proposal changed since preview. Prepare a new preview before "
+                "authorizing.",
+            )
+        authorization = self._authorization_service.record_for_plan(
+            proposal.plan,
+            run.run_id,
+        )
+        if authorization is None:
+            return self._response_composer.curiosity_rejected(
+                request,
+                "The approval could not be written durably, so it was not " "recorded.",
+            )
+        return self._response_composer.curiosity_proposal_authorized(
+            request,
+            proposal,
+            authorization,
+        )
+
     def process_prepare_proposal(self, request: BrainRequest) -> BrainResponse:
         """Draft an inert plan for one accepted question, starting nothing.
 
@@ -167,6 +242,23 @@ class CuriosityApplicationService:
         that produced it. Somebody may have recorded the very evidence the gap
         was about between accepting and asking, and drafting research for a gap
         that has since closed would propose work nobody needs.
+        """
+        derived = self._derive_proposal(request)
+        if isinstance(derived, BrainResponse):
+            return derived
+        proposal, _run = derived
+        self._events.proposal_previewed(proposal)
+        return self._response_composer.curiosity_proposal(request, proposal)
+
+    def _derive_proposal(
+        self,
+        request: BrainRequest,
+    ) -> tuple[CuriosityResearchProposal, ResearchRun] | BrainResponse:
+        """Build the current proposal for one exact question, or say why not.
+
+        Shared by previewing and approving on purpose. Approving has to see the
+        proposal the same way previewing does, and the surest way to guarantee
+        that is for there to be one derivation rather than two that agree today.
         """
         question_id = self._required_text(request, "curiosity_question_id", "question")
         question = self._questions.get(question_id)
@@ -204,8 +296,7 @@ class CuriosityApplicationService:
             )
         except ResearchError as error:
             return self._response_composer.curiosity_rejected(request, str(error))
-        self._events.proposal_previewed(proposal)
-        return self._response_composer.curiosity_proposal(request, proposal)
+        return proposal, run
 
     def process_question_accept(self, request: BrainRequest) -> BrainResponse:
         return self._decide(request, accept=True)

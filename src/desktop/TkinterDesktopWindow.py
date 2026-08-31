@@ -4773,6 +4773,10 @@ class TkinterDesktopWindow:
     def _build_curiosity_ruling_section(self, parent: ttk.Frame) -> None:
         """One question, one human ruling. Neither ruling starts any research."""
         self._curiosity_question_id = tk.StringVar()
+        #: The digest the operator was shown. Carried so approving names the
+        #: exact plan that was read rather than whatever the system would draft
+        #: at the moment the button is pressed.
+        self._curiosity_plan_digest = tk.StringVar()
         section = ttk.LabelFrame(parent, text="Rule on a question", padding=12)
         section.grid(row=2, column=0, sticky="ew", pady=(10, 0))
         section.columnconfigure(1, weight=1)
@@ -4796,6 +4800,17 @@ class TkinterDesktopWindow:
             "Prepare research proposal",
             self._prepare_curiosity_research_proposal,
         ).grid(row=0, column=2, sticky="w", padx=(8, 0))
+        self._request_button(
+            buttons,
+            "Authorize this proposal",
+            self._authorize_curiosity_research_proposal,
+        ).grid(row=0, column=3, sticky="w", padx=(8, 0))
+        ttk.Label(section, text="Plan digest").grid(
+            row=3, column=0, sticky="w", pady=(6, 0)
+        )
+        ttk.Entry(
+            section, textvariable=self._curiosity_plan_digest, state="readonly"
+        ).grid(row=3, column=1, sticky="ew", padx=(8, 0), pady=(6, 0))
 
     def _build_review_history_section(self, parent: ttk.Frame) -> None:
         """Read back what was kept, producing nothing new."""
@@ -4815,9 +4830,12 @@ class TkinterDesktopWindow:
                 buttons, "List questions", self._list_curiosity_questions
             ).grid(row=0, column=column, sticky="w", padx=(0 if column == 0 else 8, 0))
 
-    def _review_request(self, call: Callable[[], BrainResponse]) -> None:
+    def _review_request(
+        self,
+        call: Callable[[], BrainResponse],
+    ) -> BrainResponse | None:
         """Run one review request into the Review panel's result area."""
-        self._panel_request(self._review_status, self._review_output, call)
+        return self._panel_request(self._review_status, self._review_output, call)
 
     def _report_provider_comparison(self) -> None:
         """Show one run's two provider result sets. Contact no provider."""
@@ -4882,6 +4900,43 @@ class TkinterDesktopWindow:
             )
         )
 
+    def _authorize_curiosity_research_proposal(self) -> None:
+        """Approve exactly the proposal on screen, after asking.
+
+        The digest is shown in the confirmation rather than only in the panel,
+        because the digest is what the approval is bound to and an operator
+        approving one plan while reading another is the failure this exists to
+        prevent. Answering No records nothing at all.
+        """
+        question_id = self._curiosity_question_id.get().strip()
+        digest = self._curiosity_plan_digest.get().strip()
+        if not question_id or not digest:
+            self._review_status.set(
+                "Prepare a research proposal first; approving needs its digest."
+            )
+            return
+        if not messagebox.askyesno(
+            "Authorize this research proposal?",
+            (
+                f"Curiosity question: {question_id}\n"
+                f"Plan digest: {digest}\n\n"
+                "This records that you approve exactly this plan. It starts "
+                "nothing: no provider is contacted and no step runs. Beginning "
+                "the work is a separate action.\n\n"
+                "If the proposal has changed since you previewed it, the "
+                "approval is refused rather than moved to the new plan."
+            ),
+            parent=self._root,
+        ):
+            self._review_status.set("curiosity proposal: not authorized")
+            return
+        self._review_request(
+            lambda: self._controller.authorize_curiosity_research_proposal(
+                question_id,
+                digest,
+            )
+        )
+
     def _prepare_curiosity_research_proposal(self) -> None:
         """Preview what the selected accepted question would research.
 
@@ -4891,11 +4946,16 @@ class TkinterDesktopWindow:
         comes back as an explicit refusal rather than being quietly accepted
         first.
         """
-        self._review_request(
+        response = self._review_request(
             lambda: self._controller.prepare_curiosity_research_proposal(
                 self._curiosity_question_id.get()
             )
         )
+        # Captured from the canonical response rather than parsed out of the
+        # rendered text, so approving cannot bind to a digest scraped from
+        # prose. A refusal carries no proposal and clears the field.
+        proposal = getattr(response, "curiosity_proposal", None)
+        self._curiosity_plan_digest.set(proposal.digest if proposal else "")
 
     def _dismiss_curiosity_question(self) -> None:
         self._review_request(
@@ -5359,7 +5419,7 @@ class TkinterDesktopWindow:
         status: tk.StringVar,
         output: tk.Text,
         call: Callable[[], BrainResponse],
-    ) -> None:
+    ) -> BrainResponse | None:
         """Run one request, reporting a refusal as plainly as a result.
 
         A rejected request is shown in the panel rather than only in the status
@@ -5371,13 +5431,17 @@ class TkinterDesktopWindow:
             response = call()
         except ValueError as error:
             status.set(str(error))
-            return
+            return None
         status.set("Done." if response.success else "That request did not complete.")
         output.configure(state=tk.NORMAL)
         output.delete("1.0", tk.END)
         output.insert(tk.END, response.message)
         output.configure(state=tk.DISABLED)
         self._append_response(response)
+        # Returned so a caller can read canonical fields off the response
+        # rather than parsing the text it just rendered. Callers that ignore it
+        # are unaffected.
+        return response
 
     @staticmethod
     def _text_value(widget: tk.Text) -> str:

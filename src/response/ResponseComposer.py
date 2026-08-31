@@ -2505,6 +2505,41 @@ class ResponseComposer:
             curiosity_proposal=proposal,
         )
 
+    def curiosity_proposal_authorized(
+        self,
+        request: BrainRequest,
+        proposal: CuriosityResearchProposal,
+        authorization: ResearchPlanAuthorization,
+    ) -> BrainResponse:
+        """Report that a person approved this exact plan, and that it is idle.
+
+        Both facts are stated because either alone is misleading. An approval
+        that does not say it has not started reads like something happening; a
+        plan that does not say it is approved reads like nothing was decided.
+        """
+        lines = [
+            "RESEARCH PROPOSAL AUTHORIZED — approved by a person, not running",
+            f"Curiosity question: {proposal.question}",
+            f"Question ID: {proposal.curiosity_question_id}",
+            f"Plan digest: {authorization.plan_digest}",
+            f"Approval ID: {authorization.authorization_id}",
+            f"Approved by: {authorization.authorized_by.value}",
+            f"Approved at: {authorization.authorized_at.isoformat()}",
+            f"Valid until: {authorization.expires_at.isoformat()}",
+            "",
+            "Nothing has started. This approval permits a later, separate "
+            "action to begin exactly this plan; it does not begin it, and no "
+            "step has run.",
+        ]
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="curiosity_authorize_proposal",
+            memory_count=0,
+            curiosity_proposal=proposal,
+            research_plan_authorization=authorization,
+        )
+
     def curiosity_rejected(
         self,
         request: BrainRequest,

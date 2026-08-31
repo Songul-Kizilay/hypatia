@@ -457,6 +457,7 @@ class CognitiveEngine:
                 response_composer,
                 question_store=curiosity_question_store,
                 hypothesis_store=hypothesis_store,
+                authorization_service=self._plan_authorization_service,
                 event_bus=event_bus,
             )
         self._reflection_service: ReflectionApplicationService | None = None
@@ -3683,6 +3684,7 @@ class CognitiveEngine:
             or service.is_question_accept_request(request)
             or service.is_question_dismiss_request(request)
             or service.is_prepare_proposal_request(request)
+            or service.is_authorize_proposal_request(request)
         )
 
     def _process_curiosity(self, request: BrainRequest) -> BrainResponse:
@@ -3706,6 +3708,8 @@ class CognitiveEngine:
                 return service.process_question_accept(request)
             if service.is_prepare_proposal_request(request):
                 return service.process_prepare_proposal(request)
+            if service.is_authorize_proposal_request(request):
+                return service.process_authorize_proposal(request)
             return service.process_question_dismiss(request)
         except ResearchError as error:
             return self._response_composer.curiosity_rejected(request, str(error))
