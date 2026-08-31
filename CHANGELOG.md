@@ -2,6 +2,39 @@
 
 All notable project changes are recorded here.
 
+## [0.3.227] - 2026-08-31
+
+### Tests
+
+- The research controls are now checked against the handlers they are supposed
+  to call. Every research method in the window was already tested by calling it,
+  which left the one thing an operator actually does — pressing a control —
+  unproven: a button wired to the wrong method would have left every handler
+  test green while the desktop did something else.
+- The window is built by its own `__init__` and `_build_layout` with the tkinter
+  widget classes replaced by recorders, so the bindings under test come from
+  Hypatia's real construction code rather than from a fixture. No display, no
+  GUI automation, and no real Tk root is involved.
+- Preview & load is asserted by handler identity, because it is the control
+  standing between a discovered candidate and a network fetch of it. Bound to
+  the generic loader beside it, the same button would still load something —
+  without the confirmation, and without the candidate being revalidated against
+  the discovery that returned it. The contract was verified by temporarily
+  misbinding it, which fails three tests including that one.
+- The command each control carries is also lifted off the real widget and
+  invoked against live state, so a provider switch is proven to act on the
+  candidate selected when the button is pressed rather than one selected
+  earlier. Every research command is a bound method rather than a layout-time
+  lambda, which is the structural reason no stale run, provider or source can be
+  captured.
+- Shared labels are distinguished from shared handlers. The simple Research tab
+  and Research (Advanced) both offer "Find sources" and "Start research", and
+  three panels each contribute a different record type to a comparison; each
+  resolves to its own handler, and no two research controls share one.
+- No production code changed. Every binding was already correct, and the manual
+  "Load source" control was confirmed to be a deliberately separate
+  explicit-URL workflow rather than a way around candidate acceptance.
+
 ## [0.3.226] - 2026-08-31
 
 ### Tests
