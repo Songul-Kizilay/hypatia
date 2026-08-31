@@ -44,7 +44,7 @@ class JsonFileResearchSourceContentStoreTests(unittest.TestCase):
 
         self.assertEqual(self.store.load(), [self.record])
         document = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(document["schema_version"], 1)
+        self.assertEqual(document["schema_version"], 2)
         self.assertEqual(
             document["records"][0]["content_sha256"], self.record.content_sha256
         )
@@ -53,7 +53,7 @@ class JsonFileResearchSourceContentStoreTests(unittest.TestCase):
         self.store.save([self.record])
         valid = json.loads(self.path.read_text(encoding="utf-8"))
         cases = []
-        unknown_schema = {**valid, "schema_version": 2}
+        unknown_schema = {**valid, "schema_version": 3}
         cases.append((unknown_schema, "unsupported schema"))
         boolean_schema = {**valid, "schema_version": True}
         cases.append((boolean_schema, "unsupported schema"))

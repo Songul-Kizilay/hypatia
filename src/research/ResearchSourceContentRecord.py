@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from core.Exceptions import ResearchError
-from research.ResearchSource import ResearchSource
+from research.ResearchSource import HTTPS_ACQUISITION, ResearchSource
 
 MAX_SOURCE_CONTENT_UTF8_BYTES = 4_000_000
 _MAXIMUM_DOCUMENT_ID_CHARACTERS = 200
@@ -32,6 +32,8 @@ class ResearchSourceContentRecord:
     stored_at: datetime
     content_byte_count: int
     content_sha256: str
+    content_resource: str = ""
+    acquisition: str = HTTPS_ACQUISITION
 
     def __post_init__(self) -> None:
         normalized_values = (
@@ -101,6 +103,18 @@ class ResearchSourceContentRecord:
         object.__setattr__(self, "title", title)
         object.__setattr__(self, "content_type", content_type)
         object.__setattr__(self, "content_sha256", normalized_sha256)
+        # Restoration rebuilds the indexed document from this record alone, so
+        # anything absent here is absent from the document after a restart. When
+        # these were not persisted, an accepted CVE came back claiming an
+        # ordinary HTTPS read of a page that cannot produce its bytes — and the
+        # document identity still matched, so nothing failed and nothing said so.
+        for name in ("content_resource", "acquisition"):
+            value = getattr(self, name)
+            if not isinstance(value, str):
+                raise ResearchError(f"Research source persisted {name} must be text.")
+            object.__setattr__(self, name, value.strip())
+        if not self.acquisition:
+            raise ResearchError("Research source persisted acquisition is invalid.")
 
     @classmethod
     def from_source(
@@ -128,6 +142,8 @@ class ResearchSourceContentRecord:
             stored_at=stored_at,
             content_byte_count=len(encoded_content),
             content_sha256=hashlib.sha256(encoded_content).hexdigest(),
+            content_resource=source.content_resource,
+            acquisition=source.acquisition,
         )
 
     @staticmethod

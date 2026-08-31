@@ -2,6 +2,39 @@
 
 All notable project changes are recorded here.
 
+## [0.3.225] - 2026-08-31
+
+### Fixed
+
+- An accepted CVE lost its provenance on restart. Startup rebuilds each indexed
+  document from the persisted content record alone, and that record had nowhere
+  to keep how the bytes were obtained, so a source materialized from the NVD CVE
+  API 2.0 came back describing itself as an ordinary HTTPS read of the detail
+  page — a page that serves an application shell and cannot produce those bytes.
+  Document identity derives from the URL, so the restored document still
+  matched, indexing still succeeded, and nothing reported that the provenance
+  had changed. The content record now carries `content_resource` and
+  `acquisition`, and restoration rebuilds the source with them.
+
+### Changed
+
+- The research source content store is schema version 2. Version 1 snapshots
+  remain readable and are decoded with the defaults, which say exactly what
+  version 1 was able to say: an ordinary HTTPS read whose content resource is
+  the URL itself. That was true of every source that could exist when those
+  records were written, so reading them this way states their provenance rather
+  than inventing it. No historical record is rewritten or migrated.
+
+### Tests
+
+- The whole downstream operator journey is covered with a structured source:
+  accepted into the run, previewed and assessed through the existing assessment
+  vocabulary, chunked into readable evidence, cited by an ordinary claim, and
+  joined back to its discovery candidate by the provider comparison. Confidence
+  does not rise because the provider was NVD, an unassessed source stays
+  unknown rather than authoritative, no reference is ever fetched or promoted to
+  a source, and the Crossref path is asserted unchanged end to end.
+
 ## [0.3.224] - 2026-08-31
 
 ### Fixed
