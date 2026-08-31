@@ -19,8 +19,9 @@ import tempfile
 import unittest
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
@@ -484,6 +485,74 @@ class LearningOptInPolicyTests(unittest.TestCase):
 
         self.assertTrue(hypothesis_engine_enabled(environment))
         self.assertFalse(failure_memory_enabled(environment))
+
+
+class HypothesisRetractionConfirmationTests(unittest.TestCase):
+    """A canonical correction is confirmed, exactly as other mutations are."""
+
+    def _window(self, evidence: str = "evidence-1"):
+        window: Any = object.__new__(TkinterDesktopWindow)
+        window._root = object()
+        window._controller = SimpleNamespace(
+            retract_hypothesis_evidence_relation=lambda *args: self.calls.append(args)
+        )
+        window._hypothesis_id = SimpleNamespace(get=lambda: "hypothesis-1")
+        window._hypothesis_evidence_ids = SimpleNamespace(get=lambda: evidence)
+        window._hypothesis_relation = SimpleNamespace(get=lambda: "supports")
+        window._learning_status = SimpleNamespace(
+            set=lambda value: self.statuses.append(value)
+        )
+        window._learning_request = lambda call: call()
+        return window
+
+    def setUp(self) -> None:
+        self.calls: list[tuple[str, ...]] = []
+        self.statuses: list[str] = []
+
+    def test_declining_records_nothing(self) -> None:
+        window = self._window()
+
+        with patch(
+            "desktop.TkinterDesktopWindow.messagebox.askyesno", return_value=False
+        ) as confirm:
+            window._retract_hypothesis_relation()
+
+        confirm.assert_called_once()
+        self.assertEqual(self.calls, [])
+        self.assertEqual(self.statuses, ["hypothesis relation: not retracted"])
+
+    def test_confirming_records_exactly_one_retraction(self) -> None:
+        window = self._window()
+
+        with patch(
+            "desktop.TkinterDesktopWindow.messagebox.askyesno", return_value=True
+        ):
+            window._retract_hypothesis_relation()
+
+        self.assertEqual(self.calls, [("hypothesis-1", "evidence-1", "supports")])
+
+    def test_the_dialog_names_what_will_be_taken_back(self) -> None:
+        window = self._window()
+
+        with patch(
+            "desktop.TkinterDesktopWindow.messagebox.askyesno", return_value=False
+        ) as confirm:
+            window._retract_hypothesis_relation()
+
+        message = confirm.call_args[0][1]
+        for expected in ("hypothesis-1", "evidence-1", "supports", "RETRACT"):
+            with self.subTest(expected=expected):
+                self.assertIn(expected, message)
+
+    def test_several_evidence_ids_are_refused_before_confirming(self) -> None:
+        """A retraction is about one statement, not a field-full of them."""
+        window = self._window(evidence="evidence-1, evidence-2")
+
+        with patch("desktop.TkinterDesktopWindow.messagebox.askyesno") as confirm:
+            window._retract_hypothesis_relation()
+
+        confirm.assert_not_called()
+        self.assertEqual(self.calls, [])
 
 
 if __name__ == "__main__":

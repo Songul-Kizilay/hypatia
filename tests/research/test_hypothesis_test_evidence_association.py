@@ -402,13 +402,13 @@ class LegacyStoreTests(unittest.TestCase):
         self.assertEqual(restored.discriminating_test_evidence_ids, ())
         self.assertFalse(restored.has_discriminating_test_evidence)
 
-    def test_saving_writes_version_two(self) -> None:
+    def test_saving_writes_the_current_version(self) -> None:
         store = JsonFileHypothesisStore(self.path)
 
         store.save([hypothesis().addresses_test_by(("evidence-1",), NOW)])
 
         document = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(document["schema_version"], 2)
+        self.assertEqual(document["schema_version"], 3)
         self.assertEqual(
             document["hypotheses"][0]["discriminating_test_evidence_ids"],
             ["evidence-1"],
@@ -416,7 +416,7 @@ class LegacyStoreTests(unittest.TestCase):
 
     def test_an_unsupported_version_is_still_refused(self) -> None:
         self.path.write_text(
-            json.dumps({"schema_version": 3, "hypotheses": []}), encoding="utf-8"
+            json.dumps({"schema_version": 4, "hypotheses": []}), encoding="utf-8"
         )
 
         with self.assertRaises(ResearchError):

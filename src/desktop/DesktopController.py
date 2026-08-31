@@ -633,6 +633,41 @@ class DesktopController:
             evidence_ids,
         )
 
+    def retract_hypothesis_evidence_relation(
+        self,
+        hypothesis_id: str,
+        evidence_id: str,
+        relation: str,
+    ) -> BrainResponse:
+        """Take back one authored statement about evidence and a hypothesis.
+
+        One operation for all three relations, taking identifiers and a named
+        relation. It withdraws a statement; it does not delete the evidence, the
+        hypothesis, or anything else, and it decides nothing about which way the
+        evidence cuts.
+        """
+        normalized_hypothesis = hypothesis_id.strip()
+        normalized_evidence = evidence_id.strip()
+        normalized_relation = relation.strip()
+        if not normalized_hypothesis:
+            raise ValueError("A hypothesis ID cannot be empty.")
+        if not normalized_evidence:
+            raise ValueError("An evidence ID cannot be empty.")
+        if not normalized_relation:
+            raise ValueError("A relation cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="Retract hypothesis evidence relation",
+                source="desktop",
+                metadata={
+                    "intent": "research_hypothesis_retract_relation",
+                    "hypothesis_id": normalized_hypothesis,
+                    "evidence_id": normalized_evidence,
+                    "relation": normalized_relation,
+                },
+            )
+        )
+
     def oppose_hypothesis(
         self,
         hypothesis_id: str,

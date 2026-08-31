@@ -23,6 +23,11 @@ from datetime import UTC, datetime
 
 from core.Exceptions import ResearchError
 from research.DisplayText import one_bounded_line
+from research.HypothesisEvidenceRelation import HypothesisEvidenceRelation
+from research.HypothesisEvidenceRetraction import (
+    MAX_HYPOTHESIS_RETRACTIONS,
+    HypothesisEvidenceRetraction,
+)
 
 MAX_HYPOTHESIS_STATEMENT_LENGTH = 400
 MAX_DISCRIMINATING_TEST_LENGTH = 400
@@ -48,6 +53,12 @@ class ResearchHypothesis:
     #: Membership here is authored and never inferred; nothing in this codebase
     #: compares the wording of a test against the wording of evidence.
     discriminating_test_evidence_ids: tuple[str, ...] = ()
+    #: Statements an operator has taken back. The three collections above are
+    #: the current projection — an identifier sits in one exactly while that
+    #: relation is active — and this is the history, so a corrected hypothesis
+    #: reads as one where something was authored and withdrawn rather than one
+    #: where nothing was ever said.
+    retractions: tuple[HypothesisEvidenceRetraction, ...] = ()
     withdrawn: bool = False
 
     def __post_init__(self) -> None:
@@ -68,6 +79,7 @@ class ResearchHypothesis:
         if len(self.discriminating_test) > MAX_DISCRIMINATING_TEST_LENGTH:
             raise ResearchError("Hypothesis discriminating test is too long.")
         self._validate_evidence()
+        self._validate_retractions()
         for moment, label in (
             (self.created_at, "creation time"),
             (self.updated_at, "update time"),
@@ -101,6 +113,90 @@ class ResearchHypothesis:
         # it and oppose it, or address it while the operator has not yet said
         # which way it cuts. Requiring a side would be a rule this codebase
         # never had, invented to make the new relationship tidier.
+
+    def _validate_retractions(self) -> None:
+        if not isinstance(self.retractions, tuple):
+            raise ResearchError("Hypothesis retractions must be an immutable tuple.")
+        if len(self.retractions) > MAX_HYPOTHESIS_RETRACTIONS:
+            raise ResearchError("This hypothesis records too many retractions.")
+        if not all(
+            isinstance(entry, HypothesisEvidenceRetraction)
+            for entry in self.retractions
+        ):
+            raise ResearchError("A hypothesis retraction record is invalid.")
+
+    def active_evidence_ids(
+        self,
+        relation: HypothesisEvidenceRelation,
+    ) -> tuple[str, ...]:
+        """Return the evidence currently standing in that relation."""
+        if relation is HypothesisEvidenceRelation.SUPPORTS:
+            return self.supporting_evidence_ids
+        if relation is HypothesisEvidenceRelation.OPPOSES:
+            return self.opposing_evidence_ids
+        return self.discriminating_test_evidence_ids
+
+    def retracted(
+        self,
+        evidence_id: str,
+        relation: HypothesisEvidenceRelation,
+        moment: datetime,
+    ) -> ResearchHypothesis:
+        """Take back one statement, keeping the fact that it was made.
+
+        Only a currently active statement can be taken back, which is also what
+        keeps the history honest: a retraction record always corresponds to a
+        relation that really stood, and retracting twice in a row is refused
+        rather than written down twice.
+
+        Nothing moves. Retracting support does not create opposition, and
+        retracting either says nothing about the discriminating test — a
+        correction is two authored events, not one hidden flip.
+        """
+        if not isinstance(relation, HypothesisEvidenceRelation):
+            raise ResearchError("A retraction needs a known evidence relation.")
+        identifier = evidence_id.strip() if isinstance(evidence_id, str) else ""
+        if not identifier:
+            raise ResearchError("A retracted evidence ID cannot be empty.")
+        active = self.active_evidence_ids(relation)
+        if identifier not in active:
+            raise ResearchError(
+                "That evidence does not currently stand in that relation."
+            )
+        remaining = tuple(value for value in active if value != identifier)
+        # Spelled out rather than assembled from the relation's field name. A
+        # dynamic keyword would say the same thing to a reader and nothing at
+        # all to a type checker, and this is the one place where putting a
+        # value in the wrong collection would silently move evidence between
+        # relations.
+        supporting = self.supporting_evidence_ids
+        opposing = self.opposing_evidence_ids
+        addressing = self.discriminating_test_evidence_ids
+        if relation is HypothesisEvidenceRelation.SUPPORTS:
+            supporting = remaining
+        elif relation is HypothesisEvidenceRelation.OPPOSES:
+            opposing = remaining
+        else:
+            addressing = remaining
+        return replace(
+            self,
+            supporting_evidence_ids=supporting,
+            opposing_evidence_ids=opposing,
+            discriminating_test_evidence_ids=addressing,
+            retractions=(
+                *self.retractions,
+                HypothesisEvidenceRetraction(identifier, relation, moment),
+            ),
+            updated_at=moment,
+        )
+
+    def was_retracted(
+        self,
+        evidence_id: str,
+        relation: HypothesisEvidenceRelation,
+    ) -> bool:
+        """Say whether this exact statement was ever taken back."""
+        return any(entry.describes(evidence_id, relation) for entry in self.retractions)
 
     @property
     def evidence_count(self) -> int:

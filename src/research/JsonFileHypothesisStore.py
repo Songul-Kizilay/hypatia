@@ -25,6 +25,8 @@ from tempfile import NamedTemporaryFile
 from typing import Any, Protocol
 
 from core.Exceptions import ResearchError
+from research.HypothesisEvidenceRelation import relation_of
+from research.HypothesisEvidenceRetraction import HypothesisEvidenceRetraction
 from research.ResearchHypothesis import ResearchHypothesis
 
 MAX_HYPOTHESIS_STORE_BYTES = 4 * 1024 * 1024
@@ -37,8 +39,12 @@ MAX_HYPOTHESIS_STORE_ENTRIES = 500
 #: promoted into an association nobody authored. An open hypothesis restored
 #: from version 1 therefore still reads as having no test evidence, which is
 #: true — and which curiosity will say out loud.
-_SCHEMA_VERSION = 2
-_SUPPORTED_SCHEMA_VERSIONS = (1, 2)
+#: Version 3 keeps the statements an operator took back. Older files record
+#: none, and the truthful reading of that is that none were taken back — their
+#: relationships were active when written and stay active on load. No retraction
+#: is invented to explain a collection that was simply never corrected.
+_SCHEMA_VERSION = 3
+_SUPPORTED_SCHEMA_VERSIONS = (1, 2, 3)
 _DOCUMENT_FIELDS = frozenset({"schema_version", "hypotheses"})
 _ENTRY_FIELDS_V1 = frozenset(
     {
@@ -54,6 +60,8 @@ _ENTRY_FIELDS_V1 = frozenset(
     }
 )
 _ENTRY_FIELDS_V2 = _ENTRY_FIELDS_V1 | {"discriminating_test_evidence_ids"}
+_ENTRY_FIELDS_V3 = _ENTRY_FIELDS_V2 | {"retractions"}
+_RETRACTION_FIELDS = frozenset({"evidence_id", "relation", "retracted_at"})
 
 
 class _BinaryWriter(Protocol):
@@ -147,6 +155,14 @@ class JsonFileHypothesisStore:
             "discriminating_test_evidence_ids": list(
                 entry.discriminating_test_evidence_ids
             ),
+            "retractions": [
+                {
+                    "evidence_id": record.evidence_id,
+                    "relation": record.relation.value,
+                    "retracted_at": record.retracted_at.isoformat(),
+                }
+                for record in entry.retractions
+            ],
             "withdrawn": entry.withdrawn,
             "created_at": entry.created_at.isoformat(),
             "updated_at": entry.updated_at.isoformat(),
@@ -169,7 +185,11 @@ class JsonFileHypothesisStore:
 
     @staticmethod
     def _parse_entry(document: object, schema_version: int) -> ResearchHypothesis:
-        expected = _ENTRY_FIELDS_V1 if schema_version == 1 else _ENTRY_FIELDS_V2
+        expected = {
+            1: _ENTRY_FIELDS_V1,
+            2: _ENTRY_FIELDS_V2,
+            3: _ENTRY_FIELDS_V3,
+        }[schema_version]
         if not isinstance(document, dict) or set(document) != expected:
             raise ResearchError("A hypothesis document is invalid.")
         store = JsonFileHypothesisStore
@@ -188,10 +208,40 @@ class JsonFileHypothesisStore:
                 if schema_version == 1
                 else store._ids(document["discriminating_test_evidence_ids"])
             ),
+            retractions=(
+                ()
+                if schema_version < 3
+                else store._retractions(document["retractions"])
+            ),
             withdrawn=withdrawn,
             created_at=store._timestamp(document["created_at"]),
             updated_at=store._timestamp(document["updated_at"]),
         )
+
+    @staticmethod
+    def _retractions(value: object) -> tuple[HypothesisEvidenceRetraction, ...]:
+        """Decode the withdrawn statements, refusing anything malformed."""
+        if not isinstance(value, list):
+            raise ResearchError("A hypothesis retraction list is invalid.")
+        store = JsonFileHypothesisStore
+        records: list[HypothesisEvidenceRetraction] = []
+        for entry in value:
+            if not isinstance(entry, dict) or set(entry) != _RETRACTION_FIELDS:
+                raise ResearchError("A hypothesis retraction record is invalid.")
+            try:
+                relation = relation_of(entry["relation"])
+            except ValueError as error:
+                raise ResearchError(
+                    "A hypothesis retraction names an unknown relation."
+                ) from error
+            records.append(
+                HypothesisEvidenceRetraction(
+                    evidence_id=store._text(entry["evidence_id"]),
+                    relation=relation,
+                    retracted_at=store._timestamp(entry["retracted_at"]),
+                )
+            )
+        return tuple(records)
 
     @staticmethod
     def _ids(value: object) -> tuple[str, ...]:

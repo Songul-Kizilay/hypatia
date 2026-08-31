@@ -36,6 +36,7 @@ from desktop.ToolConsoleEntry import ToolConsoleEntry
 from desktop.ToolRunView import ToolRunView
 from eventbus.EventBus import EventBus
 from knowledge.KnowledgeCitation import KnowledgeCitation
+from research.HypothesisEvidenceRelation import HypothesisEvidenceRelation
 from research.RankedResearchSourceDiscovery import ranked_candidates
 from research.ResearchClaimConfidence import ResearchClaimConfidence
 from research.ResearchClaimContradictionCandidate import (
@@ -4923,6 +4924,10 @@ class TkinterDesktopWindow:
         self._hypothesis_id = tk.StringVar()
         self._hypothesis_evidence_ids = tk.StringVar()
 
+        self._hypothesis_relation = tk.StringVar(
+            value=HypothesisEvidenceRelation.SUPPORTS.value
+        )
+
         section = ttk.LabelFrame(parent, text="Hypotheses", padding=12)
         section.grid(row=1, column=0, sticky="ew", pady=(10, 0))
         section.columnconfigure(1, weight=1)
@@ -4967,13 +4972,23 @@ class TkinterDesktopWindow:
         ttk.Label(section, text=_HYPOTHESIS_EVIDENCE_NOTE, wraplength=680).grid(
             row=8, column=1, sticky="w", padx=(8, 0), pady=(6, 0)
         )
+        ttk.Label(section, text="Relation to retract").grid(
+            row=9, column=0, sticky="w", pady=(6, 0)
+        )
+        ttk.Combobox(
+            section,
+            textvariable=self._hypothesis_relation,
+            values=tuple(relation.value for relation in HypothesisEvidenceRelation),
+            state="readonly",
+        ).grid(row=9, column=1, sticky="ew", padx=(8, 0), pady=(6, 0))
         buttons = ttk.Frame(section)
-        buttons.grid(row=9, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
+        buttons.grid(row=10, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
         for column, (label, command) in enumerate(
             (
                 ("Support", self._support_hypothesis),
                 ("Oppose", self._oppose_hypothesis),
                 ("Addresses test", self._associate_hypothesis_test_evidence),
+                ("Retract relation", self._retract_hypothesis_relation),
                 ("Withdraw", self._withdraw_hypothesis),
                 ("List hypotheses", self._list_hypotheses),
             )
@@ -5066,6 +5081,51 @@ class TkinterDesktopWindow:
             lambda: self._controller.associate_hypothesis_test_evidence(
                 self._hypothesis_id.get(),
                 self._hypothesis_evidence_ids.get(),
+            )
+        )
+
+    def _retract_hypothesis_relation(self) -> None:
+        """Show exactly what will be taken back, then record only that.
+
+        The evidence field accepts several identifiers for the authoring
+        controls beside this one, but a retraction is about a single statement,
+        so this asks for exactly one rather than quietly withdrawing several at
+        once from a field that looks the same.
+        """
+        hypothesis_id = self._hypothesis_id.get().strip()
+        evidence_ids = [
+            value.strip()
+            for value in self._hypothesis_evidence_ids.get().split(",")
+            if value.strip()
+        ]
+        relation = self._hypothesis_relation.get().strip()
+        if not hypothesis_id or len(evidence_ids) != 1 or not relation:
+            self._learning_status.set(
+                "Retracting needs one hypothesis, exactly one evidence ID, "
+                "and a relation."
+            )
+            return
+        if not messagebox.askyesno(
+            "Retract this relationship?",
+            (
+                f"Hypothesis: {hypothesis_id}\n"
+                f"Evidence: {evidence_ids[0]}\n"
+                f"Relationship: {relation}\n"
+                "Action: RETRACT\n\n"
+                "This records that the statement no longer stands. The evidence "
+                "and the hypothesis are both kept, nothing moves to another "
+                "relationship, and the retraction stays visible in this "
+                "hypothesis's history."
+            ),
+            parent=self._root,
+        ):
+            self._learning_status.set("hypothesis relation: not retracted")
+            return
+        self._learning_request(
+            lambda: self._controller.retract_hypothesis_evidence_relation(
+                hypothesis_id,
+                evidence_ids[0],
+                relation,
             )
         )
 

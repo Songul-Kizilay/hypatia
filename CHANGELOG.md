@@ -2,6 +2,51 @@
 
 All notable project changes are recorded here.
 
+## [0.3.231] - 2026-08-31
+
+### Added
+
+- All three hypothesis evidence relationships can now be taken back. Supporting,
+  opposing, and addressing the discriminating test were append-only, so an
+  operator who filed evidence on the wrong side had no way home: deleting the
+  evidence would be wrong, deleting the hypothesis would be wrong, and quietly
+  dropping the identifier would leave a record that looks as though the
+  statement had never been made.
+- One typed operation covers all three, because they are the same kind of
+  statement and a correction path for only the newest would have left the older
+  two uncorrectable for no reason anyone could name.
+- The three collections remain the current projection — an identifier sits in
+  one exactly while that relation stands — and a retraction record keeps the
+  history. Every consumer already read those collections, so appraisal,
+  curiosity, events and failure lessons follow current state without knowing
+  this feature exists: no consumer changed.
+- The desktop hypothesis panel gains a relation selector and one "Retract
+  relation" control. It names the hypothesis, the evidence, the relationship and
+  the word RETRACT before recording anything, refuses more than one evidence
+  identifier because a retraction is about a single statement, and executes
+  nothing.
+
+### Changed
+
+- The hypothesis store is schema version 3. Versions 1 and 2 remain readable and
+  restore with no retractions, because that is what they say: their
+  relationships were active when written and stay active on load. No retraction
+  is invented to explain a collection that was simply never corrected.
+
+### Security
+
+- Retraction means one thing: the statement no longer stands. It does not mean
+  the evidence was wrong, that it belongs on the other side, or that the
+  hypothesis is settled either way. Nothing moves — correcting a mistake is two
+  authored events, never one hidden flip — and no confidence, status or claim
+  changes because a correction happened.
+- Only a currently standing relation can be withdrawn, which keeps every
+  retraction record matched to a relation that really existed and refuses a
+  repeated request rather than writing the same correction down twice.
+- The operation reads identifiers and a closed relation vocabulary. No wording
+  is compared against any wording, and no evidence, source, claim or assessment
+  is touched.
+
 ## [0.3.230] - 2026-08-31
 
 ### Added

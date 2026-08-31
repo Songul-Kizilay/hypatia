@@ -36,6 +36,10 @@ from cognition.HypothesisEvents import HypothesisEvents
 from core.Exceptions import ResearchError
 from eventbus.EventBus import EventBus
 from research.HypothesisAppraisal import HypothesisAppraisal
+from research.HypothesisEvidenceRelation import (
+    HypothesisEvidenceRelation,
+    relation_of,
+)
 from research.HypothesisStore import HypothesisStore
 from research.JsonFileHypothesisStore import MAX_HYPOTHESIS_STORE_ENTRIES
 from research.ResearchHypothesis import ResearchHypothesis
@@ -48,6 +52,7 @@ HYPOTHESIS_PROPOSE_INTENT = "research_hypothesis_propose"
 HYPOTHESIS_SUPPORT_INTENT = "research_hypothesis_support"
 HYPOTHESIS_OPPOSE_INTENT = "research_hypothesis_oppose"
 HYPOTHESIS_TEST_EVIDENCE_INTENT = "research_hypothesis_test_evidence"
+HYPOTHESIS_RETRACT_RELATION_INTENT = "research_hypothesis_retract_relation"
 HYPOTHESIS_WITHDRAW_INTENT = "research_hypothesis_withdraw"
 HYPOTHESIS_LIST_INTENT = "research_hypothesis_list"
 
@@ -87,6 +92,10 @@ class HypothesisApplicationService:
     @staticmethod
     def is_oppose_request(request: BrainRequest) -> bool:
         return request.metadata.get("intent") == HYPOTHESIS_OPPOSE_INTENT
+
+    @staticmethod
+    def is_retract_relation_request(request: BrainRequest) -> bool:
+        return request.metadata.get("intent") == HYPOTHESIS_RETRACT_RELATION_INTENT
 
     @staticmethod
     def is_test_evidence_request(request: BrainRequest) -> bool:
@@ -145,6 +154,42 @@ class HypothesisApplicationService:
 
     def process_oppose(self, request: BrainRequest) -> BrainResponse:
         return self._enter_evidence(request, supporting=False)
+
+    def process_retract_relation(self, request: BrainRequest) -> BrainResponse:
+        """Take back one statement about evidence, keeping that it was made.
+
+        The same operation for all three relations, because they are the same
+        kind of statement and a correction path that existed for only the newest
+        would leave the older two uncorrectable for no reason a person could
+        name.
+
+        Everything it needs is an identifier: the hypothesis, the evidence, and
+        which of the three relations is being withdrawn. Nothing reads the
+        hypothesis statement, the discriminating test, or the evidence text, so
+        no wording can decide what gets retracted.
+
+        Only a currently standing relation can be withdrawn, which is what keeps
+        a retraction record meaningful and stops a repeated request writing the
+        same correction down twice.
+        """
+        run, hypothesis = self._existing(request)
+        evidence_id = self._required_text(request, "evidence_id", "evidence ID")
+        relation = self._relation(request)
+        updated = hypothesis.retracted(evidence_id, relation, self._clock())
+        self._hypotheses[updated.hypothesis_id] = updated
+        appraisal = self._appraiser.appraise(updated, run)
+        self._events.relation_retracted(appraisal, relation)
+        return self._response_after_persist(request, appraisal)
+
+    @staticmethod
+    def _relation(request: BrainRequest) -> HypothesisEvidenceRelation:
+        """Return the named relation, refusing anything outside the vocabulary."""
+        try:
+            return relation_of(request.metadata.get("relation"))
+        except ValueError as error:
+            raise ResearchError(
+                "A hypothesis evidence relation must be named exactly."
+            ) from error
 
     def process_test_evidence(self, request: BrainRequest) -> BrainResponse:
         """Record that an operator says this evidence addresses the test.

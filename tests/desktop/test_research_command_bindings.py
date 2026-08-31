@@ -329,6 +329,7 @@ class ResearchCommandBindingTests(unittest.TestCase):
             "Support": "_support_hypothesis",
             "Oppose": "_oppose_hypothesis",
             "Addresses test": "_associate_hypothesis_test_evidence",
+            "Retract relation": "_retract_hypothesis_relation",
             "Withdraw": "_withdraw_hypothesis",
         }
 

@@ -14,6 +14,7 @@ from research.HypothesisAppraisal import HypothesisAppraisal
 HYPOTHESIS_PROPOSED = "hypothesis.proposed"
 HYPOTHESIS_EVIDENCE_ENTERED = "hypothesis.evidence_entered"
 HYPOTHESIS_TEST_EVIDENCE_RECORDED = "hypothesis.test_evidence_recorded"
+HYPOTHESIS_RELATION_RETRACTED = "hypothesis.relation_retracted"
 HYPOTHESIS_WITHDRAWN = "hypothesis.withdrawn"
 
 EVENT_SOURCE = "research.hypothesis"
@@ -51,6 +52,17 @@ class HypothesisEvents:
         payload = self._payload(appraisal)
         payload["recorded_test_evidence_count"] = recorded
         self._emit(HYPOTHESIS_TEST_EVIDENCE_RECORDED, payload)
+
+    def relation_retracted(
+        self,
+        appraisal: HypothesisAppraisal,
+        relation: object,
+    ) -> None:
+        """Announce that one statement about evidence was taken back."""
+        payload = self._payload(appraisal)
+        payload["relation"] = getattr(relation, "value", "")
+        payload["retraction_count"] = len(appraisal.hypothesis.retractions)
+        self._emit(HYPOTHESIS_RELATION_RETRACTED, payload)
 
     def withdrawn(self, appraisal: HypothesisAppraisal) -> None:
         self._emit(HYPOTHESIS_WITHDRAWN, self._payload(appraisal))
