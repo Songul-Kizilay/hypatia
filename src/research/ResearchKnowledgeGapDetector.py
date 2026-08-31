@@ -214,18 +214,18 @@ class ResearchKnowledgeGapDetector:
     ) -> list[ResearchKnowledgeGap]:
         """Note a hypothesis that names its test and has nothing recorded yet.
 
-        The condition is deliberately narrow, because it is the only one this
-        model can state truthfully. A hypothesis carries one discriminating
-        test as prose and two lists of evidence identifiers; there is no
-        canonical mark saying *this* requirement was met by *that* evidence. So
-        the detectable state is the unambiguous one — the test is named and no
-        evidence has been entered on either side — and nothing here compares
-        the wording of a test against the wording of evidence to guess at
-        anything finer.
+        The gap closes on the authored association and on nothing else. Evidence
+        entered as supporting or opposing says the evidence bears on the
+        hypothesis; it does not say anyone examined the question the hypothesis
+        was built around, and treating it that way was the coarseness this
+        replaced — a framework version number attached as context would close a
+        gap about whether a route can be reached unauthenticated.
 
-        Evidence on either side ends the gap, including evidence against. A
-        hypothesis someone has argued with is being worked on; what this looks
-        for is one nobody has answered at all.
+        So the condition is: somebody stated that some evidence addresses the
+        discriminating test. Which way it cut, and whether it settled anything,
+        are separate questions this does not ask. Nothing here compares the
+        wording of a test against the wording of evidence; the relationship is
+        authored, and its absence is simply absence.
 
         A withdrawn hypothesis is excluded because withdrawal is the one status
         that settles anything. Support does not, which is why a supported
@@ -249,7 +249,7 @@ class ResearchKnowledgeGapDetector:
                     and hypothesis.run_id == run.run_id
                     and not hypothesis.withdrawn
                     and hypothesis.discriminating_test
-                    and hypothesis.evidence_count == 0
+                    and not hypothesis.has_discriminating_test_evidence
                 ),
                 key=lambda hypothesis: hypothesis.hypothesis_id,
             )

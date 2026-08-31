@@ -41,6 +41,13 @@ class ResearchHypothesis:
     updated_at: datetime
     supporting_evidence_ids: tuple[str, ...] = ()
     opposing_evidence_ids: tuple[str, ...] = ()
+    #: Evidence an operator has stated addresses the discriminating test. Kept
+    #: apart from the two sides above because bearing on a hypothesis and
+    #: answering the question it was built around are different claims, and the
+    #: second is the one that says the hypothesis has actually been examined.
+    #: Membership here is authored and never inferred; nothing in this codebase
+    #: compares the wording of a test against the wording of evidence.
+    discriminating_test_evidence_ids: tuple[str, ...] = ()
     withdrawn: bool = False
 
     def __post_init__(self) -> None:
@@ -76,6 +83,7 @@ class ResearchHypothesis:
         for values, label in (
             (self.supporting_evidence_ids, "supporting"),
             (self.opposing_evidence_ids, "opposing"),
+            (self.discriminating_test_evidence_ids, "discriminating test"),
         ):
             if len(values) > MAX_HYPOTHESIS_EVIDENCE:
                 raise ResearchError(f"Too much {label} hypothesis evidence.")
@@ -88,11 +96,27 @@ class ResearchHypothesis:
             raise ResearchError(
                 "The same evidence cannot both support and oppose a hypothesis."
             )
+        # Deliberately no rule tying test evidence to a side. An observation can
+        # address the discriminating test and support the hypothesis, or address
+        # it and oppose it, or address it while the operator has not yet said
+        # which way it cuts. Requiring a side would be a rule this codebase
+        # never had, invented to make the new relationship tidier.
 
     @property
     def evidence_count(self) -> int:
         """Return how much evidence has been entered on either side."""
         return len(self.supporting_evidence_ids) + len(self.opposing_evidence_ids)
+
+    @property
+    def has_discriminating_test_evidence(self) -> bool:
+        """Say whether anyone has stated that evidence addresses the test.
+
+        Not whether the test passed. A hypothesis can have evidence addressing
+        its test and still be wrong, still be unresolved, and still be argued
+        about; this says only that the question it was built around has been
+        looked at rather than left alone.
+        """
+        return bool(self.discriminating_test_evidence_ids)
 
     def one_line_statement(self, limit: int) -> str:
         """Return the statement as a single line, bounded for display."""
@@ -115,6 +139,36 @@ class ResearchHypothesis:
     ) -> ResearchHypothesis:
         """Enter evidence on the opposing side."""
         return self._extended(evidence_ids, moment, supporting=False)
+
+    def addresses_test_by(
+        self,
+        evidence_ids: tuple[str, ...],
+        moment: datetime,
+    ) -> ResearchHypothesis:
+        """Record that an operator says this evidence addresses the test.
+
+        Bookkeeping after an observation, never an instruction to make one. The
+        discriminating test is inert prose describing what somebody would have
+        to see; nothing here reads it, parses it, or acts on it.
+        """
+        if self.withdrawn:
+            raise ResearchError("A withdrawn hypothesis takes no further evidence.")
+        if not evidence_ids:
+            raise ResearchError("At least one evidence ID is required.")
+        existing = set(self.discriminating_test_evidence_ids)
+        repeated = [value for value in evidence_ids if value in existing]
+        if repeated:
+            raise ResearchError(
+                "This evidence is already recorded as addressing the test."
+            )
+        return replace(
+            self,
+            discriminating_test_evidence_ids=(
+                *self.discriminating_test_evidence_ids,
+                *evidence_ids,
+            ),
+            updated_at=moment,
+        )
 
     def withdrawn_at(self, moment: datetime) -> ResearchHypothesis:
         """Stop working on this hypothesis without deleting what it recorded."""

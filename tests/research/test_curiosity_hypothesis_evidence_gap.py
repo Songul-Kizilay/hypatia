@@ -109,13 +109,33 @@ class BlockedHypothesisDetectionTests(unittest.TestCase):
         self.assertEqual(gap.run_id, RUN_ID)
         self.assertIn("no evidence has been recorded", gap.summary)
 
-    def test_evidence_on_either_side_ends_the_gap(self) -> None:
-        """Being argued with counts as being worked on."""
+    def test_ordinary_evidence_on_either_side_leaves_the_gap_open(self) -> None:
+        """Bearing on a hypothesis is not the same as answering its question.
+
+        This is the distinction the association exists for. A framework version
+        number attached as supporting context tells us nothing about whether a
+        protected route can be reached unauthenticated, and until v0.3.230 it
+        closed the gap anyway.
+        """
         for field in ("supporting_evidence_ids", "opposing_evidence_ids"):
             with self.subTest(side=field):
-                self.assertEqual(
-                    hypothesis_gaps(hypothesis(**{field: ("evidence-1",)})), []
+                [gap] = hypothesis_gaps(hypothesis(**{field: ("evidence-1",)}))
+                self.assertEqual(gap.subject_id, "hypothesis-1")
+
+    def test_only_the_authored_association_ends_the_gap(self) -> None:
+        answered = hypothesis(discriminating_test_evidence_ids=("evidence-2",))
+
+        self.assertEqual(hypothesis_gaps(answered), [])
+
+    def test_test_evidence_closes_the_gap_whichever_side_it_took(self) -> None:
+        """Addressing the test is one statement; which way it cuts is another."""
+        for field in ("supporting_evidence_ids", "opposing_evidence_ids"):
+            with self.subTest(side=field):
+                answered = hypothesis(
+                    discriminating_test_evidence_ids=("evidence-2",),
+                    **{field: ("evidence-2",)},
                 )
+                self.assertEqual(hypothesis_gaps(answered), [])
 
     def test_a_withdrawn_hypothesis_produces_no_gap(self) -> None:
         """Withdrawal is the one status this vocabulary says settles anything."""
@@ -147,14 +167,22 @@ class BlockedHypothesisDetectionTests(unittest.TestCase):
         )
         self.assertEqual(len({gap.gap_id for gap in found}), 2)
 
-    def test_a_weakened_hypothesis_is_not_a_fresh_unanswered_one(self) -> None:
-        """Its provenance is evidence on both sides, which is not an absence."""
+    def test_a_weakened_hypothesis_still_needs_its_test_addressed(self) -> None:
+        """Argument on both sides is not proof anyone ran the discriminating test.
+
+        Its provenance is preserved exactly: the two sides keep meaning what
+        they meant, and nothing reclassifies them. What is reported is only
+        that nobody has yet said which evidence answers the question.
+        """
         weakened = hypothesis(
             supporting_evidence_ids=("evidence-1",),
             opposing_evidence_ids=("evidence-2",),
         )
 
-        self.assertEqual(hypothesis_gaps(weakened), [])
+        [gap] = hypothesis_gaps(weakened)
+        self.assertEqual(gap.subject_id, "hypothesis-1")
+        self.assertEqual(weakened.supporting_evidence_ids, ("evidence-1",))
+        self.assertEqual(weakened.opposing_evidence_ids, ("evidence-2",))
         self.assertTrue(HypothesisStatus.WEAKENED.has_opposing_evidence)
 
     def test_passing_no_hypotheses_leaves_the_run_gaps_unchanged(self) -> None:
@@ -184,12 +212,26 @@ class DeterminismAndProvenanceTests(unittest.TestCase):
         self.assertIn("hypothesis-1", first.gap_id)
         self.assertNotEqual(first.gap_id, other.gap_id)
 
-    def test_recording_evidence_removes_the_gap_for_that_hypothesis(self) -> None:
+    def test_authoring_the_association_removes_that_hypothesis_gap(self) -> None:
         before = hypothesis()
-        after = replace(before, supporting_evidence_ids=("evidence-1",))
+        after = before.addresses_test_by(("evidence-1",), NOW)
 
         self.assertEqual(len(hypothesis_gaps(before)), 1)
         self.assertEqual(hypothesis_gaps(after), [])
+
+    def test_a_legacy_hypothesis_reads_as_having_no_test_evidence(self) -> None:
+        """Silence is not consent: old evidence is never promoted after upgrade.
+
+        A hypothesis written before the association existed says nothing about
+        which evidence addressed its test, and the truthful reading of that is
+        that nobody said. Such a hypothesis surfacing the gap after upgrade is
+        the correct outcome, not a regression.
+        """
+        legacy = hypothesis(supporting_evidence_ids=("evidence-1", "evidence-2"))
+
+        self.assertEqual(legacy.discriminating_test_evidence_ids, ())
+        self.assertFalse(legacy.has_discriminating_test_evidence)
+        self.assertEqual(len(hypothesis_gaps(legacy)), 1)
 
     def test_detection_changes_neither_the_run_nor_the_hypothesis(self) -> None:
         subject = hypothesis()

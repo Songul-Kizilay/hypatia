@@ -613,6 +613,26 @@ class DesktopController:
             evidence_ids,
         )
 
+    def associate_hypothesis_test_evidence(
+        self,
+        hypothesis_id: str,
+        evidence_ids: str,
+    ) -> BrainResponse:
+        """Record that this evidence addresses the discriminating test.
+
+        A different statement from supporting or opposing, and deliberately a
+        separate control: evidence can bear on a hypothesis without touching
+        the question it was built around, and only a person can say which did.
+        Nothing is executed — the test is prose describing an observation, and
+        this records that one was made.
+        """
+        return self._hypothesis_evidence_request(
+            "research_hypothesis_test_evidence",
+            "Record evidence addressing the hypothesis test",
+            hypothesis_id,
+            evidence_ids,
+        )
+
     def oppose_hypothesis(
         self,
         hypothesis_id: str,

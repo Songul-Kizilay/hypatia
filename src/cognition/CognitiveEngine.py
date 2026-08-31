@@ -3463,6 +3463,7 @@ class CognitiveEngine:
             service.is_propose_request(request)
             or service.is_support_request(request)
             or service.is_oppose_request(request)
+            or service.is_test_evidence_request(request)
             or service.is_withdraw_request(request)
             or service.is_list_request(request)
         )
@@ -3482,6 +3483,8 @@ class CognitiveEngine:
                 return service.process_support(request)
             if service.is_oppose_request(request):
                 return service.process_oppose(request)
+            if service.is_test_evidence_request(request):
+                return service.process_test_evidence(request)
             if service.is_withdraw_request(request):
                 return service.process_withdraw(request)
             return service.process_list(request)

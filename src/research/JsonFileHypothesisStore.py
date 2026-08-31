@@ -30,9 +30,17 @@ from research.ResearchHypothesis import ResearchHypothesis
 MAX_HYPOTHESIS_STORE_BYTES = 4 * 1024 * 1024
 MAX_HYPOTHESIS_STORE_ENTRIES = 500
 
-_SCHEMA_VERSION = 1
+#: Version 2 records which evidence an operator said addresses the
+#: discriminating test. A version 1 hypothesis has no such statement, and the
+#: honest reading of that is silence rather than consent: its supporting and
+#: opposing evidence keeps meaning exactly what it meant, and none of it is
+#: promoted into an association nobody authored. An open hypothesis restored
+#: from version 1 therefore still reads as having no test evidence, which is
+#: true — and which curiosity will say out loud.
+_SCHEMA_VERSION = 2
+_SUPPORTED_SCHEMA_VERSIONS = (1, 2)
 _DOCUMENT_FIELDS = frozenset({"schema_version", "hypotheses"})
-_ENTRY_FIELDS = frozenset(
+_ENTRY_FIELDS_V1 = frozenset(
     {
         "hypothesis_id",
         "run_id",
@@ -45,6 +53,7 @@ _ENTRY_FIELDS = frozenset(
         "updated_at",
     }
 )
+_ENTRY_FIELDS_V2 = _ENTRY_FIELDS_V1 | {"discriminating_test_evidence_ids"}
 
 
 class _BinaryWriter(Protocol):
@@ -135,6 +144,9 @@ class JsonFileHypothesisStore:
             "discriminating_test": entry.discriminating_test,
             "supporting_evidence_ids": list(entry.supporting_evidence_ids),
             "opposing_evidence_ids": list(entry.opposing_evidence_ids),
+            "discriminating_test_evidence_ids": list(
+                entry.discriminating_test_evidence_ids
+            ),
             "withdrawn": entry.withdrawn,
             "created_at": entry.created_at.isoformat(),
             "updated_at": entry.updated_at.isoformat(),
@@ -143,20 +155,22 @@ class JsonFileHypothesisStore:
     def _parse_document(self, document: object) -> list[ResearchHypothesis]:
         if not isinstance(document, dict) or set(document) != _DOCUMENT_FIELDS:
             raise ResearchError("The hypothesis document is invalid.")
-        if document["schema_version"] != _SCHEMA_VERSION:
+        schema_version = document["schema_version"]
+        if schema_version not in _SUPPORTED_SCHEMA_VERSIONS:
             raise ResearchError("The hypothesis store schema version is not supported.")
         entries_value = document["hypotheses"]
         if not isinstance(entries_value, list):
             raise ResearchError("Hypothesis store entries must be a list.")
         if len(entries_value) > MAX_HYPOTHESIS_STORE_ENTRIES:
             raise ResearchError("The hypothesis store has too many entries.")
-        entries = [self._parse_entry(value) for value in entries_value]
+        entries = [self._parse_entry(value, schema_version) for value in entries_value]
         self._validate(entries)
         return entries
 
     @staticmethod
-    def _parse_entry(document: object) -> ResearchHypothesis:
-        if not isinstance(document, dict) or set(document) != _ENTRY_FIELDS:
+    def _parse_entry(document: object, schema_version: int) -> ResearchHypothesis:
+        expected = _ENTRY_FIELDS_V1 if schema_version == 1 else _ENTRY_FIELDS_V2
+        if not isinstance(document, dict) or set(document) != expected:
             raise ResearchError("A hypothesis document is invalid.")
         store = JsonFileHypothesisStore
         withdrawn = document["withdrawn"]
@@ -169,6 +183,11 @@ class JsonFileHypothesisStore:
             discriminating_test=store._text(document["discriminating_test"]),
             supporting_evidence_ids=store._ids(document["supporting_evidence_ids"]),
             opposing_evidence_ids=store._ids(document["opposing_evidence_ids"]),
+            discriminating_test_evidence_ids=(
+                ()
+                if schema_version == 1
+                else store._ids(document["discriminating_test_evidence_ids"])
+            ),
             withdrawn=withdrawn,
             created_at=store._timestamp(document["created_at"]),
             updated_at=store._timestamp(document["updated_at"]),

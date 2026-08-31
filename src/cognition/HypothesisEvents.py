@@ -13,6 +13,7 @@ from research.HypothesisAppraisal import HypothesisAppraisal
 
 HYPOTHESIS_PROPOSED = "hypothesis.proposed"
 HYPOTHESIS_EVIDENCE_ENTERED = "hypothesis.evidence_entered"
+HYPOTHESIS_TEST_EVIDENCE_RECORDED = "hypothesis.test_evidence_recorded"
 HYPOTHESIS_WITHDRAWN = "hypothesis.withdrawn"
 
 EVENT_SOURCE = "research.hypothesis"
@@ -35,6 +36,21 @@ class HypothesisEvents:
         payload = self._payload(appraisal)
         payload["side"] = "supporting" if supporting else "opposing"
         self._emit(HYPOTHESIS_EVIDENCE_ENTERED, payload)
+
+    def test_evidence_recorded(
+        self,
+        appraisal: HypothesisAppraisal,
+        recorded: int,
+    ) -> None:
+        """Announce that evidence was stated to address the discriminating test.
+
+        A count and the usual bounded identifiers, as everywhere else. What the
+        evidence says, and whether it settles anything, is not in the payload
+        because it is not this event's to claim.
+        """
+        payload = self._payload(appraisal)
+        payload["recorded_test_evidence_count"] = recorded
+        self._emit(HYPOTHESIS_TEST_EVIDENCE_RECORDED, payload)
 
     def withdrawn(self, appraisal: HypothesisAppraisal) -> None:
         self._emit(HYPOTHESIS_WITHDRAWN, self._payload(appraisal))

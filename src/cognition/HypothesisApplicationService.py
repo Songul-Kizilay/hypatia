@@ -47,6 +47,7 @@ from response.ResponseComposer import ResponseComposer
 HYPOTHESIS_PROPOSE_INTENT = "research_hypothesis_propose"
 HYPOTHESIS_SUPPORT_INTENT = "research_hypothesis_support"
 HYPOTHESIS_OPPOSE_INTENT = "research_hypothesis_oppose"
+HYPOTHESIS_TEST_EVIDENCE_INTENT = "research_hypothesis_test_evidence"
 HYPOTHESIS_WITHDRAW_INTENT = "research_hypothesis_withdraw"
 HYPOTHESIS_LIST_INTENT = "research_hypothesis_list"
 
@@ -86,6 +87,10 @@ class HypothesisApplicationService:
     @staticmethod
     def is_oppose_request(request: BrainRequest) -> bool:
         return request.metadata.get("intent") == HYPOTHESIS_OPPOSE_INTENT
+
+    @staticmethod
+    def is_test_evidence_request(request: BrainRequest) -> bool:
+        return request.metadata.get("intent") == HYPOTHESIS_TEST_EVIDENCE_INTENT
 
     @staticmethod
     def is_withdraw_request(request: BrainRequest) -> bool:
@@ -140,6 +145,32 @@ class HypothesisApplicationService:
 
     def process_oppose(self, request: BrainRequest) -> BrainResponse:
         return self._enter_evidence(request, supporting=False)
+
+    def process_test_evidence(self, request: BrainRequest) -> BrainResponse:
+        """Record that an operator says this evidence addresses the test.
+
+        The narrow authored boundary for the whole relationship: there is no
+        other way for an evidence identifier to reach that collection, and
+        nothing on any other path adds one as a side effect. Entering evidence
+        as supporting or opposing leaves it untouched, because bearing on a
+        hypothesis and answering the question it was built around are different
+        statements and only a person can make the second.
+
+        Which run's evidence is usable is settled by the existing rule: the run
+        is resolved from the hypothesis, and the evidence must already be
+        recorded in that run. A hypothesis therefore cannot reach across runs
+        here any more than it can when evidence is entered on a side.
+
+        Nothing is executed. The discriminating test is prose describing an
+        observation, and this records that somebody made one — after the fact.
+        """
+        run, hypothesis = self._existing(request)
+        evidence_ids = self._evidence_ids(request, run)
+        updated = hypothesis.addresses_test_by(evidence_ids, self._clock())
+        self._hypotheses[updated.hypothesis_id] = updated
+        appraisal = self._appraiser.appraise(updated, run)
+        self._events.test_evidence_recorded(appraisal, len(evidence_ids))
+        return self._response_after_persist(request, appraisal)
 
     def process_withdraw(self, request: BrainRequest) -> BrainResponse:
         """Stop working on one hypothesis without deleting what it recorded."""

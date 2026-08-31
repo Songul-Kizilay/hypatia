@@ -4973,6 +4973,7 @@ class TkinterDesktopWindow:
             (
                 ("Support", self._support_hypothesis),
                 ("Oppose", self._oppose_hypothesis),
+                ("Addresses test", self._associate_hypothesis_test_evidence),
                 ("Withdraw", self._withdraw_hypothesis),
                 ("List hypotheses", self._list_hypotheses),
             )
@@ -5055,6 +5056,14 @@ class TkinterDesktopWindow:
     def _oppose_hypothesis(self) -> None:
         self._learning_request(
             lambda: self._controller.oppose_hypothesis(
+                self._hypothesis_id.get(),
+                self._hypothesis_evidence_ids.get(),
+            )
+        )
+
+    def _associate_hypothesis_test_evidence(self) -> None:
+        self._learning_request(
+            lambda: self._controller.associate_hypothesis_test_evidence(
                 self._hypothesis_id.get(),
                 self._hypothesis_evidence_ids.get(),
             )

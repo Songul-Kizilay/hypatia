@@ -2,6 +2,53 @@
 
 All notable project changes are recorded here.
 
+## [0.3.230] - 2026-08-31
+
+### Added
+
+- A hypothesis can now record which evidence an operator says addresses its
+  discriminating test. Until now it could say only that evidence supported or
+  opposed it, which is a weaker statement than it looks: a framework version
+  number is good supporting context for "the middleware can be bypassed" while
+  saying nothing about whether a protected route was ever reached without
+  authorization. The hypothesis names that observation; nothing recorded which
+  evidence, if any, made it.
+- The relationship is authored and never inferred. It has exactly one way in —
+  an explicit application operation and the desktop control that calls it — and
+  no other path adds to it as a side effect. Entering evidence as supporting or
+  opposing leaves it untouched, and recording it says nothing about which side
+  the evidence takes; an observation can address the test and support the
+  hypothesis, oppose it, or leave the direction unstated.
+- The desktop hypothesis panel gains one control, "Addresses test", beside
+  Support and Oppose. It reuses the hypothesis and evidence fields already
+  there, records the association, and executes nothing.
+
+### Changed
+
+- The curiosity gap added in 0.3.229 now closes only on the authored
+  association. Any supporting or opposing evidence used to close it, which meant
+  a version number attached as context could silence a question about
+  unauthenticated access. That coarseness was the limitation this milestone was
+  written to remove.
+- The hypothesis store is schema version 2. Version 1 records remain readable
+  and are read as saying nothing about their test, because that is what they
+  say: their supporting and opposing evidence keeps its existing meaning, and
+  none of it is promoted into an association nobody authored. An open
+  hypothesis carried forward will therefore surface the curiosity gap, which is
+  truthful rather than a regression.
+
+### Security
+
+- No code decides that evidence addresses a test by reading text. Not by
+  substring, token overlap, similarity, embedding, or model — the relationship
+  is a person's judgement, and a wrong inference would be invisible once stored.
+- Recording an association executes nothing. The discriminating test is inert
+  prose describing an observation somebody would have to make; it is never
+  parsed, planned, or acted on, and the association is bookkeeping after the
+  fact.
+- Appraisal is unchanged. An association says the test was examined, never that
+  it passed, so no status, direction, or confidence moves because one exists.
+
 ## [0.3.229] - 2026-08-31
 
 ### Added

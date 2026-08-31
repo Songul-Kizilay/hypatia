@@ -148,8 +148,14 @@ class RecordingFont:
         return self._configuration
 
 
-def build_real_window() -> tuple[Any, list[RecordingWidget]]:
-    """Run Hypatia's own construction with recorder widgets in place of Tk."""
+def build_real_window(**features: bool) -> tuple[Any, list[RecordingWidget]]:
+    """Run Hypatia's own construction with recorder widgets in place of Tk.
+
+    Feature flags are passed through because several panels are built only
+    when their capability is enabled; a window built with the defaults simply
+    does not contain those controls, and asserting against it would prove
+    nothing about them.
+    """
     RecordingWidget.instances = []
     module = "desktop.TkinterDesktopWindow"
     widget_names = (
@@ -184,7 +190,7 @@ def build_real_window() -> tuple[Any, list[RecordingWidget]]:
             patch(f"{module}.scrolledtext.ScrolledText", RecordingWidget)
         )
         stack.enter_context(patch(f"{module}.font.Font", RecordingFont))
-        window = TkinterDesktopWindow(object(), root=RecordingRoot())
+        window = TkinterDesktopWindow(object(), root=RecordingRoot(), **features)
     return window, list(RecordingWidget.instances)
 
 
@@ -301,6 +307,38 @@ class ResearchCommandBindingTests(unittest.TestCase):
             "_preview_and_record_research_source_assessment",
         )
         self._assert_bound("Preview & save claim", "_preview_and_record_research_claim")
+
+    def _hypothesis_control(self, label: str) -> RecordingWidget:
+        _window, widgets = build_real_window(hypothesis_enabled=True)
+        [control] = [
+            widget
+            for widget in widgets
+            if widget.text == label and widget.command is not None
+        ]
+        return control
+
+    def test_the_hypothesis_controls_are_bound_separately(self) -> None:
+        """Addressing the test is its own statement, so it is its own control.
+
+        Bound to Support or Oppose, the button would file an observation about
+        the discriminating test as a mere position on the hypothesis, and the
+        distinction the association exists for would vanish at the one place a
+        person actually uses it.
+        """
+        expected = {
+            "Support": "_support_hypothesis",
+            "Oppose": "_oppose_hypothesis",
+            "Addresses test": "_associate_hypothesis_test_evidence",
+            "Withdraw": "_withdraw_hypothesis",
+        }
+
+        bound = {
+            label: getattr(self._hypothesis_control(label).command, "__name__", "")
+            for label in expected
+        }
+
+        self.assertEqual(bound, expected)
+        self.assertEqual(len(set(bound.values())), len(expected))
 
     def test_the_comparison_controls_are_bound_to_their_own_handlers(self) -> None:
         self._assert_bound("Compare sources", "_preview_research_source_comparison")
