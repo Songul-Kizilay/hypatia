@@ -289,7 +289,7 @@ class BackgroundResearchSchedulerApplicationService:
             return 1
         if isinstance(value, bool) or not isinstance(value, int):
             raise ResearchError("Background task retry limit is invalid.")
-        return value
+        return int(value)
 
     @staticmethod
     def _required_text(request: BrainRequest, key: str, label: str) -> str:

@@ -2,6 +2,32 @@
 
 All notable project changes are recorded here.
 
+## [0.3.224] - 2026-08-31
+
+### Fixed
+
+- A weakened-hypothesis Failure Memory lesson now names both the supporting and
+  opposing evidence that made the weakened outcome possible. Previously its
+  wording described both sides while its provenance named only opposition, so
+  the remembered outcome could not be fully checked from the records it cited.
+- Supporting and opposing evidence IDs are interleaved inside the existing
+  provenance limit. Even when one side alone exceeds that bound, the lesson
+  retains records from both sides; contradicted-hypothesis lessons remain
+  unchanged and continue to cite only opposing evidence.
+
+### Changed
+
+- Three already-validated integer values from untyped provider and request
+  metadata are now returned through an explicit integer conversion. Runtime
+  behaviour is unchanged, while the full source tree again passes the current
+  strict MyPy gate without relying on `Any` return values.
+
+### Security
+
+- The change is pure derivation at the explicit Failure Memory boundary. It
+  does not mutate hypotheses, evidence, claims, assessments, or research runs,
+  and it does not add autonomous recall or execution.
+
 ## [0.3.223] - 2026-08-31
 
 ### Added

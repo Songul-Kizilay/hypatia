@@ -257,6 +257,31 @@ class HypothesisFailureMemoryTests(unittest.TestCase):
         )
         self.assertEqual(lesson.provenance, ("hypothesis-1", evidence_id))
 
+    def test_weakened_lesson_names_both_sides_of_its_evidence(self) -> None:
+        """A weakened outcome depends on support and opposition together."""
+        run_id = self.new_run()
+        supporting = self.evidence(run_id, "weakened-support")
+        opposing = self.evidence(run_id, "weakened-opposition")
+        self.hypothesis_store.save(
+            [
+                self.hypothesis(
+                    "weakened-provenance",
+                    run_id,
+                    supporting=(supporting,),
+                    opposing=(opposing,),
+                )
+            ]
+        )
+
+        response = self.service().process_hypothesis_store(self.request(run_id))
+        [lesson] = response.failure_lessons
+
+        self.assertIs(lesson.kind, FailureLessonKind.DISPROVING_EVIDENCE)
+        self.assertEqual(
+            lesson.provenance,
+            ("weakened-provenance", supporting, opposing),
+        )
+
     def test_hypotheses_from_other_runs_are_excluded(self) -> None:
         first_run = self.new_run()
         second_run = self.new_run()

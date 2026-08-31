@@ -299,7 +299,7 @@ def _published_year(value: Any) -> int | None:
     year = date_parts[0][0]
     if isinstance(year, bool) or not isinstance(year, int) or not 1000 <= year <= 9999:
         return None
-    return year
+    return int(year)
 
 
 def _normalized_bounded_text(value: str, limit: int) -> str:

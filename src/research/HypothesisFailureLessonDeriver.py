@@ -81,13 +81,7 @@ class HypothesisFailureLessonDeriver:
         kind = _LESSON_KINDS.get(appraisal.status)
         if kind is None:
             return ()
-        provenance: list[str] = []
-        for record_id in (
-            hypothesis.hypothesis_id,
-            *hypothesis.opposing_evidence_ids,
-        ):
-            if record_id not in provenance:
-                provenance.append(record_id)
+        provenance = self._provenance(appraisal)
         lesson = ResearchFailureLesson(
             lesson_id=lesson_identity(
                 hypothesis.run_id,
@@ -103,6 +97,41 @@ class HypothesisFailureLessonDeriver:
             recorded_at=recorded_at,
         )
         return (lesson,)
+
+    @staticmethod
+    def _provenance(appraisal: HypothesisAppraisal) -> list[str]:
+        """Name every side that made the remembered outcome possible.
+
+        A weakened status exists only because support and opposition coexist.
+        Interleave those records so the bounded provenance keeps both sides even
+        when either side alone is longer than the lesson limit. A contradicted
+        status has no supporting side and therefore names only its opposition.
+        """
+        hypothesis = appraisal.hypothesis
+        groups = (
+            (
+                hypothesis.supporting_evidence_ids,
+                hypothesis.opposing_evidence_ids,
+            )
+            if appraisal.status is HypothesisStatus.WEAKENED
+            else (hypothesis.opposing_evidence_ids,)
+        )
+        provenance = [hypothesis.hypothesis_id]
+        index = 0
+        while len(provenance) < MAX_LESSON_PROVENANCE:
+            added = False
+            for group in groups:
+                if index < len(group):
+                    record_id = group[index]
+                    if record_id not in provenance:
+                        provenance.append(record_id)
+                        if len(provenance) == MAX_LESSON_PROVENANCE:
+                            break
+                    added = True
+            if not added:
+                break
+            index += 1
+        return provenance
 
     @classmethod
     def _statement(cls, appraisal: HypothesisAppraisal) -> str:
