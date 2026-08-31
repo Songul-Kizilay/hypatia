@@ -47,6 +47,7 @@ from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_ope
 
 from core.Exceptions import ResearchError
 from core.Version import VERSION
+from research.NvdVulnerabilityDocument import NvdVulnerabilityDocument
 from research.PinnedHttpsTransport import PinnedHttpsHandler
 from research.PublicHttpsUrlValidator import (
     PublicHttpsUrlValidator,
@@ -225,9 +226,35 @@ class NvdResearchSourceDiscoveryProvider:
         ):
             raise ResearchError("NVD discovery limit must be between 1 and 10.")
 
+        payload = self._payload_for(self._parameters(normalized_query, limit))
+        return _parse_candidates(payload, limit)
+
+    def materialize(self, cve_id: str) -> NvdVulnerabilityDocument:
+        """Retrieve one accepted CVE in full, for reading rather than for a list.
+
+        Deliberately a second request rather than a reuse of what discovery
+        already holds. The candidate projection drops everything past the first
+        thousand characters of the description and keeps only the publication
+        year, because that is what a ranked list needs; a source a person cites
+        needs the description NVD published and the date it published it. Asking
+        again is the honest way to have them, and the request is one ordinary
+        network operation that the caller accounts for as such.
+
+        The exact-lookup route only. A keyword search could return a different
+        vulnerability, and a source materialized from a near miss would be
+        attached under the identifier of one the operator never accepted.
+        """
+        if not is_cve_id(cve_id):
+            raise ResearchError("An NVD lookup needs a valid CVE ID.")
+        payload = self._payload_for(
+            {"cveId": cve_id, "resultsPerPage": "1", "startIndex": "0"}
+        )
+        return _parse_vulnerability_document(payload, cve_id)
+
+    def _payload_for(self, parameters: dict[str, str]) -> bytes:
+        """Perform exactly one bounded request to the fixed NVD endpoint."""
         request = Request(
-            f"{NVD_CVE_ENDPOINT}?"
-            f"{urlencode(self._parameters(normalized_query, limit))}",
+            f"{NVD_CVE_ENDPOINT}?{urlencode(parameters)}",
             headers=self._headers(),
         )
         try:
@@ -250,8 +277,7 @@ class NvdResearchSourceDiscoveryProvider:
             raise _refusal(error) from error
         except (URLError, OSError) as error:
             raise ResearchError("NVD source discovery failed.") from error
-
-        return _parse_candidates(payload, limit)
+        return payload
 
     def _headers(self) -> dict[str, str]:
         headers = {"Accept": "application/json", "User-Agent": NVD_USER_AGENT}
@@ -364,6 +390,75 @@ def _parse_candidates(payload: bytes, limit: int) -> list[ResearchSourceCandidat
     return candidates
 
 
+def _parse_vulnerability_document(
+    payload: bytes,
+    expected_cve_id: str,
+) -> NvdVulnerabilityDocument:
+    """Return the one requested CVE, or refuse — never the nearest thing to it.
+
+    Where discovery skips an unreadable entry so the other nine stay usable,
+    ingestion cannot: there is one record here and it is the one a person
+    accepted. So each way this can go wrong is refused separately and by name,
+    because "missing" and "malformed" and "a different CVE" call for different
+    things from whoever reads the failure.
+
+    The identity check is the important one. An exact lookup that answers with
+    another identifier means the request, the response, or the accepted
+    candidate is not what it appears to be, and attaching that record under the
+    accepted CVE's identity would file one vulnerability's facts under another's
+    name. There is no repair for that worth attempting, so it fails closed.
+    """
+    try:
+        decoded = json.loads(payload.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ResearchError("NVD vulnerability response is invalid.") from error
+    if not isinstance(decoded, dict) or not isinstance(
+        decoded.get("vulnerabilities"), list
+    ):
+        raise ResearchError("NVD vulnerability response is invalid.")
+    if not decoded["vulnerabilities"]:
+        raise ResearchError(f"NVD holds no record for {expected_cve_id}.")
+
+    item = decoded["vulnerabilities"][0]
+    if not isinstance(item, dict) or not isinstance(item.get("cve"), dict):
+        raise ResearchError("NVD vulnerability record is malformed.")
+    cve = item["cve"]
+    if not is_cve_id(cve.get("id")):
+        raise ResearchError("NVD vulnerability record is malformed.")
+    if cve["id"] != expected_cve_id:
+        raise ResearchError(
+            f"NVD returned {cve['id']} for {expected_cve_id}; nothing was attached."
+        )
+    try:
+        record = _vulnerability_record(cve)
+    except ResearchError as error:
+        raise ResearchError("NVD vulnerability record is malformed.") from error
+    return NvdVulnerabilityDocument(
+        record=record,
+        description=_english_description(cve.get("descriptions")),
+        published=_timestamp(cve.get("published")),
+        api_resource=NVD_CVE_ENDPOINT,
+    )
+
+
+def _vulnerability_record(cve: dict[str, Any]) -> ResearchVulnerabilityRecord:
+    """Map one CVE object onto the structured record both routes share."""
+    return ResearchVulnerabilityRecord(
+        cve_id=cve["id"],
+        status=_text(cve.get("vulnStatus")),
+        source_identifier=_text(cve.get("sourceIdentifier")),
+        last_modified=_timestamp(cve.get("lastModified")),
+        weaknesses=_weaknesses(cve.get("weaknesses")),
+        metrics=_metrics(cve.get("metrics")),
+        references=_references(cve.get("references")),
+        reference_total=(
+            len(cve["references"]) if isinstance(cve.get("references"), list) else 0
+        ),
+        known_exploited_at=_text(cve.get("cisaExploitAdd")),
+        known_exploited_name=_text(cve.get("cisaVulnerabilityName")),
+    )
+
+
 def _candidate_from_item(value: Any) -> ResearchSourceCandidate | None:
     """Map one vulnerability, or skip it when it is not one we can read.
 
@@ -380,20 +475,7 @@ def _candidate_from_item(value: Any) -> ResearchSourceCandidate | None:
     description = _english_description(cve.get("descriptions"))
     published = _timestamp(cve.get("published"))
     try:
-        record = ResearchVulnerabilityRecord(
-            cve_id=cve_id,
-            status=_text(cve.get("vulnStatus")),
-            source_identifier=_text(cve.get("sourceIdentifier")),
-            last_modified=_timestamp(cve.get("lastModified")),
-            weaknesses=_weaknesses(cve.get("weaknesses")),
-            metrics=_metrics(cve.get("metrics")),
-            references=_references(cve.get("references")),
-            reference_total=(
-                len(cve["references"]) if isinstance(cve.get("references"), list) else 0
-            ),
-            known_exploited_at=_text(cve.get("cisaExploitAdd")),
-            known_exploited_name=_text(cve.get("cisaVulnerabilityName")),
-        )
+        record = _vulnerability_record(cve)
         return ResearchSourceCandidate(
             url=f"{NVD_DETAIL_PREFIX}{cve_id}",
             title=_title(cve_id, description),

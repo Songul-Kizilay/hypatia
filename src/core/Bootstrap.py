@@ -92,6 +92,7 @@ from research.LLMResearchClaimContradictionProposalProvider import (
 from research.NvdResearchSourceDiscoveryProvider import (
     NvdResearchSourceDiscoveryProvider,
 )
+from research.NvdResearchSourceFetcher import NvdResearchSourceFetcher
 from research.ResearchClaimContradictionProposalProvider import (
     ResearchClaimContradictionProposalProvider,
 )
@@ -101,6 +102,7 @@ from research.ResearchRunManager import ResearchRunManager
 from research.ResearchSourceContentRestorer import ResearchSourceContentRestorer
 from research.ResearchSourceDiscoveryProvider import ResearchSourceDiscoveryProvider
 from research.ResearchSourceFetcher import ResearchSourceFetcher
+from research.RoutedResearchSourceFetcher import RoutedResearchSourceFetcher
 from response.ResponseComposer import ResponseComposer
 from security.JsonFileVulnerabilityGraphStore import (
     JsonFileVulnerabilityGraphStore,
@@ -514,8 +516,20 @@ class Bootstrap:
         research_evidence_integrity_auditor = ResearchEvidenceIntegrityAuditor(
             knowledge_engine
         )
-        research_source_fetcher = (
-            self._research_source_fetcher or HttpResearchSourceFetcher()
+        # An NVD record is named by a page that does not contain it, so the
+        # accepted-source loader routes those to the API the record was
+        # discovered through. Every other URL keeps the generic HTTPS path. An
+        # injected fetcher is left exactly as given, so a test that supplies one
+        # still gets that one and only that one.
+        research_source_fetcher = self._research_source_fetcher or (
+            RoutedResearchSourceFetcher(
+                HttpResearchSourceFetcher(),
+                NvdResearchSourceFetcher(
+                    NvdResearchSourceDiscoveryProvider(
+                        api_key=Bootstrap._load_process_nvd_api_key()
+                    )
+                ),
+            )
         )
         planner = Planner()
         response_composer = ResponseComposer()

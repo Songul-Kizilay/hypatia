@@ -2,6 +2,47 @@
 
 All notable project changes are recorded here.
 
+## [0.3.223] - 2026-08-31
+
+### Added
+
+- An accepted NVD candidate is materialized from the NVD CVE API 2.0 instead of
+  from the page that names it. `nvd.nist.gov/vuln/detail/CVE-...` serves an
+  application shell whose CVE is drawn by a browser afterwards, so the generic
+  loader was right to refuse it and no improvement to that loader would have
+  helped. Acceptance now performs one exact `cveId` lookup through the same
+  pinned transport, fixed host and one-request discipline discovery already
+  uses, and renders the record as bounded readable text: description, published
+  and last-modified times, provider record status, weaknesses, every severity
+  metric with its own scorer, CISA known-exploited fields where present, and the
+  reference list. No browser, renderer, or bot-check workaround is involved.
+- Source provenance distinguishes what a source *is* from where its bytes came
+  from. A materialized CVE keeps the detail page as its URL — the resource a
+  person opens, and the identity duplicate detection and provider comparison
+  both join on — and records the API endpoint beside it as the content resource.
+  Left empty, as it is for every ordinary HTTPS source, the two coincide exactly
+  as before.
+
+### Changed
+
+- The candidate acceptance preview says what the load will actually do. A
+  vulnerability candidate now discloses that its record will be retrieved from
+  the API, that the linked page is not read, and that the references it lists
+  are stored as text without being fetched. A confirmation is only meaningful
+  if it names the real operation.
+
+### Security
+
+- Vulnerability data stays data. A materialized record carries the same
+  `instruction_authority = none` every external source carries, its references
+  are never fetched, and a description phrased as an instruction changes nothing
+  about what is requested. The route is chosen by URL alone, with no fallback in
+  either direction: a refused CVE lookup never silently loads the web page, and
+  an ordinary DOI never reaches the vulnerability API.
+- A lookup answering with a different CVE than the one accepted fails closed and
+  attaches nothing, rather than filing one vulnerability's facts under another's
+  identifier.
+
 ## [0.3.222] - 2026-08-30
 
 ### Fixed

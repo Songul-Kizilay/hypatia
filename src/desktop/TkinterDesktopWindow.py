@@ -6080,8 +6080,8 @@ class TkinterDesktopWindow:
             "Load research source?",
             (
                 f"{preview_response.message}\n\n"
-                "This fetches the selected HTTPS source, indexes it locally, "
-                "and attaches it to the research run. Continue?"
+                "This performs one bounded network request, indexes the result "
+                "locally, and attaches it to the research run. Continue?"
             ),
             parent=self._root,
         ):

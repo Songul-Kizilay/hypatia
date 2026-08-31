@@ -573,7 +573,7 @@ class ResearchRunManager:
                 discovery.discovery_id,
                 candidate,
                 True,
-                "Research source candidate can be loaded and attached to this run.",
+                _acceptance_disclosure(candidate),
             )
 
     def preview_source_assessment(
@@ -2069,3 +2069,22 @@ class ResearchRunManager:
         if not isinstance(candidate_url, str) or not candidate_url.strip():
             raise ResearchError("Research source candidate URL cannot be empty.")
         return candidate_url.strip()
+
+
+def _acceptance_disclosure(candidate: ResearchSourceCandidate) -> str:
+    """Say what loading this candidate will actually do, before it is confirmed.
+
+    A vulnerability candidate is named by a page that does not contain it, and
+    its record is read from the API instead. Telling an operator that Hypatia
+    will load the page they can see would describe something that never happens
+    and, worse, would misdescribe where the content they end up citing came
+    from. The confirmation is only meaningful if it names the real operation.
+    """
+    if candidate.vulnerability is not None:
+        return (
+            "Research source candidate can be loaded and attached to this run. "
+            "Its record will be retrieved from the NVD CVE API 2.0 — the "
+            "linked page is an application shell and is not read — and the "
+            "references it lists will be stored as text without being fetched."
+        )
+    return "Research source candidate can be loaded and attached to this run."
