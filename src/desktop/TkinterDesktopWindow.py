@@ -38,6 +38,7 @@ from eventbus.EventBus import EventBus
 from knowledge.KnowledgeCitation import KnowledgeCitation
 from research.HypothesisEvidenceRelation import HypothesisEvidenceRelation
 from research.RankedResearchSourceDiscovery import ranked_candidates
+from research.ResearchAttemptResolution import ResearchAttemptResolution
 from research.ResearchClaimConfidence import ResearchClaimConfidence
 from research.ResearchClaimContradictionCandidate import (
     ResearchClaimContradictionCandidate,
@@ -99,6 +100,11 @@ _HYPOTHESIS_DEFEATER_NOTE = (
 _HYPOTHESIS_EVIDENCE_NOTE = (
     "Evidence must already be recorded in the run. Separate several IDs with "
     "commas or spaces. The same record cannot be entered on both sides."
+)
+_INTERRUPTED_PANEL_NOTE = (
+    "Previous attempt was interrupted. The external operation may have "
+    "occurred. Its final result is unknown. The attempt has already been "
+    "charged. Recording what you know runs nothing and retries nothing."
 )
 _EXECUTION_PANEL_NOTE = (
     "An execution that has already been started. Refresh shows its canonical "
@@ -4566,6 +4572,40 @@ class TkinterDesktopWindow:
         ttk.Entry(section, textvariable=self._execution_id).grid(
             row=1, column=1, sticky="ew", padx=(8, 0), pady=(6, 0)
         )
+        #: Named separately from the execution because a ruling is about one
+        #: exact attempt, and "the interrupted one" is not an identity.
+        self._interrupted_step_id = tk.StringVar()
+        self._interrupted_resolution = tk.StringVar(
+            value=ResearchAttemptResolution.REMAINS_UNKNOWN.value
+        )
+        ttk.Label(section, text=_INTERRUPTED_PANEL_NOTE, wraplength=680).grid(
+            row=3, column=0, columnspan=2, sticky="w", pady=(8, 0)
+        )
+        ttk.Label(section, text="Interrupted step ID").grid(
+            row=4, column=0, sticky="w", pady=(6, 0)
+        )
+        ttk.Entry(section, textvariable=self._interrupted_step_id).grid(
+            row=4, column=1, sticky="ew", padx=(8, 0), pady=(6, 0)
+        )
+        ttk.Label(section, text="What actually happened").grid(
+            row=5, column=0, sticky="w", pady=(6, 0)
+        )
+        ttk.Combobox(
+            section,
+            textvariable=self._interrupted_resolution,
+            state="readonly",
+            values=tuple(
+                member.value
+                for member in ResearchAttemptResolution
+                if member is not ResearchAttemptResolution.NONE
+            ),
+        ).grid(row=5, column=1, sticky="ew", padx=(8, 0), pady=(6, 0))
+        self._request_button(
+            section,
+            "Record ruling",
+            self._resolve_interrupted_attempt,
+        ).grid(row=6, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
+
         buttons = ttk.Frame(section)
         buttons.grid(row=2, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
         commands: list[tuple[str, Callable[[], None]]] = [
@@ -4645,6 +4685,46 @@ class TkinterDesktopWindow:
             lambda: self._controller.resume_research_execution(
                 question_id,
                 execution_id,
+            )
+        )
+
+    def _resolve_interrupted_attempt(self) -> None:
+        """Record one human ruling about an attempt nobody saw the end of.
+
+        The dialog states what is and is not known before asking, because the
+        whole reason this control exists is that the system cannot tell the
+        operator what happened. It runs nothing and retries nothing.
+        """
+        execution_id = self._execution_id.get().strip()
+        step_id = self._interrupted_step_id.get().strip()
+        resolution = self._interrupted_resolution.get().strip()
+        if not execution_id or not step_id:
+            self._plan_approval_status.set(
+                "An execution ID and the interrupted step ID are both required."
+            )
+            return
+        if not messagebox.askyesno(
+            "Record this ruling?",
+            (
+                f"Execution: {execution_id}\n"
+                f"Step: {step_id}\n"
+                f"Ruling: {resolution}\n\n"
+                "Previous attempt was interrupted. The external operation may "
+                "have occurred. Its final result is unknown. The attempt has "
+                "already been charged.\n\n"
+                "This records what you know and nothing else. No operation "
+                "runs, nothing is retried, and the charge already made is "
+                "neither refunded nor repeated."
+            ),
+            parent=self._root,
+        ):
+            self._plan_approval_status.set("No ruling recorded.")
+            return
+        self._approval_request(
+            lambda: self._controller.resolve_interrupted_attempt(
+                execution_id,
+                step_id,
+                resolution,
             )
         )
 

@@ -433,6 +433,50 @@ class ResearchCommandBindingTests(unittest.TestCase):
 
         self.assertEqual(resuming, ["resume after restart"])
 
+    def test_the_interrupted_panel_states_what_is_not_known(self) -> None:
+        """The operator is told the four facts before being asked to rule."""
+        from desktop.TkinterDesktopWindow import _INTERRUPTED_PANEL_NOTE
+
+        note = _INTERRUPTED_PANEL_NOTE.casefold()
+
+        self.assertIn("interrupted", note)
+        self.assertIn("may have occurred", note)
+        self.assertIn("result is unknown", note)
+        self.assertIn("already been charged", note)
+        self.assertIn("retries nothing", note)
+
+    def test_the_ruling_control_is_bound_to_its_own_handler(self) -> None:
+        _window, widgets = build_real_window(plan_authorization_enabled=True)
+        by_label = {
+            widget.text: getattr(widget.command, "__name__", "")
+            for widget in widgets
+            if widget.command is not None
+        }
+
+        self.assertEqual(by_label.get("Record ruling"), "_resolve_interrupted_attempt")
+
+    def test_recording_a_ruling_requires_explicit_confirmation(self) -> None:
+        """Declining the dialog records nothing and reaches no controller."""
+        window, _widgets = build_real_window(plan_authorization_enabled=True)
+        window._execution_id.set("plan-1")
+        window._interrupted_step_id.set("step-1")
+        requested: list[Any] = []
+        window._approval_request = requested.append
+
+        with patch(
+            "desktop.TkinterDesktopWindow.messagebox.askyesno",
+            return_value=False,
+        ):
+            window._resolve_interrupted_attempt()
+        self.assertEqual(requested, [])
+
+        with patch(
+            "desktop.TkinterDesktopWindow.messagebox.askyesno",
+            return_value=True,
+        ):
+            window._resolve_interrupted_attempt()
+        self.assertEqual(len(requested), 1)
+
     def test_the_comparison_controls_are_bound_to_their_own_handlers(self) -> None:
         self._assert_bound("Compare sources", "_preview_research_source_comparison")
         self._assert_bound(

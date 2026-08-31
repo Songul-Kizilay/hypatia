@@ -22,6 +22,7 @@ EXECUTION_STEP_STARTED = "research.plan.execution.step_started"
 EXECUTION_STEP_COMPLETED = "research.plan.execution.step_completed"
 EXECUTION_STEP_FAILED = "research.plan.execution.step_failed"
 EXECUTION_STEP_BLOCKED = "research.plan.execution.step_blocked"
+EXECUTION_STEP_RESOLVED = "research.plan.execution.step_resolved"
 EXECUTION_CANCELLED = "research.plan.execution.cancelled"
 EXECUTION_RESTORED = "research.plan.execution.restored"
 EXECUTION_PERSISTENCE_FAILED = "research.plan.execution.persistence_failed"
@@ -120,6 +121,22 @@ class ResearchPlanExecutionEvents:
                 "operation": operation,
                 "cause": cause,
                 "work_performed": work_performed,
+            },
+        )
+
+    def step_resolved(
+        self,
+        plan_id: str,
+        step_id: str,
+        resolution: str,
+    ) -> None:
+        """Report one explicit human ruling on an interrupted attempt."""
+        self._emit(
+            EXECUTION_STEP_RESOLVED,
+            {
+                "plan_id": plan_id,
+                "step_id": step_id,
+                "resolution": resolution,
             },
         )
 

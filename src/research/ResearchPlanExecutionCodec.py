@@ -26,6 +26,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.Exceptions import ResearchError
+from research.ResearchAttemptResolution import ResearchAttemptResolution
 from research.ResearchAutonomyBudget import ResearchAutonomyBudget
 from research.ResearchExecutionAllowance import ResearchExecutionAllowance
 from research.ResearchExecutionSpend import ResearchExecutionSpend
@@ -80,6 +81,9 @@ _STEP_FIELDS = frozenset(
         "work_performed",
     }
 )
+#: Records written before rulings existed carry no resolution and decode as
+#: unruled, which is what they truthfully were.
+_STEP_FIELDS_WITH_RULING = _STEP_FIELDS | {"resolution"}
 
 
 def encode_execution_snapshot(
@@ -104,6 +108,7 @@ def encode_execution_snapshot(
                 "detail": step.detail,
                 "operation": step.operation,
                 "work_performed": step.work_performed,
+                "resolution": step.resolution.value,
             }
             for step in snapshot.steps
         ],
@@ -206,7 +211,10 @@ def _seconds(value: object) -> float:
 
 
 def _decode_step(document: object) -> ResearchPlanExecutionStepSnapshot:
-    if not isinstance(document, dict) or set(document) != _STEP_FIELDS:
+    if not isinstance(document, dict) or set(document) not in (
+        _STEP_FIELDS,
+        _STEP_FIELDS_WITH_RULING,
+    ):
         raise ResearchError("Execution snapshot step document is invalid.")
     work_performed = document["work_performed"]
     if not isinstance(work_performed, bool):
@@ -222,6 +230,7 @@ def _decode_step(document: object) -> ResearchPlanExecutionStepSnapshot:
         detail=_detail(document["detail"]),
         operation=_operation(document["operation"]),
         work_performed=work_performed,
+        resolution=_resolution(document.get("resolution", "none")),
     )
 
 
@@ -267,3 +276,11 @@ def _timestamp(value: object) -> Any:
     if parsed.utcoffset() is None:
         raise ResearchError("Execution snapshot timestamp must be timezone-aware.")
     return parsed
+
+
+def _resolution(value: Any) -> ResearchAttemptResolution:
+    """Return one bounded ruling, refusing anything the vocabulary lacks."""
+    try:
+        return ResearchAttemptResolution(value)
+    except ValueError as error:
+        raise ResearchError("Execution snapshot step resolution is invalid.") from error

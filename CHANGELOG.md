@@ -2,6 +2,37 @@
 
 All notable project changes are recorded here.
 
+## [0.3.243] - 2026-08-31
+
+### Added
+
+- An operator can explicitly resolve an interrupted attempt. Three bounded
+  rulings are offered and no fourth: the operation ran but its result is
+  unknown, the operation never ran, or it is still unknown. The ruling, who made
+  it and when are canonical persisted state on the step, not wording, so they
+  survive a restart.
+- A running step now records the operation it called, so an interrupted record
+  names the provider that may have run. Naming it asserts no work; the performed
+  flag stays false until something is actually known.
+- The execution status reports any operator ruling, and the desktop offers the
+  smallest surface for making one: the interrupted step, the ruling, and a
+  confirmation stating that the operation may have occurred, that its result is
+  unknown, and that the attempt has already been charged.
+
+### Security
+
+- No ruling invents a provider result. "It ran" blocks the step with the work
+  acknowledged rather than completing it, because completing would assert a
+  result nobody has; "it never ran" returns the step to pending so a later,
+  explicit advance is an ordinary new attempt at the ordinary price; "still
+  unknown" changes no status and keeps ordinary Advance refused.
+- Only an explicit human action resolves an attempt. Nothing is inferred from
+  the provider, from failure memory, or from a restart, and an empty or
+  unrecognised ruling is refused.
+- Resolution reaches no provider, retries nothing, advances nothing, creates no
+  approval, and charges no budget. The interrupted attempt stays spent, and a
+  ruling that could not be persisted is not kept.
+
 ## [0.3.242] - 2026-08-31
 
 ### Fixed

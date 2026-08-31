@@ -12,8 +12,11 @@ failed execution can never present itself as finished.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from datetime import datetime
 
 from core.Exceptions import ResearchError
+from research.ResearchAttemptResolution import ResearchAttemptResolution
+from research.ResearchAuthorizer import ResearchAuthorizer
 from research.ResearchPlan import ResearchPlan
 from research.ResearchPlanExecutionStatus import ResearchPlanExecutionStatus
 from research.ResearchPlanStepState import ResearchPlanStepState
@@ -120,8 +123,18 @@ class ResearchPlanExecutionState:
             )
         return replace(self, status=ResearchPlanExecutionStatus.RUNNING, detail="")
 
-    def start_step(self, step_id: str) -> ResearchPlanExecutionState:
-        """Begin one pending step in authored order while the plan is running."""
+    def start_step(
+        self,
+        step_id: str,
+        operation: str = "",
+    ) -> ResearchPlanExecutionState:
+        """Begin one pending step in authored order while the plan is running.
+
+        The operation is named here rather than only on the way out, because a
+        step that never comes back still needs to say who it called. Naming it
+        is not a claim that it did anything; `work_performed` stays false until
+        something is actually known.
+        """
         self._require_running()
         if self.running_step_id is not None:
             raise ResearchError("Research plan execution already has a running step.")
@@ -129,7 +142,11 @@ class ResearchPlanExecutionState:
             raise ResearchError(
                 "Research plan execution must start the next pending step."
             )
-        return self._replace_step(step_id, ResearchPlanStepStatus.RUNNING)
+        return self._replace_step(
+            step_id,
+            ResearchPlanStepStatus.RUNNING,
+            operation=operation,
+        )
 
     def complete_step(
         self,
@@ -186,6 +203,101 @@ class ResearchPlanExecutionState:
             status=ResearchPlanExecutionStatus.FAILED,
             detail=detail,
         )
+
+    def resolve_interrupted_step(
+        self,
+        step_id: str,
+        resolution: ResearchAttemptResolution,
+        moment: datetime,
+        resolved_by: ResearchAuthorizer = ResearchAuthorizer.HUMAN,
+    ) -> ResearchPlanExecutionState:
+        """Record one human ruling about an attempt that was interrupted.
+
+        Each ruling maps to the state that is true if the ruling is true, and
+        to nothing more. Saying the operation happened does not say it worked,
+        so the step becomes blocked with performed work rather than completed —
+        completing it would assert a result nobody has. Saying it never happened
+        returns the step to pending, so a later, explicit advance is an ordinary
+        new attempt charged in the ordinary way. Saying it is still unknown
+        changes no status at all and leaves the execution interrupted, which is
+        the point of being able to say it.
+
+        None of these refund the original attempt. That charge was for reaching
+        out, and reaching out is what happened.
+        """
+        if self.status is not ResearchPlanExecutionStatus.INTERRUPTED:
+            raise ResearchError(
+                "Only an interrupted research plan execution can be resolved."
+            )
+        if resolution is ResearchAttemptResolution.NONE:
+            raise ResearchError("A research plan attempt ruling cannot be empty.")
+        current = self._step(step_id)
+        if current.status is not ResearchPlanStepStatus.INTERRUPTED:
+            raise ResearchError(
+                "Only an interrupted research plan step can be resolved."
+            )
+        if resolution is ResearchAttemptResolution.REMAINS_UNKNOWN:
+            return self._with_ruling(
+                current,
+                resolution,
+                ResearchPlanStepStatus.INTERRUPTED,
+                moment,
+                resolved_by,
+                "The operator could not establish what the attempt did.",
+                work_performed=False,
+                operation=current.operation,
+                status=ResearchPlanExecutionStatus.INTERRUPTED,
+            )
+        if resolution is ResearchAttemptResolution.PERFORMED_RESULT_UNKNOWN:
+            return self._with_ruling(
+                current,
+                resolution,
+                ResearchPlanStepStatus.BLOCKED,
+                moment,
+                resolved_by,
+                "The operator confirmed the operation ran; its result is unknown.",
+                work_performed=True,
+                operation=current.operation,
+                status=ResearchPlanExecutionStatus.BLOCKED,
+            )
+        return self._with_ruling(
+            current,
+            resolution,
+            ResearchPlanStepStatus.PENDING,
+            moment,
+            resolved_by,
+            "The operator confirmed the operation never ran.",
+            work_performed=False,
+            operation="",
+            status=ResearchPlanExecutionStatus.RUNNING,
+        )
+
+    def _with_ruling(
+        self,
+        current: ResearchPlanStepState,
+        resolution: ResearchAttemptResolution,
+        step_status: ResearchPlanStepStatus,
+        moment: datetime,
+        resolved_by: ResearchAuthorizer,
+        detail: str,
+        work_performed: bool,
+        operation: str,
+        status: ResearchPlanExecutionStatus,
+    ) -> ResearchPlanExecutionState:
+        """Place one ruled step back into the execution it belongs to."""
+        ruled = current.ruled(
+            resolution,
+            step_status,
+            moment,
+            resolved_by,
+            detail,
+            work_performed=work_performed,
+            operation=operation,
+        )
+        steps = tuple(
+            ruled if step.step_id == ruled.step_id else step for step in self.steps
+        )
+        return replace(self, steps=steps, status=status, detail="")
 
     def block_step(
         self,

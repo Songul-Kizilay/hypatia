@@ -61,6 +61,7 @@ from cognition.ResearchPlanExecutionEvents import (
 )
 from core.Exceptions import ResearchError
 from eventbus.EventBus import EventBus
+from research.ResearchAttemptResolution import ResearchAttemptResolution
 from research.ResearchCapabilityCost import cost_for
 from research.ResearchExecutionAllowance import ResearchExecutionAllowance
 from research.ResearchExecutionStore import ResearchExecutionStore
@@ -92,6 +93,7 @@ from response.ResponseComposer import ResponseComposer
 
 RESEARCH_PLAN_EXECUTION_START_INTENT = "research_plan_execution_start"
 RESEARCH_PLAN_EXECUTION_STATUS_INTENT = "research_plan_execution_status"
+RESEARCH_PLAN_EXECUTION_RESOLVE_INTENT = "research_plan_execution_resolve"
 RESEARCH_PLAN_EXECUTION_CANCEL_INTENT = "research_plan_execution_cancel"
 RESEARCH_PLAN_EXECUTION_ADVANCE_INTENT = "research_plan_execution_advance"
 
@@ -471,6 +473,68 @@ class ResearchPlanExecutionApplicationService:
             cancelled,
         )
 
+    def is_resolve_request(self, request: BrainRequest) -> bool:
+        return request.metadata.get("intent") == RESEARCH_PLAN_EXECUTION_RESOLVE_INTENT
+
+    def process_resolve(self, request: BrainRequest) -> BrainResponse:
+        """Record one explicit human ruling about an interrupted attempt.
+
+        Nothing is inferred and nothing is retried. The operator names the exact
+        execution, the exact step, and what they actually know; this writes that
+        down and stops. No provider is reached, so no budget is charged — the
+        charge for the interrupted attempt was made when it began and stays
+        exactly as it is.
+        """
+        plan_id = self._normalized_plan_id(request)
+        state = self._executions.get(plan_id)
+        if state is None:
+            return self._response_composer.research_plan_execution_missing(
+                request,
+                plan_id,
+            )
+        step_id = str(request.metadata.get("step_id", "")).strip()
+        if not step_id:
+            return self._response_composer.research_plan_execution_rejected(
+                request,
+                "Resolving an interrupted attempt needs the exact step.",
+            )
+        try:
+            resolution = ResearchAttemptResolution(
+                str(request.metadata.get("resolution", "")).strip()
+            )
+        except ValueError:
+            return self._response_composer.research_plan_execution_rejected(
+                request,
+                "That is not a ruling this system understands.",
+            )
+        try:
+            resolved = state.resolve_interrupted_step(
+                step_id,
+                resolution,
+                self._clock(),
+            )
+        except ResearchError as error:
+            return self._response_composer.research_plan_execution_rejected(
+                request,
+                str(error),
+            )
+        self._executions[plan_id] = resolved
+        self._events.step_resolved(plan_id, step_id, resolution.value)
+        if not self._persist_checkpoint(plan_id):
+            # The ruling is only worth having if it survives. Put the previous
+            # state back rather than report a decision no restart would find.
+            self._executions[plan_id] = state
+            return self._response_composer.research_plan_execution_rejected(
+                request,
+                "The ruling could not be recorded durably, so it was not kept.",
+            )
+        return self._response_composer.research_plan_execution_status(
+            request,
+            resolved,
+            self._allowances.get(plan_id),
+            self._next_capability(plan_id, resolved),
+        )
+
     def process_advance(self, request: BrainRequest) -> BrainResponse:
         """Run one real research operation for the next pending step."""
         plan_id = self._normalized_plan_id(request)
@@ -545,7 +609,7 @@ class ResearchPlanExecutionApplicationService:
             )
 
         try:
-            running = state.start_step(step_id)
+            running = state.start_step(step_id, operation.operation_name)
         except ResearchError as error:
             return self._response_composer.research_plan_execution_rejected(
                 request,

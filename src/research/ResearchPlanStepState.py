@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from datetime import datetime
 
 from core.Exceptions import ResearchError
+from research.ResearchAttemptResolution import ResearchAttemptResolution
+from research.ResearchAuthorizer import ResearchAuthorizer
 from research.ResearchPlanStepStatus import ResearchPlanStepStatus
 
 MAX_RESEARCH_PLAN_STEP_DETAIL_CHARACTERS = 500
@@ -19,6 +22,12 @@ class ResearchPlanStepState:
     detail: str = ""
     work_performed: bool = False
     operation: str = ""
+    #: A human ruling about an attempt nobody saw the end of. It is canonical
+    #: state rather than wording, so what an operator decided survives a restart
+    #: and can never be re-derived from prose.
+    resolution: ResearchAttemptResolution = ResearchAttemptResolution.NONE
+    resolved_at: datetime | None = None
+    resolved_by: ResearchAuthorizer | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.step_id, str) or not self.step_id.strip():
@@ -37,6 +46,15 @@ class ResearchPlanStepState:
             raise ResearchError(
                 "Performed research work must record its operation name."
             )
+        if not isinstance(self.resolution, ResearchAttemptResolution):
+            raise ResearchError("Research plan step resolution is invalid.")
+        ruled = self.resolution is not ResearchAttemptResolution.NONE
+        if ruled and not isinstance(self.resolved_at, datetime):
+            raise ResearchError("A research plan step ruling must record when.")
+        if ruled and not isinstance(self.resolved_by, ResearchAuthorizer):
+            raise ResearchError("A research plan step ruling must record who.")
+        if not ruled and (self.resolved_at is not None or self.resolved_by is not None):
+            raise ResearchError("An unruled research plan step has no ruling record.")
         detail = self.detail.strip()
         if len(detail) > MAX_RESEARCH_PLAN_STEP_DETAIL_CHARACTERS:
             raise ResearchError("Research plan step state detail is too long.")
@@ -63,4 +81,31 @@ class ResearchPlanStepState:
             detail=detail,
             work_performed=work_performed,
             operation=operation,
+        )
+
+    def ruled(
+        self,
+        resolution: ResearchAttemptResolution,
+        status: ResearchPlanStepStatus,
+        moment: datetime,
+        resolved_by: ResearchAuthorizer,
+        detail: str = "",
+        work_performed: bool = False,
+        operation: str = "",
+    ) -> ResearchPlanStepState:
+        """Return this step carrying one human ruling about its attempt.
+
+        Separate from `with_status` because the two mean different things. That
+        one records what Hypatia observed; this one records what a person said,
+        and keeps who said it and when alongside the claim itself.
+        """
+        return replace(
+            self,
+            status=status,
+            detail=detail,
+            work_performed=work_performed,
+            operation=operation,
+            resolution=resolution,
+            resolved_at=moment,
+            resolved_by=resolved_by,
         )

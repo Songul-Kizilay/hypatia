@@ -31,6 +31,7 @@ from research.HypothesisHistoryView import HypothesisHistoryView
 from research.KnowledgeReconciliationReport import (
     KnowledgeReconciliationReport,
 )
+from research.ResearchAttemptResolution import ResearchAttemptResolution
 from research.ResearchAutonomyResult import ResearchAutonomyResult
 from research.ResearchCalibrationReport import ResearchCalibrationReport
 from research.ResearchClaimContradictionPreview import (
@@ -1074,6 +1075,13 @@ class ResponseComposer:
                 "before the process ended, so whether it did anything is not "
                 "known. Advancing will not run it again."
             )
+        ruled = [
+            step
+            for step in state.steps
+            if step.resolution is not ResearchAttemptResolution.NONE
+        ]
+        for step in ruled:
+            lines.append(f"Operator ruling on {step.step_id}: {step.resolution.value}")
         lines.append(f"Research operations performed: {state.steps_with_research_work}")
         if not state.performed_research_work:
             lines.append("No research work has run; this reports execution state only.")

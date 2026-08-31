@@ -326,6 +326,40 @@ class DesktopController:
             execution_id,
         )
 
+    def resolve_interrupted_attempt(
+        self,
+        execution_id: str,
+        step_id: str,
+        resolution: str,
+    ) -> BrainResponse:
+        """Record what the operator knows about an interrupted attempt.
+
+        Reaches no provider and spends no budget. All three identities are
+        required: a ruling that did not name exactly what it ruled on would be
+        a guess wearing a decision's clothes.
+        """
+        normalized_execution = execution_id.strip()
+        normalized_step = step_id.strip()
+        normalized_resolution = resolution.strip()
+        if not normalized_execution:
+            raise ValueError("An execution ID cannot be empty.")
+        if not normalized_step:
+            raise ValueError("A step ID cannot be empty.")
+        if not normalized_resolution:
+            raise ValueError("A ruling cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="Resolve interrupted research attempt",
+                source="desktop",
+                metadata={
+                    "intent": "research_plan_execution_resolve",
+                    "research_plan_id": normalized_execution,
+                    "step_id": normalized_step,
+                    "resolution": normalized_resolution,
+                },
+            )
+        )
+
     def cancel_research_execution(self, execution_id: str) -> BrainResponse:
         """Stop one execution. Refunds neither approval nor spent budget."""
         return self._execution_request(
