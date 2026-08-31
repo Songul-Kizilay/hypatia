@@ -2,6 +2,37 @@
 
 All notable project changes are recorded here.
 
+## [0.3.241] - 2026-08-31
+
+### Added
+
+- A durable research execution can be resumed after a restart. An execution that
+  was proposed, approved, explicitly started and perhaps advanced is recovered by
+  an operator naming it exactly, through a new "Resume after restart" control.
+  Resuming performs no research: advancing remains a separate, explicit press,
+  and one advance after a restart still means at most one step.
+- The approval that permitted an execution is located by the execution identity
+  its consumption recorded, so the plan rebuilt at resume time can be checked
+  against the digest that was actually approved.
+
+### Security
+
+- Restarting creates no authority. No approval is created or un-spent by
+  resuming; the consumed approval stays consumed, the persisted allowance is
+  restored exactly with no refund, recorded step states are restored as recorded
+  so finished work is never repeated, and cancelled or completed executions stay
+  closed.
+- Resume refuses rather than repairs. A missing durable record, a missing
+  allowance, a plan that no longer matches the approved digest, steps that do not
+  match the record, or a capability with no operation registered in this process
+  each end in refusal, because an execution that had to be guessed at is not the
+  one anybody approved.
+- Restoration judges nothing new. The gap-currency check that gates proposing
+  research is deliberately not applied when recovering work that was already
+  approved and begun, so a closed gap cannot silently revoke an approval the
+  operator already spent. Ending such an execution stays the operator's decision,
+  made by cancelling.
+
 ## [0.3.240] - 2026-08-31
 
 ### Added

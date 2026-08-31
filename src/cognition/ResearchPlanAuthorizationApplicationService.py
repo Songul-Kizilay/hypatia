@@ -171,6 +171,25 @@ class ResearchPlanAuthorizationApplicationService:
             ),
         )
 
+    def authorization_for_execution(
+        self,
+        execution_id: str,
+    ) -> ResearchPlanAuthorization | None:
+        """Return the approval spent on this exact execution, or nothing.
+
+        An exact identity match on the recorded consumption. Nothing here
+        un-spends anything; the approval comes back consumed, which is the only
+        honest thing it could be.
+        """
+        wanted = execution_id.strip()
+        if not wanted:
+            return None
+        for authorization in self._authorizations.values():
+            consumption = authorization.consumption
+            if consumption is not None and consumption.execution_id == wanted:
+                return authorization
+        return None
+
     def record_for_plan(
         self,
         plan: ResearchPlan,

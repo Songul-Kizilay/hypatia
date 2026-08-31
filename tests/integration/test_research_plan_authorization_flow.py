@@ -847,7 +847,20 @@ class BoundaryTests(unittest.TestCase):
         end = self.desktop_source().index("def _build_review_tab")
         section = self.desktop_source()[start:end].casefold()
 
-        for forbidden in ("execute", "run now", "start autonomy", "queue", "resume"):
+        # "resume" was on this list while resuming did not exist, standing in
+        # for research picking itself back up. It now exists as an explicit
+        # operator action, so what is forbidden here is the automatic kind; the
+        # deliberate kind is pinned by name in test_curiosity_execution_resume
+        # and by binding in test_research_command_bindings.
+        for forbidden in (
+            "execute",
+            "run now",
+            "start autonomy",
+            "queue",
+            "auto-resume",
+            "resume automatically",
+            "resumes on its own",
+        ):
             with self.subTest(name=forbidden):
                 self.assertNotIn(forbidden, section)
 

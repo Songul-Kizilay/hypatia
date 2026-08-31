@@ -4568,13 +4568,17 @@ class TkinterDesktopWindow:
         )
         buttons = ttk.Frame(section)
         buttons.grid(row=2, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
-        for column, (label, command) in enumerate(
-            (
-                ("Refresh status", self._refresh_execution_status),
-                ("Advance one step", self._advance_execution_one_step),
-                ("Cancel execution", self._cancel_execution),
-            )
-        ):
+        commands: list[tuple[str, Callable[[], None]]] = [
+            ("Refresh status", self._refresh_execution_status),
+            ("Advance one step", self._advance_execution_one_step),
+            ("Cancel execution", self._cancel_execution),
+        ]
+        if self._curiosity_enabled:
+            # Only offered where the question it needs can be named. Resuming
+            # asks which question the execution came from, and that field
+            # exists on the curiosity surface.
+            commands.insert(1, ("Resume after restart", self._resume_execution))
+        for column, (label, command) in enumerate(commands):
             self._request_button(buttons, label, command).grid(
                 row=0, column=column, sticky="w", padx=(0 if column == 0 else 8, 0)
             )
@@ -4606,6 +4610,42 @@ class TkinterDesktopWindow:
             return
         self._approval_request(
             lambda: self._controller.advance_research_execution(execution_id)
+        )
+
+    def _resume_execution(self) -> None:
+        """Recover one named durable execution so it can be advanced again.
+
+        Reads both identifiers when pressed, so it follows what the operator
+        has selected rather than resuming whatever ran last. It performs no
+        step: advancing stays a separate, explicit decision afterwards.
+        """
+        execution_id = self._execution_id.get().strip()
+        question_id = self._curiosity_question_id.get().strip()
+        if not execution_id or not question_id:
+            self._plan_approval_status.set(
+                "A question ID and an execution ID are both required."
+            )
+            return
+        if not messagebox.askyesno(
+            "Resume this execution?",
+            (
+                f"Execution: {execution_id}\n"
+                f"Question: {question_id}\n\n"
+                "This recovers an execution that was already approved and "
+                "already started, so that it can be advanced again. It creates "
+                "no new approval and gives back no spent budget.\n\n"
+                "No step runs. Steps that finished before the restart stay "
+                "finished and are not repeated."
+            ),
+            parent=self._root,
+        ):
+            self._plan_approval_status.set("Not resumed. Nothing was recovered.")
+            return
+        self._approval_request(
+            lambda: self._controller.resume_research_execution(
+                question_id,
+                execution_id,
+            )
         )
 
     def _cancel_execution(self) -> None:

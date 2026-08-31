@@ -57,6 +57,7 @@ CURIOSITY_QUESTION_DISMISS_INTENT = "curiosity_question_dismiss"
 CURIOSITY_PREPARE_PROPOSAL_INTENT = "curiosity_prepare_proposal"
 CURIOSITY_AUTHORIZE_PROPOSAL_INTENT = "curiosity_authorize_proposal"
 CURIOSITY_START_AUTHORIZED_PROPOSAL_INTENT = "curiosity_start_authorized_proposal"
+CURIOSITY_RESUME_EXECUTION_INTENT = "curiosity_resume_execution"
 
 
 class CuriosityApplicationService:
@@ -129,6 +130,10 @@ class CuriosityApplicationService:
         return (
             request.metadata.get("intent") == CURIOSITY_START_AUTHORIZED_PROPOSAL_INTENT
         )
+
+    @staticmethod
+    def is_resume_execution_request(request: BrainRequest) -> bool:
+        return request.metadata.get("intent") == CURIOSITY_RESUME_EXECUTION_INTENT
 
     @staticmethod
     def is_prepare_proposal_request(request: BrainRequest) -> bool:
@@ -304,6 +309,106 @@ class CuriosityApplicationService:
             authorization_id,
             started,
         )
+
+    def process_resume_execution(self, request: BrainRequest) -> BrainResponse:
+        """Make one durable execution advanceable again in this process.
+
+        The operator names an exact execution. What permits it is the approval
+        that was already spent on that execution: this looks that approval up,
+        rebuilds the plan, and requires the rebuilt digest to equal the one the
+        approval named. A restart therefore cannot create authority, because no
+        approval is created, consulted for permission, or un-spent here — the
+        only question asked is whether this is provably the same plan.
+
+        Deliberately absent is the gap-currency check that gates previewing and
+        approving. That check asks whether new research is worth proposing, and
+        this is not a proposal; the work was approved and begun before the
+        restart. Re-asking it here would let a closed gap quietly revoke an
+        approval that was already given and spent, which is a decision for the
+        operator to make by cancelling, not for a process restart to make.
+        """
+        if self._execution_starter is None:
+            return self._response_composer.curiosity_rejected(
+                request,
+                "Research plan execution is unavailable.",
+            )
+        if self._authorization_service is None:
+            return self._response_composer.curiosity_rejected(
+                request,
+                "Research plan approval records are unavailable, so no "
+                "execution can be shown to have been approved.",
+            )
+        execution_id = self._required_text(
+            request,
+            "research_plan_id",
+            "execution",
+        )
+        authorization = self._authorization_service.authorization_for_execution(
+            execution_id,
+        )
+        if authorization is None:
+            return self._response_composer.curiosity_rejected(
+                request,
+                "No used approval names that execution, so it cannot be "
+                "shown to have been authorized and was not resumed.",
+            )
+        rebuilt = self._rebuild_proposal(request)
+        if isinstance(rebuilt, BrainResponse):
+            return rebuilt
+        proposal, run = rebuilt
+        if proposal.digest != authorization.plan_digest:
+            return self._response_composer.curiosity_rejected(
+                request,
+                "The plan no longer matches the approved digest, so this "
+                "execution was not resumed.",
+            )
+        restored = self._execution_starter.rebind_restored(
+            proposal.plan,
+            run.run_id,
+            execution_id,
+        )
+        if isinstance(restored, ResearchPlanExecutionStartRefusal):
+            return self._response_composer.curiosity_rejected(
+                request,
+                restored.reason,
+            )
+        return self._response_composer.curiosity_proposal_execution_resumed(
+            request,
+            proposal,
+            authorization.authorization_id,
+            restored,
+        )
+
+    def _rebuild_proposal(
+        self,
+        request: BrainRequest,
+    ) -> tuple[CuriosityResearchProposal, ResearchRun] | BrainResponse:
+        """Build the proposal for one question again, judging nothing new.
+
+        The same canonical builder previewing uses, so the plan it returns is
+        the plan that was digested. It asks only what is needed to rebuild:
+        that the question and its run still exist. Whether the plan is the
+        approved one is settled afterwards by the digest, which is a stronger
+        answer than any check made here could be.
+        """
+        question_id = self._required_text(request, "curiosity_question_id", "question")
+        question = self._questions.get(question_id)
+        if question is None:
+            return self._response_composer.curiosity_question_missing(
+                request,
+                question_id,
+            )
+        try:
+            run = self._run_manager.get(question.run_id)
+            proposal = CuriosityProposalBuilder().build(
+                question,
+                run,
+                self._draft_service,
+                self._hypotheses_for(question.run_id),
+            )
+        except ResearchError as error:
+            return self._response_composer.curiosity_rejected(request, str(error))
+        return proposal, run
 
     def process_prepare_proposal(self, request: BrainRequest) -> BrainResponse:
         """Draft an inert plan for one accepted question, starting nothing.

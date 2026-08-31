@@ -3724,6 +3724,8 @@ class CognitiveEngine:
                 return service.process_authorize_proposal(request)
             if service.is_start_authorized_proposal_request(request):
                 return service.process_start_authorized_proposal(request)
+            if service.is_resume_execution_request(request):
+                return service.process_resume_execution(request)
             return service.process_question_dismiss(request)
         except ResearchError as error:
             return self._response_composer.curiosity_rejected(request, str(error))

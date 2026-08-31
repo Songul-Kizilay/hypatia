@@ -614,6 +614,35 @@ class DesktopController:
             )
         )
 
+    def resume_research_execution(
+        self,
+        question_id: str,
+        execution_id: str,
+    ) -> BrainResponse:
+        """Make one durable execution reachable again. Runs no step.
+
+        Both identities are required and neither is guessed. There is no
+        "resume the latest" here on purpose: the operator names the exact
+        execution, and naming nothing resumes nothing.
+        """
+        normalized_question = question_id.strip()
+        normalized_execution = execution_id.strip()
+        if not normalized_question:
+            raise ValueError("A curiosity question ID cannot be empty.")
+        if not normalized_execution:
+            raise ValueError("An execution ID cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="Resume durable research plan execution",
+                source="desktop",
+                metadata={
+                    "intent": "curiosity_resume_execution",
+                    "curiosity_question_id": normalized_question,
+                    "research_plan_id": normalized_execution,
+                },
+            )
+        )
+
     def dismiss_curiosity_question(self, question_id: str) -> BrainResponse:
         """Record that one proposal is not worth pursuing."""
         return self._curiosity_ruling(

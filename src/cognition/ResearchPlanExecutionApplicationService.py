@@ -49,6 +49,7 @@ nobody spent.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import UTC, datetime
 from typing import cast
 
@@ -82,7 +83,9 @@ from research.ResearchPlanExecutionSnapshot import (
     ResearchPlanExecutionSnapshot,
 )
 from research.ResearchPlanExecutionState import ResearchPlanExecutionState
+from research.ResearchPlanExecutionStatus import ResearchPlanExecutionStatus
 from research.ResearchPlanOperationRegistry import ResearchPlanOperationRegistry
+from research.ResearchPlanStepState import ResearchPlanStepState
 from research.ResearchPlanStepStatus import ResearchPlanStepStatus
 from research.StartsResearchPlanExecution import ResearchPlanExecutionStartRefusal
 from response.ResponseComposer import ResponseComposer
@@ -270,6 +273,91 @@ class ResearchPlanExecutionApplicationService:
         self._contexts[plan.plan_id] = context
         self._events.started(state, context.has_research_run)
         self._persist(plan.plan_id)
+        return state
+
+    def rebind_restored(
+        self,
+        plan: ResearchPlan,
+        research_run_id: str,
+        execution_id: str,
+    ) -> ResearchPlanExecutionState | ResearchPlanExecutionStartRefusal:
+        """Restore one durable execution so an operator can advance it again.
+
+        Everything comes from what was written down. The step states are the
+        recorded ones, so a completed step stays completed and is never run a
+        second time; the allowance is the persisted one, so nothing is refunded
+        by the act of restarting; and no approval is consulted or spent, because
+        the approval that permitted this execution was spent when it started and
+        must stay spent.
+
+        It refuses rather than repairing. A missing snapshot, a status that was
+        never runnable, an allowance that was never written, a plan whose steps
+        do not match what was recorded, or a capability with no registered
+        operation each end here, because every one of them means the execution
+        that would be resumed is not provably the execution that was persisted.
+        """
+        snapshot = self._restored.get(execution_id)
+        if snapshot is None:
+            return ResearchPlanExecutionStartRefusal(
+                "No durable execution with that identity was restored."
+            )
+        if execution_id in self._executions:
+            return ResearchPlanExecutionStartRefusal(
+                "That execution is already live in this process."
+            )
+        if snapshot.status not in _RESUMABLE_EXECUTION_STATUSES:
+            return ResearchPlanExecutionStartRefusal(
+                f"A {snapshot.status.value} execution cannot be resumed."
+            )
+        if snapshot.allowance is None:
+            return ResearchPlanExecutionStartRefusal(
+                "That execution recorded no approved allowance, so it cannot "
+                "be resumed without inventing one."
+            )
+        recorded = {step.step_id: step for step in snapshot.steps}
+        if {step.step_id for step in plan.steps} != set(recorded):
+            return ResearchPlanExecutionStartRefusal(
+                "The derived plan does not match the recorded execution steps."
+            )
+        for step in plan.steps:
+            if step.capability is not recorded[step.step_id].capability:
+                return ResearchPlanExecutionStartRefusal(
+                    "The derived plan changes a recorded step capability."
+                )
+            if (
+                recorded[step.step_id].status is ResearchPlanStepStatus.PENDING
+                and step.capability.executable
+                and self._operation_registry.resolve(step.capability) is None
+            ):
+                return ResearchPlanExecutionStartRefusal(
+                    f"Capability '{step.capability.value}' has no registered "
+                    "operation here, so this execution cannot be resumed."
+                )
+        try:
+            state = ResearchPlanExecutionState(
+                plan_id=execution_id,
+                status=snapshot.status,
+                steps=tuple(
+                    ResearchPlanStepState(
+                        step_id=step.step_id,
+                        status=step.status,
+                        detail=step.detail,
+                        operation=step.operation,
+                        work_performed=step.work_performed,
+                    )
+                    for step in snapshot.steps
+                ),
+                detail=snapshot.detail,
+            )
+            context = ResearchPlanExecutionContext(research_run_id=research_run_id)
+        except ResearchError as error:
+            return ResearchPlanExecutionStartRefusal(str(error))
+        bound = replace(plan, plan_id=execution_id)
+        self._executions[execution_id] = state
+        self._plans[execution_id] = bound
+        self._contexts[execution_id] = context
+        self._allowances[execution_id] = snapshot.allowance
+        self._restored.pop(execution_id, None)
         return state
 
     def _authorize(
@@ -637,3 +725,14 @@ class ResearchPlanExecutionApplicationService:
         if not isinstance(value, str) or not value.strip():
             raise ResearchError("Research plan execution ID cannot be empty.")
         return value.strip()
+
+
+#: A resumable execution is one that was started and has not closed. Cancelled,
+#: completed and failed executions are absent on purpose: restarting a process
+#: is not an event that reopens them.
+_RESUMABLE_EXECUTION_STATUSES = frozenset(
+    {
+        ResearchPlanExecutionStatus.RUNNING,
+        ResearchPlanExecutionStatus.INTERRUPTED,
+    }
+)

@@ -44,3 +44,17 @@ class StartsResearchPlanExecution(Protocol):
         authorization_id: str,
     ) -> ResearchPlanExecutionState | ResearchPlanExecutionStartRefusal:
         """Return the started state, or the reason nothing was started."""
+
+    def rebind_restored(
+        self,
+        plan: ResearchPlan,
+        research_run_id: str,
+        execution_id: str,
+    ) -> ResearchPlanExecutionState | ResearchPlanExecutionStartRefusal:
+        """Make one durable execution advanceable again, or refuse.
+
+        Rebinding is not starting. No approval is spent, because one already
+        was; the caller has re-derived the plan and proven it is the one that
+        approval named, and this restores the recorded step states and the
+        allowance exactly as they were persisted.
+        """

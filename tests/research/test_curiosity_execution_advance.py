@@ -457,9 +457,14 @@ class FailureTests(AdvanceFixture):
 
 
 class RestartTests(AdvanceFixture):
-    def test_a_restored_execution_is_readable_but_not_advanceable(self) -> None:
-        """Decision A, pinned: rebinding plan, context and allowance durably is
-        its own milestone, so this limitation is recorded rather than removed."""
+    def test_a_restored_execution_is_not_advanceable_until_resumed(self) -> None:
+        """A new process advances nothing it has not been asked to recover.
+
+        Recovering one is now possible and is its own explicit operator action,
+        covered in test_curiosity_execution_resume. What this pins is the state
+        before that action: the execution is not live here, so advancing finds
+        nothing and performs nothing rather than rebuilding it on demand.
+        """
         started = self._started()
 
         reopened = ResearchPlanExecutionApplicationService(

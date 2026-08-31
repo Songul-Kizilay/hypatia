@@ -391,6 +391,48 @@ class ResearchCommandBindingTests(unittest.TestCase):
             "_start_authorized_curiosity_research_proposal",
         )
 
+    def test_the_resume_control_is_its_own_explicit_handler(self) -> None:
+        """Recovering an execution is a separate press from running a step.
+
+        Bound to advancing, one press would recover *and* perform work, which
+        is the automatic resume this milestone exists to not have.
+        """
+        _window, widgets = build_real_window(
+            curiosity_enabled=True,
+            plan_authorization_enabled=True,
+        )
+        by_label = {
+            widget.text: getattr(widget.command, "__name__", "")
+            for widget in widgets
+            if widget.command is not None
+        }
+
+        self.assertEqual(by_label.get("Resume after restart"), "_resume_execution")
+        self.assertEqual(
+            by_label.get("Advance one step"),
+            "_advance_execution_one_step",
+        )
+        self.assertNotEqual(
+            by_label.get("Resume after restart"),
+            by_label.get("Advance one step"),
+        )
+
+    def test_no_control_resumes_the_latest_execution(self) -> None:
+        """There is one resume control, and it resumes what was named."""
+        _window, widgets = build_real_window(
+            curiosity_enabled=True,
+            plan_authorization_enabled=True,
+        )
+        labels = [
+            widget.text.casefold()
+            for widget in widgets
+            if widget.command is not None and isinstance(widget.text, str)
+        ]
+
+        resuming = [label for label in labels if "resume" in label]
+
+        self.assertEqual(resuming, ["resume after restart"])
+
     def test_the_comparison_controls_are_bound_to_their_own_handlers(self) -> None:
         self._assert_bound("Compare sources", "_preview_research_source_comparison")
         self._assert_bound(

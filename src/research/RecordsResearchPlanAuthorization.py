@@ -29,3 +29,14 @@ class RecordsResearchPlanAuthorization(Protocol):
         disclosure: ResearchDisclosure = ResearchDisclosure.NONE,
     ) -> ResearchPlanAuthorization | None:
         """Return the recorded approval, or None when it was not made durable."""
+
+    def authorization_for_execution(
+        self,
+        execution_id: str,
+    ) -> ResearchPlanAuthorization | None:
+        """Return the approval that was spent on this exact execution, if any.
+
+        Matched on the consumption's own execution identity, so it names one
+        approval or none. A caller uses it to check what was approved, never to
+        gain permission: the approval it returns is already spent.
+        """

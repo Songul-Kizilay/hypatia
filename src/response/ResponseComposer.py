@@ -2651,6 +2651,45 @@ class ResponseComposer:
             research_plan_execution=state,
         )
 
+    def curiosity_proposal_execution_resumed(
+        self,
+        request: BrainRequest,
+        proposal: CuriosityResearchProposal,
+        authorization_id: str,
+        state: ResearchPlanExecutionState,
+    ) -> BrainResponse:
+        """Report one recovered execution without implying anything ran.
+
+        Resuming is bookkeeping, not progress: it makes an execution that was
+        already approved and already started reachable again in this process.
+        The counts shown are the recorded ones, so a step that finished before
+        the restart still reads as finished and will not be repeated.
+        """
+        lines = [
+            "DURABLE CURIOSITY EXECUTION RESUMED — no step run",
+            f"Curiosity question: {proposal.question}",
+            f"Question ID: {proposal.curiosity_question_id}",
+            f"Plan digest: {proposal.digest}",
+            f"Approval ID already used: {authorization_id}",
+            f"Execution ID: {state.plan_id}",
+            f"Execution status: {state.status.value}",
+            f"Completed steps: {state.completed_steps}",
+            f"Pending steps: {state.pending_steps}",
+            "Research operations performed: 0",
+            "",
+            "No new approval was created and the original one stays used. "
+            "Nothing was performed and no provider was contacted. Any further "
+            "step still requires a separate explicit Advance action.",
+        ]
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="curiosity_resume_execution",
+            memory_count=0,
+            curiosity_proposal=proposal,
+            research_plan_execution=state,
+        )
+
     def curiosity_rejected(
         self,
         request: BrainRequest,
