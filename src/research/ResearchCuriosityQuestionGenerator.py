@@ -12,11 +12,14 @@ ordering.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from research.ResearchClaimConfidence import ResearchClaimConfidence
 from research.ResearchCuriosityQuestion import (
     MAX_QUESTION_TEXT_LENGTH,
     ResearchCuriosityQuestion,
 )
+from research.ResearchHypothesis import ResearchHypothesis
 from research.ResearchKnowledgeGap import ResearchKnowledgeGap
 from research.ResearchKnowledgeGapKind import ResearchKnowledgeGapKind
 from research.ResearchRun import ResearchRun
@@ -38,6 +41,13 @@ _TEMPLATES: dict[ResearchKnowledgeGapKind, str] = {
     ),
     ResearchKnowledgeGapKind.UNSUPPORTED_QUESTION: (
         "Which sources could begin to answer this unsupported question: {subject}?"
+    ),
+    # Names the hypothesis, never its discriminating test. The test is prose an
+    # author wrote about what to look for, and quoting it into a question is how
+    # a description of an observation turns into an instruction to go make one.
+    ResearchKnowledgeGapKind.HYPOTHESIS_EVIDENCE_GAP: (
+        "What evidence would settle this hypothesis, which so far has none: "
+        "{subject}?"
     ),
     # Deliberately about the missing information rather than the failed attempt.
     # "Try that again" is not a question, and a run whose acquisition failed
@@ -85,9 +95,15 @@ class ResearchCuriosityQuestionGenerator:
         self,
         run: ResearchRun,
         gaps: tuple[ResearchKnowledgeGap, ...],
+        hypotheses: Sequence[ResearchHypothesis] = (),
     ) -> tuple[ResearchCuriosityQuestion, ...]:
-        """Return ranked candidate questions, highest rank first."""
-        subjects = self._subjects(run)
+        """Return ranked candidate questions, highest rank first.
+
+        Hypotheses are optional and are used only to say what a gap is about in
+        its author's own words. Passing none costs a hypothesis question its
+        readable subject, never its existence.
+        """
+        subjects = self._subjects(run, hypotheses)
         questions = [
             self._question(run, gap, self._subject_for(run, subjects, gap))
             for gap in gaps
@@ -148,11 +164,25 @@ class ResearchCuriosityQuestionGenerator:
         return gap.severity * SEVERITY_WEIGHT + bonus
 
     @staticmethod
-    def _subjects(run: ResearchRun) -> dict[str, str]:
-        """Map claim and source identifiers to their own recorded wording."""
+    def _subjects(
+        run: ResearchRun,
+        hypotheses: Sequence[ResearchHypothesis] = (),
+    ) -> dict[str, str]:
+        """Map claim, source and hypothesis identifiers to their own wording.
+
+        A hypothesis is named by its statement and never by its discriminating
+        test. The test describes an observation somebody would have to make,
+        and putting that sentence inside a question is how a description turns
+        into an instruction.
+        """
         subjects = {claim.claim_id: claim.text for claim in run.claims}
         for source in run.sources:
             subjects[source.document_id] = source.title or source.url
+        for hypothesis in hypotheses:
+            if hypothesis.run_id == run.run_id:
+                subjects[hypothesis.hypothesis_id] = hypothesis.one_line_statement(
+                    MAX_SUBJECT_LENGTH
+                )
         return subjects
 
     @staticmethod

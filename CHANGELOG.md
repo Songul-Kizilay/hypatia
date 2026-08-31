@@ -2,6 +2,42 @@
 
 All notable project changes are recorded here.
 
+## [0.3.229] - 2026-08-31
+
+### Added
+
+- Curiosity can now see a hypothesis nobody has answered. Every hypothesis
+  already records the observation that would settle it — the model refuses one
+  without it, on the grounds that a proposition with no discriminating test is
+  a belief rather than a hypothesis — but hypotheses live in their own store, so
+  a reading of one run never met them. An open, non-withdrawn hypothesis with no
+  evidence recorded on either side is now a `hypothesis_evidence_gap`.
+- Hypotheses are handed to the detector rather than fetched by it. Detection
+  stays a function of its arguments, and composing the two aggregates belongs to
+  the application service, which is the only layer that knows a store exists.
+  Curiosity keeps working unchanged where no hypothesis store is configured, and
+  a store that cannot be read costs the hypothesis half of a report rather than
+  the whole of it.
+- The gap ranks below all three claim gaps and above everything describing the
+  run's breadth. Claims are positions the run already holds and their integrity
+  comes first; a stated open question is the most answerable kind of
+  incompleteness, but it is still an absence rather than a belief in trouble.
+
+### Security
+
+- The question names the hypothesis by its statement and never by its
+  discriminating test. The test describes an observation somebody would have to
+  make, and quoting that sentence into a question is how a description turns
+  into an instruction. Nothing here runs a test, builds a payload, or reaches
+  anything, and accepting the question decides nothing about the hypothesis.
+- Missing evidence asserts nothing. A hypothesis nobody has answered is neither
+  supported nor contradicted, and the gap says only that the requirement remains
+  unresolved.
+- No wording is compared against any other wording. A hypothesis carries one
+  prose test and two lists of evidence identifiers, and nothing canonical links
+  them, so the only condition reported is the unambiguous one — evidence exists,
+  or it does not.
+
 ## [0.3.228] - 2026-08-31
 
 ### Added

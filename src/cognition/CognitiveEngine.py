@@ -456,6 +456,7 @@ class CognitiveEngine:
                 research_run_manager,
                 response_composer,
                 question_store=curiosity_question_store,
+                hypothesis_store=hypothesis_store,
                 event_bus=event_bus,
             )
         self._reflection_service: ReflectionApplicationService | None = None

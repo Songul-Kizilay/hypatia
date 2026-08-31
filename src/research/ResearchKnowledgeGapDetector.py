@@ -11,12 +11,14 @@ simply mean the record is thinner than it could be.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
 
 from core.Exceptions import ResearchError
 from research.ResearchClaimRecord import ResearchClaimRecord
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchEpistemicState import ResearchEpistemicState
+from research.ResearchHypothesis import ResearchHypothesis
 from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchKnowledgeGap import MAX_GAP_SUMMARY_LENGTH, ResearchKnowledgeGap
 from research.ResearchKnowledgeGapKind import ResearchKnowledgeGapKind
@@ -61,8 +63,15 @@ class ResearchKnowledgeGapDetector:
         self,
         run: ResearchRun,
         detected_at: datetime,
+        hypotheses: Sequence[ResearchHypothesis] = (),
     ) -> tuple[ResearchKnowledgeGap, ...]:
-        """Return the highest-severity gaps this run exposes, bounded in count."""
+        """Return the highest-severity gaps this run exposes, bounded in count.
+
+        Hypotheses are passed in rather than looked up. They live in their own
+        store, and reaching into it from here would make a pure reading of one
+        run depend on persistence; composing the two is the application layer's
+        job, and this stays a function of its arguments.
+        """
         if not isinstance(run, ResearchRun):
             raise ResearchError("Knowledge gap detection requires a research run.")
         gaps = [
@@ -71,6 +80,7 @@ class ResearchKnowledgeGapDetector:
             *self._source_gaps(run, detected_at),
             *self._acquisition_gaps(run, detected_at),
             *self._coverage_gaps(run, detected_at),
+            *self._hypothesis_gaps(run, hypotheses, detected_at),
         ]
         gaps.sort(key=lambda gap: (-gap.severity, gap.kind.value, gap.subject_id))
         return tuple(gaps[: self._max_gaps])
@@ -195,6 +205,55 @@ class ResearchKnowledgeGapDetector:
                     )
                 )
         return gaps
+
+    def _hypothesis_gaps(
+        self,
+        run: ResearchRun,
+        hypotheses: Sequence[ResearchHypothesis],
+        detected_at: datetime,
+    ) -> list[ResearchKnowledgeGap]:
+        """Note a hypothesis that names its test and has nothing recorded yet.
+
+        The condition is deliberately narrow, because it is the only one this
+        model can state truthfully. A hypothesis carries one discriminating
+        test as prose and two lists of evidence identifiers; there is no
+        canonical mark saying *this* requirement was met by *that* evidence. So
+        the detectable state is the unambiguous one — the test is named and no
+        evidence has been entered on either side — and nothing here compares
+        the wording of a test against the wording of evidence to guess at
+        anything finer.
+
+        Evidence on either side ends the gap, including evidence against. A
+        hypothesis someone has argued with is being worked on; what this looks
+        for is one nobody has answered at all.
+
+        A withdrawn hypothesis is excluded because withdrawal is the one status
+        that settles anything. Support does not, which is why a supported
+        hypothesis is not excluded here on status — it simply has evidence, and
+        so does not qualify.
+        """
+        return [
+            self._gap(
+                run,
+                ResearchKnowledgeGapKind.HYPOTHESIS_EVIDENCE_GAP,
+                hypothesis.hypothesis_id,
+                "This hypothesis names the observation that would settle it, "
+                "and no evidence has been recorded either way.",
+                detected_at,
+            )
+            for hypothesis in sorted(
+                (
+                    hypothesis
+                    for hypothesis in hypotheses
+                    if isinstance(hypothesis, ResearchHypothesis)
+                    and hypothesis.run_id == run.run_id
+                    and not hypothesis.withdrawn
+                    and hypothesis.discriminating_test
+                    and hypothesis.evidence_count == 0
+                ),
+                key=lambda hypothesis: hypothesis.hypothesis_id,
+            )
+        ]
 
     def _acquisition_gaps(
         self,

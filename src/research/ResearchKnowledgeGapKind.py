@@ -8,6 +8,12 @@ The ordering below is the ranking order. A contradiction outranks an unresolved
 claim because holding two incompatible beliefs is worse than holding one
 uncertain belief, and both outrank a merely thin source record.
 
+A hypothesis naming the observation that would settle it, with nothing yet
+recorded either way, sits below all three claim gaps and above everything about
+the run's breadth. Claims are positions the run already holds, and their
+integrity comes first; a stated open question is the most answerable kind of
+incompleteness, but it is still an absence rather than a belief in trouble.
+
 Two of these describe an attempt rather than a record. A refused acquisition is
 a hole with a known cause, ranked above a source we merely distrust because
 there is nothing there at all; and a question put to one provider when two were
@@ -27,6 +33,7 @@ class ResearchKnowledgeGapKind(StrEnum):
     CONTRADICTED_CLAIM = "contradicted_claim"
     UNRESOLVED_CLAIM = "unresolved_claim"
     SINGLE_SOURCE_CLAIM = "single_source_claim"
+    HYPOTHESIS_EVIDENCE_GAP = "hypothesis_evidence_gap"
     UNSUPPORTED_QUESTION = "unsupported_question"
     FAILED_ACQUISITION = "failed_acquisition"
     LOW_TRUST_SOURCE = "low_trust_source"
@@ -59,6 +66,7 @@ _SEVERITIES: dict[ResearchKnowledgeGapKind, int] = {
     ResearchKnowledgeGapKind.CONTRADICTED_CLAIM: 70,
     ResearchKnowledgeGapKind.UNRESOLVED_CLAIM: 60,
     ResearchKnowledgeGapKind.SINGLE_SOURCE_CLAIM: 50,
+    ResearchKnowledgeGapKind.HYPOTHESIS_EVIDENCE_GAP: 45,
     ResearchKnowledgeGapKind.UNSUPPORTED_QUESTION: 40,
     ResearchKnowledgeGapKind.FAILED_ACQUISITION: 35,
     ResearchKnowledgeGapKind.LOW_TRUST_SOURCE: 30,

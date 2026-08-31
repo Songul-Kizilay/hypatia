@@ -22,12 +22,14 @@ from cognition.CuriosityEvents import CuriosityEvents
 from core.Exceptions import ResearchError
 from eventbus.EventBus import EventBus
 from research.CuriosityQuestionStore import CuriosityQuestionStore
+from research.HypothesisStore import HypothesisStore
 from research.JsonFileCuriosityQuestionStore import MAX_CURIOSITY_STORE_QUESTIONS
 from research.ResearchCuriosityPreview import ResearchCuriosityPreview
 from research.ResearchCuriosityQuestion import ResearchCuriosityQuestion
 from research.ResearchCuriosityQuestionGenerator import (
     ResearchCuriosityQuestionGenerator,
 )
+from research.ResearchHypothesis import ResearchHypothesis
 from research.ResearchKnowledgeGapDetector import ResearchKnowledgeGapDetector
 from research.ResearchRunManager import ResearchRunManager
 from response.ResponseComposer import ResponseComposer
@@ -51,6 +53,7 @@ class CuriosityApplicationService:
         detector: ResearchKnowledgeGapDetector | None = None,
         generator: ResearchCuriosityQuestionGenerator | None = None,
         question_store: CuriosityQuestionStore | None = None,
+        hypothesis_store: HypothesisStore | None = None,
         event_bus: EventBus | None = None,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
@@ -59,6 +62,7 @@ class CuriosityApplicationService:
         self._detector = detector or ResearchKnowledgeGapDetector()
         self._generator = generator or ResearchCuriosityQuestionGenerator()
         self._question_store = question_store
+        self._hypothesis_store = hypothesis_store
         self._events = CuriosityEvents(event_bus)
         self._clock = clock or (lambda: datetime.now(UTC))
         self._questions: dict[str, ResearchCuriosityQuestion] = {}
@@ -176,13 +180,34 @@ class CuriosityApplicationService:
     ) -> ResearchCuriosityPreview:
         run_id = self._required_text(request, "research_run_id", "run")
         run = self._run_manager.get(run_id)
-        gaps = self._detector.detect(run, self._clock())
-        questions = self._generator.generate(run, gaps) if generate else ()
+        hypotheses = self._hypotheses_for(run.run_id)
+        gaps = self._detector.detect(run, self._clock(), hypotheses)
+        questions = self._generator.generate(run, gaps, hypotheses) if generate else ()
         return ResearchCuriosityPreview(
             run_id=run.run_id,
             gaps=gaps,
             questions=questions,
         )
+
+    def _hypotheses_for(self, run_id: str) -> tuple[ResearchHypothesis, ...]:
+        """Return this run's own hypotheses, or none when there is no store.
+
+        Composing the two aggregates is this layer's job precisely because it
+        is the only one that knows a store exists. The detector stays a pure
+        reading of what it is handed, and curiosity keeps working unchanged
+        wherever no hypothesis store is configured.
+
+        A store that cannot be read is not a reason to fail a read-only report
+        about a run. The gaps the run itself exposes are still true, so they
+        are still reported, and the hypothesis half is simply absent.
+        """
+        if self._hypothesis_store is None:
+            return ()
+        try:
+            stored = self._hypothesis_store.load()
+        except ResearchError:
+            return ()
+        return tuple(hypothesis for hypothesis in stored if hypothesis.run_id == run_id)
 
     def _store(
         self,
