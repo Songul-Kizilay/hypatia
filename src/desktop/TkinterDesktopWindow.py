@@ -4989,6 +4989,7 @@ class TkinterDesktopWindow:
                 ("Oppose", self._oppose_hypothesis),
                 ("Addresses test", self._associate_hypothesis_test_evidence),
                 ("Retract relation", self._retract_hypothesis_relation),
+                ("View history", self._view_hypothesis_history),
                 ("Withdraw", self._withdraw_hypothesis),
                 ("List hypotheses", self._list_hypotheses),
             )
@@ -5082,6 +5083,17 @@ class TkinterDesktopWindow:
                 self._hypothesis_id.get(),
                 self._hypothesis_evidence_ids.get(),
             )
+        )
+
+    def _view_hypothesis_history(self) -> None:
+        """Read the currently selected hypothesis's history and show it.
+
+        Reads the identifier when the control is pressed rather than when the
+        panel was built, so it follows the operator's selection, and asks the
+        controller afresh each time so a correction made a moment ago is in it.
+        """
+        self._learning_request(
+            lambda: self._controller.hypothesis_history(self._hypothesis_id.get())
         )
 
     def _retract_hypothesis_relation(self) -> None:

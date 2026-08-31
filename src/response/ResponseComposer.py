@@ -26,6 +26,7 @@ from planner.Plan import Plan
 from research.BackgroundResearchTask import BackgroundResearchTask
 from research.CanonicalResearchSummary import CanonicalResearchSummary
 from research.HypothesisAppraisal import HypothesisAppraisal
+from research.HypothesisHistoryView import HypothesisHistoryView
 from research.KnowledgeReconciliationReport import (
     KnowledgeReconciliationReport,
 )
@@ -1765,6 +1766,20 @@ class ResponseComposer:
             intent="research_hypothesis",
             memory_count=0,
             hypothesis_appraisal=appraisal,
+        )
+
+    def hypothesis_history(
+        self,
+        request: BrainRequest,
+        view: HypothesisHistoryView,
+    ) -> BrainResponse:
+        """Render one hypothesis's standing beside what was withdrawn from it."""
+        return BrainResponse(
+            message="\n".join(view.lines()),
+            request_id=request.request_id,
+            intent="research_hypothesis_history",
+            memory_count=0,
+            hypothesis_history=view,
         )
 
     def hypothesis_list(

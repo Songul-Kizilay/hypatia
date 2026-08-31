@@ -40,10 +40,13 @@ from research.HypothesisEvidenceRelation import (
     HypothesisEvidenceRelation,
     relation_of,
 )
+from research.HypothesisHistoryBuilder import HypothesisHistoryBuilder
 from research.HypothesisStore import HypothesisStore
 from research.JsonFileHypothesisStore import MAX_HYPOTHESIS_STORE_ENTRIES
 from research.ResearchHypothesis import ResearchHypothesis
 from research.ResearchHypothesisAppraiser import ResearchHypothesisAppraiser
+from research.ResearchKnowledgeGapDetector import ResearchKnowledgeGapDetector
+from research.ResearchKnowledgeGapKind import ResearchKnowledgeGapKind
 from research.ResearchRun import ResearchRun
 from research.ResearchRunManager import ResearchRunManager
 from response.ResponseComposer import ResponseComposer
@@ -53,6 +56,7 @@ HYPOTHESIS_SUPPORT_INTENT = "research_hypothesis_support"
 HYPOTHESIS_OPPOSE_INTENT = "research_hypothesis_oppose"
 HYPOTHESIS_TEST_EVIDENCE_INTENT = "research_hypothesis_test_evidence"
 HYPOTHESIS_RETRACT_RELATION_INTENT = "research_hypothesis_retract_relation"
+HYPOTHESIS_HISTORY_INTENT = "research_hypothesis_history"
 HYPOTHESIS_WITHDRAW_INTENT = "research_hypothesis_withdraw"
 HYPOTHESIS_LIST_INTENT = "research_hypothesis_list"
 
@@ -92,6 +96,10 @@ class HypothesisApplicationService:
     @staticmethod
     def is_oppose_request(request: BrainRequest) -> bool:
         return request.metadata.get("intent") == HYPOTHESIS_OPPOSE_INTENT
+
+    @staticmethod
+    def is_history_request(request: BrainRequest) -> bool:
+        return request.metadata.get("intent") == HYPOTHESIS_HISTORY_INTENT
 
     @staticmethod
     def is_retract_relation_request(request: BrainRequest) -> bool:
@@ -154,6 +162,31 @@ class HypothesisApplicationService:
 
     def process_oppose(self, request: BrainRequest) -> BrainResponse:
         return self._enter_evidence(request, supporting=False)
+
+    def process_history(self, request: BrainRequest) -> BrainResponse:
+        """Report what stands and what was withdrawn, changing nothing.
+
+        Rebuilt on every request rather than cached, so a correction made a
+        moment ago is already in it. The appraisal and the curiosity gap are
+        derived here because this is the layer that can reach the run; both
+        describe the hypothesis as it is now, and neither is reconstructed for
+        any earlier moment, because no earlier moment was ever recorded.
+        """
+        run, hypothesis = self._existing(request)
+        appraisal = self._appraiser.appraise(hypothesis, run)
+        gaps = ResearchKnowledgeGapDetector().detect(run, self._clock(), (hypothesis,))
+        gap_open = any(
+            gap.kind is ResearchKnowledgeGapKind.HYPOTHESIS_EVIDENCE_GAP
+            and gap.subject_id == hypothesis.hypothesis_id
+            for gap in gaps
+        )
+        view = HypothesisHistoryBuilder().build(
+            hypothesis,
+            status=appraisal.status,
+            evidence_gap_open=gap_open,
+            evidence=run.evidence,
+        )
+        return self._response_composer.hypothesis_history(request, view)
 
     def process_retract_relation(self, request: BrainRequest) -> BrainResponse:
         """Take back one statement about evidence, keeping that it was made.

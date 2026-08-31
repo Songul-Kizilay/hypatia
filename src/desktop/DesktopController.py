@@ -633,6 +633,26 @@ class DesktopController:
             evidence_ids,
         )
 
+    def hypothesis_history(self, hypothesis_id: str) -> BrainResponse:
+        """Read one hypothesis's standing and withdrawn statements.
+
+        A read, and only a read: it records nothing, decides nothing, and the
+        controls that change a hypothesis stay where they were.
+        """
+        normalized = hypothesis_id.strip()
+        if not normalized:
+            raise ValueError("A hypothesis ID cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="Read hypothesis history",
+                source="desktop",
+                metadata={
+                    "intent": "research_hypothesis_history",
+                    "hypothesis_id": normalized,
+                },
+            )
+        )
+
     def retract_hypothesis_evidence_relation(
         self,
         hypothesis_id: str,

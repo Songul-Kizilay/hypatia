@@ -20,6 +20,7 @@ from memory.LearnedMemoryAuditReport import LearnedMemoryAuditReport
 from research.BackgroundResearchTask import BackgroundResearchTask
 from research.CanonicalResearchSummary import CanonicalResearchSummary
 from research.HypothesisAppraisal import HypothesisAppraisal
+from research.HypothesisHistoryView import HypothesisHistoryView
 from research.KnowledgeReconciliationReport import (
     KnowledgeReconciliationReport,
 )
@@ -161,6 +162,7 @@ class BrainResponse:
     research_plan_authorizations: tuple[ResearchPlanAuthorization, ...] = ()
     source_reputations: tuple[SourceReputation, ...] = ()
     hypothesis_appraisal: HypothesisAppraisal | None = None
+    hypothesis_history: HypothesisHistoryView | None = None
     hypothesis_appraisals: tuple[HypothesisAppraisal, ...] = ()
     source_load_stage: SourceLoadStage | None = None
     knowledge_reconciliation: KnowledgeReconciliationReport | None = None

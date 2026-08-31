@@ -2,6 +2,48 @@
 
 All notable project changes are recorded here.
 
+## [0.3.232] - 2026-08-31
+
+### Added
+
+- A hypothesis now has a readable history. Retraction gave the model one and
+  nothing showed it, so an operator could see what currently stands but could
+  not see that a relationship had been corrected without opening the store file.
+  The new read-only projection puts current standing beside withdrawn
+  statements, with the current appraisal and whether the discriminating test
+  still has nothing recorded against it.
+- The three meanings stay apart. Supporting, opposing and addressing the
+  discriminating test are shown under their own headings and never collapsed
+  into one list of linked evidence.
+- A relationship that was retracted and later authored again reads as standing,
+  with the earlier withdrawal still visible and marked as superseded by the
+  current one. Showing it as retracted because an older cycle ended would have
+  been a worse account than showing nothing.
+- The desktop hypothesis panel gains a read-only "View history" control beside
+  the existing mutations. It reads the identifier when pressed and asks afresh
+  each time, so a correction made a moment ago is already in it, and it records
+  nothing.
+
+### Changed
+
+- Nothing about hypothesis reasoning. No status, confidence, appraisal rule or
+  curiosity semantics changed; this milestone only reads what the previous ones
+  recorded.
+
+### Security
+
+- The view states only what canonical state proves. When a relationship was
+  authored is recorded nowhere, so it is reported as unknown rather than filled
+  in from the hypothesis's update time, the retraction's own time, or a file's —
+  a printed number that looks like an answer and is not one would be worse than
+  an admitted gap. No reason for a withdrawal is stored, so none is shown.
+- Evidence is labelled by the operator's own note where one exists and never by
+  reprinted source content, so an unread quotation cannot sit beside a
+  withdrawal and be read as the reason for it.
+- A long correction history is capped at the newest twenty and says how many
+  were recorded, because a list that silently ends is a list that lies about its
+  length.
+
 ## [0.3.231] - 2026-08-31
 
 ### Added
