@@ -4706,6 +4706,7 @@ class TkinterDesktopWindow:
         judgement stays where it was.
         """
         self._review_run_id = tk.StringVar()
+        self._review_claim_id = tk.StringVar()
         self._review_status = tk.StringVar(value=_REVIEW_IDLE_STATUS)
         parent.rowconfigure(4, weight=1)
         ttk.Label(parent, text=_REVIEW_PANEL_NOTE, wraplength=720).grid(
@@ -4722,14 +4723,21 @@ class TkinterDesktopWindow:
         ttk.Label(run, text=_CALIBRATION_NOTE, wraplength=680).grid(
             row=1, column=1, sticky="w", padx=(8, 0), pady=(6, 0)
         )
+        ttk.Label(run, text="Claim ID for review").grid(
+            row=2, column=0, sticky="w", pady=(6, 0)
+        )
+        ttk.Entry(run, textvariable=self._review_claim_id).grid(
+            row=2, column=1, sticky="ew", padx=(8, 0), pady=(6, 0)
+        )
         ttk.Label(run, text=_PROVIDER_QUALITY_NOTE, wraplength=680).grid(
-            row=3, column=1, sticky="w", padx=(8, 0), pady=(6, 0)
+            row=4, column=1, sticky="w", padx=(8, 0), pady=(6, 0)
         )
         ttk.Label(run, text=_PROVIDER_COMPARISON_NOTE, wraplength=680).grid(
-            row=4, column=1, sticky="w", padx=(8, 0), pady=(6, 0)
+            row=5, column=1, sticky="w", padx=(8, 0), pady=(6, 0)
         )
         commands: list[tuple[str, Callable[[], None]]] = [
             ("Calibrate claims", self._report_claim_calibration),
+            ("Prepare claim review", self._prepare_claim_revision_review),
             # Not run-scoped like the others: provider experience accumulates
             # across every run, and one run is never a sample.
             ("Provider quality", self._report_provider_quality),
@@ -4744,7 +4752,7 @@ class TkinterDesktopWindow:
             commands.append(("Draft questions", self._preview_curiosity_questions))
             commands.append(("Draft and keep", self._store_curiosity_questions))
         buttons = ttk.Frame(run)
-        buttons.grid(row=2, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
+        buttons.grid(row=3, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
         for index, (label, command) in enumerate(commands):
             self._request_button(buttons, label, command).grid(
                 row=index // 3,
@@ -4872,6 +4880,15 @@ class TkinterDesktopWindow:
     def _report_claim_calibration(self) -> None:
         self._review_request(
             lambda: self._controller.report_claim_calibration(self._review_run_id.get())
+        )
+
+    def _prepare_claim_revision_review(self) -> None:
+        """Show exact current context; draft and record no replacement."""
+        self._review_request(
+            lambda: self._controller.prepare_claim_revision_review(
+                self._review_run_id.get(),
+                self._review_claim_id.get(),
+            )
         )
 
     def _preview_reflection(self) -> None:

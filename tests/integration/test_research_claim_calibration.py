@@ -30,7 +30,10 @@ if str(SRC_DIR) not in sys.path:
 
 from brain.BrainRequest import BrainRequest
 from cognition.CalibrationApplicationService import CalibrationApplicationService
-from cognition.CalibrationEvents import CALIBRATION_REPORTED
+from cognition.CalibrationEvents import (
+    CALIBRATION_REPORTED,
+    CALIBRATION_REVISION_PREPARED,
+)
 from cognition.CognitiveEngine import CognitiveEngine
 from cognition.ResearchSourceAcceptanceService import ResearchSourceAcceptanceService
 from core.Exceptions import ResearchError
@@ -168,6 +171,16 @@ class CalibrationFixture(unittest.TestCase):
             metadata={
                 "intent": "research_calibration_report",
                 "research_run_id": run_id,
+            },
+        )
+
+    def revision_request(self, run_id: str, claim_id: str) -> BrainRequest:
+        return BrainRequest(
+            message="Prepare claim review",
+            metadata={
+                "intent": "research_calibration_revision_prepare",
+                "research_run_id": run_id,
+                "research_claim_id": claim_id,
             },
         )
 
@@ -666,6 +679,139 @@ class CalibrationChangesNothingTests(CalibrationFixture):
         self.assertEqual(second.research_calibration.overstated, ())
 
 
+class ClaimRevisionPreparationTests(CalibrationFixture):
+    def overstated_claim(self) -> tuple[str, str, str, str]:
+        run_id = self.new_run()
+        document_id = self.accept_source(run_id, "review")
+        evidence_id = self.add_evidence(run_id, document_id)
+        claim_id = self.claim(
+            run_id,
+            [evidence_id],
+            ResearchEpistemicState.FACT,
+            ResearchClaimConfidence.HIGH,
+            "The rings are exactly one hundred million years old.",
+        )
+        return run_id, claim_id, evidence_id, document_id
+
+    def test_an_overstated_claim_gets_one_exact_inert_handoff(self) -> None:
+        run_id, claim_id, evidence_id, document_id = self.overstated_claim()
+
+        response = self.service().process_revision_prepare(
+            self.revision_request(run_id, claim_id)
+        )
+
+        preparation = response.research_claim_revision_preparation
+        assert preparation is not None
+        self.assertEqual(preparation.run_id, run_id)
+        self.assertEqual(preparation.supersedes_claim_id, claim_id)
+        self.assertEqual(preparation.current_evidence_ids, (evidence_id,))
+        self.assertEqual(
+            preparation.current_source_document_ids,
+            (document_id,),
+        )
+        self.assertIn("Current claim:", response.message)
+        self.assertIn("record supports up to", response.message)
+        self.assertIn("No replacement was drafted or recorded", response.message)
+        self.assertIn("a person must decide", response.message)
+
+    def test_preparation_recomputes_current_state_and_changes_no_file(self) -> None:
+        run_id, claim_id, _, _ = self.overstated_claim()
+        before = self.run_path.read_bytes()
+
+        for _ in range(3):
+            self.service().process_revision_prepare(
+                self.revision_request(run_id, claim_id)
+            )
+
+        self.assertEqual(self.run_path.read_bytes(), before)
+
+    def test_a_warning_can_prompt_review_without_overstating_the_claim(self) -> None:
+        run_id = self.new_run()
+        document_id = self.accept_source(run_id, "warning")
+        evidence_id = self.add_evidence(run_id, document_id)
+        self.assess(
+            run_id,
+            document_id,
+            evidence_id,
+            ResearchInformationTrust.HIGH,
+            publication_status="retracted",
+        )
+        claim_id = self.claim(
+            run_id,
+            [evidence_id],
+            ResearchEpistemicState.LIKELY,
+            ResearchClaimConfidence.MEDIUM,
+        )
+
+        response = self.service().process_revision_prepare(
+            self.revision_request(run_id, claim_id)
+        )
+
+        preparation = response.research_claim_revision_preparation
+        assert preparation is not None
+        self.assertFalse(preparation.calibration.needs_attention)
+        self.assertTrue(preparation.calibration.warnings)
+        self.assertIn("source_retracted", response.message)
+
+    def test_a_supported_or_understated_claim_is_not_nudged_upward(self) -> None:
+        run_id = self.new_run()
+        document_id = self.accept_source(run_id, "careful")
+        evidence_id = self.add_evidence(run_id, document_id)
+        claim_id = self.claim(
+            run_id,
+            [evidence_id],
+            ResearchEpistemicState.SPECULATION,
+            ResearchClaimConfidence.UNASSESSED,
+        )
+
+        with self.assertRaisesRegex(ResearchError, "no reason for a second look"):
+            self.service().process_revision_prepare(
+                self.revision_request(run_id, claim_id)
+            )
+
+    def test_a_superseded_or_unknown_claim_cannot_be_prepared(self) -> None:
+        run_id, claim_id, evidence_id, _ = self.overstated_claim()
+        self.manager.record_claim(
+            run_id,
+            [evidence_id],
+            "The rings may have a measurable age.",
+            ResearchEpistemicState.HYPOTHESIS,
+            ResearchClaimConfidence.LOW,
+            supersedes_claim_id=claim_id,
+        )
+
+        for unavailable_id in (claim_id, "claim-missing"):
+            with (
+                self.subTest(claim_id=unavailable_id),
+                self.assertRaisesRegex(
+                    ResearchError,
+                    "Active research claim was not found",
+                ),
+            ):
+                self.service().process_revision_prepare(
+                    self.revision_request(run_id, unavailable_id)
+                )
+
+    def test_preparation_event_is_bounded_and_carries_no_claim_content(self) -> None:
+        run_id, claim_id, evidence_id, document_id = self.overstated_claim()
+
+        self.service().process_revision_prepare(self.revision_request(run_id, claim_id))
+
+        [event] = [
+            event
+            for event in self.events
+            if event.name == CALIBRATION_REVISION_PREPARED
+        ]
+        self.assertEqual(event.payload["run_id"], run_id)
+        self.assertEqual(event.payload["verdict"], "overstated_both")
+        self.assertEqual(event.payload["claims_modified"], 0)
+        serialized = json.dumps(event.payload)
+        self.assertNotIn(claim_id, serialized)
+        self.assertNotIn(evidence_id, serialized)
+        self.assertNotIn(document_id, serialized)
+        self.assertNotIn("one hundred million", serialized)
+
+
 class CalibrationProfileTests(unittest.TestCase):
     def test_a_profile_rejects_more_assessments_than_sources(self) -> None:
         with self.assertRaises(ResearchError):
@@ -806,6 +952,35 @@ class CalibrationCompositionTests(CalibrationFixture):
 
         self.assertIsNone(engine._calibration_service)
         self.assertFalse(response.success)
+        self.assertIn("unavailable", response.message)
+
+    def test_the_engine_routes_one_claim_preparation_and_stops_before_write(
+        self,
+    ) -> None:
+        run_id = self.new_run()
+        document_id = self.accept_source(run_id, "engine-review")
+        evidence_id = self.add_evidence(run_id, document_id)
+        claim_id = self.claim(
+            run_id,
+            [evidence_id],
+            ResearchEpistemicState.FACT,
+            ResearchClaimConfidence.HIGH,
+        )
+        before = self.run_path.read_bytes()
+
+        response = self.build_engine().process(self.revision_request(run_id, claim_id))
+
+        self.assertTrue(response.success)
+        self.assertIsNotNone(response.research_claim_revision_preparation)
+        self.assertEqual(self.run_path.read_bytes(), before)
+
+    def test_claim_preparation_is_refused_without_run_persistence(self) -> None:
+        response = self.build_engine(with_runs=False).process(
+            self.revision_request("run-1", "claim-1")
+        )
+
+        self.assertFalse(response.success)
+        self.assertEqual(response.intent, "research_calibration_revision_prepare")
         self.assertIn("unavailable", response.message)
 
     def test_an_unknown_run_is_refused_without_raising(self) -> None:

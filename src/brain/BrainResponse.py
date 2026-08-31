@@ -37,6 +37,9 @@ from research.ResearchClaimContradictionWritePreview import (
     ResearchClaimContradictionWritePreview,
 )
 from research.ResearchClaimPreview import ResearchClaimPreview
+from research.ResearchClaimRevisionPreparation import (
+    ResearchClaimRevisionPreparation,
+)
 from research.ResearchClaimWritePreview import ResearchClaimWritePreview
 from research.ResearchCuriosityPreview import ResearchCuriosityPreview
 from research.ResearchCuriosityQuestion import ResearchCuriosityQuestion
@@ -157,6 +160,7 @@ class BrainResponse:
     research_reflections: tuple[ResearchReflectionReport, ...] = ()
     failure_lessons: tuple[ResearchFailureLesson, ...] = ()
     research_calibration: ResearchCalibrationReport | None = None
+    research_claim_revision_preparation: ResearchClaimRevisionPreparation | None = None
     research_provider_quality: ResearchProviderQualityReport | None = None
     research_paired_provider_quality: ResearchPairedProviderQualityReport | None = None
     research_provider_comparison: ResearchProviderComparisonReport | None = None

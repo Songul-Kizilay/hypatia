@@ -454,6 +454,30 @@ class DesktopController:
             research_run_id,
         )
 
+    def prepare_claim_revision_review(
+        self,
+        research_run_id: str,
+        claim_id: str,
+    ) -> BrainResponse:
+        """Show an inert, exact handoff for one calibrated current claim."""
+        normalized_run_id = research_run_id.strip()
+        normalized_claim_id = claim_id.strip()
+        if not normalized_run_id:
+            raise ValueError("A research run ID cannot be empty.")
+        if not normalized_claim_id:
+            raise ValueError("A research claim ID cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="Prepare calibrated claim review",
+                source="desktop",
+                metadata={
+                    "intent": "research_calibration_revision_prepare",
+                    "research_run_id": normalized_run_id,
+                    "research_claim_id": normalized_claim_id,
+                },
+            )
+        )
+
     def preview_reflection(self, research_run_id: str) -> BrainResponse:
         """Report how one run went without storing the account."""
         return self._run_only_request(

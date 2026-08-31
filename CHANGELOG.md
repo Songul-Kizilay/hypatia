@@ -2,6 +2,35 @@
 
 All notable project changes are recorded here.
 
+## [0.3.239] - 2026-08-31
+
+### Added
+
+- The Review surface can now prepare one exact current claim for a person's
+  attention. The operator names both the research run and claim; Hypatia
+  re-derives current calibration and shows the authored statement, verdict,
+  support ceiling, warnings, and current evidence/source provenance together.
+- The preparation exposes the exact existing claim ID that a separately
+  authored replacement could supersede. It also shows the current evidence and
+  source IDs for inspection, without treating either set as an automatic choice
+  for a future claim.
+- Preparation is available for an overextended or contradicted claim, and for a
+  claim whose source assessments carry a warning even when its authored state
+  remains within the structural support ceiling.
+
+### Security
+
+- Preparation is derived and inert. It drafts and records no replacement,
+  chooses no epistemic state or confidence, changes no claim or provenance, and
+  creates no plan, authorization, execution, provider request, network access,
+  tool call, model call, Ollama call, or background work.
+- Superseded and unknown claims are refused. Claims with neither a calibration
+  mismatch nor an assessment-aware warning are also refused, so calibration
+  cannot nudge a careful or supported claim toward a stronger assertion.
+- The preparation event contains only the run ID, bounded verdict, warning
+  count, and explicit zero-change flags. Claim text, claim/evidence/source IDs,
+  questions, URLs, and assessment prose remain outside telemetry.
+
 ## [0.3.238] - 2026-08-31
 
 ### Added

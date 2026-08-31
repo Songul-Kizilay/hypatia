@@ -188,6 +188,28 @@ class RulingCommandTests(ControllerFixture):
         self.assertEqual(self.brain.requests, [])
 
 
+class ClaimReviewPreparationCommandTests(ControllerFixture):
+    def test_the_command_carries_only_the_exact_run_and_claim(self) -> None:
+        self.controller.prepare_claim_revision_review(" run-1 ", " claim-1 ")
+
+        self.assertEqual(
+            self.last.metadata,
+            {
+                "intent": "research_calibration_revision_prepare",
+                "research_run_id": "run-1",
+                "research_claim_id": "claim-1",
+            },
+        )
+        self.assertEqual(self.last.source, "desktop")
+
+    def test_an_empty_run_or_claim_is_refused_before_the_brain(self) -> None:
+        for values in (("", "claim-1"), ("run-1", "   ")):
+            with self.subTest(values=values), self.assertRaises(ValueError):
+                self.controller.prepare_claim_revision_review(*values)
+
+        self.assertEqual(self.brain.requests, [])
+
+
 class NothingHereAdjustsAnythingTests(unittest.TestCase):
     """The panel reports. It has no control that changes what it reports on."""
 
@@ -250,6 +272,13 @@ class NothingHereAdjustsAnythingTests(unittest.TestCase):
         self.assertIn("never adjusts one", WINDOW_SOURCE)
         self.assertIn("starts no research", WINDOW_SOURCE)
 
+    def test_the_panel_offers_one_inert_claim_review_handoff(self) -> None:
+        self.assertIn(
+            '("Prepare claim review", self._prepare_claim_revision_review)',
+            WINDOW_SOURCE,
+        )
+        self.assertIn("draft and record no replacement", WINDOW_SOURCE)
+
     def test_the_panel_promises_warnings_without_promising_correction(self) -> None:
         """It now reads a second thing, and must disclaim that one too."""
         self.assertIn("changes nothing about those either", WINDOW_SOURCE)
@@ -296,6 +325,8 @@ class PanelBehaviourTests(unittest.TestCase):
         self.window._append_response = Mock()
         self.window._review_run_id = Mock()
         self.window._review_run_id.get.return_value = "run-1"
+        self.window._review_claim_id = Mock()
+        self.window._review_claim_id.get.return_value = "claim-1"
         self.window._curiosity_question_id = Mock()
         self.window._curiosity_question_id.get.return_value = "q-1"
         self.window._curiosity_plan_digest = Mock()
@@ -309,6 +340,14 @@ class PanelBehaviourTests(unittest.TestCase):
 
         self.window._controller.report_claim_calibration.assert_called_once_with(
             "run-1"
+        )
+
+    def test_claim_review_preparation_passes_the_exact_run_and_claim(self) -> None:
+        self.window._prepare_claim_revision_review()
+
+        self.window._controller.prepare_claim_revision_review.assert_called_once_with(
+            "run-1",
+            "claim-1",
         )
 
     def test_a_ruling_passes_the_question(self) -> None:

@@ -9,8 +9,12 @@ from __future__ import annotations
 
 from eventbus.EventBus import EventBus
 from research.ResearchCalibrationReport import ResearchCalibrationReport
+from research.ResearchClaimRevisionPreparation import (
+    ResearchClaimRevisionPreparation,
+)
 
 CALIBRATION_REPORTED = "calibration.reported"
+CALIBRATION_REVISION_PREPARED = "calibration.revision_prepared"
 
 EVENT_SOURCE = "research.calibration"
 
@@ -37,6 +41,23 @@ class CalibrationEvents:
                 "warned_claim_count": len(report.warned),
                 "warning_count": report.warning_count,
                 "warning_kinds": report.warning_kind_counts(),
+                "claims_modified": 0,
+                "executed": False,
+            },
+        )
+
+    def revision_prepared(
+        self,
+        preparation: ResearchClaimRevisionPreparation,
+    ) -> None:
+        """Observe one inert handoff without exposing claim or provenance data."""
+        calibration = preparation.calibration
+        self._emit(
+            CALIBRATION_REVISION_PREPARED,
+            {
+                "run_id": preparation.run_id,
+                "verdict": calibration.verdict.value,
+                "warning_count": len(calibration.warnings),
                 "claims_modified": 0,
                 "executed": False,
             },

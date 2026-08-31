@@ -43,6 +43,9 @@ from research.ResearchClaimContradictionWritePreview import (
     ResearchClaimContradictionWritePreview,
 )
 from research.ResearchClaimPreview import ResearchClaimPreview
+from research.ResearchClaimRevisionPreparation import (
+    ResearchClaimRevisionPreparation,
+)
 from research.ResearchClaimWritePreview import ResearchClaimWritePreview
 from research.ResearchCuriosityPreview import ResearchCuriosityPreview
 from research.ResearchCuriosityQuestion import ResearchCuriosityQuestion
@@ -1623,6 +1626,75 @@ class ResponseComposer:
             message=message,
             request_id=request.request_id,
             intent="research_calibration",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_claim_revision_preparation(
+        self,
+        request: BrainRequest,
+        preparation: ResearchClaimRevisionPreparation,
+    ) -> BrainResponse:
+        """Render one inert bridge from calibration to human authoring."""
+        calibration = preparation.calibration
+        lines = [
+            "Claim review preparation:",
+            f"Run ID: {preparation.run_id}",
+            f"Current claim ID: {calibration.claim_id}",
+            "Current claim:",
+        ]
+        lines.extend(f"  {line}" for line in calibration.claim_text.splitlines())
+        lines.extend(
+            (
+                f"Calibration: {calibration.summary()}",
+                f"Verdict: {calibration.verdict.value}",
+                "Current evidence IDs: "
+                f"{', '.join(preparation.current_evidence_ids)}",
+                "Current source document IDs: "
+                f"{', '.join(preparation.current_source_document_ids)}",
+                "If you choose to author a replacement, supersedes claim ID: "
+                f"{preparation.supersedes_claim_id}",
+            )
+        )
+        for warning in calibration.warnings:
+            lines.append(f"Warning to review: {warning.summary()}")
+        if not calibration.warnings:
+            lines.append("No assessment-aware warning accompanies this mismatch.")
+        lines.extend(
+            (
+                "",
+                "No replacement was drafted or recorded. Hypatia did not choose "
+                "new claim text, an epistemic state, or confidence. The IDs above "
+                "describe the current claim only; a person must decide what, if "
+                "anything, a separately previewed revision should say and cite.",
+                "No claim, evidence, source, plan, authorization, execution, or "
+                "background task changed.",
+            )
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_calibration_revision_prepare",
+            memory_count=0,
+            research_claim_revision_preparation=preparation,
+        )
+
+    def research_claim_revision_preparation_rejected(
+        self,
+        request: BrainRequest,
+        reason: str,
+    ) -> BrainResponse:
+        """Refuse an invalid preparation request without changing a claim."""
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Claim review preparation rejected:",
+                    f"Reason: {reason}",
+                    "No claim, confidence, evidence, or research state changed.",
+                )
+            ),
+            request_id=request.request_id,
+            intent="research_calibration_revision_prepare",
             memory_count=0,
             success=False,
         )

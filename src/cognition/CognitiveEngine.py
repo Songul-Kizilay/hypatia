@@ -645,7 +645,7 @@ class CognitiveEngine:
         if self._is_plan_authorization_request(request):
             return self._process_plan_authorization(request)
 
-        if CalibrationApplicationService.is_report_request(request):
+        if CalibrationApplicationService.is_request(request):
             return self._process_calibration(request)
 
         if SourceReputationApplicationService.is_report_request(request):
@@ -3564,15 +3564,25 @@ class CognitiveEngine:
     def _process_calibration(self, request: BrainRequest) -> BrainResponse:
         """Route the calibration intent, which reads and never writes."""
         service = self._calibration_service
+        preparing_revision = CalibrationApplicationService.is_revision_prepare_request(
+            request
+        )
+        reject = (
+            self._response_composer.research_claim_revision_preparation_rejected
+            if preparing_revision
+            else self._response_composer.research_calibration_rejected
+        )
         if service is None:
-            return self._response_composer.research_calibration_rejected(
+            return reject(
                 request,
                 "Research run persistence is unavailable.",
             )
         try:
+            if preparing_revision:
+                return service.process_revision_prepare(request)
             return service.process_report(request)
         except ResearchError as error:
-            return self._response_composer.research_calibration_rejected(
+            return reject(
                 request,
                 str(error),
             )
