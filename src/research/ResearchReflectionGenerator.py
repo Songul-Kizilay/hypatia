@@ -25,6 +25,7 @@ from datetime import datetime
 from core.Exceptions import ResearchError
 from research.CanonicalResearchSummary import CanonicalResearchSummary
 from research.ReflectionFindingKind import ReflectionFindingKind
+from research.ResearchClaimRecord import ResearchClaimRecord
 from research.ResearchCuriosityQuestionGenerator import (
     ResearchCuriosityQuestionGenerator,
 )
@@ -125,16 +126,19 @@ class ResearchReflectionGenerator:
 
     def _revisions(self, run: ResearchRun) -> list[ResearchReflectionFinding]:
         """Report where a later record replaced an earlier one."""
-        findings = [
-            self._finding(
-                ReflectionFindingKind.REVISED_BELIEF,
-                claim.claim_id,
-                "A later claim replaced an earlier one, so what was believed "
-                "here changed during the run.",
+        findings: list[ResearchReflectionFinding] = []
+        claims_by_id = {claim.claim_id: claim for claim in run.claims}
+        for claim in run.claims:
+            earlier_claim = claims_by_id.get(claim.supersedes_claim_id or "")
+            if earlier_claim is None:
+                continue
+            findings.append(
+                self._finding(
+                    ReflectionFindingKind.REVISED_BELIEF,
+                    claim.claim_id,
+                    self._claim_revision_detail(earlier_claim, claim),
+                )
             )
-            for claim in run.claims
-            if claim.supersedes_claim_id
-        ]
         assessments_by_id = {
             assessment.assessment_id: assessment for assessment in run.assessments
         }
@@ -150,6 +154,47 @@ class ResearchReflectionGenerator:
                 )
             )
         return findings
+
+    @classmethod
+    def _claim_revision_detail(
+        cls,
+        earlier: ResearchClaimRecord,
+        later: ResearchClaimRecord,
+    ) -> str:
+        """Name only the authored claim dimensions the records changed."""
+        structured_changes: list[str] = []
+        if earlier.epistemic_state is not later.epistemic_state:
+            structured_changes.append(
+                "epistemic state from "
+                f"{earlier.epistemic_state.value} to {later.epistemic_state.value}"
+            )
+        if earlier.confidence is not later.confidence:
+            structured_changes.append(
+                "authored confidence from "
+                f"{earlier.confidence.value} to {later.confidence.value}"
+            )
+        if earlier.source_document_ids != later.source_document_ids:
+            structured_changes.append("linked sources")
+        if earlier.evidence_ids != later.evidence_ids:
+            structured_changes.append("linked evidence")
+        wording_changed = earlier.text != later.text
+        if structured_changes:
+            changes = [*structured_changes]
+            if wording_changed:
+                changes.append("authored wording")
+            return (
+                "A later claim changed this claim's "
+                f"{cls._joined(changes)} during the run."
+            )
+        if wording_changed:
+            return (
+                "A later claim replaced this claim's authored wording; no "
+                "structured claim judgement or provenance changed."
+            )
+        return (
+            "A later claim replaced this claim record; no authored wording, "
+            "structured claim judgement, or provenance changed."
+        )
 
     @classmethod
     def _assessment_revision_detail(

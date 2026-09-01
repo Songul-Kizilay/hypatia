@@ -48,6 +48,7 @@ from research.JsonFileReflectionReportStore import (
 )
 from research.JsonFileResearchRunStore import JsonFileResearchRunStore
 from research.ReflectionFindingKind import ReflectionFindingKind, order_for
+from research.ResearchClaimConfidence import ResearchClaimConfidence
 from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchHypothesis import ResearchHypothesis
 from research.ResearchInformationTrust import ResearchInformationTrust
@@ -230,7 +231,92 @@ class ReflectionDerivationTests(ReflectionFixture):
         self.assertIn("source_fetch", findings[0].detail)
         self.assertIn("Refused before request.", findings[0].detail)
 
-    def test_a_superseded_claim_is_reported_as_a_revised_belief(self) -> None:
+    def test_a_claim_revision_names_each_changed_dimension(self) -> None:
+        run_id, _, evidence_id = self.sourced_run()
+        run = self.manager.record_claim(
+            run_id,
+            [evidence_id],
+            "The rings may be young.",
+            ResearchEpistemicState.HYPOTHESIS,
+            ResearchClaimConfidence.LOW,
+        )
+        self.manager.record_claim(
+            run_id,
+            [evidence_id],
+            "The rings are young.",
+            ResearchEpistemicState.LIKELY,
+            ResearchClaimConfidence.HIGH,
+            supersedes_claim_id=run.claims[-1].claim_id,
+        )
+
+        findings = self.reflect(run_id).of_kind(ReflectionFindingKind.REVISED_BELIEF)
+
+        self.assertEqual(len(findings), 1)
+        self.assertIn(
+            "epistemic state from hypothesis to likely",
+            findings[0].detail,
+        )
+        self.assertIn(
+            "authored confidence from low to high",
+            findings[0].detail,
+        )
+        self.assertIn("authored wording", findings[0].detail)
+
+    def test_a_confidence_only_claim_revision_does_not_invent_other_changes(
+        self,
+    ) -> None:
+        run_id, _, evidence_id = self.sourced_run()
+        run = self.manager.record_claim(
+            run_id,
+            [evidence_id],
+            "The rings may be young.",
+            ResearchEpistemicState.HYPOTHESIS,
+            ResearchClaimConfidence.LOW,
+        )
+        self.manager.record_claim(
+            run_id,
+            [evidence_id],
+            "The rings may be young.",
+            ResearchEpistemicState.HYPOTHESIS,
+            ResearchClaimConfidence.HIGH,
+            supersedes_claim_id=run.claims[-1].claim_id,
+        )
+
+        findings = self.reflect(run_id).of_kind(ReflectionFindingKind.REVISED_BELIEF)
+
+        self.assertEqual(len(findings), 1)
+        self.assertIn("authored confidence from low to high", findings[0].detail)
+        self.assertNotIn("epistemic state", findings[0].detail)
+        self.assertNotIn("authored wording", findings[0].detail)
+
+    def test_a_provenance_only_claim_revision_names_sources_and_evidence(self) -> None:
+        run_id, _, first_evidence = self.sourced_run("claim-first")
+        second_document = self.accept_source(run_id, "claim-second")
+        second_evidence = self.add_evidence(run_id, second_document)
+        run = self.manager.record_claim(
+            run_id,
+            [first_evidence],
+            "The rings may be young.",
+            ResearchEpistemicState.HYPOTHESIS,
+        )
+        self.manager.record_claim(
+            run_id,
+            [second_evidence],
+            "The rings may be young.",
+            ResearchEpistemicState.HYPOTHESIS,
+            supersedes_claim_id=run.claims[-1].claim_id,
+        )
+
+        findings = self.reflect(run_id).of_kind(ReflectionFindingKind.REVISED_BELIEF)
+
+        self.assertEqual(len(findings), 1)
+        self.assertIn("linked sources and linked evidence", findings[0].detail)
+        self.assertNotIn("epistemic state", findings[0].detail)
+        self.assertNotIn("confidence", findings[0].detail)
+
+    def test_a_wording_only_claim_revision_does_not_invent_a_belief_change(
+        self,
+    ) -> None:
         run_id, _, evidence_id = self.sourced_run()
         run = self.manager.record_claim(
             run_id,
@@ -241,15 +327,45 @@ class ReflectionDerivationTests(ReflectionFixture):
         self.manager.record_claim(
             run_id,
             [evidence_id],
-            "The rings are young.",
-            ResearchEpistemicState.LIKELY,
+            "The rings could be young.",
+            ResearchEpistemicState.HYPOTHESIS,
             supersedes_claim_id=run.claims[-1].claim_id,
         )
 
         findings = self.reflect(run_id).of_kind(ReflectionFindingKind.REVISED_BELIEF)
 
         self.assertEqual(len(findings), 1)
-        self.assertIn("what was believed here changed", findings[0].detail)
+        self.assertIn("authored wording", findings[0].detail)
+        self.assertIn(
+            "no structured claim judgement or provenance changed",
+            findings[0].detail,
+        )
+        self.assertNotIn("what was believed", findings[0].detail)
+
+    def test_an_identical_claim_replacement_is_not_called_a_belief_change(
+        self,
+    ) -> None:
+        run_id, _, evidence_id = self.sourced_run()
+        run = self.manager.record_claim(
+            run_id,
+            [evidence_id],
+            "The rings may be young.",
+            ResearchEpistemicState.HYPOTHESIS,
+        )
+        self.manager.record_claim(
+            run_id,
+            [evidence_id],
+            "The rings may be young.",
+            ResearchEpistemicState.HYPOTHESIS,
+            supersedes_claim_id=run.claims[-1].claim_id,
+        )
+
+        findings = self.reflect(run_id).of_kind(ReflectionFindingKind.REVISED_BELIEF)
+
+        self.assertEqual(len(findings), 1)
+        self.assertIn("replaced this claim record", findings[0].detail)
+        self.assertIn("no authored wording", findings[0].detail)
+        self.assertNotIn("what was believed", findings[0].detail)
 
     def test_a_superseded_assessment_is_reported_as_a_revised_belief(self) -> None:
         run_id, document_id, evidence_id = self.sourced_run()

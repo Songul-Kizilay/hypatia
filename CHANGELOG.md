@@ -2,6 +2,25 @@
 
 All notable project changes are recorded here.
 
+## [0.3.257] - 2026-09-01
+
+### Fixed
+
+- Reflection now describes a superseding claim from the canonical dimensions
+  that actually changed: epistemic state, authored confidence, linked sources,
+  linked evidence, or authored wording.
+- A confidence-only or provenance-only correction no longer implies that the
+  claim's epistemic state changed. Wording-only and identical replacements are
+  reported without inventing a belief change.
+
+### Security
+
+- Claim-revision reporting remains bounded, deterministic, read-only, and
+  truth-neutral. It changes no claim, confidence, evidence, source, hypothesis,
+  assessment, or research run.
+- The corrected reflection path performs no model call, network request,
+  research operation, Failure Memory write, authorization, or background work.
+
 ## [0.3.256] - 2026-09-01
 
 ### Fixed

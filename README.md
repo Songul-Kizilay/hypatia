@@ -793,6 +793,12 @@ wording-only replacement says that no structured source judgement changed, and
 parallel assessments are not presented as revisions because neither replaced
 the other.
 
+Claim revisions follow the same rule. Reflection compares the explicitly
+superseded canonical claim and names only changed epistemic state, authored
+confidence, linked sources, linked evidence, or authored wording. A wording-only
+or identical replacement is still visible as a record change but is not called
+a change in belief.
+
 Every finding describes the process, never the subject. "This claim rests on one
 source" is a fact about our record; "this claim is false" would be a research
 conclusion, and reflection cannot reach one. Producing or storing a report
