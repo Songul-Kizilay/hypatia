@@ -541,15 +541,34 @@ class RestartKeepsTheExactBindingTests(BindingFixture):
 
 class NoSchedulingMachineryWasAddedTests(unittest.TestCase):
     def test_no_timer_recurrence_or_startup_run(self) -> None:
-        for forbidden in ("run_at", "Timer(", "sleep(", "threading", "recurrence"):
+        """No clock drives this scheduler; a person does.
+
+        "threading" was on this list as a stand-in for a background thread. The
+        scheduler imports RLock from that module in v0.3.280 and still starts
+        nothing, so what is named here is the machinery itself.
+        """
+        for forbidden in (
+            "run_at",
+            "Timer(",
+            "Thread(",
+            "sleep(",
+            "recurrence",
+            "start()",
+        ):
             with self.subTest(name=forbidden):
                 self.assertNotIn(forbidden, SCHEDULER_SOURCE)
 
-    def test_no_task_store_lock_was_introduced(self) -> None:
-        """Deliberately still absent; it is the next prerequisite, not this one."""
-        for forbidden in ("Lock(", "RLock("):
-            with self.subTest(name=forbidden):
-                self.assertNotIn(forbidden, SCHEDULER_SOURCE)
+    def test_the_task_lock_is_the_schedulers_own(self) -> None:
+        """v0.3.280 added it. It is in-process, and nothing wider.
+
+        This test asserted the opposite until then, and said so: the lock was
+        the acknowledged prerequisite rather than an oversight.
+        """
+        self.assertIn("self._task_lock = RLock()", SCHEDULER_SOURCE)
+
+        for wider in ("flock", "msvcrt", "lock_path", "ExclusiveStoreOwnership"):
+            with self.subTest(name=wider):
+                self.assertNotIn(wider, SCHEDULER_SOURCE)
 
 
 if __name__ == "__main__":

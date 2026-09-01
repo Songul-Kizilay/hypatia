@@ -2,6 +2,49 @@
 
 All notable project changes are recorded here.
 
+## [0.3.280] - 2026-09-01
+
+### Fixed
+
+- Every canonical scheduler task transition is now serialized by one reentrant
+  in-process lock. Create, pause, resume, cancel, worker selection, the RUNNING
+  claim, the outcome commit, restore and the durable snapshot all take it. The
+  service previously had no serialization at all, and was safe only because the
+  desktop could make one call at a time.
+- Selecting a runnable task and marking it RUNNING happen in a single lock
+  acquisition. Split across two, both callers would come away holding their own
+  PENDING snapshot, both would claim it, and both would run the same task.
+- The whole-document task snapshot is taken under the lock. Building it from a
+  dictionary another writer is mutating can drop a task or fail outright.
+
+### Added
+
+- A worker whose task moved on while it was running no longer writes its
+  result. It re-reads the task, compares, and preserves the newer ruling.
+- background_task.outcome_superseded reports that truthfully, so no completed,
+  failed or retry event ever claims a transition that did not commit.
+
+### Security
+
+- The lock is never held across autonomy, a provider, the network or a model.
+  Proven by calling back into the scheduler from inside a running task.
+- A cancel landing mid-flight survives: the task stays CANCELLED, is not
+  reopened, and the durable store agrees.
+- A lock is not permission. Every BackgroundResearchTask transition rule is
+  unchanged, pausing a RUNNING task is still refused, and terminal tasks stay
+  terminal.
+- Retry semantics are untouched: only budget exhaustion is retryable, and a
+  failure is still never retried.
+- Nothing wider was added - no file lock, no process-wide lock, no timer, no
+  run_at, no recurrence, no startup run. Whole-runtime directory ownership
+  continues to provide process-level exclusion.
+
+### Known limitation
+
+- A superseded worker result is dropped rather than kept. This milestone
+  deliberately adds no second store to park an unwritten outcome in; the event
+  records that it happened.
+
 ## [0.3.279] - 2026-09-01
 
 ### Fixed

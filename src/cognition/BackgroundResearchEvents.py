@@ -20,6 +20,10 @@ TASK_FAILED = "background_task.failed"
 TASK_CANCELLED = "background_task.cancelled"
 TASK_INTERRUPTED = "background_task.interrupted"
 TASK_RETRY_SCHEDULED = "background_task.retry_scheduled"
+#: A worker finished, but a newer legitimate transition had already won. The
+#: run really happened; its outcome was not written, and no completed, failed
+#: or retry event may claim otherwise.
+TASK_OUTCOME_SUPERSEDED = "background_task.outcome_superseded"
 
 EVENT_SOURCE = "research.background"
 
@@ -56,6 +60,10 @@ class BackgroundResearchEvents:
 
     def retry_scheduled(self, task: BackgroundResearchTask) -> None:
         self._emit(TASK_RETRY_SCHEDULED, self._payload(task))
+
+    def outcome_superseded(self, task: BackgroundResearchTask) -> None:
+        """Report the task as it actually stands, not as the worker expected."""
+        self._emit(TASK_OUTCOME_SUPERSEDED, self._payload(task))
 
     @staticmethod
     def _payload(task: BackgroundResearchTask) -> dict[str, object]:

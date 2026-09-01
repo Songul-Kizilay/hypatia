@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import UTC, datetime
+from threading import RLock
 from typing import cast
 from uuid import uuid4
 
@@ -91,6 +92,10 @@ class BackgroundResearchSchedulerApplicationService:
         self._max_tasks_per_cycle = max_tasks_per_cycle
         self._max_active_tasks = max_active_tasks
         self._tasks: dict[str, BackgroundResearchTask] = {}
+        #: One lock for every canonical task transition in this process.
+        #: Reentrant so a claim or a commit can persist without releasing it.
+        #: Never held across autonomy, a provider, the network or a model.
+        self._task_lock = RLock()
         self._restore()
 
     @staticmethod
@@ -118,34 +123,44 @@ class BackgroundResearchSchedulerApplicationService:
         return request.metadata.get("intent") == BACKGROUND_WORKER_CYCLE_INTENT
 
     def tasks(self) -> tuple[BackgroundResearchTask, ...]:
-        """Return every known task in stable creation order."""
-        return tuple(self._tasks.values())
+        """Return every known task in stable creation order.
+
+        One coherent snapshot, taken and released. Readers never hold the lock
+        while anything renders, and a caller iterating the live dictionary
+        could otherwise be walking it as a worker mutates it.
+        """
+        with self._task_lock:
+            return tuple(self._tasks.values())
 
     def process_create(self, request: BrainRequest) -> BrainResponse:
         """Queue one approved execution, or explain why it cannot be queued."""
         execution_id = self._required_text(request, "research_plan_id", "execution ID")
         budget = self._budget(request)
         max_retries = self._max_retries(request)
+        # Validated before the lock: a bounded read of execution state that
+        # calls nothing of ours, and an answer that is a statement about right
+        # now either way.
         refusal = self._binding_refusal(execution_id)
         if refusal is not None:
             return self._response_composer.background_task_rejected(request, refusal)
-        if self._active_count() >= self._max_active_tasks:
-            return self._response_composer.background_task_rejected(
-                request,
-                "Background task capacity is full.",
+        with self._task_lock:
+            if self._active_count() >= self._max_active_tasks:
+                return self._response_composer.background_task_rejected(
+                    request,
+                    "Background task capacity is full.",
+                )
+            now = self._clock()
+            task = BackgroundResearchTask(
+                task_id=self._id_factory(),
+                execution_id=execution_id,
+                budget=budget,
+                created_at=now,
+                updated_at=now,
+                max_retries=max_retries,
             )
-        now = self._clock()
-        task = BackgroundResearchTask(
-            task_id=self._id_factory(),
-            execution_id=execution_id,
-            budget=budget,
-            created_at=now,
-            updated_at=now,
-            max_retries=max_retries,
-        )
-        self._tasks[task.task_id] = task
-        self._events.created(task)
-        self._persist()
+            self._tasks[task.task_id] = task
+            self._events.created(task)
+            self._persist()
         return self._response_composer.background_task_status(request, task)
 
     def _binding_refusal(self, execution_id: str) -> str | None:
@@ -198,10 +213,13 @@ class BackgroundResearchSchedulerApplicationService:
             token = request.cancellation_token
             if token is not None and token.is_cancelled():
                 break
-            task = self._next_runnable()
-            if task is None:
+            # Claiming is one atomic act. Two cycles that both saw the same
+            # pending task would otherwise both run it, and the second would
+            # be a duplicate provider attempt nobody asked for.
+            running = self._claim_next_runnable()
+            if running is None:
                 break
-            completed.append(self._run(request, task))
+            completed.append(self._run(request, running))
         self._persist()
         return self._response_composer.background_worker_cycle(
             request,
@@ -209,18 +227,30 @@ class BackgroundResearchSchedulerApplicationService:
             self.tasks(),
         )
 
+    def _claim_next_runnable(self) -> BackgroundResearchTask | None:
+        """Select one runnable task and mark it RUNNING, or return ``None``.
+
+        Selecting and claiming cannot be separated: whatever gap opened between
+        them would be exactly wide enough for a second cycle to pick the same
+        task. Nothing slow happens in here — the autonomy run is deliberately
+        left outside, where it cannot hold anybody up.
+        """
+        with self._task_lock:
+            task = self._next_runnable()
+            if task is None:
+                return None
+            running = task.started(self._clock())
+            self._tasks[running.task_id] = running
+            self._events.started(running)
+            self._persist()
+            return running
+
     def _run(
         self,
         request: BrainRequest,
-        task: BackgroundResearchTask,
+        running: BackgroundResearchTask,
     ) -> BackgroundResearchTask:
-        """Drive one task through autonomy and record what actually happened."""
-        now = self._clock()
-        running = task.started(now)
-        self._tasks[running.task_id] = running
-        self._events.started(running)
-        self._persist()
-
+        """Drive one claimed task through autonomy and record what happened."""
         response = self._autonomy_service.process_run(
             BrainRequest(
                 message="Run research autonomy",
@@ -234,33 +264,60 @@ class BackgroundResearchSchedulerApplicationService:
                 cancellation_token=request.cancellation_token,
             )
         )
-        finished_at = self._clock()
-        result = response.research_autonomy
-        if result is None:
-            updated = running.failed(
-                BackgroundTaskOutcome.FAILED.value,
-                finished_at,
-                failure_cause="ResearchError",
-            )
+        # Back under the lock only now that the slow part is over.
+        with self._task_lock:
+            current = self._tasks.get(running.task_id)
+            if current != running:
+                return self._superseded(current)
+
+            finished_at = self._clock()
+            result = response.research_autonomy
+            if result is None:
+                updated = running.failed(
+                    BackgroundTaskOutcome.FAILED.value,
+                    finished_at,
+                    failure_cause="ResearchError",
+                )
+                self._tasks[updated.task_id] = updated
+                self._events.failed(updated)
+                self._persist()
+                return updated
+
+            outcome = outcome_for(result.stop_reason)
+            if outcome is BackgroundTaskOutcome.COMPLETED:
+                updated = running.completed(outcome.value, finished_at)
+                self._events.completed(updated)
+            elif outcome is BackgroundTaskOutcome.CANCELLED:
+                updated = running.cancelled(finished_at)
+                self._events.cancelled(updated)
+            elif outcome.retryable and running.retries_remaining > 0:
+                updated = running.retry_scheduled(outcome.value, finished_at)
+                self._events.retry_scheduled(updated)
+            else:
+                updated = running.failed(outcome.value, finished_at)
+                self._events.failed(updated)
             self._tasks[updated.task_id] = updated
-            self._events.failed(updated)
+            self._persist()
             return updated
 
-        outcome = outcome_for(result.stop_reason)
-        if outcome is BackgroundTaskOutcome.COMPLETED:
-            updated = running.completed(outcome.value, finished_at)
-            self._events.completed(updated)
-        elif outcome is BackgroundTaskOutcome.CANCELLED:
-            updated = running.cancelled(finished_at)
-            self._events.cancelled(updated)
-        elif outcome.retryable and running.retries_remaining > 0:
-            updated = running.retry_scheduled(outcome.value, finished_at)
-            self._events.retry_scheduled(updated)
-        else:
-            updated = running.failed(outcome.value, finished_at)
-            self._events.failed(updated)
-        self._tasks[updated.task_id] = updated
-        return updated
+    def _superseded(
+        self,
+        current: BackgroundResearchTask | None,
+    ) -> BackgroundResearchTask:
+        """Keep the newer transition and say so, rather than overwriting it.
+
+        Somebody cancelled or otherwise moved this task while the worker was
+        out running it. That ruling is newer and it is real, so the worker's
+        result is reported as superseded and dropped. It is not merged field by
+        field, and it never reopens a task somebody closed.
+
+        The run itself is not recoverable anywhere: this milestone deliberately
+        adds no second store to park an unwritten outcome in.
+        """
+        assert current is not None
+        self._events.outcome_superseded(current)
+        self._persist()
+        return current
 
     def _next_runnable(self) -> BackgroundResearchTask | None:
         """Pick the oldest runnable task, so nothing starves behind a retry."""
@@ -270,31 +327,46 @@ class BackgroundResearchSchedulerApplicationService:
         return min(runnable, key=lambda task: (task.created_at, task.task_id))
 
     def _transition(self, request: BrainRequest, action: str) -> BrainResponse:
+        """Read, judge and commit one ruling without anybody slipping in."""
         task_id = self._required_text(request, "background_task_id", "task ID")
-        task = self._tasks.get(task_id)
-        if task is None:
-            return self._response_composer.background_task_missing(request, task_id)
-        now = self._clock()
-        try:
-            updated = cast(
-                BackgroundResearchTask,
-                getattr(task, action)(now),
+        with self._task_lock:
+            task = self._tasks.get(task_id)
+            if task is None:
+                return self._response_composer.background_task_missing(request, task_id)
+            now = self._clock()
+            try:
+                updated = cast(
+                    BackgroundResearchTask,
+                    getattr(task, action)(now),
+                )
+            except ResearchError as error:
+                # The domain refuses. A lock is not permission.
+                return self._response_composer.background_task_rejected(
+                    request,
+                    str(error),
+                )
+            self._tasks[task_id] = updated
+            getattr(self._events, action if action != "cancelled" else "cancelled")(
+                updated
             )
-        except ResearchError as error:
-            return self._response_composer.background_task_rejected(
-                request,
-                str(error),
-            )
-        self._tasks[task_id] = updated
-        getattr(self._events, action if action != "cancelled" else "cancelled")(updated)
-        self._persist()
+            self._persist()
         return self._response_composer.background_task_status(request, updated)
 
     def _restore(self) -> None:
-        """Load durable tasks, marking mid-flight work interrupted."""
+        """Load durable tasks, marking mid-flight work interrupted.
+
+        This runs during construction, so nothing else can be looking yet. It
+        takes the lock anyway rather than leaving that an assumption somebody
+        later has to keep.
+        """
         if self._task_store is None:
             return
         now = self._clock()
+        with self._task_lock:
+            self._restore_tasks(now)
+
+    def _restore_tasks(self, now: datetime) -> None:
+        assert self._task_store is not None
         for task in self._task_store.load():
             restored = task
             if task.status is BackgroundResearchTaskStatus.RUNNING:
@@ -303,11 +375,19 @@ class BackgroundResearchSchedulerApplicationService:
             self._tasks[restored.task_id] = restored
 
     def _persist(self) -> None:
-        """Write durable task state, never erasing it silently on failure."""
+        """Write durable task state, never erasing it silently on failure.
+
+        The document written is the whole task set, so the snapshot is taken
+        under the lock: one built while another writer was midway through would
+        drop somebody, and reading the dictionary as it changes can fail
+        outright.
+        """
         if self._task_store is None:
             return
+        with self._task_lock:
+            snapshot = list(self._tasks.values())
         try:
-            self._task_store.save(list(self._tasks.values()))
+            self._task_store.save(snapshot)
         except ResearchError:
             return
 

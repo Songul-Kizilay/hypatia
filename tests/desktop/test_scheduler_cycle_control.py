@@ -323,7 +323,14 @@ class NothingSchedulesItselfTests(unittest.TestCase):
     """No timer, no recurrence, no start-up turn."""
 
     def test_the_scheduler_has_no_timer_or_polling_loop(self) -> None:
-        for forbidden in ("threading", "Timer(", "sleep(", "schedule_every"):
+        """A lock is not a thread.
+
+        "threading" stood for a background worker of the scheduler's own. Since
+        v0.3.280 it imports RLock from that module to serialize task
+        transitions and still starts nothing, so the machinery is named here
+        directly instead.
+        """
+        for forbidden in ("Thread(", "Timer(", "sleep(", "schedule_every"):
             with self.subTest(name=forbidden):
                 self.assertNotIn(forbidden, SCHEDULER_SOURCE)
 
