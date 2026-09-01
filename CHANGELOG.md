@@ -2,6 +2,29 @@
 
 All notable project changes are recorded here.
 
+## [0.3.266] - 2026-09-01
+
+### Added
+
+- A plan's nominal cost is now derived and shown before anybody approves it.
+  It is the cost of attempting each authored step exactly once, summed from the
+  same registry the executor charges against, compared dimension by dimension to
+  the budget on offer: advances, network operations and model operations.
+- The approval preview renders required beside approved, along with the fit and
+  any shortfall, for a refused preview as well as a ready one.
+
+### Security
+
+- An approval whose budget cannot cover one clean pass of the plan is now
+  refused rather than granted optimistically. The refusal records no
+  authorization, reaches no provider, starts no execution and spends nothing.
+- Knowing what a plan needs never becomes permission to have it. The requirement
+  is calculated, displayed and compared, and at no point raises the budget to fit
+  the plan; an insufficient plan is refused, not funded.
+- The figure is a floor rather than a forecast, and says so. It counts no
+  retries, no preparation, no approval, no start, and no human-only decision,
+  because none of those are authored steps that execute.
+
 ## [0.3.265] - 2026-09-01
 
 ### Fixed

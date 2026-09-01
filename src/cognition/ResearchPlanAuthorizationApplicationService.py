@@ -53,6 +53,7 @@ from research.ResearchPlanAuthorizationPreview import ResearchPlanAuthorizationP
 from research.ResearchPlanAuthorizationStore import ResearchPlanAuthorizationStore
 from research.ResearchPlanAuthorizationVerdict import ResearchPlanAuthorizationVerdict
 from research.ResearchPlanAuthorizationVerifier import verify_plan_authorization
+from research.ResearchPlanBudgetRequirement import ResearchPlanBudgetFit
 from research.ResearchPlanDraftService import (
     ResearchPlanDraftService,
     ResearchPlanStepDraft,
@@ -140,12 +141,27 @@ class ResearchPlanAuthorizationApplicationService:
                     "Too many approvals are already awaiting confirmation.",
                 ),
             )
+        fit = self.budget_fit_for(plan)
+        if not fit.sufficient:
+            # Refused before anything is built. Nothing is recorded, nothing is
+            # spent, and the budget is not quietly raised to fit the plan.
+            self._events.refused("insufficient_budget")
+            return self._response_composer.research_plan_authorization_preview(
+                request,
+                ResearchPlanAuthorizationPreview.rejected(
+                    plan.plan_id,
+                    "The budget on offer does not cover one attempt at every "
+                    "authored step, so approving it would promise work it "
+                    "cannot pay for.",
+                    budget_fit=fit,
+                ),
+            )
         authorized_at = self._clock()
         authorization = ResearchPlanAuthorization.for_plan(
             authorization_id=self._id_factory(),
             plan=plan,
             research_run_id=run_id,
-            budget=ResearchAutonomyBudget(),
+            budget=fit.budget,
             authorized_at=authorized_at,
             expires_at=authorized_at
             + timedelta(seconds=DEFAULT_AUTHORIZATION_VALIDITY_SECONDS),
@@ -190,6 +206,15 @@ class ResearchPlanAuthorizationApplicationService:
                 return authorization
         return None
 
+    def budget_fit_for(self, plan: ResearchPlan) -> ResearchPlanBudgetFit:
+        """Return what this plan would cost against the budget on offer.
+
+        The budget is the one this service would approve, not one derived from
+        the plan. Knowing what a plan needs never becomes permission to have
+        it; that stays a decision a person makes by approving or not.
+        """
+        return ResearchPlanBudgetFit.of(plan, ResearchAutonomyBudget())
+
     def record_for_plan(
         self,
         plan: ResearchPlan,
@@ -213,12 +238,20 @@ class ResearchPlanAuthorizationApplicationService:
         Returns None when the approval could not be made durable, so a caller
         never reports an approval that only ever existed in memory.
         """
+        fit = self.budget_fit_for(plan)
+        if not fit.sufficient:
+            self._events.refused("insufficient_budget")
+            raise ResearchError(
+                "The approved budget does not cover one attempt at every "
+                "authored step of this plan, so it was not approved. "
+                + " ".join(fit.lines()[1:])
+            )
         authorized_at = self._clock()
         authorization = ResearchPlanAuthorization.for_plan(
             authorization_id=self._id_factory(),
             plan=plan,
             research_run_id=research_run_id,
-            budget=ResearchAutonomyBudget(),
+            budget=fit.budget,
             authorized_at=authorized_at,
             expires_at=authorized_at
             + timedelta(seconds=DEFAULT_AUTHORIZATION_VALIDITY_SECONDS),

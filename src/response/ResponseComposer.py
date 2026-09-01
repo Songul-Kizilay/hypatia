@@ -67,6 +67,7 @@ from research.ResearchPlanAuthorizationPreview import (
 from research.ResearchPlanAuthorizationVerdict import (
     ResearchPlanAuthorizationVerdict,
 )
+from research.ResearchPlanBudgetRequirement import ResearchPlanBudgetFit
 from research.ResearchPlanDraftPreview import ResearchPlanDraftPreview
 from research.ResearchPlanExecutionSnapshot import (
     ResearchPlanExecutionSnapshot,
@@ -2095,13 +2096,19 @@ class ResponseComposer:
         request: BrainRequest,
         preview: ResearchPlanAuthorizationPreview,
     ) -> BrainResponse:
-        """Show exactly what confirming would record, having recorded nothing."""
+        """Show exactly what confirming would record, having recorded nothing.
+
+        The budget comparison is shown whichever way the preview went. Somebody
+        deciding whether to approve needs to see what the plan would cost even
+        when it fits, and especially when it does not.
+        """
         if preview.authorization is None:
             return BrainResponse(
                 message="\n".join(
                     (
                         "Research plan approval preview:",
                         f"Reason: {preview.reason}",
+                        *_budget_fit_lines(preview.budget_fit),
                         "Nothing was approved and no research was started.",
                     )
                 ),
@@ -2124,6 +2131,7 @@ class ResponseComposer:
             "",
             *self._authorization_terms(authorization),
             *_discovery_provider_lines(preview.discovery_providers),
+            *_budget_fit_lines(preview.budget_fit),
             "",
             "Nothing is recorded until you confirm this exact approval.",
             preview.reason,
@@ -4898,3 +4906,15 @@ def _discovery_provider_lines(
     return tuple(
         f"Source discovery provider: {provider.label}" for provider in providers
     )
+
+
+def _budget_fit_lines(fit: ResearchPlanBudgetFit | None) -> tuple[str, ...]:
+    """Render what the plan would cost against what is being approved.
+
+    Two numbers side by side rather than one. A requirement read on its own is
+    easily taken for a grant, and the reason it is here at all is so a person
+    can see that those are not the same thing.
+    """
+    if fit is None:
+        return ()
+    return ("", *fit.lines())

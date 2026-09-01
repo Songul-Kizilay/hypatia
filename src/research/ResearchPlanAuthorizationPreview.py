@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from core.Exceptions import ResearchError
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchPlanAuthorization import ResearchPlanAuthorization
+from research.ResearchPlanBudgetRequirement import ResearchPlanBudgetFit
 
 MAX_AUTHORIZATION_PREVIEW_REASON_CHARACTERS = 500
 
@@ -38,6 +39,10 @@ class ResearchPlanAuthorizationPreview:
     plan_id: str
     authorization: ResearchPlanAuthorization | None
     discovery_providers: tuple[ResearchDiscoveryProviderName, ...] = ()
+    #: What one clean pass of this plan would cost, against the budget being
+    #: offered. Carried structurally so a refusal names the dimension that ran
+    #: out rather than leaving somebody to read it out of a sentence.
+    budget_fit: ResearchPlanBudgetFit | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.allowed, bool):
@@ -66,6 +71,7 @@ class ResearchPlanAuthorizationPreview:
         plan_id: str,
         authorization: ResearchPlanAuthorization,
         discovery_providers: tuple[ResearchDiscoveryProviderName, ...] = (),
+        budget_fit: ResearchPlanBudgetFit | None = None,
     ) -> ResearchPlanAuthorizationPreview:
         """Show exactly what confirming would record."""
         return cls(
@@ -73,6 +79,7 @@ class ResearchPlanAuthorizationPreview:
             reason=NO_EXECUTION_NOTICE,
             plan_id=plan_id,
             authorization=authorization,
+            budget_fit=budget_fit,
         )
 
     @classmethod
@@ -80,6 +87,13 @@ class ResearchPlanAuthorizationPreview:
         cls,
         plan_id: str,
         reason: str,
+        budget_fit: ResearchPlanBudgetFit | None = None,
     ) -> ResearchPlanAuthorizationPreview:
         """Explain why no approval can be offered, without a partial record."""
-        return cls(allowed=False, reason=reason, plan_id=plan_id, authorization=None)
+        return cls(
+            allowed=False,
+            reason=reason,
+            plan_id=plan_id,
+            authorization=None,
+            budget_fit=budget_fit,
+        )
