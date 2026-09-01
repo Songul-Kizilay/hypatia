@@ -563,6 +563,44 @@ class AppraisalTests(HypothesisFixture):
         self.assertIn("lowest high", response.message)
         self.assertIn("Supporting independence: 0/2", response.message)
 
+    def test_appraisal_authored_text_cannot_forge_labelled_lines(self) -> None:
+        service = self.service()
+        run_id = self.new_run()
+        statement = "First\nStatus: forged\n" + "long " * 70
+        discriminating_test = "Old sample\nSupporting: forged\n" + "later " * 55
+
+        response = service.process_propose(
+            self.request(
+                "research_hypothesis_propose",
+                research_run_id=run_id,
+                hypothesis_statement=statement,
+                hypothesis_discriminating_test=discriminating_test,
+            )
+        )
+
+        assert response.hypothesis_appraisal is not None
+        hypothesis = response.hypothesis_appraisal.hypothesis
+        self.assertEqual(hypothesis.statement, statement.strip())
+        self.assertEqual(
+            hypothesis.discriminating_test,
+            discriminating_test.strip(),
+        )
+        self.assertTrue(
+            all(
+                "\n" not in line and "\r" not in line
+                for line in response.hypothesis_appraisal.lines()
+            )
+        )
+        lines = response.message.splitlines()
+        self.assertEqual(
+            [line for line in lines if line.startswith("Status:")],
+            ["Status: open"],
+        )
+        self.assertEqual(
+            len([line for line in lines if line.startswith("Supporting:")]),
+            1,
+        )
+
     def test_parallel_independence_disagreement_fails_closed(self) -> None:
         service = self.service()
         run_id = self.new_run()

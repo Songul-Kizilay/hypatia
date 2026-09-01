@@ -17,8 +17,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from core.Exceptions import ResearchError
+from research.DisplayText import one_bounded_line
 from research.HypothesisStatus import HypothesisStatus
-from research.ResearchHypothesis import ResearchHypothesis
+from research.ResearchHypothesis import (
+    MAX_DISCRIMINATING_TEST_LENGTH,
+    MAX_HYPOTHESIS_STATEMENT_LENGTH,
+    ResearchHypothesis,
+)
 from research.ResearchInformationTrust import ResearchInformationTrust
 
 _SUPPORTING_TRUST = {
@@ -144,9 +149,14 @@ class HypothesisAppraisal:
 
     def lines(self) -> tuple[str, ...]:
         """Render the standing as bounded, separately labelled lines."""
+        statement = self.hypothesis.one_line_statement(MAX_HYPOTHESIS_STATEMENT_LENGTH)
+        discriminating_test = one_bounded_line(
+            self.hypothesis.discriminating_test,
+            MAX_DISCRIMINATING_TEST_LENGTH,
+        )
         return (
-            f"Hypothesis: {self.hypothesis.statement}",
-            f"Would be countered by: {self.hypothesis.discriminating_test}",
+            f"Hypothesis: {statement}",
+            f"Would be countered by: {discriminating_test}",
             f"Status: {self.status.value}",
             f"Supporting: {len(self.hypothesis.supporting_evidence_ids)} evidence "
             f"across {self.supporting_source_count} source(s)",

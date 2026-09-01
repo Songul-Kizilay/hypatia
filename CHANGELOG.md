@@ -2,6 +2,24 @@
 
 All notable project changes are recorded here.
 
+## [0.3.262] - 2026-09-01
+
+### Fixed
+
+- Hypothesis appraisals now normalize the authored hypothesis statement and
+  discriminating test to one bounded display line before adding their labels.
+  Embedded line breaks can no longer manufacture a forged-looking `Status:` or
+  `Supporting:` line in a proposal or later appraisal response.
+- The canonical hypothesis keeps its admitted authored wording unchanged;
+  normalization is confined to the read-only appraisal view.
+
+### Security
+
+- The existing statement and discriminating-test length limits remain the hard
+  display bounds, and the shared one-line normalizer handles all whitespace.
+- The change is deterministic and local and performs no model call, network
+  request, research operation, evidence mutation, or background action.
+
 ## [0.3.261] - 2026-09-01
 
 ### Fixed

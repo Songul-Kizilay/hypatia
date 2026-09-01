@@ -1121,6 +1121,11 @@ independence judgements keep positive support `open`; superseded assessments do
 not count. That asymmetry is the whole reason a discriminating test is required
 — softening it would make disconfirmation just another input to be outvoted.
 
+The appraisal renders the authored statement and discriminating test as one
+bounded line under their own labels. Embedded line breaks therefore cannot
+manufacture a second status or evidence-total line, while the canonical
+hypothesis still keeps the admitted authored wording unchanged.
+
 There is no confirm intent and no status meaning true. Propose, support, oppose,
 withdraw, and list are the entire vocabulary. `supported` means corroborated
 positive evidence passed the explicit authored-trust boundary and none opposes
