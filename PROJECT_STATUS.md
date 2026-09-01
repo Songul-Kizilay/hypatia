@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.250 (Genesis)`
+`v0.3.251 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.250`** is the current source/package release line.
+- **Runtime release `v0.3.251`** is the current source/package release line.
   GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -78,6 +78,9 @@ with optional OpenAI-compatible LLM conversation support.
   store request retries the pending durable write. Only a superseded authored
   `hypothesis` is classified as a failed hypothesis; every other superseded
   epistemic state is a revised claim, not a disguised hypothesis failure.
+  Explicitly superseded source assessments now produce one `invalid_assumption`
+  lesson when trust, independence, or both changed; wording-only changes and
+  parallel authored judgements do not pretend that a correction occurred.
   A separate explicit `failure_memory_hypothesis_store` command reads only
   durable hypotheses for the selected run: `weakened` derives a
   `disproving_evidence` lesson, `contradicted` derives a `failed_hypothesis`

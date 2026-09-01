@@ -832,11 +832,14 @@ retries the pending write; there is no background or unbounded retry loop.
 
 Eight kinds of lesson are derived from what a run recorded: a claim named in a
 contradiction, a hypothesis we stopped holding, another kind of claim we
-revised, an assessment we revised, a source we accepted and then judged weak, a
-confidence that moved, a search that returned candidates and accepted none, and
-a stage that failed. Only an authored `hypothesis` becomes a failed-hypothesis
-lesson; superseded facts, likely claims, speculation, unknowns, and other claim
-states are recorded as revised claims.
+revised, a trust or independence assessment we explicitly corrected, a source
+we accepted and then judged weak, a confidence that moved, a search that
+returned candidates and accepted none, and a stage that failed. If trust and
+independence change in the same supersession they remain one assessment lesson;
+parallel judgements and wording-only revisions are not misreported as
+corrections. Only an authored `hypothesis` becomes a failed-hypothesis lesson;
+superseded facts, likely claims, speculation, unknowns, and other claim states
+are recorded as revised claims.
 
 Every lesson names the persisted records it came from, and one without
 provenance is refused at construction and again on load. That rule is the whole

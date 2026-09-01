@@ -72,6 +72,7 @@ from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchSource import ResearchSource
 from research.ResearchSourceCandidate import ResearchSourceCandidate
+from research.ResearchSourceIndependence import ResearchSourceIndependence
 from response.ResponseComposer import ResponseComposer
 from session.SessionManager import SessionManager
 from session.SessionRenameTransactionService import SessionRenameTransactionService
@@ -458,6 +459,131 @@ class LessonDerivationTests(FailureMemoryFixture):
 
         self.assertEqual(len(lessons), 1)
         self.assertIn("The first judgement did not hold", lessons[0].statement)
+
+    def test_a_revised_independence_judgement_becomes_a_lesson(self) -> None:
+        run_id, document_id, evidence_id = self.sourced_run()
+        run = self.manager.record_source_assessment(
+            run_id,
+            document_id,
+            [evidence_id],
+            "Read as an independent account.",
+            information_trust=ResearchInformationTrust.HIGH,
+            independence=ResearchSourceIndependence.INDEPENDENT,
+        )
+        first = run.assessments[-1]
+        run = self.manager.record_source_assessment(
+            run_id,
+            document_id,
+            [evidence_id],
+            "Later found to repeat the original report.",
+            supersedes_assessment_id=first.assessment_id,
+            information_trust=ResearchInformationTrust.HIGH,
+            independence=ResearchSourceIndependence.DERIVATIVE,
+        )
+        second = run.assessments[-1]
+
+        lessons = self.of_kind(run_id, FailureLessonKind.INVALID_ASSUMPTION)
+
+        self.assertEqual(len(lessons), 1)
+        self.assertIn("independence", lessons[0].statement)
+        self.assertIn("independent and later derivative", lessons[0].statement)
+        self.assertEqual(
+            lessons[0].provenance,
+            (first.assessment_id, second.assessment_id),
+        )
+
+    def test_a_correction_to_independent_is_also_remembered(self) -> None:
+        run_id, document_id, evidence_id = self.sourced_run()
+        run = self.manager.record_source_assessment(
+            run_id,
+            document_id,
+            [evidence_id],
+            "Initially read as derivative.",
+            independence=ResearchSourceIndependence.DERIVATIVE,
+        )
+        self.manager.record_source_assessment(
+            run_id,
+            document_id,
+            [evidence_id],
+            "The underlying investigation is separate.",
+            supersedes_assessment_id=run.assessments[-1].assessment_id,
+            independence=ResearchSourceIndependence.INDEPENDENT,
+        )
+
+        [lesson] = self.of_kind(run_id, FailureLessonKind.INVALID_ASSUMPTION)
+
+        self.assertIn("derivative and later independent", lesson.statement)
+
+    def test_trust_and_independence_changes_make_one_revision_lesson(self) -> None:
+        run_id, document_id, evidence_id = self.sourced_run()
+        run = self.manager.record_source_assessment(
+            run_id,
+            document_id,
+            [evidence_id],
+            "Initial reading.",
+            information_trust=ResearchInformationTrust.LOW,
+            independence=ResearchSourceIndependence.INDEPENDENT,
+        )
+        self.manager.record_source_assessment(
+            run_id,
+            document_id,
+            [evidence_id],
+            "Corrected reading.",
+            supersedes_assessment_id=run.assessments[-1].assessment_id,
+            information_trust=ResearchInformationTrust.HIGH,
+            independence=ResearchSourceIndependence.DERIVATIVE,
+        )
+
+        lessons = self.of_kind(run_id, FailureLessonKind.INVALID_ASSUMPTION)
+
+        self.assertEqual(len(lessons), 1)
+        self.assertIn(
+            "trust was first assessed low and later high", lessons[0].statement
+        )
+        self.assertIn(
+            "independence was first assessed independent and later derivative",
+            lessons[0].statement,
+        )
+
+    def test_parallel_independence_judgements_are_not_revision_lessons(self) -> None:
+        run_id, document_id, evidence_id = self.sourced_run()
+        for independence in (
+            ResearchSourceIndependence.INDEPENDENT,
+            ResearchSourceIndependence.DERIVATIVE,
+        ):
+            self.manager.record_source_assessment(
+                run_id,
+                document_id,
+                [evidence_id],
+                "A parallel authored reading.",
+                independence=independence,
+            )
+
+        self.assertEqual(
+            self.of_kind(run_id, FailureLessonKind.INVALID_ASSUMPTION),
+            (),
+        )
+
+    def test_a_text_only_supersession_is_not_a_failure_lesson(self) -> None:
+        run_id, document_id, evidence_id = self.sourced_run()
+        run = self.manager.record_source_assessment(
+            run_id,
+            document_id,
+            [evidence_id],
+            "Initial wording.",
+        )
+        self.manager.record_source_assessment(
+            run_id,
+            document_id,
+            [evidence_id],
+            "Clearer wording, same structured judgement.",
+            supersedes_assessment_id=run.assessments[-1].assessment_id,
+        )
+
+        self.assertEqual(
+            self.of_kind(run_id, FailureLessonKind.INVALID_ASSUMPTION),
+            (),
+        )
 
     def test_a_low_trust_acceptance_becomes_a_false_positive(self) -> None:
         run_id, document_id, evidence_id = self.sourced_run()

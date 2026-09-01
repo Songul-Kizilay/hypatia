@@ -2,6 +2,26 @@
 
 All notable project changes are recorded here.
 
+## [0.3.251] - 2026-09-01
+
+### Changed
+
+- Failure Memory now derives an `invalid_assumption` lesson when an explicitly
+  superseding source assessment changes the source's independence judgement,
+  just as it already did for an information-trust correction.
+- A supersession that changes trust and independence together produces one
+  provenance-backed assessment lesson naming both changes. Each direction of
+  an independence correction is retained without treating either value as a
+  claim about truth.
+
+### Security
+
+- Parallel assessments remain parallel and do not fabricate a revision;
+  wording-only or unrelated structured changes produce no new lesson.
+- Derivation stays local, deterministic, explicit-command-only, advisory, and
+  read-only. It does not call a model, open a network connection, change an
+  assessment, block research, or alter claim support.
+
 ## [0.3.250] - 2026-09-01
 
 ### Added

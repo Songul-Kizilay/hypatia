@@ -168,28 +168,71 @@ class ResearchFailureLessonDeriver:
         run: ResearchRun,
         recorded_at: datetime,
     ) -> list[ResearchFailureLesson]:
-        """A revised assessment means we misjudged a source the first time."""
+        """Remember explicit corrections to trust or source independence.
+
+        Text and the other structured dimensions can change without saying a
+        prior assumption failed. Trust and independence are different: both
+        carry the evidence-weight rules elsewhere in Research, so an authored
+        supersession that changes either is a checkable correction worth
+        remembering. If both change together they remain one assessment lesson,
+        because the two persisted assessment records are still one revision.
+        """
         by_id = {record.assessment_id: record for record in run.assessments}
         lessons: list[ResearchFailureLesson] = []
         for assessment in run.assessments:
             earlier = by_id.get(assessment.supersedes_assessment_id or "")
-            if earlier is None or earlier.information_trust is (
-                assessment.information_trust
-            ):
+            if earlier is None:
+                continue
+            trust_changed = (
+                earlier.information_trust is not assessment.information_trust
+            )
+            independence_changed = earlier.independence is not assessment.independence
+            if not trust_changed and not independence_changed:
                 continue
             lessons.append(
                 self._lesson(
                     run,
                     FailureLessonKind.INVALID_ASSUMPTION,
                     earlier.assessment_id,
-                    f"This source was first assessed {earlier.information_trust.value} "
-                    f"and later {assessment.information_trust.value}. The first "
-                    "judgement did not hold.",
+                    self._assessment_revision_statement(
+                        earlier,
+                        assessment,
+                        trust_changed=trust_changed,
+                        independence_changed=independence_changed,
+                    ),
                     (earlier.assessment_id, assessment.assessment_id),
                     recorded_at,
                 )
             )
         return lessons
+
+    @staticmethod
+    def _assessment_revision_statement(
+        earlier: ResearchSourceAssessmentRecord,
+        later: ResearchSourceAssessmentRecord,
+        *,
+        trust_changed: bool,
+        independence_changed: bool,
+    ) -> str:
+        if trust_changed and independence_changed:
+            return (
+                "This source's trust was first assessed "
+                f"{earlier.information_trust.value} and later "
+                f"{later.information_trust.value}; its independence was first "
+                f"assessed {earlier.independence.value} and later "
+                f"{later.independence.value}. The first judgement did not hold."
+            )
+        if independence_changed:
+            return (
+                "This source's independence was first assessed "
+                f"{earlier.independence.value} and later "
+                f"{later.independence.value}. The first judgement did not hold."
+            )
+        return (
+            f"This source was first assessed {earlier.information_trust.value} "
+            f"and later {later.information_trust.value}. The first judgement "
+            "did not hold."
+        )
 
     def _low_trust_sources(
         self,
