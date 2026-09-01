@@ -669,7 +669,6 @@ class BoundaryTests(AuthorizedStartFixture):
         "background_research_task_pause",
         "background_research_task_resume",
         "background_research_task_cancel",
-        "background_research_worker_cycle",
     )
 
     def desktop_source(self) -> str:
@@ -695,6 +694,10 @@ class BoundaryTests(AuthorizedStartFixture):
             "research_plan_execution_status",
             "research_plan_execution_advance",
             "research_plan_execution_cancel",
+            # One turn of the existing scheduler, asked for each time. It
+            # advances nothing on its own: no timer, no recurrence, and no
+            # second cycle without a second press.
+            "background_research_worker_cycle",
         ):
             with self.subTest(reachable=intent):
                 self.assertIn(intent, source)

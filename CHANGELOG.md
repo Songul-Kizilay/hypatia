@@ -2,6 +2,34 @@
 
 All notable project changes are recorded here.
 
+## [0.3.277] - 2026-09-01
+
+### Added
+
+- A "Run scheduler cycle" control takes one turn of the existing background
+  research scheduler, off the window's thread. The scheduler was already wired
+  and durable with a worker cycle bounded to one task, but it is synchronous and
+  demand-driven with no thread, timer or loop of its own, so without a caller it
+  never turned. This is that caller and only that.
+
+### Security
+
+- One press is one cycle. Nothing schedules a second, nothing repeats, nothing
+  runs at startup, and rebuilding the runtime restores the durable tasks without
+  running any of them.
+- No second scheduler was written. The desktop does not read the queue, choose a
+  task, advance a step or invent a status; it reserves the one worker it already
+  owns and hands the decision to the service that already makes it. The bound on
+  a cycle is the scheduler's, and the desktop supplies no number of its own.
+- The cycle grants nothing. No approval is created, no budget widened, no plan
+  or capability changed, and the work still runs through the ordinary one-step
+  advance under the approval's own allowance.
+- An empty queue, a paused task and a cancelled task each perform no research at
+  all and report so truthfully.
+- Failure semantics are unchanged and untouched. Only running out of a run's own
+  allotment returns a task to the queue; a failure, block, interruption or
+  cancellation ends it, so no provider attempt is ever repeated.
+
 ## [0.3.276] - 2026-09-01
 
 ### Fixed

@@ -786,7 +786,6 @@ class BoundaryTests(unittest.TestCase):
         "background_research_task_pause",
         "background_research_task_resume",
         "background_research_task_cancel",
-        "background_research_worker_cycle",
     )
 
     def test_reading_a_judgement_opened_no_autonomy(self) -> None:

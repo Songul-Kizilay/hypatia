@@ -141,6 +141,12 @@ def _granted_authority_lines(budget, fit=None) -> list[str]:
     return lines
 
 
+_SCHEDULER_CYCLE_NOTE = (
+    "One cycle, then it stops. The scheduler decides which approved task is "
+    "runnable and how much work one turn covers; nothing here grants authority, "
+    "widens a budget or approves anything. It does not repeat, and it never "
+    "starts on its own — every cycle is a press of this button."
+)
 _BACKGROUND_CONTINUATION_NOTE = (
     "Running in the background means off this window's thread, not unattended. "
     "It spends only the budget this execution was already granted, grants no "
@@ -4762,6 +4768,14 @@ class TkinterDesktopWindow:
         ttk.Label(section, text=_BACKGROUND_CONTINUATION_NOTE, wraplength=680).grid(
             row=13, column=0, columnspan=2, sticky="w", pady=(8, 0)
         )
+        ttk.Label(section, text=_SCHEDULER_CYCLE_NOTE, wraplength=680).grid(
+            row=14, column=0, columnspan=2, sticky="w", pady=(10, 0)
+        )
+        self._request_button(
+            section,
+            "Run scheduler cycle",
+            self._run_scheduler_cycle,
+        ).grid(row=15, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
 
         buttons = ttk.Frame(section)
         buttons.grid(row=2, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
@@ -5031,6 +5045,50 @@ class TkinterDesktopWindow:
                 f"Continuing {execution_id} in the background, at most {steps} "
                 "steps. Nothing new was authorized."
             )
+
+    def _run_scheduler_cycle(self) -> None:
+        """Ask the scheduler to take exactly one turn, off the Tk thread.
+
+        Deliberately thin. The desktop chooses nothing and advances nothing:
+        it reserves the one worker this window owns and hands the decision to
+        the service that already makes it.
+        """
+        if not messagebox.askyesno(
+            "Run one scheduler cycle?",
+            (
+                "This runs one bounded background research cycle and then "
+                "stops.\n\n" + _SCHEDULER_CYCLE_NOTE + "\n\n"
+                "Work runs under the budget and approval the task already has. "
+                "Nothing is approved, enlarged or retried here."
+            ),
+            parent=self._root,
+        ):
+            self._plan_approval_status.set("No scheduler cycle was run.")
+            return
+        started = self._start_bounded_action(
+            self._controller.run_background_scheduler_cycle,
+            self._complete_scheduler_cycle,
+            "background research scheduler cycle",
+        )
+        if started == "started":
+            self._plan_approval_status.set(
+                "Running one scheduler cycle. It will not repeat."
+            )
+
+    def _complete_scheduler_cycle(self, response: object) -> None:
+        """Show exactly what the scheduler reported, and nothing more."""
+        if not isinstance(response, BrainResponse):
+            self._plan_approval_status.set("The scheduler cycle failed.")
+            return
+        output = self._plan_approval_output
+        output.configure(state=tk.NORMAL)
+        output.delete("1.0", tk.END)
+        output.insert(tk.END, response.message)
+        output.configure(state=tk.DISABLED)
+        self._append_response(response)
+        self._plan_approval_status.set(
+            "Scheduler cycle finished. Another one needs another press."
+        )
 
     def _complete_background_continuation(self, response: object) -> None:
         """Report what the background run did, from its canonical result."""

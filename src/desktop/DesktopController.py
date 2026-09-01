@@ -470,6 +470,22 @@ class DesktopController:
             )
         )
 
+    def run_background_scheduler_cycle(self) -> BrainResponse:
+        """Run exactly one bounded scheduler cycle. Schedules nothing further.
+
+        The scheduler decides which task, if any, is runnable and how much work
+        one cycle covers. Nothing here selects a task, advances a step or grants
+        authority; it asks the existing service to take one turn and reports
+        what it did.
+        """
+        return self._brain.process(
+            BrainRequest(
+                message="Run one background research worker cycle",
+                source="desktop",
+                metadata={"intent": "background_research_worker_cycle"},
+            )
+        )
+
     def cancel_research_execution(self, execution_id: str) -> BrainResponse:
         """Stop one execution. Refunds neither approval nor spent budget."""
         return self._execution_request(
