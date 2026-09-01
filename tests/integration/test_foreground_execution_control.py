@@ -209,9 +209,14 @@ class ForegroundFixture(unittest.TestCase):
         if budget is not None:
             # Deliberately narrower than one clean pass of the plan, which the
             # approval boundary rightly refuses: an operator cannot grant a
-            # budget that cannot cover the work. These tests are about what the
-            # executor does when it runs out anyway, so the narrow approval is
+            # budget that cannot cover the work. These tests are about the
+            # executor's arithmetic in isolation, so the narrow approval is
             # placed directly rather than smuggled through confirmation.
+            #
+            # That shortcut is not what makes runtime refusal reachable. A grant
+            # the real boundary accepts runs out too, once an attempt is charged
+            # and does not finish; tests/research/test_runtime_budget_exhaustion
+            # proves that end to end without forging anything.
             pending = self.approvals._pending.pop(identity)
             self.approvals._authorizations[identity] = replace(pending, budget=budget)
             return identity
