@@ -392,6 +392,11 @@ class PanelBehaviourTests(unittest.TestCase):
         authorization.authorization_id = "approval-returned"
         response = Mock()
         response.research_plan_authorization = authorization
+        # Approving re-reads the proposal first, so the response has to carry
+        # the proposal on screen; a different digest is refused rather than
+        # approved, which is the point of re-reading.
+        response.curiosity_proposal = Mock(digest="a" * 64)
+        response.research_plan_budget_fit = None
         self.window._review_request = Mock(return_value=response)
 
         self.window._authorize_curiosity_research_proposal()

@@ -2116,6 +2116,7 @@ class ResponseComposer:
                 intent="research_plan_authorization",
                 memory_count=0,
                 success=False,
+                research_plan_budget_fit=preview.budget_fit,
             )
         authorization = preview.authorization
         lines = [
@@ -2142,6 +2143,7 @@ class ResponseComposer:
             intent="research_plan_authorization",
             memory_count=0,
             research_plan_authorization=authorization,
+            research_plan_budget_fit=preview.budget_fit,
         )
 
     def research_plan_authorization_confirmed(
@@ -2641,6 +2643,7 @@ class ResponseComposer:
             intent="curiosity_prepare_proposal",
             memory_count=0,
             curiosity_proposal=proposal,
+            research_plan_budget_fit=budget_fit,
         )
 
     def curiosity_proposal_authorized(

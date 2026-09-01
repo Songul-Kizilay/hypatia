@@ -116,6 +116,28 @@ _INTERRUPTED_PANEL_NOTE = (
     "occurred. Its final result is unknown. The attempt has already been "
     "charged. Recording what you know runs nothing and retries nothing."
 )
+
+
+def _granted_authority_lines(budget, fit=None) -> list[str]:
+    """Render the authority a confirmation is about to grant.
+
+    Shared by both approval surfaces so the two cannot drift into describing
+    the same thing differently. The budget passed in is always the one that
+    will actually be recorded; where a fit is known it is shown beside it, and
+    where none is known nothing is invented to fill the gap.
+    """
+    lines = [
+        "This is the authority you are about to grant:",
+        f"  step advances: {budget.max_step_advances}",
+        f"  network operations: {budget.max_network_operations}",
+        f"  seconds: {budget.max_seconds}",
+    ]
+    if fit is not None:
+        lines.append("")
+        lines.extend(f"  {line}" for line in fit.lines())
+    return lines
+
+
 _CURIOSITY_BUDGET_NOTE = (
     "This is the authority you are granting to this exact Hypatia-proposed "
     "plan. Hypatia did not choose it for itself. Leave a box blank to grant the "
@@ -4935,16 +4957,31 @@ class TkinterDesktopWindow:
             lambda: self._controller.cancel_research_execution(execution_id)
         )
 
-    def _approval_request(self, call: Callable[[], BrainResponse]) -> None:
-        """Run one approval request into the approval panel's result area."""
-        self._panel_request(
+    def _approval_request(
+        self,
+        call: Callable[[], BrainResponse],
+    ) -> BrainResponse | None:
+        """Run one approval request into the approval panel's result area.
+
+        The response comes back so a caller can read structured state out of
+        it — the exact approval a preview built, say — instead of reading it
+        out of the rendered text.
+        """
+        return self._panel_request(
             self._plan_approval_status,
             self._plan_approval_output,
             call,
         )
 
     def _preview_plan_authorization(self) -> None:
-        self._approval_request(
+        """Show what confirming would record, and remember the exact terms.
+
+        The approval the runtime built is captured here rather than re-derived
+        later, because that object is the one confirming records. Editing the
+        budget fields afterwards changes nothing until this is pressed again,
+        and the confirmation says so.
+        """
+        response = self._approval_request(
             lambda: self._controller.preview_plan_authorization(
                 self._research_question.get(),
                 self._text_value(self._research_plan_instructions),
@@ -4956,8 +4993,41 @@ class TkinterDesktopWindow:
                 self._authorization_seconds.get(),
             )
         )
+        authorization = getattr(response, "research_plan_authorization", None)
+        self._previewed_authority = (
+            authorization.budget if authorization is not None else None
+        )
+        self._previewed_fit = getattr(response, "research_plan_budget_fit", None)
 
     def _confirm_plan_authorization(self) -> None:
+        """Record the previewed approval, after showing its exact terms.
+
+        Confirming records the approval built when Preview ran, so the budget
+        shown here is that one and not whatever the fields say now. Anybody who
+        has edited them since is told plainly that this is not what they typed,
+        which is more use than quietly recording the older figure.
+        """
+        previewed = getattr(self, "_previewed_authority", None)
+        if previewed is None:
+            self._plan_approval_status.set(
+                "Preview an approval first; confirming records exactly what it "
+                "described."
+            )
+            return
+        if not messagebox.askyesno(
+            "Record this approval?",
+            (
+                f"Approval: {self._plan_approval_id.get().strip()}\n\n"
+                + "\n".join(_granted_authority_lines(previewed, self._previewed_fit))
+                + "\n\nThese are the terms Preview recorded. If you have "
+                "changed the budget boxes since, those changes are not part of "
+                "this approval; press Preview again to approve them instead.\n\n"
+                "Nothing runs. Beginning the work is a separate action."
+            ),
+            parent=self._root,
+        ):
+            self._plan_approval_status.set("Not confirmed. Nothing was recorded.")
+            return
         self._approval_request(
             lambda: self._controller.confirm_plan_authorization(
                 self._plan_approval_id.get(),
@@ -5281,12 +5351,47 @@ class TkinterDesktopWindow:
                 "Prepare a research proposal first; approving needs its digest."
             )
             return
+        # Read the budget boxes as they stand now, not as they stood when
+        # Preview last ran. Approving parses these same values, so a dialog
+        # describing anything else would describe the wrong grant.
+        current = self._review_request(
+            lambda: self._controller.prepare_curiosity_research_proposal(
+                question_id,
+                self._curiosity_advances.get(),
+                self._curiosity_network.get(),
+                self._curiosity_seconds.get(),
+            )
+        )
+        proposal = getattr(current, "curiosity_proposal", None)
+        fit = getattr(current, "research_plan_budget_fit", None)
+        if current is None or proposal is None:
+            reason = current.message.splitlines()[0] if current is not None else ""
+            self._review_status.set(
+                ("curiosity proposal: not authorized. " + reason).strip()
+            )
+            return
+        if proposal.digest != digest:
+            self._review_status.set(
+                "curiosity proposal: not authorized. The proposal changed since "
+                "you read it; prepare it again before approving."
+            )
+            return
+        if fit is not None and not fit.sufficient:
+            self._review_status.set(
+                "curiosity proposal: not authorized. " + " ".join(fit.lines()[1:])
+            )
+            return
         if not messagebox.askyesno(
             "Authorize this research proposal?",
             (
                 f"Curiosity question: {question_id}\n"
                 f"Plan digest: {digest}\n\n"
-                "This records that you approve exactly this plan, with the "
+                + (
+                    "\n".join(_granted_authority_lines(fit.budget, fit)) + "\n\n"
+                    if fit is not None
+                    else ""
+                )
+                + "This records that you approve exactly this plan, with the "
                 "budget you entered as the authority you are granting it. It "
                 "starts nothing: no provider is contacted and no step runs. "
                 "Beginning the work is a separate action.\n\n"

@@ -2,6 +2,38 @@
 
 All notable project changes are recorded here.
 
+## [0.3.269] - 2026-09-01
+
+### Fixed
+
+- Approving a Curiosity proposal now re-reads the budget boxes at the moment of
+  approving and recomputes the fit against that exact proposal. Values edited
+  after Prepare are the ones described and the ones recorded, so nobody has to
+  press Prepare again to be safe. Currently unusable or insufficient values
+  refuse before any dialog opens, naming what is short.
+- Confirming an operator-authored approval now shows its terms first. That path
+  records the approval object Preview built, budget included, so the dialog shows
+  that budget and says plainly that edits made since Preview are not part of it
+  and need another Preview. Showing the current boxes there would have described
+  a grant that is not the one recorded.
+
+### Added
+
+- Both approval surfaces render the authority through one shared helper, so the
+  two cannot drift into describing the same grant differently, and the budget
+  fit now travels on the response as structured state rather than only as text.
+
+### Security
+
+- A stale proposal is refused rather than moved to: the re-read proposal's digest
+  must equal the one on screen, or nothing is approved.
+- Re-reading a proposal to check its fit reaches no provider, no network and no
+  model, records nothing, and runs no research step. Declining either dialog
+  records nothing, and starting work remains a separate action.
+- Seconds are still shown as granted authority only; no required duration is
+  invented. No reactive machinery was added — the recomputation happens when a
+  button is pressed.
+
 ## [0.3.268] - 2026-09-01
 
 ### Added

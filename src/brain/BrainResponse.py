@@ -52,6 +52,7 @@ from research.ResearchPairedProviderQualityReport import (
     ResearchPairedProviderQualityReport,
 )
 from research.ResearchPlanAuthorization import ResearchPlanAuthorization
+from research.ResearchPlanBudgetRequirement import ResearchPlanBudgetFit
 from research.ResearchPlanDraftPreview import ResearchPlanDraftPreview
 from research.ResearchPlanExecutionState import ResearchPlanExecutionState
 from research.ResearchProviderComparisonReport import (
@@ -152,6 +153,7 @@ class BrainResponse:
     learned_memory_audit: LearnedMemoryAuditReport | None = None
     research_plan_execution: ResearchPlanExecutionState | None = None
     research_execution_continuation: ResearchExecutionContinuation | None = None
+    research_plan_budget_fit: ResearchPlanBudgetFit | None = None
     research_autonomy: ResearchAutonomyResult | None = None
     background_research_task: BackgroundResearchTask | None = None
     research_curiosity: ResearchCuriosityPreview | None = None
