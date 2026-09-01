@@ -141,6 +141,13 @@ def _granted_authority_lines(budget, fit=None) -> list[str]:
     return lines
 
 
+_BACKGROUND_CONTINUATION_NOTE = (
+    "Running in the background means off this window's thread, not unattended. "
+    "It spends only the budget this execution was already granted, grants no "
+    "new authority, retries nothing, and stops on failure, blocking, "
+    "interruption, cancellation or budget exhaustion. Closing Hypatia stops it; "
+    "the execution stays durable and can be resumed and continued again."
+)
 _CURIOSITY_BUDGET_NOTE = (
     "This is the authority you are granting to this exact Hypatia-proposed "
     "plan. Hypatia did not choose it for itself. Leave a box blank to grant the "
@@ -4716,11 +4723,20 @@ class TkinterDesktopWindow:
         ttk.Entry(section, textvariable=self._continuation_steps).grid(
             row=11, column=1, sticky="ew", padx=(8, 0), pady=(10, 0)
         )
-        self._request_button(
-            section,
-            "Continue bounded",
-            self._continue_execution_bounded,
-        ).grid(row=12, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
+        controls = ttk.Frame(section)
+        controls.grid(row=12, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
+        for column, (label, command) in enumerate(
+            (
+                ("Continue bounded", self._continue_execution_bounded),
+                ("Continue in background", self._continue_execution_in_background),
+            )
+        ):
+            self._request_button(controls, label, command).grid(
+                row=0, column=column, sticky="w", padx=(0 if column == 0 else 8, 0)
+            )
+        ttk.Label(section, text=_BACKGROUND_CONTINUATION_NOTE, wraplength=680).grid(
+            row=13, column=0, columnspan=2, sticky="w", pady=(8, 0)
+        )
 
         buttons = ttk.Frame(section)
         buttons.grid(row=2, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
@@ -4937,6 +4953,77 @@ class TkinterDesktopWindow:
                 execution_id,
                 steps,
             )
+        )
+
+    def _continue_execution_in_background(self) -> None:
+        """Run the same bounded continuation away from the Tk event loop.
+
+        Deliberately not a new worker. It hands the existing bounded
+        continuation to the one desktop worker this window already owns, so the
+        step loop, the budget checks, the durable checkpoint and the refusals
+        are the ones an ordinary press gets — the only difference is which
+        thread waits for them.
+
+        That worker is single-flight, which is also the guard against two
+        clicks racing over one execution: the second is told Hypatia is already
+        busy rather than starting a second run.
+        """
+        execution_id = self._execution_id.get().strip()
+        steps = self._continuation_steps.get().strip()
+        if not execution_id or not steps:
+            self._plan_approval_status.set(
+                "An execution ID and a step count are both required."
+            )
+            return
+        if not messagebox.askyesno(
+            "Continue this execution in the background?",
+            (
+                f"Execution: {execution_id}\n\n"
+                f"Run at most {steps} research steps away from this window, so "
+                "it stays usable while they run.\n\n" + _BACKGROUND_CONTINUATION_NOTE
+            ),
+            parent=self._root,
+        ):
+            self._plan_approval_status.set("Not continued. Nothing was attempted.")
+            return
+        cancellation_signal = CancellationSignal()
+        started = self._start_bounded_action(
+            lambda: self._controller.continue_research_execution(
+                execution_id,
+                steps,
+            ),
+            self._complete_background_continuation,
+            "background research continuation",
+            cancellation_signal=cancellation_signal,
+        )
+        if started == "started":
+            self._plan_approval_status.set(
+                f"Continuing {execution_id} in the background, at most {steps} "
+                "steps. Nothing new was authorized."
+            )
+
+    def _complete_background_continuation(self, response: object) -> None:
+        """Report what the background run did, from its canonical result."""
+        if not isinstance(response, BrainResponse):
+            self._plan_approval_status.set("Background continuation failed.")
+            return
+        output = self._plan_approval_output
+        output.configure(state=tk.NORMAL)
+        output.delete("1.0", tk.END)
+        output.insert(tk.END, response.message)
+        output.configure(state=tk.DISABLED)
+        self._append_response(response)
+        continuation = response.research_execution_continuation
+        if continuation is None:
+            self._plan_approval_status.set(
+                "Done." if response.success else "That request did not complete."
+            )
+            return
+        self._plan_approval_status.set(
+            f"Background continuation finished: "
+            f"{continuation.attempted_steps} of "
+            f"{continuation.requested_max_steps} steps attempted, stopped "
+            f"because {continuation.stop_reason.value}."
         )
 
     def _cancel_execution(self) -> None:

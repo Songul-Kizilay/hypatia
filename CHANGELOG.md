@@ -2,6 +2,32 @@
 
 All notable project changes are recorded here.
 
+## [0.3.271] - 2026-09-01
+
+### Added
+
+- A "Continue in background" control runs the existing bounded continuation off
+  the window's thread, so the desktop stays usable while steps run. It names the
+  exact execution and an explicit finite bound, and asks first.
+
+### Security
+
+- Background here means off the Tk thread, not unattended. Nothing was scheduled,
+  nothing recurs, and nothing relaunches after a restart; closing Hypatia stops
+  the run while the execution stays durable and resumable.
+- No second executor was written. The steps are the existing `process_continue`
+  loop over the existing one-step advance, so the budget checks, the durable
+  attempt checkpoint, the structured refusals and the stopping rules are the
+  ones an ordinary press gets.
+- The worker is the single-flight desktop runner the window already owned, which
+  is also the guard against two clicks racing over one execution: the second is
+  told Hypatia is busy rather than starting a second run.
+- The run spends only the budget this execution was already granted. No approval
+  is created, no capability widens, no plan or digest changes, no budget is reset
+  or topped up, and nothing is retried.
+- The confirmation states each of those plainly, and says the run stops on
+  failure, blocking, interruption, cancellation or budget exhaustion.
+
 ## [0.3.270] - 2026-09-01
 
 ### Fixed
