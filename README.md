@@ -967,6 +967,11 @@ judgements keep the ceiling at `likely, medium`. Missing independence does not
 raise a warning by itself; it simply cannot supply evidence that was never
 recorded.
 
+Assessment-aware warnings use that same canonical resource boundary. If one
+page was accepted under equivalent URLs more than once, one underlying concern
+produces one warning rather than one warning per stored document; the derived
+warning still carries every linked evidence ID and exact assessment provenance.
+
 A ceiling is not a verdict on truth. Meeting it does not make a claim true and
 exceeding it does not make one false — it describes what our record can bear the
 weight of. And the asymmetry is deliberate: claiming more than the record can

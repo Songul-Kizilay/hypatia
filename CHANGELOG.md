@@ -2,6 +2,23 @@
 
 All notable project changes are recorded here.
 
+## [0.3.264] - 2026-09-01
+
+### Fixed
+
+- Assessment-aware claim warnings now group equivalent accepted document
+  records by the same canonical resource identity used by support calibration.
+  Accepting one page twice can no longer duplicate a warning or inflate warning
+  telemetry for one underlying source concern.
+- The grouped warning retains every claim-linked evidence ID for the resource
+  and names the exact newest active assessment carrying that warning kind.
+
+### Security
+
+- The correction is derived, deterministic, and read-only. It changes no
+  source, assessment, evidence, claim, confidence, provider choice, research
+  operation, or persisted run state.
+
 ## [0.3.263] - 2026-09-01
 
 ### Fixed

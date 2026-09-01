@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.263 (Genesis)`
+`v0.3.264 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.263`** is the current source/package release line.
+- **Runtime release `v0.3.264`** is the current source/package release line.
   GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -1198,7 +1198,9 @@ Calibration now reads those judgements. A claim resting on a source the operator
 marked retracted, withdrawn, corrected, not useful, unrelated, background-only
 or not independent is reported as such, with the source and the assessment
 named, and a separate claim-level warning is raised when apparent corroboration
-rests on sources somebody said repeat each other.
+rests on sources somebody said repeat each other. Equivalent stored records of
+one canonical resource produce one warning per concern, with all claim-linked
+evidence retained and no inflated warning count.
 
 Those independence judgements now also bound the structural support ceiling.
 Several distinct resources reach `strong evidence / high confidence` only when

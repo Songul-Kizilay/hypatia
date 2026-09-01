@@ -120,7 +120,15 @@ class ResearchClaimCalibrator:
                     contradicted=claim.claim_id in contradicted,
                 ),
             )
-            for warnings in (self._warnings(claim, profile, evidence_sources, active),)
+            for warnings in (
+                self._warnings(
+                    claim,
+                    profile,
+                    evidence_sources,
+                    identities,
+                    active,
+                ),
+            )
         )
 
     def _calibrate(
@@ -151,6 +159,7 @@ class ResearchClaimCalibrator:
         claim: ResearchClaimRecord,
         profile: EvidenceSupportProfile,
         evidence_sources: dict[str, str],
+        identities: dict[str, str],
         active: dict[str, tuple[ResearchSourceAssessmentRecord, ...]],
     ) -> tuple[ResearchAssessmentWarning, ...]:
         """Report what the recorded judgements say about this claim's sources.
@@ -170,12 +179,23 @@ class ResearchClaimCalibrator:
             document_id = evidence_sources.get(evidence_id)
             if document_id is not None:
                 evidence_by_document.setdefault(document_id, []).append(evidence_id)
-        documents = set(evidence_by_document) | set(claim.source_document_ids)
+        documents = tuple(
+            dict.fromkeys((*claim.source_document_ids, *evidence_by_document))
+        )
+        documents_by_resource: dict[str, list[str]] = {}
+        for document_id in documents:
+            resource = identities.get(document_id) or document_id
+            documents_by_resource.setdefault(resource, []).append(document_id)
 
         warnings: list[ResearchAssessmentWarning] = []
         not_independent = 0
-        for document_id in sorted(documents):
-            assessments = active.get(document_id, ())
+        for resource in sorted(documents_by_resource):
+            resource_documents = documents_by_resource[resource]
+            assessments = tuple(
+                assessment
+                for document_id in resource_documents
+                for assessment in active.get(document_id, ())
+            )
             if not assessments:
                 continue
             if any(
@@ -213,9 +233,13 @@ class ResearchClaimCalibrator:
                         claim_id=claim.claim_id,
                         kind=kind,
                         attention=attention,
-                        source_document_id=document_id,
+                        source_document_id=assessment.source_document_id,
                         assessment_id=assessment.assessment_id,
-                        evidence_ids=tuple(evidence_by_document.get(document_id, ())),
+                        evidence_ids=tuple(
+                            evidence_id
+                            for document_id in resource_documents
+                            for evidence_id in evidence_by_document.get(document_id, ())
+                        ),
                     )
                 )
         # Said once, and only when there is corroboration to be weakened. On a

@@ -242,6 +242,55 @@ class AssessmentWarningReportTests(CalibrationFixture):
         self.assertIn(f"evidence IDs: {evidence_id}", response.message)
         self.assertIn(f"source document IDs: {document_id}", response.message)
 
+    def test_equivalent_source_records_produce_one_resource_warning(self) -> None:
+        run_id = self.new_run()
+        documents: list[str] = []
+        for url, title in (
+            ("https://www.example.test/shared", "Shared record one"),
+            ("https://example.test/shared/", "Shared record two"),
+        ):
+            result = self.acceptance.accept(
+                ResearchSource(
+                    url=url,
+                    title=title,
+                    content=f"{title} discusses the measured age of Saturn's rings.",
+                    content_type="text/html",
+                    fetched_at=FETCHED,
+                ),
+                run_id,
+            )
+            assert result.document_id is not None
+            documents.append(result.document_id)
+        evidence_ids = [
+            self.add_evidence(run_id, document_id) for document_id in documents
+        ]
+        for document_id, evidence_id in zip(documents, evidence_ids, strict=True):
+            self.assess(
+                run_id,
+                document_id,
+                evidence_id,
+                ResearchInformationTrust.HIGH,
+                publication_status="retracted",
+            )
+        self.claim(
+            run_id,
+            evidence_ids,
+            ResearchEpistemicState.LIKELY,
+            ResearchClaimConfidence.MEDIUM,
+        )
+
+        [calibration] = self.calibrator.calibrate(self.manager.get(run_id))
+
+        self.assertEqual(calibration.profile.source_count, 1)
+        self.assertEqual(len(calibration.warnings), 1)
+        [warning] = calibration.warnings
+        self.assertEqual(warning.kind.value, "source_retracted")
+        self.assertEqual(warning.evidence_ids, tuple(evidence_ids))
+        self.assertEqual(
+            warning.assessment_id,
+            self.manager.get(run_id).assessments[-1].assessment_id,
+        )
+
     def test_the_report_says_plainly_that_nothing_was_corrected(self) -> None:
         """The whole risk of a warning is that it reads as a correction."""
         run_id = self._run_with(publication_status="retracted")
