@@ -15,9 +15,15 @@ over a problem to find a step it likes better, and it never quietly repairs one
 — resolving an interrupted attempt or abandoning a blocked one stays a human
 decision made afterwards, as it was before this existed.
 
-Curiosity proposals author a single step today, which cannot exercise a loop at
-all. These build multi-step plans directly against the canonical execution
-model rather than expanding proposal authoring to suit the test.
+Two kinds of plan appear below, and the difference matters. Most tests here
+build multi-step plans directly against the canonical execution model, because
+they need shapes a real proposal does not produce — five steps, a capability
+withdrawn mid-run, a crash at step two. The last group uses the genuine
+Curiosity path instead: a real gap, a real accepted question, a real authorized
+proposal, which today authors a local knowledge search followed by one source
+discovery. That group is the one that proves the loop is reachable from the
+work Hypatia actually proposes for itself, rather than only from plans a test
+wrote for it.
 """
 
 from __future__ import annotations
@@ -33,6 +39,9 @@ for entry in (SRC_DIR, ROOT_DIR):
         sys.path.append(str(entry))
 
 from brain.BrainRequest import BrainRequest
+from cognition.CuriosityApplicationService import (
+    CURIOSITY_PREPARE_PROPOSAL_INTENT,
+)
 from cognition.ResearchPlanExecutionApplicationService import (
     RESEARCH_PLAN_EXECUTION_CONTINUE_INTENT,
 )
@@ -43,6 +52,7 @@ from research.ResearchContinuationStopReason import ResearchContinuationStopReas
 from research.ResearchExecutionAllowance import ResearchExecutionAllowance
 from research.ResearchExecutionContinuation import MAX_FOREGROUND_CONTINUATION_STEPS
 from research.ResearchPlan import ResearchPlan
+from research.ResearchPlanAuthorization import capabilities_of
 from research.ResearchPlanExecutionSnapshot import ResearchPlanExecutionSnapshot
 from research.ResearchPlanExecutionState import ResearchPlanExecutionState
 from research.ResearchPlanExecutionStatus import ResearchPlanExecutionStatus
@@ -486,6 +496,198 @@ class EachStepKeepsItsOwnGuaranteesTests(ContinuationFixture):
         self._advance_on(service, "plan-many")
 
         self.assertEqual(self.reopened_operation.calls, ["step-1"])
+
+
+class RealCuriosityJourneyTests(ContinuationFixture):
+    """The whole chain, from a gap Hypatia found to steps it actually ran.
+
+    Nothing synthetic: the plan is the one a real accepted question produces,
+    approved by its own digest and started through the ordinary path. What is
+    being checked is that bounded continuation needs no special plan to be
+    useful — the proposal Hypatia authors for itself is already multi-step, and
+    the loop runs it in authored order without widening anything.
+    """
+
+    def _prepared(self):
+        """Accept the question and return the proposal, having run nothing."""
+        self.service.process_question_accept(
+            self._request(
+                "curiosity_question_accept",
+                curiosity_question_id=self.question.question_id,
+            )
+        )
+        return self.service.process_prepare_proposal(
+            self._request(
+                CURIOSITY_PREPARE_PROPOSAL_INTENT,
+                curiosity_question_id=self.question.question_id,
+            )
+        ).curiosity_proposal
+
+    def test_a_real_proposal_authors_two_ordered_steps(self) -> None:
+        proposal = self._prepared()
+
+        self.assertEqual(
+            tuple(step.capability for step in proposal.plan.steps),
+            (
+                ResearchPlanStepCapability.LOCAL_KNOWLEDGE_SEARCH,
+                ResearchPlanStepCapability.SOURCE_DISCOVERY,
+            ),
+        )
+
+    def test_the_same_state_produces_the_same_digest(self) -> None:
+        first = self._prepared()
+
+        second = self.service.process_prepare_proposal(
+            self._request(
+                CURIOSITY_PREPARE_PROPOSAL_INTENT,
+                curiosity_question_id=self.question.question_id,
+            )
+        ).curiosity_proposal
+
+        self.assertEqual(first.digest, second.digest)
+
+    def test_preparing_a_proposal_performs_no_operation(self) -> None:
+        self._prepared()
+
+        self.assertEqual(self.operation.calls, [])
+
+    def test_starting_performs_no_step(self) -> None:
+        started = self._started()
+
+        self.assertEqual(self.operation.calls, [])
+        self.assertEqual(started.completed_steps, 0)
+        self.assertIs(started.status, ResearchPlanExecutionStatus.RUNNING)
+
+    def test_the_approval_names_exactly_the_authored_capabilities(self) -> None:
+        started = self._started()
+        [authorization] = list(self.authorization_service.authorizations())
+
+        plan = self.execution_service.live_plan(started.plan_id)
+
+        self.assertEqual(authorization.capabilities, capabilities_of(plan))
+        self.assertEqual(
+            authorization.capabilities,
+            frozenset(
+                {
+                    ResearchPlanStepCapability.LOCAL_KNOWLEDGE_SEARCH,
+                    ResearchPlanStepCapability.SOURCE_DISCOVERY,
+                }
+            ),
+        )
+
+    def test_a_bound_of_one_runs_only_the_local_search(self) -> None:
+        """The outward step is next, and stays next until asked for again."""
+        started = self._started()
+
+        result = self._result(self.execution_service, started.plan_id, 1)
+
+        self.assertEqual(self.operation.calls, ["step-1"])
+        self.assertEqual(result.attempted_step_ids, ("step-1",))
+        self.assertEqual(result.next_step_id, "step-2")
+        self.assertIs(result.stop_reason, STOP.BOUND_REACHED)
+
+    def test_a_bound_of_one_charges_nothing_for_the_local_step(self) -> None:
+        started = self._started()
+        before = self.execution_service.allowance(started.plan_id)
+
+        self._continue(self.execution_service, started.plan_id, 1)
+
+        self.assertEqual(
+            self.execution_service.allowance(
+                started.plan_id
+            ).remaining_network_operations,
+            before.remaining_network_operations,
+        )
+
+    def test_a_bound_of_two_runs_both_authored_steps_in_order(self) -> None:
+        started = self._started()
+
+        result = self._result(self.execution_service, started.plan_id, 2)
+
+        self.assertEqual(self.operation.calls, ["step-1", "step-2"])
+        self.assertEqual(result.attempted_step_ids, ("step-1", "step-2"))
+        self.assertIs(result.final_status, ResearchPlanExecutionStatus.COMPLETED)
+        self.assertIs(result.stop_reason, STOP.COMPLETED)
+
+    def test_the_discovery_step_costs_exactly_its_canonical_price(self) -> None:
+        started = self._started()
+        before = self.execution_service.allowance(started.plan_id)
+
+        self._continue(self.execution_service, started.plan_id, 2)
+
+        after = self.execution_service.allowance(started.plan_id)
+        self.assertEqual(
+            before.remaining_network_operations - after.remaining_network_operations,
+            cost_for(ResearchPlanStepCapability.SOURCE_DISCOVERY).network_operations,
+        )
+
+    def test_a_larger_bound_never_reaches_a_third_step(self) -> None:
+        """The plan holds two steps; a bound of five does not invent a third."""
+        started = self._started()
+
+        result = self._result(self.execution_service, started.plan_id, 5)
+
+        self.assertEqual(self.operation.calls, ["step-1", "step-2"])
+        self.assertEqual(result.attempted_steps, 2)
+
+
+class RealCuriosityDiscoveryFailureTests(ContinuationFixture):
+    """The local step succeeds and the provider refuses, which stops the run.
+
+    The fake refuses only the outward step, so this is a provider failing rather
+    than everything failing — the difference between proving a run stops at a
+    real refusal and proving nothing works.
+    """
+
+    fails = True
+
+    def test_the_local_step_runs_and_the_discovery_is_attempted_once(self) -> None:
+        started = self._started()
+
+        self._continue(self.execution_service, started.plan_id, 2)
+
+        self.assertEqual(self.operation.calls, ["step-1", "step-2"])
+
+    def test_the_failure_stops_the_run_with_a_structured_reason(self) -> None:
+        started = self._started()
+
+        result = self._result(self.execution_service, started.plan_id, 2)
+
+        self.assertIs(result.stop_reason, STOP.FAILED)
+        self.assertIs(result.final_status, ResearchPlanExecutionStatus.FAILED)
+
+    def test_the_failed_discovery_is_not_retried(self) -> None:
+        started = self._started()
+
+        self._continue(self.execution_service, started.plan_id, 5)
+
+        self.assertEqual(self.operation.calls.count("step-2"), 1)
+
+    def test_the_failed_step_is_recorded_as_failed(self) -> None:
+        started = self._started()
+
+        self._continue(self.execution_service, started.plan_id, 2)
+
+        [step] = [
+            entry
+            for entry in self.execution_service.live_execution(started.plan_id).steps
+            if entry.step_id == "step-2"
+        ]
+        self.assertIs(step.status, ResearchPlanStepStatus.FAILED)
+
+    def test_the_failed_attempt_is_not_refunded(self) -> None:
+        """It reached the provider, so it is paid for whatever came back."""
+        started = self._started()
+        before = self.execution_service.allowance(started.plan_id)
+
+        self._continue(self.execution_service, started.plan_id, 2)
+
+        self.assertLess(
+            self.execution_service.allowance(
+                started.plan_id
+            ).remaining_network_operations,
+            before.remaining_network_operations,
+        )
 
 
 if __name__ == "__main__":

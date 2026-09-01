@@ -31,15 +31,19 @@ for entry in (SRC_DIR, ROOT_DIR):
     if str(entry) not in sys.path:
         sys.path.append(str(entry))
 
+from research.CuriosityProposalBuilder import CuriosityProposalBuilder
 from research.ResearchCuriosityQuestionGenerator import (
     ResearchCuriosityQuestionGenerator,
 )
+from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchFailureRecord import ResearchFailureRecord
 from research.ResearchKnowledgeGapDetector import (
     ACQUISITION_FAILURE_STAGES,
     ResearchKnowledgeGapDetector,
 )
 from research.ResearchKnowledgeGapKind import ResearchKnowledgeGapKind
+from research.ResearchPlanDraftService import ResearchPlanDraftService
+from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 from research.ResearchRun import ResearchRun
 from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSourceCandidate import ResearchSourceCandidate
@@ -347,6 +351,112 @@ class ResolutionAndDeterminismTests(unittest.TestCase):
         )
 
         self.assertEqual(len(questions), 5)
+
+
+class CoverageProposalStepTests(unittest.TestCase):
+    """One discovery step per provider that has not been asked, named exactly.
+
+    The plan is where a coverage gap stops being an observation and becomes
+    work, so this checks the work is addressed to somebody in particular. A
+    step that named no provider would leave the choice to whatever the runtime
+    felt like reaching for, which is the one thing a coverage gap must not do.
+    """
+
+    def _proposal(self, asked: tuple[str, ...]):
+        """Return the proposal for a run that has asked exactly these providers."""
+        return self._proposal_from(
+            tuple(
+                discovery(index, provider)
+                for index, provider in enumerate(asked, start=1)
+            )
+        )
+
+    def _proposal_from(self, discoveries: tuple):
+        """Return the proposal for a run holding exactly these discoveries."""
+        research_run = run(discoveries=discoveries)
+        [question] = [
+            candidate
+            for candidate in ResearchCuriosityQuestionGenerator().generate(
+                research_run,
+                ResearchKnowledgeGapDetector().detect(research_run, NOW),
+            )
+            if candidate.kind is ResearchKnowledgeGapKind.PROVIDER_COVERAGE_GAP
+        ]
+        return CuriosityProposalBuilder().build(
+            question.accepted(NOW),
+            research_run,
+            ResearchPlanDraftService(id_factory=lambda: "plan-1", clock=lambda: NOW),
+        )
+
+    def test_the_plan_looks_locally_before_asking_anyone(self) -> None:
+        proposal = self._proposal(("nvd",))
+
+        first = proposal.plan.steps[0]
+
+        self.assertIs(
+            first.capability,
+            ResearchPlanStepCapability.LOCAL_KNOWLEDGE_SEARCH,
+        )
+        self.assertIsNone(first.discovery_provider)
+
+    def test_each_unasked_provider_gets_its_own_named_step(self) -> None:
+        proposal = self._proposal(("nvd",))
+
+        discoveries = [
+            step
+            for step in proposal.plan.steps
+            if step.capability is ResearchPlanStepCapability.SOURCE_DISCOVERY
+        ]
+
+        self.assertEqual(
+            [step.discovery_provider.value for step in discoveries],
+            [
+                provider.value
+                for provider in ResearchDiscoveryProviderName
+                if provider.value != "nvd"
+            ],
+        )
+
+    def test_a_provider_already_asked_gets_no_step(self) -> None:
+        proposal = self._proposal(("nvd",))
+
+        providers = {
+            step.discovery_provider.value
+            for step in proposal.plan.steps
+            if step.discovery_provider is not None
+        }
+
+        self.assertNotIn("nvd", providers)
+
+    def test_the_recorded_order_of_discoveries_does_not_change_the_plan(self) -> None:
+        """Same provider asked twice, recorded either way round, plans the same.
+
+        Storage order is not a planning rule. Only two providers exist, so both
+        runs here still leave the same one unasked; what differs is the order
+        the record happens to hold, and the plan must not notice.
+        """
+        forward = self._proposal_from(
+            (discovery(1, "nvd"), discovery(2, "nvd")),
+        )
+        backward = self._proposal_from(
+            (discovery(2, "nvd"), discovery(1, "nvd")),
+        )
+
+        self.assertEqual(forward.digest, backward.digest)
+
+    def test_the_same_state_plans_the_same_way_twice(self) -> None:
+        self.assertEqual(
+            self._proposal(("nvd",)).digest, self._proposal(("nvd",)).digest
+        )
+
+    def test_no_step_needs_a_result_that_does_not_exist_yet(self) -> None:
+        """Nothing authored here binds to a source, document or chunk."""
+        proposal = self._proposal(("nvd",))
+
+        for step in proposal.plan.steps:
+            with self.subTest(step=step.step_id):
+                self.assertEqual(step.selected_source_document_ids, ())
+                self.assertEqual(step.authorized_source_url, "")
 
 
 if __name__ == "__main__":
