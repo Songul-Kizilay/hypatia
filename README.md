@@ -785,6 +785,14 @@ uncertain, what effort went unused, what worked, and what to ask next. Problems
 come before successes deliberately — a reflection that opens with what went well
 is one nobody learns from.
 
+When one source assessment explicitly supersedes another, Reflection compares
+the canonical records and names only what changed: information trust,
+usefulness, applicability, independence, publication status, or linked
+evidence. An independence-only revision is not called a trust change. A
+wording-only replacement says that no structured source judgement changed, and
+parallel assessments are not presented as revisions because neither replaced
+the other.
+
 Every finding describes the process, never the subject. "This claim rests on one
 source" is a fact about our record; "this claim is false" would be a research
 conclusion, and reflection cannot reach one. Producing or storing a report

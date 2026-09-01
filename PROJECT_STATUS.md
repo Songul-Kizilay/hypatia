@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.255 (Genesis)`
+`v0.3.256 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.255`** is the current source/package release line.
+- **Runtime release `v0.3.256`** is the current source/package release line.
   GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -120,9 +120,12 @@ with optional OpenAI-compatible LLM conversation support.
   default off. It now composes durable hypotheses for the selected run through
   the same gap detector and Curiosity generator, so unconfirmed source
   independence and unanswered discriminating tests remain visible as weak
-  evidence and deterministic next questions. Every finding describes the
-  process and never the subject; no hypothesis is written or changed, and there
-  is no recursive reflection: only a run can be reflected on.
+  evidence and deterministic next questions. Source-assessment revisions name
+  only the dimensions that changed; independence-only and wording-only updates
+  no longer fabricate a trust change, and parallel judgements are not revisions.
+  Every finding describes the process and never the subject; no hypothesis is
+  written or changed, and there is no recursive reflection: only a run can be
+  reflected on.
 - Live validation now covers the research pipeline end to end against real
   network sources, not only deterministic doubles: a real discovery request, a
   real HTTPS fetch, acceptance, and an evidence record, with assessment and

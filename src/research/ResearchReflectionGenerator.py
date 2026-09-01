@@ -41,6 +41,7 @@ from research.ResearchReflectionReport import (
     reflection_identity,
 )
 from research.ResearchRun import ResearchRun
+from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
 
 RUN_SUBJECT = "run"
 
@@ -134,17 +135,74 @@ class ResearchReflectionGenerator:
             for claim in run.claims
             if claim.supersedes_claim_id
         ]
-        findings.extend(
-            self._finding(
-                ReflectionFindingKind.REVISED_BELIEF,
-                assessment.assessment_id,
-                "A later assessment replaced an earlier one, so how far this "
-                "source was trusted changed during the run.",
+        assessments_by_id = {
+            assessment.assessment_id: assessment for assessment in run.assessments
+        }
+        for assessment in run.assessments:
+            earlier = assessments_by_id.get(assessment.supersedes_assessment_id or "")
+            if earlier is None:
+                continue
+            findings.append(
+                self._finding(
+                    ReflectionFindingKind.REVISED_BELIEF,
+                    assessment.assessment_id,
+                    self._assessment_revision_detail(earlier, assessment),
+                )
             )
-            for assessment in run.assessments
-            if assessment.supersedes_assessment_id
-        )
         return findings
+
+    @classmethod
+    def _assessment_revision_detail(
+        cls,
+        earlier: ResearchSourceAssessmentRecord,
+        later: ResearchSourceAssessmentRecord,
+    ) -> str:
+        """Name only the source-assessment dimensions the records changed."""
+        changes: list[str] = []
+        for label, before, after in (
+            (
+                "information trust",
+                earlier.information_trust.value,
+                later.information_trust.value,
+            ),
+            ("usefulness", earlier.usefulness.value, later.usefulness.value),
+            (
+                "applicability",
+                earlier.applicability.value,
+                later.applicability.value,
+            ),
+            (
+                "independence",
+                earlier.independence.value,
+                later.independence.value,
+            ),
+            (
+                "publication status",
+                earlier.publication_status.value,
+                later.publication_status.value,
+            ),
+        ):
+            if before != after:
+                changes.append(f"{label} from {before} to {after}")
+        if earlier.evidence_ids != later.evidence_ids:
+            changes.append("linked evidence")
+        if changes:
+            return (
+                "A later assessment changed this source's "
+                f"{cls._joined(changes)} during the run."
+            )
+        return (
+            "A later assessment replaced this source assessment's authored "
+            "wording; no structured source judgement changed."
+        )
+
+    @staticmethod
+    def _joined(values: list[str]) -> str:
+        if len(values) == 1:
+            return values[0]
+        if len(values) == 2:
+            return f"{values[0]} and {values[1]}"
+        return f"{', '.join(values[:-1])}, and {values[-1]}"
 
     def _from_gaps(
         self,

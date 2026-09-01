@@ -59,7 +59,10 @@ from research.ResearchReflectionReport import (
 )
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchSource import ResearchSource
+from research.ResearchSourceApplicability import ResearchSourceApplicability
 from research.ResearchSourceIndependence import ResearchSourceIndependence
+from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
+from research.ResearchSourceUsefulness import ResearchSourceUsefulness
 from response.ResponseComposer import ResponseComposer
 from session.SessionManager import SessionManager
 from session.SessionRenameTransactionService import SessionRenameTransactionService
@@ -269,7 +272,151 @@ class ReflectionDerivationTests(ReflectionFixture):
         findings = self.reflect(run_id).of_kind(ReflectionFindingKind.REVISED_BELIEF)
 
         self.assertEqual(len(findings), 1)
-        self.assertIn("how far this source was trusted changed", findings[0].detail)
+        self.assertIn("information trust from low to high", findings[0].detail)
+
+    def test_an_independence_revision_does_not_claim_trust_changed(self) -> None:
+        run_id, document_id, evidence_id = self.sourced_run()
+        run = self.manager.record_source_assessment(
+            run_id,
+            document_id,
+            [evidence_id],
+            "Independent analysis.",
+            information_trust=ResearchInformationTrust.HIGH,
+            independence=ResearchSourceIndependence.INDEPENDENT,
+        )
+        self.manager.record_source_assessment(
+            run_id,
+            document_id,
+            [evidence_id],
+            "Derived analysis.",
+            supersedes_assessment_id=run.assessments[-1].assessment_id,
+            information_trust=ResearchInformationTrust.HIGH,
+            independence=ResearchSourceIndependence.DERIVATIVE,
+        )
+
+        findings = self.reflect(run_id).of_kind(ReflectionFindingKind.REVISED_BELIEF)
+
+        self.assertEqual(len(findings), 1)
+        self.assertIn(
+            "independence from independent to derivative",
+            findings[0].detail,
+        )
+        self.assertNotIn("information trust", findings[0].detail)
+
+    def test_combined_assessment_revision_names_each_changed_dimension(self) -> None:
+        run_id, document_id, evidence_id = self.sourced_run()
+        run = self.manager.record_source_assessment(
+            run_id,
+            document_id,
+            [evidence_id],
+            "Initial review.",
+            information_trust=ResearchInformationTrust.LOW,
+            independence=ResearchSourceIndependence.INDEPENDENT,
+        )
+        self.manager.record_source_assessment(
+            run_id,
+            document_id,
+            [evidence_id],
+            "Corrected review.",
+            supersedes_assessment_id=run.assessments[-1].assessment_id,
+            information_trust=ResearchInformationTrust.HIGH,
+            independence=ResearchSourceIndependence.DERIVATIVE,
+        )
+
+        findings = self.reflect(run_id).of_kind(ReflectionFindingKind.REVISED_BELIEF)
+
+        self.assertEqual(len(findings), 1)
+        self.assertIn("information trust from low to high", findings[0].detail)
+        self.assertIn(
+            "independence from independent to derivative",
+            findings[0].detail,
+        )
+
+    def test_reflection_names_every_structured_assessment_dimension_that_changed(
+        self,
+    ) -> None:
+        run_id, document_id, evidence_id = self.sourced_run()
+        run = self.manager.record_source_assessment(
+            run_id,
+            document_id,
+            [evidence_id],
+            "Initial structured review.",
+            information_trust=ResearchInformationTrust.LOW,
+            usefulness=ResearchSourceUsefulness.NOT_USEFUL,
+            applicability=ResearchSourceApplicability.UNRELATED,
+            independence=ResearchSourceIndependence.INDEPENDENT,
+            publication_status=ResearchSourcePublicationStatus.NORMAL,
+        )
+        self.manager.record_source_assessment(
+            run_id,
+            document_id,
+            [evidence_id],
+            "Corrected structured review.",
+            supersedes_assessment_id=run.assessments[-1].assessment_id,
+            information_trust=ResearchInformationTrust.HIGH,
+            usefulness=ResearchSourceUsefulness.USEFUL,
+            applicability=ResearchSourceApplicability.DIRECT,
+            independence=ResearchSourceIndependence.DERIVATIVE,
+            publication_status=ResearchSourcePublicationStatus.CORRECTED,
+        )
+
+        findings = self.reflect(run_id).of_kind(ReflectionFindingKind.REVISED_BELIEF)
+
+        self.assertEqual(len(findings), 1)
+        for expected in (
+            "information trust from low to high",
+            "usefulness from not_useful to useful",
+            "applicability from unrelated to direct",
+            "independence from independent to derivative",
+            "publication status from normal to corrected",
+        ):
+            with self.subTest(expected=expected):
+                self.assertIn(expected, findings[0].detail)
+
+    def test_wording_only_revision_does_not_invent_a_structured_change(self) -> None:
+        run_id, document_id, evidence_id = self.sourced_run()
+        run = self.manager.record_source_assessment(
+            run_id,
+            document_id,
+            [evidence_id],
+            "Initial wording.",
+            information_trust=ResearchInformationTrust.HIGH,
+            independence=ResearchSourceIndependence.INDEPENDENT,
+        )
+        self.manager.record_source_assessment(
+            run_id,
+            document_id,
+            [evidence_id],
+            "Clearer wording.",
+            supersedes_assessment_id=run.assessments[-1].assessment_id,
+            information_trust=ResearchInformationTrust.HIGH,
+            independence=ResearchSourceIndependence.INDEPENDENT,
+        )
+
+        findings = self.reflect(run_id).of_kind(ReflectionFindingKind.REVISED_BELIEF)
+
+        self.assertEqual(len(findings), 1)
+        self.assertIn("authored wording", findings[0].detail)
+        self.assertIn("no structured source judgement changed", findings[0].detail)
+        self.assertNotIn("trust from", findings[0].detail)
+
+    def test_parallel_assessments_are_not_reported_as_revisions(self) -> None:
+        run_id, document_id, evidence_id = self.sourced_run()
+        for trust in (
+            ResearchInformationTrust.LOW,
+            ResearchInformationTrust.HIGH,
+        ):
+            self.manager.record_source_assessment(
+                run_id,
+                document_id,
+                [evidence_id],
+                "Parallel authored view.",
+                information_trust=trust,
+            )
+
+        findings = self.reflect(run_id).of_kind(ReflectionFindingKind.REVISED_BELIEF)
+
+        self.assertEqual(findings, ())
 
     def test_a_contradiction_is_reported_as_a_contradiction(self) -> None:
         run_id, _, evidence_id = self.sourced_run()

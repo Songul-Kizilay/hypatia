@@ -2,6 +2,26 @@
 
 All notable project changes are recorded here.
 
+## [0.3.256] - 2026-09-01
+
+### Fixed
+
+- Reflection now describes a superseding source assessment from the dimensions
+  that actually changed: information trust, usefulness, applicability,
+  independence, publication status, or linked evidence.
+- An independence-only correction no longer says source trust changed. A
+  wording-only supersession is reported as authored wording with no structured
+  judgement change, and parallel assessments remain parallel rather than being
+  presented as revisions.
+
+### Security
+
+- Reflection still reads only canonical persisted records and emits bounded,
+  deterministic process observations. It assigns no winner or truth value and
+  edits no assessment, evidence, claim, hypothesis, confidence, or run.
+- The corrected reporting path performs no model call, network request,
+  research operation, automatic Failure Memory write, or background action.
+
 ## [0.3.255] - 2026-09-01
 
 ### Changed
