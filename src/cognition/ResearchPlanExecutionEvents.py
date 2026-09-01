@@ -22,6 +22,7 @@ EXECUTION_STEP_STARTED = "research.plan.execution.step_started"
 EXECUTION_STEP_COMPLETED = "research.plan.execution.step_completed"
 EXECUTION_STEP_FAILED = "research.plan.execution.step_failed"
 EXECUTION_STEP_BLOCKED = "research.plan.execution.step_blocked"
+EXECUTION_OUTCOME_SUPERSEDED = "research.plan.execution.outcome_superseded"
 EXECUTION_STEP_RESOLVED = "research.plan.execution.step_resolved"
 EXECUTION_STEP_RECOVERED = "research.plan.execution.step_recovered"
 EXECUTION_CANCELLED = "research.plan.execution.cancelled"
@@ -154,6 +155,30 @@ class ResearchPlanExecutionEvents:
                 "plan_id": plan_id,
                 "step_id": step_id,
                 "decision": decision,
+            },
+        )
+
+    def outcome_superseded(
+        self,
+        plan_id: str,
+        step_id: str,
+        operation: str,
+        status: str,
+    ) -> None:
+        """Report an attempt that returned after the execution had moved on.
+
+        Deliberately not a step transition. The operation really did return,
+        and saying so is honest; what did not happen is its outcome becoming
+        canonical, so this names the status that stood instead rather than
+        implying a state change nobody committed.
+        """
+        self._emit(
+            EXECUTION_OUTCOME_SUPERSEDED,
+            {
+                "plan_id": plan_id,
+                "step_id": step_id,
+                "operation": operation,
+                "status": status,
             },
         )
 

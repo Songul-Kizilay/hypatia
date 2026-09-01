@@ -2,6 +2,34 @@
 
 All notable project changes are recorded here.
 
+## [0.3.272] - 2026-09-01
+
+### Fixed
+
+- An attempt that finishes late can no longer undo what happened while it ran.
+  `process_advance` read the execution before reaching the provider and wrote its
+  outcome from that snapshot afterwards, so a cancellation landing mid-flight was
+  silently overwritten: the operator was told they had cancelled, later steps ran
+  anyway spending budget, and the durable record ended up saying completed.
+- The outcome is now committed only if the execution is still the one the attempt
+  started from. Execution states are immutable values, so equality answers that
+  without a revision counter, and a newer state always wins — it was written by
+  somebody who knew more at a later moment.
+
+### Security
+
+- The rule applies to every post-provider branch: success, structured provider
+  failure, and blocking. Protection on the success path alone would have been no
+  protection at all.
+- Memory and the durable record cannot disagree. A superseded outcome persists
+  the state that actually stands rather than the one the attempt was building.
+- Attempt accounting is untouched. The charge was made for reaching out, reaching
+  out happened, and a concurrent decision elsewhere does not refund it; the
+  allowance is never reset by stale-write detection.
+- The operation's having returned is still reported, as an event naming the
+  status that stands rather than implying a transition nobody committed.
+- The lock is held only around the compare-and-set, never across a provider call.
+
 ## [0.3.271] - 2026-09-01
 
 ### Added

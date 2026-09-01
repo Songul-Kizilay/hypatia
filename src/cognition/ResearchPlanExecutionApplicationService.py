@@ -51,6 +51,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, datetime
+from threading import RLock
 from typing import cast
 
 from brain.BrainRequest import BrainRequest
@@ -141,6 +142,11 @@ class ResearchPlanExecutionApplicationService:
         self._operation_registry = operation_registry or ResearchPlanOperationRegistry()
         self._events = ResearchPlanExecutionEvents(event_bus)
         self._max_active_executions = max_active_executions
+        #: Held only around a commit, never across a provider call. It makes
+        #: one read-modify-write of an execution indivisible, which is all that
+        #: is needed: the danger is a slow attempt finishing onto a state that
+        #: somebody else replaced while it ran.
+        self._commit_lock = RLock()
         self._executions: dict[str, ResearchPlanExecutionState] = {}
         self._plans: dict[str, ResearchPlan] = {}
         self._contexts: dict[str, ResearchPlanExecutionContext] = {}
@@ -862,7 +868,10 @@ class ResearchPlanExecutionApplicationService:
         except ResearchError as error:
             self._charge_elapsed(plan_id, attempt_started_at)
             failed = running.fail_step(step_id, str(error))
-            self._executions[plan_id] = failed
+            if not self._commit_outcome(plan_id, running, failed):
+                return self._superseded(
+                    request, plan_id, step_id, operation.operation_name
+                )
             self._events.step_failed(
                 plan_id,
                 step_id,
@@ -894,7 +903,10 @@ class ResearchPlanExecutionApplicationService:
                 work_performed=True,
                 operation=operation.operation_name,
             )
-            self._executions[plan_id] = failed
+            if not self._commit_outcome(plan_id, running, failed):
+                return self._superseded(
+                    request, plan_id, step_id, operation.operation_name
+                )
             self._events.step_failed(
                 plan_id,
                 step_id,
@@ -915,7 +927,8 @@ class ResearchPlanExecutionApplicationService:
             work_performed=True,
             operation=operation.operation_name,
         )
-        self._executions[plan_id] = completed
+        if not self._commit_outcome(plan_id, running, completed):
+            return self._superseded(request, plan_id, step_id, operation.operation_name)
         self._events.step_completed(plan_id, step_id, operation.operation_name)
         self._persist(plan_id)
         return self._response_composer.research_plan_execution_status(
@@ -923,6 +936,68 @@ class ResearchPlanExecutionApplicationService:
             completed,
             self._allowances.get(plan_id),
             self._next_capability(plan_id, completed),
+        )
+
+    def _commit_outcome(
+        self,
+        plan_id: str,
+        expected: ResearchPlanExecutionState,
+        successor: ResearchPlanExecutionState,
+    ) -> bool:
+        """Commit one attempt outcome, unless the execution has moved on.
+
+        The comparison is against the exact state this attempt committed before
+        reaching the provider. Execution states are immutable values, so equality
+        answers the only question that matters — is this still the execution I
+        started from — without needing a revision counter to ask it.
+
+        A newer state always wins. It was written by somebody who knew what they
+        were doing at a later moment: an operator cancelling, a ruling on an
+        interrupted attempt, a recovery. Overwriting it with a successor built
+        before any of that happened would undo a decision, silently.
+        """
+        with self._commit_lock:
+            if self._executions.get(plan_id) != expected:
+                return False
+            self._executions[plan_id] = successor
+            return True
+
+    def _superseded(
+        self,
+        request: BrainRequest,
+        plan_id: str,
+        step_id: str,
+        operation: str,
+    ) -> BrainResponse:
+        """Report an outcome that arrived after the execution had moved on.
+
+        The operation may genuinely have run, and the event says so. What is
+        reported as canonical is the state that actually stands, not the one
+        this attempt was building, because reporting the latter would tell an
+        operator their cancellation had been undone.
+
+        Anything already charged for the attempt stays charged. Time and network
+        were spent reaching out, and a concurrent decision elsewhere does not
+        give them back.
+        """
+        current = self._executions.get(plan_id)
+        self._events.outcome_superseded(
+            plan_id,
+            step_id,
+            operation,
+            current.status.value if current is not None else "unknown",
+        )
+        self._persist(plan_id)
+        if current is None:
+            return self._response_composer.research_plan_execution_missing(
+                request,
+                plan_id,
+            )
+        return self._response_composer.research_plan_execution_status(
+            request,
+            current,
+            self._allowances.get(plan_id),
+            self._next_capability(plan_id, current),
         )
 
     def _restore(self) -> None:
@@ -1023,7 +1098,8 @@ class ResearchPlanExecutionApplicationService:
     ) -> BrainResponse:
         """Block a step instead of implying work that never happened."""
         blocked = state.block_step(step_id, detail)
-        self._executions[plan_id] = blocked
+        if not self._commit_outcome(plan_id, state, blocked):
+            return self._superseded(request, plan_id, step_id, reason.value)
         self._events.step_blocked(plan_id, step_id, reason)
         self._persist(plan_id)
         return self._response_composer.research_plan_execution_status(
