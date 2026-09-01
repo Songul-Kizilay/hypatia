@@ -1051,8 +1051,8 @@ The status rules are asymmetric on purpose:
 | Evidence | Status |
 | --- | --- |
 | None, or one supporting source | open |
-| Two or more supporting sources, but any is unassessed or low trust | open |
-| Two or more supporting sources, all actively assessed medium/high, none opposing | supported |
+| Two or more supporting sources, but any is unassessed, low trust, or not explicitly independent | open |
+| Two or more supporting sources, all actively assessed medium/high and explicitly independent, none opposing | supported |
 | Opposing only | contradicted |
 | Both | weakened |
 | Withdrawn | withdrawn |
@@ -1060,10 +1060,11 @@ The status rules are asymmetric on purpose:
 Any opposing evidence at all moves a hypothesis off the supported track, while
 positive support needs more than one independent source and an active authored
 trust assessment of at least `medium` for every supporting source. The appraisal
-shows trust coverage and the lowest active trust on each side. Superseded
-assessments do not count. That asymmetry is the whole reason a discriminating
-test is required — softening it would make disconfirmation just another input
-to be outvoted.
+shows trust and explicit-independence coverage on each side, plus the lowest
+active trust. `unknown`, derivative, likely-duplicate, or conflicting active
+independence judgements keep positive support `open`; superseded assessments do
+not count. That asymmetry is the whole reason a discriminating test is required
+— softening it would make disconfirmation just another input to be outvoted.
 
 There is no confirm intent and no status meaning true. Propose, support, oppose,
 withdraw, and list are the entire vocabulary. `supported` means corroborated

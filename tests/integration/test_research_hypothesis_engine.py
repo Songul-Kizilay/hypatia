@@ -167,6 +167,7 @@ class HypothesisFixture(unittest.TestCase):
         trust: ResearchInformationTrust,
         *,
         supersedes_assessment_id: str | None = None,
+        independence: str = "unknown",
     ) -> str:
         run = self.manager.get(run_id)
         record = next(
@@ -179,6 +180,7 @@ class HypothesisFixture(unittest.TestCase):
             "Assessed for the hypothesis test.",
             supersedes_assessment_id=supersedes_assessment_id,
             information_trust=trust,
+            independence=independence,
         )
         return updated.assessments[-1].assessment_id
 
@@ -324,6 +326,26 @@ class AppraisalTests(HypothesisFixture):
                 lowest_supporting_trust=ResearchInformationTrust.HIGH,
             )
 
+    def test_an_appraisal_rejects_independence_without_assessment(self) -> None:
+        hypothesis = ResearchHypothesis(
+            hypothesis_id="hypothesis-1",
+            run_id="run-1",
+            statement=STATEMENT,
+            discriminating_test=TEST,
+            created_at=START,
+            updated_at=START,
+        )
+
+        with self.assertRaisesRegex(ResearchError, "confirmed independent"):
+            HypothesisAppraisal(
+                hypothesis=hypothesis,
+                status=HypothesisStatus.OPEN,
+                supporting_source_count=2,
+                opposing_source_count=0,
+                supporting_assessed_source_count=1,
+                supporting_independent_source_count=2,
+            )
+
     def test_a_new_hypothesis_is_open(self) -> None:
         service = self.service()
         run_id = self.new_run()
@@ -346,18 +368,81 @@ class AppraisalTests(HypothesisFixture):
 
         self.assertIs(status, HypothesisStatus.OPEN)
 
-    def test_two_medium_trust_supporting_sources_make_it_supported(self) -> None:
+    def test_two_independent_medium_trust_sources_make_it_supported(self) -> None:
         service = self.service()
         run_id = self.new_run()
         hypothesis_id = self.propose(service, run_id)
         first = self.evidence(run_id, "a")
         second = self.evidence(run_id, "b")
-        self.assess(run_id, first, ResearchInformationTrust.MEDIUM)
-        self.assess(run_id, second, ResearchInformationTrust.MEDIUM)
+        self.assess(
+            run_id,
+            first,
+            ResearchInformationTrust.MEDIUM,
+            independence="independent",
+        )
+        self.assess(
+            run_id,
+            second,
+            ResearchInformationTrust.MEDIUM,
+            independence="independent",
+        )
 
         status = self.enter(service, hypothesis_id, [first, second], True)
 
         self.assertIs(status, HypothesisStatus.SUPPORTED)
+        appraisal = self.appraiser.appraise(
+            service.hypotheses()[0],
+            self.manager.get(run_id),
+        )
+        self.assertEqual(appraisal.supporting_independent_source_count, 2)
+        self.assertTrue(appraisal.supporting_sources_independence_confirmed)
+
+    def test_unknown_independence_keeps_two_trusted_sources_open(self) -> None:
+        service = self.service()
+        run_id = self.new_run()
+        hypothesis_id = self.propose(service, run_id)
+        first = self.evidence(run_id, "a")
+        second = self.evidence(run_id, "b")
+        self.assess(run_id, first, ResearchInformationTrust.HIGH)
+        self.assess(run_id, second, ResearchInformationTrust.HIGH)
+
+        status = self.enter(service, hypothesis_id, [first, second], True)
+
+        self.assertIs(status, HypothesisStatus.OPEN)
+        appraisal = self.appraiser.appraise(
+            service.hypotheses()[0],
+            self.manager.get(run_id),
+        )
+        self.assertEqual(appraisal.supporting_independent_source_count, 0)
+        self.assertFalse(appraisal.supporting_sources_independence_confirmed)
+
+    def test_a_derivative_source_keeps_corroboration_open(self) -> None:
+        service = self.service()
+        run_id = self.new_run()
+        hypothesis_id = self.propose(service, run_id)
+        first = self.evidence(run_id, "a")
+        second = self.evidence(run_id, "b")
+        self.assess(
+            run_id,
+            first,
+            ResearchInformationTrust.HIGH,
+            independence="independent",
+        )
+        self.assess(
+            run_id,
+            second,
+            ResearchInformationTrust.HIGH,
+            independence="derivative",
+        )
+
+        status = self.enter(service, hypothesis_id, [first, second], True)
+
+        self.assertIs(status, HypothesisStatus.OPEN)
+        appraisal = self.appraiser.appraise(
+            service.hypotheses()[0],
+            self.manager.get(run_id),
+        )
+        self.assertEqual(appraisal.supporting_independent_source_count, 1)
 
     def test_two_unassessed_supporting_sources_stay_open(self) -> None:
         service = self.service()
@@ -389,14 +474,25 @@ class AppraisalTests(HypothesisFixture):
         hypothesis_id = self.propose(service, run_id)
         first = self.evidence(run_id, "a")
         second = self.evidence(run_id, "b")
-        earlier = self.assess(run_id, first, ResearchInformationTrust.LOW)
+        earlier = self.assess(
+            run_id,
+            first,
+            ResearchInformationTrust.LOW,
+            independence="derivative",
+        )
         self.assess(
             run_id,
             first,
             ResearchInformationTrust.HIGH,
             supersedes_assessment_id=earlier,
+            independence="independent",
         )
-        self.assess(run_id, second, ResearchInformationTrust.MEDIUM)
+        self.assess(
+            run_id,
+            second,
+            ResearchInformationTrust.MEDIUM,
+            independence="independent",
+        )
 
         status = self.enter(service, hypothesis_id, [first, second], True)
 
@@ -408,9 +504,24 @@ class AppraisalTests(HypothesisFixture):
         hypothesis_id = self.propose(service, run_id)
         first = self.evidence(run_id, "a")
         second = self.evidence(run_id, "b")
-        self.assess(run_id, first, ResearchInformationTrust.LOW)
-        self.assess(run_id, first, ResearchInformationTrust.HIGH)
-        self.assess(run_id, second, ResearchInformationTrust.MEDIUM)
+        self.assess(
+            run_id,
+            first,
+            ResearchInformationTrust.LOW,
+            independence="independent",
+        )
+        self.assess(
+            run_id,
+            first,
+            ResearchInformationTrust.HIGH,
+            independence="independent",
+        )
+        self.assess(
+            run_id,
+            second,
+            ResearchInformationTrust.MEDIUM,
+            independence="independent",
+        )
 
         status = self.enter(service, hypothesis_id, [first, second], True)
 
@@ -450,6 +561,42 @@ class AppraisalTests(HypothesisFixture):
         )
         self.assertIn("Supporting trust: 1/2", response.message)
         self.assertIn("lowest high", response.message)
+        self.assertIn("Supporting independence: 0/2", response.message)
+
+    def test_parallel_independence_disagreement_fails_closed(self) -> None:
+        service = self.service()
+        run_id = self.new_run()
+        hypothesis_id = self.propose(service, run_id)
+        first = self.evidence(run_id, "a")
+        second = self.evidence(run_id, "b")
+        self.assess(
+            run_id,
+            first,
+            ResearchInformationTrust.HIGH,
+            independence="independent",
+        )
+        self.assess(
+            run_id,
+            first,
+            ResearchInformationTrust.HIGH,
+            independence="derivative",
+        )
+        self.assess(
+            run_id,
+            second,
+            ResearchInformationTrust.HIGH,
+            independence="independent",
+        )
+
+        status = self.enter(service, hypothesis_id, [first, second], True)
+
+        self.assertIs(status, HypothesisStatus.OPEN)
+        appraisal = self.appraiser.appraise(
+            service.hypotheses()[0],
+            self.manager.get(run_id),
+        )
+        self.assertEqual(appraisal.supporting_independent_source_count, 1)
+        self.assertFalse(appraisal.support_boundary_met)
 
     def test_any_opposing_evidence_alone_contradicts(self) -> None:
         service = self.service()

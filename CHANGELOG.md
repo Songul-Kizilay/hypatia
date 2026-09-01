@@ -2,6 +2,27 @@
 
 All notable project changes are recorded here.
 
+## [0.3.249] - 2026-09-01
+
+### Changed
+
+- Hypothesis appraisal now requires every corroborating supporting resource to
+  carry an explicit active `independent` judgement before the derived status can
+  become `supported`.
+- Appraisals expose separate independence-coverage counts for supporting and
+  opposing evidence alongside the existing trust coverage.
+- Unknown, derivative, likely-duplicate, or conflicting active independence
+  judgements keep positive support `open`; an explicitly superseding correction
+  replaces its predecessor as before.
+
+### Security
+
+- Distinct URLs can no longer make a hypothesis appear supported when the
+  record does not establish that they are independent witnesses.
+- Appraisal remains deterministic, local, derived, and truth-neutral. It does
+  not call a model, open a network connection, edit evidence, rewrite a
+  hypothesis, or introduce any status meaning proven or true.
+
 ## [0.3.248] - 2026-09-01
 
 ### Changed

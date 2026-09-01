@@ -37,6 +37,8 @@ class HypothesisAppraisal:
     opposing_source_count: int
     supporting_assessed_source_count: int = 0
     opposing_assessed_source_count: int = 0
+    supporting_independent_source_count: int = 0
+    opposing_independent_source_count: int = 0
     lowest_supporting_trust: ResearchInformationTrust = (
         ResearchInformationTrust.UNASSESSED
     )
@@ -60,6 +62,14 @@ class HypothesisAppraisal:
                 self.opposing_assessed_source_count,
                 "opposing assessed source count",
             ),
+            (
+                self.supporting_independent_source_count,
+                "supporting independent source count",
+            ),
+            (
+                self.opposing_independent_source_count,
+                "opposing independent source count",
+            ),
         ):
             if isinstance(value, bool) or not isinstance(value, int) or value < 0:
                 raise ResearchError(f"Hypothesis {label} must be whole.")
@@ -67,6 +77,17 @@ class HypothesisAppraisal:
             raise ResearchError("More supporting sources were assessed than exist.")
         if self.opposing_assessed_source_count > self.opposing_source_count:
             raise ResearchError("More opposing sources were assessed than exist.")
+        if (
+            self.supporting_independent_source_count
+            > self.supporting_assessed_source_count
+        ):
+            raise ResearchError(
+                "More supporting sources were confirmed independent than assessed."
+            )
+        if self.opposing_independent_source_count > self.opposing_assessed_source_count:
+            raise ResearchError(
+                "More opposing sources were confirmed independent than assessed."
+            )
         for trust in (
             self.lowest_supporting_trust,
             self.lowest_opposing_trust,
@@ -104,11 +125,20 @@ class HypothesisAppraisal:
         )
 
     @property
+    def supporting_sources_independence_confirmed(self) -> bool:
+        """Return whether every corroborating source is explicitly independent."""
+        return (
+            self.corroborated
+            and self.supporting_independent_source_count == self.supporting_source_count
+        )
+
+    @property
     def support_boundary_met(self) -> bool:
         """Return whether positive support reaches the explicit trust boundary."""
         return (
             self.corroborated
             and self.supporting_sources_fully_assessed
+            and self.supporting_sources_independence_confirmed
             and self.lowest_supporting_trust in _SUPPORTING_TRUST
         )
 
@@ -124,10 +154,16 @@ class HypothesisAppraisal:
             f"{self.supporting_assessed_source_count}/"
             f"{self.supporting_source_count} source(s) assessed; lowest "
             f"{self.lowest_supporting_trust.value}",
+            "Supporting independence: "
+            f"{self.supporting_independent_source_count}/"
+            f"{self.supporting_source_count} source(s) confirmed independent",
             f"Opposing: {len(self.hypothesis.opposing_evidence_ids)} evidence "
             f"across {self.opposing_source_count} source(s)",
             "Opposing trust: "
             f"{self.opposing_assessed_source_count}/"
             f"{self.opposing_source_count} source(s) assessed; lowest "
             f"{self.lowest_opposing_trust.value}",
+            "Opposing independence: "
+            f"{self.opposing_independent_source_count}/"
+            f"{self.opposing_source_count} source(s) confirmed independent",
         )

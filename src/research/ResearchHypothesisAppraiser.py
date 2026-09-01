@@ -23,6 +23,8 @@ from research.HypothesisStatus import HypothesisStatus
 from research.ResearchHypothesis import ResearchHypothesis
 from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRun import ResearchRun
+from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
+from research.ResearchSourceIndependence import ResearchSourceIndependence
 from research.SourceIdentity import identity_of
 
 
@@ -55,18 +57,34 @@ class ResearchHypothesisAppraiser:
             raise ResearchError(
                 "Hypothesis evidence was not found in its research run."
             )
-        trust = self._active_trust(run)
+        active = self._active_assessments(run)
+        trust = {
+            document_id: min(
+                (assessment.information_trust for assessment in assessments),
+                key=self._trust_rank,
+            )
+            for document_id, assessments in active.items()
+        }
+        independent = {
+            document_id: all(
+                assessment.independence is ResearchSourceIndependence.INDEPENDENT
+                for assessment in assessments
+            )
+            for document_id, assessments in active.items()
+        }
         supporting = self._profile(
             hypothesis.supporting_evidence_ids,
             evidence_documents,
             identities,
             trust,
+            independent,
         )
         opposing = self._profile(
             hypothesis.opposing_evidence_ids,
             evidence_documents,
             identities,
             trust,
+            independent,
         )
         appraisal = HypothesisAppraisal(
             hypothesis=hypothesis,
@@ -75,8 +93,10 @@ class ResearchHypothesisAppraiser:
             opposing_source_count=opposing[0],
             supporting_assessed_source_count=supporting[1],
             opposing_assessed_source_count=opposing[1],
-            lowest_supporting_trust=supporting[2],
-            lowest_opposing_trust=opposing[2],
+            supporting_independent_source_count=supporting[2],
+            opposing_independent_source_count=opposing[2],
+            lowest_supporting_trust=supporting[3],
+            lowest_opposing_trust=opposing[3],
         )
         return replace(appraisal, status=self._status(hypothesis, appraisal))
 
@@ -102,8 +122,9 @@ class ResearchHypothesisAppraiser:
         evidence_documents: dict[str, str],
         identities: dict[str, str],
         trust: dict[str, ResearchInformationTrust],
-    ) -> tuple[int, int, ResearchInformationTrust]:
-        """Return distinct-source count, trust coverage, and the lowest trust.
+        independent: dict[str, bool],
+    ) -> tuple[int, int, int, ResearchInformationTrust]:
+        """Return source, trust, independence counts and the lowest trust.
 
         Support requires more than one source; two records of the same page must
         not satisfy that between them. When duplicate records carry different
@@ -115,12 +136,20 @@ class ResearchHypothesisAppraiser:
             if evidence_id in evidence_documents
         }
         resource_trust: dict[str, list[ResearchInformationTrust]] = {}
+        resource_independence: dict[str, list[bool]] = {}
         for document in documents:
             resource = identities.get(document) or document
             resource_trust.setdefault(resource, [])
             if document in trust:
                 resource_trust[resource].append(trust[document])
+            if document in independent:
+                resource_independence.setdefault(resource, []).append(
+                    independent[document]
+                )
         assessed = [values for values in resource_trust.values() if values]
+        independent_count = sum(
+            all(judgements) for judgements in resource_independence.values()
+        )
         lowest = (
             min(
                 (value for values in assessed for value in values),
@@ -129,32 +158,42 @@ class ResearchHypothesisAppraiser:
             if assessed
             else ResearchInformationTrust.UNASSESSED
         )
-        return len(resource_trust), len(assessed), lowest
+        return len(resource_trust), len(assessed), independent_count, lowest
 
     @staticmethod
-    def _active_trust(run: ResearchRun) -> dict[str, ResearchInformationTrust]:
-        """Return the least-trusting active judgement for every source record.
+    def _active_assessments(
+        run: ResearchRun,
+    ) -> dict[str, tuple[ResearchSourceAssessmentRecord, ...]]:
+        """Return every active judgement grouped by source record.
 
         More than one non-superseded assessment can exist for a source. Their
-        insertion order is not an epistemic rule, so a later high label must
-        not silently erase an earlier active low label. An explicit correction
-        still wins because its predecessor is removed by the supersession set.
+        insertion order is not an epistemic rule, so a later high or independent
+        label must not silently erase an earlier active low or derivative label.
+        An explicit correction still wins because its predecessor is removed by
+        the supersession set.
         """
         superseded = {
             assessment.supersedes_assessment_id
             for assessment in run.assessments
             if assessment.supersedes_assessment_id
         }
-        trust: dict[str, ResearchInformationTrust] = {}
+        active: dict[str, list[ResearchSourceAssessmentRecord]] = {}
         for assessment in run.assessments:
             if assessment.assessment_id in superseded:
                 continue
-            current = trust.get(assessment.source_document_id)
-            if current is None or ResearchHypothesisAppraiser._trust_rank(
-                assessment.information_trust
-            ) < ResearchHypothesisAppraiser._trust_rank(current):
-                trust[assessment.source_document_id] = assessment.information_trust
-        return trust
+            active.setdefault(assessment.source_document_id, []).append(assessment)
+        return {
+            document_id: tuple(
+                sorted(
+                    assessments,
+                    key=lambda assessment: (
+                        assessment.recorded_at,
+                        assessment.assessment_id,
+                    ),
+                )
+            )
+            for document_id, assessments in active.items()
+        }
 
     @staticmethod
     def _trust_rank(value: ResearchInformationTrust) -> int:
