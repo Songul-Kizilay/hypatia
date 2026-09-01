@@ -785,6 +785,12 @@ uncertain, what effort went unused, what worked, and what to ask next. Problems
 come before successes deliberately — a reflection that opens with what went well
 is one nobody learns from.
 
+When Reflection counts discovery candidates that never became accepted sources,
+it uses the same conservative canonical resource identity as the rest of the
+research system. Host case, `www.`, a default HTTPS port, a trailing slash, or a
+fragment cannot make accepted work look unused; query strings and path case stay
+distinct.
+
 When one source assessment explicitly supersedes another, Reflection compares
 the canonical records and names only what changed: information trust,
 usefulness, applicability, independence, publication status, or linked

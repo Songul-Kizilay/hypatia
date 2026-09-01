@@ -61,6 +61,7 @@ from research.ResearchReflectionReport import (
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchSource import ResearchSource
 from research.ResearchSourceApplicability import ResearchSourceApplicability
+from research.ResearchSourceCandidate import ResearchSourceCandidate
 from research.ResearchSourceIndependence import ResearchSourceIndependence
 from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
 from research.ResearchSourceUsefulness import ResearchSourceUsefulness
@@ -694,6 +695,55 @@ class ReflectionDerivationTests(ReflectionFixture):
         )
 
         self.assertIn(ReflectionFindingKind.UNCERTAIN, self.kinds(run_id))
+
+    def test_canonical_acceptance_is_not_reported_as_unused_discovery(self) -> None:
+        run_id = self.new_run()
+        document_id = self.accept_source(run_id, "canonical-used")
+        self.add_evidence(run_id, document_id)
+        self.manager.add_discovery(
+            run_id,
+            QUESTION,
+            "crossref",
+            [
+                ResearchSourceCandidate(
+                    url="https://WWW.EXAMPLE.TEST:443/canonical-used/#summary",
+                    title="Equivalent accepted resource",
+                    snippet="",
+                )
+            ],
+        )
+
+        findings = self.reflect(run_id).of_kind(ReflectionFindingKind.UNUSED_EFFORT)
+
+        self.assertEqual(findings, ())
+
+    def test_only_genuinely_unused_canonical_candidates_are_counted(self) -> None:
+        run_id = self.new_run()
+        document_id = self.accept_source(run_id, "canonical-used")
+        self.add_evidence(run_id, document_id)
+        self.manager.add_discovery(
+            run_id,
+            QUESTION,
+            "crossref",
+            [
+                ResearchSourceCandidate(
+                    url="https://www.example.test/canonical-used/",
+                    title="Equivalent accepted resource",
+                    snippet="",
+                ),
+                ResearchSourceCandidate(
+                    url="https://example.test/still-unused",
+                    title="Unused resource",
+                    snippet="",
+                ),
+            ],
+        )
+
+        findings = self.reflect(run_id).of_kind(ReflectionFindingKind.UNUSED_EFFORT)
+
+        self.assertEqual(len(findings), 1)
+        self.assertIn("1 of 2 candidates", findings[0].detail)
+        self.assertNotIn("2 of 2 candidates", findings[0].detail)
 
     def test_what_landed_is_reported_with_each_stage_kept_separate(self) -> None:
         run_id, _, _ = self.sourced_run()

@@ -43,6 +43,7 @@ from research.ResearchReflectionReport import (
 )
 from research.ResearchRun import ResearchRun
 from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
+from research.SourceIdentity import identity_of
 
 RUN_SUBJECT = "run"
 
@@ -268,11 +269,13 @@ class ResearchReflectionGenerator:
 
     def _unused_discoveries(self, run: ResearchRun) -> list[ResearchReflectionFinding]:
         """Report discovery work that never became an accepted source."""
-        accepted = {source.url for source in run.sources}
+        accepted = {identity_of(source.url) for source in run.sources}
         findings: list[ResearchReflectionFinding] = []
         for record in run.discoveries:
             unused = sum(
-                1 for candidate in record.candidates if candidate.url not in accepted
+                1
+                for candidate in record.candidates
+                if identity_of(candidate.url) not in accepted
             )
             if not unused:
                 continue

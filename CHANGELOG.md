@@ -2,6 +2,25 @@
 
 All notable project changes are recorded here.
 
+## [0.3.258] - 2026-09-01
+
+### Fixed
+
+- Reflection now matches accepted sources back to discovery candidates through
+  the shared canonical resource identity instead of comparing raw URL text.
+- Equivalent HTTPS URLs that differ only by host case, `www.`, the default
+  `:443` port, a trailing slash, or a fragment no longer make accepted work look
+  unused. Mixed discovery results count only the genuinely unaccepted
+  candidates.
+
+### Security
+
+- Canonical matching is conservative and reuses the existing `identity_of`
+  policy; query strings and case-sensitive paths remain distinct resources.
+- The change is bounded, deterministic, and read-only. It performs no fetch,
+  model call, research operation, source acceptance, Failure Memory write, or
+  background action.
+
 ## [0.3.257] - 2026-09-01
 
 ### Fixed
