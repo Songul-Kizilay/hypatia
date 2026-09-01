@@ -116,6 +116,13 @@ _INTERRUPTED_PANEL_NOTE = (
     "occurred. Its final result is unknown. The attempt has already been "
     "charged. Recording what you know runs nothing and retries nothing."
 )
+_CURIOSITY_BUDGET_NOTE = (
+    "This is the authority you are granting to this exact Hypatia-proposed "
+    "plan. Hypatia did not choose it for itself. Leave a box blank to grant the "
+    "standing default; Prepare shows what the plan needs beside what you are "
+    "granting, and an approval too small to cover one attempt at every authored "
+    "step is refused rather than granted."
+)
 _AUTHORIZATION_BUDGET_NOTE = (
     "This is the authority you are granting, not what Hypatia decided it may "
     "use. Leave a box blank to grant the standing default. Preview shows what "
@@ -5129,6 +5136,30 @@ class TkinterDesktopWindow:
         ttk.Entry(
             section, textvariable=self._curiosity_plan_digest, state="readonly"
         ).grid(row=3, column=1, sticky="ew", padx=(8, 0), pady=(6, 0))
+        #: The authority granted to a plan Hypatia proposed. Blank keeps the
+        #: standing default; nothing here is filled in from what the plan needs.
+        self._curiosity_advances = tk.StringVar()
+        self._curiosity_network = tk.StringVar()
+        self._curiosity_seconds = tk.StringVar()
+        ttk.Label(section, text=_CURIOSITY_BUDGET_NOTE, wraplength=680).grid(
+            row=6, column=0, columnspan=2, sticky="w", pady=(10, 0)
+        )
+        for offset, (label, variable) in enumerate(
+            (
+                ("Grant step advances (blank = default)", self._curiosity_advances),
+                (
+                    "Grant network operations (blank = default)",
+                    self._curiosity_network,
+                ),
+                ("Grant seconds (blank = default)", self._curiosity_seconds),
+            )
+        ):
+            ttk.Label(section, text=label).grid(
+                row=7 + offset, column=0, sticky="w", pady=(6, 0)
+            )
+            ttk.Entry(section, textvariable=variable).grid(
+                row=7 + offset, column=1, sticky="ew", padx=(8, 0), pady=(6, 0)
+            )
         ttk.Label(section, text="Approval ID").grid(
             row=4, column=0, sticky="w", pady=(6, 0)
         )
@@ -5255,9 +5286,10 @@ class TkinterDesktopWindow:
             (
                 f"Curiosity question: {question_id}\n"
                 f"Plan digest: {digest}\n\n"
-                "This records that you approve exactly this plan. It starts "
-                "nothing: no provider is contacted and no step runs. Beginning "
-                "the work is a separate action.\n\n"
+                "This records that you approve exactly this plan, with the "
+                "budget you entered as the authority you are granting it. It "
+                "starts nothing: no provider is contacted and no step runs. "
+                "Beginning the work is a separate action.\n\n"
                 "If the proposal has changed since you previewed it, the "
                 "approval is refused rather than moved to the new plan."
             ),
@@ -5269,6 +5301,9 @@ class TkinterDesktopWindow:
             lambda: self._controller.authorize_curiosity_research_proposal(
                 question_id,
                 digest,
+                self._curiosity_advances.get(),
+                self._curiosity_network.get(),
+                self._curiosity_seconds.get(),
             )
         )
         authorization = getattr(response, "research_plan_authorization", None)
@@ -5329,7 +5364,10 @@ class TkinterDesktopWindow:
         """
         response = self._review_request(
             lambda: self._controller.prepare_curiosity_research_proposal(
-                self._curiosity_question_id.get()
+                self._curiosity_question_id.get(),
+                self._curiosity_advances.get(),
+                self._curiosity_network.get(),
+                self._curiosity_seconds.get(),
             )
         )
         # Captured from the canonical response rather than parsed out of the

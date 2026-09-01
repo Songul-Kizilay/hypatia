@@ -677,23 +677,37 @@ class DesktopController:
     def prepare_curiosity_research_proposal(
         self,
         question_id: str,
+        max_step_advances: str = "",
+        max_network_operations: str = "",
+        max_seconds: str = "",
     ) -> BrainResponse:
         """Draft an inert research proposal for one accepted question.
 
         A second explicit decision, separate from accepting the question. It
         reads what would be researched and authorizes none of it: no provider is
         contacted, no source is loaded, and no approval is created or implied.
+
+        The budget fields ride along so the preview can show what the plan needs
+        beside what would be granted. Carrying them approves nothing.
         """
         return self._curiosity_ruling(
             "curiosity_prepare_proposal",
             "Prepare research proposal for curiosity question",
             question_id,
+            extra=self._budget_metadata(
+                max_step_advances,
+                max_network_operations,
+                max_seconds,
+            ),
         )
 
     def authorize_curiosity_research_proposal(
         self,
         question_id: str,
         expected_plan_digest: str,
+        max_step_advances: str = "",
+        max_network_operations: str = "",
+        max_seconds: str = "",
     ) -> BrainResponse:
         """Approve one exact previewed proposal, starting nothing.
 
@@ -712,6 +726,11 @@ class DesktopController:
                 message="Authorize curiosity research proposal",
                 source="desktop",
                 metadata={
+                    **self._budget_metadata(
+                        max_step_advances,
+                        max_network_operations,
+                        max_seconds,
+                    ),
                     "intent": "curiosity_authorize_proposal",
                     "curiosity_question_id": normalized_question,
                     "expected_plan_digest": normalized_digest,
@@ -790,6 +809,7 @@ class DesktopController:
         intent: str,
         message: str,
         question_id: str,
+        extra: dict[str, str] | None = None,
     ) -> BrainResponse:
         normalized_id = question_id.strip()
         if not normalized_id:
@@ -799,6 +819,7 @@ class DesktopController:
                 message=message,
                 source="desktop",
                 metadata={
+                    **(extra or {}),
                     "intent": intent,
                     "curiosity_question_id": normalized_id,
                 },

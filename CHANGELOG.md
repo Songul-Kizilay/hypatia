@@ -2,6 +2,40 @@
 
 All notable project changes are recorded here.
 
+## [0.3.268] - 2026-09-01
+
+### Added
+
+- The Curiosity approval surface now offers the same three budget controls the
+  operator-authored panel has: step advances, network operations and seconds. A
+  blank field grants the standing default.
+- Preparing a Curiosity proposal now shows what the plan would need beside what
+  is about to be granted, with the fit and any shortfall, before anybody
+  approves. Preparing still reaches no provider, source or model.
+- The confirmation says plainly that this is the authority being granted to a
+  plan Hypatia proposed, and that Hypatia did not choose it for itself.
+
+### Changed
+
+- A budget too small for a Curiosity plan is now refused in the same shape as
+  every other refusal there, rather than as an exception the caller had to know
+  to expect.
+
+### Security
+
+- No second budget model was introduced. The Curiosity path reuses the one
+  parser, the one requirement derivation, the one fit comparison and the
+  existing `MAX_AUTONOMY_*` ceilings, and a test pins that only one module
+  defines each.
+- Model operations remain ungrantable on this surface too, because no registered
+  capability can spend them.
+- The refusals are the same ones: unreadable input refuses instead of falling
+  back to a default, blank means "leave this bound alone" rather than zero, and
+  negatives, fractions, infinities and above-ceiling values are all refused.
+- What was typed is persisted exactly — not the default, and not the plan's
+  requirement. Choosing changes no plan, no digest, no capability, and runs
+  nothing.
+
 ## [0.3.267] - 2026-09-01
 
 ### Added

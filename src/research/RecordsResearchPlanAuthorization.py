@@ -18,6 +18,7 @@ from research.ResearchAutonomyBudget import ResearchAutonomyBudget
 from research.ResearchDisclosure import ResearchDisclosure
 from research.ResearchPlan import ResearchPlan
 from research.ResearchPlanAuthorization import ResearchPlanAuthorization
+from research.ResearchPlanBudgetRequirement import ResearchPlanBudgetFit
 
 
 class RecordsResearchPlanAuthorization(Protocol):
@@ -35,6 +36,17 @@ class RecordsResearchPlanAuthorization(Protocol):
         The budget is the authority a person chose to grant. Passing nothing
         means they left it alone and the standing default applies; it never
         means "work out what this plan needs and grant that".
+        """
+
+    def budget_fit_for(
+        self,
+        plan: ResearchPlan,
+        budget: ResearchAutonomyBudget | None = None,
+    ) -> ResearchPlanBudgetFit:
+        """Return what this plan would cost against the budget being offered.
+
+        A calculation, not a grant. Passing nothing compares against the
+        standing default; the answer never becomes permission on its own.
         """
 
     def authorization_for_execution(

@@ -2627,10 +2627,16 @@ class ResponseComposer:
         self,
         request: BrainRequest,
         proposal: CuriosityResearchProposal,
+        budget_fit: ResearchPlanBudgetFit | None = None,
     ) -> BrainResponse:
-        """Render one inert proposal, authorizing and starting nothing."""
+        """Render one inert proposal, authorizing and starting nothing.
+
+        The budget comparison rides along when there is one, so the operator
+        reads what this plan would need beside what they are about to grant,
+        before they grant it rather than after.
+        """
         return BrainResponse(
-            message="\n".join(proposal.lines()),
+            message="\n".join((*proposal.lines(), *_budget_fit_lines(budget_fit))),
             request_id=request.request_id,
             intent="curiosity_prepare_proposal",
             memory_count=0,

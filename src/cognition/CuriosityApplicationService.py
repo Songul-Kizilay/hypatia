@@ -39,6 +39,7 @@ from research.ResearchCuriosityQuestionGenerator import (
 )
 from research.ResearchHypothesis import ResearchHypothesis
 from research.ResearchKnowledgeGapDetector import ResearchKnowledgeGapDetector
+from research.ResearchPlanBudgetRequirement import ResearchPlanBudgetFit
 from research.ResearchPlanDigest import is_plan_digest
 from research.ResearchPlanDraftService import ResearchPlanDraftService
 from research.ResearchRun import ResearchRun
@@ -241,11 +242,17 @@ class CuriosityApplicationService:
             chosen = budget_from(request.metadata)
         except ResearchError as error:
             return self._response_composer.curiosity_rejected(request, str(error))
-        authorization = self._authorization_service.record_for_plan(
-            proposal.plan,
-            run.run_id,
-            budget=chosen,
-        )
+        try:
+            authorization = self._authorization_service.record_for_plan(
+                proposal.plan,
+                run.run_id,
+                budget=chosen,
+            )
+        except ResearchError as error:
+            # A budget too small to cover the plan is a refusal like any other
+            # here, and belongs in the same shape as the rest rather than as an
+            # exception the caller has to know to expect.
+            return self._response_composer.curiosity_rejected(request, str(error))
         if authorization is None:
             return self._response_composer.curiosity_rejected(
                 request,
@@ -434,8 +441,30 @@ class CuriosityApplicationService:
         if isinstance(derived, BrainResponse):
             return derived
         proposal, _run = derived
+        try:
+            fit = self._budget_fit(request, proposal)
+        except ResearchError as error:
+            return self._response_composer.curiosity_rejected(request, str(error))
         self._events.proposal_previewed(proposal)
-        return self._response_composer.curiosity_proposal(request, proposal)
+        return self._response_composer.curiosity_proposal(request, proposal, fit)
+
+    def _budget_fit(
+        self,
+        request: BrainRequest,
+        proposal: CuriosityResearchProposal,
+    ) -> ResearchPlanBudgetFit | None:
+        """Return what this proposal would cost against the budget on offer.
+
+        The same parser and the same comparison the operator-authored panel
+        uses, so a Curiosity proposal is judged by one rule rather than a second
+        one written for it. Reaches nothing: no provider, no source, no model.
+        """
+        if self._authorization_service is None:
+            return None
+        return self._authorization_service.budget_fit_for(
+            proposal.plan,
+            budget_from(request.metadata),
+        )
 
     def _derive_proposal(
         self,
