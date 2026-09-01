@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.249 (Genesis)`
+`v0.3.250 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.249`** is the current source/package release line.
+- **Runtime release `v0.3.250`** is the current source/package release line.
   GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -121,7 +121,7 @@ with optional OpenAI-compatible LLM conversation support.
   reports canonical counts instead. Evidence questions are answered only from
   persisted research state, and a post-generation guard annotates any reply that
   claims research the canonical record does not support.
-- Bounded curiosity detects seven kinds of knowledge gap in a persisted
+- Bounded curiosity detects eleven kinds of knowledge gap in a persisted
   research run, turns each into one deterministically templated and ranked
   question. Behind `HYPATIA_CURIOSITY_ENABLED`, default off. Accepting a
   question records intent only; a separate inert preview authors an exact
@@ -130,8 +130,11 @@ with optional OpenAI-compatible LLM conversation support.
   start, and every one-step Advance remain separate operator actions. The local
   step costs no network or model budget, discovery keeps its declared provider
   cost, and the proposal never fetches, accepts, judges, retries, or queues work.
-  Gaps describe what our record is missing rather than what is true, and
-  superseded claims and assessments are excluded.
+  Gaps describe what our record is missing rather than what is true. A settled
+  multi-source claim now remains visibly thin until every corroborating
+  resource has an explicit active independent judgement; parallel conflicting
+  assessments fail closed, while superseded claims and assessments are
+  excluded.
 - Background research scheduling queues approved executions behind
   `HYPATIA_BACKGROUND_RESEARCH_ENABLED`, default off. The scheduler owns
   queueing, pausing, retrying, and crash recovery only; every cycle drives the

@@ -39,6 +39,10 @@ _TEMPLATES: dict[ResearchKnowledgeGapKind, str] = {
     ResearchKnowledgeGapKind.SINGLE_SOURCE_CLAIM: (
         "Which independent source would corroborate this claim: {subject}?"
     ),
+    ResearchKnowledgeGapKind.UNCONFIRMED_INDEPENDENCE_CLAIM: (
+        "Which independent source would corroborate this claim beyond its "
+        "current support: {subject}?"
+    ),
     ResearchKnowledgeGapKind.UNSUPPORTED_QUESTION: (
         "Which sources could begin to answer this unsupported question: {subject}?"
     ),

@@ -15,6 +15,7 @@ from collections.abc import Sequence
 from datetime import datetime
 
 from core.Exceptions import ResearchError
+from research.ResearchClaimCalibrator import ResearchClaimCalibrator
 from research.ResearchClaimRecord import ResearchClaimRecord
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchEpistemicState import ResearchEpistemicState
@@ -23,7 +24,6 @@ from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchKnowledgeGap import MAX_GAP_SUMMARY_LENGTH, ResearchKnowledgeGap
 from research.ResearchKnowledgeGapKind import ResearchKnowledgeGapKind
 from research.ResearchRun import ResearchRun
-from research.SourceIdentity import identity_of
 
 MAX_GAPS_PER_RUN = 50
 RUN_SUBJECT = ""
@@ -112,13 +112,9 @@ class ResearchKnowledgeGapDetector:
             for record in run.claim_contradictions
             for claim_id in record.claim_ids
         }
-        identities = {
-            source.document_id: identity_of(source.url) for source in run.sources
-        }
-        evidence_sources = {
-            record.evidence_id: identities.get(record.source_document_id)
-            or record.source_document_id
-            for record in run.evidence
+        calibrations = {
+            calibration.claim_id: calibration
+            for calibration in ResearchClaimCalibrator().calibrate(run)
         }
         gaps: list[ResearchKnowledgeGap] = []
         for claim in self._active_claims(run):
@@ -146,11 +142,10 @@ class ResearchKnowledgeGapDetector:
                     )
                 )
                 continue
-            if (
-                claim.epistemic_state in SETTLED_STATES
-                and self._distinct_source_count(claim, evidence_sources, identities)
-                == 1
-            ):
+            if claim.epistemic_state not in SETTLED_STATES:
+                continue
+            calibration = calibrations[claim.claim_id]
+            if calibration.profile.source_count == 1:
                 gaps.append(
                     self._gap(
                         run,
@@ -158,6 +153,22 @@ class ResearchKnowledgeGapDetector:
                         claim.claim_id,
                         "This claim rests on a single source, so nothing "
                         "corroborates it.",
+                        detected_at,
+                    )
+                )
+                continue
+            if (
+                calibration.profile.corroborated
+                and not calibration.profile.independence_confirmed
+            ):
+                gaps.append(
+                    self._gap(
+                        run,
+                        ResearchKnowledgeGapKind.UNCONFIRMED_INDEPENDENCE_CLAIM,
+                        claim.claim_id,
+                        "This claim has multiple sources, but the record does "
+                        "not confirm that every corroborating source is "
+                        "independent.",
                         detected_at,
                     )
                 )
@@ -371,29 +382,6 @@ class ResearchKnowledgeGapDetector:
             ResearchInformationTrust.MEDIUM: 2,
             ResearchInformationTrust.HIGH: 3,
         }[value]
-
-    @staticmethod
-    def _distinct_source_count(
-        claim: ResearchClaimRecord,
-        evidence_sources: dict[str, str],
-        identities: dict[str, str],
-    ) -> int:
-        """Count independent resources, so one page cannot look like two.
-
-        The claim's own document IDs are mapped through the identity table too.
-        Leaving them raw would add the duplicate records back after the evidence
-        side had already collapsed them.
-        """
-        resources = {
-            evidence_sources[evidence_id]
-            for evidence_id in claim.evidence_ids
-            if evidence_id in evidence_sources
-        }
-        resources.update(
-            identities.get(document) or document
-            for document in claim.source_document_ids
-        )
-        return len(resources)
 
     @staticmethod
     def _gap(

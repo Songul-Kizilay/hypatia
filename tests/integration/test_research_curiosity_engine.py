@@ -61,8 +61,10 @@ from research.ResearchKnowledgeGapDetector import (
     ResearchKnowledgeGapDetector,
 )
 from research.ResearchKnowledgeGapKind import ResearchKnowledgeGapKind, severity_for
+from research.ResearchRun import ResearchRun
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchSource import ResearchSource
+from research.ResearchSourceIndependence import ResearchSourceIndependence
 from response.ResponseComposer import ResponseComposer
 from session.SessionManager import SessionManager
 from session.SessionRenameTransactionService import SessionRenameTransactionService
@@ -165,6 +167,25 @@ class CuriosityFixture(unittest.TestCase):
     def kinds(self, run_id: str) -> list[ResearchKnowledgeGapKind]:
         run = self.manager.get(run_id)
         return [gap.kind for gap in self.detector.detect(run, START)]
+
+    def assess_independence(
+        self,
+        run_id: str,
+        document_id: str,
+        evidence_id: str,
+        independence: ResearchSourceIndependence,
+        *,
+        supersedes_assessment_id: str | None = None,
+    ) -> ResearchRun:
+        return self.manager.record_source_assessment(
+            run_id,
+            document_id,
+            [evidence_id],
+            "Independence assessed for the curiosity test.",
+            supersedes_assessment_id=supersedes_assessment_id,
+            information_trust=ResearchInformationTrust.HIGH,
+            independence=independence,
+        )
 
     def request(self, intent: str, **metadata: object) -> BrainRequest:
         return BrainRequest(
@@ -304,7 +325,7 @@ class KnowledgeGapDetectionTests(CuriosityFixture):
             self.kinds(run_id),
         )
 
-    def test_a_corroborated_claim_is_not_reported_as_thin(self) -> None:
+    def test_multiple_sources_without_independence_are_reported_as_thin(self) -> None:
         run_id, first_document, first_evidence = self.sourced_run("a")
         second_document = self.accept_source(run_id, "b")
         second_evidence = self.add_evidence(run_id, second_document)
@@ -316,8 +337,135 @@ class KnowledgeGapDetectionTests(CuriosityFixture):
             ResearchEpistemicState.FACT,
         )
 
+        kinds = self.kinds(run_id)
+
+        self.assertNotIn(ResearchKnowledgeGapKind.SINGLE_SOURCE_CLAIM, kinds)
+        self.assertIn(
+            ResearchKnowledgeGapKind.UNCONFIRMED_INDEPENDENCE_CLAIM,
+            kinds,
+        )
+
+    def test_explicitly_independent_sources_close_the_independence_gap(self) -> None:
+        run_id, first_document, first_evidence = self.sourced_run("a")
+        second_document = self.accept_source(run_id, "b")
+        second_evidence = self.add_evidence(run_id, second_document)
+        for document_id, evidence_id in (
+            (first_document, first_evidence),
+            (second_document, second_evidence),
+        ):
+            self.assess_independence(
+                run_id,
+                document_id,
+                evidence_id,
+                ResearchSourceIndependence.INDEPENDENT,
+            )
+        self.manager.record_claim(
+            run_id,
+            [first_evidence, second_evidence],
+            "The rings exist.",
+            ResearchEpistemicState.FACT,
+        )
+
+        kinds = self.kinds(run_id)
+
+        self.assertNotIn(ResearchKnowledgeGapKind.SINGLE_SOURCE_CLAIM, kinds)
         self.assertNotIn(
-            ResearchKnowledgeGapKind.SINGLE_SOURCE_CLAIM,
+            ResearchKnowledgeGapKind.UNCONFIRMED_INDEPENDENCE_CLAIM,
+            kinds,
+        )
+
+    def test_a_derivative_source_keeps_the_independence_gap_open(self) -> None:
+        run_id, first_document, first_evidence = self.sourced_run("a")
+        second_document = self.accept_source(run_id, "b")
+        second_evidence = self.add_evidence(run_id, second_document)
+        self.assess_independence(
+            run_id,
+            first_document,
+            first_evidence,
+            ResearchSourceIndependence.INDEPENDENT,
+        )
+        self.assess_independence(
+            run_id,
+            second_document,
+            second_evidence,
+            ResearchSourceIndependence.DERIVATIVE,
+        )
+        self.manager.record_claim(
+            run_id,
+            [first_evidence, second_evidence],
+            "The rings exist.",
+            ResearchEpistemicState.FACT,
+        )
+
+        self.assertIn(
+            ResearchKnowledgeGapKind.UNCONFIRMED_INDEPENDENCE_CLAIM,
+            self.kinds(run_id),
+        )
+
+    def test_conflicting_active_assessments_fail_closed(self) -> None:
+        run_id, first_document, first_evidence = self.sourced_run("a")
+        second_document = self.accept_source(run_id, "b")
+        second_evidence = self.add_evidence(run_id, second_document)
+        for independence in (
+            ResearchSourceIndependence.INDEPENDENT,
+            ResearchSourceIndependence.DERIVATIVE,
+        ):
+            self.assess_independence(
+                run_id,
+                first_document,
+                first_evidence,
+                independence,
+            )
+        self.assess_independence(
+            run_id,
+            second_document,
+            second_evidence,
+            ResearchSourceIndependence.INDEPENDENT,
+        )
+        self.manager.record_claim(
+            run_id,
+            [first_evidence, second_evidence],
+            "The rings exist.",
+            ResearchEpistemicState.FACT,
+        )
+
+        self.assertIn(
+            ResearchKnowledgeGapKind.UNCONFIRMED_INDEPENDENCE_CLAIM,
+            self.kinds(run_id),
+        )
+
+    def test_a_superseding_independent_judgement_closes_the_gap(self) -> None:
+        run_id, first_document, first_evidence = self.sourced_run("a")
+        second_document = self.accept_source(run_id, "b")
+        second_evidence = self.add_evidence(run_id, second_document)
+        self.assess_independence(
+            run_id,
+            first_document,
+            first_evidence,
+            ResearchSourceIndependence.INDEPENDENT,
+        )
+        run = self.assess_independence(
+            run_id,
+            second_document,
+            second_evidence,
+            ResearchSourceIndependence.DERIVATIVE,
+        )
+        self.assess_independence(
+            run_id,
+            second_document,
+            second_evidence,
+            ResearchSourceIndependence.INDEPENDENT,
+            supersedes_assessment_id=run.assessments[-1].assessment_id,
+        )
+        self.manager.record_claim(
+            run_id,
+            [first_evidence, second_evidence],
+            "The rings exist.",
+            ResearchEpistemicState.FACT,
+        )
+
+        self.assertNotIn(
+            ResearchKnowledgeGapKind.UNCONFIRMED_INDEPENDENCE_CLAIM,
             self.kinds(run_id),
         )
 
@@ -461,6 +609,32 @@ class CuriosityQuestionGenerationTests(CuriosityFixture):
         self.assertTrue(questions)
         for question in questions:
             self.assertTrue(question.text.endswith("?"), question.text)
+
+    def test_unconfirmed_independence_yields_a_specific_question(self) -> None:
+        run_id, _, first_evidence = self.sourced_run("a")
+        second_document = self.accept_source(run_id, "b")
+        second_evidence = self.add_evidence(run_id, second_document)
+        self.manager.record_claim(
+            run_id,
+            [first_evidence, second_evidence],
+            "The rings exist.",
+            ResearchEpistemicState.FACT,
+        )
+        run = self.manager.get(run_id)
+
+        questions = ResearchCuriosityQuestionGenerator().generate(
+            run,
+            self.detector.detect(run, START),
+        )
+        [question] = [
+            candidate
+            for candidate in questions
+            if candidate.kind is ResearchKnowledgeGapKind.UNCONFIRMED_INDEPENDENCE_CLAIM
+        ]
+
+        self.assertIn("independent", question.text)
+        self.assertIn("The rings exist", question.text)
+        self.assertTrue(question.text.endswith("?"))
 
     def test_questions_are_ranked_by_gap_severity(self) -> None:
         run_id, _, evidence_id = self.sourced_run()

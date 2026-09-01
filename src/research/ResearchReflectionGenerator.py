@@ -46,6 +46,9 @@ _GAP_FINDINGS: dict[ResearchKnowledgeGapKind, ReflectionFindingKind] = {
     ResearchKnowledgeGapKind.CONTRADICTED_CLAIM: ReflectionFindingKind.CONTRADICTION,
     ResearchKnowledgeGapKind.UNRESOLVED_CLAIM: ReflectionFindingKind.UNCERTAIN,
     ResearchKnowledgeGapKind.SINGLE_SOURCE_CLAIM: ReflectionFindingKind.WEAK_EVIDENCE,
+    ResearchKnowledgeGapKind.UNCONFIRMED_INDEPENDENCE_CLAIM: (
+        ReflectionFindingKind.WEAK_EVIDENCE
+    ),
     ResearchKnowledgeGapKind.LOW_TRUST_SOURCE: ReflectionFindingKind.WEAK_EVIDENCE,
     ResearchKnowledgeGapKind.UNASSESSED_SOURCE: ReflectionFindingKind.WEAK_EVIDENCE,
     ResearchKnowledgeGapKind.UNUSED_SOURCE: ReflectionFindingKind.UNUSED_EFFORT,

@@ -9,7 +9,7 @@ claim because holding two incompatible beliefs is worse than holding one
 uncertain belief, and both outrank a merely thin source record.
 
 A hypothesis naming the observation that would settle it, with nothing yet
-recorded either way, sits below all three claim gaps and above everything about
+recorded either way, sits below all four claim gaps and above everything about
 the run's breadth. Claims are positions the run already holds, and their
 integrity comes first; a stated open question is the most answerable kind of
 incompleteness, but it is still an absence rather than a belief in trouble.
@@ -33,6 +33,7 @@ class ResearchKnowledgeGapKind(StrEnum):
     CONTRADICTED_CLAIM = "contradicted_claim"
     UNRESOLVED_CLAIM = "unresolved_claim"
     SINGLE_SOURCE_CLAIM = "single_source_claim"
+    UNCONFIRMED_INDEPENDENCE_CLAIM = "unconfirmed_independence_claim"
     HYPOTHESIS_EVIDENCE_GAP = "hypothesis_evidence_gap"
     UNSUPPORTED_QUESTION = "unsupported_question"
     FAILED_ACQUISITION = "failed_acquisition"
@@ -66,6 +67,7 @@ _SEVERITIES: dict[ResearchKnowledgeGapKind, int] = {
     ResearchKnowledgeGapKind.CONTRADICTED_CLAIM: 70,
     ResearchKnowledgeGapKind.UNRESOLVED_CLAIM: 60,
     ResearchKnowledgeGapKind.SINGLE_SOURCE_CLAIM: 50,
+    ResearchKnowledgeGapKind.UNCONFIRMED_INDEPENDENCE_CLAIM: 50,
     ResearchKnowledgeGapKind.HYPOTHESIS_EVIDENCE_GAP: 45,
     ResearchKnowledgeGapKind.UNSUPPORTED_QUESTION: 40,
     ResearchKnowledgeGapKind.FAILED_ACQUISITION: 35,

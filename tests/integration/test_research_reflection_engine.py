@@ -260,6 +260,24 @@ class ReflectionDerivationTests(ReflectionFixture):
 
         self.assertIn(ReflectionFindingKind.WEAK_EVIDENCE, self.kinds(run_id))
 
+    def test_unconfirmed_independence_is_reported_as_weak_evidence(self) -> None:
+        run_id, _, first_evidence = self.sourced_run("a")
+        second_document = self.accept_source(run_id, "b")
+        second_evidence = self.add_evidence(run_id, second_document)
+        self.manager.record_claim(
+            run_id,
+            [first_evidence, second_evidence],
+            "The rings exist.",
+            ResearchEpistemicState.FACT,
+        )
+
+        findings = self.reflect(run_id).of_kind(ReflectionFindingKind.WEAK_EVIDENCE)
+
+        self.assertTrue(
+            any("independent" in finding.detail for finding in findings),
+            findings,
+        )
+
     def test_an_open_claim_is_reported_as_uncertain(self) -> None:
         run_id, _, evidence_id = self.sourced_run()
         self.manager.record_claim(

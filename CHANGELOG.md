@@ -2,6 +2,26 @@
 
 All notable project changes are recorded here.
 
+## [0.3.250] - 2026-09-01
+
+### Added
+
+- Curiosity now reports a dedicated knowledge gap when a settled claim has
+  several distinct sources but the active record does not confirm that every
+  corroborating resource is independent.
+- The gap produces one deterministic question asking for independent
+  corroboration, appears as weak evidence in Reflection, and can be previewed
+  through the existing inert Curiosity proposal path.
+
+### Security
+
+- Gap detection reuses Claim Calibration's canonical resource identity,
+  active-assessment, and fail-closed independence rules instead of maintaining
+  a second corroboration calculation.
+- Unknown, derivative, likely-duplicate, or conflicting active independence
+  judgements keep the gap open. An explicit superseding correction can close
+  it; detection remains local, read-only, deterministic, and truth-neutral.
+
 ## [0.3.249] - 2026-09-01
 
 ### Changed

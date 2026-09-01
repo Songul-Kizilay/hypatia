@@ -46,6 +46,7 @@ from research.CuriosityQuestionStatus import CuriosityQuestionStatus
 from research.CuriosityResearchProposal import NOT_AUTHORIZED_NOTICE
 from research.HypothesisEvidenceRelation import HypothesisEvidenceRelation
 from research.JsonFileResearchRunStore import JsonFileResearchRunStore
+from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchHypothesis import ResearchHypothesis
 from research.ResearchKnowledgeGapKind import ResearchKnowledgeGapKind
 from research.ResearchPlanDigest import plan_digest
@@ -430,6 +431,51 @@ class PlanTests(ProposalFixture):
         rendered = "\n".join(proposal.lines())
         self.assertIn("preview only, not authorized, not running", rendered)
         self.assertIn("separate explicit authorization", rendered)
+
+    def test_an_independence_gap_previews_an_inert_generic_plan(self) -> None:
+        self.manager.add_source(
+            self.run_id,
+            ResearchSource(
+                url="https://example.test/second-document",
+                title="A second source",
+                content="A second observation recorded during the run.",
+                content_type="text/plain",
+                fetched_at=PAST,
+            ),
+            "document-2",
+        )
+        run = self.manager.add_evidence(
+            self.run_id,
+            Chunk(
+                document_id="document-2",
+                index=0,
+                content="A second observation recorded during the run.",
+                chunk_id="chunk-2",
+            ),
+            "A second note.",
+        )
+        second_evidence_id = run.evidence[-1].evidence_id
+        self.manager.record_claim(
+            self.run_id,
+            [self.evidence_id, second_evidence_id],
+            STATEMENT,
+            ResearchEpistemicState.FACT,
+        )
+
+        proposal = self._proposal(
+            ResearchKnowledgeGapKind.UNCONFIRMED_INDEPENDENCE_CLAIM
+        )
+
+        self.assertIs(
+            proposal.gap_kind,
+            ResearchKnowledgeGapKind.UNCONFIRMED_INDEPENDENCE_CLAIM,
+        )
+        self.assertFalse(proposal.authorized)
+        self.assertFalse(proposal.started)
+        self.assertIs(
+            proposal.plan.steps[0].capability,
+            ResearchPlanStepCapability.LOCAL_KNOWLEDGE_SEARCH,
+        )
 
     def test_the_preview_never_says_anything_is_starting(self) -> None:
         rendered = "\n".join(self._proposal().lines()).casefold()
