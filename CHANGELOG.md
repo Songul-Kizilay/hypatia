@@ -2,6 +2,35 @@
 
 All notable project changes are recorded here.
 
+## [0.3.270] - 2026-09-01
+
+### Fixed
+
+- Confirming an operator-authored approval now binds the budget as it stands at
+  confirmation, not the one Preview happened to freeze. A number changed after
+  previewing is the number recorded, with no second Preview required, which
+  removes the last asymmetry with the Curiosity flow.
+- The confirmation dialog shows those current values and no longer warns that
+  later edits are excluded, because they no longer are.
+
+### Changed
+
+- Preview still settles the plan, and only the plan. The approval is built by
+  replacing one field on the previewed record, which cannot reach the digest or
+  the capabilities, so no amount of budget editing turns one approved plan into
+  another. A refused budget leaves the preview standing, since the plan was
+  never the problem.
+
+### Security
+
+- A current budget that is unusable or too small is refused, never substituted.
+  Not by the previewed figure that happened to parse, not by the default unless
+  the field is genuinely blank, and not by what the plan turns out to need.
+- Confirming reaches no provider, no network and no model, spends no budget and
+  starts nothing; declining the dialog records nothing.
+- The Curiosity flow is unchanged, and remains the reference behaviour this
+  milestone brought the other surface up to.
+
 ## [0.3.269] - 2026-09-01
 
 ### Fixed

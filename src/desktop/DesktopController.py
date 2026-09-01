@@ -292,6 +292,9 @@ class DesktopController:
         instruction_lines: str,
         source_id_lines: str,
         research_run_id: str,
+        max_step_advances: str = "",
+        max_network_operations: str = "",
+        max_seconds: str = "",
     ) -> BrainResponse:
         """Record exactly one previewed approval. Starts no research.
 
@@ -309,7 +312,14 @@ class DesktopController:
             instruction_lines,
             source_id_lines,
             research_run_id,
-            extra={"authorization_id": normalized_id},
+            extra={
+                "authorization_id": normalized_id,
+                **self._budget_metadata(
+                    max_step_advances,
+                    max_network_operations,
+                    max_seconds,
+                ),
+            },
         )
 
     def start_authorized_execution(

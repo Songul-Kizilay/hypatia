@@ -13,6 +13,7 @@ from typing import Literal, Protocol
 from brain.BrainResponse import BrainResponse
 from brain.SessionSummary import SessionSummary
 from core.CancellationSignal import CancellationSignal
+from core.Exceptions import ResearchError
 from desktop.DesktopController import DesktopController
 from desktop.DesktopRequestRunner import DesktopRequestRunner
 from desktop.FilesystemContentPreview import FilesystemContentPreview
@@ -42,6 +43,7 @@ from research.ResearchAttemptRecoveryDecision import (
     ResearchAttemptRecoveryDecision,
 )
 from research.ResearchAttemptResolution import ResearchAttemptResolution
+from research.ResearchAuthorizationBudgetChoice import budget_from
 from research.ResearchClaimConfidence import ResearchClaimConfidence
 from research.ResearchClaimContradictionCandidate import (
     ResearchClaimContradictionCandidate,
@@ -58,6 +60,7 @@ from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchInformationTrust import ResearchInformationTrust
+from research.ResearchPlanBudgetRequirement import ResearchPlanBudgetFit
 from research.ResearchRun import ResearchRun
 from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
@@ -5010,18 +5013,48 @@ class TkinterDesktopWindow:
         previewed = getattr(self, "_previewed_authority", None)
         if previewed is None:
             self._plan_approval_status.set(
-                "Preview an approval first; confirming records exactly what it "
+                "Preview an approval first; confirming approves the plan it "
                 "described."
+            )
+            return
+        try:
+            current = budget_from(
+                {
+                    "max_step_advances": self._authorization_advances.get(),
+                    "max_network_operations": self._authorization_network.get(),
+                    "max_seconds": self._authorization_seconds.get(),
+                }
+            )
+        except ResearchError as error:
+            # Nothing valid is substituted for something unusable, least of all
+            # the older figure that happened to parse.
+            self._plan_approval_status.set(f"Not confirmed. {error}")
+            return
+        # The requirement comes from the previewed plan, which a budget cannot
+        # change, so it is still the right figure to compare against.
+        previewed_fit = getattr(self, "_previewed_fit", None)
+        fit = (
+            ResearchPlanBudgetFit(
+                required=previewed_fit.required,
+                required_advances=previewed_fit.required_advances,
+                budget=current,
+            )
+            if previewed_fit is not None
+            else None
+        )
+        if fit is not None and not fit.sufficient:
+            self._plan_approval_status.set(
+                "Not confirmed. " + " ".join(fit.lines()[1:])
             )
             return
         if not messagebox.askyesno(
             "Record this approval?",
             (
                 f"Approval: {self._plan_approval_id.get().strip()}\n\n"
-                + "\n".join(_granted_authority_lines(previewed, self._previewed_fit))
-                + "\n\nThese are the terms Preview recorded. If you have "
-                "changed the budget boxes since, those changes are not part of "
-                "this approval; press Preview again to approve them instead.\n\n"
+                + "\n".join(_granted_authority_lines(current, fit))
+                + "\n\nThe plan is the one Preview settled and is unchanged; "
+                "the budget above is what the boxes say now, and is what will "
+                "be recorded.\n\n"
                 "Nothing runs. Beginning the work is a separate action."
             ),
             parent=self._root,
@@ -5035,6 +5068,9 @@ class TkinterDesktopWindow:
                 self._text_value(self._research_plan_instructions),
                 self._text_value(self._research_plan_source_ids),
                 self._plan_approval_run_id.get(),
+                self._authorization_advances.get(),
+                self._authorization_network.get(),
+                self._authorization_seconds.get(),
             )
         )
 

@@ -15,6 +15,7 @@ from __future__ import annotations
 import sys
 import tempfile
 import unittest
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -206,19 +207,14 @@ class ForegroundFixture(unittest.TestCase):
         assert previewed.research_plan_authorization is not None
         identity = previewed.research_plan_authorization.authorization_id
         if budget is not None:
-            # Narrow the pending approval before it is confirmed, so the
-            # recorded approval is the narrow one rather than a widened copy.
-            pending = self.approvals._pending[identity]
-            self.approvals._pending[identity] = type(pending)(
-                authorization_id=pending.authorization_id,
-                plan_digest=pending.plan_digest,
-                research_run_id=pending.research_run_id,
-                capabilities=pending.capabilities,
-                budget=budget,
-                authorized_at=pending.authorized_at,
-                expires_at=pending.expires_at,
-                disclosure=pending.disclosure,
-            )
+            # Deliberately narrower than one clean pass of the plan, which the
+            # approval boundary rightly refuses: an operator cannot grant a
+            # budget that cannot cover the work. These tests are about what the
+            # executor does when it runs out anyway, so the narrow approval is
+            # placed directly rather than smuggled through confirmation.
+            pending = self.approvals._pending.pop(identity)
+            self.approvals._authorizations[identity] = replace(pending, budget=budget)
+            return identity
         confirmed = self.approvals.process_confirm(
             self.request(
                 "research_plan_authorization_confirm",

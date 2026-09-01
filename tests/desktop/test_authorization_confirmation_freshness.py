@@ -280,11 +280,11 @@ class OperatorAuthoredConfirmsWhatItRecordsTests(unittest.TestCase):
         dialog.assert_not_called()
         self.assertEqual(self.requested, [])
 
-    def test_the_dialog_shows_the_budget_the_preview_recorded(self) -> None:
-        self.window._previewed_authority = ResearchAutonomyBudget(
-            max_network_operations=1, max_step_advances=2
-        )
+    def test_the_dialog_shows_the_budget_in_the_boxes_now(self) -> None:
+        """Confirming binds current values, so the dialog describes those."""
+        self.window._previewed_authority = ResearchAutonomyBudget()
         self.window._previewed_fit = None
+        self.window._authorization_network.set("2")
 
         with patch(
             "desktop.TkinterDesktopWindow.messagebox.askyesno", return_value=True
@@ -292,11 +292,15 @@ class OperatorAuthoredConfirmsWhatItRecordsTests(unittest.TestCase):
             self.window._confirm_plan_authorization()
 
         shown = dialog.call_args.args[1]
-        self.assertIn("network operations: 1", shown)
+        self.assertIn("network operations: 2", shown)
+        self.assertNotIn(
+            f"network operations: {ResearchAutonomyBudget().max_network_operations}",
+            shown,
+        )
         self.assertEqual(len(self.requested), 1)
 
-    def test_the_dialog_says_later_edits_are_not_part_of_it(self) -> None:
-        """Truthful, because confirming records the object Preview built."""
+    def test_the_dialog_says_the_plan_is_the_previewed_one(self) -> None:
+        """The budget may have moved since Preview; the plan may not."""
         self.window._previewed_authority = ResearchAutonomyBudget()
         self.window._previewed_fit = None
 
@@ -306,7 +310,21 @@ class OperatorAuthoredConfirmsWhatItRecordsTests(unittest.TestCase):
             self.window._confirm_plan_authorization()
 
         shown = dialog.call_args.args[1]
-        self.assertIn("press Preview again", shown)
+        self.assertIn("the one Preview settled and is unchanged", shown)
+        self.assertNotIn("press Preview again", shown)
+
+    def test_unreadable_current_input_opens_no_dialog(self) -> None:
+        self.window._previewed_authority = ResearchAutonomyBudget()
+        self.window._previewed_fit = None
+        self.window._authorization_network.set("plenty")
+
+        with patch(
+            "desktop.TkinterDesktopWindow.messagebox.askyesno", return_value=True
+        ) as dialog:
+            self.window._confirm_plan_authorization()
+
+        dialog.assert_not_called()
+        self.assertEqual(self.requested, [])
 
     def test_declining_records_nothing(self) -> None:
         self.window._previewed_authority = ResearchAutonomyBudget()

@@ -30,6 +30,7 @@ harmless one is the one that stays possible.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from typing import cast
 from uuid import uuid4
@@ -322,6 +323,29 @@ class ResearchPlanAuthorizationApplicationService:
                 request,
                 verdict,
             )
+        try:
+            chosen = budget_from(request.metadata)
+        except ResearchError as error:
+            # The preview is left standing. Its plan is still the plan; only the
+            # number typed against it was unusable, and the operator can correct
+            # that without describing the work again.
+            self._events.refused("invalid_budget")
+            return self._response_composer.research_plan_authorization_rejected(
+                request,
+                str(error),
+            )
+        fit = self.budget_fit_for(plan, chosen)
+        if not fit.sufficient:
+            self._events.refused("insufficient_budget")
+            return self._response_composer.research_plan_authorization_rejected(
+                request,
+                "The budget being granted does not cover one attempt at every "
+                "authored step. " + " ".join(fit.lines()[1:]),
+            )
+        # A successor rather than a rebuild. Replacing only the budget cannot
+        # alter the digest or the capabilities, so the plan a person previewed
+        # stays exactly the plan they are approving.
+        authorization = replace(authorization, budget=chosen)
         self._pending.pop(authorization_id, None)
         if authorization.authorization_id in self._authorizations:
             self._events.refused("duplicate_identity")
