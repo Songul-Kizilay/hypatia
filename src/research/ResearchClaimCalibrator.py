@@ -38,6 +38,7 @@ from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRun import ResearchRun
 from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
+from research.ResearchSourceIndependence import ResearchSourceIndependence
 from research.SourceIdentity import identity_of
 
 _STATE_RANK: dict[ResearchEpistemicState, int] = {
@@ -98,6 +99,13 @@ class ResearchClaimCalibrator:
             )
             for document_id, assessments in active.items()
         }
+        independent = {
+            document_id: all(
+                assessment.independence is ResearchSourceIndependence.INDEPENDENT
+                for assessment in assessments
+            )
+            for document_id, assessments in active.items()
+        }
         return tuple(
             self._calibrate(claim, profile, warnings)
             for claim in run.claims
@@ -108,6 +116,7 @@ class ResearchClaimCalibrator:
                     evidence_sources,
                     identities,
                     trust,
+                    independent,
                     contradicted=claim.claim_id in contradicted,
                 ),
             )
@@ -255,7 +264,10 @@ class ResearchClaimCalibrator:
             return (ResearchEpistemicState.HYPOTHESIS, ResearchClaimConfidence.LOW)
         if not profile.fully_assessed:
             return (ResearchEpistemicState.LIKELY, ResearchClaimConfidence.MEDIUM)
-        if lowest >= _TRUST_RANK[ResearchInformationTrust.MEDIUM]:
+        if (
+            lowest >= _TRUST_RANK[ResearchInformationTrust.MEDIUM]
+            and profile.independence_confirmed
+        ):
             return (
                 ResearchEpistemicState.STRONG_EVIDENCE,
                 ResearchClaimConfidence.HIGH,
@@ -295,6 +307,7 @@ class ResearchClaimCalibrator:
         evidence_sources: dict[str, str],
         identities: dict[str, str],
         trust: dict[str, ResearchInformationTrust],
+        independent: dict[str, bool],
         *,
         contradicted: bool,
     ) -> EvidenceSupportProfile:
@@ -321,10 +334,22 @@ class ResearchClaimCalibrator:
             min(values, key=lambda value: _TRUST_RANK[value])
             for values in trust_by_resource.values()
         ]
+        independence_by_resource: dict[str, list[bool]] = {}
+        for document in documents:
+            if document not in independent:
+                continue
+            resource = identities.get(document) or document
+            independence_by_resource.setdefault(resource, []).append(
+                independent[document]
+            )
+        independent_resources = sum(
+            all(judgements) for judgements in independence_by_resource.values()
+        )
         return EvidenceSupportProfile(
             source_count=len(resources),
             evidence_count=len(claim.evidence_ids),
             assessed_source_count=len(assessed_resources),
+            independent_source_count=independent_resources,
             lowest_trust=(
                 min(assessed_resources, key=lambda value: _TRUST_RANK[value])
                 if assessed_resources

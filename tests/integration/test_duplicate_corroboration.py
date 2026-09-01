@@ -219,6 +219,7 @@ class DuplicateCorroborationFixture(unittest.TestCase):
                 [evidence_id],
                 "Assessed for the duplicate test.",
                 information_trust=trust,
+                independence="independent",
             )
 
 

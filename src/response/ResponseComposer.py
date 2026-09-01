@@ -1616,7 +1616,9 @@ class ResponseComposer:
             lines.append(
                 f"  sources {entry.profile.source_count}, "
                 f"evidence {entry.profile.evidence_count}, "
-                f"assessed {entry.profile.assessed_source_count}"
+                f"assessed {entry.profile.assessed_source_count}, "
+                "confirmed independent "
+                f"{entry.profile.independent_source_count}"
             )
             # The warnings are listed under the claim but never folded into its
             # verdict. They answer a different question: not whether the claim

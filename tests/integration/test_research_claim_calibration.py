@@ -446,7 +446,101 @@ class SupportCeilingTests(CalibrationFixture):
             ResearchClaimConfidence.HIGH,
         )
 
-        self.assertIs(self.verdict(run_id), CalibrationVerdict.WITHIN_SUPPORT)
+        [calibration] = self.calibrator.calibrate(self.manager.get(run_id))
+
+        self.assertEqual(calibration.profile.independent_source_count, 2)
+        self.assertTrue(calibration.profile.independence_confirmed)
+        self.assertIs(calibration.verdict, CalibrationVerdict.WITHIN_SUPPORT)
+
+    def test_unknown_independence_cannot_carry_strong_evidence(self) -> None:
+        run_id = self.new_run()
+        evidence_ids: list[str] = []
+        for slug in ("a", "b"):
+            document_id = self.accept_source(run_id, slug)
+            evidence_id = self.add_evidence(run_id, document_id)
+            self.assess(
+                run_id,
+                document_id,
+                evidence_id,
+                ResearchInformationTrust.HIGH,
+            )
+            evidence_ids.append(evidence_id)
+        self.claim(
+            run_id,
+            evidence_ids,
+            ResearchEpistemicState.STRONG_EVIDENCE,
+            ResearchClaimConfidence.HIGH,
+        )
+
+        [calibration] = self.calibrator.calibrate(self.manager.get(run_id))
+
+        self.assertEqual(calibration.profile.independent_source_count, 0)
+        self.assertFalse(calibration.profile.independence_confirmed)
+        self.assertIs(calibration.supported_state, ResearchEpistemicState.LIKELY)
+        self.assertIs(
+            calibration.supported_confidence,
+            ResearchClaimConfidence.MEDIUM,
+        )
+        self.assertIs(calibration.verdict, CalibrationVerdict.OVERSTATED_BOTH)
+
+    def test_a_derivative_source_prevents_independent_corroboration(self) -> None:
+        run_id = self.new_run()
+        evidence_ids: list[str] = []
+        for slug, independence in (
+            ("a", "independent"),
+            ("b", "derivative"),
+        ):
+            document_id = self.accept_source(run_id, slug)
+            evidence_id = self.add_evidence(run_id, document_id)
+            self.assess(
+                run_id,
+                document_id,
+                evidence_id,
+                ResearchInformationTrust.HIGH,
+                independence=independence,
+            )
+            evidence_ids.append(evidence_id)
+        self.claim(
+            run_id,
+            evidence_ids,
+            ResearchEpistemicState.STRONG_EVIDENCE,
+            ResearchClaimConfidence.HIGH,
+        )
+
+        [calibration] = self.calibrator.calibrate(self.manager.get(run_id))
+
+        self.assertEqual(calibration.profile.source_count, 2)
+        self.assertEqual(calibration.profile.independent_source_count, 1)
+        self.assertFalse(calibration.profile.independence_confirmed)
+        self.assertIs(calibration.verdict, CalibrationVerdict.OVERSTATED_BOTH)
+
+    def test_parallel_independence_disagreement_fails_closed(self) -> None:
+        run_id, evidence_ids = self.corroborated_run(ResearchInformationTrust.HIGH)
+        run = self.manager.get(run_id)
+        self.manager.record_source_assessment(
+            run_id,
+            run.sources[0].document_id,
+            [evidence_ids[0]],
+            "A second reader judged this source derivative.",
+            None,
+            ResearchInformationTrust.HIGH,
+            "unknown",
+            "unknown",
+            "derivative",
+            "unknown",
+        )
+        self.claim(
+            run_id,
+            evidence_ids,
+            ResearchEpistemicState.STRONG_EVIDENCE,
+            ResearchClaimConfidence.HIGH,
+        )
+
+        [calibration] = self.calibrator.calibrate(self.manager.get(run_id))
+
+        self.assertEqual(calibration.profile.independent_source_count, 1)
+        self.assertFalse(calibration.profile.independence_confirmed)
+        self.assertIs(calibration.verdict, CalibrationVerdict.OVERSTATED_BOTH)
 
     def test_two_sources_still_cannot_carry_a_fact(self) -> None:
         run_id, evidence_ids = self.corroborated_run(ResearchInformationTrust.HIGH)
@@ -599,7 +693,13 @@ class SupportCeilingTests(CalibrationFixture):
         for slug in ("a", "b"):
             document_id = self.accept_source(run_id, slug)
             evidence_id = self.add_evidence(run_id, document_id)
-            self.assess(run_id, document_id, evidence_id, trust)
+            self.assess(
+                run_id,
+                document_id,
+                evidence_id,
+                trust,
+                independence="independent",
+            )
             evidence_ids.append(evidence_id)
         return run_id, evidence_ids
 
@@ -817,6 +917,14 @@ class CalibrationProfileTests(unittest.TestCase):
         with self.assertRaises(ResearchError):
             EvidenceSupportProfile(source_count=1, assessed_source_count=2)
 
+    def test_a_profile_rejects_more_independent_sources_than_assessed(self) -> None:
+        with self.assertRaisesRegex(ResearchError, "confirmed independent"):
+            EvidenceSupportProfile(
+                source_count=2,
+                assessed_source_count=1,
+                independent_source_count=2,
+            )
+
     def test_a_profile_rejects_negative_counts(self) -> None:
         with self.assertRaises(ResearchError):
             EvidenceSupportProfile(source_count=-1)
@@ -863,11 +971,28 @@ class CalibrationProfileTests(unittest.TestCase):
     def test_an_empty_profile_is_not_fully_assessed(self) -> None:
         self.assertFalse(EvidenceSupportProfile().fully_assessed)
 
+    def test_independence_requires_every_corroborating_source(self) -> None:
+        self.assertFalse(
+            EvidenceSupportProfile(
+                source_count=2,
+                assessed_source_count=2,
+                independent_source_count=1,
+            ).independence_confirmed
+        )
+        self.assertTrue(
+            EvidenceSupportProfile(
+                source_count=2,
+                assessed_source_count=2,
+                independent_source_count=2,
+            ).independence_confirmed
+        )
+
     def test_the_profile_renders_each_count_separately(self) -> None:
         lines = EvidenceSupportProfile(source_count=2, evidence_count=3).lines()
 
         self.assertIn("Distinct sources: 2", lines)
         self.assertIn("Evidence records: 3", lines)
+        self.assertIn("Sources confirmed independent: 0", lines)
 
     def test_only_overstatement_needs_attention(self) -> None:
         self.assertFalse(CalibrationVerdict.WITHIN_SUPPORT.needs_attention)

@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.199 (Genesis)`
+`v0.3.248 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.199`** is the current source/package release line.
+- **Runtime release `v0.3.248`** is the current source/package release line.
   GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -60,9 +60,12 @@ with optional OpenAI-compatible LLM conversation support.
   no fetch refused, no evidence discounted, no source pre-assessed.
 - Claim calibration compares each authored claim against the evidence structure
   behind it and reports overstatement, using stated ceiling rules rather than a
-  hidden score. Nothing supports `fact`. It is derived on every request with no
-  store and no write path, it never edits a claim, and understatement is not
-  treated as a problem.
+  hidden score. Strong evidence now requires every corroborating resource to be
+  explicitly judged independent as well as assessed at medium trust or better;
+  unknown, derivative, likely-duplicate, or conflicting active independence
+  judgements cannot inflate the ceiling. Nothing supports `fact`. It is derived
+  on every request with no store and no write path, it never edits a claim, and
+  understatement is not treated as a problem.
 - Failure memory derives eight bounded kinds of lesson from what a run
   recorded, each naming the persisted records it came from; a lesson without
   provenance is refused. Behind `HYPATIA_FAILURE_MEMORY_ENABLED`, default off.
@@ -1157,6 +1160,12 @@ marked retracted, withdrawn, corrected, not useful, unrelated, background-only
 or not independent is reported as such, with the source and the assessment
 named, and a separate claim-level warning is raised when apparent corroboration
 rests on sources somebody said repeat each other.
+
+Those independence judgements now also bound the structural support ceiling.
+Several distinct resources reach `strong evidence / high confidence` only when
+every one has an explicit active `independent` judgement and medium-or-better
+trust. Unknown or conflicting independence stays silent as a warning, but it
+cannot be counted as proof of independence.
 
 It corrects nothing. No confidence is lowered, no claim withdrawn, no evidence
 removed, no source rejected, no reputation moved, no relevance rank touched —

@@ -2,6 +2,27 @@
 
 All notable project changes are recorded here.
 
+## [0.3.248] - 2026-09-01
+
+### Changed
+
+- Claim calibration now requires every corroborating resource to carry an
+  explicit active `independent` judgement before the evidence structure can
+  support `strong evidence / high confidence`.
+- The calibration profile and report expose the number of resources whose
+  independence is confirmed, separately from distinct and assessed counts.
+- Unknown, derivative, likely-duplicate, or conflicting active independence
+  judgements cap support at `likely / medium`; they never rewrite the authored
+  claim or delete any provenance.
+
+### Security
+
+- Distinct URLs can no longer inflate a claim's support ceiling when the record
+  does not establish that they are independent witnesses.
+- Independence remains deterministic, local, read-only, and operator-authored.
+  No model, network request, score, automatic claim revision, source rejection,
+  or evidence mutation is introduced.
+
 ## [0.3.247] - 2026-09-01
 
 ### Changed

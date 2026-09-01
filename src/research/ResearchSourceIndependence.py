@@ -6,10 +6,11 @@ that matter most to corroboration — a press release restating a vendor advisor
 a news article summarising one paper, two papers reanalysing one dataset. Those
 are four documents and one witness, and only somebody who read them knows it.
 
-Recording that judgement changes nothing on its own. No records merge, nothing
-is deleted, and no corroboration count moves, because counting is a separate
-question that a later milestone may answer by consulting this. What it does is
-stop the knowledge being lost the moment the person who had it closes the panel.
+Recording that judgement changes nothing on its own. No records merge and
+nothing is deleted. Claim calibration may consult it when deciding whether
+several distinct resources provide explicitly independent corroboration, but it
+never edits the underlying claim, evidence, source, or assessment. The record
+also stops the knowledge being lost when the person who had it closes the panel.
 """
 
 from __future__ import annotations

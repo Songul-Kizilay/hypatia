@@ -899,11 +899,18 @@ The ceilings are stated rules rather than a hidden score:
 | Contradicted | contradicted, unassessed |
 | One source, not assessed | hypothesis, low |
 | One source, assessed high | likely, medium |
-| Two or more sources, not all assessed | likely, medium |
-| Two or more sources, all assessed medium or better | strong evidence, high |
+| Two or more sources, not all assessed or not all explicitly independent | likely, medium |
+| Two or more sources, all assessed medium or better and explicitly independent | strong evidence, high |
 
 Nothing supports `fact`. No configuration of sources in our own record has ever
 been enough to make a claim a fact, so calibration will not pretend otherwise.
+
+Distinct pages are not automatically independent witnesses. The strong-evidence
+ceiling requires an explicit `independent` judgement for every corroborating
+resource. `unknown`, `derivative`, a likely duplicate, or conflicting active
+judgements keep the ceiling at `likely, medium`. Missing independence does not
+raise a warning by itself; it simply cannot supply evidence that was never
+recorded.
 
 A ceiling is not a verdict on truth. Meeting it does not make a claim true and
 exceeding it does not make one false — it describes what our record can bear the
