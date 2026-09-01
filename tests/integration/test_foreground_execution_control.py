@@ -759,7 +759,12 @@ class NoLoopTests(ForegroundFixture):
         # Named exactly once: in its own definition. A second mention would
         # be the recursion this milestone exists to not have.
         self.assertEqual(section.count("process_advance"), 1)
-        self.assertNotIn("while ", section)
+        # Matched at the start of a statement rather than anywhere in the text.
+        # A comment explaining that something committed "while this attempt was
+        # being prepared" is prose about concurrency, not a loop, and a
+        # substring check reads the two the same way.
+        statements = [line.strip() for line in section.splitlines()]
+        self.assertEqual([line for line in statements if line.startswith("while ")], [])
         self.assertNotIn("for step in plan.steps", section)
 
     def test_the_execution_service_reaches_no_scheduler_or_autonomy(self) -> None:

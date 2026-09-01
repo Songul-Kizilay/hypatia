@@ -313,6 +313,142 @@ class TheUncontendedPathIsUnchangedTests(ConcurrencyFixture):
         )
 
 
+class TheAttemptNeverStartsOnACancelledExecutionTests(ConcurrencyFixture):
+    """The other side of the window: cancelling before the attempt commits."""
+
+    def test_a_cancel_landing_first_stops_the_provider_being_reached(self) -> None:
+        """Ordering A: the attempt stands down rather than starting anyway."""
+        gated = GatedOperation()
+        service = self._multi_step(count=3, operation=gated)
+        original = service._commit_outcome
+        cancelled_first: list[bool] = []
+
+        def cancel_then_commit(plan_id, expected, successor):
+            if not cancelled_first:
+                cancelled_first.append(True)
+                service.process_cancel(
+                    BrainRequest(
+                        message="Cancel",
+                        metadata={
+                            "intent": "research_plan_execution_cancel",
+                            "research_plan_id": "plan-many",
+                        },
+                    )
+                )
+            return original(plan_id, expected, successor)
+
+        service._commit_outcome = cancel_then_commit
+
+        self._continue(service, "plan-many", 3)
+
+        self.assertEqual(gated.calls, [])
+        self.assertIs(
+            service.live_execution("plan-many").status,
+            ResearchPlanExecutionStatus.CANCELLED,
+        )
+
+    def test_a_cancel_landing_first_charges_nothing(self) -> None:
+        gated = GatedOperation()
+        service = self._multi_step(count=3, operation=gated)
+        before = service.allowance("plan-many").remaining_network_operations
+        original = service._commit_outcome
+        once: list[bool] = []
+
+        def cancel_then_commit(plan_id, expected, successor):
+            if not once:
+                once.append(True)
+                service.process_cancel(
+                    BrainRequest(
+                        message="Cancel",
+                        metadata={
+                            "intent": "research_plan_execution_cancel",
+                            "research_plan_id": "plan-many",
+                        },
+                    )
+                )
+            return original(plan_id, expected, successor)
+
+        service._commit_outcome = cancel_then_commit
+
+        self._continue(service, "plan-many", 3)
+
+        self.assertEqual(
+            service.allowance("plan-many").remaining_network_operations, before
+        )
+
+
+class OnlyOneAttemptCanStartTests(ConcurrencyFixture):
+    """Two advances racing for the same execution cannot both reach a provider.
+
+    Both threads read the same state, choose the same step and check the same
+    budget. Serializing the attempt commit is what decides between them: the
+    first commits its running state, the second finds the execution is no longer
+    what it planned from and stands down without calling anybody.
+    """
+
+    def test_two_concurrent_advances_produce_one_provider_call(self) -> None:
+        gated = GatedOperation()
+        service = self._multi_step(count=3, operation=gated)
+        started = Event()
+
+        def advance():
+            started.set()
+            service.process_advance(
+                BrainRequest(
+                    message="Advance",
+                    metadata={
+                        "intent": "research_plan_execution_advance",
+                        "research_plan_id": "plan-many",
+                    },
+                )
+            )
+
+        first = Thread(target=advance)
+        second = Thread(target=advance)
+        first.start()
+        self.assertTrue(started.wait(timeout=5))
+        second.start()
+        try:
+            self.assertTrue(gated.entered.wait(timeout=5))
+            gated.release.set()
+            first.join(timeout=10)
+            second.join(timeout=10)
+
+            self.assertEqual(gated.calls, ["step-1"])
+        finally:
+            gated.release.set()
+            first.join(timeout=10)
+            second.join(timeout=10)
+
+    def test_the_step_is_charged_once(self) -> None:
+        gated = GatedOperation()
+        service = self._multi_step(count=3, operation=gated)
+        before = service.allowance("plan-many").remaining_network_operations
+        gated.release.set()
+
+        threads = [
+            Thread(
+                target=lambda: service.process_advance(
+                    BrainRequest(
+                        message="Advance",
+                        metadata={
+                            "intent": "research_plan_execution_advance",
+                            "research_plan_id": "plan-many",
+                        },
+                    )
+                )
+            )
+            for _ in range(2)
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=10)
+
+        spent = before - service.allowance("plan-many").remaining_network_operations
+        self.assertEqual(spent, len(gated.calls))
+
+
 class TheDisciplineIsNarrowTests(unittest.TestCase):
     """How the fix is written matters as much as that it works."""
 

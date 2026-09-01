@@ -228,9 +228,10 @@ class ResearchPlanExecutionApplicationService:
             )
 
         state = ResearchPlanExecutionState.prepare(plan).start()
-        self._executions[plan.plan_id] = state
-        self._plans[plan.plan_id] = plan
-        self._contexts[plan.plan_id] = context
+        with self._commit_lock:
+            self._executions[plan.plan_id] = state
+            self._plans[plan.plan_id] = plan
+            self._contexts[plan.plan_id] = context
         self._events.started(state, context.has_research_run)
         self._persist(plan.plan_id)
         return self._response_composer.research_plan_execution_status(request, state)
@@ -289,9 +290,10 @@ class ResearchPlanExecutionApplicationService:
                 budget=decision.authorization.budget
             )
         state = ResearchPlanExecutionState.prepare(plan).start()
-        self._executions[plan.plan_id] = state
-        self._plans[plan.plan_id] = plan
-        self._contexts[plan.plan_id] = context
+        with self._commit_lock:
+            self._executions[plan.plan_id] = state
+            self._plans[plan.plan_id] = plan
+            self._contexts[plan.plan_id] = context
         self._events.started(state, context.has_research_run)
         self._persist(plan.plan_id)
         return state
@@ -374,8 +376,9 @@ class ResearchPlanExecutionApplicationService:
         except ResearchError as error:
             return ResearchPlanExecutionStartRefusal(str(error))
         bound = replace(plan, plan_id=execution_id)
-        self._executions[execution_id] = state
-        self._plans[execution_id] = bound
+        with self._commit_lock:
+            self._executions[execution_id] = state
+            self._plans[execution_id] = bound
         self._contexts[execution_id] = context
         self._allowances[execution_id] = snapshot.allowance
         self._restored.pop(execution_id, None)
@@ -471,20 +474,24 @@ class ResearchPlanExecutionApplicationService:
     def process_cancel(self, request: BrainRequest) -> BrainResponse:
         """Cancel unfinished steps while preserving completed-step history."""
         plan_id = self._normalized_plan_id(request)
-        state = self._executions.get(plan_id)
-        if state is None:
-            return self._response_composer.research_plan_execution_missing(
-                request,
-                plan_id,
-            )
-        try:
-            cancelled = state.cancel("Cancelled by explicit user request.")
-        except ResearchError as error:
-            return self._response_composer.research_plan_execution_rejected(
-                request,
-                str(error),
-            )
-        self._executions[plan_id] = cancelled
+        # Read, derive and write together. Deriving from a state somebody else
+        # replaces before the write is exactly how a cancellation used to be
+        # lost, and cancelling is the transition that can least afford it.
+        with self._commit_lock:
+            state = self._executions.get(plan_id)
+            if state is None:
+                return self._response_composer.research_plan_execution_missing(
+                    request,
+                    plan_id,
+                )
+            try:
+                cancelled = state.cancel("Cancelled by explicit user request.")
+            except ResearchError as error:
+                return self._response_composer.research_plan_execution_rejected(
+                    request,
+                    str(error),
+                )
+            self._executions[plan_id] = cancelled
         self._events.cancelled(cancelled)
         self._persist(plan_id)
         return self._response_composer.research_plan_execution_status(
@@ -537,12 +544,18 @@ class ResearchPlanExecutionApplicationService:
                 request,
                 str(error),
             )
-        self._executions[plan_id] = resolved
+        if not self._commit_outcome(plan_id, state, resolved):
+            # Somebody committed a newer state while this decision was
+            # being formed. Theirs stands; nothing here is forced over it.
+            return self._response_composer.research_plan_execution_rejected(
+                request,
+                "That execution changed while the ruling was being made.",
+            )
         self._events.step_resolved(plan_id, step_id, resolution.value)
         if not self._persist_checkpoint(plan_id):
             # The ruling is only worth having if it survives. Put the previous
             # state back rather than report a decision no restart would find.
-            self._executions[plan_id] = state
+            self._commit_outcome(plan_id, resolved, state)
             return self._response_composer.research_plan_execution_rejected(
                 request,
                 "The ruling could not be recorded durably, so it was not kept.",
@@ -604,10 +617,16 @@ class ResearchPlanExecutionApplicationService:
                 request,
                 str(error),
             )
-        self._executions[plan_id] = recovered
+        if not self._commit_outcome(plan_id, state, recovered):
+            # Somebody committed a newer state while this decision was
+            # being formed. Theirs stands; nothing here is forced over it.
+            return self._response_composer.research_plan_execution_rejected(
+                request,
+                "That execution changed while the decision was being made.",
+            )
         self._events.step_recovered(plan_id, step_id, recovery.decision.value)
         if not self._persist_checkpoint(plan_id):
-            self._executions[plan_id] = state
+            self._commit_outcome(plan_id, recovered, state)
             return self._response_composer.research_plan_execution_rejected(
                 request,
                 "The decision could not be recorded durably, so it was not kept.",
@@ -837,7 +856,14 @@ class ResearchPlanExecutionApplicationService:
         # Written down before the provider is reachable. A crash from here on
         # leaves a record saying this step was attempted and paid for, which is
         # the truth; leaving it pending would say the attempt never happened.
-        self._executions[plan_id] = running
+        if not self._commit_outcome(plan_id, state, running):
+            # Somebody committed while this attempt was being prepared. No
+            # provider is reached, so the charge made a moment ago is given
+            # back — the same thing the failed-checkpoint path does, and for
+            # the same reason: nothing was spent because nothing was tried.
+            if allowance is not None:
+                self._allowances[plan_id] = allowance
+            return self._superseded(request, plan_id, step_id, operation.operation_name)
         self._events.step_started(
             plan_id,
             step_id,
@@ -847,8 +873,11 @@ class ResearchPlanExecutionApplicationService:
         if not self._persist_checkpoint(plan_id):
             # Nothing external has happened yet, so the record from before the
             # attempt is still the true one. Put it back rather than run an
-            # operation whose having happened no restart could discover.
-            self._executions[plan_id] = state
+            # operation whose having happened no restart could discover — but
+            # only if this attempt's own state is still what stands, because a
+            # rollback over somebody else's newer decision is the same mistake
+            # in the other direction.
+            self._commit_outcome(plan_id, running, state)
             if allowance is not None:
                 self._allowances[plan_id] = allowance
             return self._response_composer.research_plan_execution_rejected(
@@ -944,7 +973,7 @@ class ResearchPlanExecutionApplicationService:
         expected: ResearchPlanExecutionState,
         successor: ResearchPlanExecutionState,
     ) -> bool:
-        """Commit one attempt outcome, unless the execution has moved on.
+        """Commit one canonical transition, unless the execution has moved on.
 
         The comparison is against the exact state this attempt committed before
         reaching the provider. Execution states are immutable values, so equality

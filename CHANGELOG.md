@@ -2,6 +2,39 @@
 
 All notable project changes are recorded here.
 
+## [0.3.274] - 2026-09-01
+
+### Fixed
+
+- Every canonical execution transition now takes the same commit lock, closing
+  the window v0.3.273 documented. Cancelling could previously land between the
+  outcome commit's comparison and its write and be overwritten; the two can now
+  only happen one after the other, and either order ends with the cancellation
+  standing.
+- Starting, cancelling, resolving, recovering, the pre-provider attempt commit
+  and the post-provider outcome all commit under that lock, as do the rollbacks
+  that undo a decision whose durable write failed — a rollback over somebody
+  else's newer state was the same mistake in the other direction.
+- A resolve or recover whose execution changed while the decision was being
+  formed is now refused rather than forced over the newer state.
+- An attempt superseded before it reaches a provider returns the charge it had
+  just made, matching what the failed-checkpoint path already did: nothing was
+  spent because nothing was tried. A superseded outcome *after* the provider ran
+  still keeps its charge.
+
+### Security
+
+- The lock is never held across a provider call, and a test that deliberately
+  holds it there deadlocks, which is how that guarantee is pinned.
+- Two concurrent advances on one execution can no longer both reach a provider:
+  the first commits its attempt, the second finds the execution is not what it
+  planned from and stands down without calling anybody.
+- Live and durable state agree after every contended transition tested.
+- Cancel still spends nothing, refunds nothing already spent on a real attempt,
+  creates no approval, and leaves the plan, digest and capabilities untouched.
+- This is in-process serialization of a single owning service. It makes no claim
+  about multiple processes sharing one store.
+
 ## [0.3.273] - 2026-09-01
 
 ### Fixed
@@ -36,7 +69,7 @@ All notable project changes are recorded here.
   anywhere during the provider call, is preserved. The behaviour is recorded in
   `test_a_cancel_can_still_be_lost_in_the_commit_window` rather than left
   undocumented, and closing it means bringing every canonical writer under that
-  lock.
+  lock. **Closed in v0.3.274.**
 
 ## [0.3.272] - 2026-09-01
 

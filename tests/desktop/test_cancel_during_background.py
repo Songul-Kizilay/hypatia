@@ -19,8 +19,9 @@ cancellation and the next step never begins. That is proven here end to end,
 gated on Events rather than timing, from the desktop control down to the durable
 record.
 
-One narrow window is not closed by this milestone and is documented rather than
-hidden: see `test_a_cancel_can_still_be_lost_in_the_commit_window`.
+The narrow commit window this file once documented is closed: every canonical
+transition now takes the same lock, so a cancellation and an attempt outcome can
+only happen one after the other. See `TheCommitWindowIsClosedTests`.
 """
 
 from __future__ import annotations
@@ -350,26 +351,26 @@ class TheDesktopDoesNotTouchStateItselfTests(unittest.TestCase):
         self.assertNotIn("is_cancelled", body)
 
 
-class TheRemainingWindowTests(ContinuationFixture):
-    """Documented, not hidden: one narrow way a cancel can still be lost.
+class TheCommitWindowIsClosedTests(ContinuationFixture):
+    """The window v0.3.273 documented, now proven shut.
 
-    `process_cancel` does not take the commit lock that `_commit_outcome` holds,
-    so a cancellation landing between that method's comparison and its write is
-    overwritten. The window is two adjacent statements wide and cannot be hit by
-    a cancellation arriving at any other moment, including anywhere during the
-    provider call — that case is covered above and is safe.
+    Cancelling used to be able to land between the outcome commit's comparison
+    and its write, and be overwritten. Both now take the same lock, so the two
+    transitions can only happen one after the other. Either order is fine and
+    the test allows both: what it refuses is the third outcome, where cancelling
+    reports success and the execution ends up completed anyway.
 
-    Closing it means bringing every canonical writer under the same lock, which
-    is execution-state work rather than desktop work. This test states the
-    behaviour that exists today so the next change can be measured against it.
+    The cancel runs on its own thread precisely because it may now have to wait
+    for the lock. Calling it from the test thread while the worker holds it
+    would deadlock, which is itself a sign the serialization is real.
     """
 
-    def test_a_cancel_can_still_be_lost_in_the_commit_window(self) -> None:
+    def test_cancelling_inside_the_commit_window_is_not_lost(self) -> None:
         gated = _GatedOperation()
         service = self._multi_step(count=3, operation=gated)
         worker_thread: dict[str, int] = {}
-        entered = Event()
-        proceed = Event()
+        inside_commit = Event()
+        let_commit_finish = Event()
 
         class _WindowedExecutions(dict):
             """Hold the worker inside the commit, after its comparison passed."""
@@ -383,21 +384,64 @@ class TheRemainingWindowTests(ContinuationFixture):
                     is ResearchPlanExecutionStatus.RUNNING
                     and any(step.status.value == "completed" for step in value.steps)
                 ):
-                    entered.set()
-                    proceed.wait(timeout=5)
+                    inside_commit.set()
+                    let_commit_finish.wait(timeout=5)
                 super().__setitem__(key, value)
 
-        gated.on_enter = lambda: worker_thread.update(
-            id=__import__("threading").get_ident()
-        )
+        import threading
+
+        gated.on_enter = lambda: worker_thread.update(id=threading.get_ident())
         service._executions = _WindowedExecutions(service._executions)
+
+        cancelled: dict[str, object] = {}
         worker = Thread(target=lambda: self._continue(service, "plan-many", 3))
+        canceller = Thread(
+            target=lambda: cancelled.update(
+                response=service.process_cancel(
+                    BrainRequest(
+                        message="Cancel",
+                        metadata={
+                            "intent": "research_plan_execution_cancel",
+                            "research_plan_id": "plan-many",
+                        },
+                    )
+                )
+            )
+        )
         worker.start()
         try:
             self.assertTrue(gated.entered.wait(timeout=5))
             gated.release.set()
-            self.assertTrue(entered.wait(timeout=5))
+            self.assertTrue(inside_commit.wait(timeout=5))
 
+            # Issued while the worker is provably inside the commit region.
+            canceller.start()
+            let_commit_finish.set()
+            canceller.join(timeout=10)
+            worker.join(timeout=10)
+
+            self.assertFalse(canceller.is_alive())
+            self.assertFalse(worker.is_alive())
+            self.assertTrue(cancelled["response"].success)
+            self.assertIs(
+                service.live_execution("plan-many").status,
+                ResearchPlanExecutionStatus.CANCELLED,
+            )
+        finally:
+            gated.release.set()
+            let_commit_finish.set()
+            worker.join(timeout=10)
+            if canceller.is_alive():
+                canceller.join(timeout=10)
+
+    def test_the_durable_record_agrees_after_the_window(self) -> None:
+        """Live and durable must not disagree about a contended transition."""
+        gated = _GatedOperation()
+        service = self._multi_step(count=2, operation=gated)
+        worker = Thread(target=lambda: self._continue(service, "plan-many", 2))
+        worker.start()
+        try:
+            self.assertTrue(gated.entered.wait(timeout=5))
             service.process_cancel(
                 BrainRequest(
                     message="Cancel",
@@ -407,23 +451,21 @@ class TheRemainingWindowTests(ContinuationFixture):
                     },
                 )
             )
+            gated.release.set()
+            worker.join(timeout=10)
+
+            [snapshot] = [
+                entry
+                for entry in self.execution_store.load()
+                if entry.plan_id == "plan-many"
+            ]
             self.assertIs(
                 service.live_execution("plan-many").status,
                 ResearchPlanExecutionStatus.CANCELLED,
             )
-
-            proceed.set()
-            worker.join(timeout=10)
-
-            # Today the stale write wins inside this window. Recorded so the
-            # milestone that closes it has something to change.
-            self.assertIsNot(
-                service.live_execution("plan-many").status,
-                ResearchPlanExecutionStatus.CANCELLED,
-            )
+            self.assertIs(snapshot.status, ResearchPlanExecutionStatus.CANCELLED)
         finally:
             gated.release.set()
-            proceed.set()
             worker.join(timeout=10)
 
 
