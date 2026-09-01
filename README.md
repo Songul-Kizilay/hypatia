@@ -796,6 +796,11 @@ provider in the failure subject and explanation. Older providerless records stay
 under their recorded stage; provider identity is never reconstructed from order
 or error wording.
 
+Every finding detail is normalized to one display line before it can be stored
+or rendered. A line break in an authored or persisted failure reason therefore
+cannot manufacture a second, forged-looking reflection entry; its wording stays
+visible inside the one real finding.
+
 When one source assessment explicitly supersedes another, Reflection compares
 the canonical records and names only what changed: information trust,
 usefulness, applicability, independence, publication status, or linked

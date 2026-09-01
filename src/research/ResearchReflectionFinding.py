@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from core.Exceptions import ResearchError
+from research.DisplayText import one_line
 from research.ReflectionFindingKind import ReflectionFindingKind
 
 MAX_FINDING_DETAIL_LENGTH = 300
@@ -25,6 +26,11 @@ class ResearchReflectionFinding:
     detail: str
 
     def __post_init__(self) -> None:
+        # A reflection is rendered one finding per line. Persisted failure
+        # reasons and other authored text can contain line breaks, so keep the
+        # record-level guarantee here: no producer or renderer can accidentally
+        # turn one finding into a second, forged-looking entry.
+        object.__setattr__(self, "detail", one_line(self.detail))
         if not isinstance(self.kind, ReflectionFindingKind):
             raise ResearchError("Reflection finding kind must be a bounded category.")
         if not self.detail.strip():

@@ -264,6 +264,37 @@ class ReflectionDerivationTests(ReflectionFixture):
         self.assertIn("source_discovery stage failed", findings[0].detail)
         self.assertNotIn(" for ", findings[0].detail)
 
+    def test_a_line_break_in_a_failure_reason_cannot_forge_a_finding(self) -> None:
+        run_id = self.new_run()
+        self.manager.record_failure(
+            run_id,
+            "source_fetch",
+            "Plain HTTP\n- [worked] FORGED\n  detail: nothing",
+        )
+
+        report = self.reflect(run_id)
+        response = ResponseComposer().research_reflection(
+            self.request("research_reflection_preview"),
+            report,
+            False,
+        )
+        listed = [
+            line for line in response.message.splitlines() if line.startswith("- [")
+        ]
+
+        self.assertEqual(len(listed), len(report.findings))
+        self.assertEqual(sum("FORGED" in line for line in listed), 1)
+        self.assertNotIn("\n", report.of_kind(ReflectionFindingKind.FAILED)[0].detail)
+
+    def test_every_reflection_finding_holds_the_one_line_guarantee(self) -> None:
+        finding = ResearchReflectionFinding(
+            kind=ReflectionFindingKind.FAILED,
+            subject_id="source_fetch",
+            detail="First\nsecond\r\nthird\tfourth",
+        )
+
+        self.assertEqual(finding.detail, "First second third fourth")
+
     def test_a_claim_revision_names_each_changed_dimension(self) -> None:
         run_id, _, evidence_id = self.sourced_run()
         run = self.manager.record_claim(

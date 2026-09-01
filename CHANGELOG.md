@@ -2,6 +2,24 @@
 
 All notable project changes are recorded here.
 
+## [0.3.260] - 2026-09-01
+
+### Fixed
+
+- Reflection finding details now collapse embedded line breaks and other
+  whitespace before they enter a report. One recorded failure therefore remains
+  one visible finding instead of being able to resemble extra list entries.
+- The guarantee lives on the shared reflection-finding record, so preview,
+  durable storage, reload, and future renderers inherit the same boundary.
+
+### Security
+
+- Authored or persisted failure text cannot inject a forged-looking reflection
+  label such as `[worked]` onto a new line. The original bounded wording remains
+  visible as one normalized line rather than being silently discarded.
+- The change is deterministic and local. It starts no research, model call,
+  network request, retry, Failure Memory write, or background action.
+
 ## [0.3.259] - 2026-09-01
 
 ### Fixed
