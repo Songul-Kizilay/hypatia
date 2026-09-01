@@ -39,9 +39,10 @@ _REGISTRY_LOCK = RLock()
 class ExclusiveStoreOwnership:
     """One process's held claim on one durable store."""
 
-    def __init__(self, path: Path, handle: IO[bytes]) -> None:
+    def __init__(self, path: Path, handle: IO[bytes], key: str) -> None:
         self._path = path
         self._handle = handle
+        self._key = key
         self._released = False
 
     @property
@@ -65,7 +66,7 @@ class ExclusiveStoreOwnership:
             if self._released:
                 return
             self._released = True
-            _HELD.pop(str(self._path), None)
+            _HELD.pop(self._key, None)
             try:
                 _unlock(self._handle)
             finally:
@@ -81,24 +82,60 @@ def claim(store_path: Path) -> ExclusiveStoreOwnership:
     if not isinstance(store_path, Path):
         raise BootstrapError("A store claim needs a real path.")
     resolved = store_path.resolve()
-    key = str(resolved)
+    return _claim(
+        resolved,
+        resolved.with_name(resolved.name + ".lock"),
+        "The research execution store is already owned by another Hypatia "
+        f"process: {resolved}. Close that one first, or point this process at "
+        "a different store.",
+    )
+
+
+def claim_directory(directory: Path) -> ExclusiveStoreOwnership:
+    """Return this process's exclusive claim on one writable data directory.
+
+    Claimed rather than each file inside it, because the files in one of these
+    directories are written by one runtime as a set. A second process holding
+    any of them would be the same data loss, so the directory is the honest
+    unit; the files are not independently shareable.
+    """
+    if not isinstance(directory, Path):
+        raise BootstrapError("A directory claim needs a real path.")
+    resolved = directory.resolve()
+    return _claim(
+        resolved,
+        resolved / ".hypatia-owner.lock",
+        "Another Hypatia process already owns this writable runtime data "
+        f"directory: {resolved}. Close that one first, or point this process "
+        "at a different data directory.",
+    )
+
+
+def _claim(
+    subject: Path,
+    lock_path: Path,
+    refusal: str,
+) -> ExclusiveStoreOwnership:
+    """Take one OS lock, or refuse with the caller's own words."""
+    key = str(lock_path)
     with _REGISTRY_LOCK:
         existing = _HELD.get(key)
         if existing is not None and existing.held:
             return existing
-        lock_path = resolved.with_name(resolved.name + ".lock")
         lock_path.parent.mkdir(parents=True, exist_ok=True)
-        handle = open(lock_path, "a+b")
+        try:
+            handle = _open_lock(lock_path)
+        except OSError as error:
+            # On Windows a lock file another owner is still holding can be
+            # pending deletion, which refuses to open at all. That is the same
+            # answer by a different route: somebody has it.
+            raise BootstrapError(refusal) from error
         try:
             _lock(handle)
         except OSError as error:
             handle.close()
-            raise BootstrapError(
-                "The research execution store is already owned by another "
-                f"Hypatia process: {resolved}. Close that one first, or point "
-                "this process at a different store."
-            ) from error
-        owned = ExclusiveStoreOwnership(resolved, handle)
+            raise BootstrapError(refusal) from error
+        owned = ExclusiveStoreOwnership(subject, handle, key)
         _HELD[key] = owned
         return owned
 
@@ -114,6 +151,23 @@ def release_all() -> None:
     with _REGISTRY_LOCK:
         for held in list(_HELD.values()):
             held.release()
+
+
+def _open_lock(lock_path: Path) -> IO[bytes]:
+    """Open the lock file in a way the platform can still tidy up around.
+
+    On Windows the handle is opened so that others may delete the file while it
+    is held, and so that it removes itself once released. Without that a held
+    claim would make its own directory undeletable, which turns an ownership
+    guard into a housekeeping problem for everything that creates a runtime and
+    then wants the directory gone.
+    """
+    if sys.platform == "win32":
+        import os
+
+        descriptor = os.open(lock_path, os.O_RDWR | os.O_CREAT | os.O_TEMPORARY, 0o600)
+        return os.fdopen(descriptor, "r+b")
+    return open(lock_path, "a+b")
 
 
 def _lock(handle: IO[bytes]) -> None:

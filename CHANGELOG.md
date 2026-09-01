@@ -2,6 +2,38 @@
 
 All notable project changes are recorded here.
 
+## [0.3.276] - 2026-09-01
+
+### Fixed
+
+- Ownership now covers every directory the runtime writes canonical state into,
+  not only the execution store. Sessions, memory, knowledge relations, research
+  runs and the nine research stores kept beside them are all whole-file JSON
+  stores with the same replace-the-document write, so a second process opening
+  them loses records exactly as the execution store did.
+- The claim is taken at the very start of `initialize()`, before a single store
+  is opened. A second process is refused while it can still do no harm, rather
+  than after it has loaded sessions and memory.
+
+### Security
+
+- The unit is the directory, because the files in one of these directories are
+  written by one runtime as a set and are not independently shareable. Research
+  keeps runs, executions, background tasks, curiosity questions, reflections,
+  lessons, approvals, hypotheses and the vulnerability graph together, so one
+  claim covers them.
+- It is not one Hypatia per machine. Two runtimes on separate data directories
+  both start, proven with real processes, and a test greps the ownership module
+  to keep it from drifting toward a machine-wide claim.
+- The mechanism is unchanged from v0.3.275: a kernel-held lock, released when the
+  owning process ends however it ends, with a leftover lock file granting
+  nothing. Killing an owner and then claiming the directory is proven.
+- The execution store keeps its own claim as well, since callers can build it
+  without going through `initialize()`. The two are separate lock files and
+  neither waits on the other.
+- A refused process writes nothing at all: no store, no fallback directory, no
+  in-memory mode, and a message naming the directory without claiming corruption.
+
 ## [0.3.275] - 2026-09-01
 
 ### Fixed

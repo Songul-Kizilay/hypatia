@@ -7,7 +7,7 @@ from brain.Brain import Brain
 from cognition.CognitiveEngine import CognitiveEngine
 from core.Config import Config
 from core.DependencyContainer import DependencyContainer
-from core.ExclusiveStoreOwnership import claim
+from core.ExclusiveStoreOwnership import claim, claim_directory
 from core.Logger import Logger
 from core.RuntimeOptIn import (
     background_research_enabled,
@@ -460,6 +460,11 @@ class Bootstrap:
         return timeout_seconds
 
     def initialize(self) -> None:
+        # Claimed before a single writable store is opened. A second process
+        # must be refused while it can still do no harm, not after it has
+        # already loaded sessions and memory and is one save away from
+        # replacing somebody else's.
+        self._claim_writable_directories()
         config = Config()
         logger = Logger()
         container = DependencyContainer()
@@ -650,6 +655,41 @@ class Bootstrap:
             {"status": "ready"},
             source="bootstrap",
         )
+
+    def _writable_directories(self) -> tuple[Path, ...]:
+        """Return every directory this runtime will write canonical state into.
+
+        Derived from the same path rules the stores themselves use, so the list
+        cannot drift from what is actually opened. Research keeps its many
+        stores beside the run snapshot, which is why one entry covers runs,
+        executions, background tasks, curiosity, reflections, lessons,
+        approvals, hypotheses and the vulnerability graph together.
+        """
+        run_path = self._research_run_path or self._research_run_store_path(
+            self._memory_path
+        )
+        paths = (
+            self._session_path or self._default_session_path(),
+            self._memory_path or self._default_memory_path(),
+            self._knowledge_relation_path
+            or self._knowledge_relation_store_path(self._memory_path),
+            run_path,
+            self._research_source_content_store_path(
+                self._memory_path,
+                self._research_run_path,
+            ),
+        )
+        directories: list[Path] = []
+        for path in paths:
+            parent = path.parent
+            if parent not in directories:
+                directories.append(parent)
+        return tuple(directories)
+
+    def _claim_writable_directories(self) -> None:
+        """Own every directory this runtime writes, or refuse to start."""
+        for directory in self._writable_directories():
+            claim_directory(directory)
 
     @staticmethod
     def _default_memory_path() -> Path:

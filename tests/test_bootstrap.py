@@ -17,6 +17,7 @@ from brain.Brain import Brain
 from brain.BrainRequest import BrainRequest
 from core.Bootstrap import Bootstrap
 from core.Exceptions import MemoryError, ResearchError, SessionError
+from core.ExclusiveStoreOwnership import release_all
 from eventbus.EventBus import EventBus
 from knowledge.JsonFileKnowledgeRelationStore import JsonFileKnowledgeRelationStore
 from knowledge.KnowledgeEngine import KnowledgeEngine
@@ -286,6 +287,10 @@ class BootstrapTests(unittest.TestCase):
     def test_bootstrap_registers_json_file_memory_store_with_default_path(self) -> None:
         bootstrap = Bootstrap()
         bootstrap.initialize()
+        # Initializing with the defaults claims this repository's own data
+        # directories for the rest of the process. Released here so a later
+        # test that starts a clean Hypatia is not refused by this one.
+        self.addCleanup(release_all)
 
         memory_store = bootstrap.container.resolve(JsonFileMemoryStore)
         session_store = bootstrap.container.resolve(JsonFileSessionStore)
