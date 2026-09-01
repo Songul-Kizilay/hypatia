@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.264 (Genesis)`
+`v0.3.265 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.264`** is the current source/package release line.
+- **Runtime release `v0.3.265`** is the current source/package release line.
   GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -63,7 +63,9 @@ with optional OpenAI-compatible LLM conversation support.
   lose the change.
 - Source reputation aggregates authored assessments by origin across runs and
   reports counts with a bounded standing, never a score. It is derived on every
-  request with no store, so revising an assessment revises the reputation. Below
+  request with no store, so revising an assessment revises the reputation.
+  Equivalent records of one canonical resource count as one assessed sample and
+  retain the least-trusting active authored label regardless of run order. Below
   three assessments the standing is provisional, and no standing gates anything:
   no fetch refused, no evidence discounted, no source pre-assessed.
 - Claim calibration compares each authored claim against the evidence structure

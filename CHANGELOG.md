@@ -2,6 +2,24 @@
 
 All notable project changes are recorded here.
 
+## [0.3.265] - 2026-09-01
+
+### Fixed
+
+- Source reputation now combines active trust assessments across all equivalent
+  records of one canonical resource before counting the resource once. A
+  high-trust record encountered first can no longer hide an active low-trust
+  assessment attached to an equivalent record.
+- Reputation derivation is now invariant to research-run input order. Accepted,
+  evidence, and run counts remain storage facts, while the single assessed
+  resource sample uses the least-trusting active authored label.
+
+### Security
+
+- The correction is local, deterministic, derived, and advisory-only. It changes
+  no source, assessment, evidence, claim, confidence, reputation store, provider
+  choice, or research execution.
+
 ## [0.3.264] - 2026-09-01
 
 ### Fixed

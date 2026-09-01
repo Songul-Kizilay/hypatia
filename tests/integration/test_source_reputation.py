@@ -342,6 +342,36 @@ class ReputationLedgerTests(ReputationLedgerFixture):
         self.assertEqual(reputation.low_count, 1)
         self.assertEqual(reputation.high_count, 0)
 
+    def test_equivalent_resource_trust_is_cautious_and_order_invariant(self) -> None:
+        first_run = self.new_run()
+        self.graded(
+            first_run,
+            "https://www.mixed.test/shared",
+            ResearchInformationTrust.HIGH,
+        )
+        second_run = self.new_run()
+        self.graded(
+            second_run,
+            "https://mixed.test/shared/",
+            ResearchInformationTrust.LOW,
+        )
+
+        runs = self.manager.list()
+        forward = next(
+            entry for entry in self.ledger.build(runs) if entry.origin == "mixed.test"
+        )
+        reverse = next(
+            entry
+            for entry in self.ledger.build(reversed(runs))
+            if entry.origin == "mixed.test"
+        )
+
+        self.assertEqual(forward, reverse)
+        self.assertEqual(forward.accepted_count, 2)
+        self.assertEqual(forward.assessed_count, 1)
+        self.assertEqual(forward.low_count, 1)
+        self.assertEqual(forward.high_count, 0)
+
     def test_reputation_accumulates_across_runs(self) -> None:
         for index in range(MIN_ASSESSMENTS_FOR_STANDING):
             run_id = self.new_run()

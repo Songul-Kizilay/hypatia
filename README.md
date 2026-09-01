@@ -996,6 +996,11 @@ infers quality from a URL, and acceptance is not approval — a source is accept
 because someone chose to read it, which says nothing about whether it was any
 good.
 
+Equivalent records of one canonical resource count as one assessed sample. If
+their active authored trust labels differ, the least-trusting label represents
+that resource regardless of run order; an earlier high label cannot hide a
+still-active low one.
+
 There is no score. A single number would compress "we assessed three pages from
 this host, two low and one high" into something that looks precise, travels
 easily, and cannot be argued with. The counts stay separate so the reader can
