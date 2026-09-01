@@ -2,6 +2,32 @@
 
 All notable project changes are recorded here.
 
+## [0.3.281] - 2026-09-02
+
+### Added
+
+- The trusted local desktop can record or revoke a durable deferred-execution
+  grant for one exact queued research task. The record binds the task,
+  execution, current plan digest, plan-derived capabilities and the task's
+  outer bound; it is not a new research authorization or allowance.
+- A pure deferred-eligibility decision checks that exact binding against live
+  task, execution, plan and remaining allowance state. Manual and future
+  deferred scheduler selection are now distinct modes, but no automatic cycle,
+  timer, recurrence, polling or `run_at` exists.
+- The desktop shows the exact binding before confirmation and states that the
+  action adds no budget or capabilities and that no timer exists.
+
+### Security
+
+- Deferred grant and revocation are structurally absent from BrainRequest and
+  CognitiveEngine intent dispatch. `source=desktop`, request metadata, task
+  creation, Curiosity and the scheduler cannot mint trusted operator proof.
+- Existing and legacy tasks with no separate grant remain manual-only after a
+  restart. Revocation runs no research and changes neither task nor execution.
+- `TRUSTED_LOCAL_OPERATOR` means confirmation through Hypatia's local desktop
+  control plane. It is not cryptographic identity and does not defend against
+  arbitrary malicious code already executing inside the Hypatia process.
+
 ## [0.3.280] - 2026-09-01
 
 ### Fixed

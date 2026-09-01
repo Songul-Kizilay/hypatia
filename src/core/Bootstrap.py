@@ -5,6 +5,9 @@ from urllib.parse import urlparse
 
 from brain.Brain import Brain
 from cognition.CognitiveEngine import CognitiveEngine
+from cognition.TrustedDeferredExecutionControlService import (
+    TrustedDeferredExecutionControlService,
+)
 from core.Config import Config
 from core.DependencyContainer import DependencyContainer
 from core.ExclusiveStoreOwnership import claim, claim_directory
@@ -67,6 +70,9 @@ from research.JsonFileBackgroundTaskStore import (
 )
 from research.JsonFileCuriosityQuestionStore import (
     JsonFileCuriosityQuestionStore,
+)
+from research.JsonFileDeferredExecutionGrantStore import (
+    JsonFileDeferredExecutionGrantStore,
 )
 from research.JsonFileFailureLessonStore import (
     JsonFileFailureLessonStore,
@@ -499,6 +505,7 @@ class Bootstrap:
         research_run_manager.load()
         research_execution_store = self._research_execution_store()
         background_task_store = self._background_task_store()
+        deferred_execution_grant_store = self._deferred_execution_grant_store()
         curiosity_question_store = self._curiosity_question_store()
         reflection_report_store = self._reflection_report_store()
         failure_lesson_store = self._failure_lesson_store()
@@ -578,6 +585,7 @@ class Bootstrap:
             research_run_manager=research_run_manager,
             research_execution_store=research_execution_store,
             background_task_store=background_task_store,
+            deferred_execution_grant_store=deferred_execution_grant_store,
             curiosity_question_store=curiosity_question_store,
             reflection_report_store=reflection_report_store,
             failure_lesson_store=failure_lesson_store,
@@ -600,6 +608,14 @@ class Bootstrap:
             research_evidence_integrity_auditor=(research_evidence_integrity_auditor),
         )
         brain = Brain(cognitive_engine, memory_manager, event_bus)
+        deferred_execution_control = (
+            TrustedDeferredExecutionControlService(
+                cognitive_engine,
+                deferred_execution_grant_store,
+            )
+            if deferred_execution_grant_store is not None
+            else None
+        )
 
         container.register(config)
         container.register(logger)
@@ -628,6 +644,8 @@ class Bootstrap:
         container.register(cognitive_engine)
         container.register(brain)
         container.register(planner)
+        if deferred_execution_control is not None:
+            container.register(deferred_execution_control)
 
         self.container = container
 
@@ -743,6 +761,19 @@ class Bootstrap:
         )
         return JsonFileBackgroundTaskStore(
             run_path.with_name("research_background_tasks.json")
+        )
+
+    def _deferred_execution_grant_store(
+        self,
+    ) -> JsonFileDeferredExecutionGrantStore | None:
+        """Keep deferred authority separate and opt-in with the scheduler."""
+        if not background_research_enabled(os.environ):
+            return None
+        run_path = self._research_run_path or self._research_run_store_path(
+            self._memory_path
+        )
+        return JsonFileDeferredExecutionGrantStore(
+            run_path.with_name("research_deferred_execution_grants.json")
         )
 
     def _curiosity_question_store(self) -> JsonFileCuriosityQuestionStore | None:

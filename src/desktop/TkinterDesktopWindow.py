@@ -13,7 +13,7 @@ from typing import Literal, Protocol
 from brain.BrainResponse import BrainResponse
 from brain.SessionSummary import SessionSummary
 from core.CancellationSignal import CancellationSignal
-from core.Exceptions import ResearchError
+from core.Exceptions import HypatiaError, ResearchError
 from desktop.DesktopController import DesktopController
 from desktop.DesktopRequestRunner import DesktopRequestRunner
 from desktop.FilesystemContentPreview import FilesystemContentPreview
@@ -4807,11 +4807,37 @@ class TkinterDesktopWindow:
             self._request_button(queue_buttons, label, command).grid(
                 row=0, column=column, sticky="w", padx=(0 if column == 0 else 8, 0)
             )
+        self._deferred_execution_status = tk.StringVar(
+            value="Deferred status: manual only. No timer exists."
+        )
+        if getattr(self._controller, "deferred_execution_control_available", False):
+            deferred_buttons = ttk.Frame(section)
+            deferred_buttons.grid(
+                row=18, column=1, sticky="w", padx=(8, 0), pady=(8, 0)
+            )
+            for column, (label, command) in enumerate(
+                (
+                    ("Allow deferred execution", self._allow_deferred_execution),
+                    ("Revoke deferred execution", self._revoke_deferred_execution),
+                    ("Refresh deferred status", self._refresh_deferred_execution),
+                )
+            ):
+                self._request_button(deferred_buttons, label, command).grid(
+                    row=0,
+                    column=column,
+                    sticky="w",
+                    padx=(0 if column == 0 else 8, 0),
+                )
+            ttk.Label(
+                section,
+                textvariable=self._deferred_execution_status,
+                wraplength=680,
+            ).grid(row=19, column=0, columnspan=2, sticky="w", pady=(4, 0))
         self._request_button(
             section,
             "Run scheduler cycle",
             self._run_scheduler_cycle,
-        ).grid(row=18, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
+        ).grid(row=20, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
 
         buttons = ttk.Frame(section)
         buttons.grid(row=2, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
@@ -5162,6 +5188,72 @@ class TkinterDesktopWindow:
             self._plan_approval_status.set("The queue was left as it was.")
             return
         self._approval_request(lambda: action(task_id))
+
+    def _refresh_deferred_execution(self) -> None:
+        task_id = self._scheduler_task_id.get().strip()
+        if not task_id:
+            self._deferred_execution_status.set("A background task ID is required.")
+            return
+        try:
+            view = self._controller.deferred_execution_status(task_id)
+        except (HypatiaError, ValueError, RuntimeError) as error:
+            self._deferred_execution_status.set(str(error))
+            return
+        state = "allowed" if view.decision.allowed else view.decision.reason
+        self._deferred_execution_status.set(
+            f"Deferred status for {view.task_id}: {state}. No timer exists."
+        )
+
+    def _allow_deferred_execution(self) -> None:
+        task_id = self._scheduler_task_id.get().strip()
+        if not task_id:
+            self._deferred_execution_status.set("A background task ID is required.")
+            return
+        try:
+            preview = self._controller.deferred_execution_status(task_id)
+        except (HypatiaError, ValueError, RuntimeError) as error:
+            self._deferred_execution_status.set(str(error))
+            return
+        if not messagebox.askyesno(
+            "Allow deferred execution?",
+            preview.confirmation_text(),
+            parent=self._root,
+        ):
+            self._deferred_execution_status.set("Deferred execution remains unchanged.")
+            return
+        try:
+            view = self._controller.allow_deferred_execution(task_id)
+        except (HypatiaError, ValueError, RuntimeError) as error:
+            self._deferred_execution_status.set(str(error))
+            return
+        self._deferred_execution_status.set(
+            f"Deferred execution allowed for {view.task_id}. No timer exists."
+        )
+
+    def _revoke_deferred_execution(self) -> None:
+        task_id = self._scheduler_task_id.get().strip()
+        if not task_id:
+            self._deferred_execution_status.set("A background task ID is required.")
+            return
+        if not messagebox.askyesno(
+            "Revoke deferred execution?",
+            (
+                f"Task: {task_id}\n\nFuture automatic eligibility will be "
+                "removed. The task and execution are not cancelled, no budget "
+                "is refunded, and nothing runs now."
+            ),
+            parent=self._root,
+        ):
+            self._deferred_execution_status.set("Deferred execution remains unchanged.")
+            return
+        try:
+            view = self._controller.revoke_deferred_execution(task_id)
+        except (HypatiaError, ValueError, RuntimeError) as error:
+            self._deferred_execution_status.set(str(error))
+            return
+        self._deferred_execution_status.set(
+            f"Deferred execution revoked for {view.task_id}. Manual cycle is unchanged."
+        )
 
     def _run_scheduler_cycle(self) -> None:
         """Ask the scheduler to take exactly one turn, off the Tk thread.

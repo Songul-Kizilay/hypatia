@@ -5,8 +5,12 @@ from __future__ import annotations
 import os
 
 from brain.Brain import Brain
+from cognition.TrustedDeferredExecutionControlService import (
+    TrustedDeferredExecutionControlService,
+)
 from core.Application import HypatiaApplication
 from core.RuntimeOptIn import (
+    background_research_enabled,
     curiosity_enabled,
     failure_memory_enabled,
     hypothesis_engine_enabled,
@@ -77,7 +81,16 @@ def main() -> None:
             event_bus=event_bus,
         )
         TkinterDesktopWindow(
-            DesktopController(brain),
+            DesktopController(
+                brain,
+                (
+                    app.bootstrap.container.resolve(
+                        TrustedDeferredExecutionControlService
+                    )
+                    if background_research_enabled(os.environ)
+                    else None
+                ),
+            ),
             event_bus=event_bus,
             tool_console=ToolConsoleController(tool_runtime, event_bus),
             # The same predicates the runtime used to decide whether each of

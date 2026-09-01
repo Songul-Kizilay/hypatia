@@ -35,9 +35,12 @@ from research.BackgroundResearchTask import BackgroundResearchTask
 from research.BackgroundResearchTaskStatus import BackgroundResearchTaskStatus
 from research.BackgroundTaskOutcome import BackgroundTaskOutcome, outcome_for
 from research.BackgroundTaskStore import BackgroundTaskStore
+from research.DeferredExecutionEligibility import deferred_execution_decision
+from research.DeferredExecutionGrantStore import ReadsDeferredExecutionGrants
 from research.ReadsResearchExecution import ReadsResearchExecution
 from research.ResearchAutonomyBudget import ResearchAutonomyBudget
 from research.ResearchExecutionProgressBlock import progress_block
+from research.SchedulerSelectionMode import SchedulerSelectionMode
 from response.ResponseComposer import ResponseComposer
 
 BACKGROUND_TASK_CREATE_INTENT = "background_research_task_create"
@@ -68,6 +71,7 @@ class BackgroundResearchSchedulerApplicationService:
         id_factory: Callable[[], str] | None = None,
         max_tasks_per_cycle: int = DEFAULT_MAX_TASKS_PER_CYCLE,
         max_active_tasks: int = DEFAULT_MAX_ACTIVE_TASKS,
+        deferred_grants: ReadsDeferredExecutionGrants | None = None,
     ) -> None:
         self._validate_bound(
             max_tasks_per_cycle,
@@ -91,6 +95,7 @@ class BackgroundResearchSchedulerApplicationService:
         self._id_factory = id_factory or (lambda: str(uuid4()))
         self._max_tasks_per_cycle = max_tasks_per_cycle
         self._max_active_tasks = max_active_tasks
+        self._deferred_grants = deferred_grants
         self._tasks: dict[str, BackgroundResearchTask] = {}
         #: One lock for every canonical task transition in this process.
         #: Reentrant so a claim or a commit can persist without releasing it.
@@ -131,6 +136,11 @@ class BackgroundResearchSchedulerApplicationService:
         """
         with self._task_lock:
             return tuple(self._tasks.values())
+
+    def task(self, task_id: str) -> BackgroundResearchTask | None:
+        """Return one exact task without exposing queue mutation."""
+        with self._task_lock:
+            return self._tasks.get(task_id)
 
     def process_create(self, request: BrainRequest) -> BrainResponse:
         """Queue one approved execution, or explain why it cannot be queued."""
@@ -319,12 +329,35 @@ class BackgroundResearchSchedulerApplicationService:
         self._persist()
         return current
 
-    def _next_runnable(self) -> BackgroundResearchTask | None:
-        """Pick the oldest runnable task, so nothing starves behind a retry."""
+    def _next_runnable(
+        self,
+        mode: SchedulerSelectionMode = SchedulerSelectionMode.MANUAL,
+    ) -> BackgroundResearchTask | None:
+        """Pick oldest manual or explicitly deferred-eligible task.
+
+        No public automatic cycle exists. The mode is explicit now so a future
+        timer cannot accidentally reuse the manual-selection predicate.
+        """
         runnable = [task for task in self._tasks.values() if task.status.runnable]
+        if mode is SchedulerSelectionMode.DEFERRED:
+            runnable = [task for task in runnable if self._deferred_runnable(task)]
         if not runnable:
             return None
         return min(runnable, key=lambda task: (task.created_at, task.task_id))
+
+    def _deferred_runnable(self, task: BackgroundResearchTask) -> bool:
+        if self._deferred_grants is None:
+            return False
+        grant = self._deferred_grants.active_for_task(task.task_id)
+        executions = self._executions
+        state = executions.live_execution(task.execution_id)
+        live_plan = getattr(executions, "live_plan", None)
+        allowance_reader = getattr(executions, "allowance", None)
+        if live_plan is None or allowance_reader is None:
+            return False
+        plan = live_plan(task.execution_id)
+        allowance = allowance_reader(task.execution_id)
+        return deferred_execution_decision(task, state, plan, allowance, grant).allowed
 
     def _transition(self, request: BrainRequest, action: str) -> BrainResponse:
         """Read, judge and commit one ruling without anybody slipping in."""

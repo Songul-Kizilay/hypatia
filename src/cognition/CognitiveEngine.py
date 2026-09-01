@@ -126,12 +126,17 @@ from memory.SessionMemoryPolicy import SessionMemoryPolicy
 from research.AcceptedSourceListingStepOperation import (
     AcceptedSourceListingStepOperation,
 )
+from research.BackgroundResearchTask import BackgroundResearchTask
 from research.BackgroundTaskStore import BackgroundTaskStore
 from research.ClaimContradictionStepOperation import (
     ClaimContradictionStepOperation,
 )
 from research.ClaimCreationStepOperation import ClaimCreationStepOperation
 from research.CuriosityQuestionStore import CuriosityQuestionStore
+from research.DeferredExecutionGrantStore import (
+    DeferredExecutionGrantReader,
+    DeferredExecutionGrantStore,
+)
 from research.EvidenceIntegrityCheckStepOperation import (
     EvidenceIntegrityCheckStepOperation,
 )
@@ -157,12 +162,15 @@ from research.ResearchClaimContradictionProposalProvider import (
 from research.ResearchClaimRecord import ResearchClaimRecord
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchEvidenceIntegrityAuditor import ResearchEvidenceIntegrityAuditor
+from research.ResearchExecutionAllowance import ResearchExecutionAllowance
 from research.ResearchExecutionStore import ResearchExecutionStore
 from research.ResearchFailureLesson import ResearchFailureLesson
+from research.ResearchPlan import ResearchPlan
 from research.ResearchPlanAuthorizationStore import (
     ResearchPlanAuthorizationStore,
 )
 from research.ResearchPlanDraftService import ResearchPlanDraftService
+from research.ResearchPlanExecutionState import ResearchPlanExecutionState
 from research.ResearchPlanOperationRegistry import (
     ResearchPlanOperationRegistry,
 )
@@ -214,6 +222,26 @@ RESEARCH_CLAIM_CONTRADICTION_PROPOSAL_MAX_CLAIMS = 50
 class CognitiveEngine:
     """Coordinates the first knowledge-backed cognitive request flow."""
 
+    def background_research_task(self, task_id: str) -> BackgroundResearchTask | None:
+        """Read one scheduler task for trusted control-plane composition."""
+        return self._background_research_scheduler.task(task_id)
+
+    def live_research_execution(
+        self, execution_id: str
+    ) -> ResearchPlanExecutionState | None:
+        """Read exact live state; this grants no transition authority."""
+        return self._research_plan_execution_service.live_execution(execution_id)
+
+    def live_research_plan(self, execution_id: str) -> ResearchPlan | None:
+        """Read the exact plan bound to one live execution."""
+        return self._research_plan_execution_service.live_plan(execution_id)
+
+    def research_execution_allowance(
+        self, execution_id: str
+    ) -> ResearchExecutionAllowance | None:
+        """Read remaining existing authority without changing it."""
+        return self._research_plan_execution_service.allowance(execution_id)
+
     def __init__(
         self,
         knowledge_engine: KnowledgeEngine,
@@ -236,6 +264,7 @@ class CognitiveEngine:
         research_run_manager: ResearchRunManager | None = None,
         research_execution_store: ResearchExecutionStore | None = None,
         background_task_store: BackgroundTaskStore | None = None,
+        deferred_execution_grant_store: DeferredExecutionGrantStore | None = None,
         curiosity_question_store: CuriosityQuestionStore | None = None,
         reflection_report_store: ReflectionReportStore | None = None,
         failure_lesson_store: FailureLessonStore | None = None,
@@ -444,6 +473,11 @@ class CognitiveEngine:
                 executions=self._research_plan_execution_service,
                 task_store=background_task_store,
                 event_bus=event_bus,
+                deferred_grants=(
+                    DeferredExecutionGrantReader(deferred_execution_grant_store)
+                    if deferred_execution_grant_store is not None
+                    else None
+                ),
             )
         )
         self._research_honesty_service = ResearchHonestyApplicationService(

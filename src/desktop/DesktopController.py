@@ -7,6 +7,7 @@ from typing import Protocol
 from brain.BrainRequest import BrainRequest
 from brain.BrainResponse import BrainResponse
 from core.CancellationSignal import CancellationToken
+from research.DeferredExecutionControlView import DeferredExecutionControlView
 from research.ProviderComparisonRequest import ProviderComparisonRequest
 from research.ResearchClaimConfidence import ResearchClaimConfidence
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
@@ -19,6 +20,16 @@ from research.ResearchSourceApplicability import ResearchSourceApplicability
 from research.ResearchSourceIndependence import ResearchSourceIndependence
 from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
 from research.ResearchSourceUsefulness import ResearchSourceUsefulness
+
+
+class TrustedDeferredExecutionController(Protocol):
+    """Narrow desktop-only authority, deliberately not a Brain processor."""
+
+    def preview(self, task_id: str) -> DeferredExecutionControlView: ...
+
+    def grant(self, task_id: str) -> DeferredExecutionControlView: ...
+
+    def revoke(self, task_id: str) -> DeferredExecutionControlView: ...
 
 
 def _plan_step_drafts(
@@ -78,8 +89,31 @@ class BrainProcessor(Protocol):
 class DesktopController:
     """Keep UI actions small, explicit, and free of duplicate state."""
 
-    def __init__(self, brain: BrainProcessor) -> None:
+    def __init__(
+        self,
+        brain: BrainProcessor,
+        deferred_execution_control: TrustedDeferredExecutionController | None = None,
+    ) -> None:
         self._brain = brain
+        self._deferred_execution_control = deferred_execution_control
+
+    @property
+    def deferred_execution_control_available(self) -> bool:
+        return self._deferred_execution_control is not None
+
+    def deferred_execution_status(self, task_id: str) -> DeferredExecutionControlView:
+        return self._deferred_control().preview(task_id.strip())
+
+    def allow_deferred_execution(self, task_id: str) -> DeferredExecutionControlView:
+        return self._deferred_control().grant(task_id.strip())
+
+    def revoke_deferred_execution(self, task_id: str) -> DeferredExecutionControlView:
+        return self._deferred_control().revoke(task_id.strip())
+
+    def _deferred_control(self) -> TrustedDeferredExecutionController:
+        if self._deferred_execution_control is None:
+            raise ValueError("Deferred execution control is unavailable.")
+        return self._deferred_execution_control
 
     def submit_message(self, message: str) -> BrainResponse:
         """Send non-empty composer text unchanged to the existing Brain."""
