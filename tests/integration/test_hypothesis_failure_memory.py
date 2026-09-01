@@ -152,6 +152,7 @@ class HypothesisFailureMemoryTests(unittest.TestCase):
         independence: ResearchSourceIndependence,
         *,
         supersedes_assessment_id: str | None = None,
+        information_trust: ResearchInformationTrust = ResearchInformationTrust.MEDIUM,
     ) -> ResearchSourceAssessmentRecord:
         run = self.manager.get(run_id)
         record = next(
@@ -163,7 +164,7 @@ class HypothesisFailureMemoryTests(unittest.TestCase):
             [evidence_id],
             "Assessed for hypothesis support.",
             supersedes_assessment_id=supersedes_assessment_id,
-            information_trust=ResearchInformationTrust.MEDIUM,
+            information_trust=information_trust,
             independence=independence,
         )
         return updated.assessments[-1]
@@ -331,6 +332,119 @@ class HypothesisFailureMemoryTests(unittest.TestCase):
         self.assertTrue(
             lesson.statement.endswith("No truth or falsity is decided here.")
         )
+
+    def test_explicit_trust_correction_during_support_becomes_one_lesson(
+        self,
+    ) -> None:
+        run_id = self.new_run()
+        evidence_id = self.evidence(run_id, "trust-corrected-support")
+        initial = self.assess_independence(
+            run_id,
+            evidence_id,
+            ResearchSourceIndependence.INDEPENDENT,
+            information_trust=ResearchInformationTrust.LOW,
+        )
+        correction = self.assess_independence(
+            run_id,
+            evidence_id,
+            ResearchSourceIndependence.INDEPENDENT,
+            supersedes_assessment_id=initial.assessment_id,
+            information_trust=ResearchInformationTrust.HIGH,
+        )
+        self.hypothesis_store.save(
+            [
+                self.timed_support(
+                    "trust-corrected-hypothesis",
+                    run_id,
+                    evidence_id,
+                    initial.recorded_at,
+                )
+            ]
+        )
+
+        response = self.service().process_hypothesis_store(self.request(run_id))
+
+        [lesson] = response.failure_lessons
+        self.assertIs(lesson.kind, FailureLessonKind.INVALID_ASSUMPTION)
+        self.assertEqual(
+            lesson.subject_id,
+            f"trust-corrected-hypothesis:{correction.assessment_id}",
+        )
+        self.assertIn("trust changed from low to high", lesson.statement)
+        self.assertNotIn("independence changed", lesson.statement)
+        self.assertEqual(
+            lesson.provenance[-2:],
+            (initial.assessment_id, correction.assessment_id),
+        )
+
+    def test_trust_and_independence_correction_stays_one_hypothesis_lesson(
+        self,
+    ) -> None:
+        run_id = self.new_run()
+        evidence_id = self.evidence(run_id, "combined-corrected-support")
+        initial = self.assess_independence(
+            run_id,
+            evidence_id,
+            ResearchSourceIndependence.INDEPENDENT,
+            information_trust=ResearchInformationTrust.HIGH,
+        )
+        correction = self.assess_independence(
+            run_id,
+            evidence_id,
+            ResearchSourceIndependence.DERIVATIVE,
+            supersedes_assessment_id=initial.assessment_id,
+            information_trust=ResearchInformationTrust.LOW,
+        )
+        self.hypothesis_store.save(
+            [
+                self.timed_support(
+                    "combined-corrected-hypothesis",
+                    run_id,
+                    evidence_id,
+                    initial.recorded_at,
+                )
+            ]
+        )
+
+        response = self.service().process_hypothesis_store(self.request(run_id))
+
+        [lesson] = response.failure_lessons
+        self.assertIn("trust changed from high to low", lesson.statement)
+        self.assertIn(
+            "independence changed from independent to derivative",
+            lesson.statement,
+        )
+        self.assertEqual(lesson.provenance[-1], correction.assessment_id)
+
+    def test_parallel_trust_assessments_are_not_a_correction(self) -> None:
+        run_id = self.new_run()
+        evidence_id = self.evidence(run_id, "parallel-trust-support")
+        initial = self.assess_independence(
+            run_id,
+            evidence_id,
+            ResearchSourceIndependence.INDEPENDENT,
+            information_trust=ResearchInformationTrust.LOW,
+        )
+        self.assess_independence(
+            run_id,
+            evidence_id,
+            ResearchSourceIndependence.INDEPENDENT,
+            information_trust=ResearchInformationTrust.HIGH,
+        )
+        self.hypothesis_store.save(
+            [
+                self.timed_support(
+                    "parallel-trust-hypothesis",
+                    run_id,
+                    evidence_id,
+                    initial.recorded_at,
+                )
+            ]
+        )
+
+        response = self.service().process_hypothesis_store(self.request(run_id))
+
+        self.assertEqual(response.failure_lessons, ())
 
     def test_unknown_independence_without_a_changed_supersession_is_not_a_lesson(
         self,

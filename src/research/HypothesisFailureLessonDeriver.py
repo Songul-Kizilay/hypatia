@@ -106,7 +106,7 @@ class HypothesisFailureLessonDeriver:
                 )
             )
         lessons.extend(
-            self._independence_correction_lessons(
+            self._support_correction_lessons(
                 appraisal,
                 run,
                 recorded_at,
@@ -115,7 +115,7 @@ class HypothesisFailureLessonDeriver:
         )
         return tuple(lessons)
 
-    def _independence_correction_lessons(
+    def _support_correction_lessons(
         self,
         appraisal: HypothesisAppraisal,
         run: ResearchRun,
@@ -144,7 +144,7 @@ class HypothesisFailureLessonDeriver:
                     kind=FailureLessonKind.INVALID_ASSUMPTION,
                     run_id=run.run_id,
                     subject_id=subject_id,
-                    statement=self._independence_statement(
+                    statement=self._support_correction_statement(
                         appraisal,
                         correction,
                     ),
@@ -164,16 +164,40 @@ class HypothesisFailureLessonDeriver:
         return tuple(unique)
 
     @staticmethod
-    def _independence_statement(
+    def _support_correction_statement(
         appraisal: HypothesisAppraisal,
         correction: HypothesisSupportCorrection,
     ) -> str:
         prefix = 'Supporting-source correction for hypothesis: "'
+        trust_changed = (
+            correction.earlier_information_trust
+            is not correction.later_information_trust
+        )
+        independence_changed = (
+            correction.earlier_independence is not correction.later_independence
+        )
+        if trust_changed and independence_changed:
+            changes = (
+                "trust changed from "
+                f"{correction.earlier_information_trust.value} to "
+                f"{correction.later_information_trust.value}; independence changed "
+                f"from {correction.earlier_independence.value} to "
+                f"{correction.later_independence.value}"
+            )
+        elif trust_changed:
+            changes = (
+                "trust changed from "
+                f"{correction.earlier_information_trust.value} to "
+                f"{correction.later_information_trust.value}"
+            )
+        else:
+            changes = (
+                "independence changed from "
+                f"{correction.earlier_independence.value} to "
+                f"{correction.later_independence.value}"
+            )
         suffix = (
-            '" - independence changed from '
-            f"{correction.earlier_independence.value} to "
-            f"{correction.later_independence.value}. "
-            f"The earlier judgement did not hold. {NO_TRUTH_DECIDED}"
+            f'" - {changes}. The earlier judgement did not hold. ' f"{NO_TRUTH_DECIDED}"
         )
         budget = MAX_LESSON_STATEMENT_LENGTH - len(prefix) - len(suffix)
         wording = appraisal.hypothesis.one_line_statement(max(1, budget))

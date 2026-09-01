@@ -19,6 +19,7 @@ from datetime import datetime
 from core.Exceptions import ResearchError
 from research.HypothesisEvidenceRelation import HypothesisEvidenceRelation
 from research.ResearchHypothesis import ResearchHypothesis
+from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRun import ResearchRun
 from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
 from research.ResearchSourceIndependence import ResearchSourceIndependence
@@ -32,6 +33,8 @@ class HypothesisSupportCorrection:
     source_document_id: str
     earlier_assessment_id: str
     later_assessment_id: str
+    earlier_information_trust: ResearchInformationTrust
+    later_information_trust: ResearchInformationTrust
     earlier_independence: ResearchSourceIndependence
     later_independence: ResearchSourceIndependence
 
@@ -45,12 +48,21 @@ class HypothesisSupportCorrection:
             if not isinstance(value, str) or not value.strip():
                 raise ResearchError(f"{label} cannot be empty.")
             object.__setattr__(self, label.lower().replace(" ", "_"), value.strip())
+        if not isinstance(self.earlier_information_trust, ResearchInformationTrust):
+            raise ResearchError("Earlier source trust is invalid.")
+        if not isinstance(self.later_information_trust, ResearchInformationTrust):
+            raise ResearchError("Later source trust is invalid.")
         if not isinstance(self.earlier_independence, ResearchSourceIndependence):
             raise ResearchError("Earlier source independence is invalid.")
         if not isinstance(self.later_independence, ResearchSourceIndependence):
             raise ResearchError("Later source independence is invalid.")
-        if self.earlier_independence is self.later_independence:
-            raise ResearchError("A source correction must change independence.")
+        if (
+            self.earlier_information_trust is self.later_information_trust
+            and self.earlier_independence is self.later_independence
+        ):
+            raise ResearchError(
+                "A source correction must change trust or independence."
+            )
 
 
 class HypothesisSupportCorrectionFinder:
@@ -83,7 +95,7 @@ class HypothesisSupportCorrectionFinder:
             ),
         ):
             earlier = assessments_by_id.get(later.supersedes_assessment_id or "")
-            if earlier is None or not self._changed_independence(earlier, later):
+            if earlier is None or not self._changed_support_judgement(earlier, later):
                 continue
             support = support_by_document.get(later.source_document_id)
             if support is None or support[0] > later.recorded_at:
@@ -94,6 +106,8 @@ class HypothesisSupportCorrectionFinder:
                     source_document_id=later.source_document_id,
                     earlier_assessment_id=earlier.assessment_id,
                     later_assessment_id=later.assessment_id,
+                    earlier_information_trust=earlier.information_trust,
+                    later_information_trust=later.information_trust,
                     earlier_independence=earlier.independence,
                     later_independence=later.independence,
                 )
@@ -122,11 +136,11 @@ class HypothesisSupportCorrectionFinder:
         return support_by_document
 
     @staticmethod
-    def _changed_independence(
+    def _changed_support_judgement(
         earlier: ResearchSourceAssessmentRecord,
         later: ResearchSourceAssessmentRecord,
     ) -> bool:
-        return (
-            earlier.source_document_id == later.source_document_id
-            and earlier.independence is not later.independence
+        return earlier.source_document_id == later.source_document_id and (
+            earlier.information_trust is not later.information_trust
+            or earlier.independence is not later.independence
         )

@@ -868,16 +868,17 @@ write. Repeating the request is idempotent, and a weakened hypothesis that is
 later contradicted can retain both distinct, provenance-backed lessons without
 either lesson claiming that the hypothesis is true or false.
 
-That same explicit request can remember a source-independence correction tied
-to a hypothesis, but only when the supporting-evidence relation has its own
-recorded authoring time and was already standing when an explicitly superseding
-assessment changed that source's independence judgement. The resulting
-`invalid_assumption` lesson names the hypothesis, evidence, source document,
-and both assessment records. Missing or unknown independence is not a failure;
-parallel assessments are not a correction; legacy untimed support, support
-added after the correction, unrelated sources, and withdrawn hypotheses do not
-produce this lesson. Nothing is inferred from wording or record order, and no
-event or background path stores it automatically.
+That same explicit request can remember a source trust or independence
+correction tied to a hypothesis, but only when the supporting-evidence relation
+has its own recorded authoring time and was already standing when an explicitly
+superseding assessment changed that source judgement. A revision changing both
+dimensions remains one `invalid_assumption` lesson, naming the hypothesis,
+evidence, source document, and both assessment records. A missing structured
+judgement is not a failure; parallel assessments are not a correction; legacy
+untimed support, support added after the correction, unrelated sources, and
+withdrawn hypotheses do not produce this lesson. Nothing is inferred from
+wording or record order, and no event or background path stores it
+automatically.
 
 Each such lesson quotes the hypothesis in the wording it was written in. An
 outcome recorded only as a record ID is unreadable by the time anyone needs it,

@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.254 (Genesis)`
+`v0.3.255 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.254`** is the current source/package release line.
+- **Runtime release `v0.3.255`** is the current source/package release line.
   GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -86,9 +86,10 @@ with optional OpenAI-compatible LLM conversation support.
   `disproving_evidence` lesson, `contradicted` derives a `failed_hypothesis`
   lesson, and `open`, `supported`, or `withdrawn` derives none. No event handler
   or background task creates these lessons automatically. The same command can
-  additionally remember a source-independence correction only when a timed,
-  currently standing support relation demonstrably predates the explicitly
-  superseding assessment. Unknown or missing independence, parallel judgements,
+  additionally remember a source trust or independence correction only when a
+  timed, currently standing support relation demonstrably predates the
+  explicitly superseding assessment. A revision that changes both dimensions
+  stays one lesson. Missing structured judgement, parallel judgements,
   unrelated sources, post-correction support, withdrawn hypotheses, and legacy
   untimed support derive no such lesson. Each lesson quotes the hypothesis in
   its own wording on a single bounded line, and the per-run limit keeps

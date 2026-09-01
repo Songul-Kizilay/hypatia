@@ -2,6 +2,28 @@
 
 All notable project changes are recorded here.
 
+## [0.3.255] - 2026-09-01
+
+### Changed
+
+- A timed hypothesis support relation can now remember an explicitly
+  superseding source-assessment correction when information trust changed, as
+  well as when independence changed.
+- A single assessment revision that changes trust and independence together
+  produces one `invalid_assumption` lesson with one stable identity and the
+  same hypothesis, evidence, source, and two-assessment provenance chain.
+
+### Security
+
+- The sequence requirement is unchanged: the supporting relation must carry a
+  recorded authoring time no later than the linked correction. Parallel
+  assessments, unchanged supersessions, unrelated sources, later support,
+  withdrawn hypotheses, and legacy untimed support produce no lesson.
+- Trust labels are reported as operator-authored corrections, not converted to
+  truth or instructions. Learning remains behind the explicit Failure Memory
+  command and performs no event-driven write, model call, research operation,
+  network request, claim edit, or hypothesis status change.
+
 ## [0.3.254] - 2026-09-01
 
 ### Added
