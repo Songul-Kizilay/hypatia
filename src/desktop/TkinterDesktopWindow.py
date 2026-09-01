@@ -478,6 +478,9 @@ class TkinterDesktopWindow:
         self._root = root or tk.Tk()
         self._research_refresh_signal = ResearchStateRefreshSignal(event_bus)
         self._request_runner = DesktopRequestRunner()
+        #: Controls that stop work rather than start it. They stay usable while
+        #: the one worker is busy; everything else is disabled until it frees.
+        self._control_plane_controls: list[ttk.Button] = []
         self._request_completion_handler: Callable[[object], None] | None = None
         self._request_controls: list[ttk.Button] = []
         self._request_label: str | None = None
@@ -914,6 +917,27 @@ class TkinterDesktopWindow:
         """Create one control disabled while a long desktop request is active."""
         button = ttk.Button(parent, text=text, command=command)
         self._request_controls.append(button)
+        return button
+
+    def _control_plane_button(
+        self,
+        parent: tk.Misc,
+        text: str,
+        command: Callable[[], None],
+    ) -> ttk.Button:
+        """Create one control that stays usable while a request is running.
+
+        Reserved for actions that stop work rather than start it. Everything
+        else is disabled while the worker is busy, because a second request
+        would have nowhere to run; an action whose entire purpose is to end the
+        first one is useless if it is only available once that has happened.
+
+        Nothing here makes such an action concurrent with the worker in any
+        deeper sense. It still runs on this thread and still goes through the
+        ordinary application boundary; it is simply not greyed out.
+        """
+        button = ttk.Button(parent, text=text, command=command)
+        self._control_plane_controls.append(button)
         return button
 
     def _collect_request_controls(self, parent: tk.Misc) -> list[ttk.Button]:
@@ -2592,10 +2616,11 @@ class TkinterDesktopWindow:
         )
         self._composer.bind("<Control-Return>", self._send_with_keyboard)
         self._composer.focus_set()
+        control_plane = set(map(id, self._control_plane_controls))
         self._request_controls = [
             button
             for button in self._collect_request_controls(container)
-            if button is not self._cancel_button
+            if button is not self._cancel_button and id(button) not in control_plane
         ]
 
     def _change_font_size(self, adjustment: int) -> None:
@@ -4743,7 +4768,6 @@ class TkinterDesktopWindow:
         commands: list[tuple[str, Callable[[], None]]] = [
             ("Refresh status", self._refresh_execution_status),
             ("Advance one step", self._advance_execution_one_step),
-            ("Cancel execution", self._cancel_execution),
         ]
         if self._curiosity_enabled:
             # Only offered where the question it needs can be named. Resuming
@@ -4754,6 +4778,12 @@ class TkinterDesktopWindow:
             self._request_button(buttons, label, command).grid(
                 row=0, column=column, sticky="w", padx=(0 if column == 0 else 8, 0)
             )
+        # Deliberately not one of the buttons above. Cancelling is how an
+        # operator stops a continuation that is already running, so it is the
+        # one execution control that must not be greyed out while one is.
+        self._control_plane_button(
+            buttons, "Cancel execution", self._cancel_execution
+        ).grid(row=0, column=len(commands), sticky="w", padx=(8, 0))
 
     def _refresh_execution_status(self) -> None:
         self._approval_request(

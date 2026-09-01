@@ -2,6 +2,42 @@
 
 All notable project changes are recorded here.
 
+## [0.3.273] - 2026-09-01
+
+### Fixed
+
+- "Cancel execution" stays usable while a background continuation is running. It
+  is now a control-plane action: every other desktop control is still disabled
+  while the one worker is busy, because a second request would have nowhere to
+  run, but a stop button that only appears once the work has stopped is not a
+  stop button.
+- The cancellation reaches the canonical service on the calling thread and
+  returns without waiting for the in-flight provider, so the execution is
+  CANCELLED both live and durably before the operation comes back. The returning
+  provider cannot undo it, and no later step begins.
+
+### Security
+
+- The exemption is exactly one button wide. A second continuation, an advance,
+  a start and an approval all remain blocked while the worker is busy, and the
+  request runner itself was not touched or made concurrent.
+- Cancel targets the execution named in the panel, never the running worker's.
+  Cancelling a different identity leaves the running one alone, and a blank one
+  refuses.
+- Nothing about authority moves: no approval is created, the plan and its digest
+  are untouched, and the in-flight attempt's spent budget stays spent.
+
+### Known limitation
+
+- One narrow window remains open. `process_cancel` does not take the commit lock
+  that guards the attempt's outcome, so a cancellation landing between that
+  comparison and its write is still overwritten. The window is two adjacent
+  statements wide; a cancellation arriving at any other moment, including
+  anywhere during the provider call, is preserved. The behaviour is recorded in
+  `test_a_cancel_can_still_be_lost_in_the_commit_window` rather than left
+  undocumented, and closing it means bringing every canonical writer under that
+  lock.
+
 ## [0.3.272] - 2026-09-01
 
 ### Fixed
