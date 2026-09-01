@@ -24,6 +24,7 @@ from cognition.CognitiveEngine import CognitiveEngine
 from cognition.ResearchPlanExecutionEvents import EXECUTION_RESTORED
 from core.Bootstrap import Bootstrap
 from core.Exceptions import ResearchError
+from core.ExclusiveStoreOwnership import release_all
 from eventbus.Event import Event
 from eventbus.EventBus import EventBus
 from knowledge.KnowledgeEngine import KnowledgeEngine
@@ -390,12 +391,18 @@ class BootstrapExecutionPersistenceTests(unittest.TestCase):
 
             store = bootstrap._research_execution_store()
 
-            self.assertIsNotNone(store)
-            assert store is not None
-            self.assertEqual(
-                store._path,
-                path / "research_executions.json",
-            )
+            try:
+                self.assertIsNotNone(store)
+                assert store is not None
+                self.assertEqual(
+                    store._path,
+                    path / "research_executions.json",
+                )
+            finally:
+                # Building the store claims it for this process, and the held
+                # lock keeps its file undeletable until the claim is given up —
+                # which has to happen before this directory is removed.
+                release_all()
 
     def test_non_exact_flag_values_keep_persistence_disabled(self) -> None:
         for value in ("True", "1", "yes", ""):

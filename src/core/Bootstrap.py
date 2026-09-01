@@ -7,6 +7,7 @@ from brain.Brain import Brain
 from cognition.CognitiveEngine import CognitiveEngine
 from core.Config import Config
 from core.DependencyContainer import DependencyContainer
+from core.ExclusiveStoreOwnership import claim
 from core.Logger import Logger
 from core.RuntimeOptIn import (
     background_research_enabled,
@@ -682,9 +683,12 @@ class Bootstrap:
         run_path = self._research_run_path or self._research_run_store_path(
             self._memory_path
         )
-        return JsonFileResearchExecutionStore(
-            run_path.with_name("research_executions.json")
-        )
+        store_path = run_path.with_name("research_executions.json")
+        # Claimed before the store is handed out, because two processes sharing
+        # one execution store do not race over a field: each replaces the whole
+        # document, so the later writer erases the other's executions.
+        claim(store_path)
+        return JsonFileResearchExecutionStore(store_path)
 
     def _background_task_store(self) -> JsonFileBackgroundTaskStore | None:
         """Create the task store only when background research is opted in.

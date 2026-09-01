@@ -2,6 +2,34 @@
 
 All notable project changes are recorded here.
 
+## [0.3.275] - 2026-09-01
+
+### Fixed
+
+- A writable research execution store now has one owning process. Two Hypatia
+  processes pointed at the same store did not race over a field: each keeps its
+  own picture in memory and each save replaces the whole document, so the later
+  writer erased the other's executions outright. That was reproduced with two
+  real processes, which is why the second one is now refused rather than warned.
+
+### Security
+
+- Ownership is an OS lock on a sidecar file, not the existence of that file. A
+  file that merely existed would keep a dead owner's claim forever and leave
+  somebody deleting it by hand after every crash; a kernel-held lock is released
+  when the owning process ends, however it ends. Killing an owner outright and
+  then claiming the store is proven in the tests.
+- The claim is per store, never per machine. Two processes working on different
+  stores are left alone, and within one process the same store may be claimed
+  again so that rebuilding an application does not deadlock against itself.
+- A refused process changes nothing: it does not touch the store, does not fall
+  back to another file, in-memory mode or a copy, and says plainly that another
+  Hypatia process owns the store without claiming corruption or interfering with
+  the owner.
+- No scheduler process was introduced. This makes sharing fail loudly; it does
+  not make sharing safe, and the in-process guarantees from v0.3.274 are
+  unchanged.
+
 ## [0.3.274] - 2026-09-01
 
 ### Fixed
