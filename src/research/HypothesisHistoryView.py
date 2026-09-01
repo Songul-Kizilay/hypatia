@@ -34,6 +34,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from core.Exceptions import ResearchError
+from research.DisplayText import one_bounded_line
 from research.HypothesisEvidenceRelation import HypothesisEvidenceRelation
 from research.HypothesisEvidenceRetraction import HypothesisEvidenceRetraction
 from research.HypothesisStatus import HypothesisStatus
@@ -44,6 +45,7 @@ from research.HypothesisStatus import HypothesisStatus
 MAX_HISTORY_RETRACTIONS = 20
 
 MAX_STATEMENT_LENGTH = 200
+MAX_EVIDENCE_NOTE_LENGTH = 80
 
 ASSERTION_TIME_NOTICE = (
     "Relationships authored before this was recorded show no authoring time. "
@@ -237,5 +239,8 @@ class HypothesisHistoryView:
 
     def _label(self, evidence_id: str) -> str:
         """Name evidence by its own note where one exists, else by identifier."""
-        note = self.evidence_notes.get(evidence_id, "")
+        note = one_bounded_line(
+            self.evidence_notes.get(evidence_id, ""),
+            MAX_EVIDENCE_NOTE_LENGTH,
+        )
         return f"{evidence_id} ({note})" if note else evidence_id

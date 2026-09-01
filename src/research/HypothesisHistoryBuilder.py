@@ -16,8 +16,10 @@ from collections.abc import Sequence
 from datetime import datetime
 
 from core.Exceptions import ResearchError
+from research.DisplayText import one_bounded_line
 from research.HypothesisEvidenceRetraction import HypothesisEvidenceRetraction
 from research.HypothesisHistoryView import (
+    MAX_EVIDENCE_NOTE_LENGTH,
     MAX_HISTORY_RETRACTIONS,
     MAX_STATEMENT_LENGTH,
     HypothesisHistoryView,
@@ -26,8 +28,6 @@ from research.HypothesisHistoryView import (
 from research.HypothesisStatus import HypothesisStatus
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchHypothesis import ResearchHypothesis
-
-MAX_EVIDENCE_NOTE_LENGTH = 80
 
 
 class HypothesisHistoryBuilder:
@@ -123,7 +123,10 @@ def _notes(
         *(entry.evidence_id for entry in hypothesis.retractions),
     }
     return {
-        record.evidence_id: record.note.strip()[:MAX_EVIDENCE_NOTE_LENGTH]
+        record.evidence_id: one_bounded_line(
+            record.note,
+            MAX_EVIDENCE_NOTE_LENGTH,
+        )
         for record in evidence
         if record.evidence_id in mentioned and record.note.strip()
     }

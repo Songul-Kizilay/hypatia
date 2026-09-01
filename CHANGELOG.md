@@ -2,6 +2,23 @@
 
 All notable project changes are recorded here.
 
+## [0.3.263] - 2026-09-01
+
+### Fixed
+
+- Hypothesis History now collapses an operator-authored evidence note to one
+  display line before applying its 80-character bound. A line break in a note
+  can no longer resemble another relation, standing, or withdrawal entry.
+- The final history renderer applies the same boundary even when a view is
+  constructed directly rather than through the normal builder.
+
+### Security
+
+- The normalized, bounded note is stored only in the derived read model; the
+  canonical evidence record and hypothesis remain unchanged.
+- The change performs no model call, network request, research operation,
+  evidence mutation, retry, or background action.
+
 ## [0.3.262] - 2026-09-01
 
 ### Fixed

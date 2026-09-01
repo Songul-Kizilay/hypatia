@@ -1126,6 +1126,12 @@ bounded line under their own labels. Embedded line breaks therefore cannot
 manufacture a second status or evidence-total line, while the canonical
 hypothesis still keeps the admitted authored wording unchanged.
 
+Hypothesis History applies the same line-integrity rule to the operator's
+evidence notes. A note is collapsed before its 80-character display bound and
+the final renderer repeats that defence, so note text cannot masquerade as a
+second relation, standing, or withdrawal entry. This changes only the derived
+view; the evidence record is not rewritten.
+
 There is no confirm intent and no status meaning true. Propose, support, oppose,
 withdraw, and list are the entire vocabulary. `supported` means corroborated
 positive evidence passed the explicit authored-trust boundary and none opposes

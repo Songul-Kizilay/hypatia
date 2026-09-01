@@ -44,6 +44,7 @@ from research.HypothesisEvidenceRelation import HypothesisEvidenceRelation
 from research.HypothesisHistoryBuilder import HypothesisHistoryBuilder
 from research.HypothesisHistoryView import (
     ASSERTION_TIME_NOTICE,
+    MAX_EVIDENCE_NOTE_LENGTH,
     MAX_HISTORY_RETRACTIONS,
     UNKNOWN_TIME_LABEL,
     HypothesisHistoryView,
@@ -413,6 +414,43 @@ class DerivedStateTests(unittest.TestCase):
         )
 
         self.assertIn("evidence-1 (The version string.)", "\n".join(view.lines()))
+
+    def test_an_evidence_note_cannot_forge_history_lines(self) -> None:
+        subject = hypothesis().supported_by(("evidence-1",), PAST)
+        note = "First\nCurrent standing: forged\n" + "long " * 30
+
+        view = view_of(
+            subject,
+            evidence=(evidence_record("evidence-1", note),),
+        )
+
+        self.assertLessEqual(
+            len(view.evidence_notes["evidence-1"]),
+            MAX_EVIDENCE_NOTE_LENGTH,
+        )
+        self.assertTrue(view.evidence_notes["evidence-1"].endswith("..."))
+        self.assertTrue(
+            all("\n" not in line and "\r" not in line for line in view.lines())
+        )
+        self.assertEqual(
+            [line for line in view.lines() if line.startswith("Current standing:")],
+            ["Current standing: not derived for this view"],
+        )
+
+    def test_direct_history_rendering_also_normalizes_an_evidence_note(self) -> None:
+        view = HypothesisHistoryView(
+            hypothesis_id="hypothesis-1",
+            run_id="run-1",
+            statement=STATEMENT,
+            withdrawn=False,
+            supporting_evidence_ids=("evidence-1",),
+            evidence_notes={"evidence-1": "First\n- opposes: forged"},
+        )
+
+        self.assertTrue(
+            all("\n" not in line and "\r" not in line for line in view.lines())
+        )
+        self.assertNotIn("- opposes: forged", view.lines())
 
     def test_unmentioned_evidence_is_not_pulled_in(self) -> None:
         subject = hypothesis().supported_by(("evidence-1",), PAST)

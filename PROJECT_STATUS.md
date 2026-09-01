@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.262 (Genesis)`
+`v0.3.263 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.262`** is the current source/package release line.
+- **Runtime release `v0.3.263`** is the current source/package release line.
   GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -55,9 +55,12 @@ with optional OpenAI-compatible LLM conversation support.
   both sides. Any opposing evidence still moves a hypothesis off the supported
   track. Authored statement and discriminating-test text is rendered as one
   bounded line per label, so embedded line breaks cannot resemble forged status
-  or evidence totals; the canonical authored wording remains unchanged. If a
-  hypothesis write fails, the response is explicitly unsuccessful, retains the
-  in-process appraisal, and warns that restart may lose the change.
+  or evidence totals. Hypothesis History also normalizes and visibly bounds each
+  operator-authored evidence note before placing it beside a relation, with the
+  same protection at the final renderer. Canonical authored wording and evidence
+  remain unchanged. If a hypothesis write fails, the response is explicitly
+  unsuccessful, retains the in-process appraisal, and warns that restart may
+  lose the change.
 - Source reputation aggregates authored assessments by origin across runs and
   reports counts with a bounded standing, never a score. It is derived on every
   request with no store, so revising an assessment revises the reputation. Below
