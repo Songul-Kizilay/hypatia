@@ -2,6 +2,26 @@
 
 All notable project changes are recorded here.
 
+## [0.3.253] - 2026-09-01
+
+### Changed
+
+- Reflection now reads the selected run's durable hypotheses through the
+  existing hypothesis-store boundary and passes them to the shared knowledge-gap
+  detector and Curiosity question generator.
+- An unanswered discriminating test or multi-source hypothesis support whose
+  independence is not confirmed is shown as weak evidence, with the same
+  deterministic next question Curiosity would surface.
+
+### Security
+
+- Reflection remains local, deterministic, read-only, and truth-neutral. It
+  neither writes hypotheses nor changes their status, evidence, confidence, or
+  source assessments, and it starts no research, model call, or network request.
+- Only hypotheses belonging to the selected run are composed into a report. A
+  missing or unreadable hypothesis store preserves the run-side reflection
+  rather than exposing a storage error or inventing hypothesis state.
+
 ## [0.3.252] - 2026-09-01
 
 ### Added

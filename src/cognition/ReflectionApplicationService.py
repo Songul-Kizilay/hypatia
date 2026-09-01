@@ -1,10 +1,11 @@
 """Bounded reflection: report how a run went, and change nothing about it.
 
-Reflection reads persisted research state and produces an account of the
-process — what failed, what contradicted what, which beliefs were revised, what
-rests on thin evidence, what stayed uncertain, what effort went unused, what
-worked, and what curiosity would ask next. Producing or storing that account
-performs no research operation, mutates no run, and promotes nothing.
+Reflection reads persisted research and hypothesis state and produces an
+account of the process — what failed, what contradicted what, which beliefs were
+revised, what rests on thin evidence, what stayed uncertain, what effort went
+unused, what worked, and what curiosity would ask next. Producing or storing
+that account performs no research operation, mutates no run or hypothesis, and
+promotes nothing.
 
 There is no recursive reflection. The only thing this service will reflect on is
 a research run; a stored reflection report is not a run, and no intent here
@@ -22,8 +23,10 @@ from brain.BrainResponse import BrainResponse
 from cognition.ReflectionEvents import ReflectionEvents
 from core.Exceptions import ResearchError
 from eventbus.EventBus import EventBus
+from research.HypothesisStore import HypothesisStore
 from research.JsonFileReflectionReportStore import MAX_REFLECTION_STORE_REPORTS
 from research.ReflectionReportStore import ReflectionReportStore
+from research.ResearchHypothesis import ResearchHypothesis
 from research.ResearchReflectionGenerator import ResearchReflectionGenerator
 from research.ResearchReflectionReport import ResearchReflectionReport
 from research.ResearchRunManager import ResearchRunManager
@@ -44,6 +47,7 @@ class ReflectionApplicationService:
         *,
         generator: ResearchReflectionGenerator | None = None,
         report_store: ReflectionReportStore | None = None,
+        hypothesis_store: HypothesisStore | None = None,
         event_bus: EventBus | None = None,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
@@ -51,6 +55,7 @@ class ReflectionApplicationService:
         self._response_composer = response_composer
         self._generator = generator or ResearchReflectionGenerator()
         self._report_store = report_store
+        self._hypothesis_store = hypothesis_store
         self._events = ReflectionEvents(event_bus)
         self._clock = clock or (lambda: datetime.now(UTC))
         self._reports: dict[str, ResearchReflectionReport] = {}
@@ -114,7 +119,24 @@ class ReflectionApplicationService:
         if not isinstance(run_id, str) or not run_id.strip():
             raise ResearchError("Reflection requires a research run ID.")
         run = self._run_manager.get(run_id.strip())
-        return self._generator.reflect(run, self._clock())
+        hypotheses = self._hypotheses_for(run.run_id)
+        return self._generator.reflect(run, self._clock(), hypotheses)
+
+    def _hypotheses_for(self, run_id: str) -> tuple[ResearchHypothesis, ...]:
+        """Return durable hypotheses for this run, or none when unavailable.
+
+        Reflection remains useful when hypothesis persistence is disabled or
+        temporarily unreadable: the run-side findings are still true. The
+        application layer composes the separate aggregates, while the generator
+        stays a pure function of the records it is explicitly given.
+        """
+        if self._hypothesis_store is None:
+            return ()
+        try:
+            stored = self._hypothesis_store.load()
+        except ResearchError:
+            return ()
+        return tuple(hypothesis for hypothesis in stored if hypothesis.run_id == run_id)
 
     def _restore(self) -> None:
         if self._report_store is None:

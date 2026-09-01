@@ -12,13 +12,14 @@ gap detector, and the "what next" section is the curiosity generator's output,
 reported but never stored: turning a question into work stays curiosity's
 decision to offer and a human's decision to take.
 
-There is no recursive reflection. This generator accepts a research run and
-nothing else, and a reflection report is not a research run, so reflecting on a
-reflection is not an operation that exists.
+There is no recursive reflection. This generator accepts a research run and an
+optional sequence of that run's authored hypotheses; a reflection report is
+neither, so reflecting on a reflection is not an operation that exists.
 """
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
 
 from core.Exceptions import ResearchError
@@ -27,6 +28,7 @@ from research.ReflectionFindingKind import ReflectionFindingKind
 from research.ResearchCuriosityQuestionGenerator import (
     ResearchCuriosityQuestionGenerator,
 )
+from research.ResearchHypothesis import ResearchHypothesis
 from research.ResearchKnowledgeGapDetector import ResearchKnowledgeGapDetector
 from research.ResearchKnowledgeGapKind import ResearchKnowledgeGapKind
 from research.ResearchReflectionFinding import (
@@ -47,6 +49,12 @@ _GAP_FINDINGS: dict[ResearchKnowledgeGapKind, ReflectionFindingKind] = {
     ResearchKnowledgeGapKind.UNRESOLVED_CLAIM: ReflectionFindingKind.UNCERTAIN,
     ResearchKnowledgeGapKind.SINGLE_SOURCE_CLAIM: ReflectionFindingKind.WEAK_EVIDENCE,
     ResearchKnowledgeGapKind.UNCONFIRMED_INDEPENDENCE_CLAIM: (
+        ReflectionFindingKind.WEAK_EVIDENCE
+    ),
+    ResearchKnowledgeGapKind.UNCONFIRMED_INDEPENDENCE_HYPOTHESIS: (
+        ReflectionFindingKind.WEAK_EVIDENCE
+    ),
+    ResearchKnowledgeGapKind.HYPOTHESIS_EVIDENCE_GAP: (
         ReflectionFindingKind.WEAK_EVIDENCE
     ),
     ResearchKnowledgeGapKind.LOW_TRUST_SOURCE: ReflectionFindingKind.WEAK_EVIDENCE,
@@ -80,6 +88,7 @@ class ResearchReflectionGenerator:
         self,
         run: ResearchRun,
         reflected_at: datetime,
+        hypotheses: Sequence[ResearchHypothesis] = (),
     ) -> ResearchReflectionReport:
         """Return one bounded report, performing no research of any kind."""
         if not isinstance(run, ResearchRun):
@@ -87,10 +96,10 @@ class ResearchReflectionGenerator:
         findings = [
             *self._failures(run),
             *self._revisions(run),
-            *self._from_gaps(run, reflected_at),
+            *self._from_gaps(run, reflected_at, hypotheses),
             *self._unused_discoveries(run),
             *self._worked(run),
-            *self._next_questions(run, reflected_at),
+            *self._next_questions(run, reflected_at, hypotheses),
         ]
         findings.sort(key=lambda finding: (finding.order, finding.subject_id))
         return ResearchReflectionReport(
@@ -141,6 +150,7 @@ class ResearchReflectionGenerator:
         self,
         run: ResearchRun,
         reflected_at: datetime,
+        hypotheses: Sequence[ResearchHypothesis],
     ) -> list[ResearchReflectionFinding]:
         """Reuse gap detection rather than re-deriving a thin record."""
         return [
@@ -149,7 +159,7 @@ class ResearchReflectionGenerator:
                 gap.subject_id or RUN_SUBJECT,
                 gap.summary,
             )
-            for gap in self._detector.detect(run, reflected_at)
+            for gap in self._detector.detect(run, reflected_at, hypotheses)
             if gap.kind in _GAP_FINDINGS
         ]
 
@@ -196,16 +206,17 @@ class ResearchReflectionGenerator:
         self,
         run: ResearchRun,
         reflected_at: datetime,
+        hypotheses: Sequence[ResearchHypothesis],
     ) -> list[ResearchReflectionFinding]:
         """Report curiosity's proposals without storing or acting on any."""
-        gaps = self._detector.detect(run, reflected_at)
+        gaps = self._detector.detect(run, reflected_at, hypotheses)
         return [
             self._finding(
                 ReflectionFindingKind.NEXT_QUESTION,
                 question.question_id,
                 question.text,
             )
-            for question in self._question_generator.generate(run, gaps)
+            for question in self._question_generator.generate(run, gaps, hypotheses)
         ]
 
     @staticmethod

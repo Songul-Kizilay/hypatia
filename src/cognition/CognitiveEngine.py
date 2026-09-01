@@ -467,6 +467,7 @@ class CognitiveEngine:
                 research_run_manager,
                 response_composer,
                 report_store=reflection_report_store,
+                hypothesis_store=hypothesis_store,
                 event_bus=event_bus,
             )
         self._failure_memory_service: FailureMemoryApplicationService | None = None

@@ -794,7 +794,13 @@ nothing.
 Where reflection and curiosity ask the same question, reflection reuses
 curiosity rather than duplicating it: the thin-record findings come from the gap
 detector, and the "what next" section is curiosity's proposals, reported but
-never stored.
+never stored. When durable hypotheses are available, reflection reads only those
+belonging to the selected run and gives them to the same two components. An
+unanswered discriminating test or multi-source support whose independence is not
+confirmed therefore stays visible as weak evidence and as the same deterministic
+next question. This is still inspection only: no hypothesis, evidence relation,
+assessment, status, or confidence is changed. If hypothesis state is unavailable,
+the run-side reflection remains available without inventing the missing half.
 
 There is no recursive reflection. Only a research run can be reflected on; a
 stored report is not a run, and no intent accepts one. A system that reflects on

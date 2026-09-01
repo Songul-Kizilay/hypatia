@@ -49,6 +49,7 @@ from research.JsonFileReflectionReportStore import (
 from research.JsonFileResearchRunStore import JsonFileResearchRunStore
 from research.ReflectionFindingKind import ReflectionFindingKind, order_for
 from research.ResearchEpistemicState import ResearchEpistemicState
+from research.ResearchHypothesis import ResearchHypothesis
 from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchReflectionFinding import ResearchReflectionFinding
 from research.ResearchReflectionGenerator import ResearchReflectionGenerator
@@ -58,6 +59,7 @@ from research.ResearchReflectionReport import (
 )
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchSource import ResearchSource
+from research.ResearchSourceIndependence import ResearchSourceIndependence
 from response.ResponseComposer import ResponseComposer
 from session.SessionManager import SessionManager
 from session.SessionRenameTransactionService import SessionRenameTransactionService
@@ -88,6 +90,24 @@ class InMemoryContentStore:
         self.records = list(records)
 
 
+class InMemoryHypothesisStore:
+    def __init__(self, records: list[ResearchHypothesis] | None = None) -> None:
+        self.records = list(records or [])
+        self.save_calls = 0
+
+    def load(self) -> list[ResearchHypothesis]:
+        return list(self.records)
+
+    def save(self, records: list[ResearchHypothesis]) -> None:
+        self.save_calls += 1
+        self.records = list(records)
+
+
+class UnreadableHypothesisStore(InMemoryHypothesisStore):
+    def load(self) -> list[ResearchHypothesis]:
+        raise ResearchError("PRIVATE-HYPOTHESIS-PATH is unreadable.")
+
+
 class ReflectionFixture(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary_directory = tempfile.TemporaryDirectory()
@@ -114,13 +134,18 @@ class ReflectionFixture(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary_directory.cleanup()
 
-    def service(self, persist: bool = True) -> ReflectionApplicationService:
+    def service(
+        self,
+        persist: bool = True,
+        hypothesis_store: InMemoryHypothesisStore | None = None,
+    ) -> ReflectionApplicationService:
         return ReflectionApplicationService(
             self.manager,
             ResponseComposer(),
             report_store=(
                 JsonFileReflectionReportStore(self.report_path) if persist else None
             ),
+            hypothesis_store=hypothesis_store,
             event_bus=self.event_bus,
             clock=self.clock,
         )
@@ -155,6 +180,25 @@ class ReflectionFixture(unittest.TestCase):
         run_id = self.new_run()
         document_id = self.accept_source(run_id, slug)
         return run_id, document_id, self.add_evidence(run_id, document_id)
+
+    @staticmethod
+    def hypothesis(
+        run_id: str,
+        supporting_evidence_ids: tuple[str, ...],
+        *,
+        test_evidence_ids: tuple[str, ...] = (),
+        hypothesis_id: str = "hypothesis-rings-age",
+    ) -> ResearchHypothesis:
+        return ResearchHypothesis(
+            hypothesis_id=hypothesis_id,
+            run_id=run_id,
+            statement="The ring system formed recently.",
+            discriminating_test="Older dust would count against a recent origin.",
+            supporting_evidence_ids=supporting_evidence_ids,
+            discriminating_test_evidence_ids=test_evidence_ids,
+            created_at=START,
+            updated_at=START,
+        )
 
     def reflect(self, run_id: str) -> ResearchReflectionReport:
         return self.generator.reflect(self.manager.get(run_id), START)
@@ -276,6 +320,105 @@ class ReflectionDerivationTests(ReflectionFixture):
         self.assertTrue(
             any("independent" in finding.detail for finding in findings),
             findings,
+        )
+
+    def test_hypothesis_independence_gap_is_reflected_from_the_same_detector(
+        self,
+    ) -> None:
+        run_id, _, first_evidence = self.sourced_run("a")
+        second_document = self.accept_source(run_id, "b")
+        second_evidence = self.add_evidence(run_id, second_document)
+        hypothesis = self.hypothesis(
+            run_id,
+            (first_evidence, second_evidence),
+            test_evidence_ids=(first_evidence,),
+        )
+
+        report = self.generator.reflect(
+            self.manager.get(run_id),
+            START,
+            (hypothesis,),
+        )
+        weak = report.of_kind(ReflectionFindingKind.WEAK_EVIDENCE)
+        questions = report.of_kind(ReflectionFindingKind.NEXT_QUESTION)
+
+        self.assertTrue(
+            any(
+                finding.subject_id == hypothesis.hypothesis_id
+                and "does not confirm" in finding.detail
+                for finding in weak
+            ),
+            weak,
+        )
+        self.assertTrue(
+            any(
+                "independent source" in finding.detail
+                and "ring system formed recently" in finding.detail
+                for finding in questions
+            ),
+            questions,
+        )
+
+    def test_confirmed_hypothesis_independence_closes_the_reflection_gap(self) -> None:
+        run_id, first_document, first_evidence = self.sourced_run("a")
+        second_document = self.accept_source(run_id, "b")
+        second_evidence = self.add_evidence(run_id, second_document)
+        for document_id, evidence_id in (
+            (first_document, first_evidence),
+            (second_document, second_evidence),
+        ):
+            self.manager.record_source_assessment(
+                run_id,
+                document_id,
+                [evidence_id],
+                "This source is an independent account.",
+                information_trust=ResearchInformationTrust.MEDIUM,
+                independence=ResearchSourceIndependence.INDEPENDENT,
+            )
+        hypothesis = self.hypothesis(
+            run_id,
+            (first_evidence, second_evidence),
+            test_evidence_ids=(first_evidence,),
+        )
+
+        report = self.generator.reflect(
+            self.manager.get(run_id),
+            START,
+            (hypothesis,),
+        )
+
+        self.assertNotIn(
+            hypothesis.hypothesis_id,
+            {
+                finding.subject_id
+                for finding in report.of_kind(ReflectionFindingKind.WEAK_EVIDENCE)
+            },
+        )
+        self.assertFalse(
+            any(
+                "independent source" in finding.detail
+                for finding in report.of_kind(ReflectionFindingKind.NEXT_QUESTION)
+            )
+        )
+
+    def test_unanswered_hypothesis_test_is_reflected_as_weak_evidence(self) -> None:
+        run_id, _, evidence_id = self.sourced_run()
+        hypothesis = self.hypothesis(run_id, (evidence_id,))
+
+        report = self.generator.reflect(
+            self.manager.get(run_id),
+            START,
+            (hypothesis,),
+        )
+
+        weak = report.of_kind(ReflectionFindingKind.WEAK_EVIDENCE)
+        self.assertTrue(
+            any(
+                finding.subject_id == hypothesis.hypothesis_id
+                and "addressing it" in finding.detail
+                for finding in weak
+            ),
+            weak,
         )
 
     def test_an_open_claim_is_reported_as_uncertain(self) -> None:
@@ -458,6 +601,62 @@ class ReflectionServiceTests(ReflectionFixture):
         self.assertIn("Not stored.", response.message)
         self.assertEqual(service.reports(), ())
         self.assertFalse(self.report_path.exists())
+
+    def test_preview_reads_this_runs_persisted_hypotheses(self) -> None:
+        run_id, _, first_evidence = self.sourced_run("a")
+        second_document = self.accept_source(run_id, "b")
+        second_evidence = self.add_evidence(run_id, second_document)
+        hypothesis = self.hypothesis(
+            run_id,
+            (first_evidence, second_evidence),
+            test_evidence_ids=(first_evidence,),
+        )
+        store = InMemoryHypothesisStore(
+            [
+                hypothesis,
+                self.hypothesis(
+                    "run-other",
+                    (),
+                    hypothesis_id="hypothesis-other-run",
+                ),
+            ]
+        )
+
+        response = self.service(hypothesis_store=store).process_preview(
+            self.request("research_reflection_preview", research_run_id=run_id)
+        )
+        assert response.research_reflection is not None
+        subject_ids = {
+            finding.subject_id for finding in response.research_reflection.findings
+        }
+
+        self.assertIn(hypothesis.hypothesis_id, subject_ids)
+        self.assertNotIn("hypothesis-other-run", subject_ids)
+        self.assertEqual(store.save_calls, 0)
+        self.assertEqual(store.records[0], hypothesis)
+
+    def test_unreadable_hypothesis_store_preserves_run_side_reflection(self) -> None:
+        run_id, _, evidence_id = self.sourced_run()
+        self.manager.record_claim(
+            run_id,
+            [evidence_id],
+            "The rings exist.",
+            ResearchEpistemicState.FACT,
+        )
+
+        response = self.service(
+            hypothesis_store=UnreadableHypothesisStore()
+        ).process_preview(
+            self.request("research_reflection_preview", research_run_id=run_id)
+        )
+        assert response.research_reflection is not None
+
+        self.assertTrue(response.success)
+        self.assertIn(
+            ReflectionFindingKind.WEAK_EVIDENCE,
+            [finding.kind for finding in response.research_reflection.findings],
+        )
+        self.assertNotIn("PRIVATE-HYPOTHESIS-PATH", response.message)
 
     def test_the_response_says_it_describes_process_not_truth(self) -> None:
         run_id, _, _ = self.sourced_run()
@@ -806,6 +1005,16 @@ class ReflectionCompositionTests(ReflectionFixture):
         assert response.research_reflection is not None
         self.assertEqual(response.research_reflection.run_id, run_id)
 
+    def test_the_engine_routes_the_hypothesis_store_into_reflection(self) -> None:
+        store = InMemoryHypothesisStore()
+
+        engine = self.build_engine(hypothesis_store=store)
+
+        service = engine._reflection_service
+        self.assertIsInstance(service, ReflectionApplicationService)
+        assert service is not None
+        self.assertIs(service._hypothesis_store, store)
+
     def test_reflection_is_refused_without_run_persistence(self) -> None:
         engine = self.build_engine(with_runs=False)
 
@@ -839,7 +1048,11 @@ class ReflectionCompositionTests(ReflectionFixture):
         self.assertFalse(response.success)
         self.assertIn("rejected", response.message)
 
-    def build_engine(self, with_runs: bool = True) -> CognitiveEngine:
+    def build_engine(
+        self,
+        with_runs: bool = True,
+        hypothesis_store: InMemoryHypothesisStore | None = None,
+    ) -> CognitiveEngine:
         event_bus = EventBus()
         memory_manager = MemoryManager(event_bus)
         session_manager = SessionManager(event_bus)
@@ -856,6 +1069,7 @@ class ReflectionCompositionTests(ReflectionFixture):
                 event_bus=event_bus,
             ),
             research_run_manager=self.manager if with_runs else None,
+            hypothesis_store=hypothesis_store,
         )
 
 
