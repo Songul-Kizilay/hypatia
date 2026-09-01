@@ -799,7 +799,9 @@ or error wording.
 Every finding detail is normalized to one display line before it can be stored
 or rendered. A line break in an authored or persisted failure reason therefore
 cannot manufacture a second, forged-looking reflection entry; its wording stays
-visible inside the one real finding.
+visible inside the one real finding. The 300-character bound is applied after
+that normalization, so collapsed whitespace does not hide later useful wording;
+a genuinely shortened visible detail ends with `...`.
 
 When one source assessment explicitly supersedes another, Reflection compares
 the canonical records and names only what changed: information trust,

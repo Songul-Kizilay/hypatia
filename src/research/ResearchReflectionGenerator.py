@@ -24,6 +24,7 @@ from datetime import datetime
 
 from core.Exceptions import ResearchError
 from research.CanonicalResearchSummary import CanonicalResearchSummary
+from research.DisplayText import one_bounded_line
 from research.ReflectionFindingKind import ReflectionFindingKind
 from research.ResearchClaimRecord import ResearchClaimRecord
 from research.ResearchCuriosityQuestionGenerator import (
@@ -339,5 +340,5 @@ class ResearchReflectionGenerator:
         return ResearchReflectionFinding(
             kind=kind,
             subject_id=subject_id,
-            detail=detail[:MAX_FINDING_DETAIL_LENGTH],
+            detail=one_bounded_line(detail, MAX_FINDING_DETAIL_LENGTH),
         )

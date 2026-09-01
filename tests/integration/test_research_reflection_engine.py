@@ -295,6 +295,27 @@ class ReflectionDerivationTests(ReflectionFixture):
 
         self.assertEqual(finding.detail, "First second third fourth")
 
+    def test_visible_detail_is_normalized_before_its_bound_is_applied(self) -> None:
+        detail = "prefix " + ("   " * 110) + "important tail"
+
+        finding = ResearchReflectionGenerator._finding(
+            ReflectionFindingKind.FAILED,
+            "source_fetch",
+            detail,
+        )
+
+        self.assertEqual(finding.detail, "prefix important tail")
+
+    def test_a_genuinely_long_visible_detail_marks_its_truncation(self) -> None:
+        finding = ResearchReflectionGenerator._finding(
+            ReflectionFindingKind.FAILED,
+            "source_fetch",
+            "visible " * 100,
+        )
+
+        self.assertEqual(len(finding.detail), 300)
+        self.assertTrue(finding.detail.endswith("..."))
+
     def test_a_claim_revision_names_each_changed_dimension(self) -> None:
         run_id, _, evidence_id = self.sourced_run()
         run = self.manager.record_claim(

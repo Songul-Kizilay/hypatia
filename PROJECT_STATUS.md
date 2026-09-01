@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.260 (Genesis)`
+`v0.3.261 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.260`** is the current source/package release line.
+- **Runtime release `v0.3.261`** is the current source/package release line.
   GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -131,7 +131,9 @@ with optional OpenAI-compatible LLM conversation support.
   provider attribution is retained on failure findings; legacy providerless
   failures stay providerless rather than being guessed. Every finding detail is
   normalized to one line at the shared record boundary, so embedded line breaks
-  cannot masquerade as additional report entries.
+  cannot masquerade as additional report entries. The visible one-line text is
+  bounded after normalization, preserving useful wording that fits and marking
+  genuine truncation with an ellipsis.
   Every finding describes the process and never the subject; no hypothesis is
   written or changed, and there is no recursive reflection: only a run can be
   reflected on.

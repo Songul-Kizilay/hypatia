@@ -2,6 +2,24 @@
 
 All notable project changes are recorded here.
 
+## [0.3.261] - 2026-09-01
+
+### Fixed
+
+- Reflection now normalizes a finding to its one-line display form before
+  applying the 300-character detail bound. Repeated whitespace can no longer
+  consume the bound and hide useful wording that would fit visibly.
+- A genuinely overlong visible detail ends with `...`, making the bounded
+  omission explicit instead of silently cutting text.
+
+### Security
+
+- Bounding still happens before a finding enters a report, and the shared
+  finding record continues to enforce one-line storage and the hard maximum.
+- The change is deterministic and local and performs no model call, network
+  request, research operation, retry, write to Failure Memory, or background
+  action.
+
 ## [0.3.260] - 2026-09-01
 
 ### Fixed
