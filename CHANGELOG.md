@@ -2,6 +2,48 @@
 
 All notable project changes are recorded here.
 
+## [0.3.279] - 2026-09-01
+
+### Fixed
+
+- Scheduler task creation now binds only to an execution that exists and could
+  still move. It previously accepted any identifier, so a durable task could be
+  queued against nothing at all, sit PENDING looking ordinary, and only reveal
+  itself when a cycle spent a slot discovering there was no such execution.
+
+### Added
+
+- A read-only `ReadsResearchExecution` port with one method. The scheduler can
+  look an execution up; it still cannot advance, cancel, resolve, recover,
+  authorize or touch a budget.
+- `progress_block(state)` holds the part of autonomy's stop decision that
+  depends on execution state alone. Autonomy now asks it too, so the rule the
+  scheduler refuses on and the rule the cycle stops on cannot drift apart.
+
+### Security
+
+- Refusal happens before anything is written: no task, no store mutation, no
+  authorization, no provider, no execution created, and no fallback to some
+  other execution when the named one is absent.
+- Executions that can never progress are refused - already finished, cancelled,
+  failed, waiting on a human to resolve an interrupted or blocked step, or with
+  no pending step left. Queueing them would record a task whose only possible
+  outcome is to fail.
+- Validation is read-only and takes no authority: the execution, its plan, its
+  steps and its allowance are unchanged by a create, accepted or refused.
+- Creation-time validation means "this was meaningful when queued", not "this
+  will stay runnable". Nothing about execution state is copied into the task,
+  and the worker cycle still decides against live canonical state.
+- The desktop duplicates none of this. It reads no execution state and simply
+  surfaces the scheduler's refusal.
+
+### Known limitation
+
+- The scheduler still serializes nothing internally. Queue mutations are safe
+  only because the single-flight desktop worker cannot run a cycle and a
+  mutation at once. This remains the prerequisite before any future-time or
+  timer work, and no such work exists yet.
+
 ## [0.3.278] - 2026-09-01
 
 ### Added

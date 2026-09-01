@@ -34,7 +34,9 @@ from research.BackgroundResearchTask import BackgroundResearchTask
 from research.BackgroundResearchTaskStatus import BackgroundResearchTaskStatus
 from research.BackgroundTaskOutcome import BackgroundTaskOutcome, outcome_for
 from research.BackgroundTaskStore import BackgroundTaskStore
+from research.ReadsResearchExecution import ReadsResearchExecution
 from research.ResearchAutonomyBudget import ResearchAutonomyBudget
+from research.ResearchExecutionProgressBlock import progress_block
 from response.ResponseComposer import ResponseComposer
 
 BACKGROUND_TASK_CREATE_INTENT = "background_research_task_create"
@@ -58,6 +60,7 @@ class BackgroundResearchSchedulerApplicationService:
         autonomy_service: ResearchAutonomyApplicationService,
         response_composer: ResponseComposer,
         *,
+        executions: ReadsResearchExecution,
         task_store: BackgroundTaskStore | None = None,
         event_bus: EventBus | None = None,
         clock: Callable[[], datetime] | None = None,
@@ -76,6 +79,10 @@ class BackgroundResearchSchedulerApplicationService:
             "active tasks",
         )
         self._autonomy_service = autonomy_service
+        #: Read-only, and deliberately not the execution service itself.
+        #: The scheduler decides what to queue and run; it must never be
+        #: able to advance, cancel, resolve or authorize anything.
+        self._executions = executions
         self._response_composer = response_composer
         self._task_store = task_store
         self._events = BackgroundResearchEvents(event_bus)
@@ -119,6 +126,9 @@ class BackgroundResearchSchedulerApplicationService:
         execution_id = self._required_text(request, "research_plan_id", "execution ID")
         budget = self._budget(request)
         max_retries = self._max_retries(request)
+        refusal = self._binding_refusal(execution_id)
+        if refusal is not None:
+            return self._response_composer.background_task_rejected(request, refusal)
         if self._active_count() >= self._max_active_tasks:
             return self._response_composer.background_task_rejected(
                 request,
@@ -137,6 +147,36 @@ class BackgroundResearchSchedulerApplicationService:
         self._events.created(task)
         self._persist()
         return self._response_composer.background_task_status(request, task)
+
+    def _binding_refusal(self, execution_id: str) -> str | None:
+        """Say why this exact execution cannot be queued, or ``None``.
+
+        Read-only, and only about right now. A task that passes here can still
+        become unrunnable afterwards — completed, cancelled, blocked by a step
+        that failed — and that is the worker cycle's business, decided against
+        canonical state at run time. Nothing about the execution is copied into
+        the task, because a frozen answer would go stale the moment it was
+        written.
+        """
+        state = self._executions.live_execution(execution_id)
+        if state is None:
+            return (
+                f"This process holds no research execution with ID "
+                f"{execution_id}. A background task is never created for an "
+                "execution that does not exist, and never falls back to "
+                "another one."
+            )
+        blocked = progress_block(state)
+        if blocked is None:
+            return None
+        return (
+            f"Research execution {execution_id} cannot progress: "
+            f"{blocked.value}. Queueing it would create a task no scheduler "
+            "cycle could ever run. Whatever this execution needs — a human "
+            "resolving an interrupted step, recovering a blocked one, or "
+            "nothing at all because it is already finished — has to happen "
+            "first."
+        )
 
     def process_pause(self, request: BrainRequest) -> BrainResponse:
         return self._transition(request, "paused")

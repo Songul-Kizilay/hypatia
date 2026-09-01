@@ -123,6 +123,7 @@ class SchedulerFixture(unittest.TestCase):
             BackgroundResearchSchedulerApplicationService(
                 engine._research_autonomy_service,
                 ResponseComposer(),
+                executions=engine._research_plan_execution_service,
                 task_store=(
                     JsonFileBackgroundTaskStore(self.task_path) if persist else None
                 ),

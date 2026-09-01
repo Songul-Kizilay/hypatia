@@ -248,17 +248,25 @@ class TheServiceRefusesTruthfullyTests(OperatorQueueFixture):
                 with self.assertRaises(ValueError):
                     action("")
 
-    def test_queueing_an_unknown_execution_is_not_validated_here(self) -> None:
-        """A known gap, pinned so it is not mistaken for a guarantee.
+    def test_queueing_an_unknown_execution_is_refused(self) -> None:
+        """The gap this test pinned in v0.3.278 is closed.
 
-        ``process_create`` accepts any execution identifier without checking it
-        exists. That is the scheduler's contract today, and the desktop does not
-        paper over it with a hidden check of its own — a cycle that later picks
-        the task is where the truth comes out.
+        It used to assert the opposite — that any identifier was accepted —
+        and said so as a known limitation rather than hiding it. The refusal
+        now comes from the scheduler, not from the desktop, which is why the
+        controller sees it here at all.
         """
         response = self.controller.create_background_task("plan-that-never-existed")
 
-        self.assertIsNotNone(response.background_research_task)
+        self.assertIsNone(response.background_research_task)
+        self.assertIn("Background research task rejected:", response.message)
+        self.assertIn("plan-that-never-existed", response.message)
+
+    def test_a_refused_binding_writes_no_task(self) -> None:
+        self.controller.create_background_task("plan-that-never-existed")
+
+        self.assertEqual(self.scheduler.tasks(), ())
+        self.assertEqual(self.task_store.load(), [])
 
 
 class NothingRunsWithoutTheCyclePressTests(OperatorQueueFixture):

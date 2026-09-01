@@ -441,6 +441,7 @@ class CognitiveEngine:
             BackgroundResearchSchedulerApplicationService(
                 self._research_autonomy_service,
                 response_composer,
+                executions=self._research_plan_execution_service,
                 task_store=background_task_store,
                 event_bus=event_bus,
             )

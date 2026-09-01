@@ -68,6 +68,7 @@ class SchedulerCycleFixture(ContinuationFixture):
                 event_bus=EventBus(),
             ),
             ResponseComposer(),
+            executions=self.execution,
             task_store=self.task_store,
         )
 

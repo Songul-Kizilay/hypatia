@@ -36,6 +36,7 @@ from research.ResearchAutonomyResult import (
     ResearchAutonomyResult,
 )
 from research.ResearchCapabilityCost import cost_for
+from research.ResearchExecutionProgressBlock import progress_block
 from research.ResearchPlanExecutionState import ResearchPlanExecutionState
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 from research.ResearchPlanStepStatus import ResearchPlanStepStatus
@@ -143,22 +144,17 @@ class ResearchAutonomyApplicationService:
         token = request.cancellation_token
         if token is not None and token.is_cancelled():
             return AutonomyStopReason.CANCELLED
-        # Step-level reasons come first: they explain why an execution became
-        # terminal, which a bare "terminal" answer would hide.
-        if any(step.status is ResearchPlanStepStatus.FAILED for step in state.steps):
-            return AutonomyStopReason.STEP_FAILED
-        if any(step.status is ResearchPlanStepStatus.BLOCKED for step in state.steps):
-            return AutonomyStopReason.STEP_BLOCKED
-        if any(
-            step.status is ResearchPlanStepStatus.INTERRUPTED for step in state.steps
-        ):
-            return AutonomyStopReason.STEP_INTERRUPTED
-        if state.status.terminal:
-            return AutonomyStopReason.EXECUTION_TERMINAL
+        # Everything decidable from the execution alone, in one place, because
+        # the scheduler asks the same question at creation time and two copies
+        # of it would drift apart. Step-level reasons come first there: they
+        # explain why an execution became terminal, which a bare "terminal"
+        # answer would hide.
+        blocked = progress_block(state)
+        if blocked is not None:
+            return blocked
 
         step_id = state.next_pending_step_id
-        if step_id is None:
-            return AutonomyStopReason.NO_PENDING_STEP
+        assert step_id is not None
         if steps_attempted >= budget.max_step_advances:
             return AutonomyStopReason.STEP_BUDGET_EXHAUSTED
         if elapsed >= budget.max_seconds:
