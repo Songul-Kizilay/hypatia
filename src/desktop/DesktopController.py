@@ -240,8 +240,16 @@ class DesktopController:
         source_id_lines: str,
         research_run_id: str,
         disclosure: str = "none",
+        max_step_advances: str = "",
+        max_network_operations: str = "",
+        max_seconds: str = "",
     ) -> BrainResponse:
-        """Show the approval this plan would record. Records nothing."""
+        """Show the approval this plan would record. Records nothing.
+
+        The budget fields are passed through exactly as typed, blanks included.
+        A blank means the operator left that bound alone; nothing here fills one
+        in for them, and nothing here reads an unusable value as a number.
+        """
         return self._plan_authorization_request(
             "research_plan_authorization_preview",
             "Preview research plan approval",
@@ -249,8 +257,33 @@ class DesktopController:
             instruction_lines,
             source_id_lines,
             research_run_id,
-            extra={"research_disclosure": disclosure.strip() or "none"},
+            extra={
+                "research_disclosure": disclosure.strip() or "none",
+                **self._budget_metadata(
+                    max_step_advances,
+                    max_network_operations,
+                    max_seconds,
+                ),
+            },
         )
+
+    @staticmethod
+    def _budget_metadata(
+        max_step_advances: str,
+        max_network_operations: str,
+        max_seconds: str,
+    ) -> dict[str, str]:
+        """Return only the bounds the operator actually filled in.
+
+        Empty fields are omitted rather than sent as zero. Zero is a real and
+        very restrictive answer, and a blank box must never be read as one.
+        """
+        chosen = {
+            "max_step_advances": max_step_advances,
+            "max_network_operations": max_network_operations,
+            "max_seconds": max_seconds,
+        }
+        return {name: value for name, value in chosen.items() if value.strip()}
 
     def confirm_plan_authorization(
         self,

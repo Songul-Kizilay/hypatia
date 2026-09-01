@@ -14,6 +14,7 @@ cannot be mistaken for the place those checks live.
 
 from typing import Protocol
 
+from research.ResearchAutonomyBudget import ResearchAutonomyBudget
 from research.ResearchDisclosure import ResearchDisclosure
 from research.ResearchPlan import ResearchPlan
 from research.ResearchPlanAuthorization import ResearchPlanAuthorization
@@ -27,8 +28,14 @@ class RecordsResearchPlanAuthorization(Protocol):
         plan: ResearchPlan,
         research_run_id: str,
         disclosure: ResearchDisclosure = ResearchDisclosure.NONE,
+        budget: ResearchAutonomyBudget | None = None,
     ) -> ResearchPlanAuthorization | None:
-        """Return the recorded approval, or None when it was not made durable."""
+        """Return the recorded approval, or None when it was not made durable.
+
+        The budget is the authority a person chose to grant. Passing nothing
+        means they left it alone and the standing default applies; it never
+        means "work out what this plan needs and grant that".
+        """
 
     def authorization_for_execution(
         self,

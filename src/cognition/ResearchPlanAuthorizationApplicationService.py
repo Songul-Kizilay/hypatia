@@ -39,6 +39,7 @@ from brain.BrainResponse import BrainResponse
 from cognition.ResearchPlanAuthorizationEvents import ResearchPlanAuthorizationEvents
 from core.Exceptions import ResearchError
 from eventbus.EventBus import EventBus
+from research.ResearchAuthorizationBudgetChoice import budget_from
 from research.ResearchAutonomyBudget import ResearchAutonomyBudget
 from research.ResearchDisclosure import ResearchDisclosure
 from research.ResearchPlan import ResearchPlan
@@ -141,7 +142,14 @@ class ResearchPlanAuthorizationApplicationService:
                     "Too many approvals are already awaiting confirmation.",
                 ),
             )
-        fit = self.budget_fit_for(plan)
+        try:
+            chosen = budget_from(request.metadata)
+        except ResearchError as error:
+            return self._response_composer.research_plan_authorization_preview(
+                request,
+                ResearchPlanAuthorizationPreview.rejected(plan.plan_id, str(error)),
+            )
+        fit = self.budget_fit_for(plan, chosen)
         if not fit.sufficient:
             # Refused before anything is built. Nothing is recorded, nothing is
             # spent, and the budget is not quietly raised to fit the plan.
@@ -206,20 +214,26 @@ class ResearchPlanAuthorizationApplicationService:
                 return authorization
         return None
 
-    def budget_fit_for(self, plan: ResearchPlan) -> ResearchPlanBudgetFit:
-        """Return what this plan would cost against the budget on offer.
+    def budget_fit_for(
+        self,
+        plan: ResearchPlan,
+        budget: ResearchAutonomyBudget | None = None,
+    ) -> ResearchPlanBudgetFit:
+        """Return what this plan would cost against the budget being granted.
 
-        The budget is the one this service would approve, not one derived from
-        the plan. Knowing what a plan needs never becomes permission to have
-        it; that stays a decision a person makes by approving or not.
+        The budget is the one somebody is offering, defaulting to the standing
+        one when nobody chose. It is never derived from the plan: knowing what a
+        plan needs does not become permission to have it, and that stays a
+        decision a person makes by approving or not.
         """
-        return ResearchPlanBudgetFit.of(plan, ResearchAutonomyBudget())
+        return ResearchPlanBudgetFit.of(plan, budget or ResearchAutonomyBudget())
 
     def record_for_plan(
         self,
         plan: ResearchPlan,
         research_run_id: str,
         disclosure: ResearchDisclosure = ResearchDisclosure.NONE,
+        budget: ResearchAutonomyBudget | None = None,
     ) -> ResearchPlanAuthorization | None:
         """Record one human approval of an already-canonical plan.
 
@@ -238,7 +252,7 @@ class ResearchPlanAuthorizationApplicationService:
         Returns None when the approval could not be made durable, so a caller
         never reports an approval that only ever existed in memory.
         """
-        fit = self.budget_fit_for(plan)
+        fit = self.budget_fit_for(plan, budget)
         if not fit.sufficient:
             self._events.refused("insufficient_budget")
             raise ResearchError(

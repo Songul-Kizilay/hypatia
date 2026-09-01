@@ -116,6 +116,12 @@ _INTERRUPTED_PANEL_NOTE = (
     "occurred. Its final result is unknown. The attempt has already been "
     "charged. Recording what you know runs nothing and retries nothing."
 )
+_AUTHORIZATION_BUDGET_NOTE = (
+    "This is the authority you are granting, not what Hypatia decided it may "
+    "use. Leave a box blank to grant the standing default. Preview shows what "
+    "the plan needs beside what you are granting; an approval that cannot cover "
+    "one attempt at every authored step is refused rather than granted."
+)
 _EXECUTION_PANEL_NOTE = (
     "An execution that has already been started. Refresh shows its canonical "
     "state and what remains of the approved budget. Advance attempts exactly "
@@ -4537,6 +4543,31 @@ class TkinterDesktopWindow:
         ttk.Entry(section, textvariable=self._plan_approval_id).grid(
             row=3, column=1, sticky="ew", padx=(8, 0), pady=(6, 0)
         )
+        #: The authority being granted, typed by the operator. Blank means
+        #: "leave this bound alone", never zero and never "whatever it needs".
+        self._authorization_advances = tk.StringVar()
+        self._authorization_network = tk.StringVar()
+        self._authorization_seconds = tk.StringVar()
+        ttk.Label(section, text=_AUTHORIZATION_BUDGET_NOTE, wraplength=680).grid(
+            row=10, column=0, columnspan=2, sticky="w", pady=(10, 0)
+        )
+        for offset, (label, variable) in enumerate(
+            (
+                ("Grant step advances (blank = default)", self._authorization_advances),
+                (
+                    "Grant network operations (blank = default)",
+                    self._authorization_network,
+                ),
+                ("Grant seconds (blank = default)", self._authorization_seconds),
+            )
+        ):
+            ttk.Label(section, text=label).grid(
+                row=11 + offset, column=0, sticky="w", pady=(6, 0)
+            )
+            ttk.Entry(section, textvariable=variable).grid(
+                row=11 + offset, column=1, sticky="ew", padx=(8, 0), pady=(6, 0)
+            )
+
         buttons = ttk.Frame(section)
         buttons.grid(row=4, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
         for column, (label, command) in enumerate(
@@ -4913,6 +4944,9 @@ class TkinterDesktopWindow:
                 self._text_value(self._research_plan_source_ids),
                 self._plan_approval_run_id.get(),
                 self._plan_approval_disclosure.get(),
+                self._authorization_advances.get(),
+                self._authorization_network.get(),
+                self._authorization_seconds.get(),
             )
         )
 

@@ -31,6 +31,7 @@ from research.JsonFileCuriosityQuestionStore import MAX_CURIOSITY_STORE_QUESTION
 from research.RecordsResearchPlanAuthorization import (
     RecordsResearchPlanAuthorization,
 )
+from research.ResearchAuthorizationBudgetChoice import budget_from
 from research.ResearchCuriosityPreview import ResearchCuriosityPreview
 from research.ResearchCuriosityQuestion import ResearchCuriosityQuestion
 from research.ResearchCuriosityQuestionGenerator import (
@@ -236,9 +237,14 @@ class CuriosityApplicationService:
                 "Proposal changed since preview. Prepare a new preview before "
                 "authorizing.",
             )
+        try:
+            chosen = budget_from(request.metadata)
+        except ResearchError as error:
+            return self._response_composer.curiosity_rejected(request, str(error))
         authorization = self._authorization_service.record_for_plan(
             proposal.plan,
             run.run_id,
+            budget=chosen,
         )
         if authorization is None:
             return self._response_composer.curiosity_rejected(

@@ -2,6 +2,36 @@
 
 All notable project changes are recorded here.
 
+## [0.3.267] - 2026-09-01
+
+### Added
+
+- The operator now chooses the budget an approval grants, rather than receiving
+  a constant. Step advances, network operations and seconds can each be set at
+  the authorization boundary; a field left blank keeps the standing default.
+- The desktop states plainly that these are the authority being granted rather
+  than what Hypatia decided it may use, and the preview shows what the plan needs
+  beside what is being granted.
+
+### Security
+
+- Model operations are deliberately not offered. No registered capability
+  declares a cost there, so a control for it would grant authority nothing can
+  spend.
+- Unreadable input refuses the approval instead of falling back to a default.
+  The permissive direction is the dangerous one, and a value nobody typed must
+  never become authority.
+- Blank means "leave this bound alone" and never zero, while an explicit zero is
+  accepted as the real and very tight answer it is.
+- Refused by name: negatives, fractions, floats where a count belongs, booleans
+  Python would read as one, infinities, not-a-number, None, and anything above
+  the hard ceilings `ResearchAutonomyBudget` already enforces.
+- The chosen budget is persisted exactly. It is not replaced by the default, and
+  pointedly not by the plan's requirement; a different budget is a different
+  approval record rather than an edit to an existing one.
+- An insufficient grant is still refused, whoever chose it. Selecting a budget
+  changes no plan, no capability and no execution, and performs no research.
+
 ## [0.3.266] - 2026-09-01
 
 ### Added
