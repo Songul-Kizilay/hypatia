@@ -732,11 +732,11 @@ versioned document.
 
 Curiosity reads a research run and reports where our own record is thin:
 a contradicted claim, an unresolved claim, a claim resting on a single source,
-a multi-source claim without confirmed independent corroboration, an untested
-hypothesis, a question with no accepted sources, a failed source acquisition,
-a low-trust source, narrow provider coverage, an unassessed source, or an
-accepted source nothing cites. A gap says what is missing from the record, never
-what is true.
+a multi-source claim without confirmed independent corroboration, a hypothesis
+whose multi-source support is not confirmed independent, an untested hypothesis,
+a question with no accepted sources, a failed source acquisition, a low-trust
+source, narrow provider coverage, an unassessed source, or an accepted source
+nothing cites. A gap says what is missing from the record, never what is true.
 
 Each gap becomes exactly one question, generated from a fixed template rather
 than by a model, so a proposal can only ask about a claim or source the system

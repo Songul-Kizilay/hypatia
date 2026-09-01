@@ -26,6 +26,7 @@ from __future__ import annotations
 import sys
 import tempfile
 import unittest
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -476,6 +477,49 @@ class PlanTests(ProposalFixture):
             proposal.plan.steps[0].capability,
             ResearchPlanStepCapability.LOCAL_KNOWLEDGE_SEARCH,
         )
+
+    def test_a_hypothesis_independence_gap_keeps_provenance_and_is_inert(
+        self,
+    ) -> None:
+        self.manager.add_source(
+            self.run_id,
+            ResearchSource(
+                url="https://example.test/second-document",
+                title="A second source",
+                content="A second observation recorded during the run.",
+                content_type="text/plain",
+                fetched_at=PAST,
+            ),
+            "document-2",
+        )
+        run = self.manager.add_evidence(
+            self.run_id,
+            Chunk(
+                document_id="document-2",
+                index=0,
+                content="A second observation recorded during the run.",
+                chunk_id="chunk-2",
+            ),
+            "A second note.",
+        )
+        second_evidence_id = run.evidence[-1].evidence_id
+        self.hypothesis_store.hypotheses = [
+            replace(
+                self.hypothesis,
+                supporting_evidence_ids=(self.evidence_id, second_evidence_id),
+            )
+        ]
+
+        proposal = self._proposal(
+            ResearchKnowledgeGapKind.UNCONFIRMED_INDEPENDENCE_HYPOTHESIS
+        )
+
+        self.assertEqual(proposal.hypothesis_id, self.hypothesis.hypothesis_id)
+        self.assertEqual(proposal.discriminating_test, TEST)
+        self.assertIn("independent", proposal.objective)
+        self.assertFalse(proposal.authorized)
+        self.assertFalse(proposal.started)
+        self.assertIn("independently corroborate", proposal.plan.steps[-1].instruction)
 
     def test_the_preview_never_says_anything_is_starting(self) -> None:
         rendered = "\n".join(self._proposal().lines()).casefold()

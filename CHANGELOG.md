@@ -2,6 +2,26 @@
 
 All notable project changes are recorded here.
 
+## [0.3.252] - 2026-09-01
+
+### Added
+
+- Curiosity now reports a dedicated knowledge gap when a hypothesis carries
+  supporting evidence from several canonical sources but the active record
+  does not confirm that every supporting source is independent.
+- The gap produces one deterministic question asking for independent
+  corroboration and can be prepared through the existing inert Curiosity plan
+  path while preserving the hypothesis and discriminating-test provenance.
+
+### Security
+
+- Detection reuses `ResearchHypothesisAppraiser` resource identity,
+  active-assessment, and fail-closed independence rules; it does not maintain a
+  competing corroboration calculation.
+- Unknown, derivative, likely-duplicate, or conflicting independence
+  judgements keep the gap open. Detection and proposal preview remain local,
+  deterministic, read-only, truth-neutral, and incapable of starting research.
+
 ## [0.3.251] - 2026-09-01
 
 ### Changed

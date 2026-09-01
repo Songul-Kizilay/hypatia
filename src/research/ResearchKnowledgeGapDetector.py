@@ -20,6 +20,7 @@ from research.ResearchClaimRecord import ResearchClaimRecord
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchHypothesis import ResearchHypothesis
+from research.ResearchHypothesisAppraiser import ResearchHypothesisAppraiser
 from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchKnowledgeGap import MAX_GAP_SUMMARY_LENGTH, ResearchKnowledgeGap
 from research.ResearchKnowledgeGapKind import ResearchKnowledgeGapKind
@@ -223,48 +224,75 @@ class ResearchKnowledgeGapDetector:
         hypotheses: Sequence[ResearchHypothesis],
         detected_at: datetime,
     ) -> list[ResearchKnowledgeGap]:
-        """Note a hypothesis that names its test and has nothing recorded yet.
+        """Report unanswered tests and only-apparent hypothesis corroboration.
 
-        The gap closes on the authored association and on nothing else. Evidence
-        entered as supporting or opposing says the evidence bears on the
-        hypothesis; it does not say anyone examined the question the hypothesis
-        was built around, and treating it that way was the coarseness this
-        replaced — a framework version number attached as context would close a
-        gap about whether a route can be reached unauthenticated.
+        The discriminating-test gap closes on the authored association and on
+        nothing else. Supporting or opposing evidence says that material bears
+        on the hypothesis; it does not say somebody examined the question the
+        hypothesis was built around.
 
-        So the condition is: somebody stated that some evidence addresses the
-        discriminating test. Which way it cut, and whether it settled anything,
-        are separate questions this does not ask. Nothing here compares the
-        wording of a test against the wording of evidence; the relationship is
-        authored, and its absence is simply absence.
+        Independence is a second, separate gap. More than one canonical source
+        can look corroborating while every assessment is silent or one says a
+        source repeats another. Reuse the hypothesis appraiser's exact boundary
+        rather than inventing another count here. A single supporting source is
+        not called corroborated, so it does not produce this specific gap.
 
         A withdrawn hypothesis is excluded because withdrawal is the one status
-        that settles anything. Support does not, which is why a supported
-        hypothesis is not excluded here on status — it simply has evidence, and
-        so does not qualify.
+        that settles anything. Nothing here compares prose, decides truth, or
+        changes the hypothesis.
         """
-        return [
-            self._gap(
-                run,
-                ResearchKnowledgeGapKind.HYPOTHESIS_EVIDENCE_GAP,
-                hypothesis.hypothesis_id,
-                "This hypothesis names the observation that would settle it, "
-                "and no evidence has been recorded either way.",
-                detected_at,
-            )
-            for hypothesis in sorted(
-                (
-                    hypothesis
-                    for hypothesis in hypotheses
-                    if isinstance(hypothesis, ResearchHypothesis)
-                    and hypothesis.run_id == run.run_id
-                    and not hypothesis.withdrawn
-                    and hypothesis.discriminating_test
-                    and not hypothesis.has_discriminating_test_evidence
-                ),
-                key=lambda hypothesis: hypothesis.hypothesis_id,
-            )
-        ]
+        gaps: list[ResearchKnowledgeGap] = []
+        appraiser = ResearchHypothesisAppraiser()
+        run_evidence_ids = {record.evidence_id for record in run.evidence}
+        current = sorted(
+            (
+                hypothesis
+                for hypothesis in hypotheses
+                if isinstance(hypothesis, ResearchHypothesis)
+                and hypothesis.run_id == run.run_id
+                and not hypothesis.withdrawn
+                and hypothesis.discriminating_test
+            ),
+            key=lambda hypothesis: hypothesis.hypothesis_id,
+        )
+        for hypothesis in current:
+            # One evidence record cannot represent corroboration. Avoid asking
+            # the appraiser to resolve its source until there are at least two
+            # authored supporting records; this also preserves legacy
+            # hypothesis-gap readings whose old evidence identifiers predate
+            # the run-side evidence aggregate.
+            if len(hypothesis.supporting_evidence_ids) > 1 and all(
+                evidence_id in run_evidence_ids
+                for evidence_id in hypothesis.supporting_evidence_ids
+            ):
+                appraisal = appraiser.appraise(hypothesis, run)
+                if (
+                    appraisal.corroborated
+                    and not appraisal.supporting_sources_independence_confirmed
+                ):
+                    gaps.append(
+                        self._gap(
+                            run,
+                            ResearchKnowledgeGapKind.UNCONFIRMED_INDEPENDENCE_HYPOTHESIS,
+                            hypothesis.hypothesis_id,
+                            "This hypothesis has support from multiple sources, but "
+                            "the record does not confirm that every supporting "
+                            "source is independent.",
+                            detected_at,
+                        )
+                    )
+            if not hypothesis.has_discriminating_test_evidence:
+                gaps.append(
+                    self._gap(
+                        run,
+                        ResearchKnowledgeGapKind.HYPOTHESIS_EVIDENCE_GAP,
+                        hypothesis.hypothesis_id,
+                        "This hypothesis names the observation that would settle "
+                        "it, and no evidence has been recorded as addressing it.",
+                        detected_at,
+                    )
+                )
+        return gaps
 
     def _acquisition_gaps(
         self,

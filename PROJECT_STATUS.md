@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.251 (Genesis)`
+`v0.3.252 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.251`** is the current source/package release line.
+- **Runtime release `v0.3.252`** is the current source/package release line.
   GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -1174,6 +1174,13 @@ Several distinct resources reach `strong evidence / high confidence` only when
 every one has an explicit active `independent` judgement and medium-or-better
 trust. Unknown or conflicting independence stays silent as a warning, but it
 cannot be counted as proof of independence.
+
+Curiosity applies the same boundary to hypotheses. When supporting evidence
+comes from several canonical sources but their independence is unknown,
+derivative, likely duplicated, or actively disputed, Hypatia reports a separate
+hypothesis-independence gap and asks which independent source could corroborate
+the hypothesis. The question can enter the existing local-first proposal flow,
+but noticing or previewing it changes no hypothesis and starts no research.
 
 It corrects nothing. No confidence is lowered, no claim withdrawn, no evidence
 removed, no source rejected, no reputation moved, no relevance rank touched —

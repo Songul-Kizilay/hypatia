@@ -53,6 +53,10 @@ _TEMPLATES: dict[ResearchKnowledgeGapKind, str] = {
         "What evidence would settle this hypothesis, which so far has none: "
         "{subject}?"
     ),
+    ResearchKnowledgeGapKind.UNCONFIRMED_INDEPENDENCE_HYPOTHESIS: (
+        "Which independent source would corroborate this hypothesis beyond its "
+        "current support: {subject}?"
+    ),
     # Deliberately about the missing information rather than the failed attempt.
     # "Try that again" is not a question, and a run whose acquisition failed
     # once has no new reason to expect a different answer.

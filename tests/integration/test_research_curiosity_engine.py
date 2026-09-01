@@ -55,6 +55,7 @@ from research.ResearchCuriosityQuestionGenerator import (
     ResearchCuriosityQuestionGenerator,
 )
 from research.ResearchEpistemicState import ResearchEpistemicState
+from research.ResearchHypothesis import ResearchHypothesis
 from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchKnowledgeGapDetector import (
     MAX_GAPS_PER_RUN,
@@ -469,6 +470,108 @@ class KnowledgeGapDetectionTests(CuriosityFixture):
             self.kinds(run_id),
         )
 
+    def test_multiple_hypothesis_sources_without_independence_are_thin(self) -> None:
+        run_id, _, first_evidence = self.sourced_run("a")
+        second_document = self.accept_source(run_id, "b")
+        second_evidence = self.add_evidence(run_id, second_document)
+        hypothesis = ResearchHypothesis(
+            hypothesis_id="hypothesis-1",
+            run_id=run_id,
+            statement="The rings formed recently.",
+            discriminating_test="Independent age measurements converge.",
+            created_at=START,
+            updated_at=START,
+            supporting_evidence_ids=(first_evidence, second_evidence),
+            discriminating_test_evidence_ids=(first_evidence,),
+        )
+
+        kinds = {
+            gap.kind
+            for gap in self.detector.detect(
+                self.manager.get(run_id), START, (hypothesis,)
+            )
+        }
+
+        self.assertIn(
+            ResearchKnowledgeGapKind.UNCONFIRMED_INDEPENDENCE_HYPOTHESIS,
+            kinds,
+        )
+        self.assertNotIn(ResearchKnowledgeGapKind.HYPOTHESIS_EVIDENCE_GAP, kinds)
+
+    def test_explicitly_independent_support_closes_the_hypothesis_gap(self) -> None:
+        run_id, first_document, first_evidence = self.sourced_run("a")
+        second_document = self.accept_source(run_id, "b")
+        second_evidence = self.add_evidence(run_id, second_document)
+        for document_id, evidence_id in (
+            (first_document, first_evidence),
+            (second_document, second_evidence),
+        ):
+            self.assess_independence(
+                run_id,
+                document_id,
+                evidence_id,
+                ResearchSourceIndependence.INDEPENDENT,
+            )
+        hypothesis = ResearchHypothesis(
+            hypothesis_id="hypothesis-1",
+            run_id=run_id,
+            statement="The rings formed recently.",
+            discriminating_test="Independent age measurements converge.",
+            created_at=START,
+            updated_at=START,
+            supporting_evidence_ids=(first_evidence, second_evidence),
+            discriminating_test_evidence_ids=(first_evidence,),
+        )
+
+        kinds = {
+            gap.kind
+            for gap in self.detector.detect(
+                self.manager.get(run_id), START, (hypothesis,)
+            )
+        }
+
+        self.assertNotIn(
+            ResearchKnowledgeGapKind.UNCONFIRMED_INDEPENDENCE_HYPOTHESIS,
+            kinds,
+        )
+
+    def test_a_derivative_support_keeps_the_hypothesis_gap_open(self) -> None:
+        run_id, first_document, first_evidence = self.sourced_run("a")
+        second_document = self.accept_source(run_id, "b")
+        second_evidence = self.add_evidence(run_id, second_document)
+        self.assess_independence(
+            run_id,
+            first_document,
+            first_evidence,
+            ResearchSourceIndependence.INDEPENDENT,
+        )
+        self.assess_independence(
+            run_id,
+            second_document,
+            second_evidence,
+            ResearchSourceIndependence.DERIVATIVE,
+        )
+        hypothesis = ResearchHypothesis(
+            hypothesis_id="hypothesis-1",
+            run_id=run_id,
+            statement="The rings formed recently.",
+            discriminating_test="Independent age measurements converge.",
+            created_at=START,
+            updated_at=START,
+            supporting_evidence_ids=(first_evidence, second_evidence),
+            discriminating_test_evidence_ids=(first_evidence,),
+        )
+
+        gaps = self.detector.detect(self.manager.get(run_id), START, (hypothesis,))
+
+        [gap] = [
+            item
+            for item in gaps
+            if item.kind is ResearchKnowledgeGapKind.UNCONFIRMED_INDEPENDENCE_HYPOTHESIS
+        ]
+        self.assertEqual(gap.subject_id, hypothesis.hypothesis_id)
+        self.assertIn("multiple sources", gap.summary)
+
     def test_a_contradicted_claim_outranks_an_unresolved_one(self) -> None:
         run_id, _, evidence_id = self.sourced_run()
         self.manager.record_claim(
@@ -634,6 +737,39 @@ class CuriosityQuestionGenerationTests(CuriosityFixture):
 
         self.assertIn("independent", question.text)
         self.assertIn("The rings exist", question.text)
+        self.assertTrue(question.text.endswith("?"))
+
+    def test_unconfirmed_hypothesis_independence_yields_a_specific_question(
+        self,
+    ) -> None:
+        run_id, _, first_evidence = self.sourced_run("a")
+        second_document = self.accept_source(run_id, "b")
+        second_evidence = self.add_evidence(run_id, second_document)
+        hypothesis = ResearchHypothesis(
+            hypothesis_id="hypothesis-1",
+            run_id=run_id,
+            statement="The rings formed recently.",
+            discriminating_test="Independent age measurements converge.",
+            created_at=START,
+            updated_at=START,
+            supporting_evidence_ids=(first_evidence, second_evidence),
+        )
+        run = self.manager.get(run_id)
+
+        questions = ResearchCuriosityQuestionGenerator().generate(
+            run,
+            self.detector.detect(run, START, (hypothesis,)),
+            (hypothesis,),
+        )
+        [question] = [
+            candidate
+            for candidate in questions
+            if candidate.kind
+            is ResearchKnowledgeGapKind.UNCONFIRMED_INDEPENDENCE_HYPOTHESIS
+        ]
+
+        self.assertIn("independent", question.text)
+        self.assertIn("The rings formed recently", question.text)
         self.assertTrue(question.text.endswith("?"))
 
     def test_questions_are_ranked_by_gap_severity(self) -> None:

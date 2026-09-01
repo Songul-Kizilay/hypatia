@@ -8,11 +8,11 @@ The ordering below is the ranking order. A contradiction outranks an unresolved
 claim because holding two incompatible beliefs is worse than holding one
 uncertain belief, and both outrank a merely thin source record.
 
-A hypothesis naming the observation that would settle it, with nothing yet
-recorded either way, sits below all four claim gaps and above everything about
-the run's breadth. Claims are positions the run already holds, and their
-integrity comes first; a stated open question is the most answerable kind of
-incompleteness, but it is still an absence rather than a belief in trouble.
+Hypothesis gaps sit below all four claim gaps and above everything about the
+run's breadth. Claims are positions the run already holds, and their integrity
+comes first; a stated open question is the most answerable kind of
+incompleteness, while support that only appears corroborated until independence
+is checked is the more urgent hypothesis gap.
 
 Two of these describe an attempt rather than a record. A refused acquisition is
 a hole with a known cause, ranked above a source we merely distrust because
@@ -34,6 +34,7 @@ class ResearchKnowledgeGapKind(StrEnum):
     UNRESOLVED_CLAIM = "unresolved_claim"
     SINGLE_SOURCE_CLAIM = "single_source_claim"
     UNCONFIRMED_INDEPENDENCE_CLAIM = "unconfirmed_independence_claim"
+    UNCONFIRMED_INDEPENDENCE_HYPOTHESIS = "unconfirmed_independence_hypothesis"
     HYPOTHESIS_EVIDENCE_GAP = "hypothesis_evidence_gap"
     UNSUPPORTED_QUESTION = "unsupported_question"
     FAILED_ACQUISITION = "failed_acquisition"
@@ -68,6 +69,7 @@ _SEVERITIES: dict[ResearchKnowledgeGapKind, int] = {
     ResearchKnowledgeGapKind.UNRESOLVED_CLAIM: 60,
     ResearchKnowledgeGapKind.SINGLE_SOURCE_CLAIM: 50,
     ResearchKnowledgeGapKind.UNCONFIRMED_INDEPENDENCE_CLAIM: 50,
+    ResearchKnowledgeGapKind.UNCONFIRMED_INDEPENDENCE_HYPOTHESIS: 46,
     ResearchKnowledgeGapKind.HYPOTHESIS_EVIDENCE_GAP: 45,
     ResearchKnowledgeGapKind.UNSUPPORTED_QUESTION: 40,
     ResearchKnowledgeGapKind.FAILED_ACQUISITION: 35,

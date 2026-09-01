@@ -80,7 +80,10 @@ def _hypothesis_for(
     an identifier comparison. Nothing here reads a statement or a test looking
     for a likely candidate.
     """
-    if question.kind is not ResearchKnowledgeGapKind.HYPOTHESIS_EVIDENCE_GAP:
+    if question.kind not in (
+        ResearchKnowledgeGapKind.HYPOTHESIS_EVIDENCE_GAP,
+        ResearchKnowledgeGapKind.UNCONFIRMED_INDEPENDENCE_HYPOTHESIS,
+    ):
         return None
     for hypothesis in hypotheses:
         if (
@@ -100,6 +103,12 @@ def _objective(question: ResearchCuriosityQuestion, run: ResearchRun) -> str:
                 "discriminating test of this hypothesis, so that an operator "
                 "has something to judge. Whether the hypothesis holds is not "
                 "decided here."
+            )
+        case ResearchKnowledgeGapKind.UNCONFIRMED_INDEPENDENCE_HYPOTHESIS:
+            return (
+                "Find independent sources bearing on this hypothesis so its "
+                "apparent corroboration can be distinguished from repeated "
+                "reporting. Whether the hypothesis holds is not decided here."
             )
         case ResearchKnowledgeGapKind.PROVIDER_COVERAGE_GAP:
             missing = _unasked_providers(run)
@@ -194,6 +203,11 @@ def _instruction(question: ResearchCuriosityQuestion) -> str:
                 "Discover candidate sources that could address this "
                 "hypothesis's discriminating test. Finding a source is not "
                 "performing the test."
+            )
+        case ResearchKnowledgeGapKind.UNCONFIRMED_INDEPENDENCE_HYPOTHESIS:
+            return (
+                "Discover candidate sources that could independently corroborate "
+                "this hypothesis beyond its current support."
             )
         case ResearchKnowledgeGapKind.FAILED_ACQUISITION:
             return (
