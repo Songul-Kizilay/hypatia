@@ -2,6 +2,23 @@
 
 All notable project changes are recorded here.
 
+## [0.3.259] - 2026-09-01
+
+### Fixed
+
+- Reflection now preserves a recorded provider on research failures instead of
+  reducing every failure to its stage. Provider-attributed discovery failures
+  therefore remain distinguishable in the report.
+- Legacy failures without provider provenance remain under their recorded stage
+  and are not attributed by execution order, error text, or any other guess.
+
+### Security
+
+- Provider text comes only from the canonical bounded failure record. Reflection
+  does not infer provenance or treat the provider as instruction authority.
+- The change remains deterministic and read-only and starts no research, model
+  call, network request, retry, Failure Memory write, or background action.
+
 ## [0.3.258] - 2026-09-01
 
 ### Fixed

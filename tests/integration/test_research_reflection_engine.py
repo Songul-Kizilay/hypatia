@@ -232,6 +232,38 @@ class ReflectionDerivationTests(ReflectionFixture):
         self.assertIn("source_fetch", findings[0].detail)
         self.assertIn("Refused before request.", findings[0].detail)
 
+    def test_a_provider_attributed_failure_keeps_its_canonical_provider(self) -> None:
+        run_id = self.new_run()
+        self.manager.record_failure(
+            run_id,
+            "source_discovery",
+            "Research source discovery failed.",
+            provider="nvd",
+        )
+
+        findings = self.reflect(run_id).of_kind(ReflectionFindingKind.FAILED)
+
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].subject_id, "nvd")
+        self.assertIn("source_discovery stage for nvd failed", findings[0].detail)
+
+    def test_legacy_failure_without_provider_is_not_attributed_by_guessing(
+        self,
+    ) -> None:
+        run_id = self.new_run()
+        self.manager.record_failure(
+            run_id,
+            "source_discovery",
+            "Research source discovery failed.",
+        )
+
+        findings = self.reflect(run_id).of_kind(ReflectionFindingKind.FAILED)
+
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].subject_id, "source_discovery")
+        self.assertIn("source_discovery stage failed", findings[0].detail)
+        self.assertNotIn(" for ", findings[0].detail)
+
     def test_a_claim_revision_names_each_changed_dimension(self) -> None:
         run_id, _, evidence_id = self.sourced_run()
         run = self.manager.record_claim(

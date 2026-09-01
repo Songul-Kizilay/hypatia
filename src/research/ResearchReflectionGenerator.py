@@ -119,8 +119,13 @@ class ResearchReflectionGenerator:
         return [
             self._finding(
                 ReflectionFindingKind.FAILED,
-                record.stage,
-                f"The {record.stage} stage failed: {record.reason}",
+                record.provider or record.stage,
+                (
+                    f"The {record.stage} stage for {record.provider} failed: "
+                    f"{record.reason}"
+                    if record.provider is not None
+                    else f"The {record.stage} stage failed: {record.reason}"
+                ),
             )
             for record in run.failures
         ]

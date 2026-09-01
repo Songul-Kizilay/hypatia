@@ -791,6 +791,11 @@ research system. Host case, `www.`, a default HTTPS port, a trailing slash, or a
 fragment cannot make accepted work look unused; query strings and path case stay
 distinct.
 
+When a canonical failure record names its provider, Reflection keeps that
+provider in the failure subject and explanation. Older providerless records stay
+under their recorded stage; provider identity is never reconstructed from order
+or error wording.
+
 When one source assessment explicitly supersedes another, Reflection compares
 the canonical records and names only what changed: information trust,
 usefulness, applicability, independence, publication status, or linked
