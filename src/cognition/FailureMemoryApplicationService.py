@@ -45,6 +45,7 @@ from research.HypothesisFailureLessonDeriver import (
     hypothesis_retention_key,
 )
 from research.HypothesisStore import HypothesisStore
+from research.HypothesisSupportCorrection import HypothesisSupportCorrectionFinder
 from research.JsonFileFailureLessonStore import MAX_FAILURE_STORE_LESSONS
 from research.ResearchFailureLesson import ResearchFailureLesson
 from research.ResearchFailureLessonDeriver import ResearchFailureLessonDeriver
@@ -70,6 +71,7 @@ class FailureMemoryApplicationService:
         deriver: ResearchFailureLessonDeriver | None = None,
         hypothesis_deriver: HypothesisFailureLessonDeriver | None = None,
         hypothesis_appraiser: ResearchHypothesisAppraiser | None = None,
+        hypothesis_correction_finder: HypothesisSupportCorrectionFinder | None = None,
         hypothesis_store: HypothesisStore | None = None,
         advisor: FailureMemoryAdvisor | None = None,
         lesson_store: FailureLessonStore | None = None,
@@ -84,6 +86,9 @@ class FailureMemoryApplicationService:
         )
         self._hypothesis_appraiser = (
             hypothesis_appraiser or ResearchHypothesisAppraiser()
+        )
+        self._hypothesis_correction_finder = (
+            hypothesis_correction_finder or HypothesisSupportCorrectionFinder()
         )
         self._hypothesis_store = hypothesis_store
         self._advisor = advisor or FailureMemoryAdvisor()
@@ -155,7 +160,15 @@ class FailureMemoryApplicationService:
             if hypothesis.run_id != run.run_id:
                 continue
             appraisal = self._hypothesis_appraiser.appraise(hypothesis, run)
-            lessons.extend(self._hypothesis_deriver.derive(appraisal, run, recorded_at))
+            corrections = self._hypothesis_correction_finder.find(hypothesis, run)
+            lessons.extend(
+                self._hypothesis_deriver.derive(
+                    appraisal,
+                    run,
+                    recorded_at,
+                    corrections,
+                )
+            )
         lessons.sort(key=hypothesis_retention_key)
         derived = tuple(lessons[:MAX_HYPOTHESIS_FAILURE_LESSONS_PER_RUN])
         dropped = len(lessons) - len(derived)

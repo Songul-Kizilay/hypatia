@@ -2,6 +2,29 @@
 
 All notable project changes are recorded here.
 
+## [0.3.254] - 2026-09-01
+
+### Added
+
+- The explicit `failure_memory_hypothesis_store` command can now remember one
+  `invalid_assumption` lesson when a timed, currently standing supporting-
+  evidence relation lived through an explicitly superseding assessment that
+  changed the same source's independence judgement.
+- The lesson carries the hypothesis, evidence, source document, earlier
+  assessment, and correcting assessment identifiers as provenance. Repeating
+  the command keeps the same stable lesson rather than adding a duplicate.
+
+### Security
+
+- Missing or unknown independence is not a failure. Parallel assessments,
+  wording-only supersessions, unrelated sources, support authored only after a
+  correction, withdrawn hypotheses, and legacy support with no recorded
+  authoring time produce no hypothesis-specific correction lesson.
+- A provenance-only projector establishes the checkable record sequence before
+  Failure Memory composes advisory text. It neither changes hypothesis status
+  nor treats either independence label as true, and no event, background task,
+  model call, research operation, or network request triggers this learning.
+
 ## [0.3.253] - 2026-09-01
 
 ### Changed

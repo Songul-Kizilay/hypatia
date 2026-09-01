@@ -45,6 +45,8 @@ from research.ResearchHypothesis import ResearchHypothesis
 from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchSource import ResearchSource
+from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
+from research.ResearchSourceIndependence import ResearchSourceIndependence
 from response.ResponseComposer import ResponseComposer
 from session.SessionManager import SessionManager
 from session.SessionRenameTransactionService import SessionRenameTransactionService
@@ -137,16 +139,53 @@ class HypothesisFailureMemoryTests(unittest.TestCase):
         return updated.evidence[-1].evidence_id
 
     def assess_medium(self, run_id: str, evidence_id: str) -> None:
+        self.assess_independence(
+            run_id,
+            evidence_id,
+            ResearchSourceIndependence.UNKNOWN,
+        )
+
+    def assess_independence(
+        self,
+        run_id: str,
+        evidence_id: str,
+        independence: ResearchSourceIndependence,
+        *,
+        supersedes_assessment_id: str | None = None,
+    ) -> ResearchSourceAssessmentRecord:
         run = self.manager.get(run_id)
         record = next(
             entry for entry in run.evidence if entry.evidence_id == evidence_id
         )
-        self.manager.record_source_assessment(
+        updated = self.manager.record_source_assessment(
             run_id,
             record.source_document_id,
             [evidence_id],
             "Assessed for hypothesis support.",
+            supersedes_assessment_id=supersedes_assessment_id,
             information_trust=ResearchInformationTrust.MEDIUM,
+            independence=independence,
+        )
+        return updated.assessments[-1]
+
+    def source_document_id(self, run_id: str, evidence_id: str) -> str:
+        run = self.manager.get(run_id)
+        return next(
+            entry.source_document_id
+            for entry in run.evidence
+            if entry.evidence_id == evidence_id
+        )
+
+    def timed_support(
+        self,
+        hypothesis_id: str,
+        run_id: str,
+        evidence_id: str,
+        authored_at: datetime,
+    ) -> ResearchHypothesis:
+        return self.hypothesis(hypothesis_id, run_id).supported_by(
+            (evidence_id,),
+            authored_at,
         )
 
     @staticmethod
@@ -240,6 +279,349 @@ class HypothesisFailureMemoryTests(unittest.TestCase):
             self.assertIn("No truth or falsity is decided", lesson.statement)
             self.assertNotIn("confirmed", lesson.statement.casefold())
             self.assertEqual(lesson.run_id, run_id)
+
+    def test_explicit_independence_correction_during_support_becomes_lesson(
+        self,
+    ) -> None:
+        run_id = self.new_run()
+        evidence_id = self.evidence(run_id, "corrected-support")
+        initial = self.assess_independence(
+            run_id,
+            evidence_id,
+            ResearchSourceIndependence.INDEPENDENT,
+        )
+        hypothesis = self.timed_support(
+            "corrected-hypothesis",
+            run_id,
+            evidence_id,
+            initial.recorded_at,
+        )
+        correction = self.assess_independence(
+            run_id,
+            evidence_id,
+            ResearchSourceIndependence.DERIVATIVE,
+            supersedes_assessment_id=initial.assessment_id,
+        )
+        self.hypothesis_store.save([hypothesis])
+
+        response = self.service().process_hypothesis_store(self.request(run_id))
+
+        [lesson] = response.failure_lessons
+        self.assertIs(lesson.kind, FailureLessonKind.INVALID_ASSUMPTION)
+        self.assertEqual(
+            lesson.lesson_id,
+            (
+                f"lesson:{run_id}:invalid_assumption:"
+                f"corrected-hypothesis:{correction.assessment_id}"
+            ),
+        )
+        self.assertEqual(
+            lesson.provenance,
+            (
+                "corrected-hypothesis",
+                evidence_id,
+                self.source_document_id(run_id, evidence_id),
+                initial.assessment_id,
+                correction.assessment_id,
+            ),
+        )
+        self.assertIn(
+            "independence changed from independent to derivative", lesson.statement
+        )
+        self.assertTrue(
+            lesson.statement.endswith("No truth or falsity is decided here.")
+        )
+
+    def test_unknown_independence_without_a_changed_supersession_is_not_a_lesson(
+        self,
+    ) -> None:
+        run_id = self.new_run()
+        evidence_id = self.evidence(run_id, "unknown-support")
+        initial = self.assess_independence(
+            run_id,
+            evidence_id,
+            ResearchSourceIndependence.UNKNOWN,
+        )
+        self.assess_independence(
+            run_id,
+            evidence_id,
+            ResearchSourceIndependence.UNKNOWN,
+            supersedes_assessment_id=initial.assessment_id,
+        )
+        self.hypothesis_store.save(
+            [
+                self.timed_support(
+                    "unknown-hypothesis",
+                    run_id,
+                    evidence_id,
+                    initial.recorded_at,
+                )
+            ]
+        )
+
+        response = self.service().process_hypothesis_store(self.request(run_id))
+
+        self.assertEqual(response.failure_lessons, ())
+
+    def test_parallel_independence_assessments_are_not_a_correction(self) -> None:
+        run_id = self.new_run()
+        evidence_id = self.evidence(run_id, "parallel-support")
+        initial = self.assess_independence(
+            run_id,
+            evidence_id,
+            ResearchSourceIndependence.INDEPENDENT,
+        )
+        self.assess_independence(
+            run_id,
+            evidence_id,
+            ResearchSourceIndependence.DERIVATIVE,
+        )
+        self.hypothesis_store.save(
+            [
+                self.timed_support(
+                    "parallel-hypothesis",
+                    run_id,
+                    evidence_id,
+                    initial.recorded_at,
+                )
+            ]
+        )
+
+        response = self.service().process_hypothesis_store(self.request(run_id))
+
+        self.assertEqual(response.failure_lessons, ())
+
+    def test_support_authored_after_the_correction_is_not_a_lesson(self) -> None:
+        run_id = self.new_run()
+        evidence_id = self.evidence(run_id, "later-support")
+        initial = self.assess_independence(
+            run_id,
+            evidence_id,
+            ResearchSourceIndependence.INDEPENDENT,
+        )
+        self.assess_independence(
+            run_id,
+            evidence_id,
+            ResearchSourceIndependence.DERIVATIVE,
+            supersedes_assessment_id=initial.assessment_id,
+        )
+        self.hypothesis_store.save(
+            [
+                self.timed_support(
+                    "later-hypothesis",
+                    run_id,
+                    evidence_id,
+                    datetime.now(UTC),
+                )
+            ]
+        )
+
+        response = self.service().process_hypothesis_store(self.request(run_id))
+
+        self.assertEqual(response.failure_lessons, ())
+
+    def test_legacy_untimed_support_cannot_prove_a_correction_sequence(self) -> None:
+        run_id = self.new_run()
+        evidence_id = self.evidence(run_id, "legacy-support")
+        initial = self.assess_independence(
+            run_id,
+            evidence_id,
+            ResearchSourceIndependence.INDEPENDENT,
+        )
+        self.assess_independence(
+            run_id,
+            evidence_id,
+            ResearchSourceIndependence.DERIVATIVE,
+            supersedes_assessment_id=initial.assessment_id,
+        )
+        self.hypothesis_store.save(
+            [
+                self.hypothesis(
+                    "legacy-hypothesis",
+                    run_id,
+                    supporting=(evidence_id,),
+                )
+            ]
+        )
+
+        response = self.service().process_hypothesis_store(self.request(run_id))
+
+        self.assertEqual(response.failure_lessons, ())
+
+    def test_correction_for_an_unrelated_source_is_not_a_hypothesis_lesson(
+        self,
+    ) -> None:
+        run_id = self.new_run()
+        supporting = self.evidence(run_id, "standing-support")
+        unrelated = self.evidence(run_id, "unrelated-source")
+        initial = self.assess_independence(
+            run_id,
+            unrelated,
+            ResearchSourceIndependence.INDEPENDENT,
+        )
+        self.assess_independence(
+            run_id,
+            unrelated,
+            ResearchSourceIndependence.DERIVATIVE,
+            supersedes_assessment_id=initial.assessment_id,
+        )
+        self.hypothesis_store.save(
+            [
+                self.timed_support(
+                    "unrelated-hypothesis",
+                    run_id,
+                    supporting,
+                    initial.recorded_at,
+                )
+            ]
+        )
+
+        response = self.service().process_hypothesis_store(self.request(run_id))
+
+        self.assertEqual(response.failure_lessons, ())
+
+    def test_withdrawn_hypothesis_does_not_gain_a_correction_lesson(self) -> None:
+        run_id = self.new_run()
+        evidence_id = self.evidence(run_id, "withdrawn-support")
+        initial = self.assess_independence(
+            run_id,
+            evidence_id,
+            ResearchSourceIndependence.INDEPENDENT,
+        )
+        correction = self.assess_independence(
+            run_id,
+            evidence_id,
+            ResearchSourceIndependence.DERIVATIVE,
+            supersedes_assessment_id=initial.assessment_id,
+        )
+        hypothesis = self.timed_support(
+            "withdrawn-correction",
+            run_id,
+            evidence_id,
+            initial.recorded_at,
+        ).withdrawn_at(correction.recorded_at)
+        self.hypothesis_store.save([hypothesis])
+
+        response = self.service().process_hypothesis_store(self.request(run_id))
+
+        self.assertEqual(response.failure_lessons, ())
+
+    def test_repeating_the_correction_command_is_idempotent(self) -> None:
+        run_id = self.new_run()
+        evidence_id = self.evidence(run_id, "repeat-correction")
+        initial = self.assess_independence(
+            run_id,
+            evidence_id,
+            ResearchSourceIndependence.DERIVATIVE,
+        )
+        self.assess_independence(
+            run_id,
+            evidence_id,
+            ResearchSourceIndependence.INDEPENDENT,
+            supersedes_assessment_id=initial.assessment_id,
+        )
+        self.hypothesis_store.save(
+            [
+                self.timed_support(
+                    "repeat-correction-hypothesis",
+                    run_id,
+                    evidence_id,
+                    initial.recorded_at,
+                )
+            ]
+        )
+        service = self.service()
+
+        service.process_hypothesis_store(self.request(run_id))
+        first = service.lessons()
+        service.process_hypothesis_store(self.request(run_id))
+
+        self.assertEqual(service.lessons(), first)
+        self.assertEqual(len(first), 1)
+        stored_events = [event for event in self.events if event.name == LESSONS_STORED]
+        self.assertEqual(stored_events[-1].payload["stored_count"], 0)
+
+    def test_correction_lesson_is_single_line_bounded_and_truth_neutral(self) -> None:
+        run_id = self.new_run()
+        evidence_id = self.evidence(run_id, "bounded-correction")
+        initial = self.assess_independence(
+            run_id,
+            evidence_id,
+            ResearchSourceIndependence.INDEPENDENT,
+        )
+        correction = self.assess_independence(
+            run_id,
+            evidence_id,
+            ResearchSourceIndependence.LIKELY_DUPLICATE,
+            supersedes_assessment_id=initial.assessment_id,
+        )
+        hypothesis = replace(
+            self.timed_support(
+                "bounded-correction-hypothesis",
+                run_id,
+                evidence_id,
+                initial.recorded_at,
+            ),
+            statement=("Long supporting hypothesis. " * 12) + "\nforged line",
+        )
+        self.hypothesis_store.save([hypothesis])
+
+        response = self.service().process_hypothesis_store(self.request(run_id))
+
+        [lesson] = response.failure_lessons
+        self.assertIn(correction.assessment_id, lesson.provenance)
+        self.assertLessEqual(len(lesson.statement), MAX_LESSON_STATEMENT_LENGTH)
+        self.assertNotIn("\n", lesson.statement)
+        self.assertTrue(
+            lesson.statement.endswith("No truth or falsity is decided here.")
+        )
+
+    def test_per_run_limit_keeps_hypothesis_outcomes_over_support_corrections(
+        self,
+    ) -> None:
+        run_id = self.new_run()
+        supporting: list[str] = []
+        for index in range(MAX_HYPOTHESIS_FAILURE_LESSONS_PER_RUN):
+            evidence_id = self.evidence(run_id, f"correction-cap-{index}")
+            initial = self.assess_independence(
+                run_id,
+                evidence_id,
+                ResearchSourceIndependence.INDEPENDENT,
+            )
+            self.assess_independence(
+                run_id,
+                evidence_id,
+                ResearchSourceIndependence.DERIVATIVE,
+                supersedes_assessment_id=initial.assessment_id,
+            )
+            supporting.append(evidence_id)
+        opposition = self.evidence(run_id, "retained-outcome")
+        timed_support = self.hypothesis("many-corrections", run_id).supported_by(
+            tuple(supporting),
+            START,
+        )
+        self.hypothesis_store.save(
+            [
+                timed_support,
+                self.hypothesis(
+                    "retained-contradiction",
+                    run_id,
+                    opposing=(opposition,),
+                ),
+            ]
+        )
+
+        response = self.service().process_hypothesis_store(self.request(run_id))
+
+        self.assertEqual(
+            len(response.failure_lessons),
+            MAX_HYPOTHESIS_FAILURE_LESSONS_PER_RUN,
+        )
+        self.assertIn(
+            "retained-contradiction",
+            {lesson.subject_id for lesson in response.failure_lessons},
+        )
+        self.assertIn("Beyond the per-run limit, not derived: 1", response.message)
 
     def test_identity_and_provenance_name_persisted_records(self) -> None:
         run_id = self.new_run()

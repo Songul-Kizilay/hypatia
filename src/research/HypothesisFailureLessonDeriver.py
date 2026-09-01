@@ -24,6 +24,7 @@ from core.Exceptions import ResearchError
 from research.FailureLessonKind import FailureLessonKind
 from research.HypothesisAppraisal import HypothesisAppraisal
 from research.HypothesisStatus import HypothesisStatus
+from research.HypothesisSupportCorrection import HypothesisSupportCorrection
 from research.ResearchFailureLesson import (
     MAX_LESSON_CONTEXT_LENGTH,
     MAX_LESSON_PROVENANCE,
@@ -48,6 +49,7 @@ _LESSON_KINDS = {
 _RETENTION_ORDER = {
     FailureLessonKind.FAILED_HYPOTHESIS: 0,
     FailureLessonKind.DISPROVING_EVIDENCE: 1,
+    FailureLessonKind.INVALID_ASSUMPTION: 2,
 }
 
 NO_TRUTH_DECIDED = "No truth or falsity is decided here."
@@ -62,15 +64,16 @@ def hypothesis_retention_key(lesson: ResearchFailureLesson) -> tuple[int, str]:
 
 
 class HypothesisFailureLessonDeriver:
-    """Derive at most one advisory lesson from one current appraisal."""
+    """Derive bounded advisory lessons from one current appraisal and history."""
 
     def derive(
         self,
         appraisal: HypothesisAppraisal,
         run: ResearchRun,
         recorded_at: datetime,
+        corrections: tuple[HypothesisSupportCorrection, ...] = (),
     ) -> tuple[ResearchFailureLesson, ...]:
-        """Return a lesson only for a weakened or contradicted hypothesis."""
+        """Return explicit outcomes and support assumptions that were corrected."""
         if not isinstance(appraisal, HypothesisAppraisal):
             raise ResearchError("Hypothesis lesson derivation requires an appraisal.")
         if not isinstance(run, ResearchRun):
@@ -78,25 +81,103 @@ class HypothesisFailureLessonDeriver:
         hypothesis = appraisal.hypothesis
         if hypothesis.run_id != run.run_id:
             raise ResearchError("Hypothesis and research run do not match.")
+        if not isinstance(corrections, tuple) or not all(
+            isinstance(value, HypothesisSupportCorrection) for value in corrections
+        ):
+            raise ResearchError("Hypothesis support corrections are invalid.")
+        lessons: list[ResearchFailureLesson] = []
         kind = _LESSON_KINDS.get(appraisal.status)
-        if kind is None:
-            return ()
-        provenance = self._provenance(appraisal)
-        lesson = ResearchFailureLesson(
-            lesson_id=lesson_identity(
-                hypothesis.run_id,
-                kind,
-                hypothesis.hypothesis_id,
-            ),
-            kind=kind,
-            run_id=hypothesis.run_id,
-            subject_id=hypothesis.hypothesis_id,
-            statement=self._statement(appraisal)[:MAX_LESSON_STATEMENT_LENGTH],
-            provenance=tuple(provenance[:MAX_LESSON_PROVENANCE]),
-            context=run.question[:MAX_LESSON_CONTEXT_LENGTH],
-            recorded_at=recorded_at,
+        if kind is not None:
+            provenance = self._provenance(appraisal)
+            lessons.append(
+                ResearchFailureLesson(
+                    lesson_id=lesson_identity(
+                        hypothesis.run_id,
+                        kind,
+                        hypothesis.hypothesis_id,
+                    ),
+                    kind=kind,
+                    run_id=hypothesis.run_id,
+                    subject_id=hypothesis.hypothesis_id,
+                    statement=self._statement(appraisal)[:MAX_LESSON_STATEMENT_LENGTH],
+                    provenance=tuple(provenance[:MAX_LESSON_PROVENANCE]),
+                    context=run.question[:MAX_LESSON_CONTEXT_LENGTH],
+                    recorded_at=recorded_at,
+                )
+            )
+        lessons.extend(
+            self._independence_correction_lessons(
+                appraisal,
+                run,
+                recorded_at,
+                corrections,
+            )
         )
-        return (lesson,)
+        return tuple(lessons)
+
+    def _independence_correction_lessons(
+        self,
+        appraisal: HypothesisAppraisal,
+        run: ResearchRun,
+        recorded_at: datetime,
+        corrections: tuple[HypothesisSupportCorrection, ...],
+    ) -> list[ResearchFailureLesson]:
+        """Translate checkable support corrections into advisory lessons."""
+        hypothesis = appraisal.hypothesis
+        lessons: list[ResearchFailureLesson] = []
+        for correction in corrections:
+            provenance = self._unique(
+                hypothesis.hypothesis_id,
+                correction.evidence_id,
+                correction.source_document_id,
+                correction.earlier_assessment_id,
+                correction.later_assessment_id,
+            )
+            subject_id = f"{hypothesis.hypothesis_id}:{correction.later_assessment_id}"
+            lessons.append(
+                ResearchFailureLesson(
+                    lesson_id=lesson_identity(
+                        run.run_id,
+                        FailureLessonKind.INVALID_ASSUMPTION,
+                        subject_id,
+                    ),
+                    kind=FailureLessonKind.INVALID_ASSUMPTION,
+                    run_id=run.run_id,
+                    subject_id=subject_id,
+                    statement=self._independence_statement(
+                        appraisal,
+                        correction,
+                    ),
+                    provenance=provenance[:MAX_LESSON_PROVENANCE],
+                    context=run.question[:MAX_LESSON_CONTEXT_LENGTH],
+                    recorded_at=recorded_at,
+                )
+            )
+        return lessons
+
+    @staticmethod
+    def _unique(*values: str) -> tuple[str, ...]:
+        unique: list[str] = []
+        for value in values:
+            if value and value not in unique:
+                unique.append(value)
+        return tuple(unique)
+
+    @staticmethod
+    def _independence_statement(
+        appraisal: HypothesisAppraisal,
+        correction: HypothesisSupportCorrection,
+    ) -> str:
+        prefix = 'Supporting-source correction for hypothesis: "'
+        suffix = (
+            '" - independence changed from '
+            f"{correction.earlier_independence.value} to "
+            f"{correction.later_independence.value}. "
+            f"The earlier judgement did not hold. {NO_TRUTH_DECIDED}"
+        )
+        budget = MAX_LESSON_STATEMENT_LENGTH - len(prefix) - len(suffix)
+        wording = appraisal.hypothesis.one_line_statement(max(1, budget))
+        return f"{prefix}{wording}{suffix}"
 
     @staticmethod
     def _provenance(appraisal: HypothesisAppraisal) -> list[str]:

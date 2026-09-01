@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.253 (Genesis)`
+`v0.3.254 (Genesis)`
 
 This is the version reported by the runtime and package metadata. It captures
 the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
@@ -12,7 +12,7 @@ local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.253`** is the current source/package release line.
+- **Runtime release `v0.3.254`** is the current source/package release line.
   GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
@@ -85,9 +85,15 @@ with optional OpenAI-compatible LLM conversation support.
   durable hypotheses for the selected run: `weakened` derives a
   `disproving_evidence` lesson, `contradicted` derives a `failed_hypothesis`
   lesson, and `open`, `supported`, or `withdrawn` derives none. No event handler
-  or background task creates these lessons automatically. Each lesson quotes the
-  hypothesis in its own wording on a single bounded line, and the per-run limit
-  keeps contradictions ahead of weakened outcomes while reporting any overflow.
+  or background task creates these lessons automatically. The same command can
+  additionally remember a source-independence correction only when a timed,
+  currently standing support relation demonstrably predates the explicitly
+  superseding assessment. Unknown or missing independence, parallel judgements,
+  unrelated sources, post-correction support, withdrawn hypotheses, and legacy
+  untimed support derive no such lesson. Each lesson quotes the hypothesis in
+  its own wording on a single bounded line, and the per-run limit keeps
+  contradictions and weakened outcomes ahead of support-correction lessons
+  while reporting any overflow.
 - Looking back at a run is reachable from the desktop. A Review tab reports
   claim calibration, reflection, and curiosity gaps and questions, each kept
   surface gated on its own opt-in. Calibration needs none because it stores
