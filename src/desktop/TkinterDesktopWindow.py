@@ -141,6 +141,15 @@ def _granted_authority_lines(budget, fit=None) -> list[str]:
     return lines
 
 
+_SCHEDULER_QUEUE_NOTE = (
+    "Queueing a task is not approving one. A task names an execution that was "
+    "already approved and already started, and asks the scheduler to consider "
+    "it; the budget below bounds one scheduler run and never raises what the "
+    "execution was actually granted. Creating, pausing, resuming and cancelling "
+    "run no research at all — only pressing Run scheduler cycle does. Cancelling "
+    "a task stops the scheduler choosing it; the execution itself is untouched "
+    "and is stopped separately above."
+)
 _SCHEDULER_CYCLE_NOTE = (
     "One cycle, then it stops. The scheduler decides which approved task is "
     "runnable and how much work one turn covers; nothing here grants authority, "
@@ -4771,11 +4780,38 @@ class TkinterDesktopWindow:
         ttk.Label(section, text=_SCHEDULER_CYCLE_NOTE, wraplength=680).grid(
             row=14, column=0, columnspan=2, sticky="w", pady=(10, 0)
         )
+        #: The scheduler record, kept apart from the execution field above.
+        #: Pausing a task and cancelling an execution are different acts on
+        #: different identities, and one box for both would invite the mistake.
+        self._scheduler_task_id = tk.StringVar()
+        ttk.Label(section, text=_SCHEDULER_QUEUE_NOTE, wraplength=680).grid(
+            row=15, column=0, columnspan=2, sticky="w", pady=(10, 0)
+        )
+        ttk.Label(section, text="Background task ID").grid(
+            row=16, column=0, sticky="w", pady=(6, 0)
+        )
+        ttk.Entry(section, textvariable=self._scheduler_task_id).grid(
+            row=16, column=1, sticky="ew", padx=(8, 0), pady=(6, 0)
+        )
+        queue_buttons = ttk.Frame(section)
+        queue_buttons.grid(row=17, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
+        for column, (label, command) in enumerate(
+            (
+                ("Queue this execution", self._create_background_task),
+                ("Refresh tasks", self._list_background_tasks),
+                ("Pause task", self._pause_background_task),
+                ("Resume task", self._resume_background_task),
+                ("Cancel task", self._cancel_background_task),
+            )
+        ):
+            self._request_button(queue_buttons, label, command).grid(
+                row=0, column=column, sticky="w", padx=(0 if column == 0 else 8, 0)
+            )
         self._request_button(
             section,
             "Run scheduler cycle",
             self._run_scheduler_cycle,
-        ).grid(row=15, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
+        ).grid(row=18, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
 
         buttons = ttk.Frame(section)
         buttons.grid(row=2, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
@@ -5045,6 +5081,87 @@ class TkinterDesktopWindow:
                 f"Continuing {execution_id} in the background, at most {steps} "
                 "steps. Nothing new was authorized."
             )
+
+    def _create_background_task(self) -> None:
+        """Queue the named execution for the scheduler, running nothing.
+
+        The execution comes from the field above, because a task is always
+        about one exact execution somebody already approved and started. This
+        neither approves nor starts anything, and it does not run a cycle.
+        """
+        execution_id = self._execution_id.get().strip()
+        if not execution_id:
+            self._plan_approval_status.set(
+                "An execution ID is required to queue a background task."
+            )
+            return
+        if not messagebox.askyesno(
+            "Queue this execution?",
+            (
+                f"Execution: {execution_id}\n\n" + _SCHEDULER_QUEUE_NOTE + "\n\n"
+                "Nothing runs now. The task waits until you press Run scheduler "
+                "cycle."
+            ),
+            parent=self._root,
+        ):
+            self._plan_approval_status.set("Nothing was queued.")
+            return
+        response = self._approval_request(
+            lambda: self._controller.create_background_task(execution_id)
+        )
+        # Captured from the canonical record so pausing acts on the identity
+        # the scheduler actually made, not one read back out of the text.
+        task = getattr(response, "background_research_task", None)
+        self._scheduler_task_id.set(task.task_id if task else "")
+
+    def _list_background_tasks(self) -> None:
+        """Read the durable queue. Chooses nothing and runs nothing."""
+        self._approval_request(self._controller.list_background_tasks)
+
+    def _pause_background_task(self) -> None:
+        self._background_task_action(
+            self._controller.pause_background_task,
+            "Pause this background task?",
+            "The scheduler will stop choosing it until you resume it. The "
+            "execution it names is not stopped and not changed.",
+        )
+
+    def _resume_background_task(self) -> None:
+        self._background_task_action(
+            self._controller.resume_background_task,
+            "Resume this background task?",
+            "The scheduler may choose it again. Nothing runs now: that still "
+            "takes a press of Run scheduler cycle.",
+        )
+
+    def _cancel_background_task(self) -> None:
+        self._background_task_action(
+            self._controller.cancel_background_task,
+            "Cancel this background task?",
+            "The scheduler will never choose it again. This is the queue entry "
+            "only — the research execution it names keeps the state it has, and "
+            "stopping that is the separate Cancel execution control above.",
+        )
+
+    def _background_task_action(
+        self,
+        action: Callable[[str], BrainResponse],
+        question: str,
+        detail: str,
+    ) -> None:
+        """Send one exact task identity to one scheduler control, after asking."""
+        task_id = self._scheduler_task_id.get().strip()
+        if not task_id:
+            self._plan_approval_status.set("A background task ID is required.")
+            return
+        if not messagebox.askyesno(
+            question,
+            f"Background task: {task_id}\n\n{detail}",
+            parent=self._root,
+        ):
+            self._plan_approval_status.set("The queue was left as it was.")
+            return
+        self._approval_request(lambda: action(task_id))
 
     def _run_scheduler_cycle(self) -> None:
         """Ask the scheduler to take exactly one turn, off the Tk thread.

@@ -1205,7 +1205,10 @@ class ResponseComposer:
         """Render bounded task identities and statuses only."""
         lines = [f"Background research tasks: {len(tasks)}"]
         lines.extend(
-            f"- {task.task_id}: {task.status.value}"
+            # Both identities, because they control different things: the task
+            # is what the queue pauses, the execution is what research runs on.
+            f"- task {task.task_id}: {task.status.value}"
+            f" | execution {task.execution_id}"
             f" (retries {task.retry_count}/{task.max_retries})"
             for task in tasks
         )

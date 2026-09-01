@@ -419,7 +419,13 @@ class ResearchCommandBindingTests(unittest.TestCase):
         )
 
     def test_no_control_resumes_the_latest_execution(self) -> None:
-        """There is one resume control, and it resumes what was named."""
+        """Every resume control names what it resumes.
+
+        There are two, and they resume different things: an execution after a
+        restart, and a paused entry in the scheduler queue. Neither means "the
+        last one" — that was the failure this guards against, and adding a
+        second explicitly-named control does not reintroduce it.
+        """
         _window, widgets = build_real_window(
             curiosity_enabled=True,
             plan_authorization_enabled=True,
@@ -432,7 +438,11 @@ class ResearchCommandBindingTests(unittest.TestCase):
 
         resuming = [label for label in labels if "resume" in label]
 
-        self.assertEqual(resuming, ["resume after restart"])
+        self.assertEqual(sorted(resuming), ["resume after restart", "resume task"])
+        for label in resuming:
+            with self.subTest(name=label):
+                for implicit in ("latest", "last", "current", "previous"):
+                    self.assertNotIn(implicit, label)
 
     def test_the_interrupted_panel_states_what_is_not_known(self) -> None:
         """The operator is told the four facts before being asked to rule."""

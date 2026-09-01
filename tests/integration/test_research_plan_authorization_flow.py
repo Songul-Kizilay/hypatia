@@ -748,20 +748,14 @@ class EngineRoutingTests(AuthorizationFixture):
 class BoundaryTests(unittest.TestCase):
     """What approving must still be unable to do."""
 
-    #: The four foreground execution intents are deliberately absent. All of
-    #: them are reachable, and every one of them is an act the operator has to
-    #: perform: start spends an approval, advance attempts exactly one step,
-    #: status reads, cancel stops. The seven below are the ones that would run
-    #: research without anybody asking each time, and none of them can reach an
-    #: approval at all.
-    AUTONOMY_INTENTS = (
-        "research_autonomy_run",
-        "background_research_task_create",
-        "background_research_task_list",
-        "background_research_task_pause",
-        "background_research_task_resume",
-        "background_research_task_cancel",
-    )
+    #: The queue intents left this list in v0.3.278, when the operator got
+    #: controls for them. They never belonged to it on their own merits: what
+    #: this guards is research running without anybody asking each time, and
+    #: creating, listing, pausing, resuming and cancelling a queued task reach
+    #: no provider at all. Only two things run research — the autonomy run
+    #: below, which stays unreachable, and the worker cycle, which is one press
+    #: for one turn.
+    AUTONOMY_INTENTS = ("research_autonomy_run",)
 
     def desktop_source(self) -> str:
         desktop = SRC_DIR / "desktop"
@@ -797,6 +791,13 @@ class BoundaryTests(unittest.TestCase):
             # advances nothing on its own: no timer, no recurrence, and no
             # second cycle without a second press.
             "background_research_worker_cycle",
+            # The queue the cycle turns. Each of these is a press, none of them
+            # reaches a provider, and none can start the cycle.
+            "background_research_task_create",
+            "background_research_task_list",
+            "background_research_task_pause",
+            "background_research_task_resume",
+            "background_research_task_cancel",
         ):
             with self.subTest(reachable=intent):
                 self.assertIn(intent, source)
@@ -855,11 +856,19 @@ class BoundaryTests(unittest.TestCase):
         # operator action, so what is forbidden here is the automatic kind; the
         # deliberate kind is pinned by name in test_curiosity_execution_resume
         # and by binding in test_research_command_bindings.
+        #
+        # "queue" left the list in v0.3.278 for exactly the same reason. It
+        # stood for research lining itself up; queueing is now an operator
+        # pressing a button on one named execution, running nothing, so the
+        # automatic kind is what is named below. The explicit kind is pinned in
+        # test_background_task_queue_controls and test_operator_task_queue.
         for forbidden in (
             "execute",
             "run now",
             "start autonomy",
-            "queue",
+            "auto-queue",
+            "queue automatically",
+            "queues itself",
             "auto-resume",
             "resume automatically",
             "resumes on its own",

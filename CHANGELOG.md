@@ -2,6 +2,42 @@
 
 All notable project changes are recorded here.
 
+## [0.3.278] - 2026-09-01
+
+### Added
+
+- The background research task queue is now visible and operable. Creating,
+  listing, pausing, resuming and cancelling all go through the five scheduler
+  intents that already existed and already routed; the desktop builds no task
+  record, keeps no queue of its own, and infers no status.
+- A queued task's row names both the task and the execution it stands for, so
+  the identifier a control needs is the one the operator can read.
+
+### Security
+
+- Queueing is not approving, and queueing is not running. Creating a task sends
+  no budget and grants no authority: the scheduler's own default bounds one run,
+  and what a task may spend stays the allowance the execution was already
+  granted. Nothing here reaches a provider - only Run scheduler cycle does.
+- Task identity and execution identity are kept in separate fields and separate
+  controls. Cancelling a task stops the scheduler choosing it and leaves the
+  execution exactly as it was; stopping that is still the separate execution
+  control.
+- Eligibility stays with the domain. The desktop predicts no refusal and hides
+  none: an unknown task, or an illegal move on a terminal one, comes back as the
+  scheduler's own refusal with no task state changed.
+- Every queue mutation is confirmed first and every one is an ordinary request
+  control, so none of them can run while a scheduler cycle holds the worker.
+
+### Known limitation
+
+- The scheduler serializes nothing internally. Queue mutations are safe here
+  only because the single-flight worker cannot run a cycle and a mutation at the
+  same time; a second caller outside the desktop would have no such protection.
+- `process_create` does not check that the execution it names exists or is
+  eligible. The desktop deliberately does not paper over this with a hidden
+  check of its own.
+
 ## [0.3.277] - 2026-09-01
 
 ### Added

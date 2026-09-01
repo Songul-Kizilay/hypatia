@@ -336,9 +336,19 @@ class NoSchedulingWasAddedTests(unittest.TestCase):
         self.assertNotIn("MAX_BACKGROUND", WINDOW_SOURCE)
 
     def test_no_relaunch_machinery_exists(self) -> None:
+        """Nothing picks a stopped background run back up by itself.
+
+        "resume_background" was on this list as a stand-in for that, from when
+        nothing of the sort existed under any name. v0.3.278 added
+        ``resume_background_task``, which is an operator pressing Resume on a
+        named queue entry and runs nothing — so the guard now names the
+        automatic kind directly rather than tripping on the explicit one.
+        """
         for forbidden in (
             "auto_relaunch",
-            "resume_background",
+            "resume_background_continuation",
+            "resume_background_run",
+            "resume_background_worker",
             "restart_worker",
             "overnight",
         ):

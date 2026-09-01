@@ -850,14 +850,14 @@ class ReadOnlyTests(EvaluationFixture):
 
 
 class BoundaryTests(unittest.TestCase):
-    AUTONOMY_INTENTS = (
-        "research_autonomy_run",
-        "background_research_task_create",
-        "background_research_task_list",
-        "background_research_task_pause",
-        "background_research_task_resume",
-        "background_research_task_cancel",
-    )
+    #: The queue intents left this list in v0.3.278, when the operator got
+    #: controls for them. They never belonged to it on their own merits: what
+    #: this guards is research running without anybody asking each time, and
+    #: creating, listing, pausing, resuming and cancelling a queued task reach
+    #: no provider at all. Only two things run research — the autonomy run
+    #: below, which stays unreachable, and the worker cycle, which is one press
+    #: for one turn.
+    AUTONOMY_INTENTS = ("research_autonomy_run",)
 
     def test_measuring_providers_opened_no_autonomy(self) -> None:
         desktop = "\n".join(

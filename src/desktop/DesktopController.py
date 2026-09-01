@@ -470,6 +470,86 @@ class DesktopController:
             )
         )
 
+    def create_background_task(self, execution_id: str) -> BrainResponse:
+        """Queue one exact execution for the scheduler. Runs nothing.
+
+        No budget is sent, so the scheduler applies its own default per-run
+        bound. That bound is not authority in any case: what the task may
+        actually spend stays the allowance the execution was already granted,
+        and queueing cannot raise it. The approval panel's budget fields are
+        deliberately not reused here — they belong to an authorization.
+        """
+        normalized = execution_id.strip()
+        if not normalized:
+            raise ValueError("An execution ID cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="Queue one background research task",
+                source="desktop",
+                metadata={
+                    "intent": "background_research_task_create",
+                    "research_plan_id": normalized,
+                },
+            )
+        )
+
+    def list_background_tasks(self) -> BrainResponse:
+        """Read the durable queue. Selects nothing and runs nothing."""
+        return self._brain.process(
+            BrainRequest(
+                message="List background research tasks",
+                source="desktop",
+                metadata={"intent": "background_research_task_list"},
+            )
+        )
+
+    def pause_background_task(self, task_id: str) -> BrainResponse:
+        """Stop the scheduler choosing this task until somebody resumes it."""
+        return self._background_task_ruling(
+            "background_research_task_pause",
+            "Pause one background research task",
+            task_id,
+        )
+
+    def resume_background_task(self, task_id: str) -> BrainResponse:
+        """Make this task selectable again. Runs no cycle."""
+        return self._background_task_ruling(
+            "background_research_task_resume",
+            "Resume one background research task",
+            task_id,
+        )
+
+    def cancel_background_task(self, task_id: str) -> BrainResponse:
+        """Stop the scheduler choosing this task, for good.
+
+        The queue entry only. The research execution it names is untouched and
+        keeps whatever state it already had; stopping that is a separate,
+        explicit action on the execution itself.
+        """
+        return self._background_task_ruling(
+            "background_research_task_cancel",
+            "Cancel one background research task",
+            task_id,
+        )
+
+    def _background_task_ruling(
+        self,
+        intent: str,
+        message: str,
+        task_id: str,
+    ) -> BrainResponse:
+        """Send one exact task identity to one existing scheduler intent."""
+        normalized = task_id.strip()
+        if not normalized:
+            raise ValueError("A background task ID cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message=message,
+                source="desktop",
+                metadata={"intent": intent, "background_task_id": normalized},
+            )
+        )
+
     def run_background_scheduler_cycle(self) -> BrainResponse:
         """Run exactly one bounded scheduler cycle. Schedules nothing further.
 
