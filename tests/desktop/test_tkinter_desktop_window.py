@@ -953,6 +953,7 @@ class ResearchPlanDesktopPreviewTests(unittest.TestCase):
         window._research_plan_instructions = instruction_editor
         window._research_plan_source_ids = source_editor
         window._research_plan_constraints = constraint_editor
+        window._plan_restriction = RecordingInput("advisory")
         window._research_plan_preview = preview_output
         window._append_response = appended.append
 
@@ -973,6 +974,7 @@ class ResearchPlanDesktopPreviewTests(unittest.TestCase):
             "Review evidence.\n",
             "document-2, document-1\n",
             "Do not fetch.\n",
+            "advisory",
         )
         self.assertEqual(request_labels, ["research plan preview"])
         instruction_editor.get.assert_called_once_with("1.0", "end-1c")

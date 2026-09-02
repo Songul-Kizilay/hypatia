@@ -26,6 +26,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from core.Exceptions import ResearchError
+from research.ResearchPlanRestriction import ResearchPlanRestriction
 
 MAX_RESEARCH_PLAN_CONSTRAINT_CHARACTERS = 2_000
 
@@ -35,8 +36,17 @@ class ResearchPlanConstraint:
     """Preserve one exact authored restriction that never becomes a step."""
 
     text: str
+    #: Optional, and never derived from the text above. Absent means advisory:
+    #: the sentence is approved and displayed, and nothing blocks because of
+    #: it. A value here is a separate thing the operator chose, and it is the
+    #: only reason anything is mechanically refused.
+    restriction: ResearchPlanRestriction | None = None
 
     def __post_init__(self) -> None:
+        if self.restriction is not None and not isinstance(
+            self.restriction, ResearchPlanRestriction
+        ):
+            raise ResearchError("Research plan restriction is invalid.")
         if not isinstance(self.text, str) or not self.text.strip():
             raise ResearchError("Research plan constraint cannot be empty.")
         normalized = self.text.strip()

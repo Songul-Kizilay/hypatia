@@ -971,14 +971,23 @@ class ResponseComposer:
                 # Listed apart from the steps, and numbered separately, so a
                 # constraint can never be read back as "step 11".
                 lines.append("Plan constraints:")
-                lines.extend(
-                    f"C{index}. {constraint.text}"
-                    for index, constraint in enumerate(plan.constraints, start=1)
-                )
+                for index, constraint in enumerate(plan.constraints, start=1):
+                    lines.append(f"C{index}. {constraint.text}")
+                    # Said for every constraint, so advisory text is never left
+                    # looking like it might be enforced.
+                    lines.append(
+                        "    Enforcement: "
+                        + (
+                            constraint.restriction.value
+                            if constraint.restriction is not None
+                            else "advisory only"
+                        )
+                    )
                 lines.append(
                     "Constraints are approved plan content and are bound into "
-                    "the plan's digest. They are not executable steps, and "
-                    "nothing here interprets them into capabilities."
+                    "the plan's digest. They are not executable steps. Only a "
+                    "restriction named above is mechanically enforced; "
+                    "advisory text blocks nothing on its own."
                 )
             lines.extend((f"Plan ID: {plan.plan_id}",))
             if prior_lessons:

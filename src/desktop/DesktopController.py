@@ -18,6 +18,7 @@ from research.ResearchClaimConfidence import ResearchClaimConfidence
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchInformationTrust import ResearchInformationTrust
+from research.ResearchPlanRestriction import ResearchPlanRestriction
 from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
 )
@@ -25,6 +26,11 @@ from research.ResearchSourceApplicability import ResearchSourceApplicability
 from research.ResearchSourceIndependence import ResearchSourceIndependence
 from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
 from research.ResearchSourceUsefulness import ResearchSourceUsefulness
+
+#: What the operator picks when they want the text to stay advisory. Kept out
+#: of the restriction vocabulary itself: "no restriction" is the absence of
+#: one, not a kind of one.
+ADVISORY_RESTRICTION_LABEL = "advisory"
 
 
 class TrustedDeferredExecutionController(Protocol):
@@ -63,6 +69,23 @@ class TrustedOneShotDeferredExecutionController(Protocol):
     def skip_due_to_busy(
         self, schedule_id: str
     ) -> OneShotDeferredExecutionSchedule: ...
+
+
+def _plan_restriction(value: str) -> ResearchPlanRestriction | None:
+    """Resolve the operator's typed selection, or nothing at all.
+
+    Blank and the advisory label both mean no enforcement. An unrecognised
+    value is refused rather than defaulted: silently falling back to "no
+    restriction" would turn a selection the operator made into one they did
+    not, in the direction that permits more.
+    """
+    normalized = value.strip()
+    if not normalized or normalized == ADVISORY_RESTRICTION_LABEL:
+        return None
+    try:
+        return ResearchPlanRestriction(normalized)
+    except ValueError as error:
+        raise ValueError("That plan restriction is not recognized.") from error
 
 
 def _plan_constraint_drafts(constraint_lines: str) -> tuple[str, ...]:
@@ -342,6 +365,7 @@ class DesktopController:
         instruction_lines: str,
         source_id_lines: str,
         constraint_lines: str = "",
+        restriction: str = "",
     ) -> BrainResponse:
         """Preview one explicit ordered plan without saving or executing it.
 
@@ -376,6 +400,7 @@ class DesktopController:
                     "research_plan_constraints": _plan_constraint_drafts(
                         constraint_lines
                     ),
+                    "research_plan_restriction": _plan_restriction(restriction),
                 },
             )
         )
@@ -391,6 +416,7 @@ class DesktopController:
         max_network_operations: str = "",
         max_seconds: str = "",
         constraint_lines: str = "",
+        restriction: str = "",
     ) -> BrainResponse:
         """Show the approval this plan would record. Records nothing.
 
@@ -414,6 +440,7 @@ class DesktopController:
                 ),
             },
             constraint_lines=constraint_lines,
+            restriction=restriction,
         )
 
     @staticmethod
@@ -445,6 +472,7 @@ class DesktopController:
         max_network_operations: str = "",
         max_seconds: str = "",
         constraint_lines: str = "",
+        restriction: str = "",
     ) -> BrainResponse:
         """Record exactly one previewed approval. Starts no research.
 
@@ -471,6 +499,7 @@ class DesktopController:
                 ),
             },
             constraint_lines=constraint_lines,
+            restriction=restriction,
         )
 
     def start_authorized_execution(
@@ -481,6 +510,7 @@ class DesktopController:
         source_id_lines: str,
         research_run_id: str,
         constraint_lines: str = "",
+        restriction: str = "",
     ) -> BrainResponse:
         """Spend one recorded approval on one foreground execution start.
 
@@ -500,6 +530,7 @@ class DesktopController:
             research_run_id,
             extra={"authorization_id": normalized_id},
             constraint_lines=constraint_lines,
+            restriction=restriction,
         )
 
     def research_execution_status(self, execution_id: str) -> BrainResponse:
@@ -765,6 +796,7 @@ class DesktopController:
         *,
         extra: dict[str, object],
         constraint_lines: str = "",
+        restriction: str = "",
     ) -> BrainResponse:
         if not all(
             isinstance(value, str)
@@ -786,6 +818,7 @@ class DesktopController:
                 source_id_lines,
             ),
             "research_plan_constraints": _plan_constraint_drafts(constraint_lines),
+            "research_plan_restriction": _plan_restriction(restriction),
         }
         metadata.update(extra)
         return self._brain.process(

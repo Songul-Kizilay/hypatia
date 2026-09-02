@@ -17,7 +17,10 @@ from brain.BrainResponse import BrainResponse
 from brain.SessionSummary import SessionSummary
 from core.CancellationSignal import CancellationSignal
 from core.Exceptions import HypatiaError, ResearchError
-from desktop.DesktopController import DesktopController
+from desktop.DesktopController import (
+    ADVISORY_RESTRICTION_LABEL,
+    DesktopController,
+)
 from desktop.DesktopRequestRunner import DesktopRequestRunner
 from desktop.FilesystemContentPreview import FilesystemContentPreview
 from desktop.MarkdownTextSegments import (
@@ -64,6 +67,7 @@ from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchPlanBudgetRequirement import ResearchPlanBudgetFit
+from research.ResearchPlanRestriction import ResearchPlanRestriction
 from research.ResearchRun import ResearchRun
 from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
@@ -183,10 +187,14 @@ _PLAN_CONSTRAINT_NOTE = (
     "A constraint is part of what you approve and is bound into the plan's "
     "digest, so changing one invalidates an approval made for the old wording. "
     "It is not a step: it is never executed, never advanced, and spends no "
-    "budget. Nothing reads a constraint and turns it into a capability — what "
-    "the plan may actually do is still decided by its steps' declared "
-    "capabilities. Which lines are steps and which are constraints is your "
-    "choice alone; nothing here classifies them for you."
+    "budget. Which lines are steps and which are constraints is your choice "
+    "alone; nothing here classifies them for you. "
+    "The wording is never read to decide what is enforced. Left advisory, a "
+    "constraint explains your intent and blocks nothing. Choosing "
+    "'no_external_source_access' refuses any plan whose steps declare a "
+    "capability that costs a network call — source discovery, fetch or "
+    "accept — and it only ever refuses: it adds no capability, budget or "
+    "provider, and never quietly drops a step or substitutes a local one."
 )
 _EXECUTION_PANEL_NOTE = (
     "An execution that has already been started. Refresh shows its canonical "
@@ -1877,11 +1885,30 @@ class TkinterDesktopWindow:
             wrap=tk.WORD,
         )
         self._research_plan_constraints.grid(row=0, column=0, sticky="nsew")
+        #: One explicit selection. Nothing reads the text above to decide it,
+        #: and leaving it advisory is what keeps every existing plan behaving
+        #: exactly as it did.
+        self._plan_restriction = tk.StringVar(value=ADVISORY_RESTRICTION_LABEL)
+        enforcement = ttk.Frame(constraint_frame)
+        enforcement.grid(row=1, column=0, sticky="w", pady=(6, 0))
+        ttk.Label(enforcement, text="Constraint enforcement").grid(
+            row=0, column=0, sticky="w"
+        )
+        ttk.Combobox(
+            enforcement,
+            textvariable=self._plan_restriction,
+            state="readonly",
+            width=32,
+            values=(
+                ADVISORY_RESTRICTION_LABEL,
+                ResearchPlanRestriction.NO_EXTERNAL_SOURCE_ACCESS.value,
+            ),
+        ).grid(row=0, column=1, sticky="w", padx=(8, 0))
         ttk.Label(
             constraint_frame,
             text=_PLAN_CONSTRAINT_NOTE,
             wraplength=680,
-        ).grid(row=1, column=0, sticky="w", pady=(6, 0))
+        ).grid(row=2, column=0, sticky="w", pady=(6, 0))
         ttk.Button(
             research_plan_frame,
             text="Preview plan — no write",
@@ -3070,6 +3097,7 @@ class TkinterDesktopWindow:
                 instruction_lines,
                 source_id_lines,
                 constraint_lines,
+                self._plan_restriction.get(),
             ),
             self._complete_research_plan_draft_preview,
             "research plan preview",
@@ -5622,6 +5650,7 @@ class TkinterDesktopWindow:
                 # Sent with the plan so the approval binds the constraints the
                 # operator can see, not a constraint-free version of it.
                 self._text_value(self._research_plan_constraints),
+                self._plan_restriction.get(),
             )
         )
         authorization = getattr(response, "research_plan_authorization", None)
@@ -5700,6 +5729,7 @@ class TkinterDesktopWindow:
                 self._authorization_network.get(),
                 self._authorization_seconds.get(),
                 self._text_value(self._research_plan_constraints),
+                self._plan_restriction.get(),
             )
         )
 
@@ -5736,6 +5766,7 @@ class TkinterDesktopWindow:
                 self._text_value(self._research_plan_source_ids),
                 self._plan_approval_run_id.get(),
                 self._text_value(self._research_plan_constraints),
+                self._plan_restriction.get(),
             )
         )
 

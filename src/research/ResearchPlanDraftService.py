@@ -12,6 +12,7 @@ from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchPlan import ResearchPlan
 from research.ResearchPlanConstraint import ResearchPlanConstraint
 from research.ResearchPlanDraftPreview import ResearchPlanDraftPreview
+from research.ResearchPlanRestriction import ResearchPlanRestriction
 from research.ResearchPlanStep import ResearchPlanStep
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 from research.ResearchPlanStepDraftInput import ResearchPlanStepDraftInput
@@ -23,6 +24,11 @@ ResearchPlanStepDraft = ResearchPlanStepDraftInput | tuple[object, ...]
 #: it would silently produce a different, constraint-free plan, and the
 #: approval would bind a digest for something the operator never saw.
 RESEARCH_PLAN_CONSTRAINTS_KEY = "research_plan_constraints"
+
+#: The metadata key carrying the operator's typed restriction selection.
+#: Separate from the constraint text on purpose: the text is never read to
+#: decide whether anything is enforced.
+RESEARCH_PLAN_RESTRICTION_KEY = "research_plan_restriction"
 
 
 class ResearchPlanDraftService:
@@ -42,15 +48,18 @@ class ResearchPlanDraftService:
         question: str,
         step_drafts: tuple[ResearchPlanStepDraft, ...],
         constraint_drafts: tuple[str, ...] = (),
+        restriction: ResearchPlanRestriction | None = None,
     ) -> ResearchPlanDraftPreview:
         """Return a complete inert plan or one bounded validation failure.
 
         Steps and constraints arrive already separated, because the author
-        decided which is which. Nothing here reads the text to guess.
+        decided which is which. Nothing here reads the text to guess, and the
+        restriction is a value the operator selected rather than anything
+        inferred from what a constraint happens to say.
         """
         try:
             steps = self._build_steps(step_drafts)
-            constraints = self._build_constraints(constraint_drafts)
+            constraints = self._build_constraints(constraint_drafts, restriction)
             plan = ResearchPlan(
                 plan_id=self._id_factory(),
                 question=question,
@@ -65,14 +74,20 @@ class ResearchPlanDraftService:
     @staticmethod
     def _build_constraints(
         constraint_drafts: tuple[str, ...],
+        restriction: ResearchPlanRestriction | None = None,
     ) -> tuple[ResearchPlanConstraint, ...]:
-        """Preserve exact authored text in exact authored order."""
+        """Preserve exact authored text, in order, with the chosen restriction.
+
+        The restriction is applied as given. No line is read to decide whether
+        it deserves one.
+        """
         if not isinstance(constraint_drafts, tuple):
             raise ResearchError(
                 "Research plan draft constraints must be an immutable tuple."
             )
         return tuple(
-            ResearchPlanConstraint(text=cast(str, draft)) for draft in constraint_drafts
+            ResearchPlanConstraint(text=cast(str, draft), restriction=restriction)
+            for draft in constraint_drafts
         )
 
     @staticmethod

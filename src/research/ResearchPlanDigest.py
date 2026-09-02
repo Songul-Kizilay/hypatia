@@ -59,7 +59,12 @@ CANONICAL_SCHEMA = "hypatia:research-plan-digest:v2"
 #: them they are encoded, under a schema string that can never collide with
 #: v2 — so adding the first constraint changes the digest, and removing the
 #: last one changes it back.
-CANONICAL_SCHEMA_WITH_CONSTRAINTS = "hypatia:research-plan-digest:v3"
+#: Version 4 carries the typed restriction a constraint may declare.
+#: The string moves because the constrained encoding itself changed:
+#: a v3 digest described constraints that could only be advisory, and
+#: must never be reinterpreted as covering an enforced one. Plans with
+#: no constraints are untouched and keep their v2 identity.
+CANONICAL_SCHEMA_WITH_CONSTRAINTS = "hypatia:research-plan-digest:v4"
 
 #: Instance bookkeeping, deliberately outside the approved content. `plan_id`
 #: is random per preview and `created_at` is the moment of previewing; neither

@@ -10,6 +10,7 @@ from brain.BrainResponse import BrainResponse
 from research.ResearchFailureLesson import ResearchFailureLesson
 from research.ResearchPlanDraftPreview import ResearchPlanDraftPreview
 from research.ResearchPlanDraftService import (
+    RESEARCH_PLAN_RESTRICTION_KEY,
     ResearchPlanDraftService,
     ResearchPlanStepDraft,
 )
@@ -17,6 +18,7 @@ from research.ResearchPlanFailureLessonTrace import (
     ResearchPlanFailureLessonTrace,
     ResearchPlanFailureLessonTracer,
 )
+from research.ResearchPlanRestriction import ResearchPlanRestriction
 from response.ResponseComposer import ResponseComposer
 
 
@@ -59,6 +61,10 @@ class ResearchPlanPreviewApplicationService:
             question,
             step_drafts,
             constraint_drafts,
+            cast(
+                ResearchPlanRestriction | None,
+                request.metadata.get(RESEARCH_PLAN_RESTRICTION_KEY),
+            ),
         )
         prior_lessons = self._prior_lessons(preview)
         lesson_trace = self._lesson_trace(preview, prior_lessons)

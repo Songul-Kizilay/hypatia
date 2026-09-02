@@ -308,6 +308,7 @@ class DesktopControllerTests(unittest.TestCase):
                     ("Record gaps.", ()),
                 ),
                 "research_plan_constraints": (),
+                "research_plan_restriction": None,
             },
         )
 

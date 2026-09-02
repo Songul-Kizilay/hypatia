@@ -2,6 +2,59 @@
 
 All notable project changes are recorded here.
 
+## [0.3.286] - 2026-09-02
+
+### Added
+
+- A plan constraint may now carry one typed restriction,
+  `no_external_source_access`, which is mechanically enforced. Plan Draft has an
+  enforcement selector; leaving it advisory is the default and preserves
+  v0.3.285 behaviour exactly.
+- A pure validator reports every contradiction between a plan and its own
+  restrictions, naming the exact step, the exact declared capability and the
+  exact restriction.
+
+### Changed
+
+- Approval refuses a self-contradictory plan before recording anything, and
+  execution start asks the same shared validator again before any provider is
+  reached. Neither boundary keeps a rule table of its own.
+- Previews state enforcement for every constraint, so advisory wording is never
+  left looking like it might block something.
+
+### Security
+
+- Wording is never interpreted. "Do not access external sources" enforces
+  nothing on its own, in either direction: a constraint whose text sounds
+  permissive still blocks when the operator typed a restriction. No model, no
+  regex, no keyword rule, no provider-name inference.
+- What counts as external comes from the declared capability cost table that
+  already governs network budgets, so the restriction and the budget cannot
+  disagree, and a capability added later with a network cost is forbidden
+  automatically rather than slipping past a hand-written list.
+- A restriction can only refuse. It adds no capability, budget, allowance or
+  provider, and a refused plan is returned exactly as authored: no step
+  removed, no capability lowered, no local or alternate provider substituted.
+- Local-only work stays runnable under the restriction. It blocks source
+  discovery, fetch and accept, and nothing else.
+
+### Compatibility
+
+- Plans with no constraints keep their historical v2 bytes and digest
+  unchanged.
+- Constraints that carry a restriction encode under a new v4 schema string,
+  because the constrained encoding itself gained a field. A v3 digest can
+  therefore never be reinterpreted as covering an enforced constraint; it stops
+  matching, which is the fail-closed direction.
+- No restriction is ever inferred for an existing constraint. Absent means
+  advisory.
+
+### Known limitation
+
+- The enforcement selector applies one restriction to every constraint a plan
+  declares. Per-row selection is deferred, and the vocabulary holds exactly one
+  restriction, so this is not a policy engine.
+
 ## [0.3.285] - 2026-09-02
 
 ### Added

@@ -89,6 +89,7 @@ from research.ResearchPlanAuthorizationVerdict import (
 )
 from research.ResearchPlanDraftService import (
     RESEARCH_PLAN_CONSTRAINTS_KEY,
+    RESEARCH_PLAN_RESTRICTION_KEY,
     ResearchPlanDraftService,
     ResearchPlanStepDraft,
 )
@@ -99,6 +100,10 @@ from research.ResearchPlanExecutionSnapshot import (
 from research.ResearchPlanExecutionState import ResearchPlanExecutionState
 from research.ResearchPlanExecutionStatus import ResearchPlanExecutionStatus
 from research.ResearchPlanOperationRegistry import ResearchPlanOperationRegistry
+from research.ResearchPlanRestriction import ResearchPlanRestriction
+from research.ResearchPlanRestrictionConflict import (
+    plan_restriction_conflicts,
+)
 from research.ResearchPlanStepState import ResearchPlanStepState
 from research.ResearchPlanStepStatus import ResearchPlanStepStatus
 from research.StartsResearchPlanExecution import ResearchPlanExecutionStartRefusal
@@ -188,6 +193,10 @@ class ResearchPlanExecutionApplicationService:
                 tuple[str, ...],
                 request.metadata.get(RESEARCH_PLAN_CONSTRAINTS_KEY) or (),
             ),
+            cast(
+                ResearchPlanRestriction | None,
+                request.metadata.get(RESEARCH_PLAN_RESTRICTION_KEY),
+            ),
         )
         if not preview.allowed:
             return self._response_composer.research_plan_execution_rejected(
@@ -196,6 +205,19 @@ class ResearchPlanExecutionApplicationService:
             )
         plan = preview.plan
         assert plan is not None
+
+        # The same canonical check the approval boundary ran. A stale or
+        # internal path that reached here with a contradictory plan stops
+        # before any provider is touched.
+        conflicts = plan_restriction_conflicts(plan)
+        if conflicts:
+            return self._response_composer.research_plan_execution_rejected(
+                request,
+                " ".join(
+                    ("This research plan contradicts itself, so it cannot start.",)
+                    + tuple(conflict.summary() for conflict in conflicts)
+                ),
+            )
 
         if plan.plan_id in self._executions:
             return self._response_composer.research_plan_execution_rejected(

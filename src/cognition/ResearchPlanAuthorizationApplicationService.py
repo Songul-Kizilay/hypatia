@@ -58,8 +58,13 @@ from research.ResearchPlanAuthorizationVerifier import verify_plan_authorization
 from research.ResearchPlanBudgetRequirement import ResearchPlanBudgetFit
 from research.ResearchPlanDraftService import (
     RESEARCH_PLAN_CONSTRAINTS_KEY,
+    RESEARCH_PLAN_RESTRICTION_KEY,
     ResearchPlanDraftService,
     ResearchPlanStepDraft,
+)
+from research.ResearchPlanRestriction import ResearchPlanRestriction
+from research.ResearchPlanRestrictionConflict import (
+    plan_restriction_conflicts,
 )
 from research.ResearchRunManager import ResearchRunManager
 from response.ResponseComposer import ResponseComposer
@@ -128,6 +133,14 @@ class ResearchPlanAuthorizationApplicationService:
         """Show the exact approval confirming would record. Write nothing."""
         run_id = self._required_run_id(request)
         plan = self._plan(request)
+        if plan is not None and (conflict := self._restriction_refusal(plan)):
+            return self._response_composer.research_plan_authorization_preview(
+                request,
+                ResearchPlanAuthorizationPreview.rejected(
+                    "contradictory",
+                    conflict,
+                ),
+            )
         if plan is None:
             return self._response_composer.research_plan_authorization_preview(
                 request,
@@ -303,6 +316,15 @@ class ResearchPlanAuthorizationApplicationService:
             )
         run_id = self._required_run_id(request)
         plan = self._plan(request)
+        if plan is not None and (conflict := self._restriction_refusal(plan)):
+            # Refused before anything is recorded. The plan is returned as
+            # authored: no step removed, no capability lowered, no provider
+            # swapped for a local one.
+            self._events.refused("contradictory_plan")
+            return self._response_composer.research_plan_authorization_rejected(
+                request,
+                conflict,
+            )
         if plan is None:
             self._events.refused("invalid_plan")
             return self._response_composer.research_plan_authorization_rejected(
@@ -431,6 +453,17 @@ class ResearchPlanAuthorizationApplicationService:
         self._events.consumption_refused(verdict.value)
         return ResearchPlanAuthorizationDecision.refused(verdict)
 
+    @staticmethod
+    def _restriction_refusal(plan: ResearchPlan) -> str | None:
+        """Report the plan's own contradiction, or ``None`` if it has none."""
+        conflicts = plan_restriction_conflicts(plan)
+        if not conflicts:
+            return None
+        return " ".join(
+            ("This research plan contradicts itself, so it cannot be approved.",)
+            + tuple(conflict.summary() for conflict in conflicts)
+        )
+
     def _plan(self, request: BrainRequest) -> ResearchPlan | None:
         """Rebuild the exact plan from the authored draft, or refuse it."""
         question = request.metadata.get("research_plan_question")
@@ -444,6 +477,10 @@ class ResearchPlanAuthorizationApplicationService:
             cast(
                 tuple[str, ...],
                 request.metadata.get(RESEARCH_PLAN_CONSTRAINTS_KEY) or (),
+            ),
+            cast(
+                ResearchPlanRestriction | None,
+                request.metadata.get(RESEARCH_PLAN_RESTRICTION_KEY),
             ),
         )
         return preview.plan if preview.allowed else None

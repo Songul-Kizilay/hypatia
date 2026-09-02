@@ -75,7 +75,7 @@ class ResearchPlanPreviewApplicationServiceTests(unittest.TestCase):
         result = service.process_draft_preview(request)
 
         self.assertIs(result, response)
-        draft_service.preview.assert_called_once_with(question, steps, ())
+        draft_service.preview.assert_called_once_with(question, steps, (), None)
         composer.research_plan_draft_preview.assert_called_once_with(
             request,
             preview,
