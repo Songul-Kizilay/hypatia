@@ -2,6 +2,52 @@
 
 All notable project changes are recorded here.
 
+## [0.3.287] - 2026-09-02
+
+### Added
+
+- A recorded approval now names the typed restrictions it was approved under.
+  Auditing one previously meant rebuilding the exact plan to learn whether it
+  had been approved with no external source access; the record says so.
+- Approval previews, confirmations and listings render "Approved restrictions",
+  reporting "none" rather than staying silent when there are none.
+
+### Changed
+
+- The verifier cross-checks the snapshot against the plan and returns a
+  dedicated `restriction_mismatch` verdict, exactly as it already cross-checks
+  capabilities.
+
+### Security
+
+- The snapshot is derived, never supplied. `for_plan` builds it with
+  `restrictions_of` from the exact confirmed plan and takes no restriction
+  argument, so an approval cannot be typed wider than the plan it approves.
+- Advisory constraint text contributes nothing to it, in either direction. A
+  sentence forbidding external sources records no restriction; a permissive
+  sentence with a typed restriction records it.
+- It is evidence, not authority. A mismatch only ever produces a refusal, in
+  both directions, and is never reconciled by copying one side over the other.
+  Removing the snapshot cannot widen anything: a restricted plan still fails.
+- A contradictory plan still receives no approval at all, so no misleading
+  snapshot can exist for a plan nobody could run.
+- The plan digest is unchanged by any of this, and still covers the restriction
+  itself. Validity ceiling, single-use consumption, stale-plan refusal and human
+  provenance are untouched.
+
+### Compatibility
+
+- The authorization store moves to schema 3. Version 1 and 2 records remain
+  readable and load with no restrictions, which is what they truthfully had:
+  nothing could record one when they were written. No restriction is ever
+  inferred from stored text.
+
+### Known limitation
+
+- Deferred execution grants remain digest-bound but not self-describing: a
+  grant names a plan digest and still does not say which restriction it was
+  granted under. That was deliberately left out of scope here.
+
 ## [0.3.286] - 2026-09-02
 
 ### Added

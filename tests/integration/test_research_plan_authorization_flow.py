@@ -457,7 +457,7 @@ class PersistenceTests(AuthorizationFixture):
     def test_an_unsupported_schema_version_fails_closed(self) -> None:
         """Newer than this build understands is refused, not guessed at."""
         self.store_path.write_text(
-            '{"schema_version": 3, "authorizations": []}',
+            '{"schema_version": 4, "authorizations": []}',
             encoding="utf-8",
         )
 
@@ -476,6 +476,7 @@ class PersistenceTests(AuthorizationFixture):
         document = json.loads(self.store_path.read_text(encoding="utf-8"))
         for entry in document["authorizations"]:
             entry.pop("consumption")
+            entry.pop("approved_restrictions")
         document["schema_version"] = 1
         self.store_path.write_text(json.dumps(document), encoding="utf-8")
 

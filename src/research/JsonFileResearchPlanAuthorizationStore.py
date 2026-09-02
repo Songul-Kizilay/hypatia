@@ -43,6 +43,7 @@ from research.ResearchPlanAuthorization import ResearchPlanAuthorization
 from research.ResearchPlanAuthorizationConsumption import (
     ResearchPlanAuthorizationConsumption,
 )
+from research.ResearchPlanRestriction import ResearchPlanRestriction
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 
 MAX_AUTHORIZATION_STORE_BYTES = 4 * 1024 * 1024
@@ -52,8 +53,8 @@ MAX_AUTHORIZATION_STORE_BYTES = 4 * 1024 * 1024
 #: review — which is the number that matters, not what the disk could hold.
 MAX_AUTHORIZATION_STORE_ENTRIES = 500
 
-_SCHEMA_VERSION = 2
-_READABLE_SCHEMA_VERSIONS = frozenset({1, 2})
+_SCHEMA_VERSION = 3
+_READABLE_SCHEMA_VERSIONS = frozenset({1, 2, 3})
 _DOCUMENT_FIELDS = frozenset({"schema_version", "authorizations"})
 _ENTRY_FIELDS = frozenset(
     {
@@ -61,6 +62,7 @@ _ENTRY_FIELDS = frozenset(
         "plan_digest",
         "research_run_id",
         "capabilities",
+        "approved_restrictions",
         "budget",
         "disclosure",
         "authorized_by",
@@ -69,8 +71,14 @@ _ENTRY_FIELDS = frozenset(
         "consumption",
     }
 )
-#: Version 1 wrote every field above except the last.
-_ENTRY_FIELDS_V1 = _ENTRY_FIELDS - {"consumption"}
+#: Version 3 added the approved restrictions. Earlier records are read with
+#: none, which is what they truthfully had: nothing could record a typed
+#: restriction when they were written. Reading a missing set as "restricted"
+#: would invent an approval nobody gave, and reading it as a wildcard would be
+#: worse; an empty set is simply the fact.
+_ENTRY_FIELDS_V2 = _ENTRY_FIELDS - {"approved_restrictions"}
+#: Version 1 wrote every field above except consumption and restrictions.
+_ENTRY_FIELDS_V1 = _ENTRY_FIELDS_V2 - {"consumption"}
 _CONSUMPTION_FIELDS = frozenset({"execution_id", "consumed_at"})
 _BUDGET_FIELDS = frozenset(
     {
@@ -169,6 +177,9 @@ class JsonFileResearchPlanAuthorizationStore:
             "research_run_id": entry.research_run_id,
             # Sorted so one authorization always serializes identically, which
             # a set's iteration order would not guarantee.
+            "approved_restrictions": sorted(
+                restriction.value for restriction in entry.approved_restrictions
+            ),
             "capabilities": sorted(
                 capability.value for capability in entry.capabilities
             ),
@@ -212,6 +223,7 @@ class JsonFileResearchPlanAuthorizationStore:
     def _parse_entry(document: object) -> ResearchPlanAuthorization:
         if not isinstance(document, dict) or set(document) not in (
             _ENTRY_FIELDS,
+            _ENTRY_FIELDS_V2,
             _ENTRY_FIELDS_V1,
         ):
             raise ResearchError("An authorization document is invalid.")
@@ -221,6 +233,9 @@ class JsonFileResearchPlanAuthorizationStore:
             plan_digest=store._text(document["plan_digest"]),
             research_run_id=store._text(document["research_run_id"]),
             capabilities=store._capabilities(document["capabilities"]),
+            approved_restrictions=store._restrictions(
+                document.get("approved_restrictions", [])
+            ),
             budget=store._budget(document["budget"]),
             disclosure=store._member(
                 ResearchDisclosure,
@@ -262,6 +277,17 @@ class JsonFileResearchPlanAuthorizationStore:
             return frozenset(ResearchPlanStepCapability(entry) for entry in value)
         except ValueError as error:
             raise ResearchError("An authorization capability is invalid.") from error
+
+    @staticmethod
+    def _restrictions(value: object) -> frozenset[ResearchPlanRestriction]:
+        if not isinstance(value, list) or not all(
+            isinstance(entry, str) for entry in value
+        ):
+            raise ResearchError("An authorization restriction list is invalid.")
+        try:
+            return frozenset(ResearchPlanRestriction(entry) for entry in value)
+        except ValueError as error:
+            raise ResearchError("An authorization restriction is invalid.") from error
 
     @staticmethod
     def _budget(value: object) -> ResearchAutonomyBudget:

@@ -41,6 +41,7 @@ from research.ResearchPlanAuthorizationConsumption import (
     ResearchPlanAuthorizationConsumption,
 )
 from research.ResearchPlanDigest import is_plan_digest, plan_digest
+from research.ResearchPlanRestriction import ResearchPlanRestriction
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 
 MAX_AUTHORIZATION_ID_CHARACTERS = 200
@@ -63,6 +64,11 @@ class ResearchPlanAuthorization:
     budget: ResearchAutonomyBudget
     authorized_at: datetime
     expires_at: datetime
+    #: What the plan already says, written down so an approval can be read
+    #: without re-deriving it from a digest. Audit evidence, never authority:
+    #: the verifier only ever refuses on a mismatch, and removing this could
+    #: not make any execution more permissive.
+    approved_restrictions: frozenset[ResearchPlanRestriction] = frozenset()
     disclosure: ResearchDisclosure = ResearchDisclosure.NONE
     authorized_by: ResearchAuthorizer = ResearchAuthorizer.HUMAN
     consumption: ResearchPlanAuthorizationConsumption | None = None
@@ -81,6 +87,17 @@ class ResearchPlanAuthorization:
         if not is_plan_digest(self.plan_digest):
             raise ResearchError(
                 "Research plan authorization requires a valid plan digest."
+            )
+        if not isinstance(self.approved_restrictions, frozenset):
+            raise ResearchError(
+                "Research plan authorization restrictions must be an immutable set."
+            )
+        if not all(
+            isinstance(restriction, ResearchPlanRestriction)
+            for restriction in self.approved_restrictions
+        ):
+            raise ResearchError(
+                "Research plan authorization restrictions must be typed."
             )
         if not isinstance(self.capabilities, frozenset):
             raise ResearchError(
@@ -136,6 +153,7 @@ class ResearchPlanAuthorization:
             plan_digest=plan_digest(plan),
             research_run_id=research_run_id,
             capabilities=capabilities_of(plan),
+            approved_restrictions=restrictions_of(plan),
             budget=budget,
             authorized_at=authorized_at,
             expires_at=expires_at,
@@ -212,3 +230,19 @@ def capabilities_of(plan: ResearchPlan) -> frozenset[ResearchPlanStepCapability]
     if not isinstance(plan, ResearchPlan):
         raise ResearchError("Research plan capabilities require a validated plan.")
     return frozenset(step.capability for step in plan.steps)
+
+
+def restrictions_of(plan: ResearchPlan) -> frozenset[ResearchPlanRestriction]:
+    """Return exactly the typed restrictions this plan's constraints declare.
+
+    Only typed selections. A constraint left advisory contributes nothing, and
+    its wording is never read, so an approval can never claim a restriction the
+    operator did not choose.
+    """
+    if not isinstance(plan, ResearchPlan):
+        raise ResearchError("Research plan restrictions require a validated plan.")
+    return frozenset(
+        constraint.restriction
+        for constraint in plan.constraints
+        if constraint.restriction is not None
+    )

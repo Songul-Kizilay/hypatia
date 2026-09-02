@@ -2345,8 +2345,21 @@ class ResponseComposer:
             sorted(capability.value for capability in authorization.capabilities)
         )
         budget = authorization.budget
+        # Named rather than left to be inferred from the digest, so an approval
+        # can be read back and understood on its own. Restricts only; it grants
+        # nothing that the capabilities above do not already say.
+        restrictions = (
+            ", ".join(
+                sorted(
+                    restriction.value
+                    for restriction in authorization.approved_restrictions
+                )
+            )
+            or "none"
+        )
         return (
             f"Capabilities: {capabilities}",
+            f"Approved restrictions: {restrictions}",
             f"Budget: {budget.max_step_advances} step(s), "
             f"{budget.max_network_operations} network operation(s), "
             f"{budget.max_llm_operations} model call(s), "

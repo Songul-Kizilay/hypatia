@@ -27,6 +27,7 @@ from research.ResearchPlan import ResearchPlan
 from research.ResearchPlanAuthorization import (
     ResearchPlanAuthorization,
     capabilities_of,
+    restrictions_of,
 )
 from research.ResearchPlanAuthorizationVerdict import (
     ResearchPlanAuthorizationVerdict,
@@ -56,6 +57,12 @@ def verify_plan_authorization(
         return ResearchPlanAuthorizationVerdict.RUN_MISMATCH
     if authorization.capabilities != capabilities_of(plan):
         return ResearchPlanAuthorizationVerdict.CAPABILITY_MISMATCH
+    # Checked the same way and for the same reason. The digest already covers
+    # the plan's restrictions, so disagreement here means the stored approval
+    # and the plan it names describe different things; that is refused rather
+    # than reconciled, in either direction.
+    if authorization.approved_restrictions != restrictions_of(plan):
+        return ResearchPlanAuthorizationVerdict.RESTRICTION_MISMATCH
     if authorization.is_consumed:
         return ResearchPlanAuthorizationVerdict.ALREADY_CONSUMED
     if authorization.has_expired_at(moment):

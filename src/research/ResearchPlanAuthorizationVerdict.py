@@ -29,6 +29,7 @@ class ResearchPlanAuthorizationVerdict(StrEnum):
     DIGEST_MISMATCH = "digest_mismatch"
     RUN_MISMATCH = "run_mismatch"
     CAPABILITY_MISMATCH = "capability_mismatch"
+    RESTRICTION_MISMATCH = "restriction_mismatch"
     EXPIRED = "expired"
     UNKNOWN = "unknown"
     ALREADY_CONSUMED = "already_consumed"
