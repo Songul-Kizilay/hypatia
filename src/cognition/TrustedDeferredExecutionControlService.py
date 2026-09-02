@@ -23,7 +23,7 @@ from research.ReadsDeferredExecutionContext import ReadsDeferredExecutionContext
 from research.ResearchExecutionAllowance import ResearchExecutionAllowance
 from research.ResearchExecutionProgressBlock import progress_block
 from research.ResearchPlan import ResearchPlan
-from research.ResearchPlanAuthorization import capabilities_of
+from research.ResearchPlanAuthorization import capabilities_of, restrictions_of
 from research.ResearchPlanDigest import plan_digest
 from research.ResearchPlanExecutionState import ResearchPlanExecutionState
 
@@ -77,6 +77,9 @@ class TrustedDeferredExecutionControlService:
             execution_id=task.execution_id,
             plan_digest=plan_digest(plan),
             capabilities=capabilities_of(plan),
+            # The same extraction authorizations use. One meaning of "this
+            # plan's restrictions", not two that could drift.
+            approved_restrictions=restrictions_of(plan),
             task_budget=task.budget,
             granted_at=self._clock(),
             granted_by=DeferredGrantAuthorizer.TRUSTED_LOCAL_OPERATOR,

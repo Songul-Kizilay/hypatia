@@ -8,7 +8,7 @@ from research.ResearchCapabilityCost import cost_for
 from research.ResearchExecutionAllowance import ResearchExecutionAllowance
 from research.ResearchExecutionProgressBlock import progress_block
 from research.ResearchPlan import ResearchPlan
-from research.ResearchPlanAuthorization import capabilities_of
+from research.ResearchPlanAuthorization import capabilities_of, restrictions_of
 from research.ResearchPlanDigest import plan_digest
 from research.ResearchPlanExecutionState import ResearchPlanExecutionState
 
@@ -49,6 +49,16 @@ def deferred_execution_decision(
         return DeferredExecutionDecision(False, "plan_digest_mismatch")
     if grant.capabilities != capabilities_of(plan):
         return DeferredExecutionDecision(False, "capability_mismatch")
+    # A grant written before restrictions were recorded cannot say what it was
+    # granted under, and this is the one authority that runs without a person
+    # present. Unreadable is treated as not eligible rather than as harmless:
+    # the operator can look at it, and grant it again if they still mean it.
+    if grant.approved_restrictions is None:
+        return DeferredExecutionDecision(False, "restrictions_unrecorded")
+    # Checked exactly as capabilities are, and refused in either direction
+    # rather than reconciled.
+    if grant.approved_restrictions != restrictions_of(plan):
+        return DeferredExecutionDecision(False, "restriction_mismatch")
     if allowance is None:
         return DeferredExecutionDecision(False, "allowance_unavailable")
     step_id = execution.next_pending_step_id

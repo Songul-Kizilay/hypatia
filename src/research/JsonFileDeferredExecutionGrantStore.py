@@ -14,11 +14,16 @@ from core.Exceptions import ResearchError
 from research.DeferredExecutionGrant import DeferredExecutionGrant
 from research.DeferredGrantAuthorizer import DeferredGrantAuthorizer
 from research.ResearchAutonomyBudget import ResearchAutonomyBudget
+from research.ResearchPlanRestriction import ResearchPlanRestriction
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 
 MAX_DEFERRED_GRANT_STORE_BYTES = 4 * 1024 * 1024
 MAX_DEFERRED_GRANT_STORE_ENTRIES = 500
-_SCHEMA_VERSION = 1
+_SCHEMA_VERSION = 2
+#: Version 1 recorded no restrictions. Those entries load as unrecorded
+#: rather than as an empty set, because an empty set is a claim and the
+#: record never made it.
+_READABLE_SCHEMA_VERSIONS = frozenset({1, 2})
 _DOCUMENT_FIELDS = frozenset({"schema_version", "grants"})
 _ENTRY_FIELDS = frozenset(
     {
@@ -32,8 +37,10 @@ _ENTRY_FIELDS = frozenset(
         "granted_by",
         "revoked_at",
         "revoked_by",
+        "approved_restrictions",
     }
 )
+_ENTRY_FIELDS_V1 = _ENTRY_FIELDS - {"approved_restrictions"}
 _BUDGET_FIELDS = frozenset(
     {
         "max_step_advances",
@@ -126,6 +133,11 @@ class JsonFileDeferredExecutionGrantStore:
             "execution_id": grant.execution_id,
             "plan_digest": grant.plan_digest,
             "capabilities": sorted(value.value for value in grant.capabilities),
+            "approved_restrictions": (
+                None
+                if grant.approved_restrictions is None
+                else sorted(value.value for value in grant.approved_restrictions)
+            ),
             "task_budget": {
                 "max_step_advances": budget.max_step_advances,
                 "max_network_operations": budget.max_network_operations,
@@ -145,7 +157,7 @@ class JsonFileDeferredExecutionGrantStore:
     def _parse_document(self, document: object) -> list[DeferredExecutionGrant]:
         if not isinstance(document, dict) or set(document) != _DOCUMENT_FIELDS:
             raise ResearchError("Deferred execution grant document is invalid.")
-        if document["schema_version"] != _SCHEMA_VERSION:
+        if document["schema_version"] not in _READABLE_SCHEMA_VERSIONS:
             raise ResearchError("Deferred execution grant schema is unsupported.")
         values = document["grants"]
         if not isinstance(values, list):
@@ -156,7 +168,10 @@ class JsonFileDeferredExecutionGrantStore:
 
     @staticmethod
     def _parse_entry(document: object) -> DeferredExecutionGrant:
-        if not isinstance(document, dict) or set(document) != _ENTRY_FIELDS:
+        if not isinstance(document, dict) or set(document) not in (
+            _ENTRY_FIELDS,
+            _ENTRY_FIELDS_V1,
+        ):
             raise ResearchError("A deferred execution grant is invalid.")
         budget = document["task_budget"]
         if not isinstance(budget, dict) or set(budget) != _BUDGET_FIELDS:
@@ -177,6 +192,9 @@ class JsonFileDeferredExecutionGrantStore:
                     "capability",
                 )
                 for value in capabilities
+            ),
+            approved_restrictions=store._restrictions(
+                document.get("approved_restrictions")
             ),
             task_budget=ResearchAutonomyBudget(**budget),
             granted_at=store._timestamp(document["granted_at"]),
@@ -199,6 +217,19 @@ class JsonFileDeferredExecutionGrantStore:
                     "revocation provenance",
                 )
             ),
+        )
+
+    @staticmethod
+    def _restrictions(value: object) -> frozenset[ResearchPlanRestriction] | None:
+        """Read a recorded set, or ``None`` where none was ever recorded."""
+        if value is None:
+            return None
+        if not isinstance(value, list):
+            raise ResearchError("Deferred execution restrictions are invalid.")
+        store = JsonFileDeferredExecutionGrantStore
+        return frozenset(
+            store._member(ResearchPlanRestriction, entry, "restriction")
+            for entry in value
         )
 
     @staticmethod

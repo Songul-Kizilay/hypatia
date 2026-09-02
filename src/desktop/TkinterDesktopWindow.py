@@ -5313,7 +5313,9 @@ class TkinterDesktopWindow:
             return
         state = "allowed" if view.decision.allowed else view.decision.reason
         self._deferred_execution_status.set(
-            f"Deferred status for {view.task_id}: {state}. No timer exists."
+            f"Deferred status for {view.task_id}: {state}. "
+            f"Approved restrictions: {view.approved_restrictions_text}. "
+            "No timer exists."
         )
 
     def _allow_deferred_execution(self) -> None:

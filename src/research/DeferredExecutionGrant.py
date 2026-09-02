@@ -9,6 +9,7 @@ from core.Exceptions import ResearchError
 from research.DeferredGrantAuthorizer import DeferredGrantAuthorizer
 from research.ResearchAutonomyBudget import ResearchAutonomyBudget
 from research.ResearchPlanDigest import is_plan_digest
+from research.ResearchPlanRestriction import ResearchPlanRestriction
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 
 MAX_DEFERRED_GRANT_ID_CHARACTERS = 200
@@ -26,6 +27,16 @@ class DeferredExecutionGrant:
     task_budget: ResearchAutonomyBudget
     granted_at: datetime
     granted_by: DeferredGrantAuthorizer
+    #: What the granted plan already said, written down so a grant can be read
+    #: without rebuilding the plan behind its digest.
+    #:
+    #: ``None`` is not "no restrictions" — it means this record never recorded
+    #: them, which is the only truthful reading of a grant written before this
+    #: field existed. Typed restrictions arrived one release earlier, so such a
+    #: grant may well have covered a restricted plan; claiming it approved none
+    #: would be inventing history. An empty frozenset is the different, positive
+    #: statement that a grant was made and had none.
+    approved_restrictions: frozenset[ResearchPlanRestriction] | None = None
     revoked_at: datetime | None = None
     revoked_by: DeferredGrantAuthorizer | None = None
 
@@ -47,6 +58,16 @@ class DeferredExecutionGrant:
             isinstance(value, ResearchPlanStepCapability) for value in self.capabilities
         ):
             raise ResearchError("Deferred execution grant capability is invalid.")
+        if self.approved_restrictions is not None:
+            if not isinstance(self.approved_restrictions, frozenset):
+                raise ResearchError(
+                    "Deferred execution grant restrictions are invalid."
+                )
+            if not all(
+                isinstance(value, ResearchPlanRestriction)
+                for value in self.approved_restrictions
+            ):
+                raise ResearchError("Deferred execution grant restriction is invalid.")
         if not isinstance(self.task_budget, ResearchAutonomyBudget):
             raise ResearchError("Deferred execution grant task budget is invalid.")
         if not isinstance(self.granted_by, DeferredGrantAuthorizer):
@@ -69,6 +90,11 @@ class DeferredExecutionGrant:
     @property
     def active(self) -> bool:
         return self.revoked_at is None
+
+    @property
+    def records_restrictions(self) -> bool:
+        """Return whether this grant states what it was granted under."""
+        return self.approved_restrictions is not None
 
     def revoked(
         self,

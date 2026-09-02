@@ -259,12 +259,14 @@ class NothingElseChangedTests(unittest.TestCase):
         self.assertIn("for step in plan.steps:", source)
         self.assertNotIn("restriction", source.casefold())
 
-    def test_the_scheduler_and_grants_know_nothing_of_restrictions(self) -> None:
-        for name in (
-            "cognition/BackgroundResearchSchedulerApplicationService.py",
-            "research/DeferredExecutionGrant.py",
-            "research/DeferredExecutionEligibility.py",
-        ):
+    def test_the_scheduler_knows_nothing_of_restrictions(self) -> None:
+        """The scheduler still decides nothing about them.
+
+        Deferred grants left this list in v0.3.288, when they began recording
+        the restrictions they were granted under. That is their own milestone;
+        the scheduler was and remains uninvolved.
+        """
+        for name in ("cognition/BackgroundResearchSchedulerApplicationService.py",):
             with self.subTest(name=name):
                 source = (SRC_DIR / name).read_text(encoding="utf-8")
 

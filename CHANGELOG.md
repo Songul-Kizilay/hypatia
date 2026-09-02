@@ -2,6 +2,52 @@
 
 All notable project changes are recorded here.
 
+## [0.3.288] - 2026-09-02
+
+### Added
+
+- A deferred execution grant now records the typed restrictions of the plan it
+  was granted over, derived by the same `restrictions_of` the authorization
+  snapshot uses. Auditing a grant no longer means rebuilding the plan behind
+  its digest.
+- Grant status and the grant confirmation state "Approved restrictions".
+
+### Changed
+
+- Eligibility cross-checks the snapshot against the plan and refuses on
+  mismatch, exactly as it already cross-checks capabilities.
+
+### Security
+
+- The snapshot is derived at grant time from the exact plan, never supplied by
+  a caller, and constraint wording is still never interpreted.
+- It grants nothing. It adds no capability, enlarges no task budget or
+  allowance, and does not alter the plan digest. Removing it makes a grant less
+  usable, never more: an unrecorded grant is refused outright.
+- A mismatch is refused in both directions and never reconciled by copying one
+  side over the other. Refusal spends no allowance and reaches no provider.
+- Revocation, lifetime, task binding, execution binding, capability binding and
+  budget binding are unchanged.
+
+### Compatibility
+
+- The grant store moves to schema 2 and still reads schema 1. Those records load
+  as **unrecorded**, not as an empty set. Typed restrictions existed for two
+  releases before grants recorded them, so a stored grant may genuinely cover a
+  restricted plan; reading it as "approved no restrictions" would invent
+  history in the permissive direction.
+- An unrecorded grant is therefore not eligible for deferred selection, and is
+  rendered as "unavailable for legacy grant" rather than "none". An operator
+  who still means it can grant again.
+- An unknown future schema is refused rather than guessed at.
+
+### Known limitation
+
+- Legacy grants must be re-granted before they could ever be selected
+  automatically. Nothing runs from grants today — no timer exists — so this
+  costs nothing now, but it is a deliberate fail-closed break rather than a
+  silent upgrade.
+
 ## [0.3.287] - 2026-09-02
 
 ### Added

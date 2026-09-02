@@ -27,7 +27,7 @@ from research.ResearchAutonomyBudget import ResearchAutonomyBudget
 from research.ResearchExecutionAllowance import ResearchExecutionAllowance
 from research.ResearchExecutionSpend import ResearchExecutionSpend
 from research.ResearchPlan import ResearchPlan
-from research.ResearchPlanAuthorization import capabilities_of
+from research.ResearchPlanAuthorization import capabilities_of, restrictions_of
 from research.ResearchPlanDigest import plan_digest
 from research.ResearchPlanExecutionState import ResearchPlanExecutionState
 from research.ResearchPlanStep import ResearchPlanStep
@@ -96,6 +96,9 @@ def grant_for(context: Context, **changes) -> DeferredExecutionGrant:
         execution_id=context.task.execution_id,
         plan_digest=plan_digest(context.plan),
         capabilities=capabilities_of(context.plan),
+        # What the service records, so a hand-built grant behaves like a real
+        # one; individual tests still override it through replace().
+        approved_restrictions=restrictions_of(context.plan),
         task_budget=context.task.budget,
         granted_at=NOW,
         granted_by=DeferredGrantAuthorizer.TRUSTED_LOCAL_OPERATOR,

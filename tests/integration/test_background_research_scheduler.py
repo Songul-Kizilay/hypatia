@@ -55,7 +55,7 @@ from research.JsonFileResearchRunStore import JsonFileResearchRunStore
 from research.ResearchAutonomyBudget import ResearchAutonomyBudget
 from research.ResearchAutonomyResult import AutonomyStopReason
 from research.ResearchExecutionAllowance import ResearchExecutionAllowance
-from research.ResearchPlanAuthorization import capabilities_of
+from research.ResearchPlanAuthorization import capabilities_of, restrictions_of
 from research.ResearchPlanDigest import plan_digest
 from research.ResearchPlanStepDraftInput import ResearchPlanStepDraftInput
 from research.ResearchRunManager import ResearchRunManager
@@ -237,6 +237,9 @@ class BackgroundSchedulerTests(SchedulerFixture):
             execution_id=task.execution_id,
             plan_digest=plan_digest(plan),
             capabilities=capabilities_of(plan),
+            # Recorded as a real grant records it. Omitting it now means
+            # "never recorded", which is deliberately not eligible.
+            approved_restrictions=restrictions_of(plan),
             task_budget=task.budget,
             granted_at=START,
             granted_by=DeferredGrantAuthorizer.TRUSTED_LOCAL_OPERATOR,
