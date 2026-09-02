@@ -29,6 +29,7 @@ from research.JsonFileResearchRunStore import JsonFileResearchRunStore
 from research.ResearchFailureLesson import ResearchFailureLesson
 from research.ResearchPlanDraftPreview import ResearchPlanDraftPreview
 from research.ResearchPlanDraftService import ResearchPlanDraftService
+from research.ResearchPlanFailureLessonTrace import ResearchPlanFailureLessonTracer
 from research.ResearchRunManager import ResearchRunManager
 from response.ResponseComposer import ResponseComposer
 from session.SessionManager import SessionManager
@@ -79,6 +80,7 @@ class ResearchPlanPreviewApplicationServiceTests(unittest.TestCase):
             request,
             preview,
             (),
+            None,
         )
 
     def test_valid_preview_receives_advice_for_its_canonical_question(self) -> None:
@@ -141,6 +143,45 @@ class ResearchPlanPreviewApplicationServiceTests(unittest.TestCase):
 
         self.assertTrue(response.success)
         self.assertEqual(response.failure_lessons, ())
+
+    def test_broken_trace_cannot_turn_a_valid_preview_into_failure(self) -> None:
+        remembered = ResearchFailureLesson(
+            lesson_id="lesson-1",
+            kind=FailureLessonKind.FAILED_HYPOTHESIS,
+            run_id="run-old",
+            subject_id="h1",
+            statement="The ring-age hypothesis lacked opposing evidence.",
+            provenance=("h1", "evidence-4"),
+            context="Which observation would change the ring-age hypothesis?",
+            recorded_at=datetime(2026, 8, 21, 18, 0, tzinfo=UTC),
+        )
+        tracer = Mock(spec=ResearchPlanFailureLessonTracer)
+        tracer.trace.side_effect = RuntimeError("trace unavailable")
+        service = ResearchPlanPreviewApplicationService(
+            ResponseComposer(),
+            ResearchPlanDraftService(
+                clock=lambda: datetime(2026, 8, 22, 18, 0, tzinfo=UTC),
+                id_factory=lambda: "plan-1",
+            ),
+            Mock(return_value=(remembered,)),
+            tracer,
+        )
+        request = BrainRequest(
+            "ignored",
+            metadata={
+                "research_plan_question": (
+                    "Which observation would settle the ring-age debate?"
+                ),
+                "research_plan_steps": (("Review opposing ring-age evidence.", ()),),
+            },
+        )
+
+        response = service.process_draft_preview(request)
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.failure_lessons, (remembered,))
+        self.assertIsNone(response.research_plan_failure_lesson_trace)
+        self.assertIn("wording overlap: unavailable", response.message)
 
     def test_missing_metadata_is_delegated_to_bounded_validation(self) -> None:
         service = ResearchPlanPreviewApplicationService(
@@ -285,7 +326,9 @@ class ResearchPlanPreviewCognitiveRoutingTests(unittest.TestCase):
                         "research_plan_question": (
                             "Which observation would settle the ring-age debate?"
                         ),
-                        "research_plan_steps": (("Review observations.", ()),),
+                        "research_plan_steps": (
+                            ("Review opposing ring-age evidence.", ()),
+                        ),
                     },
                 )
             )
@@ -293,6 +336,16 @@ class ResearchPlanPreviewCognitiveRoutingTests(unittest.TestCase):
             self.assertTrue(response.success)
             self.assertEqual(len(response.failure_lessons), 1)
             self.assertIn("Possibly relevant prior lessons: 1", response.message)
+            trace = response.research_plan_failure_lesson_trace
+            self.assertIsNotNone(trace)
+            assert trace is not None
+            self.assertEqual(trace.plan_id, "plan-1")
+            self.assertEqual(len(trace.references), 1)
+            self.assertEqual(trace.references[0].step_id, "step-1")
+            self.assertEqual(
+                trace.references[0].shared_terms,
+                ("evidence", "opposing", "ring-age"),
+            )
             self.assertEqual(run_manager.list(), [])
             self.assertEqual((root / "lessons.json").read_bytes(), lessons_before)
             self.assertEqual(events, ["failure_memory.lessons_recalled"])

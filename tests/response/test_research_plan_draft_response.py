@@ -10,6 +10,7 @@ from research.FailureLessonKind import FailureLessonKind
 from research.ResearchFailureLesson import ResearchFailureLesson
 from research.ResearchPlan import ResearchPlan
 from research.ResearchPlanDraftPreview import ResearchPlanDraftPreview
+from research.ResearchPlanFailureLessonTrace import ResearchPlanFailureLessonTracer
 from research.ResearchPlanStep import ResearchPlanStep
 from response.ResponseComposer import ResponseComposer
 
@@ -91,7 +92,12 @@ class ResearchPlanDraftResponseTests(unittest.TestCase):
         plan = ResearchPlan(
             "plan-1",
             "Which observation would settle the ring-age debate?",
-            (ResearchPlanStep("step-1", "Review observations."),),
+            (
+                ResearchPlanStep(
+                    "step-1",
+                    "Review opposing ring-age evidence.",
+                ),
+            ),
             datetime(2026, 8, 22, 18, 0, tzinfo=UTC),
         )
         preview = ResearchPlanDraftPreview.ready(plan)
@@ -110,12 +116,18 @@ class ResearchPlanDraftResponseTests(unittest.TestCase):
             self.request,
             preview,
             (lesson,),
+            ResearchPlanFailureLessonTracer().trace(plan, (lesson,)),
         )
 
         self.assertEqual(response.failure_lessons, (lesson,))
+        self.assertIsNotNone(response.research_plan_failure_lesson_trace)
         self.assertIn("Possibly relevant prior lessons: 1", response.message)
         self.assertIn("from: h1, evidence-4", response.message)
-        self.assertIn("The authored plan", response.message)
+        self.assertIn(
+            "Authored-step wording overlap: step-1 " "(evidence, opposing, ring-age)",
+            response.message,
+        )
+        self.assertIn("lexical trace, not a judgement", response.message)
         self.assertLess(
             response.message.index("Plan ID: plan-1"),
             response.message.index("Possibly relevant prior lessons: 1"),

@@ -73,6 +73,7 @@ from research.ResearchPlanExecutionSnapshot import (
     ResearchPlanExecutionSnapshot,
 )
 from research.ResearchPlanExecutionState import ResearchPlanExecutionState
+from research.ResearchPlanFailureLessonTrace import ResearchPlanFailureLessonTrace
 from research.ResearchPlanStepStatus import ResearchPlanStepStatus
 from research.ResearchProviderComparisonReport import (
     ResearchProviderComparisonReport,
@@ -931,6 +932,7 @@ class ResponseComposer:
         request: BrainRequest,
         preview: ResearchPlanDraftPreview,
         prior_lessons: tuple[ResearchFailureLesson, ...] = (),
+        lesson_trace: ResearchPlanFailureLessonTrace | None = None,
     ) -> BrainResponse:
         """Render one inert authored plan plus optional advisory lessons."""
         plan = preview.plan
@@ -972,9 +974,22 @@ class ResponseComposer:
                 for lesson in prior_lessons:
                     lines.append(f"- [{lesson.kind.value}] {lesson.statement}")
                     lines.append(f"  from: {', '.join(lesson.provenance)}")
+                    if lesson_trace is None:
+                        lines.append("  Authored-step wording overlap: unavailable")
+                        continue
+                    references = lesson_trace.references_for(lesson.lesson_id)
+                    if not references:
+                        lines.append("  Authored-step wording overlap: none")
+                    for reference in references:
+                        lines.append(
+                            "  Authored-step wording overlap: "
+                            f"{reference.step_id} "
+                            f"({', '.join(reference.shared_terms)})"
+                        )
                 lines.append(
-                    "These are advisory. The authored plan, its future digest, "
-                    "authorization, capabilities, and execution are unchanged."
+                    "This is a lexical trace, not a judgement that a lesson is "
+                    "addressed. The authored plan, its future digest, authorization, "
+                    "capabilities, and execution are unchanged."
                 )
             lines.extend(
                 (
@@ -992,6 +1007,9 @@ class ResponseComposer:
             success=preview.allowed,
             research_plan_draft_preview=preview,
             failure_lessons=prior_lessons if preview.allowed else (),
+            research_plan_failure_lesson_trace=(
+                lesson_trace if preview.allowed else None
+            ),
         )
 
     def learned_memory_audit(

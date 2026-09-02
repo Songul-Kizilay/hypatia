@@ -2,6 +2,23 @@
 
 All notable project changes are recorded here.
 
+## [0.3.284] - 2026-09-02
+
+### Added
+
+- Research-plan previews now explain which authored steps share meaningful
+  wording with each displayed prior failure lesson, including the exact shared
+  terms and stable step IDs.
+
+### Safety
+
+- The trace is deterministic, read-only and explicitly lexical. It does not
+  claim that a lesson is addressed, score plan quality, change the authored
+  plan or digest, authorize work, call a model, or start execution.
+- A valid preview survives a trace that cannot be produced. The overlap is
+  reported as unavailable rather than as an absence of overlap, so a failed
+  computation is never read as a finding, and the preview itself is unaffected.
+
 ## [0.3.283] - 2026-09-02
 
 ### Added

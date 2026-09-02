@@ -13,6 +13,10 @@ from research.ResearchPlanDraftService import (
     ResearchPlanDraftService,
     ResearchPlanStepDraft,
 )
+from research.ResearchPlanFailureLessonTrace import (
+    ResearchPlanFailureLessonTrace,
+    ResearchPlanFailureLessonTracer,
+)
 from response.ResponseComposer import ResponseComposer
 
 
@@ -26,10 +30,12 @@ class ResearchPlanPreviewApplicationService:
         lesson_advisor: (
             Callable[[str], tuple[ResearchFailureLesson, ...]] | None
         ) = None,
+        lesson_tracer: ResearchPlanFailureLessonTracer | None = None,
     ) -> None:
         self._response_composer = response_composer
         self._draft_service = draft_service or ResearchPlanDraftService()
         self._lesson_advisor = lesson_advisor
+        self._lesson_tracer = lesson_tracer or ResearchPlanFailureLessonTracer()
 
     @staticmethod
     def is_draft_preview_request(request: BrainRequest) -> bool:
@@ -45,10 +51,12 @@ class ResearchPlanPreviewApplicationService:
         )
         preview = self._draft_service.preview(question, step_drafts)
         prior_lessons = self._prior_lessons(preview)
+        lesson_trace = self._lesson_trace(preview, prior_lessons)
         return self._response_composer.research_plan_draft_preview(
             request,
             preview,
             prior_lessons,
+            lesson_trace,
         )
 
     def _prior_lessons(
@@ -66,3 +74,18 @@ class ResearchPlanPreviewApplicationService:
             # A plan preview has already succeeded. Advisory recall must not
             # turn that success into a failure or change the plan itself.
             return ()
+
+    def _lesson_trace(
+        self,
+        preview: ResearchPlanDraftPreview,
+        lessons: tuple[ResearchFailureLesson, ...],
+    ) -> ResearchPlanFailureLessonTrace | None:
+        """Trace shown lessons against authored steps, changing nothing."""
+        if preview.plan is None or not lessons:
+            return None
+        try:
+            return self._lesson_tracer.trace(preview.plan, lessons)
+        except Exception:
+            # Like recall itself, this is explanatory decoration on an
+            # already-valid preview. It may disappear; the preview may not.
+            return None

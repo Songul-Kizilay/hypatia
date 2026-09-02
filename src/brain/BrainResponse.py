@@ -55,6 +55,7 @@ from research.ResearchPlanAuthorization import ResearchPlanAuthorization
 from research.ResearchPlanBudgetRequirement import ResearchPlanBudgetFit
 from research.ResearchPlanDraftPreview import ResearchPlanDraftPreview
 from research.ResearchPlanExecutionState import ResearchPlanExecutionState
+from research.ResearchPlanFailureLessonTrace import ResearchPlanFailureLessonTrace
 from research.ResearchProviderComparisonReport import (
     ResearchProviderComparisonReport,
 )
@@ -150,6 +151,7 @@ class BrainResponse:
     ) = None
     research_evidence_integrity_status: ResearchEvidenceIntegrityStatus | None = None
     research_plan_draft_preview: ResearchPlanDraftPreview | None = None
+    research_plan_failure_lesson_trace: ResearchPlanFailureLessonTrace | None = None
     learned_memory_audit: LearnedMemoryAuditReport | None = None
     research_plan_execution: ResearchPlanExecutionState | None = None
     research_execution_continuation: ResearchExecutionContinuation | None = None
