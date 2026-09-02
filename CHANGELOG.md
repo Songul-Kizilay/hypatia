@@ -2,6 +2,20 @@
 
 All notable project changes are recorded here.
 
+## [0.3.283] - 2026-09-02
+
+### Added
+
+- A valid authored research-plan preview now surfaces bounded, provenance-backed
+  lessons remembered from similar prior questions before the operator confirms
+  the plan.
+
+### Safety
+
+- Failure recall remains advisory and read-only. It cannot reject a valid plan,
+  alter its steps or future digest, authorize capabilities, start execution, or
+  turn a successful preview into a failure when recall is unavailable.
+
 ## [0.3.282] - 2026-09-02
 
 ### Added

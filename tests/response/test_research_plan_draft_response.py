@@ -6,6 +6,8 @@ import unittest
 from datetime import UTC, datetime
 
 from brain.BrainRequest import BrainRequest
+from research.FailureLessonKind import FailureLessonKind
+from research.ResearchFailureLesson import ResearchFailureLesson
 from research.ResearchPlan import ResearchPlan
 from research.ResearchPlanDraftPreview import ResearchPlanDraftPreview
 from research.ResearchPlanStep import ResearchPlanStep
@@ -84,6 +86,41 @@ class ResearchPlanDraftResponseTests(unittest.TestCase):
             "Persistent writes: not used\n"
             "Execution: not started",
         )
+
+    def test_ready_preview_surfaces_prior_lessons_as_advice_only(self) -> None:
+        plan = ResearchPlan(
+            "plan-1",
+            "Which observation would settle the ring-age debate?",
+            (ResearchPlanStep("step-1", "Review observations."),),
+            datetime(2026, 8, 22, 18, 0, tzinfo=UTC),
+        )
+        preview = ResearchPlanDraftPreview.ready(plan)
+        lesson = ResearchFailureLesson(
+            lesson_id="lesson:run-old:failed_hypothesis:h1",
+            kind=FailureLessonKind.FAILED_HYPOTHESIS,
+            run_id="run-old",
+            subject_id="h1",
+            statement="The earlier ring-age hypothesis lacked opposing evidence.",
+            provenance=("h1", "evidence-4"),
+            context="Which observation would change the ring-age hypothesis?",
+            recorded_at=datetime(2026, 8, 21, 18, 0, tzinfo=UTC),
+        )
+
+        response = self.composer.research_plan_draft_preview(
+            self.request,
+            preview,
+            (lesson,),
+        )
+
+        self.assertEqual(response.failure_lessons, (lesson,))
+        self.assertIn("Possibly relevant prior lessons: 1", response.message)
+        self.assertIn("from: h1, evidence-4", response.message)
+        self.assertIn("The authored plan", response.message)
+        self.assertLess(
+            response.message.index("Plan ID: plan-1"),
+            response.message.index("Possibly relevant prior lessons: 1"),
+        )
+        self.assertTrue(response.message.endswith("Execution: not started"))
 
 
 if __name__ == "__main__":

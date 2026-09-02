@@ -589,6 +589,11 @@ class CognitiveEngine:
         self._research_plan_preview_service = ResearchPlanPreviewApplicationService(
             response_composer,
             research_plan_draft_service,
+            (
+                self._failure_memory_service.advice
+                if self._failure_memory_service is not None
+                else None
+            ),
         )
         self._source_ingestion_events = SourceIngestionEvents(event_bus)
         self._knowledge_reconciliation_service = (

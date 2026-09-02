@@ -930,8 +930,9 @@ class ResponseComposer:
         self,
         request: BrainRequest,
         preview: ResearchPlanDraftPreview,
+        prior_lessons: tuple[ResearchFailureLesson, ...] = (),
     ) -> BrainResponse:
-        """Render one inert authored plan or its bounded validation reason."""
+        """Render one inert authored plan plus optional advisory lessons."""
         plan = preview.plan
         if not preview.allowed:
             message = "\n".join(
@@ -963,9 +964,20 @@ class ResponseComposer:
                         "   Source discovery provider: "
                         f"{step.discovery_provider.label}"
                     )
+            lines.extend((f"Plan ID: {plan.plan_id}",))
+            if prior_lessons:
+                lines.extend(
+                    ("", f"Possibly relevant prior lessons: {len(prior_lessons)}")
+                )
+                for lesson in prior_lessons:
+                    lines.append(f"- [{lesson.kind.value}] {lesson.statement}")
+                    lines.append(f"  from: {', '.join(lesson.provenance)}")
+                lines.append(
+                    "These are advisory. The authored plan, its future digest, "
+                    "authorization, capabilities, and execution are unchanged."
+                )
             lines.extend(
                 (
-                    f"Plan ID: {plan.plan_id}",
                     "Status: ready for explicit confirmation",
                     "Persistent writes: not used",
                     "Execution: not started",
@@ -979,6 +991,7 @@ class ResponseComposer:
             memory_count=0,
             success=preview.allowed,
             research_plan_draft_preview=preview,
+            failure_lessons=prior_lessons if preview.allowed else (),
         )
 
     def learned_memory_audit(
