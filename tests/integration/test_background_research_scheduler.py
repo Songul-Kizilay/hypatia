@@ -45,6 +45,8 @@ from planner.Planner import Planner
 from research.BackgroundResearchTask import BackgroundResearchTask
 from research.BackgroundResearchTaskStatus import BackgroundResearchTaskStatus
 from research.BackgroundTaskOutcome import BackgroundTaskOutcome, outcome_for
+from research.DeferredExecutionGrant import DeferredExecutionGrant
+from research.DeferredGrantAuthorizer import DeferredGrantAuthorizer
 from research.JsonFileBackgroundTaskStore import (
     MAX_BACKGROUND_TASK_STORE_TASKS,
     JsonFileBackgroundTaskStore,
@@ -52,6 +54,9 @@ from research.JsonFileBackgroundTaskStore import (
 from research.JsonFileResearchRunStore import JsonFileResearchRunStore
 from research.ResearchAutonomyBudget import ResearchAutonomyBudget
 from research.ResearchAutonomyResult import AutonomyStopReason
+from research.ResearchExecutionAllowance import ResearchExecutionAllowance
+from research.ResearchPlanAuthorization import capabilities_of
+from research.ResearchPlanDigest import plan_digest
 from research.ResearchPlanStepDraftInput import ResearchPlanStepDraftInput
 from research.ResearchRunManager import ResearchRunManager
 from response.ResponseComposer import ResponseComposer
@@ -72,6 +77,16 @@ class StubClock:
         value = self.now
         self.now += timedelta(seconds=1)
         return value
+
+
+class StaticDeferredGrantReader:
+    def __init__(self, grant: DeferredExecutionGrant | None) -> None:
+        self.grant = grant
+
+    def active_for_task(self, task_id: str) -> DeferredExecutionGrant | None:
+        if self.grant is not None and self.grant.task_id == task_id:
+            return self.grant
+        return None
 
 
 class SchedulerFixture(unittest.TestCase):
@@ -209,6 +224,53 @@ class SchedulerFixture(unittest.TestCase):
 
 
 class BackgroundSchedulerTests(SchedulerFixture):
+    def deferred_grant(self, task_id: str) -> DeferredExecutionGrant:
+        task = self.task(self.engine, task_id)
+        plan = self.engine.live_research_plan(task.execution_id)
+        assert plan is not None
+        self.engine._research_plan_execution_service._allowances[task.execution_id] = (
+            ResearchExecutionAllowance(ResearchAutonomyBudget())
+        )
+        return DeferredExecutionGrant(
+            grant_id=f"grant-{task_id}",
+            task_id=task.task_id,
+            execution_id=task.execution_id,
+            plan_digest=plan_digest(plan),
+            capabilities=capabilities_of(plan),
+            task_budget=task.budget,
+            granted_at=START,
+            granted_by=DeferredGrantAuthorizer.TRUSTED_LOCAL_OPERATOR,
+        )
+
+    def test_exact_deferred_run_requires_live_exact_grant(self) -> None:
+        execution_id = self.start_execution(self.engine, self.search_step())
+        task_id = self.create_task(self.engine, execution_id)
+        result = self.engine.run_exact_deferred_background_task(task_id)
+        self.assertIsNone(result)
+        self.assertIs(
+            self.task(self.engine, task_id).status,
+            BackgroundResearchTaskStatus.PENDING,
+        )
+
+    def test_exact_deferred_run_never_falls_back_to_older_task(self) -> None:
+        first_execution = self.start_execution(self.engine, self.search_step())
+        second_execution = self.start_execution(self.engine, self.search_step())
+        first_task = self.create_task(self.engine, first_execution)
+        second_task = self.create_task(self.engine, second_execution)
+        self.engine._background_research_scheduler._deferred_grants = (
+            StaticDeferredGrantReader(self.deferred_grant(second_task))
+        )
+        result = self.engine.run_exact_deferred_background_task(second_task)
+        self.assertIsNotNone(result)
+        self.assertIs(
+            self.task(self.engine, first_task).status,
+            BackgroundResearchTaskStatus.PENDING,
+        )
+        self.assertIs(
+            self.task(self.engine, second_task).status,
+            BackgroundResearchTaskStatus.COMPLETED,
+        )
+
     def test_create_persists_a_pending_task(self) -> None:
         execution_id = self.start_execution(self.engine, self.search_step())
 

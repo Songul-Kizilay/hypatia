@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Protocol
 
 from brain.BrainRequest import BrainRequest
 from brain.BrainResponse import BrainResponse
 from core.CancellationSignal import CancellationToken
 from research.DeferredExecutionControlView import DeferredExecutionControlView
+from research.OneShotDeferredExecutionSchedule import OneShotDeferredExecutionSchedule
+from research.OneShotDeferredExecutionScheduleView import (
+    OneShotDeferredExecutionScheduleView,
+)
 from research.ProviderComparisonRequest import ProviderComparisonRequest
 from research.ResearchClaimConfidence import ResearchClaimConfidence
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
@@ -30,6 +35,34 @@ class TrustedDeferredExecutionController(Protocol):
     def grant(self, task_id: str) -> DeferredExecutionControlView: ...
 
     def revoke(self, task_id: str) -> DeferredExecutionControlView: ...
+
+
+class TrustedOneShotDeferredExecutionController(Protocol):
+    """Narrow non-Brain port for one exact future attempt."""
+
+    def preview(
+        self, task_id: str, run_at: datetime
+    ) -> OneShotDeferredExecutionScheduleView: ...
+
+    def schedule(
+        self, task_id: str, run_at: datetime
+    ) -> OneShotDeferredExecutionScheduleView: ...
+
+    def cancel(self, task_id: str) -> OneShotDeferredExecutionSchedule: ...
+
+    def status(self, task_id: str) -> OneShotDeferredExecutionSchedule | None: ...
+
+    def next_pending(self) -> OneShotDeferredExecutionSchedule | None: ...
+
+    def fire(
+        self,
+        schedule_id: str,
+        cancellation_token: CancellationToken | None = None,
+    ) -> OneShotDeferredExecutionSchedule: ...
+
+    def skip_due_to_busy(
+        self, schedule_id: str
+    ) -> OneShotDeferredExecutionSchedule: ...
 
 
 def _plan_step_drafts(
@@ -93,9 +126,13 @@ class DesktopController:
         self,
         brain: BrainProcessor,
         deferred_execution_control: TrustedDeferredExecutionController | None = None,
+        one_shot_deferred_execution_control: (
+            TrustedOneShotDeferredExecutionController | None
+        ) = None,
     ) -> None:
         self._brain = brain
         self._deferred_execution_control = deferred_execution_control
+        self._one_shot_deferred_execution_control = one_shot_deferred_execution_control
 
     @property
     def deferred_execution_control_available(self) -> bool:
@@ -114,6 +151,52 @@ class DesktopController:
         if self._deferred_execution_control is None:
             raise ValueError("Deferred execution control is unavailable.")
         return self._deferred_execution_control
+
+    @property
+    def one_shot_deferred_execution_available(self) -> bool:
+        return self._one_shot_deferred_execution_control is not None
+
+    def preview_one_shot_deferred_execution(
+        self, task_id: str, run_at: datetime
+    ) -> OneShotDeferredExecutionScheduleView:
+        return self._one_shot_control().preview(task_id.strip(), run_at)
+
+    def schedule_one_shot_deferred_execution(
+        self, task_id: str, run_at: datetime
+    ) -> OneShotDeferredExecutionScheduleView:
+        return self._one_shot_control().schedule(task_id.strip(), run_at)
+
+    def cancel_one_shot_deferred_execution(
+        self, task_id: str
+    ) -> OneShotDeferredExecutionSchedule:
+        return self._one_shot_control().cancel(task_id.strip())
+
+    def one_shot_deferred_execution_status(
+        self, task_id: str
+    ) -> OneShotDeferredExecutionSchedule | None:
+        return self._one_shot_control().status(task_id.strip())
+
+    def next_one_shot_deferred_execution(
+        self,
+    ) -> OneShotDeferredExecutionSchedule | None:
+        return self._one_shot_control().next_pending()
+
+    def fire_one_shot_deferred_execution(
+        self,
+        schedule_id: str,
+        cancellation_token: CancellationToken | None = None,
+    ) -> OneShotDeferredExecutionSchedule:
+        return self._one_shot_control().fire(schedule_id.strip(), cancellation_token)
+
+    def skip_busy_one_shot_deferred_execution(
+        self, schedule_id: str
+    ) -> OneShotDeferredExecutionSchedule:
+        return self._one_shot_control().skip_due_to_busy(schedule_id.strip())
+
+    def _one_shot_control(self) -> TrustedOneShotDeferredExecutionController:
+        if self._one_shot_deferred_execution_control is None:
+            raise ValueError("One-shot deferred execution control is unavailable.")
+        return self._one_shot_deferred_execution_control
 
     def submit_message(self, message: str) -> BrainResponse:
         """Send non-empty composer text unchanged to the existing Brain."""

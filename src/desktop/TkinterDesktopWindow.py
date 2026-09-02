@@ -5,7 +5,10 @@ from __future__ import annotations
 import tkinter as tk
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from enum import StrEnum
+from functools import partial
+from math import ceil
 from time import monotonic
 from tkinter import filedialog, font, messagebox, scrolledtext, ttk
 from typing import Literal, Protocol
@@ -501,6 +504,7 @@ class TkinterDesktopWindow:
         self._request_label: str | None = None
         self._request_started_at: float | None = None
         self._closing = False
+        self._one_shot_after_id: str | None = None
         self._status = tk.StringVar(value="Ready")
         self._session_id = tk.StringVar()
         self._session_rename_target = tk.StringVar()
@@ -694,6 +698,7 @@ class TkinterDesktopWindow:
         self._build_layout()
         self._apply_accessibility_preferences()
         self._root.protocol("WM_DELETE_WINDOW", self._close)
+        self._arm_one_shot_deferred_execution()
         self._root.after(_REQUEST_POLL_INTERVAL_MS, self._poll_requests)
 
     def run(self) -> None:
@@ -781,7 +786,8 @@ class TkinterDesktopWindow:
         """Consume worker results and touch widgets only from the Tk event loop."""
         if self._closing:
             return
-        for completion in self._request_runner.drain():
+        completions = self._request_runner.drain()
+        for completion in completions:
             handler = self._request_completion_handler
             self._request_completion_handler = None
             self._set_request_controls_busy(False)
@@ -805,6 +811,8 @@ class TkinterDesktopWindow:
                 handler(completion.value)
             except Exception:
                 self._status.set("Desktop request failed.")
+        if completions:
+            self._arm_one_shot_deferred_execution()
         self._apply_pending_research_refresh()
         if self._request_runner.is_running():
             self._update_request_progress()
@@ -918,6 +926,13 @@ class TkinterDesktopWindow:
         if self._closing:
             return
         self._closing = True
+        one_shot_after_id = getattr(self, "_one_shot_after_id", None)
+        if one_shot_after_id is not None:
+            try:
+                self._root.after_cancel(one_shot_after_id)
+            except tk.TclError:
+                pass
+            self._one_shot_after_id = None
         self._clear_tool_content()
         self._request_completion_handler = None
         self._request_runner.stop()
@@ -4833,11 +4848,47 @@ class TkinterDesktopWindow:
                 textvariable=self._deferred_execution_status,
                 wraplength=680,
             ).grid(row=19, column=0, columnspan=2, sticky="w", pady=(4, 0))
+        self._one_shot_run_at = tk.StringVar()
+        self._one_shot_deferred_status = tk.StringVar(
+            value="No one-shot deferred run is scheduled."
+        )
+        if getattr(self._controller, "one_shot_deferred_execution_available", False):
+            ttk.Label(section, text="Run once at (local time: YYYY-MM-DD HH:MM)").grid(
+                row=20, column=0, sticky="w", pady=(8, 0)
+            )
+            ttk.Entry(section, textvariable=self._one_shot_run_at).grid(
+                row=20, column=1, sticky="ew", padx=(8, 0), pady=(8, 0)
+            )
+            one_shot_buttons = ttk.Frame(section)
+            one_shot_buttons.grid(
+                row=21, column=1, sticky="w", padx=(8, 0), pady=(8, 0)
+            )
+            for column, (label, command) in enumerate(
+                (
+                    ("Schedule one run", self._schedule_one_shot_deferred_execution),
+                    ("Cancel scheduled run", self._cancel_one_shot_deferred_execution),
+                    (
+                        "Refresh scheduled run",
+                        self._refresh_one_shot_deferred_execution,
+                    ),
+                )
+            ):
+                self._request_button(one_shot_buttons, label, command).grid(
+                    row=0,
+                    column=column,
+                    sticky="w",
+                    padx=(0 if column == 0 else 8, 0),
+                )
+            ttk.Label(
+                section,
+                textvariable=self._one_shot_deferred_status,
+                wraplength=680,
+            ).grid(row=22, column=0, columnspan=2, sticky="w", pady=(4, 0))
         self._request_button(
             section,
             "Run scheduler cycle",
             self._run_scheduler_cycle,
-        ).grid(row=20, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
+        ).grid(row=23, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
 
         buttons = ttk.Frame(section)
         buttons.grid(row=2, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
@@ -5253,6 +5304,163 @@ class TkinterDesktopWindow:
             return
         self._deferred_execution_status.set(
             f"Deferred execution revoked for {view.task_id}. Manual cycle is unchanged."
+        )
+
+    def _schedule_one_shot_deferred_execution(self) -> None:
+        task_id = self._scheduler_task_id.get().strip()
+        if not task_id:
+            self._one_shot_deferred_status.set("A background task ID is required.")
+            return
+        try:
+            run_at = self._one_shot_run_time()
+            preview = self._controller.preview_one_shot_deferred_execution(
+                task_id, run_at
+            )
+        except (HypatiaError, ValueError, RuntimeError) as error:
+            self._one_shot_deferred_status.set(str(error))
+            return
+        if not messagebox.askyesno(
+            "Schedule one deferred run?",
+            preview.confirmation_text(),
+            parent=self._root,
+        ):
+            self._one_shot_deferred_status.set("No one-shot run was scheduled.")
+            return
+        try:
+            view = self._controller.schedule_one_shot_deferred_execution(
+                task_id, run_at
+            )
+        except (HypatiaError, ValueError, RuntimeError) as error:
+            self._one_shot_deferred_status.set(str(error))
+            return
+        self._one_shot_deferred_status.set(
+            f"One run scheduled for {view.run_at.astimezone():%Y-%m-%d %H:%M %Z}. "
+            "It will not repeat."
+        )
+        self._arm_one_shot_deferred_execution()
+
+    def _cancel_one_shot_deferred_execution(self) -> None:
+        task_id = self._scheduler_task_id.get().strip()
+        if not task_id:
+            self._one_shot_deferred_status.set("A background task ID is required.")
+            return
+        if not messagebox.askyesno(
+            "Cancel the scheduled run?",
+            (
+                f"Task: {task_id}\n\nOnly the pending one-shot wake-up is "
+                "cancelled. The deferred grant, task, execution, budget and "
+                "manual cycle remain unchanged."
+            ),
+            parent=self._root,
+        ):
+            self._one_shot_deferred_status.set("The scheduled run was left unchanged.")
+            return
+        try:
+            schedule = self._controller.cancel_one_shot_deferred_execution(task_id)
+        except (HypatiaError, ValueError, RuntimeError) as error:
+            self._one_shot_deferred_status.set(str(error))
+            return
+        self._one_shot_deferred_status.set(
+            f"Scheduled run {schedule.schedule_id} cancelled. Nothing ran."
+        )
+        self._arm_one_shot_deferred_execution()
+
+    def _refresh_one_shot_deferred_execution(self) -> None:
+        task_id = self._scheduler_task_id.get().strip()
+        if not task_id:
+            self._one_shot_deferred_status.set("A background task ID is required.")
+            return
+        try:
+            schedule = self._controller.one_shot_deferred_execution_status(task_id)
+        except (HypatiaError, ValueError, RuntimeError) as error:
+            self._one_shot_deferred_status.set(str(error))
+            return
+        if schedule is None:
+            self._one_shot_deferred_status.set("No one-shot run exists for this task.")
+            return
+        self._one_shot_deferred_status.set(
+            f"One-shot {schedule.schedule_id}: {schedule.status.value}; "
+            f"{schedule.run_at.astimezone():%Y-%m-%d %H:%M %Z}."
+        )
+
+    def _one_shot_run_time(self) -> datetime:
+        value = self._one_shot_run_at.get().strip()
+        if not value:
+            raise ValueError("A local one-shot run time is required.")
+        try:
+            local_time = datetime.strptime(value, "%Y-%m-%d %H:%M").astimezone()
+        except ValueError as error:
+            raise ValueError("Use local time in YYYY-MM-DD HH:MM format.") from error
+        return local_time.astimezone(UTC)
+
+    def _arm_one_shot_deferred_execution(self) -> None:
+        """Arm only the next durable Tk wake-up; never poll or repeat."""
+        controller = getattr(self, "_controller", None)
+        if self._closing or not getattr(
+            controller, "one_shot_deferred_execution_available", False
+        ):
+            return
+        if self._one_shot_after_id is not None:
+            try:
+                self._root.after_cancel(self._one_shot_after_id)
+            except tk.TclError:
+                pass
+            self._one_shot_after_id = None
+        try:
+            schedule = self._controller.next_one_shot_deferred_execution()
+        except (HypatiaError, ValueError, RuntimeError) as error:
+            self._one_shot_deferred_status.set(str(error))
+            return
+        if schedule is None:
+            return
+        delay_ms = max(
+            0, ceil((schedule.run_at - datetime.now(UTC)).total_seconds() * 1000)
+        )
+        self._one_shot_after_id = self._root.after(
+            delay_ms,
+            partial(self._fire_one_shot_deferred_execution, schedule.schedule_id),
+        )
+
+    def _fire_one_shot_deferred_execution(self, schedule_id: str) -> None:
+        self._one_shot_after_id = None
+        cancellation_signal = CancellationSignal()
+        started = self._start_bounded_action(
+            lambda: self._controller.fire_one_shot_deferred_execution(
+                schedule_id, cancellation_signal
+            ),
+            self._complete_one_shot_deferred_execution,
+            "one-shot deferred execution",
+            cancellation_signal=cancellation_signal,
+        )
+        if started == "started":
+            self._one_shot_deferred_status.set(
+                f"One-shot {schedule_id} is attempting its exact task once."
+            )
+            return
+        if started == "busy":
+            try:
+                skipped = self._controller.skip_busy_one_shot_deferred_execution(
+                    schedule_id
+                )
+            except (HypatiaError, ValueError, RuntimeError) as error:
+                self._one_shot_deferred_status.set(str(error))
+                return
+            self._one_shot_deferred_status.set(
+                f"One-shot {skipped.schedule_id} was skipped because the desktop "
+                "worker was busy. It will not retry."
+            )
+            self._arm_one_shot_deferred_execution()
+            return
+        self._one_shot_deferred_status.set(
+            "The one-shot worker could not start. The pending record was not consumed."
+        )
+
+    def _complete_one_shot_deferred_execution(self, value: object) -> None:
+        schedule_id = getattr(value, "schedule_id", "unknown")
+        status = getattr(getattr(value, "status", None), "value", "failed")
+        self._one_shot_deferred_status.set(
+            f"One-shot {schedule_id} finished with status: {status}. "
+            "It will not repeat."
         )
 
     def _run_scheduler_cycle(self) -> None:

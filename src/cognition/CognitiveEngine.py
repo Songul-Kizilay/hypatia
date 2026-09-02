@@ -87,6 +87,7 @@ from cognition.SourceReputationApplicationService import (
 from cognition.VulnerabilityGraphApplicationService import (
     VulnerabilityGraphApplicationService,
 )
+from core.CancellationSignal import CancellationToken
 from core.Exceptions import (
     KnowledgeError,
     MemoryError,
@@ -241,6 +242,17 @@ class CognitiveEngine:
     ) -> ResearchExecutionAllowance | None:
         """Read remaining existing authority without changing it."""
         return self._research_plan_execution_service.allowance(execution_id)
+
+    def run_exact_deferred_background_task(
+        self,
+        task_id: str,
+        cancellation_token: CancellationToken | None = None,
+    ) -> BackgroundResearchTask | None:
+        """Run one exact task only when live deferred eligibility still holds."""
+        return self._background_research_scheduler.run_exact_deferred_task(
+            task_id,
+            cancellation_token,
+        )
 
     def __init__(
         self,

@@ -8,6 +8,9 @@ from brain.Brain import Brain
 from cognition.TrustedDeferredExecutionControlService import (
     TrustedDeferredExecutionControlService,
 )
+from cognition.TrustedOneShotDeferredExecutionScheduler import (
+    TrustedOneShotDeferredExecutionScheduler,
+)
 from core.Application import HypatiaApplication
 from core.RuntimeOptIn import (
     background_research_enabled,
@@ -80,16 +83,23 @@ def main() -> None:
             filesystem_read_tool=_compose_filesystem_read_tool(filesystem_root),
             event_bus=event_bus,
         )
+        background_enabled = background_research_enabled(os.environ)
+        authorization_enabled = plan_authorization_enabled(os.environ)
+        deferred_execution_control = (
+            app.bootstrap.container.resolve(TrustedDeferredExecutionControlService)
+            if background_enabled and authorization_enabled
+            else None
+        )
+        one_shot_deferred_execution_control = (
+            app.bootstrap.container.resolve(TrustedOneShotDeferredExecutionScheduler)
+            if background_enabled and authorization_enabled
+            else None
+        )
         TkinterDesktopWindow(
             DesktopController(
                 brain,
-                (
-                    app.bootstrap.container.resolve(
-                        TrustedDeferredExecutionControlService
-                    )
-                    if background_research_enabled(os.environ)
-                    else None
-                ),
+                deferred_execution_control,
+                one_shot_deferred_execution_control,
             ),
             event_bus=event_bus,
             tool_console=ToolConsoleController(tool_runtime, event_bus),

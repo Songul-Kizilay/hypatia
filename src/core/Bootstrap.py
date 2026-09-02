@@ -8,6 +8,9 @@ from cognition.CognitiveEngine import CognitiveEngine
 from cognition.TrustedDeferredExecutionControlService import (
     TrustedDeferredExecutionControlService,
 )
+from cognition.TrustedOneShotDeferredExecutionScheduler import (
+    TrustedOneShotDeferredExecutionScheduler,
+)
 from core.Config import Config
 from core.DependencyContainer import DependencyContainer
 from core.ExclusiveStoreOwnership import claim, claim_directory
@@ -64,6 +67,7 @@ from planner.Planner import Planner
 from research.CrossrefResearchSourceDiscoveryProvider import (
     CrossrefResearchSourceDiscoveryProvider,
 )
+from research.DeferredExecutionGrantStore import DeferredExecutionGrantReader
 from research.HttpResearchSourceFetcher import HttpResearchSourceFetcher
 from research.JsonFileBackgroundTaskStore import (
     JsonFileBackgroundTaskStore,
@@ -79,6 +83,9 @@ from research.JsonFileFailureLessonStore import (
 )
 from research.JsonFileHypothesisStore import (
     JsonFileHypothesisStore,
+)
+from research.JsonFileOneShotDeferredExecutionScheduleStore import (
+    JsonFileOneShotDeferredExecutionScheduleStore,
 )
 from research.JsonFileReflectionReportStore import (
     JsonFileReflectionReportStore,
@@ -506,6 +513,7 @@ class Bootstrap:
         research_execution_store = self._research_execution_store()
         background_task_store = self._background_task_store()
         deferred_execution_grant_store = self._deferred_execution_grant_store()
+        one_shot_deferred_schedule_store = self._one_shot_deferred_schedule_store()
         curiosity_question_store = self._curiosity_question_store()
         reflection_report_store = self._reflection_report_store()
         failure_lesson_store = self._failure_lesson_store()
@@ -616,6 +624,18 @@ class Bootstrap:
             if deferred_execution_grant_store is not None
             else None
         )
+        one_shot_deferred_scheduler = (
+            TrustedOneShotDeferredExecutionScheduler(
+                deferred_execution_control,
+                DeferredExecutionGrantReader(deferred_execution_grant_store),
+                one_shot_deferred_schedule_store,
+                cognitive_engine,
+            )
+            if deferred_execution_control is not None
+            and deferred_execution_grant_store is not None
+            and one_shot_deferred_schedule_store is not None
+            else None
+        )
 
         container.register(config)
         container.register(logger)
@@ -646,6 +666,8 @@ class Bootstrap:
         container.register(planner)
         if deferred_execution_control is not None:
             container.register(deferred_execution_control)
+        if one_shot_deferred_scheduler is not None:
+            container.register(one_shot_deferred_scheduler)
 
         self.container = container
 
@@ -774,6 +796,19 @@ class Bootstrap:
         )
         return JsonFileDeferredExecutionGrantStore(
             run_path.with_name("research_deferred_execution_grants.json")
+        )
+
+    def _one_shot_deferred_schedule_store(
+        self,
+    ) -> JsonFileOneShotDeferredExecutionScheduleStore | None:
+        """Keep one-shot wake-up facts durable beside scheduler state."""
+        if not background_research_enabled(os.environ):
+            return None
+        run_path = self._research_run_path or self._research_run_store_path(
+            self._memory_path
+        )
+        return JsonFileOneShotDeferredExecutionScheduleStore(
+            run_path.with_name("research_one_shot_deferred_schedules.json")
         )
 
     def _curiosity_question_store(self) -> JsonFileCuriosityQuestionStore | None:

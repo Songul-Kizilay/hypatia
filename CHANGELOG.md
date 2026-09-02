@@ -2,6 +2,28 @@
 
 All notable project changes are recorded here.
 
+## [0.3.282] - 2026-09-02
+
+### Added
+
+- The trusted local desktop can schedule one exact queued task for one future
+  attempt, up to seven days ahead. The durable record binds the exact active
+  deferred-grant ID and is revalidated against live task, execution, plan,
+  capabilities and allowance state when it fires.
+- A single Tk wake-up is armed for the earliest pending record. It is cancelled
+  and re-armed when durable state changes; there is no scheduler polling loop,
+  recurrence, provider retry or startup worker cycle.
+
+### Security
+
+- A due schedule is durably claimed before research is attempted. A process
+  crash after that claim cannot replay it on restart. A revoked/replaced grant,
+  stale task, exhausted authority or busy desktop worker consumes the one-shot
+  turn without falling back to another task or retrying.
+- Scheduling and cancellation remain trusted-desktop control-plane actions,
+  not Brain intents. They add no budget, capability, plan authorization or
+  execution allowance, and cancellation changes only the pending schedule.
+
 ## [0.3.281] - 2026-09-02
 
 ### Added

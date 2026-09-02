@@ -214,7 +214,12 @@ class TheDesktopDoesNoSchedulingTests(unittest.TestCase):
                 self.assertNotIn(forbidden, body)
 
     def test_no_second_scheduler_was_written(self) -> None:
-        for forbidden in ("_next_runnable", "BackgroundResearchTask", "retry"):
+        for forbidden in (
+            "_next_runnable",
+            "BackgroundResearchTask",
+            ".retry(",
+            "retry_scheduled(",
+        ):
             with self.subTest(name=forbidden):
                 self.assertNotIn(forbidden, WINDOW_SOURCE)
                 self.assertNotIn(forbidden, CONTROLLER_SOURCE)

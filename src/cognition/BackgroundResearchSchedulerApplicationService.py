@@ -29,6 +29,7 @@ from cognition.ResearchAutonomyApplicationService import (
     RESEARCH_AUTONOMY_RUN_INTENT,
     ResearchAutonomyApplicationService,
 )
+from core.CancellationSignal import CancellationToken
 from core.Exceptions import ResearchError
 from eventbus.EventBus import EventBus
 from research.BackgroundResearchTask import BackgroundResearchTask
@@ -237,6 +238,25 @@ class BackgroundResearchSchedulerApplicationService:
             self.tasks(),
         )
 
+    def run_exact_deferred_task(
+        self,
+        task_id: str,
+        cancellation_token: CancellationToken | None = None,
+    ) -> BackgroundResearchTask | None:
+        """Attempt one exact deferred-eligible task once, with no fallback."""
+        running = self._claim_exact_deferred(task_id.strip())
+        if running is None:
+            return None
+        return self._run(
+            BrainRequest(
+                message="Run exact deferred background task",
+                request_id=f"deferred-{uuid4()}",
+                source="scheduler",
+                cancellation_token=cancellation_token,
+            ),
+            running,
+        )
+
     def _claim_next_runnable(self) -> BackgroundResearchTask | None:
         """Select one runnable task and mark it RUNNING, or return ``None``.
 
@@ -248,6 +268,24 @@ class BackgroundResearchSchedulerApplicationService:
         with self._task_lock:
             task = self._next_runnable()
             if task is None:
+                return None
+            running = task.started(self._clock())
+            self._tasks[running.task_id] = running
+            self._events.started(running)
+            self._persist()
+            return running
+
+    def _claim_exact_deferred(self, task_id: str) -> BackgroundResearchTask | None:
+        """Atomically claim only the named deferred-eligible task."""
+        if not task_id:
+            return None
+        with self._task_lock:
+            task = self._tasks.get(task_id)
+            if (
+                task is None
+                or not task.status.runnable
+                or not self._deferred_runnable(task)
+            ):
                 return None
             running = task.started(self._clock())
             self._tasks[running.task_id] = running
