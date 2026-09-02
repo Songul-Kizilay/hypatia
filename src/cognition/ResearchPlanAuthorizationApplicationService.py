@@ -57,6 +57,7 @@ from research.ResearchPlanAuthorizationVerdict import ResearchPlanAuthorizationV
 from research.ResearchPlanAuthorizationVerifier import verify_plan_authorization
 from research.ResearchPlanBudgetRequirement import ResearchPlanBudgetFit
 from research.ResearchPlanDraftService import (
+    RESEARCH_PLAN_CONSTRAINTS_KEY,
     ResearchPlanDraftService,
     ResearchPlanStepDraft,
 )
@@ -437,6 +438,13 @@ class ResearchPlanAuthorizationApplicationService:
         preview = self._draft_service.preview(
             cast(str, question),
             cast(tuple[ResearchPlanStepDraft, ...], step_drafts),
+            # Rebuilt with its constraints, so the digest covers exactly what
+            # the operator previewed. Dropping them here would approve or start
+            # a different plan than the one that was shown.
+            cast(
+                tuple[str, ...],
+                request.metadata.get(RESEARCH_PLAN_CONSTRAINTS_KEY) or (),
+            ),
         )
         return preview.plan if preview.allowed else None
 

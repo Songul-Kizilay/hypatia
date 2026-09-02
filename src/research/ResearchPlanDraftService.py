@@ -4,17 +4,25 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import UTC, datetime
+from typing import cast
 from uuid import uuid4
 
 from core.Exceptions import ResearchError
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchPlan import ResearchPlan
+from research.ResearchPlanConstraint import ResearchPlanConstraint
 from research.ResearchPlanDraftPreview import ResearchPlanDraftPreview
 from research.ResearchPlanStep import ResearchPlanStep
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 from research.ResearchPlanStepDraftInput import ResearchPlanStepDraftInput
 
 ResearchPlanStepDraft = ResearchPlanStepDraftInput | tuple[object, ...]
+
+#: The metadata key carrying authored constraints. Named once so every
+#: place that rebuilds a plan reads the same field: a rebuild that missed
+#: it would silently produce a different, constraint-free plan, and the
+#: approval would bind a digest for something the operator never saw.
+RESEARCH_PLAN_CONSTRAINTS_KEY = "research_plan_constraints"
 
 
 class ResearchPlanDraftService:
@@ -33,19 +41,39 @@ class ResearchPlanDraftService:
         self,
         question: str,
         step_drafts: tuple[ResearchPlanStepDraft, ...],
+        constraint_drafts: tuple[str, ...] = (),
     ) -> ResearchPlanDraftPreview:
-        """Return a complete inert plan or one bounded validation failure."""
+        """Return a complete inert plan or one bounded validation failure.
+
+        Steps and constraints arrive already separated, because the author
+        decided which is which. Nothing here reads the text to guess.
+        """
         try:
             steps = self._build_steps(step_drafts)
+            constraints = self._build_constraints(constraint_drafts)
             plan = ResearchPlan(
                 plan_id=self._id_factory(),
                 question=question,
                 steps=steps,
                 created_at=self._clock(),
+                constraints=constraints,
             )
         except ResearchError as error:
             return ResearchPlanDraftPreview.rejected(str(error))
         return ResearchPlanDraftPreview.ready(plan)
+
+    @staticmethod
+    def _build_constraints(
+        constraint_drafts: tuple[str, ...],
+    ) -> tuple[ResearchPlanConstraint, ...]:
+        """Preserve exact authored text in exact authored order."""
+        if not isinstance(constraint_drafts, tuple):
+            raise ResearchError(
+                "Research plan draft constraints must be an immutable tuple."
+            )
+        return tuple(
+            ResearchPlanConstraint(text=cast(str, draft)) for draft in constraint_drafts
+        )
 
     @staticmethod
     def _build_steps(

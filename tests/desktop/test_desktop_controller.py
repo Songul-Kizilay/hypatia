@@ -307,6 +307,7 @@ class DesktopControllerTests(unittest.TestCase):
                     ("Review evidence.", ("document-2", "document-1")),
                     ("Record gaps.", ()),
                 ),
+                "research_plan_constraints": (),
             },
         )
 

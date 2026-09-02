@@ -2,6 +2,53 @@
 
 All notable project changes are recorded here.
 
+## [0.3.285] - 2026-09-02
+
+### Added
+
+- Research plans now carry first-class non-executable constraints alongside
+  their ordered steps. A line such as "Do not execute research or access
+  external sources yet" is authored in its own field and stays a condition on
+  the plan instead of becoming step 11 of 11.
+- Plan Draft has a separate constraints box, and previews report Steps and
+  Constraints separately, numbering constraints C1, C2 so they can never be
+  read back as steps.
+
+### Changed
+
+- Constraints are bound into the plan digest, so an approval made for a plan
+  that forbids external sources cannot be reused for the same plan with that
+  sentence removed. Authorization, confirmation and execution start all rebuild
+  the plan with its constraints through one shared metadata key.
+
+### Compatibility
+
+- A plan with no constraints encodes exactly as it did before they existed, byte
+  for byte, and keeps its historical digest. The empty tuple is omitted rather
+  than encoded, and a plan that has constraints declares a distinct canonical
+  schema, so approvals and deferred grants made before this release still match
+  the same plan re-authored today.
+
+### Safety
+
+- Constraints are never executable. They produce no step, receive no step ID,
+  select no sources, spend no step, network or model budget, and reach no
+  provider.
+- Constraints grant nothing. Nothing reads their words and turns them into a
+  capability; what a plan may do is still decided by its steps declared
+  capabilities and the execution allowance.
+- Which lines are steps and which are constraints is the author decision alone.
+  No model and no keyword rule classifies them.
+- The v0.3.284 failure-lesson trace still targets research steps only, so a
+  constraint sharing wording with a prior lesson is never reported as step-N.
+
+### Known limitation
+
+- A constraint is an approved, displayed statement, not an enforced rule. This
+  release separates the concepts and binds them into plan identity; it builds no
+  constraint interpreter or policy engine, so a constraint saying "use NVD only"
+  restricts nothing by itself.
+
 ## [0.3.284] - 2026-09-02
 
 ### Added

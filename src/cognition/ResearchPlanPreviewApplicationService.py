@@ -49,7 +49,17 @@ class ResearchPlanPreviewApplicationService:
             tuple[ResearchPlanStepDraft, ...],
             request.metadata.get("research_plan_steps"),
         )
-        preview = self._draft_service.preview(question, step_drafts)
+        # Supplied as their own field. A constraint is never inferred from a
+        # step's wording, and a step is never demoted by looking like one.
+        constraint_drafts = cast(
+            tuple[str, ...],
+            request.metadata.get("research_plan_constraints") or (),
+        )
+        preview = self._draft_service.preview(
+            question,
+            step_drafts,
+            constraint_drafts,
+        )
         prior_lessons = self._prior_lessons(preview)
         lesson_trace = self._lesson_trace(preview, prior_lessons)
         return self._response_composer.research_plan_draft_preview(

@@ -47,6 +47,20 @@ from research.ResearchPlan import ResearchPlan
 #: silently become an approval to contact a different host.
 CANONICAL_SCHEMA = "hypatia:research-plan-digest:v2"
 
+#: Version 3 adds authored constraints. It is selected by whether a plan
+#: actually has any, not by when the plan was written, because there is no
+#: such thing here as an old plan object to ask: a `ResearchPlan` is built in
+#: one place, from a live draft, and is never restored from disk. A plan with
+#: no constraints therefore encodes exactly as it always did and keeps the
+#: digest it already had, so approvals and deferred grants made before
+#: constraints existed still verify against the same plan re-authored today.
+#:
+#: This is not constraints escaping the approved content. When a plan has
+#: them they are encoded, under a schema string that can never collide with
+#: v2 — so adding the first constraint changes the digest, and removing the
+#: last one changes it back.
+CANONICAL_SCHEMA_WITH_CONSTRAINTS = "hypatia:research-plan-digest:v3"
+
 #: Instance bookkeeping, deliberately outside the approved content. `plan_id`
 #: is random per preview and `created_at` is the moment of previewing; neither
 #: changes what the plan would attempt, and including either would make every
@@ -70,10 +84,17 @@ def canonical_plan_bytes(plan: ResearchPlan) -> bytes:
     """
     if not isinstance(plan, ResearchPlan):
         raise ResearchError("A research plan digest requires a validated plan.")
-    payload = _encode(CANONICAL_SCHEMA) + _encode_dataclass(
-        plan,
-        skip=UNDIGESTED_PLAN_FIELDS,
-    )
+    # An empty constraint tuple says nothing, so it is left out rather than
+    # encoded as a present-but-empty field. That keeps a step-only plan byte
+    # identical to what it produced before constraints existed, which is what
+    # lets an approval or a grant made then still match the same plan now.
+    if plan.constraints:
+        schema = CANONICAL_SCHEMA_WITH_CONSTRAINTS
+        skip = UNDIGESTED_PLAN_FIELDS
+    else:
+        schema = CANONICAL_SCHEMA
+        skip = UNDIGESTED_PLAN_FIELDS | {"constraints"}
+    payload = _encode(schema) + _encode_dataclass(plan, skip=skip)
     return _token(b"p", payload)
 
 

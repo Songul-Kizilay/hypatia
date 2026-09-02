@@ -6,11 +6,13 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from core.Exceptions import ResearchError
+from research.ResearchPlanConstraint import ResearchPlanConstraint
 from research.ResearchPlanStep import ResearchPlanStep
 
 MAX_RESEARCH_PLAN_ID_CHARACTERS = 200
 MAX_RESEARCH_PLAN_QUESTION_CHARACTERS = 2_000
 MAX_RESEARCH_PLAN_STEPS = 20
+MAX_RESEARCH_PLAN_CONSTRAINTS = 20
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,6 +23,11 @@ class ResearchPlan:
     question: str
     steps: tuple[ResearchPlanStep, ...]
     created_at: datetime
+    #: Declared last so a plan without constraints encodes exactly as it did
+    #: before they existed. The digest walks fields in declaration order, and
+    #: an empty tuple is skipped there, so every step-only plan keeps the
+    #: identity it already had.
+    constraints: tuple[ResearchPlanConstraint, ...] = ()
 
     def __post_init__(self) -> None:
         plan_id = self._normalize_bounded_text(
@@ -47,6 +54,15 @@ class ResearchPlan:
             or self.created_at.utcoffset() is None
         ):
             raise ResearchError("Research plan creation time must be timezone-aware.")
+        if not isinstance(self.constraints, tuple):
+            raise ResearchError("Research plan requires an immutable constraint tuple.")
+        if len(self.constraints) > MAX_RESEARCH_PLAN_CONSTRAINTS:
+            raise ResearchError("Research plan has too many constraints.")
+        if not all(
+            isinstance(constraint, ResearchPlanConstraint)
+            for constraint in self.constraints
+        ):
+            raise ResearchError("Research plan contains an invalid constraint.")
         object.__setattr__(self, "plan_id", plan_id)
         object.__setattr__(self, "question", question)
 

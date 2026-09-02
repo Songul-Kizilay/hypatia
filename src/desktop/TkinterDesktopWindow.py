@@ -179,6 +179,15 @@ _AUTHORIZATION_BUDGET_NOTE = (
     "the plan needs beside what you are granting; an approval that cannot cover "
     "one attempt at every authored step is refused rather than granted."
 )
+_PLAN_CONSTRAINT_NOTE = (
+    "A constraint is part of what you approve and is bound into the plan's "
+    "digest, so changing one invalidates an approval made for the old wording. "
+    "It is not a step: it is never executed, never advanced, and spends no "
+    "budget. Nothing reads a constraint and turns it into a capability — what "
+    "the plan may actually do is still decided by its steps' declared "
+    "capabilities. Which lines are steps and which are constraints is your "
+    "choice alone; nothing here classifies them for you."
+)
 _EXECUTION_PANEL_NOTE = (
     "An execution that has already been started. Refresh shows its canonical "
     "state and what remains of the approved budget. Advance attempts exactly "
@@ -1825,7 +1834,7 @@ class TkinterDesktopWindow:
         ).grid(row=2, column=0, columnspan=2, sticky="ew", pady=(4, 8))
         instruction_frame = ttk.LabelFrame(
             research_plan_frame,
-            text="Ordered instructions — one step per line",
+            text="Research steps — one executable step per line",
             padding=6,
         )
         instruction_frame.grid(row=3, column=0, sticky="nsew", padx=(0, 4))
@@ -1851,11 +1860,33 @@ class TkinterDesktopWindow:
             wrap=tk.WORD,
         )
         self._research_plan_source_ids.grid(row=0, column=0, sticky="nsew")
+        #: Constraints are authored here, never sorted out of the step list.
+        #: A line belongs in this box because a person put it here: the runtime
+        #: reads no wording to decide, and no model is asked.
+        constraint_frame = ttk.LabelFrame(
+            research_plan_frame,
+            text=("Plan constraints — one per line; approved, but never executed"),
+            padding=6,
+        )
+        constraint_frame.grid(row=4, column=0, columnspan=2, sticky="nsew", pady=(8, 0))
+        constraint_frame.columnconfigure(0, weight=1)
+        constraint_frame.rowconfigure(0, weight=1)
+        self._research_plan_constraints = scrolledtext.ScrolledText(
+            constraint_frame,
+            height=3,
+            wrap=tk.WORD,
+        )
+        self._research_plan_constraints.grid(row=0, column=0, sticky="nsew")
+        ttk.Label(
+            constraint_frame,
+            text=_PLAN_CONSTRAINT_NOTE,
+            wraplength=680,
+        ).grid(row=1, column=0, sticky="w", pady=(6, 0))
         ttk.Button(
             research_plan_frame,
             text="Preview plan — no write",
             command=self._preview_research_plan_draft,
-        ).grid(row=4, column=1, sticky="e", pady=(8, 8))
+        ).grid(row=5, column=1, sticky="e", pady=(8, 8))
         # Reaches the same preview as the button above and nothing else. There
         # is no shortcut here: approving the plan and pressing Advance twice is
         # still what turns this into two requests.
@@ -3032,11 +3063,13 @@ class TkinterDesktopWindow:
         question = self._research_question.get()
         instruction_lines = self._research_plan_instructions.get("1.0", "end-1c")
         source_id_lines = self._research_plan_source_ids.get("1.0", "end-1c")
+        constraint_lines = self._research_plan_constraints.get("1.0", "end-1c")
         self._start_request(
             lambda: self._controller.preview_research_plan_draft(
                 question,
                 instruction_lines,
                 source_id_lines,
+                constraint_lines,
             ),
             self._complete_research_plan_draft_preview,
             "research plan preview",
@@ -5586,6 +5619,9 @@ class TkinterDesktopWindow:
                 self._authorization_advances.get(),
                 self._authorization_network.get(),
                 self._authorization_seconds.get(),
+                # Sent with the plan so the approval binds the constraints the
+                # operator can see, not a constraint-free version of it.
+                self._text_value(self._research_plan_constraints),
             )
         )
         authorization = getattr(response, "research_plan_authorization", None)
@@ -5663,6 +5699,7 @@ class TkinterDesktopWindow:
                 self._authorization_advances.get(),
                 self._authorization_network.get(),
                 self._authorization_seconds.get(),
+                self._text_value(self._research_plan_constraints),
             )
         )
 
@@ -5698,6 +5735,7 @@ class TkinterDesktopWindow:
                 self._text_value(self._research_plan_instructions),
                 self._text_value(self._research_plan_source_ids),
                 self._plan_approval_run_id.get(),
+                self._text_value(self._research_plan_constraints),
             )
         )
 

@@ -56,6 +56,7 @@ class ResearchPlanDraftResponseTests(unittest.TestCase):
             "Research plan draft preview:\n"
             "Question: Compare the accepted findings.\n"
             "Steps: 2\n"
+            "Constraints: 0\n"
             "Selected sources: 2\n"
             "1. Review accepted sources.\n"
             "   Selected sources: document-2, document-1\n"

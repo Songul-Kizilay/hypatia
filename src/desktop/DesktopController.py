@@ -65,6 +65,19 @@ class TrustedOneShotDeferredExecutionController(Protocol):
     ) -> OneShotDeferredExecutionSchedule: ...
 
 
+def _plan_constraint_drafts(constraint_lines: str) -> tuple[str, ...]:
+    """Shape typed constraint rows, one per line, preserving exact order.
+
+    Blank lines are dropped rather than becoming empty constraints. Nothing
+    here pairs a constraint with a source row: constraints occupy no position
+    in the step/source alignment, so adding one cannot move a source onto a
+    different step.
+    """
+    return tuple(
+        stripped for line in constraint_lines.splitlines() if (stripped := line.strip())
+    )
+
+
 def _plan_step_drafts(
     instruction_lines: str,
     source_id_lines: str,
@@ -328,11 +341,23 @@ class DesktopController:
         question: str,
         instruction_lines: str,
         source_id_lines: str,
+        constraint_lines: str = "",
     ) -> BrainResponse:
-        """Preview one explicit ordered plan without saving or executing it."""
+        """Preview one explicit ordered plan without saving or executing it.
+
+        Steps and constraints come from two separate fields because the author
+        already decided which is which. Nothing here inspects the wording to
+        sort them, so a line saying "do not access external sources" is a
+        constraint only if it was typed as one.
+        """
         if not all(
             isinstance(value, str)
-            for value in (question, instruction_lines, source_id_lines)
+            for value in (
+                question,
+                instruction_lines,
+                source_id_lines,
+                constraint_lines,
+            )
         ):
             raise ValueError("Research plan draft fields must be text.")
         return self._brain.process(
@@ -345,6 +370,11 @@ class DesktopController:
                     "research_plan_steps": _plan_step_drafts(
                         instruction_lines,
                         source_id_lines,
+                    ),
+                    # Sources align with step lines only, so constraints are
+                    # kept out of that pairing entirely.
+                    "research_plan_constraints": _plan_constraint_drafts(
+                        constraint_lines
                     ),
                 },
             )
@@ -360,6 +390,7 @@ class DesktopController:
         max_step_advances: str = "",
         max_network_operations: str = "",
         max_seconds: str = "",
+        constraint_lines: str = "",
     ) -> BrainResponse:
         """Show the approval this plan would record. Records nothing.
 
@@ -382,6 +413,7 @@ class DesktopController:
                     max_seconds,
                 ),
             },
+            constraint_lines=constraint_lines,
         )
 
     @staticmethod
@@ -412,6 +444,7 @@ class DesktopController:
         max_step_advances: str = "",
         max_network_operations: str = "",
         max_seconds: str = "",
+        constraint_lines: str = "",
     ) -> BrainResponse:
         """Record exactly one previewed approval. Starts no research.
 
@@ -437,6 +470,7 @@ class DesktopController:
                     max_seconds,
                 ),
             },
+            constraint_lines=constraint_lines,
         )
 
     def start_authorized_execution(
@@ -446,6 +480,7 @@ class DesktopController:
         instruction_lines: str,
         source_id_lines: str,
         research_run_id: str,
+        constraint_lines: str = "",
     ) -> BrainResponse:
         """Spend one recorded approval on one foreground execution start.
 
@@ -464,6 +499,7 @@ class DesktopController:
             source_id_lines,
             research_run_id,
             extra={"authorization_id": normalized_id},
+            constraint_lines=constraint_lines,
         )
 
     def research_execution_status(self, execution_id: str) -> BrainResponse:
@@ -728,6 +764,7 @@ class DesktopController:
         research_run_id: str,
         *,
         extra: dict[str, object],
+        constraint_lines: str = "",
     ) -> BrainResponse:
         if not all(
             isinstance(value, str)
@@ -748,6 +785,7 @@ class DesktopController:
                 instruction_lines,
                 source_id_lines,
             ),
+            "research_plan_constraints": _plan_constraint_drafts(constraint_lines),
         }
         metadata.update(extra)
         return self._brain.process(

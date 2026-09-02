@@ -951,6 +951,7 @@ class ResponseComposer:
                 "Research plan draft preview:",
                 f"Question: {plan.question}",
                 f"Steps: {len(plan.steps)}",
+                f"Constraints: {len(plan.constraints)}",
                 f"Selected sources: {len(plan.selected_source_document_ids)}",
             ]
             for index, step in enumerate(plan.steps, start=1):
@@ -966,6 +967,19 @@ class ResponseComposer:
                         "   Source discovery provider: "
                         f"{step.discovery_provider.label}"
                     )
+            if plan.constraints:
+                # Listed apart from the steps, and numbered separately, so a
+                # constraint can never be read back as "step 11".
+                lines.append("Plan constraints:")
+                lines.extend(
+                    f"C{index}. {constraint.text}"
+                    for index, constraint in enumerate(plan.constraints, start=1)
+                )
+                lines.append(
+                    "Constraints are approved plan content and are bound into "
+                    "the plan's digest. They are not executable steps, and "
+                    "nothing here interprets them into capabilities."
+                )
             lines.extend((f"Plan ID: {plan.plan_id}",))
             if prior_lessons:
                 lines.extend(
