@@ -2,6 +2,23 @@
 
 All notable project changes are recorded here.
 
+## [0.3.295] - 2026-09-03
+
+### Changed
+
+- Hypothesis appraisals now show how many evidence records an operator has
+  explicitly associated with the hypothesis's discriminating test.
+- Hypothesis lists keep that test-addressing evidence count visible beside the
+  separate supporting and opposing source counts.
+
+### Safety
+
+- The count reports an authored association only. It does not infer that a test
+  ran, decide how an observation cuts, move evidence to either side or change a
+  hypothesis status.
+- This is a pure projection of existing hypothesis state: it writes nothing,
+  performs no research, and invokes no provider or model.
+
 ## [0.3.294] - 2026-09-03
 
 ### Changed

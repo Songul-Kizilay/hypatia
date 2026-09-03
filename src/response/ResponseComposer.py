@@ -1949,6 +1949,10 @@ class ResponseComposer:
             "source, and no opposing evidence. That is still where most "
             "abandoned theories stood right until the observation that undid "
             "them.",
+            "",
+            "Evidence recorded as addressing the discriminating test is an "
+            "authored association only. It does not say whether that evidence "
+            "supports or opposes the hypothesis.",
         ]
         return BrainResponse(
             message="\n".join(lines),
@@ -1993,11 +1997,16 @@ class ResponseComposer:
                 f"  {appraisal.hypothesis.hypothesis_id} | "
                 f"for {appraisal.supporting_source_count} / "
                 f"against {appraisal.opposing_source_count} source(s); "
+                "test-addressing evidence "
+                f"{appraisal.discriminating_test_evidence_count}; "
                 f"support trust {appraisal.supporting_assessed_source_count}/"
                 f"{appraisal.supporting_source_count} assessed, lowest "
                 f"{appraisal.lowest_supporting_trust.value}"
             )
-        lines.append("Listing hypotheses performs no research and settles nothing.")
+        lines.append(
+            "Test-addressing evidence is authored, not inferred. Listing "
+            "hypotheses performs no research and settles nothing."
+        )
         return BrainResponse(
             message="\n".join(lines),
             request_id=request.request_id,

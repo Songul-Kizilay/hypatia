@@ -255,6 +255,36 @@ class ServiceAuthoringTests(unittest.TestCase):
         self.assertEqual(current.discriminating_test_evidence_ids, (self.evidence_id,))
         self.assertEqual(current.run_id, self.run_id)
 
+    def test_the_returned_appraisal_shows_that_the_test_was_addressed(self) -> None:
+        response = self._associate()
+
+        assert response.hypothesis_appraisal is not None
+        self.assertEqual(
+            response.hypothesis_appraisal.discriminating_test_evidence_count,
+            1,
+        )
+        self.assertIn(
+            "Evidence recorded as addressing the discriminating test: 1 record(s)",
+            response.message,
+        )
+        self.assertIn("authored association only", response.message)
+        self.assertIn("supports or opposes", response.message)
+        self.assertFalse(response.hypothesis_appraisal.status.means_true)
+
+    def test_the_hypothesis_list_keeps_test_evidence_visible(self) -> None:
+        self._associate()
+
+        response = self.service.process_list(
+            BrainRequest(
+                message="List hypotheses",
+                metadata={"intent": "research_hypothesis_list"},
+            )
+        )
+
+        self.assertIn("test-addressing evidence 1", response.message)
+        self.assertIn("authored, not inferred", response.message)
+        self.assertIn("settles nothing", response.message)
+
     def test_another_runs_evidence_is_refused(self) -> None:
         """Cross-run safety, settled by run membership rather than by wording."""
         with self.assertRaises(ResearchError):

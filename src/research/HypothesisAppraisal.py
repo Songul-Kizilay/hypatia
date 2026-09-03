@@ -147,6 +147,11 @@ class HypothesisAppraisal:
             and self.lowest_supporting_trust in _SUPPORTING_TRUST
         )
 
+    @property
+    def discriminating_test_evidence_count(self) -> int:
+        """Count authored links to the test without inferring their outcome."""
+        return len(self.hypothesis.discriminating_test_evidence_ids)
+
     def lines(self) -> tuple[str, ...]:
         """Render the standing as bounded, separately labelled lines."""
         statement = self.hypothesis.one_line_statement(MAX_HYPOTHESIS_STATEMENT_LENGTH)
@@ -157,6 +162,8 @@ class HypothesisAppraisal:
         return (
             f"Hypothesis: {statement}",
             f"Would be countered by: {discriminating_test}",
+            "Evidence recorded as addressing the discriminating test: "
+            f"{self.discriminating_test_evidence_count} record(s)",
             f"Status: {self.status.value}",
             f"Supporting: {len(self.hypothesis.supporting_evidence_ids)} evidence "
             f"across {self.supporting_source_count} source(s)",

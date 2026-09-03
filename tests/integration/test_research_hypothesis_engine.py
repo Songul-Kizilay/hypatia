@@ -358,6 +358,26 @@ class AppraisalTests(HypothesisFixture):
         )
         self.assertIs(appraisal.status, HypothesisStatus.OPEN)
 
+    def test_a_new_appraisal_says_the_discriminating_test_is_unaddressed(self) -> None:
+        service = self.service()
+        run_id = self.new_run()
+
+        hypothesis_id = self.propose(service, run_id)
+        appraisal = self.appraiser.appraise(
+            next(
+                value
+                for value in service.hypotheses()
+                if value.hypothesis_id == hypothesis_id
+            ),
+            self.manager.get(run_id),
+        )
+
+        self.assertEqual(appraisal.discriminating_test_evidence_count, 0)
+        self.assertIn(
+            "Evidence recorded as addressing the discriminating test: 0 record(s)",
+            appraisal.lines(),
+        )
+
     def test_one_supporting_source_is_not_yet_support(self) -> None:
         service = self.service()
         run_id = self.new_run()
