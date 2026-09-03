@@ -2,6 +2,47 @@
 
 All notable project changes are recorded here.
 
+## [0.3.292] - 2026-09-03
+
+### Fixed
+
+- A deferred-grant document's declared schema version now decides which entry
+  shape is legal. Shape was previously validated against "either known field
+  set", so a document could call itself version 1 - the version written before
+  restrictions were recorded at all - while carrying the version 2 restriction
+  field, and be believed about it. The reverse passed too. A version marker that
+  constrains nothing cannot tell a reader which format it is holding.
+- The deferred-grant confirmation now states the restrictions the pending plan
+  would bind, instead of answering "no grant". That was true and useless where
+  somebody decides whether to authorise unattended execution: reporting the
+  absence of the record reads as the absence of a restriction.
+
+### Changed
+
+- Three states are kept distinct and never borrow each other's wording:
+  "Restrictions to be granted" before one exists, "Approved restrictions" for a
+  grant that recorded them, and "unavailable for legacy grant" for one that
+  never did.
+
+### Security
+
+- Strict per-version shape: a missing field, a newer field, an unknown extra
+  field, a malformed restriction container and an unknown restriction value are
+  each refused rather than ignored, stripped or reinterpreted. Readable versions
+  are derived from the declared shapes, so a version added without one is
+  unreadable rather than lenient.
+- Unknown stays unknown. A legacy record still loads as unrecorded, never as an
+  empty set, and reading one rewrites nothing: no upgrade, no fabricated
+  snapshot, no implicit re-grant.
+- The pending answer is derived from the exact plan through the same helper the
+  grant is built with - never a caller-supplied argument, never read out of
+  constraint wording. An existing grant is still described by its own record, so
+  a stale plan cannot speak for it.
+- Rendering only. Previewing creates no grant, writes nothing, spends no
+  allowance and leaves the plan digest untouched. Eligibility, rebind,
+  authorization, capability and budget binding, revocation and one-shot gating
+  are unchanged.
+
 ## [0.3.291] - 2026-09-03
 
 ### Changed

@@ -58,6 +58,10 @@ class TrustedDeferredExecutionControlService:
             decision=deferred_execution_decision(
                 task, execution, plan, allowance, grant
             ),
+            # From the exact plan being previewed, through the same helper the
+            # grant itself is built with. Never a caller-supplied argument and
+            # never read out of constraint wording.
+            pending_restrictions=restrictions_of(plan),
         )
 
     def grant(self, task_id: str) -> DeferredExecutionControlView:

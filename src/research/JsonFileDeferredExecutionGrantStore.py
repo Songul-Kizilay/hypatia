@@ -20,10 +20,6 @@ from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 MAX_DEFERRED_GRANT_STORE_BYTES = 4 * 1024 * 1024
 MAX_DEFERRED_GRANT_STORE_ENTRIES = 500
 _SCHEMA_VERSION = 2
-#: Version 1 recorded no restrictions. Those entries load as unrecorded
-#: rather than as an empty set, because an empty set is a claim and the
-#: record never made it.
-_READABLE_SCHEMA_VERSIONS = frozenset({1, 2})
 _DOCUMENT_FIELDS = frozenset({"schema_version", "grants"})
 _ENTRY_FIELDS = frozenset(
     {
@@ -40,7 +36,19 @@ _ENTRY_FIELDS = frozenset(
         "approved_restrictions",
     }
 )
+#: Version 1 recorded no restrictions. Those entries load as unrecorded rather
+#: than as an empty set, because an empty set is a claim and the record never
+#: made it.
 _ENTRY_FIELDS_V1 = _ENTRY_FIELDS - {"approved_restrictions"}
+
+#: The declared version decides which shape is legal, rather than the shape
+#: deciding what the record apparently means. Reading it the other way round
+#: let a document call itself version 1 while carrying the version 2 field, and
+#: be believed about a restriction that version could never have recorded.
+_ENTRY_FIELDS_BY_VERSION = {1: _ENTRY_FIELDS_V1, 2: _ENTRY_FIELDS}
+#: Derived, so a version added without a declared shape is unreadable rather
+#: than silently accepting whatever turns up.
+_READABLE_SCHEMA_VERSIONS = frozenset(_ENTRY_FIELDS_BY_VERSION)
 _BUDGET_FIELDS = frozenset(
     {
         "max_step_advances",
@@ -162,15 +170,21 @@ class JsonFileDeferredExecutionGrantStore:
         values = document["grants"]
         if not isinstance(values, list):
             raise ResearchError("Deferred execution grants must be a list.")
-        grants = [self._parse_entry(value) for value in values]
+        version = document["schema_version"]
+        grants = [self._parse_entry(value, version) for value in values]
         self._validate(grants)
         return grants
 
     @staticmethod
-    def _parse_entry(document: object) -> DeferredExecutionGrant:
-        if not isinstance(document, dict) or set(document) not in (
-            _ENTRY_FIELDS,
-            _ENTRY_FIELDS_V1,
+    def _parse_entry(document: object, version: int) -> DeferredExecutionGrant:
+        """Decode one entry against the shape its document declared.
+
+        Exactly that shape: a field the declared version never wrote is as
+        wrong as a missing one, so neither is read past.
+        """
+        if (
+            not isinstance(document, dict)
+            or set(document) != _ENTRY_FIELDS_BY_VERSION[version]
         ):
             raise ResearchError("A deferred execution grant is invalid.")
         budget = document["task_budget"]
