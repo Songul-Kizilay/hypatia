@@ -25,6 +25,7 @@ import sys
 import unittest
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 SRC_DIR = ROOT_DIR / "src"
@@ -35,7 +36,11 @@ for entry in (SRC_DIR, ROOT_DIR):
 from research.DeferredGrantAuthorizer import DeferredGrantAuthorizer
 from research.ResearchPlanRestriction import ResearchPlanRestriction
 from tests.research.test_deferred_execution_grants import grant_for
-from tests.research.test_one_shot_deferred_execution import RUN_AT, OneShotFixture
+from tests.research.test_one_shot_deferred_execution import (
+    RUN_AT,
+    OneShotFixture,
+    Value,
+)
 
 NO_EXTERNAL = ResearchPlanRestriction.NO_EXTERNAL_SOURCE_ACCESS
 
@@ -260,6 +265,89 @@ class OpeningTheConfirmationArmsNothingTests(GrantVisibilityFixture):
         self.service.schedule("task-1", RUN_AT)
 
         self.assertEqual(len(self.schedules.records), 1)
+
+
+class StatusShowsTheRecordedGrantTests(GrantVisibilityFixture):
+    """Status describes the authority named by the stored schedule."""
+
+    def test_status_shows_the_exact_grants_restrictions(self) -> None:
+        self._restrict(frozenset({NO_EXTERNAL}))
+        armed = self.service.schedule("task-1", RUN_AT)
+
+        status = self.service.status("task-1")
+
+        assert status is not None
+        self.assertEqual(status.schedule, armed.schedule)
+        self.assertEqual(status.grant_id, "grant-1")
+        self.assertEqual(status.approved_restrictions_text, "no_external_source_access")
+
+    def test_a_revoked_record_still_truthfully_describes_what_was_armed(self) -> None:
+        self._restrict(frozenset({NO_EXTERNAL}))
+        self.service.schedule("task-1", RUN_AT)
+        [stored] = self.grants.records
+        self.grants.records = [
+            stored.revoked(RUN_AT, DeferredGrantAuthorizer.TRUSTED_LOCAL_OPERATOR)
+        ]
+
+        status = self.service.status("task-1")
+
+        assert status is not None
+        assert status.grant is not None
+        self.assertFalse(status.grant.active)
+        self.assertEqual(status.approved_restrictions_text, "no_external_source_access")
+
+    def test_a_different_active_grant_is_never_substituted(self) -> None:
+        self._restrict(frozenset({NO_EXTERNAL}))
+        self.service.schedule("task-1", RUN_AT)
+        [stored] = self.grants.records
+        self.grants.records = [replace(stored, grant_id="grant-other")]
+
+        status = self.service.status("task-1")
+
+        assert status is not None
+        self.assertEqual(status.grant_id, "grant-1")
+        self.assertIsNone(status.grant)
+        self.assertEqual(status.approved_restrictions_text, "unavailable")
+
+    def test_reading_status_changes_nothing_and_runs_nothing(self) -> None:
+        self.service.schedule("task-1", RUN_AT)
+        before_schedules = list(self.schedules.records)
+        before_grants = list(self.grants.records)
+        before_task = self.context.task
+        before_execution = self.context.execution
+        before_allowance = self.context.allowance
+
+        self.service.status("task-1")
+
+        self.assertEqual(self.schedules.records, before_schedules)
+        self.assertEqual(self.grants.records, before_grants)
+        self.assertEqual(self.context.task, before_task)
+        self.assertEqual(self.context.execution, before_execution)
+        self.assertEqual(self.context.allowance, before_allowance)
+        self.assertEqual(self.runner.calls, [])
+
+
+class DesktopStatusSurfaceTests(GrantVisibilityFixture):
+    def test_refresh_names_the_exact_grant_and_its_restrictions(self) -> None:
+        from desktop.TkinterDesktopWindow import TkinterDesktopWindow
+
+        self._restrict(frozenset({NO_EXTERNAL}))
+        self.service.schedule("task-1", RUN_AT)
+        view = self.service.status("task-1")
+        window = object.__new__(TkinterDesktopWindow)
+        window._controller = SimpleNamespace(
+            one_shot_deferred_execution_status=lambda task_id: view
+        )
+        window._scheduler_task_id = Value("task-1")
+        window._one_shot_deferred_status = Value()
+
+        window._refresh_one_shot_deferred_execution()
+
+        self.assertIn("Deferred grant: grant-1", window._one_shot_deferred_status.value)
+        self.assertIn(
+            "Approved restrictions: no_external_source_access",
+            window._one_shot_deferred_status.value,
+        )
 
 
 class IneligibleGrantsStillNeverReachTheScreenTests(GrantVisibilityFixture):

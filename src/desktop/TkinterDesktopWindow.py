@@ -5434,16 +5434,24 @@ class TkinterDesktopWindow:
             self._one_shot_deferred_status.set("A background task ID is required.")
             return
         try:
-            schedule = self._controller.one_shot_deferred_execution_status(task_id)
+            view = self._controller.one_shot_deferred_execution_status(task_id)
         except (HypatiaError, ValueError, RuntimeError) as error:
             self._one_shot_deferred_status.set(str(error))
             return
-        if schedule is None:
+        if view is None:
             self._one_shot_deferred_status.set("No one-shot run exists for this task.")
+            return
+        schedule = view.schedule
+        if schedule is None:
+            self._one_shot_deferred_status.set(
+                "Stored one-shot schedule details are unavailable."
+            )
             return
         self._one_shot_deferred_status.set(
             f"One-shot {schedule.schedule_id}: {schedule.status.value}; "
-            f"{schedule.run_at.astimezone():%Y-%m-%d %H:%M %Z}."
+            f"{schedule.run_at.astimezone():%Y-%m-%d %H:%M %Z}.\n"
+            f"Deferred grant: {view.grant_id}; "
+            f"Approved restrictions: {view.approved_restrictions_text}."
         )
 
     def _one_shot_run_time(self) -> datetime:

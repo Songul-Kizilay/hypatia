@@ -109,7 +109,14 @@ class TrustedOneShotDeferredExecutionScheduler:
             self._save_replacement(schedules, cancelled)
             return cancelled
 
-    def status(self, task_id: str) -> OneShotDeferredExecutionSchedule | None:
+    def status(self, task_id: str) -> OneShotDeferredExecutionScheduleView | None:
+        """Report the latest schedule together with the grant it names.
+
+        Resolved by the schedule's own grant ID, never by whichever grant is
+        currently active for the task: those can differ, and the schedule will
+        run under the one it recorded. An id that no longer resolves reports as
+        unavailable rather than borrowing another grant's answer.
+        """
         normalized = task_id.strip()
         if not normalized:
             raise ResearchError("One-shot deferred task ID cannot be empty.")
@@ -117,10 +124,15 @@ class TrustedOneShotDeferredExecutionScheduler:
             matches = [
                 value for value in self._schedules.load() if value.task_id == normalized
             ]
-        return (
-            max(matches, key=lambda value: (value.created_at, value.schedule_id))
-            if matches
-            else None
+        if not matches:
+            return None
+        schedule = max(matches, key=lambda value: (value.created_at, value.schedule_id))
+        return OneShotDeferredExecutionScheduleView(
+            task_id=schedule.task_id,
+            grant_id=schedule.grant_id,
+            run_at=schedule.run_at,
+            schedule=schedule,
+            grant=self._grants.for_grant_id(schedule.grant_id),
         )
 
     def next_pending(self) -> OneShotDeferredExecutionSchedule | None:

@@ -56,7 +56,7 @@ class TrustedOneShotDeferredExecutionController(Protocol):
 
     def cancel(self, task_id: str) -> OneShotDeferredExecutionSchedule: ...
 
-    def status(self, task_id: str) -> OneShotDeferredExecutionSchedule | None: ...
+    def status(self, task_id: str) -> OneShotDeferredExecutionScheduleView | None: ...
 
     def next_pending(self) -> OneShotDeferredExecutionSchedule | None: ...
 
@@ -209,7 +209,8 @@ class DesktopController:
 
     def one_shot_deferred_execution_status(
         self, task_id: str
-    ) -> OneShotDeferredExecutionSchedule | None:
+    ) -> OneShotDeferredExecutionScheduleView | None:
+        """Report the latest schedule and the exact grant it names."""
         return self._one_shot_control().status(task_id.strip())
 
     def next_one_shot_deferred_execution(

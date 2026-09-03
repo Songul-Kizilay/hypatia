@@ -2,6 +2,25 @@
 
 All notable project changes are recorded here.
 
+## [0.3.294] - 2026-09-03
+
+### Changed
+
+- Inspecting a stored one-shot deferred run now shows the restrictions recorded
+  by the exact grant ID that the schedule names, alongside its status and time.
+- Revoked grants remain visible as historical authority records, while a missing
+  or ambiguous referenced grant is reported as unavailable.
+
+### Security
+
+- Status lookup never substitutes whichever grant is currently active for the
+  task. A later grant cannot rewrite the authority description of an earlier
+  schedule.
+- This is a read-only audit projection. It changes no schedule, grant, task,
+  execution or budget, runs no work and performs no provider or model call.
+- Unknown remains unknown: a schedule whose exact grant cannot be resolved is
+  not rendered as unrestricted.
+
 ## [0.3.293] - 2026-09-03
 
 ### Changed
