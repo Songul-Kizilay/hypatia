@@ -25,6 +25,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+from research.FailureMemoryRecallMatch import FailureMemoryRecallMatch
 from research.FailureMemoryTokens import failure_memory_tokens
 from research.ResearchFailureLesson import ResearchFailureLesson
 
@@ -49,19 +50,33 @@ class FailureMemoryAdvisor:
         lessons: Iterable[ResearchFailureLesson],
     ) -> tuple[ResearchFailureLesson, ...]:
         """Return lessons sharing wording with the question, heaviest first."""
+        return tuple(match.lesson for match in self.matches(question, lessons))
+
+    def matches(
+        self,
+        question: str,
+        lessons: Iterable[ResearchFailureLesson],
+    ) -> tuple[FailureMemoryRecallMatch, ...]:
+        """Return selected lessons with their exact normalized shared terms."""
         wanted = failure_memory_tokens(question)
         if not wanted:
             return ()
-        scored: list[tuple[int, int, ResearchFailureLesson]] = []
+        scored: list[tuple[int, int, ResearchFailureLesson, tuple[str, ...]]] = []
         for lesson in lessons:
-            shared = len(wanted & lesson.tokens())
-            if shared < MIN_SHARED_TOKENS:
+            shared_terms = tuple(sorted(wanted & lesson.tokens()))
+            if len(shared_terms) < MIN_SHARED_TOKENS:
                 continue
-            scored.append((shared, lesson.weight, lesson))
+            scored.append((len(shared_terms), lesson.weight, lesson, shared_terms))
         # Stable passes keep the final lesson-ID tie-break deterministic while
         # making overlap, kind weight, and then recency descend in that order.
         scored.sort(key=lambda entry: entry[2].lesson_id)
         scored.sort(key=lambda entry: entry[2].recorded_at, reverse=True)
         scored.sort(key=lambda entry: entry[1], reverse=True)
         scored.sort(key=lambda entry: entry[0], reverse=True)
-        return tuple(entry[2] for entry in scored[: self._limit])
+        return tuple(
+            FailureMemoryRecallMatch(
+                lesson=entry[2],
+                shared_terms=entry[3],
+            )
+            for entry in scored[: self._limit]
+        )

@@ -2,6 +2,28 @@
 
 All notable project changes are recorded here.
 
+## [0.3.290] - 2026-09-03
+
+### Added
+
+- Explicit Failure Memory recall now shows the exact normalized terms shared
+  by each selected prior lesson and the operator's new research question.
+- Recall responses carry the same bounded match trace as structured data for
+  inspection without changing the existing lesson records.
+
+### Changed
+
+- The existing deterministic recall ranking now produces an explainable match
+  projection while preserving its overlap threshold, weights, tie-breaks and
+  result limit exactly.
+
+### Safety
+
+- Shared terms are labelled as lexical overlap only, never as proof that an old
+  failure applies to the new question.
+- Recall remains read-only and advisory: it changes no run, plan, hypothesis,
+  claim, capability, authorization or provider activity.
+
 ## [0.3.289] - 2026-09-03
 
 ### Fixed

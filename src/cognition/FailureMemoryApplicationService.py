@@ -39,6 +39,7 @@ from core.Exceptions import ResearchError
 from eventbus.EventBus import EventBus
 from research.FailureLessonStore import FailureLessonStore
 from research.FailureMemoryAdvisor import FailureMemoryAdvisor
+from research.FailureMemoryRecallMatch import FailureMemoryRecallMatch
 from research.HypothesisFailureLessonDeriver import (
     MAX_HYPOTHESIS_FAILURE_LESSONS_PER_RUN,
     HypothesisFailureLessonDeriver,
@@ -197,9 +198,12 @@ class FailureMemoryApplicationService:
         question = request.metadata.get("research_question")
         if not isinstance(question, str) or not question.strip():
             raise ResearchError("Failure recall requires a research question.")
+        matches = self._advice_matches(question)
+        lessons = tuple(match.lesson for match in matches)
         return self._response_composer.failure_lesson_recall(
             request,
-            self.advice(question),
+            lessons,
+            matches,
         )
 
     def advice(self, question: str) -> tuple[ResearchFailureLesson, ...]:
@@ -216,9 +220,18 @@ class FailureMemoryApplicationService:
         """
         if not isinstance(question, str) or not question.strip():
             return ()
-        relevant = self._advisor.relevant(question, self._lessons.values())
+        matches = self._advice_matches(question)
+        return tuple(match.lesson for match in matches)
+
+    def _advice_matches(
+        self,
+        question: str,
+    ) -> tuple[FailureMemoryRecallMatch, ...]:
+        """Recall once and retain the lexical reason without changing state."""
+        matches = self._advisor.matches(question, self._lessons.values())
+        relevant = tuple(match.lesson for match in matches)
         self._events.recalled(relevant, len(self._lessons))
-        return relevant
+        return matches
 
     def _derive(
         self,

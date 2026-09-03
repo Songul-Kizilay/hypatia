@@ -20,6 +20,7 @@ from memory.LearnedMemoryAuditReport import LearnedMemoryAuditReport
 from research.BackgroundResearchTask import BackgroundResearchTask
 from research.CanonicalResearchSummary import CanonicalResearchSummary
 from research.CuriosityResearchProposal import CuriosityResearchProposal
+from research.FailureMemoryRecallMatch import FailureMemoryRecallMatch
 from research.HypothesisAppraisal import HypothesisAppraisal
 from research.HypothesisHistoryView import HypothesisHistoryView
 from research.KnowledgeReconciliationReport import (
@@ -167,6 +168,7 @@ class BrainResponse:
     research_reflection: ResearchReflectionReport | None = None
     research_reflections: tuple[ResearchReflectionReport, ...] = ()
     failure_lessons: tuple[ResearchFailureLesson, ...] = ()
+    failure_memory_recall_matches: tuple[FailureMemoryRecallMatch, ...] = ()
     research_calibration: ResearchCalibrationReport | None = None
     research_claim_revision_preparation: ResearchClaimRevisionPreparation | None = None
     research_provider_quality: ResearchProviderQualityReport | None = None

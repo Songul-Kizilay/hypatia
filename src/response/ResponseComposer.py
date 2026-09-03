@@ -26,6 +26,7 @@ from planner.Plan import Plan
 from research.BackgroundResearchTask import BackgroundResearchTask
 from research.CanonicalResearchSummary import CanonicalResearchSummary
 from research.CuriosityResearchProposal import CuriosityResearchProposal
+from research.FailureMemoryRecallMatch import FailureMemoryRecallMatch
 from research.HypothesisAppraisal import HypothesisAppraisal
 from research.HypothesisHistoryView import HypothesisHistoryView
 from research.KnowledgeReconciliationReport import (
@@ -1598,8 +1599,10 @@ class ResponseComposer:
         self,
         request: BrainRequest,
         lessons: tuple[ResearchFailureLesson, ...],
+        matches: tuple[FailureMemoryRecallMatch, ...] = (),
     ) -> BrainResponse:
         """Offer prior lessons as advice, never as a decision."""
+        matches_by_lesson_id = {match.lesson.lesson_id: match for match in matches}
         lines = [
             "Possibly relevant prior lessons:",
             f"Lessons: {len(lessons)}",
@@ -1607,6 +1610,9 @@ class ResponseComposer:
         ]
         for lesson in lessons:
             lines.append(f"- [{lesson.kind.value}] {lesson.statement}")
+            match = matches_by_lesson_id.get(lesson.lesson_id)
+            if match is not None:
+                lines.append(f"  matched terms: {', '.join(match.shared_terms)}")
             lines.append(f"  from: {', '.join(lesson.provenance)}")
         if not lessons:
             lines.append("Nothing remembered overlaps this question.")
@@ -1618,12 +1624,18 @@ class ResponseComposer:
                 "is not a reason not to try it.",
             )
         )
+        if matches:
+            lines.append(
+                "Matched terms explain lexical overlap only; they do not prove "
+                "that a prior lesson applies to this question."
+            )
         return BrainResponse(
             message="\n".join(lines),
             request_id=request.request_id,
             intent="failure_memory",
             memory_count=0,
             failure_lessons=lessons,
+            failure_memory_recall_matches=matches,
         )
 
     def failure_memory_rejected(

@@ -973,6 +973,43 @@ class RecallIsAdvisoryTests(FailureMemoryFixture):
         self.assertTrue(response.failure_lessons)
         self.assertIn("Possibly relevant prior lessons", response.message)
 
+    def test_recall_explains_the_exact_normalized_shared_terms(self) -> None:
+        run_id = self.failing_run()
+        service = self.service()
+        service.process_store(
+            self.request("failure_memory_store", research_run_id=run_id)
+        )
+
+        response = service.process_recall(
+            self.request("failure_memory_recall", research_question=QUESTION)
+        )
+
+        self.assertEqual(len(response.failure_memory_recall_matches), 1)
+        match = response.failure_memory_recall_matches[0]
+        self.assertEqual(match.lesson, response.failure_lessons[0])
+        self.assertEqual(
+            match.shared_terms,
+            ("age", "does", "have", "measured", "ring", "saturn", "system"),
+        )
+        self.assertIn(
+            "matched terms: age, does, have, measured, ring, saturn, system",
+            response.message,
+        )
+
+    def test_recall_explanation_is_not_presented_as_applicability_proof(self) -> None:
+        run_id = self.failing_run()
+        service = self.service()
+        service.process_store(
+            self.request("failure_memory_store", research_run_id=run_id)
+        )
+
+        response = service.process_recall(
+            self.request("failure_memory_recall", research_question=QUESTION)
+        )
+
+        self.assertIn("lexical overlap only", response.message)
+        self.assertIn("do not prove", response.message)
+
     def test_recall_says_plainly_that_it_blocks_nothing(self) -> None:
         run_id = self.failing_run()
         service = self.service()
@@ -1043,6 +1080,36 @@ class RecallIsAdvisoryTests(FailureMemoryFixture):
 
         self.assertEqual(len(relevant), 3)
 
+    def test_explained_matches_preserve_the_existing_relevance_order(self) -> None:
+        lessons = [
+            ResearchFailureLesson(
+                lesson_id=f"lesson:{index}",
+                kind=FailureLessonKind.OPERATION_FAILURE,
+                run_id=f"run-{index}",
+                subject_id=f"stage-{index}",
+                statement="Saturn rings research failed.",
+                provenance=(f"failure:{index}",),
+                context="",
+                recorded_at=START + timedelta(seconds=index),
+            )
+            for index in range(3)
+        ]
+        advisor = FailureMemoryAdvisor()
+
+        relevant = advisor.relevant("Saturn rings research", lessons)
+        matches = advisor.matches("Saturn rings research", lessons)
+
+        self.assertEqual(
+            tuple(match.lesson for match in matches),
+            relevant,
+        )
+        self.assertTrue(
+            all(
+                match.shared_terms == ("research", "rings", "saturn")
+                for match in matches
+            )
+        )
+
     def test_a_heavier_lesson_outranks_a_lighter_one_on_equal_overlap(self) -> None:
         def lesson(kind: FailureLessonKind, name: str) -> ResearchFailureLesson:
             return ResearchFailureLesson(
@@ -1112,6 +1179,13 @@ class RecallIsAdvisoryTests(FailureMemoryFixture):
         self.assertEqual(MIN_SHARED_TOKENS, 2)
         self.assertEqual(
             advisor.relevant(
+                "Does quantum error correction reduce evidence loss?",
+                [lesson],
+            ),
+            (),
+        )
+        self.assertEqual(
+            advisor.matches(
                 "Does quantum error correction reduce evidence loss?",
                 [lesson],
             ),
