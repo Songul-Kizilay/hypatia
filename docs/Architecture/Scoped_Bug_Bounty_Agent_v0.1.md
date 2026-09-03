@@ -43,9 +43,35 @@ must not substitute another address. Unicode authorities must be entered as
 explicit ASCII A-labels; whitespace, controls and ambiguous authority syntax
 are rejected before parsing can erase them.
 
-## Boundaries that are NOT implemented by this increment
+## v0.3.298: scope snapshot persistence and content identity
 
-- There is no UI/persisted program-scope enrollment or proof of authorization.
+`ResearchTargetScopeCodec` serializes every host/subdomain and CIDR rule under
+a strict versioned schema. `target_scope_digest()` identifies that exact
+validated content, including exclusions and authored rule order. Domain case
+and a single trailing root dot normalize through `TargetHostRule`; formatting
+the JSON differently does not alter content identity. Future model fields
+require an explicit schema update rather than silently escaping the digest.
+
+`JsonFileResearchTargetScopeStore` stores one snapshot in a caller-selected
+local path, with a 64 KiB bounded read and validated bounded serialization.
+Writes use a same-directory temporary file, flush/fsync, and atomic replacement
+following existing research stores. Failed writes preserve the previous file.
+Reads neither write nor start research. Missing means `None`, not unrestricted
+scope. Corruption, duplicate/unknown/missing fields, unsupported schemas and
+digest mismatches fail closed. The restored scope can be passed directly to
+the existing scoped HTTPS validator and retains all exclusions.
+
+This is trusted single-writer snapshot storage, not append-only revision
+history, a program registry, a user-confirmation UI or execution authorization.
+The digest is not a signature: a local writer can edit and rehash a snapshot.
+A future grant must bind a separately confirmed scope digest AND program/job
+identity. Replacing the file must never silently reauthorize an existing job.
+No program prose or path restriction is converted into a host-wide permission.
+
+## Boundaries that are NOT implemented yet
+
+- There is no UI/program-scope enrollment or proof of authorization; only the
+  exact target-scope snapshot has persistence.
 - There is no scope revision/digest binding to an execution grant yet.
 - The default generic reference-source fetcher is unchanged. Constructing an
   unscoped fetcher does not acquire a bug bounty permission. The future target

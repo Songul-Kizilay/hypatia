@@ -2,6 +2,22 @@
 
 All notable project changes are recorded here.
 
+## [0.3.298] - 2026-09-03
+
+### Added
+
+- Strict versioned target-scope snapshots, a content digest covering all rule
+  families, and bounded atomic local persistence. Restored exclusions remain
+  effective in the scoped HTTPS validator.
+- Regression coverage for changed/unknown/dropped/duplicate fields, malformed
+  schemas, disk failures, bounded I/O and future model-field omission.
+
+### Limits
+
+- A snapshot and its digest grant no authority and are not an authenticated
+  signature. Program enrollment, confirmation, job binding, revocation and the
+  autonomous target runner remain separate required integration work.
+
 ## [0.3.297] - 2026-09-03
 
 ### Added
