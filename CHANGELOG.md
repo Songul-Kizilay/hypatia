@@ -2,6 +2,25 @@
 
 All notable project changes are recorded here.
 
+## [0.3.291] - 2026-09-03
+
+### Changed
+
+- Claim calibration now renders the complete existing evidence-support profile
+  for each active claim instead of hiding its trust range inside a compressed
+  count summary.
+- Operators can see distinct-source, evidence, assessment, independence,
+  lowest/highest trust, contradiction and supersession facts beside the exact
+  authored and supported confidence levels they influence.
+
+### Safety
+
+- Trust remains an authored source assessment and is not presented as a truth
+  score. The calibration ceiling, verdict, warnings and claim state are
+  unchanged.
+- The report is still pure derivation: it performs no persistence, provider or
+  model call and changes no claim, evidence, source or assessment.
+
 ## [0.3.290] - 2026-09-03
 
 ### Added

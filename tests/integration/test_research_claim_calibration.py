@@ -380,6 +380,95 @@ class AssessmentWarningReportTests(CalibrationFixture):
 
 
 class SupportCeilingTests(CalibrationFixture):
+    def test_report_shows_the_trust_range_that_limits_the_ceiling(self) -> None:
+        run_id = self.new_run()
+        first = self.accept_source(run_id, "a")
+        second = self.accept_source(run_id, "b")
+        first_evidence = self.add_evidence(run_id, first)
+        second_evidence = self.add_evidence(run_id, second)
+        self.assess(run_id, first, first_evidence, ResearchInformationTrust.HIGH)
+        self.assess(run_id, second, second_evidence, ResearchInformationTrust.LOW)
+        self.claim(
+            run_id,
+            [first_evidence, second_evidence],
+            ResearchEpistemicState.STRONG_EVIDENCE,
+            ResearchClaimConfidence.HIGH,
+        )
+
+        response = self.service().process_report(self.request(run_id))
+
+        self.assertIn("Evidence support profile:", response.message)
+        self.assertIn("Lowest trust: low", response.message)
+        self.assertIn("Highest trust: high", response.message)
+        self.assertIn("record supports up to likely/medium", response.message)
+
+    def test_report_shows_a_contradicted_claim_as_contradicted(self) -> None:
+        """The fact the old compressed summary could not express at all.
+
+        Counts alone left a contradicted claim looking like any other. It is
+        the one thing a reader most needs beside a confidence level, so the
+        rendered report is asserted rather than the calibrator behind it.
+        """
+        run_id = self.new_run()
+        document_id = self.accept_source(run_id, "a")
+        evidence_id = self.add_evidence(run_id, document_id)
+        first = self.claim(
+            run_id,
+            [evidence_id],
+            ResearchEpistemicState.HYPOTHESIS,
+            ResearchClaimConfidence.LOW,
+            "The rings are young.",
+        )
+        second = self.claim(
+            run_id,
+            [evidence_id],
+            ResearchEpistemicState.HYPOTHESIS,
+            ResearchClaimConfidence.LOW,
+            "The rings are ancient.",
+        )
+        self.manager.record_claim_contradiction(
+            run_id, [first, second], "These two cannot both hold."
+        )
+
+        response = self.service().process_report(self.request(run_id))
+
+        self.assertIn("Contradicted: yes", response.message)
+        self.assertNotIn("Contradicted: no", response.message)
+
+    def test_report_shows_an_uncontradicted_claim_as_not_contradicted(self) -> None:
+        """So the line above is read as a finding, not as boilerplate."""
+        run_id = self.new_run()
+        document_id = self.accept_source(run_id, "a")
+        evidence_id = self.add_evidence(run_id, document_id)
+        self.claim(
+            run_id,
+            [evidence_id],
+            ResearchEpistemicState.HYPOTHESIS,
+            ResearchClaimConfidence.LOW,
+        )
+
+        response = self.service().process_report(self.request(run_id))
+
+        self.assertIn("Contradicted: no", response.message)
+        self.assertIn("Superseded: no", response.message)
+
+    def test_report_names_unassessed_trust_instead_of_inventing_it(self) -> None:
+        run_id = self.new_run()
+        document_id = self.accept_source(run_id, "unassessed")
+        evidence_id = self.add_evidence(run_id, document_id)
+        self.claim(
+            run_id,
+            [evidence_id],
+            ResearchEpistemicState.HYPOTHESIS,
+            ResearchClaimConfidence.LOW,
+        )
+
+        response = self.service().process_report(self.request(run_id))
+
+        self.assertIn("Sources assessed: 0", response.message)
+        self.assertIn("Lowest trust: unassessed", response.message)
+        self.assertIn("Highest trust: unassessed", response.message)
+
     def test_duplicate_records_do_not_hide_an_unassessed_resource(self) -> None:
         run_id = self.new_run()
         documents: list[str] = []

@@ -1683,13 +1683,8 @@ class ResponseComposer:
             lines.append(
                 "  source document IDs: " f"{', '.join(entry.source_document_ids)}"
             )
-            lines.append(
-                f"  sources {entry.profile.source_count}, "
-                f"evidence {entry.profile.evidence_count}, "
-                f"assessed {entry.profile.assessed_source_count}, "
-                "confirmed independent "
-                f"{entry.profile.independent_source_count}"
-            )
+            lines.append("  Evidence support profile:")
+            lines.extend(f"    {line}" for line in entry.profile.lines())
             # The warnings are listed under the claim but never folded into its
             # verdict. They answer a different question: not whether the claim
             # outruns its support, but whether somebody who read one of those
