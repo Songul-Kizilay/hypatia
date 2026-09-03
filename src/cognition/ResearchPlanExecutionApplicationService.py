@@ -367,6 +367,11 @@ class ResearchPlanExecutionApplicationService:
                 "That execution recorded no approved allowance, so it cannot "
                 "be resumed without inventing one."
             )
+        if plan_restriction_conflicts(plan):
+            return ResearchPlanExecutionStartRefusal(
+                "The derived plan contains a capability forbidden by its own "
+                "restriction."
+            )
         recorded = {step.step_id: step for step in snapshot.steps}
         if {step.step_id for step in plan.steps} != set(recorded):
             return ResearchPlanExecutionStartRefusal(

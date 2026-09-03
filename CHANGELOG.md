@@ -2,6 +2,26 @@
 
 All notable project changes are recorded here.
 
+## [0.3.289] - 2026-09-03
+
+### Fixed
+
+- Deferred execution eligibility now rejects a plan whose typed restriction
+  forbids a capability declared by one of its own steps, even when the grant's
+  restriction snapshot matches that contradictory plan exactly.
+- Durable execution rebinding applies the same canonical restriction-conflict
+  rule before restored work is made live again.
+
+### Security
+
+- Authorization, foreground Start, deferred eligibility and restored-execution
+  rebinding now share `plan_restriction_conflicts` rather than maintaining
+  separate rule tables.
+- A rejected contradictory plan creates no deferred grant, becomes neither
+  eligible nor live, reaches no provider and spends no execution allowance.
+- Grant snapshot matching remains a consistency check, not proof that the plan
+  itself is internally coherent.
+
 ## [0.3.288] - 2026-09-02
 
 ### Added

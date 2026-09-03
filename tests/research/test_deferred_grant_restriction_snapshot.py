@@ -533,3 +533,97 @@ class AnOmittedFieldClaimsNothingTests(unittest.TestCase):
         self.assertIsNone(built.approved_restrictions)
         self.assertFalse(built.records_restrictions)
         self.assertFalse(decide(context, built).allowed)
+
+
+def contradictory_context() -> Context:
+    """A plan that forbids external sources and whose only step needs them."""
+    from dataclasses import replace as _replace
+
+    from research.ResearchPlanConstraint import ResearchPlanConstraint
+    from research.ResearchPlanExecutionState import ResearchPlanExecutionState
+    from research.ResearchPlanStep import ResearchPlanStep
+    from research.ResearchPlanStepCapability import ResearchPlanStepCapability
+
+    context = Context()
+    context.plan = _replace(
+        context.plan,
+        steps=(
+            ResearchPlanStep(
+                step_id="step-1",
+                instruction="Discover supporting literature through Crossref.",
+                capability=ResearchPlanStepCapability.SOURCE_DISCOVERY,
+            ),
+        ),
+        constraints=(
+            ResearchPlanConstraint(
+                text="Do not access external sources.", restriction=NO_EXTERNAL
+            ),
+        ),
+    )
+    context.execution = ResearchPlanExecutionState.prepare(context.plan).start()
+    return context
+
+
+class ASelfContradictoryPlanIsNeverDeferredEligibleTests(unittest.TestCase):
+    """A matching snapshot is not the same as a coherent plan.
+
+    Approval and execution start both refuse a plan whose steps declare a
+    capability its own restriction forbids. Deferred grants are the one
+    authority that runs with nobody present, and they were the one boundary
+    that never asked. Worse, the snapshot matches perfectly in this case —
+    grant and plan agree exactly that external sources are forbidden — so
+    every consistency check passes while the only step performs source
+    discovery.
+    """
+
+    def test_the_fixture_plan_really_does_contradict_itself(self) -> None:
+        from research.ResearchPlanRestrictionConflict import (
+            plan_restriction_conflicts,
+        )
+
+        self.assertTrue(plan_restriction_conflicts(contradictory_context().plan))
+
+    def test_the_snapshot_still_matches_the_plan(self) -> None:
+        """So the mismatch check cannot be what saves us here."""
+        context = contradictory_context()
+
+        self.assertEqual(
+            grant_for(context).approved_restrictions, restrictions_of(context.plan)
+        )
+
+    def test_a_contradictory_plan_is_not_deferred_eligible(self) -> None:
+        context = contradictory_context()
+
+        decision = decide(context, grant_for(context))
+
+        self.assertFalse(decision.allowed)
+        self.assertEqual(decision.reason, "plan_restriction_conflict")
+
+    def test_no_grant_can_be_minted_over_a_contradictory_plan(self) -> None:
+        """Case E, at the boundary that mints unattended authority."""
+        from cognition.TrustedDeferredExecutionControlService import (
+            TrustedDeferredExecutionControlService,
+        )
+        from core.Exceptions import ResearchError as _ResearchError
+
+        context = contradictory_context()
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonFileDeferredExecutionGrantStore(Path(directory) / "grants.json")
+            before = (context.execution, context.allowance)
+            service = TrustedDeferredExecutionControlService(
+                context,
+                store,
+                clock=lambda: NOW,
+                id_factory=lambda: "grant-1",
+            )
+
+            with self.assertRaises(_ResearchError):
+                service.grant("task-1")
+            self.assertEqual(store.load(), [])
+            self.assertEqual((context.execution, context.allowance), before)
+
+    def test_an_ordinary_restricted_local_plan_is_still_eligible(self) -> None:
+        """The refusal must be about the contradiction, not about restrictions."""
+        context = restricted_context()
+
+        self.assertTrue(decide(context, grant_for(context)).allowed)

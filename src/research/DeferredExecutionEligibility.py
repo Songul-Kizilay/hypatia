@@ -11,6 +11,7 @@ from research.ResearchPlan import ResearchPlan
 from research.ResearchPlanAuthorization import capabilities_of, restrictions_of
 from research.ResearchPlanDigest import plan_digest
 from research.ResearchPlanExecutionState import ResearchPlanExecutionState
+from research.ResearchPlanRestrictionConflict import plan_restriction_conflicts
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,6 +60,15 @@ def deferred_execution_decision(
     # rather than reconciled.
     if grant.approved_restrictions != restrictions_of(plan):
         return DeferredExecutionDecision(False, "restriction_mismatch")
+    # Agreeing with the plan is not the same as the plan making sense. A plan
+    # whose step declares a capability its own restriction forbids matches its
+    # grant perfectly — both say external sources are forbidden — while the
+    # only step performs source discovery. Approval and Start already refuse
+    # such a plan; this is the one authority that runs with nobody present, so
+    # it asks the same canonical validator rather than trusting that it was
+    # asked earlier.
+    if plan_restriction_conflicts(plan):
+        return DeferredExecutionDecision(False, "plan_restriction_conflict")
     if allowance is None:
         return DeferredExecutionDecision(False, "allowance_unavailable")
     step_id = execution.next_pending_step_id

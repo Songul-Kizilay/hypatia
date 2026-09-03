@@ -52,11 +52,13 @@ from research.ResearchAutonomyBudget import ResearchAutonomyBudget
 from research.ResearchCapabilityCost import cost_for
 from research.ResearchExecutionAllowance import ResearchExecutionAllowance
 from research.ResearchPlan import ResearchPlan
+from research.ResearchPlanConstraint import ResearchPlanConstraint
 from research.ResearchPlanDraftService import ResearchPlanDraftService
 from research.ResearchPlanExecutionSnapshot import ResearchPlanExecutionSnapshot
 from research.ResearchPlanExecutionState import ResearchPlanExecutionState
 from research.ResearchPlanExecutionStatus import ResearchPlanExecutionStatus
 from research.ResearchPlanOperationRegistry import ResearchPlanOperationRegistry
+from research.ResearchPlanRestriction import ResearchPlanRestriction
 from research.ResearchPlanStep import ResearchPlanStep
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 from research.ResearchPlanStepState import ResearchPlanStepState
@@ -646,6 +648,29 @@ class PartlyFinishedExecutionTests(ResumeFixture):
             "plan-two",
         )
 
+        self.assertIsNone(execution.live_execution("plan-two"))
+
+    def test_a_reconstructed_plan_cannot_add_a_contradictory_restriction(self) -> None:
+        """Restart refuses before making internally forbidden work runnable."""
+        plan = self._partly_finished()
+        _curiosity, execution = self._restart()
+        contradictory = replace(
+            plan,
+            constraints=(
+                ResearchPlanConstraint(
+                    text="Do not access external sources.",
+                    restriction=ResearchPlanRestriction.NO_EXTERNAL_SOURCE_ACCESS,
+                ),
+            ),
+        )
+
+        refusal = execution.rebind_restored(
+            contradictory,
+            self.run_id,
+            "plan-two",
+        )
+
+        self.assertIn("forbidden by its own restriction", refusal.reason)
         self.assertIsNone(execution.live_execution("plan-two"))
 
 
