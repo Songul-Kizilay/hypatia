@@ -2,6 +2,38 @@
 
 All notable project changes are recorded here.
 
+## [0.3.293] - 2026-09-03
+
+### Changed
+
+- Arming a one-shot deferred run now states the restrictions the exact grant
+  already carries, beside the grant it names. This is the last control that asks
+  a person to authorise something happening while they are not watching, and it
+  identified the authority without describing it.
+- The armed confirmation returned after scheduling describes the same grant.
+
+### Security
+
+- The displayed state is the grant's own recorded snapshot, never re-derived
+  from the current plan. A grant describes the plan as it stood when the grant
+  was made, and a plan can move afterwards; what the grant recorded is what the
+  run is permitted under.
+- The grant shown is the one whose id is shown. A second or revoked grant on the
+  same task cannot supply the description.
+- One wording for an existing grant, now owned by the grant itself and shared by
+  every screen, so recorded-empty reads as "none" and a legacy record reads as
+  "unavailable for legacy grant" wherever it appears. Unknown stays unknown.
+- Display only. Opening the confirmation persists no schedule, mutates no grant,
+  runs no task and spends no allowance; arming still requires the explicit call.
+- Free-form constraint wording is still never interpreted. Only the persisted
+  typed snapshot is rendered.
+
+### Note
+
+- Revoked and legacy-unrecorded grants remain ineligible and are refused before
+  this screen renders at all, so the confirmation only ever describes a grant
+  that is currently valid.
+
 ## [0.3.292] - 2026-09-03
 
 ### Fixed

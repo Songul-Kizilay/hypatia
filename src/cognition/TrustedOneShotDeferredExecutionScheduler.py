@@ -63,6 +63,9 @@ class TrustedOneShotDeferredExecutionScheduler:
             task_id=deferred.task_id,
             grant_id=deferred.grant.grant_id,
             run_at=normalized_run_at,
+            # The same grant whose id is shown, so the restrictions named are
+            # that grant's own record rather than anything re-derived.
+            grant=deferred.grant,
         )
 
     def schedule(
@@ -90,6 +93,7 @@ class TrustedOneShotDeferredExecutionScheduler:
             grant_id=schedule.grant_id,
             run_at=schedule.run_at,
             schedule=schedule,
+            grant=view.grant,
         )
 
     def cancel(self, task_id: str) -> OneShotDeferredExecutionSchedule:

@@ -36,12 +36,7 @@ class DeferredExecutionControlView:
         """
         if self.grant is None:
             return "no grant"
-        if self.grant.approved_restrictions is None:
-            return "unavailable for legacy grant"
-        return (
-            ", ".join(sorted(value.value for value in self.grant.approved_restrictions))
-            or "none"
-        )
+        return self.grant.approved_restrictions_text
 
     @property
     def restrictions_to_be_granted_text(self) -> str:

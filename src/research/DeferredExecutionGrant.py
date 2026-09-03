@@ -92,6 +92,22 @@ class DeferredExecutionGrant:
         return self.revoked_at is None
 
     @property
+    def approved_restrictions_text(self) -> str:
+        """Name what this grant records, keeping unknown distinct from none.
+
+        Owned by the grant rather than by any one screen, so every place that
+        shows an existing grant says the same thing about it. "none" is the
+        claim that a grant was made and carried no restriction; a grant written
+        before restrictions were recorded cannot make that claim and says so.
+        """
+        if self.approved_restrictions is None:
+            return "unavailable for legacy grant"
+        return (
+            ", ".join(sorted(value.value for value in self.approved_restrictions))
+            or "none"
+        )
+
+    @property
     def records_restrictions(self) -> bool:
         """Return whether this grant states what it was granted under."""
         return self.approved_restrictions is not None
