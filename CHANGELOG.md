@@ -2,6 +2,22 @@
 
 All notable project changes are recorded here.
 
+## [0.3.297] - 2026-09-03
+
+### Added
+
+- Explicit bounded target-scope host/CIDR rules with exclusion precedence and
+  an opt-in scoped validator for the existing public HTTPS text acquisition
+  path, including redirect and connection-pinning validation.
+- Offline scope-bypass regressions and an implementation roadmap toward the
+  user's scope-bound autonomous bug bounty companion.
+
+### Limits
+
+- This is a composable target gate, not an autonomous scanner or authorization
+  grant. No runtime/UI scope enrollment, target runner, path-limited program
+  policy, new network capability or global research-fetcher behavior is added.
+
 ## [0.3.296] - 2026-09-03
 
 ### Fixed
