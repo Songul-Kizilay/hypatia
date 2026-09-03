@@ -16,6 +16,7 @@ from dataclasses import dataclass
 
 from core.CancellationSignal import CancellationToken
 from core.Exceptions import ResearchError
+from research.ResearchPlanTargetBinding import ResearchPlanTargetBinding
 
 MAX_RESEARCH_EXECUTION_RUN_ID_CHARACTERS = 200
 
@@ -26,8 +27,13 @@ class ResearchPlanExecutionContext:
 
     research_run_id: str | None = None
     cancellation_token: CancellationToken | None = None
+    target_binding: ResearchPlanTargetBinding | None = None
 
     def __post_init__(self) -> None:
+        if self.target_binding is not None and not isinstance(
+            self.target_binding, ResearchPlanTargetBinding
+        ):
+            raise ResearchError("Research execution target binding is invalid.")
         run_id = self.research_run_id
         if run_id is None:
             return

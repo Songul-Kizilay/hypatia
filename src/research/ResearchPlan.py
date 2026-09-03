@@ -8,6 +8,8 @@ from datetime import datetime
 from core.Exceptions import ResearchError
 from research.ResearchPlanConstraint import ResearchPlanConstraint
 from research.ResearchPlanStep import ResearchPlanStep
+from research.ResearchPlanStepCapability import ResearchPlanStepCapability
+from research.ResearchPlanTargetBinding import ResearchPlanTargetBinding
 
 MAX_RESEARCH_PLAN_ID_CHARACTERS = 200
 MAX_RESEARCH_PLAN_QUESTION_CHARACTERS = 2_000
@@ -23,11 +25,11 @@ class ResearchPlan:
     question: str
     steps: tuple[ResearchPlanStep, ...]
     created_at: datetime
-    #: Declared last so a plan without constraints encodes exactly as it did
-    #: before they existed. The digest walks fields in declaration order, and
-    #: an empty tuple is skipped there, so every step-only plan keeps the
-    #: identity it already had.
+    #: Appended after the original fields so an empty constraint tuple can be
+    #: skipped by the digest and retain the original step-only identity.
     constraints: tuple[ResearchPlanConstraint, ...] = ()
+    #: Absent for existing reference research; present values enter approval.
+    target_binding: ResearchPlanTargetBinding | None = None
 
     def __post_init__(self) -> None:
         plan_id = self._normalize_bounded_text(
@@ -63,6 +65,22 @@ class ResearchPlan:
             for constraint in self.constraints
         ):
             raise ResearchError("Research plan contains an invalid constraint.")
+        if self.target_binding is not None:
+            if not isinstance(self.target_binding, ResearchPlanTargetBinding):
+                raise ResearchError("Research plan target binding is invalid.")
+            # Only the existing bounded target HTTPS retrieval path is wired.
+            # Discovery providers and other operations have separate boundaries.
+            if any(
+                step.capability
+                not in {
+                    ResearchPlanStepCapability.SOURCE_FETCH,
+                    ResearchPlanStepCapability.SOURCE_ACCEPT,
+                }
+                for step in self.steps
+            ):
+                raise ResearchError(
+                    "Target-bound plans support only source fetch and source accept."
+                )
         object.__setattr__(self, "plan_id", plan_id)
         object.__setattr__(self, "question", question)
 

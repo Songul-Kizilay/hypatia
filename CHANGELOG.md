@@ -2,6 +2,29 @@
 
 All notable project changes are recorded here.
 
+## [0.3.299] - 2026-09-03
+
+### Added
+
+- Exact program/target-scope binding in research-plan identity, authored draft
+  and approval previews, confirmation and execution. Target-bound plans use
+  only existing SOURCE_FETCH/SOURCE_ACCEPT public HTTPS text operations.
+- Target acquisition always constructs the scoped canonical transport; the
+  general reference fetcher is never its fallback. Scope applies to redirects,
+  pinned connections and final responses as well as the initial target.
+- Durable target-plan identity prevents restarted executions from changing
+  program, rules, source URL or research run. Existing authorization/grant
+  digest checks cover the binding without a second authority system.
+
+### Compatibility and limits
+
+- Unscoped reference plans keep their existing v2/v4 identity and behaviour.
+  Target plans use v5 and cannot resume from digest-less legacy snapshots.
+- No desktop program-enrollment surface, per-program revocation/rate policy,
+  path restrictions, autonomous target selection or vulnerability checks are
+  added. Program identity and scope rules alone are not proof of consent.
+- Validation is offline; no target traffic or GitHub operations were used.
+
 ## [0.3.298] - 2026-09-03
 
 ### Added

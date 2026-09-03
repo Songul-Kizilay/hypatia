@@ -24,6 +24,7 @@ from core.Exceptions import ResearchError
 from research.ResearchAttemptRecovery import ResearchAttemptRecovery
 from research.ResearchAttemptResolution import ResearchAttemptResolution
 from research.ResearchExecutionAllowance import ResearchExecutionAllowance
+from research.ResearchPlanDigest import is_plan_digest
 from research.ResearchPlanExecutionState import ResearchPlanExecutionState
 from research.ResearchPlanExecutionStatus import ResearchPlanExecutionStatus
 from research.ResearchPlanStep import ResearchPlanStep
@@ -86,8 +87,15 @@ class ResearchPlanExecutionSnapshot:
     detail: str = ""
     research_run_id: str | None = None
     allowance: ResearchExecutionAllowance | None = None
+    #: Full canonical plan identity, including program, scope and every step.
+    #: Legacy snapshots did not record this proof and must not imply one.
+    target_plan_digest: str | None = None
 
     def __post_init__(self) -> None:
+        if self.target_plan_digest is not None and not is_plan_digest(
+            self.target_plan_digest
+        ):
+            raise ResearchError("Execution snapshot target plan digest is invalid.")
         if not isinstance(self.plan_id, str) or not self.plan_id.strip():
             raise ResearchError("Execution snapshot plan ID cannot be empty.")
         if self.allowance is not None and not isinstance(
@@ -138,6 +146,7 @@ class ResearchPlanExecutionSnapshot:
         recorded_at: datetime,
         research_run_id: str | None = None,
         allowance: ResearchExecutionAllowance | None = None,
+        target_plan_digest: str | None = None,
     ) -> ResearchPlanExecutionSnapshot:
         """Capture the current state, pairing each step with its capability."""
         capabilities = {step.step_id: step.capability for step in steps}
@@ -148,6 +157,7 @@ class ResearchPlanExecutionSnapshot:
             detail=state.detail,
             research_run_id=research_run_id,
             allowance=allowance,
+            target_plan_digest=target_plan_digest,
             recorded_at=recorded_at,
             steps=tuple(
                 ResearchPlanExecutionStepSnapshot(

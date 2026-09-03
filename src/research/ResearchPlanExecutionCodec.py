@@ -36,6 +36,7 @@ from research.ResearchAuthorizer import ResearchAuthorizer
 from research.ResearchAutonomyBudget import ResearchAutonomyBudget
 from research.ResearchExecutionAllowance import ResearchExecutionAllowance
 from research.ResearchExecutionSpend import ResearchExecutionSpend
+from research.ResearchPlanDigest import is_plan_digest
 from research.ResearchPlanExecutionSnapshot import (
     MAX_SNAPSHOT_DETAIL_CHARACTERS,
     MAX_SNAPSHOT_STEPS,
@@ -60,6 +61,7 @@ _EXECUTION_FIELDS = frozenset(
 )
 #: Version 1 wrote every field above except the last.
 _EXECUTION_FIELDS_V1 = _EXECUTION_FIELDS - {"allowance"}
+_EXECUTION_FIELDS_WITH_TARGET = _EXECUTION_FIELDS | {"target_plan_digest"}
 _ALLOWANCE_FIELDS = frozenset({"budget", "spend"})
 _BUDGET_FIELDS = frozenset(
     {
@@ -104,7 +106,7 @@ def encode_execution_snapshot(
     """Return the document form of one execution snapshot."""
     if not isinstance(snapshot, ResearchPlanExecutionSnapshot):
         raise ResearchError("Execution snapshot is invalid.")
-    return {
+    document = {
         "plan_id": snapshot.plan_id,
         "question": snapshot.question,
         "status": snapshot.status.value,
@@ -126,6 +128,9 @@ def encode_execution_snapshot(
             for step in snapshot.steps
         ],
     }
+    if snapshot.target_plan_digest is not None:
+        document["target_plan_digest"] = snapshot.target_plan_digest
+    return document
 
 
 def decode_execution_snapshot(document: object) -> ResearchPlanExecutionSnapshot:
@@ -133,8 +138,13 @@ def decode_execution_snapshot(document: object) -> ResearchPlanExecutionSnapshot
     if not isinstance(document, dict) or set(document) not in (
         _EXECUTION_FIELDS,
         _EXECUTION_FIELDS_V1,
+        _EXECUTION_FIELDS_WITH_TARGET,
     ):
         raise ResearchError("Execution snapshot document is invalid.")
+    if "target_plan_digest" in document and not is_plan_digest(
+        document["target_plan_digest"]
+    ):
+        raise ResearchError("Execution snapshot target plan digest is invalid.")
     steps_value = document["steps"]
     if not isinstance(steps_value, list) or not steps_value:
         raise ResearchError("Execution snapshot requires step records.")
@@ -155,6 +165,7 @@ def decode_execution_snapshot(document: object) -> ResearchPlanExecutionSnapshot
         research_run_id=run_id,
         recorded_at=_timestamp(document["recorded_at"]),
         allowance=_decode_allowance(document.get("allowance")),
+        target_plan_digest=document.get("target_plan_digest"),
         steps=tuple(_decode_step(value) for value in steps_value),
     )
 

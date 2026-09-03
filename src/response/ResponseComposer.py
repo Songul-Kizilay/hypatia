@@ -76,6 +76,7 @@ from research.ResearchPlanExecutionSnapshot import (
 from research.ResearchPlanExecutionState import ResearchPlanExecutionState
 from research.ResearchPlanFailureLessonTrace import ResearchPlanFailureLessonTrace
 from research.ResearchPlanStepStatus import ResearchPlanStepStatus
+from research.ResearchPlanTargetBinding import ResearchPlanTargetBinding
 from research.ResearchProviderComparisonReport import (
     ResearchProviderComparisonReport,
 )
@@ -110,6 +111,7 @@ from research.ResearchSourceComparisonPreview import ResearchSourceComparisonPre
 from research.ResearchSourceContentRestorationStatus import (
     ResearchSourceContentRestorationStatus,
 )
+from research.ResearchTargetScopeCodec import target_scope_digest
 from research.SourceLoadStage import SourceLoadStage
 from research.SourceReputation import SourceReputation
 from response.HonestyPhrasebook import phrase
@@ -954,6 +956,7 @@ class ResponseComposer:
                 f"Steps: {len(plan.steps)}",
                 f"Constraints: {len(plan.constraints)}",
                 f"Selected sources: {len(plan.selected_source_document_ids)}",
+                *_target_binding_lines(plan.target_binding),
             ]
             for index, step in enumerate(plan.steps, start=1):
                 selected_sources = ", ".join(step.selected_source_document_ids)
@@ -2204,6 +2207,7 @@ class ResponseComposer:
             f"Research run: {authorization.research_run_id}",
             "",
             *self._authorization_terms(authorization),
+            *_target_binding_lines(preview.target_binding),
             *_discovery_provider_lines(preview.discovery_providers),
             *_budget_fit_lines(preview.budget_fit),
             "",
@@ -4981,6 +4985,39 @@ class ResponseComposer:
             f"{index}. {session.session_id} — {count} "
             f"{conversation_label}{active_marker}"
         )
+
+
+def _target_binding_lines(
+    binding: ResearchPlanTargetBinding | None,
+) -> tuple[str, ...]:
+    """Disclose the full bounded scope before exact-plan confirmation."""
+    if binding is None:
+        return ()
+    scope = binding.scope
+    lines = [
+        f"Target program: {binding.program_id}",
+        f"Target scope content: {target_scope_digest(scope)}",
+        "Target transport: public HTTPS port 443, bounded text GET only",
+    ]
+    for label, rules in (
+        ("Allowed host", scope.allowed_hosts),
+        ("Excluded host", scope.excluded_hosts),
+    ):
+        for rule in rules:
+            selection = (
+                "descendants only, not apex" if rule.subdomains_only else "exact"
+            )
+            lines.append(f"{label}: {rule.host} ({selection})")
+    for label, networks in (
+        ("Allowed IP network", scope.allowed_networks),
+        ("Excluded IP network", scope.excluded_networks),
+    ):
+        lines.extend(f"{label}: {network}" for network in networks)
+    lines.append(
+        "Exclusions win. This scope does not prove program ownership or consent; "
+        "path-specific rules and other test types are not supported here."
+    )
+    return tuple(lines)
 
 
 def _discovery_provider_lines(

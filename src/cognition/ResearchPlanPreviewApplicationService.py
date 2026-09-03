@@ -11,6 +11,7 @@ from research.ResearchFailureLesson import ResearchFailureLesson
 from research.ResearchPlanDraftPreview import ResearchPlanDraftPreview
 from research.ResearchPlanDraftService import (
     RESEARCH_PLAN_RESTRICTION_KEY,
+    RESEARCH_PLAN_TARGET_BINDING_KEY,
     ResearchPlanDraftService,
     ResearchPlanStepDraft,
 )
@@ -19,6 +20,7 @@ from research.ResearchPlanFailureLessonTrace import (
     ResearchPlanFailureLessonTracer,
 )
 from research.ResearchPlanRestriction import ResearchPlanRestriction
+from research.ResearchPlanTargetBinding import ResearchPlanTargetBinding
 from response.ResponseComposer import ResponseComposer
 
 
@@ -64,6 +66,10 @@ class ResearchPlanPreviewApplicationService:
             cast(
                 ResearchPlanRestriction | None,
                 request.metadata.get(RESEARCH_PLAN_RESTRICTION_KEY),
+            ),
+            target_binding=cast(
+                ResearchPlanTargetBinding | None,
+                request.metadata.get(RESEARCH_PLAN_TARGET_BINDING_KEY),
             ),
         )
         prior_lessons = self._prior_lessons(preview)

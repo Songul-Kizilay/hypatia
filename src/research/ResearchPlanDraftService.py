@@ -16,6 +16,7 @@ from research.ResearchPlanRestriction import ResearchPlanRestriction
 from research.ResearchPlanStep import ResearchPlanStep
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 from research.ResearchPlanStepDraftInput import ResearchPlanStepDraftInput
+from research.ResearchPlanTargetBinding import ResearchPlanTargetBinding
 
 ResearchPlanStepDraft = ResearchPlanStepDraftInput | tuple[object, ...]
 
@@ -29,6 +30,7 @@ RESEARCH_PLAN_CONSTRAINTS_KEY = "research_plan_constraints"
 #: Separate from the constraint text on purpose: the text is never read to
 #: decide whether anything is enforced.
 RESEARCH_PLAN_RESTRICTION_KEY = "research_plan_restriction"
+RESEARCH_PLAN_TARGET_BINDING_KEY = "research_plan_target_binding"
 
 
 class ResearchPlanDraftService:
@@ -49,6 +51,7 @@ class ResearchPlanDraftService:
         step_drafts: tuple[ResearchPlanStepDraft, ...],
         constraint_drafts: tuple[str, ...] = (),
         restriction: ResearchPlanRestriction | None = None,
+        target_binding: ResearchPlanTargetBinding | None = None,
     ) -> ResearchPlanDraftPreview:
         """Return a complete inert plan or one bounded validation failure.
 
@@ -66,6 +69,7 @@ class ResearchPlanDraftService:
                 steps=steps,
                 created_at=self._clock(),
                 constraints=constraints,
+                target_binding=target_binding,
             )
         except ResearchError as error:
             return ResearchPlanDraftPreview.rejected(str(error))

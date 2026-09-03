@@ -87,9 +87,11 @@ from research.ResearchPlanAuthorizationDecision import (
 from research.ResearchPlanAuthorizationVerdict import (
     ResearchPlanAuthorizationVerdict,
 )
+from research.ResearchPlanDigest import plan_digest
 from research.ResearchPlanDraftService import (
     RESEARCH_PLAN_CONSTRAINTS_KEY,
     RESEARCH_PLAN_RESTRICTION_KEY,
+    RESEARCH_PLAN_TARGET_BINDING_KEY,
     ResearchPlanDraftService,
     ResearchPlanStepDraft,
 )
@@ -106,6 +108,7 @@ from research.ResearchPlanRestrictionConflict import (
 )
 from research.ResearchPlanStepState import ResearchPlanStepState
 from research.ResearchPlanStepStatus import ResearchPlanStepStatus
+from research.ResearchPlanTargetBinding import ResearchPlanTargetBinding
 from research.StartsResearchPlanExecution import ResearchPlanExecutionStartRefusal
 from response.ResponseComposer import ResponseComposer
 
@@ -197,6 +200,10 @@ class ResearchPlanExecutionApplicationService:
                 ResearchPlanRestriction | None,
                 request.metadata.get(RESEARCH_PLAN_RESTRICTION_KEY),
             ),
+            target_binding=cast(
+                ResearchPlanTargetBinding | None,
+                request.metadata.get(RESEARCH_PLAN_TARGET_BINDING_KEY),
+            ),
         )
         if not preview.allowed:
             return self._response_composer.research_plan_execution_rejected(
@@ -205,6 +212,10 @@ class ResearchPlanExecutionApplicationService:
             )
         plan = preview.plan
         assert plan is not None
+        if plan.target_binding is not None and self._authorization_consumer is None:
+            return self._response_composer.research_plan_execution_rejected(
+                request, "Target-bound research requires a recorded human approval."
+            )
 
         # The same canonical check the approval boundary ran. A stale or
         # internal path that reached here with a contradictory plan stops
@@ -232,7 +243,8 @@ class ResearchPlanExecutionApplicationService:
 
         try:
             context = ResearchPlanExecutionContext(
-                research_run_id=self._optional_run_id(request)
+                research_run_id=self._optional_run_id(request),
+                target_binding=plan.target_binding,
             )
         except ResearchError as error:
             return self._response_composer.research_plan_execution_rejected(
@@ -294,7 +306,9 @@ class ResearchPlanExecutionApplicationService:
                 "Research plan execution capacity is full in this process."
             )
         try:
-            context = ResearchPlanExecutionContext(research_run_id=research_run_id)
+            context = ResearchPlanExecutionContext(
+                research_run_id=research_run_id, target_binding=plan.target_binding
+            )
         except ResearchError as error:
             return ResearchPlanExecutionStartRefusal(str(error))
         if self._authorization_consumer is None:
@@ -367,6 +381,16 @@ class ResearchPlanExecutionApplicationService:
                 "That execution recorded no approved allowance, so it cannot "
                 "be resumed without inventing one."
             )
+        if snapshot.target_plan_digest is not None or plan.target_binding is not None:
+            if (
+                plan.target_binding is None
+                or snapshot.target_plan_digest != plan_digest(plan)
+                or snapshot.research_run_id != research_run_id
+            ):
+                return ResearchPlanExecutionStartRefusal(
+                    "Target execution must retain its exact recorded plan, "
+                    "program, scope and research run."
+                )
         if plan_restriction_conflicts(plan):
             return ResearchPlanExecutionStartRefusal(
                 "The derived plan contains a capability forbidden by its own "
@@ -407,7 +431,9 @@ class ResearchPlanExecutionApplicationService:
                 ),
                 detail=snapshot.detail,
             )
-            context = ResearchPlanExecutionContext(research_run_id=research_run_id)
+            context = ResearchPlanExecutionContext(
+                research_run_id=research_run_id, target_binding=plan.target_binding
+            )
         except ResearchError as error:
             return ResearchPlanExecutionStartRefusal(str(error))
         bound = replace(plan, plan_id=execution_id)
@@ -927,6 +953,7 @@ class ResearchPlanExecutionApplicationService:
                 ResearchPlanExecutionContext(
                     research_run_id=stored.research_run_id,
                     cancellation_token=request.cancellation_token,
+                    target_binding=plan.target_binding,
                 ),
             )
         except ResearchError as error:
@@ -1141,6 +1168,11 @@ class ResearchPlanExecutionApplicationService:
                     ResearchPlanExecutionContext(),
                 ).research_run_id,
                 self._allowances.get(plan_id),
+                target_plan_digest=(
+                    plan_digest(self._plans[plan_id])
+                    if self._plans[plan_id].target_binding is not None
+                    else None
+                ),
             )
             for plan_id, state in self._executions.items()
         ]

@@ -22,6 +22,7 @@ performed work that did not succeed, never as a successful acceptance.
 from __future__ import annotations
 
 from core.Exceptions import KnowledgeError, ResearchError
+from research.PlanSourceFetcher import fetch_plan_source
 from research.ResearchPlanExecutionContext import ResearchPlanExecutionContext
 from research.ResearchPlanStep import ResearchPlanStep
 from research.ResearchPlanStepOperationResult import ResearchPlanStepOperationResult
@@ -74,7 +75,7 @@ class SourceAcceptStepOperation:
 
         self._raise_if_cancelled(context)
         try:
-            source = self._source_fetcher.fetch(url)
+            source = fetch_plan_source(url, context, self._source_fetcher)
         except ResearchError:
             self._record_failure(run_id, "Research source acquisition failed.")
             raise

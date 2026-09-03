@@ -68,14 +68,54 @@ A future grant must bind a separately confirmed scope digest AND program/job
 identity. Replacing the file must never silently reauthorize an existing job.
 No program prose or path restriction is converted into a host-wide permission.
 
+## v0.3.299: exact-plan approval and scoped acquisition
+
+`ResearchPlanTargetBinding(program_id, scope)` is now an optional field on the
+canonical `ResearchPlan`. The entire binding participates in the existing
+recursive plan digest under scoped schema v5. Unscoped reference plans skip
+the absent field and retain their original v2/v4 identities. No duplicate
+scope authority is added to authorizations or deferred grants: their existing
+exact-plan digest checks reject any changed program, rule, exclusion or step.
+
+The structured authored-plan metadata key `research_plan_target_binding`
+accepts this typed value, never prose or a partially parsed dictionary. Draft,
+approval and Start rebuilds all preserve it. The draft and approval preview
+display the program, all target rules and exclusions, scope content identity
+and the supported transport limits before confirmation. This is a core service
+path, not yet a desktop program-enrollment workflow. Trusted composition still
+owns the distinction between reference research and authorized target work.
+
+For now a target-bound plan may contain only the existing `SOURCE_FETCH` and
+`SOURCE_ACCEPT` capabilities. Discovery APIs and all other capabilities are
+refused in target plans, not silently routed out of scope. `PlanSourceFetcher`
+uses `HttpResearchSourceFetcher` with `ScopedPublicHttpsUrlValidator` for the
+bound immutable scope. It never uses the injected general/reference fetcher
+for target work, including on failure. Canonical acceptance is unchanged.
+
+Start requires a recorded human authorization even in a composition where
+legacy reference plans can start without one. Start remains zero-step. Each
+Advance takes its binding from the canonical live plan, not caller metadata;
+the existing allowance charges an attempted operation as before. This is an
+operation/attempt budget, not a per-HTTP-request or redirect rate limiter.
+
+Target execution snapshots record the full `target_plan_digest`. Rebind checks
+that digest and the recorded research run before making an execution live.
+Changed or removed bindings are refused, and a target plan cannot resume from
+a legacy snapshot that lacks this proof. The exact plan must still be supplied
+by the trusted caller; neither scope nor complete plan is reconstructed from
+the narrow execution bookkeeping snapshot. Editing a saved scope does not
+modify an already approved plan or act as revocation of an existing job.
+
 ## Boundaries that are NOT implemented yet
 
 - There is no UI/program-scope enrollment or proof of authorization; only the
   exact target-scope snapshot has persistence.
-- There is no scope revision/digest binding to an execution grant yet.
+- Exact scope content is bound through the plan digest; a program registry,
+  current-revision policy and per-program revocation remain unimplemented.
 - The default generic reference-source fetcher is unchanged. Constructing an
   unscoped fetcher does not acquire a bug bounty permission. The future target
-  runner must require a scope and must never fall back to this unscoped path.
+  enrollment/runner must require a scope. Bound source operations already
+  refuse fallback to that reference path.
 - The adapter supports the existing public HTTPS port-443 bounded text GET
   path only. It does not add HTTP, alternate ports, probes, scanning, shell
   tools, request bodies, session credentials or vulnerability exploitation.
@@ -119,3 +159,12 @@ Unicode case-folding hazards, address substitutions, exclusion after DNS
 changes, actual installed redirect/pinning handlers, pre-open rejection and
 pre-body-read rejection. DNS and HTTP are replaced with deterministic test
 doubles. Existing public-HTTPS/transport tests remain unchanged.
+
+`tests/research/test_plan_target_binding.py` locks legacy digests, target
+identity changes, snapshot compatibility and deferred-grant mismatch/revocation.
+`tests/integration/test_target_bound_research_plan.py` covers real authored
+preview/confirmation/Start/Advance, both acquisition operations, explicit
+disclosure, missing authorization, changed scope, restart, and actual installed
+redirect/pinning handlers. Only DNS and the network opener are replaced; no
+third-party traffic occurs. A fetched page remains untrusted source material,
+not a vulnerability finding.

@@ -19,6 +19,7 @@ from core.Exceptions import ResearchError
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchPlanAuthorization import ResearchPlanAuthorization
 from research.ResearchPlanBudgetRequirement import ResearchPlanBudgetFit
+from research.ResearchPlanTargetBinding import ResearchPlanTargetBinding
 
 MAX_AUTHORIZATION_PREVIEW_REASON_CHARACTERS = 500
 
@@ -43,8 +44,13 @@ class ResearchPlanAuthorizationPreview:
     #: offered. Carried structurally so a refusal names the dimension that ran
     #: out rather than leaving somebody to read it out of a sentence.
     budget_fit: ResearchPlanBudgetFit | None = None
+    target_binding: ResearchPlanTargetBinding | None = None
 
     def __post_init__(self) -> None:
+        if self.target_binding is not None and not isinstance(
+            self.target_binding, ResearchPlanTargetBinding
+        ):
+            raise ResearchError("Authorization preview target binding is invalid.")
         if not isinstance(self.allowed, bool):
             raise ResearchError("Authorization preview decision must be boolean.")
         for value, label in (
@@ -72,6 +78,7 @@ class ResearchPlanAuthorizationPreview:
         authorization: ResearchPlanAuthorization,
         discovery_providers: tuple[ResearchDiscoveryProviderName, ...] = (),
         budget_fit: ResearchPlanBudgetFit | None = None,
+        target_binding: ResearchPlanTargetBinding | None = None,
     ) -> ResearchPlanAuthorizationPreview:
         """Show exactly what confirming would record."""
         return cls(
@@ -80,6 +87,7 @@ class ResearchPlanAuthorizationPreview:
             plan_id=plan_id,
             authorization=authorization,
             budget_fit=budget_fit,
+            target_binding=target_binding,
         )
 
     @classmethod

@@ -66,6 +66,10 @@ CANONICAL_SCHEMA = "hypatia:research-plan-digest:v2"
 #: no constraints are untouched and keep their v2 identity.
 CANONICAL_SCHEMA_WITH_CONSTRAINTS = "hypatia:research-plan-digest:v4"
 
+#: Target plans bind the exact program and all scope rules under a separate
+#: schema. Unscoped plans retain their existing v2/v4 canonical bytes.
+CANONICAL_SCHEMA_WITH_TARGET = "hypatia:research-plan-digest:v5"
+
 #: Instance bookkeeping, deliberately outside the approved content. `plan_id`
 #: is random per preview and `created_at` is the moment of previewing; neither
 #: changes what the plan would attempt, and including either would make every
@@ -93,12 +97,17 @@ def canonical_plan_bytes(plan: ResearchPlan) -> bytes:
     # encoded as a present-but-empty field. That keeps a step-only plan byte
     # identical to what it produced before constraints existed, which is what
     # lets an approval or a grant made then still match the same plan now.
-    if plan.constraints:
+    skip = UNDIGESTED_PLAN_FIELDS
+    if plan.target_binding is not None:
+        schema = CANONICAL_SCHEMA_WITH_TARGET
+    elif plan.constraints:
         schema = CANONICAL_SCHEMA_WITH_CONSTRAINTS
-        skip = UNDIGESTED_PLAN_FIELDS
     else:
         schema = CANONICAL_SCHEMA
-        skip = UNDIGESTED_PLAN_FIELDS | {"constraints"}
+    if not plan.constraints:
+        skip = skip | {"constraints"}
+    if plan.target_binding is None:
+        skip = skip | {"target_binding"}
     payload = _encode(schema) + _encode_dataclass(plan, skip=skip)
     return _token(b"p", payload)
 
