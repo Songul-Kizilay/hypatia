@@ -279,10 +279,6 @@ class NoUnrelatedSubsystemChangedTests(unittest.TestCase):
                 self.assertNotIn("constraint", source.casefold())
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class TheApprovalBindsTheConstraintsTests(unittest.TestCase):
     """A plan is approved with its constraints or not at all."""
 
@@ -411,3 +407,7 @@ class TheDesktopShapesTheTwoFieldsSeparatelyTests(unittest.TestCase):
         self.assertEqual(
             metadata["research_plan_constraints"], ("Do not fetch.", "Use NVD only.")
         )
+
+
+if __name__ == "__main__":
+    unittest.main()

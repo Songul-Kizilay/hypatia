@@ -74,6 +74,48 @@ def restricted_context() -> Context:
     return context
 
 
+def schema_one_document(context: Context) -> dict:
+    """Reproduce the exact grant document v0.3.287 and earlier wrote.
+
+    Hand-written rather than serialized: the point of a legacy fixture is that
+    the current writer cannot have produced it. Taking today's output and
+    deleting a key proves only that the reader tolerates a missing key, which
+    is a different and much weaker claim.
+
+    The field set is schema 1 exactly - the ten keys the store wrote before
+    `approved_restrictions` existed - and `schema_version` says 1 to match.
+    The digest, capabilities and budget refer to the caller's plan and task so
+    the record is genuinely about them; a legacy grant naming some other plan
+    would be refused for a mismatch long before restrictions were considered,
+    and would prove nothing about how an unrecorded snapshot is read.
+    """
+    budget = context.task.budget
+    return {
+        "schema_version": 1,
+        "grants": [
+            {
+                "grant_id": "grant-1",
+                "task_id": context.task.task_id,
+                "execution_id": context.task.execution_id,
+                "plan_digest": plan_digest(context.plan),
+                "capabilities": sorted(
+                    value.value for value in capabilities_of(context.plan)
+                ),
+                "task_budget": {
+                    "max_step_advances": budget.max_step_advances,
+                    "max_network_operations": budget.max_network_operations,
+                    "max_llm_operations": budget.max_llm_operations,
+                    "max_seconds": budget.max_seconds,
+                },
+                "granted_at": NOW.isoformat(),
+                "granted_by": "trusted_local_operator",
+                "revoked_at": None,
+                "revoked_by": None,
+            }
+        ],
+    }
+
+
 def decide(context: Context, grant: DeferredExecutionGrant | None):
     """Ask the pure decision exactly as a future timer would."""
     return deferred_execution_decision(
@@ -208,23 +250,57 @@ class AnUnrecordedGrantIsNotEligibleTests(unittest.TestCase):
 
 
 class TheSnapshotGrantsNothingTests(unittest.TestCase):
+    """Driven through the real service, not the fixture helper.
+
+    `grant_for` mirrors what the service records by convention, so asserting
+    against it proves the helper is consistent with itself. A regression in
+    TrustedDeferredExecutionControlService.grant would leave every one of
+    these green. The grant under test is therefore the one the service mints.
+    """
+
+    def _granted(self, context: Context):
+        from cognition.TrustedDeferredExecutionControlService import (
+            TrustedDeferredExecutionControlService,
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            view = TrustedDeferredExecutionControlService(
+                context,
+                JsonFileDeferredExecutionGrantStore(Path(directory) / "grants.json"),
+                clock=lambda: NOW,
+                id_factory=lambda: "grant-1",
+            ).grant("task-1")
+        assert view.grant is not None
+        return view.grant
+
     def test_it_adds_no_capability(self) -> None:
         context = Context()
 
-        self.assertEqual(grant_for(context).capabilities, capabilities_of(context.plan))
+        self.assertEqual(
+            self._granted(context).capabilities, capabilities_of(context.plan)
+        )
 
     def test_it_changes_no_task_budget(self) -> None:
         context = Context()
 
-        self.assertEqual(grant_for(context).task_budget, context.task.budget)
+        self.assertEqual(self._granted(context).task_budget, context.task.budget)
 
     def test_it_does_not_change_the_plan_digest(self) -> None:
         context = Context()
         before = plan_digest(context.plan)
 
-        grant_for(context)
+        self._granted(context)
 
         self.assertEqual(plan_digest(context.plan), before)
+
+    def test_granting_a_restricted_plan_still_adds_no_capability(self) -> None:
+        """The case where the snapshot is non-empty is the one worth checking."""
+        context = restricted_context()
+
+        granted = self._granted(context)
+
+        self.assertEqual(granted.capabilities, capabilities_of(context.plan))
+        self.assertEqual(granted.task_budget, context.task.budget)
 
     def test_removing_the_snapshot_cannot_widen_anything(self) -> None:
         """Deleting the evidence makes the grant less usable, never more."""
@@ -297,38 +373,36 @@ class PersistenceTellsTheTruthTests(unittest.TestCase):
         self.assertTrue(restored.records_restrictions)
 
     def test_a_genuine_schema_one_record_loads_as_unrecorded(self) -> None:
-        """The historical shape, not a current record with a field removed."""
+        """A document the current writer could not have produced."""
         context = Context()
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "grants.json"
-            store = JsonFileDeferredExecutionGrantStore(path)
-            store.save([grant_for(context)])
-            document = json.loads(path.read_text(encoding="utf-8"))
-            for entry in document["grants"]:
-                entry.pop("approved_restrictions")
-            document["schema_version"] = 1
-            path.write_text(json.dumps(document), encoding="utf-8")
+            path.write_text(json.dumps(schema_one_document(context)), encoding="utf-8")
 
             [restored] = JsonFileDeferredExecutionGrantStore(path).load()
 
         self.assertIsNone(restored.approved_restrictions)
         self.assertFalse(restored.records_restrictions)
 
+    def test_the_legacy_fixture_really_lacks_the_field(self) -> None:
+        """Otherwise the test above would pass for the wrong reason."""
+        [entry] = schema_one_document(Context())["grants"]
+
+        self.assertNotIn("approved_restrictions", entry)
+        self.assertEqual(schema_one_document(Context())["schema_version"], 1)
+
     def test_a_restored_legacy_grant_is_not_eligible(self) -> None:
+        """And refused for being unrecorded, not for some earlier mismatch."""
         context = Context()
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "grants.json"
-            store = JsonFileDeferredExecutionGrantStore(path)
-            store.save([grant_for(context)])
-            document = json.loads(path.read_text(encoding="utf-8"))
-            for entry in document["grants"]:
-                entry.pop("approved_restrictions")
-            document["schema_version"] = 1
-            path.write_text(json.dumps(document), encoding="utf-8")
+            path.write_text(json.dumps(schema_one_document(context)), encoding="utf-8")
 
             [restored] = JsonFileDeferredExecutionGrantStore(path).load()
 
-        self.assertFalse(decide(context, restored).allowed)
+        decision = decide(context, restored)
+        self.assertFalse(decision.allowed)
+        self.assertEqual(decision.reason, "restrictions_unrecorded")
 
     def test_an_unknown_future_schema_is_refused(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -418,10 +492,6 @@ class OneExtractionFunctionTests(unittest.TestCase):
         for forbidden in ("grant_restrictions_of", "authorization_restrictions_of"):
             with self.subTest(name=forbidden):
                 self.assertNotIn(forbidden, grant_source + eligibility_source)
-
-
-if __name__ == "__main__":
-    unittest.main()
 
 
 class TheRealGrantPathDerivesItTests(unittest.TestCase):
@@ -627,3 +697,7 @@ class ASelfContradictoryPlanIsNeverDeferredEligibleTests(unittest.TestCase):
         context = restricted_context()
 
         self.assertTrue(decide(context, grant_for(context)).allowed)
+
+
+if __name__ == "__main__":
+    unittest.main()

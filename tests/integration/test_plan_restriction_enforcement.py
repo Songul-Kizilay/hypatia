@@ -273,10 +273,6 @@ class NothingElseChangedTests(unittest.TestCase):
                 self.assertNotIn("restriction", source.casefold())
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class TheBoundariesActuallyRefuseTests(unittest.TestCase):
     """Behaviour, not source text.
 
@@ -572,3 +568,7 @@ class TheApprovalBoundaryRefusesInPracticeTests(unittest.TestCase):
         )
 
         self.assertEqual(list(self.service.authorizations()), [])
+
+
+if __name__ == "__main__":
+    unittest.main()

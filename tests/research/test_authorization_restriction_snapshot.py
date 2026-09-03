@@ -348,10 +348,6 @@ class ExistingAuthorizationSemanticsAreUnchangedTests(unittest.TestCase):
         self.assertIs(authorize(build_plan()).authorized_by, ResearchAuthorizer.HUMAN)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class TheApprovalPathRecordsItEndToEndTests(unittest.TestCase):
     """Through the real service, store and renderer."""
 
@@ -489,3 +485,7 @@ class TheApprovalPathRecordsItEndToEndTests(unittest.TestCase):
 
         self.assertEqual(self.service.authorizations(), ())
         self.assertFalse(self.store_path.exists())
+
+
+if __name__ == "__main__":
+    unittest.main()
