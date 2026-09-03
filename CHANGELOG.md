@@ -2,6 +2,19 @@
 
 All notable project changes are recorded here.
 
+## [0.3.296] - 2026-09-03
+
+### Fixed
+
+- Failure Memory no longer recalls unrelated lessons or links them to authored
+  plan steps solely because of long function words such as `which` and `does`,
+  or generic medium names already present in the shared exclusion lists.
+- Apply those existing exact-token exclusions at every length, while preserving
+  subject words and technical identifiers such as XSS, SQL, C++, C#, HTTP/2,
+  Next.js and CVE identifiers. Matching remains lexical and advisory only.
+- No stored lessons, plan content, authorization rules or execution behavior
+  are rewritten; only recall and explanation token selection changes.
+
 ## [0.3.295] - 2026-09-03
 
 ### Changed

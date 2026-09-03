@@ -989,10 +989,10 @@ class RecallIsAdvisoryTests(FailureMemoryFixture):
         self.assertEqual(match.lesson, response.failure_lessons[0])
         self.assertEqual(
             match.shared_terms,
-            ("age", "does", "have", "measured", "ring", "saturn", "system"),
+            ("age", "have", "measured", "ring", "saturn", "system"),
         )
         self.assertIn(
-            "matched terms: age, does, have, measured, ring, saturn, system",
+            "matched terms: age, have, measured, ring, saturn, system",
             response.message,
         )
 

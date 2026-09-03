@@ -40,6 +40,22 @@ def lesson(
 
 
 class ResearchPlanFailureLessonTracerTests(unittest.TestCase):
+    def test_function_words_do_not_forge_a_step_reference(self) -> None:
+        plan = ResearchPlan(
+            "plan-1",
+            "Compiler optimization",
+            (ResearchPlanStep("step-1", "Which compiler does optimize Rust?"),),
+            datetime(2026, 8, 22, 18, 0, tzinfo=UTC),
+        )
+        remembered = lesson(
+            "lesson-1", "Saturn rings failed.", "Which observation does help?"
+        )
+
+        trace = ResearchPlanFailureLessonTracer().trace(plan, (remembered,))
+
+        self.assertEqual(trace.references, ())
+        self.assertEqual(trace.unreferenced_lesson_ids, ("lesson-1",))
+
     def test_reports_exact_shared_terms_in_lesson_and_step_order(self) -> None:
         plan = ResearchPlan(
             "plan-1",
