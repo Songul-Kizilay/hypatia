@@ -207,3 +207,19 @@ program authority. See
 Kali execution remains blocked until the v0.3.301 scope revision is enforced at
 approval, Start, restore and every Advance and enrollment can represent the
 program's permitted check classes, ports and budgets without broadening them.
+
+## v0.3.303: explicit scope enrollment service
+
+The core application layer now supports separate create/revoke preview and
+exact-confirm operations for immutable program-scope revisions. The complete
+revision is held in a bounded process-local preview, and confirmation names its
+exact revision ID and digest rather than resubmitting editable scope fields.
+Persistence succeeds before the service publishes the new history in memory.
+An active program revision must be explicitly revoked before a successor can
+be previewed.
+
+This service remains deliberately unwired: it performs no network, process,
+research or model work and has no desktop control yet. The next milestone must
+give the operator a clear enrollment/revocation surface and make target drafts
+select the exact confirmed revision before mandatory dispatch enforcement is
+enabled.

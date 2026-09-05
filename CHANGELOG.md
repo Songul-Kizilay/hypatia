@@ -2,6 +2,27 @@
 
 All notable project changes are recorded here.
 
+## [0.3.303] - 2026-09-05
+
+### Added
+
+- A bounded program-scope enrollment application service with separate
+  create/revoke preview and exact confirmation operations over the immutable
+  v0.3.301 revision history.
+- Confirmation names the exact pending revision ID and digest shown in the
+  process-local preview. Caller-built revision objects are never accepted,
+  previews are capped at 20, and replay or tampering is refused.
+- Durable publication precedes in-memory publication. Failed persistence leaves
+  the last published history unchanged; startup strictly revalidates even a
+  non-JSON store through the canonical bounded codec.
+
+### Safety and limits
+
+- Enrollment performs no DNS, network, process, model or research execution.
+  The service is not yet wired to the desktop, plan binding or dispatch gates.
+- A program cannot receive a successor revision until its current revision has
+  been explicitly previewed and confirmed as human-revoked.
+
 ## [0.3.302] - 2026-09-05
 
 ### Security design
