@@ -13,7 +13,7 @@ class Version:
 
     major: int = 0
     minor: int = 3
-    patch: int = 300
+    patch: int = 301
     codename: str = "Genesis"
 
     @property

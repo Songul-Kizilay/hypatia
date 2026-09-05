@@ -180,3 +180,17 @@ The form deliberately cannot express crawling, active scanning, credentials,
 exploitation or path-specific program policy. It is session-only and does not
 prove permission; durable program enrollment, policy expiry/revocation and an
 operator-approved autonomous job remain future milestones.
+
+## v0.3.301: immutable program-scope revision history
+
+Hypatia can now represent and atomically persist one human-confirmed immutable
+program-scope revision. The record binds the program identity, exact existing
+scope and digest, fixed currently supported acquisition capabilities,
+HTTPS:443 transport, confirmation/expiry times, and one-way human revocation.
+History cannot be shortened or rewritten, and a successor requires explicit
+revocation of the previous revision.
+
+This is the enrollment record foundation, not permission to execute. Plan
+binding and dispatch-time enforcement intentionally remain the next milestone:
+approval, Start, restore and every Advance must resolve the exact active
+revision before any budget, DNS, checkpoint or network side effect.

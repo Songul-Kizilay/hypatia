@@ -2,6 +2,26 @@
 
 All notable project changes are recorded here.
 
+## [0.3.301] - 2026-09-05
+
+### Added
+
+- Immutable, human-confirmed program-scope revision records with exact target
+  scope identity, fixed supported `source_fetch`/`source_accept` over HTTPS:443,
+  a one-hour validity ceiling, and one-way human revocation.
+- A strict bounded JSON codec and atomic local history store. Unknown, missing,
+  duplicated, corrupt, reordered-authority, widened audit facts, history
+  removal, and unrevoked replacement are rejected rather than repaired.
+
+### Safety and limits
+
+- This release establishes the durable enrollment record only. It grants no
+  execution authority, performs no network access, and is not yet consulted by
+  plan approval, Start, restored execution, or Advance.
+- The next integration must bind an exact revision into target-plan identity
+  and fail closed on missing, expired, changed, superseded, or revoked records
+  before checkpoint, budget charge, DNS, or network dispatch.
+
 ## [0.3.300] - 2026-09-05
 
 ### Added
