@@ -2,6 +2,26 @@
 
 All notable project changes are recorded here.
 
+## [0.3.300] - 2026-09-05
+
+### Added
+
+- A desktop target-program editor for one explicit bug-bounty program, bounded
+  host/CIDR allow and exclusion rules, exact public HTTPS URLs, and a choice
+  between read-only fetch and canonical source acceptance.
+- Target drafts now travel through the existing plan preview, exact-digest
+  approval, confirmation and zero-step Start flow. Editing or clearing the
+  target invalidates the cached approval preview.
+- Reference-provider comparison is refused while target mode is active, so a
+  target-bound plan cannot silently turn into an unrelated discovery plan.
+
+### Safety and limits
+
+- Opening or applying the editor performs no DNS, network, persistence,
+  approval or execution. Runtime scope validation remains authoritative.
+- This is exact-page public HTTPS text acquisition, not crawling, scanning,
+  authentication, exploitation or a general autonomous bug-bounty runner.
+
 ## [0.3.299] - 2026-09-03
 
 ### Added

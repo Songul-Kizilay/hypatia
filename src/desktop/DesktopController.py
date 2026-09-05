@@ -8,6 +8,7 @@ from typing import Protocol
 from brain.BrainRequest import BrainRequest
 from brain.BrainResponse import BrainResponse
 from core.CancellationSignal import CancellationToken
+from desktop.TargetResearchDraft import TargetResearchDraft
 from research.DeferredExecutionControlView import DeferredExecutionControlView
 from research.OneShotDeferredExecutionSchedule import OneShotDeferredExecutionSchedule
 from research.OneShotDeferredExecutionScheduleView import (
@@ -31,6 +32,18 @@ from research.ResearchSourceUsefulness import ResearchSourceUsefulness
 #: of the restriction vocabulary itself: "no restriction" is the absence of
 #: one, not a kind of one.
 ADVISORY_RESTRICTION_LABEL = "advisory"
+
+
+def _target_draft_metadata(draft: TargetResearchDraft | None) -> dict[str, object]:
+    """Use explicit target steps, never infer capabilities from manual prose."""
+    if draft is None:
+        return {}
+    if not isinstance(draft, TargetResearchDraft):
+        raise ValueError("Target plan requires a validated target draft.")
+    return {
+        "research_plan_target_binding": draft.binding,
+        "research_plan_steps": draft.steps,
+    }
 
 
 class TrustedDeferredExecutionController(Protocol):
@@ -367,6 +380,8 @@ class DesktopController:
         source_id_lines: str,
         constraint_lines: str = "",
         restriction: str = "",
+        *,
+        target_draft: TargetResearchDraft | None = None,
     ) -> BrainResponse:
         """Preview one explicit ordered plan without saving or executing it.
 
@@ -402,6 +417,7 @@ class DesktopController:
                         constraint_lines
                     ),
                     "research_plan_restriction": _plan_restriction(restriction),
+                    **_target_draft_metadata(target_draft),
                 },
             )
         )
@@ -418,6 +434,8 @@ class DesktopController:
         max_seconds: str = "",
         constraint_lines: str = "",
         restriction: str = "",
+        *,
+        target_draft: TargetResearchDraft | None = None,
     ) -> BrainResponse:
         """Show the approval this plan would record. Records nothing.
 
@@ -442,6 +460,7 @@ class DesktopController:
             },
             constraint_lines=constraint_lines,
             restriction=restriction,
+            target_draft=target_draft,
         )
 
     @staticmethod
@@ -474,6 +493,8 @@ class DesktopController:
         max_seconds: str = "",
         constraint_lines: str = "",
         restriction: str = "",
+        *,
+        target_draft: TargetResearchDraft | None = None,
     ) -> BrainResponse:
         """Record exactly one previewed approval. Starts no research.
 
@@ -501,6 +522,7 @@ class DesktopController:
             },
             constraint_lines=constraint_lines,
             restriction=restriction,
+            target_draft=target_draft,
         )
 
     def start_authorized_execution(
@@ -512,6 +534,8 @@ class DesktopController:
         research_run_id: str,
         constraint_lines: str = "",
         restriction: str = "",
+        *,
+        target_draft: TargetResearchDraft | None = None,
     ) -> BrainResponse:
         """Spend one recorded approval on one foreground execution start.
 
@@ -532,6 +556,7 @@ class DesktopController:
             extra={"authorization_id": normalized_id},
             constraint_lines=constraint_lines,
             restriction=restriction,
+            target_draft=target_draft,
         )
 
     def research_execution_status(self, execution_id: str) -> BrainResponse:
@@ -798,6 +823,7 @@ class DesktopController:
         extra: dict[str, object],
         constraint_lines: str = "",
         restriction: str = "",
+        target_draft: TargetResearchDraft | None = None,
     ) -> BrainResponse:
         if not all(
             isinstance(value, str)
@@ -822,6 +848,7 @@ class DesktopController:
             "research_plan_restriction": _plan_restriction(restriction),
         }
         metadata.update(extra)
+        metadata.update(_target_draft_metadata(target_draft))
         return self._brain.process(
             BrainRequest(message=message, source="desktop", metadata=metadata)
         )

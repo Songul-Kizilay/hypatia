@@ -168,3 +168,15 @@ disclosure, missing authorization, changed scope, restart, and actual installed
 redirect/pinning handlers. Only DNS and the network opener are replaced; no
 third-party traffic occurs. A fetched page remains untrusted source material,
 not a vulnerability finding.
+## v0.3.300: desktop target-plan authoring
+
+The desktop Plan draft panel can now create an inert typed target draft from
+an explicit program ID, allow/exclusion host and CIDR rules, exact public HTTPS
+URLs, and a fetch-or-accept action. Applying the editor performs no I/O and
+reuses the canonical preview, approval, confirmation, Start and Advance
+boundaries. Changing the target clears cached approval preview state.
+
+The form deliberately cannot express crawling, active scanning, credentials,
+exploitation or path-specific program policy. It is session-only and does not
+prove permission; durable program enrollment, policy expiry/revocation and an
+operator-approved autonomous job remain future milestones.

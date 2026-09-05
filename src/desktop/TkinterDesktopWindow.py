@@ -38,6 +38,8 @@ from desktop.SimpleResearchActivity import SimpleResearchActivity
 from desktop.SimpleResearchPhrasebook import phrase as simple_phrase
 from desktop.SimpleResearchReadModel import SimpleResearchReadModel
 from desktop.SimpleSourceCard import SimpleSourceCard
+from desktop.TargetResearchDraft import TargetResearchDraft
+from desktop.TargetResearchDraftDialog import TargetResearchDraftDialog
 from desktop.ToolConsoleController import ToolConsoleController
 from desktop.ToolConsoleEntry import ToolConsoleEntry
 from desktop.ToolRunView import ToolRunView
@@ -1909,21 +1911,49 @@ class TkinterDesktopWindow:
             text=_PLAN_CONSTRAINT_NOTE,
             wraplength=680,
         ).grid(row=2, column=0, sticky="w", pady=(6, 0))
-        ttk.Button(
+        self._target_plan_draft: TargetResearchDraft | None = None
+        self._reference_plan_text: tuple[str, str] | None = None
+        self._target_plan_status = tk.StringVar(
+            value="Reference plan mode — no bug-bounty target selected"
+        )
+        target_bar = ttk.LabelFrame(
             research_plan_frame,
-            text="Preview plan — no write",
-            command=self._preview_research_plan_draft,
-        ).grid(row=5, column=1, sticky="e", pady=(8, 8))
+            text="Bug-bounty target scope",
+            padding=6,
+        )
+        target_bar.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(8, 0))
+        target_bar.columnconfigure(0, weight=1)
+        ttk.Label(target_bar, textvariable=self._target_plan_status).grid(
+            row=0, column=0, sticky="w"
+        )
+        ttk.Button(
+            target_bar,
+            text="Edit target program…",
+            command=self._open_target_plan_editor,
+        ).grid(row=0, column=1, padx=(8, 4))
+        ttk.Button(
+            target_bar,
+            text="Use reference plan",
+            command=self._clear_target_plan_draft,
+        ).grid(row=0, column=2)
+        plan_actions = ttk.Frame(research_plan_frame)
+        plan_actions.grid(row=6, column=0, columnspan=2, sticky="ew", pady=(8, 8))
+        plan_actions.columnconfigure(1, weight=1)
         # Reaches the same preview as the button above and nothing else. There
         # is no shortcut here: approving the plan and pressing Advance twice is
         # still what turns this into two requests.
         ttk.Button(
-            research_plan_frame,
+            plan_actions,
             text="Compare Crossref + NVD — preview only",
             command=self._preview_provider_comparison_plan,
-        ).grid(row=4, column=0, sticky="w", pady=(8, 8))
+        ).grid(row=0, column=0, sticky="w")
+        ttk.Button(
+            plan_actions,
+            text="Preview plan — no write",
+            command=self._preview_research_plan_draft,
+        ).grid(row=0, column=2, sticky="e")
         ttk.Label(research_plan_frame, text="Complete preview or rejection").grid(
-            row=5,
+            row=7,
             column=0,
             columnspan=2,
             sticky="w",
@@ -1934,7 +1964,7 @@ class TkinterDesktopWindow:
             wrap=tk.WORD,
         )
         self._research_plan_preview.grid(
-            row=6,
+            row=8,
             column=0,
             columnspan=2,
             sticky="nsew",
@@ -3077,6 +3107,11 @@ class TkinterDesktopWindow:
         through the same preview, the same approval and the same two explicit
         advances as anything else. Pressing this reaches a preview.
         """
+        if getattr(self, "_target_plan_draft", None) is not None:
+            self._status.set(
+                "Switch to reference plan mode before comparing reference providers."
+            )
+            return
         self._start_request(
             lambda: self._controller.preview_provider_comparison_plan(
                 self._research_question.get()
@@ -3091,6 +3126,7 @@ class TkinterDesktopWindow:
         instruction_lines = self._research_plan_instructions.get("1.0", "end-1c")
         source_id_lines = self._research_plan_source_ids.get("1.0", "end-1c")
         constraint_lines = self._research_plan_constraints.get("1.0", "end-1c")
+        target_options = self._target_plan_options()
         self._start_request(
             lambda: self._controller.preview_research_plan_draft(
                 question,
@@ -3098,10 +3134,88 @@ class TkinterDesktopWindow:
                 source_id_lines,
                 constraint_lines,
                 self._plan_restriction.get(),
+                **target_options,
             ),
             self._complete_research_plan_draft_preview,
             "research plan preview",
         )
+
+    def _open_target_plan_editor(self) -> None:
+        """Edit an inert target-bound plan draft; perform no network access."""
+        palette = _accessibility_palette(self._theme_mode.get())
+        TargetResearchDraftDialog(
+            self._root,
+            getattr(self, "_target_plan_draft", None),
+            self._apply_target_plan_draft,
+            background=palette.background,
+            field_background=palette.field_background,
+            foreground=palette.foreground,
+        )
+
+    def _apply_target_plan_draft(self, draft: TargetResearchDraft) -> None:
+        if not isinstance(draft, TargetResearchDraft):
+            raise ValueError("Target plan requires a validated target draft.")
+        if getattr(self, "_target_plan_draft", None) is None:
+            self._reference_plan_text = (
+                self._text_value(self._research_plan_instructions),
+                self._text_value(self._research_plan_source_ids),
+            )
+        self._target_plan_draft = draft
+        step_lines = "\n".join(
+            f"{step.capability}: {step.authorized_source_url}" for step in draft.steps
+        )
+        self._replace_plan_text(
+            self._research_plan_instructions, step_lines, disabled=True
+        )
+        self._replace_plan_text(self._research_plan_source_ids, "", disabled=True)
+        self._target_plan_status.set(
+            f"Target program: {draft.binding.program_id} · "
+            f"{len(draft.steps)} exact page(s)"
+        )
+        self._invalidate_plan_approval_preview()
+
+    def _clear_target_plan_draft(self) -> None:
+        if getattr(self, "_target_plan_draft", None) is None:
+            self._target_plan_status.set(
+                "Reference plan mode — no bug-bounty target selected"
+            )
+            return
+        if not messagebox.askyesno(
+            "Use reference plan mode?",
+            "This clears only the current target draft. It does not revoke or "
+            "change any execution already started.",
+            parent=self._root,
+        ):
+            return
+        instructions, sources = self._reference_plan_text or ("", "")
+        self._target_plan_draft = None
+        self._reference_plan_text = None
+        self._replace_plan_text(self._research_plan_instructions, instructions)
+        self._replace_plan_text(self._research_plan_source_ids, sources)
+        self._target_plan_status.set(
+            "Reference plan mode — no bug-bounty target selected"
+        )
+        self._invalidate_plan_approval_preview()
+
+    @staticmethod
+    def _replace_plan_text(
+        widget: tk.Text, value: str, *, disabled: bool = False
+    ) -> None:
+        widget.configure(state=tk.NORMAL)
+        widget.delete("1.0", tk.END)
+        widget.insert(tk.END, value)
+        widget.configure(state=tk.DISABLED if disabled else tk.NORMAL)
+
+    def _target_plan_options(self) -> dict[str, TargetResearchDraft]:
+        draft = getattr(self, "_target_plan_draft", None)
+        return {} if draft is None else {"target_draft": draft}
+
+    def _invalidate_plan_approval_preview(self) -> None:
+        self._previewed_authority = None
+        self._previewed_fit = None
+        approval_id = getattr(self, "_plan_approval_id", None)
+        if approval_id is not None:
+            approval_id.set("")
 
     def _complete_research_plan_draft_preview(
         self,
@@ -5647,6 +5761,7 @@ class TkinterDesktopWindow:
         budget fields afterwards changes nothing until this is pressed again,
         and the confirmation says so.
         """
+        target_options = self._target_plan_options()
         response = self._approval_request(
             lambda: self._controller.preview_plan_authorization(
                 self._research_question.get(),
@@ -5661,6 +5776,7 @@ class TkinterDesktopWindow:
                 # operator can see, not a constraint-free version of it.
                 self._text_value(self._research_plan_constraints),
                 self._plan_restriction.get(),
+                **target_options,
             )
         )
         authorization = getattr(response, "research_plan_authorization", None)
@@ -5728,6 +5844,7 @@ class TkinterDesktopWindow:
         ):
             self._plan_approval_status.set("Not confirmed. Nothing was recorded.")
             return
+        target_options = self._target_plan_options()
         self._approval_request(
             lambda: self._controller.confirm_plan_authorization(
                 self._plan_approval_id.get(),
@@ -5740,6 +5857,7 @@ class TkinterDesktopWindow:
                 self._authorization_seconds.get(),
                 self._text_value(self._research_plan_constraints),
                 self._plan_restriction.get(),
+                **target_options,
             )
         )
 
@@ -5768,6 +5886,7 @@ class TkinterDesktopWindow:
         ):
             self._plan_approval_status.set("Not started. The approval is unused.")
             return
+        target_options = self._target_plan_options()
         self._approval_request(
             lambda: self._controller.start_authorized_execution(
                 authorization_id,
@@ -5777,6 +5896,7 @@ class TkinterDesktopWindow:
                 self._plan_approval_run_id.get(),
                 self._text_value(self._research_plan_constraints),
                 self._plan_restriction.get(),
+                **target_options,
             )
         )
 
