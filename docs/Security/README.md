@@ -185,6 +185,13 @@ Hypatia currently runs as a local-first CLI. The initial security boundary is:
   implements nothing, makes nothing reachable, and grants no filesystem, shell,
   tool, or remote-disclosure authority.
 
+- [Scope-bound Kali tool execution design](Kali_Tool_Execution_Design.md).
+  The accepted future boundary is a reviewed catalogue of structured security
+  operations, never a general terminal or command string. Exact active program
+  scope, check-class/port/rate budgets, explicit operation authorization,
+  bounded process and output handling, and typed untrusted observations are
+  prerequisites. No Kali process or network request is implemented yet.
+
 The current full-repository security baseline is recorded in the Codex Security
 scan completed for v0.3 planning. Before Hypatia gains a networked UI, plugins,
 remote storage, or multi-user operation, this document must grow into a complete

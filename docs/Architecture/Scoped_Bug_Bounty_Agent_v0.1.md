@@ -194,3 +194,16 @@ This is the enrollment record foundation, not permission to execute. Plan
 binding and dispatch-time enforcement intentionally remain the next milestone:
 approval, Start, restore and every Advance must resolve the exact active
 revision before any budget, DNS, checkpoint or network side effect.
+
+## Future Kali security-tool boundary
+
+The requested security-tool capability is accepted only as a scope-bound,
+tool-specific execution layer. Hypatia will not expose a general terminal or
+accept raw command strings. Every executable, option, target, port, check class,
+rate, duration and output limit must come from reviewed code and exact active
+program authority. See
+[`Kali_Tool_Execution_Design.md`](../Security/Kali_Tool_Execution_Design.md).
+
+Kali execution remains blocked until the v0.3.301 scope revision is enforced at
+approval, Start, restore and every Advance and enrollment can represent the
+program's permitted check classes, ports and budgets without broadening them.

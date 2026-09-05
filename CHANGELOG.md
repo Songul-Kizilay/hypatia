@@ -2,6 +2,26 @@
 
 All notable project changes are recorded here.
 
+## [0.3.302] - 2026-09-05
+
+### Security design
+
+- Accepted a future scope-bound Kali security-tool layer made of reviewed,
+  structured capabilities; raw terminal access, command strings, shells,
+  arbitrary executables and PATH-based dispatch are explicitly rejected.
+- Defined exact active program scope, check-class/port/rate/time budgets,
+  explicit operation authorization, process/output bounds, untrusted typed
+  observations and fake-runner tests as prerequisites for execution.
+- Recorded the required order: scope-revision enforcement first, then richer
+  enrollment, inert operation preview, exact authorization, fake execution and
+  finally one opt-in reviewed WSL/Kali operation.
+
+### Safety and limits
+
+- This release starts no process, registers no new Tool capability, installs no
+  software and performs no network access. WSL is present on the inspected host,
+  but no Kali distribution or Kali security executable was detected.
+
 ## [0.3.301] - 2026-09-05
 
 ### Added
