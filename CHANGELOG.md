@@ -2,6 +2,30 @@
 
 All notable project changes are recorded here.
 
+## [0.3.304] - 2026-09-06
+
+### Added
+
+- The desktop target-program editor now exposes the program-scope enrollment
+  service: an operator can preview and exactly confirm a saved active scope
+  record, refresh active records, and preview/confirm human revocation from
+  the same bounded target-scope fields.
+- Confirming a saved scope checks that the current form still matches the
+  previewed program ID and target rules. Editing the form after preview clears
+  the decision path instead of saving stale scope authority.
+- The installed desktop runtime now keeps scope-revision history in the
+  desktop-owned research data directory.
+
+### Safety and limits
+
+- The new UI writes only program-scope revisions after explicit confirmation.
+  It does not approve a research plan, start or advance execution, run Kali,
+  create a terminal, resolve DNS, open the network, call a model or register a
+  new tool capability.
+- Target plans still are not bound to an exact active scope revision at
+  approval/Start/restore/Advance. That enforcement remains the next required
+  integration before any Kali/process work.
+
 ## [0.3.303] - 2026-09-05
 
 ### Added

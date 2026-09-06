@@ -53,6 +53,32 @@ def _host_rule(value: str) -> TargetHostRule:
     return TargetHostRule(value[2:] if wildcard else value, wildcard)
 
 
+def target_scope_from_fields(
+    allowed_hosts: str,
+    excluded_hosts: str,
+    allowed_networks: str,
+    excluded_networks: str,
+) -> ResearchTargetScope:
+    """Parse the scope portion of the desktop target form without I/O."""
+    groups = tuple(
+        _lines(value, label, MAX_SCOPE_RULES)
+        for value, label in (
+            (allowed_hosts, "allowed hosts"),
+            (excluded_hosts, "excluded hosts"),
+            (allowed_networks, "allowed networks"),
+            (excluded_networks, "excluded networks"),
+        )
+    )
+    if sum(len(group) for group in groups) > MAX_SCOPE_RULES:
+        raise ResearchError("Target scope has too many rules.")
+    return ResearchTargetScope(
+        allowed_hosts=tuple(_host_rule(row) for row in groups[0]),
+        excluded_hosts=tuple(_host_rule(row) for row in groups[1]),
+        allowed_networks=groups[2],
+        excluded_networks=groups[3],
+    )
+
+
 def _source_url(value: str, scope: ResearchTargetScope) -> str:
     if (
         not isinstance(value, str)
@@ -149,22 +175,11 @@ class TargetResearchDraft:
         action = _field(action, "action")
         if action not in _ACTIONS:
             raise ResearchError("Target action must be source_fetch or source_accept.")
-        groups = tuple(
-            _lines(value, label, MAX_SCOPE_RULES)
-            for value, label in (
-                (allowed_hosts, "allowed hosts"),
-                (excluded_hosts, "excluded hosts"),
-                (allowed_networks, "allowed networks"),
-                (excluded_networks, "excluded networks"),
-            )
-        )
-        if sum(len(group) for group in groups) > MAX_SCOPE_RULES:
-            raise ResearchError("Target scope has too many rules.")
-        scope = ResearchTargetScope(
-            allowed_hosts=tuple(_host_rule(row) for row in groups[0]),
-            excluded_hosts=tuple(_host_rule(row) for row in groups[1]),
-            allowed_networks=groups[2],
-            excluded_networks=groups[3],
+        scope = target_scope_from_fields(
+            allowed_hosts,
+            excluded_hosts,
+            allowed_networks,
+            excluded_networks,
         )
         binding = ResearchPlanTargetBinding(program_id, scope)
         urls = _lines(source_urls, "source URLs", MAX_RESEARCH_PLAN_STEPS)

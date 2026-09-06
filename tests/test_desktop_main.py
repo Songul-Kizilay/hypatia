@@ -13,9 +13,15 @@ if str(SRC_DIR) not in sys.path:
 
 import desktop_main
 from brain.Brain import Brain
+from cognition.ResearchProgramScopeEnrollmentService import (
+    ResearchProgramScopeEnrollmentService,
+)
 from desktop.DesktopDataPaths import DesktopDataPaths
 from desktop.ToolConsoleController import ToolConsoleController
 from eventbus.EventBus import EventBus
+from research.JsonFileResearchProgramScopeRevisionStore import (
+    JsonFileResearchProgramScopeRevisionStore,
+)
 from tools.FilesystemReadTool import FilesystemReadTool
 from tools.FilesystemRoot import FilesystemRoot
 from tools.WindowsRootedOpen import (
@@ -121,6 +127,43 @@ class DesktopMainTests(unittest.TestCase):
         root_policy.assert_called_once_with(default_root=paths.root)
         console = window_type.call_args.kwargs["tool_console"]
         self.assertIsInstance(console, ToolConsoleController)
+        scope_service = window_type.call_args.kwargs["program_scope_enrollment_service"]
+        self.assertIsInstance(scope_service, ResearchProgramScopeEnrollmentService)
+
+    def test_main_composes_program_scope_enrollment_from_desktop_data_path(
+        self,
+    ) -> None:
+        paths = DesktopDataPaths(Path("C:/Users/Songul/AppData/Local/Hypatia"))
+        brain = Mock(spec=Brain)
+        event_bus = EventBus()
+        container = Mock()
+        container.resolve.side_effect = lambda requested: (
+            brain if requested is Brain else event_bus
+        )
+        application = Mock()
+        application.bootstrap.container = container
+        store = Mock(spec=JsonFileResearchProgramScopeRevisionStore)
+        store.load.return_value = []
+
+        with (
+            patch(
+                "desktop_main.DesktopDataPaths.from_process_environment",
+                return_value=paths,
+            ),
+            patch(
+                "desktop_main.HypatiaApplication.from_process_environment",
+                return_value=application,
+            ),
+            patch("desktop_main.TkinterDesktopWindow", return_value=Mock()),
+            patch("desktop_main.resolve_filesystem_root", return_value=None),
+            patch(
+                "desktop_main.JsonFileResearchProgramScopeRevisionStore",
+                return_value=store,
+            ) as store_type,
+        ):
+            desktop_main.main()
+
+        store_type.assert_called_once_with(paths.research_program_scope_revision_path)
 
     def test_main_composes_a_console_that_runs_nothing_on_its_own(self) -> None:
         """Composition wires the console. It does not authorize anything."""

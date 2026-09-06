@@ -39,7 +39,10 @@ from desktop.SimpleResearchPhrasebook import phrase as simple_phrase
 from desktop.SimpleResearchReadModel import SimpleResearchReadModel
 from desktop.SimpleSourceCard import SimpleSourceCard
 from desktop.TargetResearchDraft import TargetResearchDraft
-from desktop.TargetResearchDraftDialog import TargetResearchDraftDialog
+from desktop.TargetResearchDraftDialog import (
+    ProgramScopeEnrollmentProcessor,
+    TargetResearchDraftDialog,
+)
 from desktop.ToolConsoleController import ToolConsoleController
 from desktop.ToolConsoleEntry import ToolConsoleEntry
 from desktop.ToolRunView import ToolRunView
@@ -503,6 +506,7 @@ class TkinterDesktopWindow:
         reflection_enabled: bool = False,
         curiosity_enabled: bool = False,
         plan_authorization_enabled: bool = False,
+        program_scope_enrollment_service: ProgramScopeEnrollmentProcessor | None = None,
     ) -> None:
         self._controller = controller
         self._tool_console = tool_console
@@ -512,6 +516,7 @@ class TkinterDesktopWindow:
         self._reflection_enabled = reflection_enabled
         self._curiosity_enabled = curiosity_enabled
         self._plan_authorization_enabled = plan_authorization_enabled
+        self._program_scope_enrollment_service = program_scope_enrollment_service
         self._root = root or tk.Tk()
         self._research_refresh_signal = ResearchStateRefreshSignal(event_bus)
         self._request_runner = DesktopRequestRunner()
@@ -3147,6 +3152,9 @@ class TkinterDesktopWindow:
             self._root,
             getattr(self, "_target_plan_draft", None),
             self._apply_target_plan_draft,
+            scope_enrollment_service=getattr(
+                self, "_program_scope_enrollment_service", None
+            ),
             background=palette.background,
             field_background=palette.field_background,
             foreground=palette.foreground,

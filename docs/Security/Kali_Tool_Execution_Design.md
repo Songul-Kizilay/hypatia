@@ -19,6 +19,8 @@ effects, budget and evidence handling are known before they run.
   a central effect and invocation gate.
 - No shell or generic process capability is registered.
 - Research target rules and immutable program-scope revision records exist.
+- The desktop can preview and exactly confirm save/revoke decisions for those
+  program-scope revision records.
 - Program-scope revisions are not yet enforced at approval, Start, restore and
   every Advance boundary.
 - The current Windows host exposes `wsl.exe`, but no Kali distribution or Kali

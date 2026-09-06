@@ -8,7 +8,7 @@ They should not have to approve every routine step of an already approved job.
 The system must explain observations, distinguish hypotheses from verified
 findings, preserve evidence, and stop rather than expand its own authority.
 
-## Current checkpoint: v0.3.297
+## Current checkpoint: v0.3.304
 
 This increment supplies a tested request-target gate, not a finished bounty
 agent. `ResearchTargetScope` is immutable, bounded to 100 combined rules, and
@@ -108,10 +108,11 @@ modify an already approved plan or act as revocation of an existing job.
 
 ## Boundaries that are NOT implemented yet
 
-- There is no UI/program-scope enrollment or proof of authorization; only the
-  exact target-scope snapshot has persistence.
-- Exact scope content is bound through the plan digest; a program registry,
-  current-revision policy and per-program revocation remain unimplemented.
+- The desktop can save and revoke program-scope revision records, but a target
+  plan still does not bind one exact active revision identity.
+- Exact scope content is bound through the plan digest for target drafts, but
+  current-revision policy has not yet been enforced at plan approval, Start,
+  restore or every Advance.
 - The default generic reference-source fetcher is unchanged. Constructing an
   unscoped fetcher does not acquire a bug bounty permission. The future target
   enrollment/runner must require a scope. Bound source operations already
@@ -217,6 +218,19 @@ exact revision ID and digest rather than resubmitting editable scope fields.
 Persistence succeeds before the service publishes the new history in memory.
 An active program revision must be explicitly revoked before a successor can
 be previewed.
+
+## v0.3.304: desktop scope enrollment controls
+
+The desktop target-program editor now reaches the enrollment service. From the
+same validated program ID and target rules, the operator can preview and
+confirm a saved active scope revision, refresh active revisions, and separately
+preview and confirm human revocation. Confirmation refuses a stale preview if
+the form's program ID or target rules changed after preview.
+
+This still does not approve or run a plan. It performs no DNS lookup, network
+request, model call, Kali operation, terminal launch or tool registration. The
+next required integration is binding a target plan to one exact active
+revision and checking that revision at approval, Start, restore and Advance.
 
 This service remains deliberately unwired: it performs no network, process,
 research or model work and has no desktop control yet. The next milestone must

@@ -5,6 +5,9 @@ from __future__ import annotations
 import os
 
 from brain.Brain import Brain
+from cognition.ResearchProgramScopeEnrollmentService import (
+    ResearchProgramScopeEnrollmentService,
+)
 from cognition.TrustedDeferredExecutionControlService import (
     TrustedDeferredExecutionControlService,
 )
@@ -26,6 +29,9 @@ from desktop.DesktopDataPaths import DesktopDataPaths
 from desktop.TkinterDesktopWindow import TkinterDesktopWindow
 from desktop.ToolConsoleController import ToolConsoleController
 from eventbus.EventBus import EventBus
+from research.JsonFileResearchProgramScopeRevisionStore import (
+    JsonFileResearchProgramScopeRevisionStore,
+)
 from tools.FilesystemReadTool import FilesystemReadTool
 from tools.FilesystemRoot import FilesystemRoot
 from tools.FilesystemRootPolicy import resolve_filesystem_root
@@ -95,6 +101,11 @@ def main() -> None:
             if background_enabled and authorization_enabled
             else None
         )
+        program_scope_enrollment_service = ResearchProgramScopeEnrollmentService(
+            JsonFileResearchProgramScopeRevisionStore(
+                data_paths.research_program_scope_revision_path
+            )
+        )
         TkinterDesktopWindow(
             DesktopController(
                 brain,
@@ -112,6 +123,7 @@ def main() -> None:
             reflection_enabled=reflection_enabled(os.environ),
             curiosity_enabled=curiosity_enabled(os.environ),
             plan_authorization_enabled=plan_authorization_enabled(os.environ),
+            program_scope_enrollment_service=program_scope_enrollment_service,
         ).run()
     finally:
         app.stop()

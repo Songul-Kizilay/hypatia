@@ -41,6 +41,11 @@ class DesktopDataPaths:
         """Return the accepted research-source content snapshot path."""
         return self.root / "research" / "content.json"
 
+    @property
+    def research_program_scope_revision_path(self) -> Path:
+        """Return the confirmed program-scope revision history path."""
+        return self.root / "research" / "program_scope_revisions.json"
+
     @classmethod
     def from_process_environment(
         cls,

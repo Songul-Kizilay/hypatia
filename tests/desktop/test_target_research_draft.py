@@ -16,6 +16,7 @@ from core.Exceptions import ResearchError
 from desktop.TargetResearchDraft import (
     MAX_TARGET_FORM_FIELD_CHARACTERS,
     TargetResearchDraft,
+    target_scope_from_fields,
 )
 from research.ResearchPlanDraftService import ResearchPlanDraftService
 from research.ResearchPlanStepDraftInput import ResearchPlanStepDraftInput
@@ -81,6 +82,20 @@ class TargetResearchDraftTests(unittest.TestCase):
             tuple(step.authorized_source_url for step in preview.plan.steps),
             tuple(step.authorized_source_url for step in draft.steps),
         )
+
+    def test_scope_fields_can_be_parsed_without_source_urls_or_network(self) -> None:
+        parsed = target_scope_from_fields(
+            " EXAMPLE.TEST. \n*.example.test",
+            "admin.example.test",
+            "",
+            "",
+        )
+
+        self.assertEqual(parsed.allowed_hosts[0].host, "example.test")
+        self.assertFalse(parsed.allowed_hosts[0].subdomains_only)
+        self.assertEqual(parsed.allowed_hosts[1].host, "example.test")
+        self.assertTrue(parsed.allowed_hosts[1].subdomains_only)
+        self.assertEqual(parsed.excluded_hosts[0].host, "admin.example.test")
 
     def test_fetch_and_accept_are_explicit_and_no_other_actions_are_inferred(
         self,

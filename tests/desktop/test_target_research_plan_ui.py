@@ -59,6 +59,7 @@ class TargetResearchPlanUiTests(unittest.TestCase):
         window._previewed_fit = object()
         window._plan_approval_id = _Variable("approval-1")
         window._root = object()
+        window._program_scope_enrollment_service = object()
         return window
 
     def test_apply_uses_immutable_typed_draft_and_invalidates_preview(self) -> None:
@@ -101,6 +102,21 @@ class TargetResearchPlanUiTests(unittest.TestCase):
 
         window._start_request.assert_not_called()
         self.assertIn("reference plan mode", window._status.get())
+
+    def test_editor_receives_scope_enrollment_service_without_running_it(self) -> None:
+        window = self._window()
+        window._theme_mode = _Variable("eye_comfort")
+
+        with patch(
+            "desktop.TkinterDesktopWindow.TargetResearchDraftDialog"
+        ) as dialog_type:
+            window._open_target_plan_editor()
+
+        dialog_type.assert_called_once()
+        self.assertIs(
+            dialog_type.call_args.kwargs["scope_enrollment_service"],
+            window._program_scope_enrollment_service,
+        )
 
 
 if __name__ == "__main__":
