@@ -108,6 +108,9 @@ class DesktopMainTests(unittest.TestCase):
             knowledge_relation_path=paths.knowledge_relation_path,
             research_run_path=paths.research_run_path,
             research_source_content_path=paths.research_source_content_path,
+            research_program_scope_revision_path=(
+                paths.research_program_scope_revision_path
+            ),
         )
         application.start.assert_called_once_with()
         # The desktop now also resolves the runtime event bus, so it can

@@ -66,9 +66,9 @@ CANONICAL_SCHEMA = "hypatia:research-plan-digest:v2"
 #: no constraints are untouched and keep their v2 identity.
 CANONICAL_SCHEMA_WITH_CONSTRAINTS = "hypatia:research-plan-digest:v4"
 
-#: Target plans bind the exact program and all scope rules under a separate
-#: schema. Unscoped plans retain their existing v2/v4 canonical bytes.
-CANONICAL_SCHEMA_WITH_TARGET = "hypatia:research-plan-digest:v5"
+#: Target plans bind the exact program, scope rules and active scope-revision
+#: identity under a separate schema. Unscoped plans retain existing v2/v4 bytes.
+CANONICAL_SCHEMA_WITH_TARGET = "hypatia:research-plan-digest:v6"
 
 #: Instance bookkeeping, deliberately outside the approved content. `plan_id`
 #: is random per preview and `created_at` is the moment of previewing; neither

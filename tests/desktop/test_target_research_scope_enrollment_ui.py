@@ -4,7 +4,7 @@ import sys
 import unittest
 from datetime import UTC, datetime
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
@@ -78,7 +78,11 @@ def _dialog(
         "excluded_hosts": _Text("admin.example.test"),
         "allowed_networks": _Text(""),
         "excluded_networks": _Text(""),
+        "source_urls": _Text("https://example.test/"),
     }
+    dialog.action = _Variable("Read page only")
+    dialog._on_apply = Mock()
+    dialog.window = Mock()
     return dialog
 
 
@@ -140,6 +144,21 @@ class TargetResearchScopeEnrollmentUiTests(unittest.TestCase):
 
         self.assertFalse(store.values[0].active)
         self.assertIn("Scope revoked", dialog.status.get())
+
+    def test_use_in_plan_binds_selected_active_scope_revision(self) -> None:
+        store = _MemoryStore()
+        service = _service(store)
+        dialog = _dialog(service)
+        dialog._preview_scope_enrollment()
+        dialog._confirm_scope_enrollment()
+        revision = store.values[0]
+
+        dialog.apply()
+
+        draft = dialog._on_apply.call_args.args[0]
+        self.assertEqual(draft.binding.scope_revision_id, revision.revision_id)
+        self.assertEqual(draft.binding.scope_revision_digest, revision.revision_digest)
+        dialog.window.destroy.assert_called_once_with()
 
     def test_missing_enrollment_service_is_inert(self) -> None:
         dialog = object.__new__(TargetResearchDraftDialog)

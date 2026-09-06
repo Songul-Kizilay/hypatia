@@ -176,6 +176,7 @@ from research.ResearchPlanOperationRegistry import (
     ResearchPlanOperationRegistry,
 )
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
+from research.ResearchProgramScopeRevisionStore import ResearchProgramScopeRevisionStore
 from research.ResearchRun import ResearchRun
 from research.ResearchRunCompletionStepOperation import (
     ResearchRunCompletionStepOperation,
@@ -282,6 +283,7 @@ class CognitiveEngine:
         failure_lesson_store: FailureLessonStore | None = None,
         hypothesis_store: HypothesisStore | None = None,
         plan_authorization_store: ResearchPlanAuthorizationStore | None = None,
+        program_scope_revision_store: ResearchProgramScopeRevisionStore | None = None,
         vulnerability_graph_store: VulnerabilityGraphStore | None = None,
         research_source_discovery_provider: (
             ResearchSourceDiscoveryProvider | None
@@ -456,6 +458,7 @@ class CognitiveEngine:
                     response_composer,
                     authorization_store=plan_authorization_store,
                     event_bus=event_bus,
+                    program_scope_revision_store=program_scope_revision_store,
                 )
             )
 
@@ -472,6 +475,7 @@ class CognitiveEngine:
                 if plan_authorization_store is not None
                 else None
             ),
+            program_scope_revision_store=program_scope_revision_store,
         )
         self._research_autonomy_service = ResearchAutonomyApplicationService(
             self._research_plan_execution_service,

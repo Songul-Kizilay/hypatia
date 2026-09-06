@@ -8,7 +8,7 @@ They should not have to approve every routine step of an already approved job.
 The system must explain observations, distinguish hypotheses from verified
 findings, preserve evidence, and stop rather than expand its own authority.
 
-## Current checkpoint: v0.3.304
+## Current checkpoint: v0.3.305
 
 This increment supplies a tested request-target gate, not a finished bounty
 agent. `ResearchTargetScope` is immutable, bounded to 100 combined rules, and
@@ -70,12 +70,14 @@ No program prose or path restriction is converted into a host-wide permission.
 
 ## v0.3.299: exact-plan approval and scoped acquisition
 
-`ResearchPlanTargetBinding(program_id, scope)` is now an optional field on the
-canonical `ResearchPlan`. The entire binding participates in the existing
-recursive plan digest under scoped schema v5. Unscoped reference plans skip
-the absent field and retain their original v2/v4 identities. No duplicate
-scope authority is added to authorizations or deferred grants: their existing
-exact-plan digest checks reject any changed program, rule, exclusion or step.
+`ResearchPlanTargetBinding(program_id, scope)` began as an optional field on the
+canonical `ResearchPlan`. In v0.3.305 the binding also carries
+`scope_revision_id` and `scope_revision_digest`, and the entire binding
+participates in the existing recursive plan digest under scoped schema v6.
+Unscoped reference plans skip the absent field and retain their original v2/v4
+identities. No duplicate scope authority is added to authorizations or deferred
+grants: their existing exact-plan digest checks reject any changed program,
+rule, exclusion, revision identity or step.
 
 The structured authored-plan metadata key `research_plan_target_binding`
 accepts this typed value, never prose or a partially parsed dictionary. Draft,
@@ -103,16 +105,15 @@ that digest and the recorded research run before making an execution live.
 Changed or removed bindings are refused, and a target plan cannot resume from
 a legacy snapshot that lacks this proof. The exact plan must still be supplied
 by the trusted caller; neither scope nor complete plan is reconstructed from
-the narrow execution bookkeeping snapshot. Editing a saved scope does not
-modify an already approved plan or act as revocation of an existing job.
+the narrow execution bookkeeping snapshot. Editing or revoking a saved scope
+does not rewrite an already approved plan, but v0.3.305 requires the exact
+active revision to remain valid at Start, restore and every Advance before side
+effects.
 
 ## Boundaries that are NOT implemented yet
 
-- The desktop can save and revoke program-scope revision records, but a target
-  plan still does not bind one exact active revision identity.
-- Exact scope content is bound through the plan digest for target drafts, but
-  current-revision policy has not yet been enforced at plan approval, Start,
-  restore or every Advance.
+- Target plans now bind one exact active revision identity and re-check it at
+  plan approval, Start, restore and every Advance.
 - The default generic reference-source fetcher is unchanged. Constructing an
   unscoped fetcher does not acquire a bug bounty permission. The future target
   enrollment/runner must require a scope. Bound source operations already
@@ -192,9 +193,9 @@ History cannot be shortened or rewritten, and a successor requires explicit
 revocation of the previous revision.
 
 This is the enrollment record foundation, not permission to execute. Plan
-binding and dispatch-time enforcement intentionally remain the next milestone:
-approval, Start, restore and every Advance must resolve the exact active
-revision before any budget, DNS, checkpoint or network side effect.
+binding and dispatch-time enforcement were added in v0.3.305: approval, Start,
+restore and every Advance resolve the exact active revision before any budget,
+DNS, checkpoint or network side effect.
 
 ## Future Kali security-tool boundary
 
@@ -205,9 +206,9 @@ rate, duration and output limit must come from reviewed code and exact active
 program authority. See
 [`Kali_Tool_Execution_Design.md`](../Security/Kali_Tool_Execution_Design.md).
 
-Kali execution remains blocked until the v0.3.301 scope revision is enforced at
-approval, Start, restore and every Advance and enrollment can represent the
-program's permitted check classes, ports and budgets without broadening them.
+Kali execution remains blocked until enrollment can represent the program's
+permitted check classes, ports and budgets without broadening them, and until a
+reviewed operation preview/authorization/fake-runner path exists.
 
 ## v0.3.303: explicit scope enrollment service
 
@@ -228,12 +229,17 @@ preview and confirm human revocation. Confirmation refuses a stale preview if
 the form's program ID or target rules changed after preview.
 
 This still does not approve or run a plan. It performs no DNS lookup, network
-request, model call, Kali operation, terminal launch or tool registration. The
-next required integration is binding a target plan to one exact active
-revision and checking that revision at approval, Start, restore and Advance.
+request, model call, Kali operation, terminal launch or tool registration.
 
-This service remains deliberately unwired: it performs no network, process,
-research or model work and has no desktop control yet. The next milestone must
-give the operator a clear enrollment/revocation surface and make target drafts
-select the exact confirmed revision before mandatory dispatch enforcement is
-enabled.
+## v0.3.305: exact active scope revision dispatch gate
+
+Target drafts now select an active saved scope revision and carry its revision
+ID and digest into the target binding. Approval preview, confirmation,
+Curiosity proposal approval, Start, restore and every Advance independently
+reload the saved program-scope revision history and require the exact revision
+to remain active and to match the target program and scope.
+
+Refusals happen before approval consumption, durable execution checkpoints,
+budget spend, DNS lookup, provider calls or network traffic. This is still not
+Kali execution; it is the required authority gate that future structured Kali
+operations must reuse.

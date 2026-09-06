@@ -30,6 +30,7 @@ from research.ResearchPlanTargetBinding import ResearchPlanTargetBinding
 from research.ResearchTargetScope import ResearchTargetScope, TargetHostRule
 
 MOMENT = datetime(2026, 9, 3, tzinfo=UTC)
+SCOPE_REVISION_DIGEST = "a" * 64
 
 
 def reference_plan() -> ResearchPlan:
@@ -60,6 +61,8 @@ def target_binding() -> ResearchPlanTargetBinding:
             allowed_networks=("93.184.216.0/24",),
             excluded_networks=("93.184.216.35/32",),
         ),
+        scope_revision_id="scope-revision-1",
+        scope_revision_digest=SCOPE_REVISION_DIGEST,
     )
 
 
@@ -77,6 +80,20 @@ class PlanTargetBindingTests(unittest.TestCase):
         for scope in (None, {}, "example.test"):
             with self.subTest(scope=scope), self.assertRaises(ResearchError):
                 ResearchPlanTargetBinding("program-1", scope)  # type: ignore[arg-type]
+        for values in (
+            {"scope_revision_id": "scope-1"},
+            {"scope_revision_digest": SCOPE_REVISION_DIGEST},
+            {"scope_revision_id": "", "scope_revision_digest": SCOPE_REVISION_DIGEST},
+            {"scope_revision_id": "scope-1", "scope_revision_digest": "A" * 64},
+            {"scope_revision_id": "scope-1", "scope_revision_digest": "g" * 64},
+            {"scope_revision_id": "scope-1", "scope_revision_digest": "a" * 63},
+        ):
+            with self.subTest(values=values), self.assertRaises(ResearchError):
+                ResearchPlanTargetBinding(
+                    "program-1",
+                    target_binding().scope,
+                    **values,
+                )
         self.assertEqual(
             len(replace(target_binding(), program_id="p" * 200).program_id), 200
         )
@@ -129,11 +146,19 @@ class PlanTargetBindingTests(unittest.TestCase):
     def test_scoped_schema_covers_program_rules_and_constraints(self) -> None:
         binding = target_binding()
         plan = replace(reference_plan(), target_binding=binding)
-        self.assertIn(b"hypatia:research-plan-digest:v5", canonical_plan_bytes(plan))
+        self.assertIn(b"hypatia:research-plan-digest:v6", canonical_plan_bytes(plan))
         scope = binding.scope
         variants = (
             replace(plan, target_binding=None),
             replace(plan, target_binding=replace(binding, program_id="program-2")),
+            replace(
+                plan,
+                target_binding=replace(binding, scope_revision_id="scope-revision-2"),
+            ),
+            replace(
+                plan,
+                target_binding=replace(binding, scope_revision_digest="b" * 64),
+            ),
             replace(plan, constraints=(ResearchPlanConstraint("Only this source"),)),
             replace(
                 plan,
@@ -168,7 +193,12 @@ class PlanTargetBindingTests(unittest.TestCase):
         class FutureBinding(ResearchPlanTargetBinding):
             revision: str = "first"
 
-        binding = FutureBinding("program-1", target_binding().scope)
+        binding = FutureBinding(
+            "program-1",
+            target_binding().scope,
+            scope_revision_id="scope-revision-1",
+            scope_revision_digest=SCOPE_REVISION_DIGEST,
+        )
         first = replace(reference_plan(), target_binding=binding)
         second = replace(first, target_binding=replace(binding, revision="second"))
         self.assertNotEqual(plan_digest(first), plan_digest(second))

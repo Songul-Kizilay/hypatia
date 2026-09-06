@@ -1,6 +1,7 @@
 # Scope-bound Kali tool execution security design
 
-**Status:** Accepted design; execution is not implemented.
+**Status:** Accepted design; execution is not implemented. Scope-revision
+enforcement landed in v0.3.305.
 
 ## Purpose
 
@@ -21,15 +22,17 @@ effects, budget and evidence handling are known before they run.
 - Research target rules and immutable program-scope revision records exist.
 - The desktop can preview and exactly confirm save/revoke decisions for those
   program-scope revision records.
-- Program-scope revisions are not yet enforced at approval, Start, restore and
-  every Advance boundary.
+- Program-scope revisions are enforced at approval, Start, restore and every
+  Advance boundary before approval consumption, checkpoints, budget spend, DNS,
+  provider calls or network traffic.
 - The current Windows host exposes `wsl.exe`, but no Kali distribution or Kali
   security executable was detected during this design milestone.
 - The existing target transport supports bounded public HTTPS acquisition; it
   does not authorize scanning, probing, exploitation or arbitrary ports.
 
-These facts make direct Kali execution unsafe today. Scope-revision enforcement
-is a prerequisite, not work that a process runner may duplicate or bypass.
+These facts still make direct Kali execution unsafe today. Scope-revision
+enforcement is now present as a prerequisite; a process runner still may not
+duplicate, weaken or bypass it.
 
 ## Non-goals
 
@@ -157,7 +160,7 @@ without becoming permanent target prohibitions.
 ## Required milestone order
 
 1. Enforce exact active program-scope revisions at approval, Start, restore and
-   every Advance, before side effects.
+   every Advance, before side effects. **Done in v0.3.305.**
 2. Extend enrollment with explicit permitted check classes, ports, rate limits,
    request counts and time budgets.
 3. Add an inert structured Kali operation preview. It builds and displays no

@@ -96,6 +96,9 @@ from research.JsonFileResearchExecutionStore import (
 from research.JsonFileResearchPlanAuthorizationStore import (
     JsonFileResearchPlanAuthorizationStore,
 )
+from research.JsonFileResearchProgramScopeRevisionStore import (
+    JsonFileResearchProgramScopeRevisionStore,
+)
 from research.JsonFileResearchRunStore import JsonFileResearchRunStore
 from research.JsonFileResearchSourceContentStore import (
     JsonFileResearchSourceContentStore,
@@ -158,12 +161,16 @@ class Bootstrap:
             ResearchClaimContradictionProposalProvider | None
         ) = None,
         research_source_content_path: Path | None = None,
+        research_program_scope_revision_path: Path | None = None,
     ) -> None:
         self._memory_path = memory_path
         self._session_path = session_path
         self._knowledge_relation_path = knowledge_relation_path
         self._research_run_path = research_run_path
         self._research_source_content_path = research_source_content_path
+        self._research_program_scope_revision_path = (
+            research_program_scope_revision_path
+        )
         self._llm_provider = llm_provider
         self._llm_config = llm_config
         self._llm_api_key = llm_api_key
@@ -191,6 +198,7 @@ class Bootstrap:
         knowledge_relation_path: Path | None = None,
         research_run_path: Path | None = None,
         research_source_content_path: Path | None = None,
+        research_program_scope_revision_path: Path | None = None,
     ) -> Bootstrap:
         """Create Bootstrap with LLM settings loaded from the process environment."""
         llm_config, llm_api_key = load_llm_process_environment_settings()
@@ -214,6 +222,7 @@ class Bootstrap:
             knowledge_relation_path=knowledge_relation_path,
             research_run_path=research_run_path,
             research_source_content_path=research_source_content_path,
+            research_program_scope_revision_path=research_program_scope_revision_path,
             llm_config=llm_config,
             llm_api_key=llm_api_key,
             llm_system_prompt=llm_system_prompt,
@@ -519,6 +528,7 @@ class Bootstrap:
         failure_lesson_store = self._failure_lesson_store()
         hypothesis_store = self._hypothesis_store()
         plan_authorization_store = self._plan_authorization_store()
+        program_scope_revision_store = self._program_scope_revision_store()
         vulnerability_graph_store = self._vulnerability_graph_store()
         research_source_content_store = JsonFileResearchSourceContentStore(
             self._research_source_content_path
@@ -599,6 +609,7 @@ class Bootstrap:
             failure_lesson_store=failure_lesson_store,
             hypothesis_store=hypothesis_store,
             plan_authorization_store=plan_authorization_store,
+            program_scope_revision_store=program_scope_revision_store,
             vulnerability_graph_store=vulnerability_graph_store,
             research_source_discovery_provider=(
                 self._research_source_discovery_provider
@@ -668,6 +679,7 @@ class Bootstrap:
             container.register(deferred_execution_control)
         if one_shot_deferred_scheduler is not None:
             container.register(one_shot_deferred_scheduler)
+        container.register(program_scope_revision_store)
 
         self.container = container
 
@@ -715,6 +727,10 @@ class Bootstrap:
             or self._knowledge_relation_store_path(self._memory_path),
             run_path,
             self._research_source_content_store_path(
+                self._memory_path,
+                self._research_run_path,
+            ),
+            self._research_program_scope_revision_store_path(
                 self._memory_path,
                 self._research_run_path,
             ),
@@ -873,6 +889,17 @@ class Bootstrap:
             run_path.with_name("research_plan_authorizations.json")
         )
 
+    def _program_scope_revision_store(
+        self,
+    ) -> JsonFileResearchProgramScopeRevisionStore:
+        """Create the exact saved-scope store used to validate target plans."""
+        return JsonFileResearchProgramScopeRevisionStore(
+            self._research_program_scope_revision_store_path(
+                self._memory_path,
+                self._research_run_path,
+            )
+        )
+
     def _hypothesis_store(self) -> JsonFileHypothesisStore | None:
         """Create the hypothesis store only when hypotheses are opted in.
 
@@ -934,6 +961,16 @@ class Bootstrap:
         if memory_path is not None:
             return memory_path.with_name("research_source_content.json")
         return cls._default_research_source_content_path()
+
+    def _research_program_scope_revision_store_path(
+        self,
+        memory_path: Path | None,
+        research_run_path: Path | None,
+    ) -> Path:
+        if self._research_program_scope_revision_path is not None:
+            return self._research_program_scope_revision_path
+        run_path = research_run_path or self._research_run_store_path(memory_path)
+        return run_path.with_name("program_scope_revisions.json")
 
     def _configured_llm_provider(self) -> LLMProvider | None:
         if self._llm_provider is not None:

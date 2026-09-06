@@ -248,9 +248,25 @@ class TargetResearchDraftDialog:
             action = _ACTIONS.get(self.action.get())
             if action is None:
                 raise ResearchError("Choose a supported target action.")
+            revision = self._selected_scope_revision()
+            if self._scope_enrollment_service is not None:
+                if revision is None:
+                    raise ResearchError(
+                        "Select an active saved scope before using it in a plan."
+                    )
+                if not self._scope_revision_matches_form(revision):
+                    raise ResearchError(
+                        "Selected saved scope no longer matches the form."
+                    )
             draft = TargetResearchDraft.from_fields(
                 program_id=self.program.get(),
                 action=action,
+                scope_revision_id=(
+                    revision.revision_id if revision is not None else None
+                ),
+                scope_revision_digest=(
+                    revision.revision_digest if revision is not None else None
+                ),
                 **{key: box.get("1.0", "end-1c") for key, box in self.fields.items()},
             )
         except (ResearchError, ValueError) as error:
@@ -406,6 +422,18 @@ class TargetResearchDraftDialog:
             return (
                 preview.revision.program_id == self.program.get().strip()
                 and preview.revision.scope == self._current_scope()
+            )
+        except ResearchError, ValueError:
+            return False
+
+    def _scope_revision_matches_form(
+        self,
+        revision: ResearchProgramScopeRevision,
+    ) -> bool:
+        try:
+            return (
+                revision.program_id == self.program.get().strip()
+                and revision.scope == self._current_scope()
             )
         except ResearchError, ValueError:
             return False

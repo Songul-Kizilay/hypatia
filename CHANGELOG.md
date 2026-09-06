@@ -2,6 +2,30 @@
 
 All notable project changes are recorded here.
 
+## [0.3.305] - 2026-09-06
+
+### Added
+
+- Target-bound research plans now bind the exact active program-scope revision
+  identity and digest into `ResearchPlanTargetBinding`, and the target-plan
+  digest schema moved to v6 so this identity participates in approval and
+  execution identity.
+- Approval preview, approval confirmation, Curiosity proposal approval,
+  execution Start, durable restore and every Advance now re-check the exact
+  saved revision against the active local scope-revision history before any
+  approval consumption, checkpoint, DNS lookup, provider call or network budget
+  spend.
+- The desktop target editor now requires a selected active saved scope record
+  before using a target draft in a plan, and carries that revision ID/digest
+  into the draft.
+
+### Safety and limits
+
+- This release still adds no Kali runner, terminal, shell, process capability,
+  scan, probe, exploit, arbitrary port access or autonomous target operation.
+  It is the prerequisite scope-authority gate for future reviewed Kali-tool
+  milestones.
+
 ## [0.3.304] - 2026-09-06
 
 ### Added

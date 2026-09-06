@@ -4999,6 +4999,13 @@ def _target_binding_lines(
         f"Target scope content: {target_scope_digest(scope)}",
         "Target transport: public HTTPS port 443, bounded text GET only",
     ]
+    if binding.has_scope_revision:
+        lines.extend(
+            (
+                f"Target scope revision: {binding.scope_revision_id}",
+                f"Target scope revision digest: {binding.scope_revision_digest}",
+            )
+        )
     for label, rules in (
         ("Allowed host", scope.allowed_hosts),
         ("Excluded host", scope.excluded_hosts),

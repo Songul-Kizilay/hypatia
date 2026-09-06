@@ -109,6 +109,10 @@ from research.ResearchPlanRestrictionConflict import (
 from research.ResearchPlanStepState import ResearchPlanStepState
 from research.ResearchPlanStepStatus import ResearchPlanStepStatus
 from research.ResearchPlanTargetBinding import ResearchPlanTargetBinding
+from research.ResearchPlanTargetScopeRevisionGuard import (
+    target_scope_revision_refusal,
+)
+from research.ResearchProgramScopeRevisionStore import ResearchProgramScopeRevisionStore
 from research.StartsResearchPlanExecution import ResearchPlanExecutionStartRefusal
 from response.ResponseComposer import ResponseComposer
 
@@ -135,6 +139,7 @@ class ResearchPlanExecutionApplicationService:
         event_bus: EventBus | None = None,
         execution_store: ResearchExecutionStore | None = None,
         authorization_consumer: ResearchPlanAuthorizationConsumer | None = None,
+        program_scope_revision_store: ResearchProgramScopeRevisionStore | None = None,
         clock: Callable[[], datetime] | None = None,
         max_active_executions: int = MAX_ACTIVE_RESEARCH_PLAN_EXECUTIONS,
     ) -> None:
@@ -161,6 +166,7 @@ class ResearchPlanExecutionApplicationService:
         self._contexts: dict[str, ResearchPlanExecutionContext] = {}
         self._execution_store = execution_store
         self._authorization_consumer = authorization_consumer
+        self._program_scope_revision_store = program_scope_revision_store
         self._allowances: dict[str, ResearchExecutionAllowance] = {}
         self._clock = clock or (lambda: datetime.now(UTC))
         self._restored: dict[str, ResearchPlanExecutionSnapshot] = {}
@@ -215,6 +221,11 @@ class ResearchPlanExecutionApplicationService:
         if plan.target_binding is not None and self._authorization_consumer is None:
             return self._response_composer.research_plan_execution_rejected(
                 request, "Target-bound research requires a recorded human approval."
+            )
+        if scope_refusal := self._target_scope_refusal(plan):
+            return self._response_composer.research_plan_execution_rejected(
+                request,
+                scope_refusal,
             )
 
         # The same canonical check the approval boundary ran. A stale or
@@ -305,6 +316,8 @@ class ResearchPlanExecutionApplicationService:
             return ResearchPlanExecutionStartRefusal(
                 "Research plan execution capacity is full in this process."
             )
+        if scope_refusal := self._target_scope_refusal(plan):
+            return ResearchPlanExecutionStartRefusal(scope_refusal)
         try:
             context = ResearchPlanExecutionContext(
                 research_run_id=research_run_id, target_binding=plan.target_binding
@@ -396,6 +409,8 @@ class ResearchPlanExecutionApplicationService:
                 "The derived plan contains a capability forbidden by its own "
                 "restriction."
             )
+        if scope_refusal := self._target_scope_refusal(plan):
+            return ResearchPlanExecutionStartRefusal(scope_refusal)
         recorded = {step.step_id: step for step in snapshot.steps}
         if {step.step_id for step in plan.steps} != set(recorded):
             return ResearchPlanExecutionStartRefusal(
@@ -479,6 +494,19 @@ class ResearchPlanExecutionApplicationService:
             plan.plan_id,
             self._clock(),
         )
+
+    def _target_scope_refusal(self, plan: ResearchPlan) -> str | None:
+        """Report a target plan whose saved scope revision is not live."""
+        if plan.target_binding is None:
+            return None
+        try:
+            return target_scope_revision_refusal(
+                plan.target_binding,
+                self._program_scope_revision_store,
+                self._clock(),
+            )
+        except ResearchError as error:
+            return str(error)
 
     def live_execution(self, plan_id: str) -> ResearchPlanExecutionState | None:
         """Return live execution state for a caller that only reads it."""
@@ -838,6 +866,11 @@ class ResearchPlanExecutionApplicationService:
             return self._response_composer.research_plan_execution_missing(
                 request,
                 plan_id,
+            )
+        if scope_refusal := self._target_scope_refusal(plan):
+            return self._response_composer.research_plan_execution_rejected(
+                request,
+                scope_refusal,
             )
         interrupted = next(
             (

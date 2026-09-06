@@ -164,6 +164,8 @@ class TargetResearchDraft:
         excluded_networks: str,
         source_urls: str,
         action: str = "source_fetch",
+        scope_revision_id: str | None = None,
+        scope_revision_digest: str | None = None,
     ) -> TargetResearchDraft:
         """Parse every nonblank row, or reject the entire draft without I/O."""
         program_id = _field(program_id, "program ID")
@@ -181,7 +183,16 @@ class TargetResearchDraft:
             allowed_networks,
             excluded_networks,
         )
-        binding = ResearchPlanTargetBinding(program_id, scope)
+        revision_id = scope_revision_id.strip() if scope_revision_id else None
+        revision_digest = (
+            scope_revision_digest.strip() if scope_revision_digest else None
+        )
+        binding = ResearchPlanTargetBinding(
+            program_id,
+            scope,
+            scope_revision_id=revision_id,
+            scope_revision_digest=revision_digest,
+        )
         urls = _lines(source_urls, "source URLs", MAX_RESEARCH_PLAN_STEPS)
         if not urls:
             raise ResearchError(
@@ -221,4 +232,6 @@ class TargetResearchDraft:
             "excluded_networks": "\n".join(scope.excluded_networks),
             "source_urls": "\n".join(step.authorized_source_url for step in self.steps),
             "action": str(self.steps[0].capability),
+            "scope_revision_id": self.binding.scope_revision_id or "",
+            "scope_revision_digest": self.binding.scope_revision_digest or "",
         }

@@ -7,7 +7,7 @@ import sys
 import tempfile
 import unittest
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from http.client import HTTPMessage
 from io import BytesIO
 from itertools import count
@@ -35,6 +35,9 @@ from research.JsonFileResearchExecutionStore import JsonFileResearchExecutionSto
 from research.JsonFileResearchPlanAuthorizationStore import (
     JsonFileResearchPlanAuthorizationStore,
 )
+from research.JsonFileResearchProgramScopeRevisionStore import (
+    JsonFileResearchProgramScopeRevisionStore,
+)
 from research.JsonFileResearchRunStore import JsonFileResearchRunStore
 from research.PinnedHttpsTransport import PinnedHttpsHandler
 from research.ResearchPlanDigest import plan_digest
@@ -45,6 +48,7 @@ from research.ResearchPlanStep import ResearchPlanStep
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 from research.ResearchPlanStepStatus import ResearchPlanStepStatus
 from research.ResearchPlanTargetBinding import ResearchPlanTargetBinding
+from research.ResearchProgramScopeRevision import ResearchProgramScopeRevision
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchSourceAcceptanceResult import ResearchSourceAcceptanceResult
 from research.ResearchTargetScope import ResearchTargetScope, TargetHostRule
@@ -72,7 +76,23 @@ class TargetBoundPlanFlowTests(unittest.TestCase):
             excluded_hosts=(TargetHostRule("pay.example.test"),),
             excluded_networks=("93.184.216.35/32",),
         )
-        self.binding = ResearchPlanTargetBinding("program-a", self.scope)
+        self.scope_store = JsonFileResearchProgramScopeRevisionStore(
+            self.root / "program_scope_revisions.json"
+        )
+        self.scope_revision = ResearchProgramScopeRevision(
+            "scope-revision-1",
+            "program-a",
+            self.scope,
+            NOW,
+            NOW + timedelta(minutes=30),
+        )
+        self.scope_store.save([self.scope_revision])
+        self.binding = ResearchPlanTargetBinding(
+            "program-a",
+            self.scope,
+            scope_revision_id=self.scope_revision.revision_id,
+            scope_revision_digest=self.scope_revision.revision_digest,
+        )
         self.manager = ResearchRunManager(
             JsonFileResearchRunStore(self.root / "runs.json")
         )
@@ -90,6 +110,7 @@ class TargetBoundPlanFlowTests(unittest.TestCase):
             self.manager,
             ResponseComposer(),
             authorization_store=self.auth_store,
+            program_scope_revision_store=self.scope_store,
             clock=lambda: NOW,
         )
         self.store = JsonFileResearchExecutionStore(self.root / "executions.json")
@@ -125,6 +146,7 @@ class TargetBoundPlanFlowTests(unittest.TestCase):
             operation_registry=self.registry,
             execution_store=self.store,
             authorization_consumer=self.authorizations,
+            program_scope_revision_store=self.scope_store,
             clock=lambda: NOW,
         )
 
@@ -218,6 +240,49 @@ class TargetBoundPlanFlowTests(unittest.TestCase):
         self.assertFalse(self.auth_store.load()[0].is_consumed)
         self.assertEqual(self.store.load(), [])
         self.dns.assert_not_called()
+
+    def test_target_approval_requires_exact_active_scope_revision(self):
+        for binding in (
+            replace(
+                self.binding,
+                scope_revision_id=None,
+                scope_revision_digest=None,
+            ),
+            replace(self.binding, scope_revision_id="unknown-revision"),
+            replace(self.binding, scope_revision_digest="b" * 64),
+        ):
+            with self.subTest(binding=binding):
+                response = self.authorizations.process_preview(
+                    self.request(research_plan_target_binding=binding)
+                )
+                self.assertFalse(response.success)
+                self.assertIn("scope revision", response.message)
+        self.assertFalse(self.auth_store.load())
+        self.dns.assert_not_called()
+
+    def test_revoked_scope_revision_cannot_start_or_consume_approval(self):
+        auth_id = self.approve()
+        self.scope_store.save([self.scope_revision.revoked(NOW)])
+        response = self.execution.process_start(self.request(authorization_id=auth_id))
+        self.assertFalse(response.success)
+        self.assertIn("scope revision", response.message)
+        self.assertFalse(self.auth_store.load()[0].is_consumed)
+        self.assertEqual(self.store.load(), [])
+        self.dns.assert_not_called()
+
+    def test_revoked_scope_revision_refuses_advance_before_network_and_budget(self):
+        execution_id = self.start()
+        allowance = self.execution.allowance(execution_id)
+        assert allowance is not None
+        self.scope_store.save([self.scope_revision.revoked(NOW)])
+        response = self.advance(self.execution, execution_id)
+        self.assertFalse(response.success)
+        self.assertIn("scope revision", response.message)
+        self.dns.assert_not_called()
+        self.assertEqual(self.opener.calls, [])
+        updated = self.execution.allowance(execution_id)
+        assert updated is not None
+        self.assertEqual(updated.spend, allowance.spend)
 
     def test_target_start_requires_authorization_even_in_legacy_composition(self):
         service = ResearchPlanExecutionApplicationService(
@@ -384,6 +449,17 @@ class TargetBoundPlanFlowTests(unittest.TestCase):
             ResearchPlanStepStatus.COMPLETED,
         )
         self.reference.fetch.assert_not_called()
+
+    def test_revoked_scope_revision_cannot_be_rebound_after_restart(self):
+        execution_id = self.start()
+        plan = self.execution.live_plan(execution_id)
+        assert plan is not None
+        restored = self.new_execution()
+        self.scope_store.save([self.scope_revision.revoked(NOW)])
+        response = restored.rebind_restored(plan, self.run_id, execution_id)
+        self.assertIsInstance(response, ResearchPlanExecutionStartRefusal)
+        self.assertIn("scope revision", response.reason)
+        self.dns.assert_not_called()
 
     def test_legacy_snapshot_cannot_be_rebound_to_target_plan(self):
         execution_id = self.start()

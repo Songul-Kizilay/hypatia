@@ -21,6 +21,8 @@ from desktop.TargetResearchDraft import (
 from research.ResearchPlanDraftService import ResearchPlanDraftService
 from research.ResearchPlanStepDraftInput import ResearchPlanStepDraftInput
 
+SCOPE_REVISION_DIGEST = "a" * 64
+
 
 def fields(**changes: str) -> dict[str, str]:
     return {
@@ -82,6 +84,18 @@ class TargetResearchDraftTests(unittest.TestCase):
             tuple(step.authorized_source_url for step in preview.plan.steps),
             tuple(step.authorized_source_url for step in draft.steps),
         )
+
+    def test_optional_scope_revision_identity_round_trips_without_io(self) -> None:
+        draft = TargetResearchDraft.from_fields(
+            **fields(),
+            scope_revision_id="  scope-revision-1  ",
+            scope_revision_digest=SCOPE_REVISION_DIGEST,
+        )
+
+        self.assertEqual(draft.binding.scope_revision_id, "scope-revision-1")
+        self.assertEqual(draft.binding.scope_revision_digest, SCOPE_REVISION_DIGEST)
+        self.assertTrue(draft.binding.has_scope_revision)
+        self.assertEqual(TargetResearchDraft.from_fields(**draft.to_fields()), draft)
 
     def test_scope_fields_can_be_parsed_without_source_urls_or_network(self) -> None:
         parsed = target_scope_from_fields(

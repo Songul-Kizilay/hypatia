@@ -73,6 +73,9 @@ def main() -> None:
         knowledge_relation_path=data_paths.knowledge_relation_path,
         research_run_path=data_paths.research_run_path,
         research_source_content_path=data_paths.research_source_content_path,
+        research_program_scope_revision_path=(
+            data_paths.research_program_scope_revision_path
+        ),
     )
     app.start()
 

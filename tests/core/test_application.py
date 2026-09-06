@@ -50,6 +50,9 @@ class HypatiaApplicationTests(unittest.TestCase):
         relation_path = Path("C:/Hypatia/knowledge/relations.json")
         research_run_path = Path("C:/Hypatia/research/runs.json")
         research_source_content_path = Path("C:/Hypatia/research/content.json")
+        research_program_scope_revision_path = Path(
+            "C:/Hypatia/research/program_scope_revisions.json"
+        )
 
         with patch(
             "core.Application.Bootstrap.from_process_environment",
@@ -61,6 +64,9 @@ class HypatiaApplicationTests(unittest.TestCase):
                 knowledge_relation_path=relation_path,
                 research_run_path=research_run_path,
                 research_source_content_path=research_source_content_path,
+                research_program_scope_revision_path=(
+                    research_program_scope_revision_path
+                ),
             )
 
         bootstrap_factory.assert_called_once_with(
@@ -69,5 +75,6 @@ class HypatiaApplicationTests(unittest.TestCase):
             knowledge_relation_path=relation_path,
             research_run_path=research_run_path,
             research_source_content_path=research_source_content_path,
+            research_program_scope_revision_path=research_program_scope_revision_path,
         )
         self.assertIs(application.bootstrap, sentinel_bootstrap)

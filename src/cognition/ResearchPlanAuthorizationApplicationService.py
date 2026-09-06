@@ -68,6 +68,10 @@ from research.ResearchPlanRestrictionConflict import (
     plan_restriction_conflicts,
 )
 from research.ResearchPlanTargetBinding import ResearchPlanTargetBinding
+from research.ResearchPlanTargetScopeRevisionGuard import (
+    target_scope_revision_refusal,
+)
+from research.ResearchProgramScopeRevisionStore import ResearchProgramScopeRevisionStore
 from research.ResearchRunManager import ResearchRunManager
 from response.ResponseComposer import ResponseComposer
 
@@ -96,12 +100,14 @@ class ResearchPlanAuthorizationApplicationService:
         authorization_store: ResearchPlanAuthorizationStore | None = None,
         draft_service: ResearchPlanDraftService | None = None,
         event_bus: EventBus | None = None,
+        program_scope_revision_store: ResearchProgramScopeRevisionStore | None = None,
         clock: Callable[[], datetime] | None = None,
         id_factory: Callable[[], str] | None = None,
     ) -> None:
         self._run_manager = run_manager
         self._response_composer = response_composer
         self._authorization_store = authorization_store
+        self._program_scope_revision_store = program_scope_revision_store
         self._draft_service = draft_service or ResearchPlanDraftService()
         self._events = ResearchPlanAuthorizationEvents(event_bus)
         self._clock = clock or (lambda: datetime.now(UTC))
@@ -149,6 +155,14 @@ class ResearchPlanAuthorizationApplicationService:
                 ResearchPlanAuthorizationPreview.rejected(
                     "unavailable",
                     "That research plan is not valid, so nothing can be approved.",
+                ),
+            )
+        if scope_refusal := self._target_scope_refusal(plan):
+            return self._response_composer.research_plan_authorization_preview(
+                request,
+                ResearchPlanAuthorizationPreview.rejected(
+                    plan.plan_id,
+                    scope_refusal,
                 ),
             )
         if len(self._pending) >= MAX_PENDING_AUTHORIZATION_PREVIEWS:
@@ -270,6 +284,9 @@ class ResearchPlanAuthorizationApplicationService:
         Returns None when the approval could not be made durable, so a caller
         never reports an approval that only ever existed in memory.
         """
+        if scope_refusal := self._target_scope_refusal(plan):
+            self._events.refused("target_scope_revision")
+            raise ResearchError(scope_refusal)
         fit = self.budget_fit_for(plan, budget)
         if not fit.sufficient:
             self._events.refused("insufficient_budget")
@@ -333,6 +350,12 @@ class ResearchPlanAuthorizationApplicationService:
             return self._response_composer.research_plan_authorization_rejected(
                 request,
                 "That research plan is no longer valid, so it cannot be approved.",
+            )
+        if scope_refusal := self._target_scope_refusal(plan):
+            self._events.refused("target_scope_revision")
+            return self._response_composer.research_plan_authorization_rejected(
+                request,
+                scope_refusal,
             )
         verdict = verify_plan_authorization(
             authorization,
@@ -466,6 +489,19 @@ class ResearchPlanAuthorizationApplicationService:
             ("This research plan contradicts itself, so it cannot be approved.",)
             + tuple(conflict.summary() for conflict in conflicts)
         )
+
+    def _target_scope_refusal(self, plan: ResearchPlan) -> str | None:
+        """Report a target plan whose saved scope revision is not live."""
+        if plan.target_binding is None:
+            return None
+        try:
+            return target_scope_revision_refusal(
+                plan.target_binding,
+                self._program_scope_revision_store,
+                self._clock(),
+            )
+        except ResearchError as error:
+            return str(error)
 
     def _plan(self, request: BrainRequest) -> ResearchPlan | None:
         """Rebuild the exact plan from the authored draft, or refuse it."""
