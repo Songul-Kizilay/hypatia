@@ -49,6 +49,7 @@ from research.ResearchExecutionContinuation import (
     ResearchExecutionContinuation,
 )
 from research.ResearchFailureLesson import ResearchFailureLesson
+from research.ResearchKaliOperationPreview import ResearchKaliOperationPreview
 from research.ResearchPairedProviderQualityReport import (
     ResearchPairedProviderQualityReport,
 )
@@ -174,6 +175,7 @@ class BrainResponse:
     research_provider_quality: ResearchProviderQualityReport | None = None
     research_paired_provider_quality: ResearchPairedProviderQualityReport | None = None
     research_provider_comparison: ResearchProviderComparisonReport | None = None
+    kali_operation_preview: ResearchKaliOperationPreview | None = None
     research_plan_authorization: ResearchPlanAuthorization | None = None
     research_plan_authorizations: tuple[ResearchPlanAuthorization, ...] = ()
     source_reputations: tuple[SourceReputation, ...] = ()

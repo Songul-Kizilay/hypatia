@@ -2,6 +2,26 @@
 
 All notable project changes are recorded here.
 
+## [0.3.307] - 2026-09-07
+
+### Added
+
+- Added an inert structured Kali operation preview for the first reviewed
+  operation profile: DNS record lookup.
+- The preview binds the exact active program-scope revision, scope revision
+  digest, execution policy digest, target hostname, DNS record type, permitted
+  ports and bounded operation budget into an operation digest.
+- The preview is available only through an explicit structured intent and
+  returns operator-visible facts without constructing a command line.
+
+### Safety and limits
+
+- This release still adds no Kali runner, terminal, shell, child process,
+  generic command execution, DNS lookup or network traffic.
+- Out-of-scope hosts, excluded hosts, missing scope history, inactive scope
+  revisions, revision digest mismatch and policies without DNS lookup permission
+  fail closed before any DNS, process, write or network side effect.
+
 ## [0.3.306] - 2026-09-07
 
 ### Added

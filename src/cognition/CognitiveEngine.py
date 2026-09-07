@@ -28,6 +28,9 @@ from cognition.FailureMemoryApplicationService import (
 from cognition.HypothesisApplicationService import (
     HypothesisApplicationService,
 )
+from cognition.KaliOperationPreviewApplicationService import (
+    KaliOperationPreviewApplicationService,
+)
 from cognition.KnowledgeReconciliationApplicationService import (
     KnowledgeReconciliationApplicationService,
 )
@@ -599,6 +602,16 @@ class CognitiveEngine:
                 else None
             ),
         )
+        self._kali_operation_preview_service: (
+            KaliOperationPreviewApplicationService | None
+        ) = None
+        if program_scope_revision_store is not None:
+            self._kali_operation_preview_service = (
+                KaliOperationPreviewApplicationService(
+                    response_composer,
+                    program_scope_revision_store,
+                )
+            )
         self._source_ingestion_events = SourceIngestionEvents(event_bus)
         self._knowledge_reconciliation_service = (
             KnowledgeReconciliationApplicationService(
@@ -655,6 +668,14 @@ class CognitiveEngine:
 
         if self._research_plan_preview_service.is_draft_preview_request(request):
             return self._research_plan_preview_service.process_draft_preview(request)
+
+        if KaliOperationPreviewApplicationService.is_preview_request(request):
+            if self._kali_operation_preview_service is None:
+                return self._response_composer.kali_operation_preview_failure(
+                    request,
+                    "Program scope revisions are unavailable in this runtime.",
+                )
+            return self._kali_operation_preview_service.process_preview(request)
 
         if self._research_plan_execution_service.is_start_request(request):
             return self._research_plan_execution_service.process_start(request)

@@ -8,7 +8,7 @@ They should not have to approve every routine step of an already approved job.
 The system must explain observations, distinguish hypotheses from verified
 findings, preserve evidence, and stop rather than expand its own authority.
 
-## Current checkpoint: v0.3.306
+## Current checkpoint: v0.3.307
 
 This increment supplies a tested request-target gate, not a finished bounty
 agent. `ResearchTargetScope` is immutable, bounded to 100 combined rules, and
@@ -256,3 +256,19 @@ facts without changing existing scope revision identity.
 This still does not run Kali or add a process capability. It is the policy
 record a future inert Kali-operation preview and authorization path must bind
 before any child process can be considered.
+
+## v0.3.307: inert Kali operation preview
+
+Hypatia can now build the first structured Kali-operation preview for a
+DNS-record lookup profile. The preview is bound to:
+
+- exact active program-scope revision identity and digest;
+- execution-policy digest;
+- reviewed operation kind and check class;
+- admitted hostname;
+- DNS record type;
+- permitted ports and operation budget.
+
+The preview does not construct a raw command string, start Kali, launch a
+terminal, create a process, perform DNS, use the network or write durable state.
+It is the visible proposal a future exact operation authorization must approve.

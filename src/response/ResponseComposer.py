@@ -58,6 +58,7 @@ from research.ResearchExecutionContinuation import (
     ResearchExecutionContinuation,
 )
 from research.ResearchFailureLesson import ResearchFailureLesson
+from research.ResearchKaliOperationPreview import ResearchKaliOperationPreview
 from research.ResearchPairedProviderQualityReport import (
     ResearchPairedProviderQualityReport,
 )
@@ -1037,6 +1038,67 @@ class ResponseComposer:
             research_plan_failure_lesson_trace=(
                 lesson_trace if preview.allowed else None
             ),
+        )
+
+    def kali_operation_preview(
+        self,
+        request: BrainRequest,
+        preview: ResearchKaliOperationPreview,
+    ) -> BrainResponse:
+        """Render one inert Kali operation proposal without a command string."""
+        message = "\n".join(
+            (
+                "Kali operation preview:",
+                f"Program: {preview.program_id}",
+                f"Scope revision: {preview.scope_revision_id}",
+                f"Scope revision digest: {preview.scope_revision_digest}",
+                f"Execution policy digest: {preview.execution_policy_digest}",
+                f"Operation digest: {preview.operation_digest}",
+                f"Operation: {preview.operation_kind.value}",
+                f"Check class: {preview.check_class.value}",
+                f"Hostname: {preview.hostname}",
+                f"DNS record type: {preview.dns_record_type.value}",
+                "Permitted ports: "
+                + ", ".join(str(port) for port in preview.permitted_ports),
+                "Budget: "
+                f"{preview.max_request_count} request(s), "
+                f"{preview.max_requests_per_minute}/min, "
+                f"{preview.max_seconds:g}s",
+                "Command line: not constructed",
+                "Execution: not started",
+                "Process: not created",
+                "Network/DNS: not used",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="kali_operation_preview",
+            memory_count=0,
+            kali_operation_preview=preview,
+        )
+
+    def kali_operation_preview_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Render a fail-closed Kali operation preview refusal."""
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Kali operation preview rejected:",
+                    f"Reason: {message}",
+                    "Command line: not constructed",
+                    "Execution: not started",
+                    "Process: not created",
+                    "Network/DNS: not used",
+                )
+            ),
+            request_id=request.request_id,
+            intent="kali_operation_preview",
+            memory_count=0,
+            success=False,
         )
 
     def learned_memory_audit(
