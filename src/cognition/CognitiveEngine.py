@@ -37,6 +37,9 @@ from cognition.KaliOperationFakeRunnerApplicationService import (
 from cognition.KaliOperationPreviewApplicationService import (
     KaliOperationPreviewApplicationService,
 )
+from cognition.KaliRuntimeReadinessApplicationService import (
+    KaliRuntimeReadinessApplicationService,
+)
 from cognition.KnowledgeReconciliationApplicationService import (
     KnowledgeReconciliationApplicationService,
 )
@@ -178,6 +181,7 @@ from research.ResearchFailureLesson import ResearchFailureLesson
 from research.ResearchKaliOperationAuthorizationStore import (
     ResearchKaliOperationAuthorizationStore,
 )
+from research.ResearchKaliRuntimeEnvironment import ResearchKaliRuntimeProbe
 from research.ResearchPlan import ResearchPlan
 from research.ResearchPlanAuthorizationStore import (
     ResearchPlanAuthorizationStore,
@@ -298,6 +302,7 @@ class CognitiveEngine:
         kali_operation_authorization_store: (
             ResearchKaliOperationAuthorizationStore | None
         ) = None,
+        kali_runtime_probe: ResearchKaliRuntimeProbe | None = None,
         program_scope_revision_store: ResearchProgramScopeRevisionStore | None = None,
         vulnerability_graph_store: VulnerabilityGraphStore | None = None,
         research_source_discovery_provider: (
@@ -623,6 +628,10 @@ class CognitiveEngine:
         self._kali_operation_fake_runner_service: (
             KaliOperationFakeRunnerApplicationService | None
         ) = None
+        self._kali_runtime_readiness_service = KaliRuntimeReadinessApplicationService(
+            response_composer,
+            probe=kali_runtime_probe,
+        )
         if program_scope_revision_store is not None:
             self._kali_operation_preview_service = (
                 KaliOperationPreviewApplicationService(
@@ -729,6 +738,9 @@ class CognitiveEngine:
                     "Kali operation authorizations are unavailable in this runtime.",
                 )
             return self._kali_operation_fake_runner_service.process_fake_run(request)
+
+        if KaliRuntimeReadinessApplicationService.is_readiness_request(request):
+            return self._kali_runtime_readiness_service.process_readiness(request)
 
         if self._research_plan_execution_service.is_start_request(request):
             return self._research_plan_execution_service.process_start(request)

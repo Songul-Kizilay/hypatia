@@ -65,6 +65,7 @@ from research.ResearchKaliOperationPreview import (
     ResearchKaliOperationFakeRun,
     ResearchKaliOperationPreview,
 )
+from research.ResearchKaliRuntimeEnvironment import ResearchKaliRuntimeReadiness
 from research.ResearchPairedProviderQualityReport import (
     ResearchPairedProviderQualityReport,
 )
@@ -1229,6 +1230,62 @@ class ResponseComposer:
             ),
             request_id=request.request_id,
             intent="kali_operation_fake_run",
+            memory_count=0,
+            success=False,
+        )
+
+    def kali_runtime_readiness(
+        self,
+        request: BrainRequest,
+        readiness: ResearchKaliRuntimeReadiness,
+    ) -> BrainResponse:
+        """Render reviewed WSL/Kali runtime readiness without execution."""
+        requirement = readiness.requirement
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Kali runtime readiness:",
+                    f"State: {readiness.state.value}",
+                    f"Reason: {readiness.reason}",
+                    f"Transport required: {requirement.transport.value}",
+                    f"Distribution required: {requirement.distribution}",
+                    f"Executable required: {requirement.executable_path}",
+                    f"Version prefix required: {requirement.version_prefix}",
+                    "Observed distribution: "
+                    f"{readiness.observed_distribution or 'not observed'}",
+                    "Observed executable: "
+                    f"{readiness.observed_executable_path or 'not observed'}",
+                    f"Observed version: {readiness.observed_version or 'not observed'}",
+                    "Execution: not started",
+                    "Process: not created",
+                    "Network/DNS: not used",
+                )
+            ),
+            request_id=request.request_id,
+            intent="kali_runtime_readiness",
+            memory_count=0,
+            success=readiness.ready,
+            kali_runtime_readiness=readiness,
+        )
+
+    def kali_runtime_readiness_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Report a readiness refusal before any runtime probing."""
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Kali runtime readiness refused:",
+                    f"Reason: {message}",
+                    "Execution: not started",
+                    "Process: not created",
+                    "Network/DNS: not used",
+                )
+            ),
+            request_id=request.request_id,
+            intent="kali_runtime_readiness",
             memory_count=0,
             success=False,
         )

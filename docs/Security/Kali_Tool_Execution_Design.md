@@ -6,6 +6,7 @@ v0.3.306. Inert operation preview landed in v0.3.307. Exact operation-digest
 authorization landed in v0.3.308. Durable operation-authorization persistence
 landed in v0.3.309. Reviewed inert command-plan construction landed in
 v0.3.310. Deterministic no-process fake-runner gating landed in v0.3.311.
+Opt-in WSL/Kali runtime-readiness reporting landed in v0.3.312.
 
 ## Purpose
 
@@ -41,6 +42,10 @@ effects, budget and evidence handling are known before they run.
   output after reloading the persisted authorization and re-checking the exact
   operation digest. This still creates no terminal, child process, DNS lookup
   or target traffic.
+- Hypatia can now report reviewed WSL/Kali runtime prerequisites through an
+  explicit opt-in readiness boundary. The default probe fails closed when no
+  host adapter is configured, and a readiness report grants no execution
+  authority.
 - The desktop can preview and exactly confirm save/revoke decisions for those
   program-scope revision records.
 - Program-scope revisions are enforced at approval, Start, restore and every
@@ -199,7 +204,9 @@ without becoming permanent target prohibitions.
    process creation on every refusal path. **Done for the DNS-record lookup
    profile in v0.3.311.**
 8. Add an opt-in WSL/Kali installation boundary and the single first reviewed
-   operation. Tests use a fake child-process adapter and local fixtures; no
+   operation. **Initial opt-in runtime-readiness boundary done in v0.3.312.**
+   The future process adapter and real single reviewed operation remain
+   separate work. Tests use a fake child-process adapter and local fixtures; no
    third-party target traffic is allowed.
 9. Connect typed observations to evidence review and reporting.
 10. Only then permit the bounded autonomous loop to select that exact capability

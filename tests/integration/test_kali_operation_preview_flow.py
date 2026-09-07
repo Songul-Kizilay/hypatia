@@ -24,6 +24,9 @@ from cognition.KaliOperationFakeRunnerApplicationService import (
 from cognition.KaliOperationPreviewApplicationService import (
     KALI_OPERATION_PREVIEW_INTENT,
 )
+from cognition.KaliRuntimeReadinessApplicationService import (
+    KALI_RUNTIME_READINESS_INTENT,
+)
 from eventbus.EventBus import EventBus
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from memory.MemoryManager import MemoryManager
@@ -37,6 +40,11 @@ from research.JsonFileResearchProgramScopeRevisionStore import (
 from research.ResearchKaliOperationPreview import (
     ResearchDnsRecordType,
     ResearchKaliOperationKind,
+)
+from research.ResearchKaliRuntimeEnvironment import (
+    ResearchKaliRuntimeReadiness,
+    ResearchKaliRuntimeReadinessState,
+    ResearchKaliRuntimeRequirement,
 )
 from research.ResearchProgramScopeExecutionPolicy import (
     ResearchProgramScopeCheckClass,
@@ -100,6 +108,63 @@ class KaliOperationPreviewFlowTests(unittest.TestCase):
             program_scope_revision_store=self.scope_store,
             kali_operation_authorization_store=self.authorization_store,
         )
+
+    def test_structured_runtime_readiness_routes_without_execution(self) -> None:
+        class ReadyProbe:
+            def readiness(
+                self,
+                requirement: ResearchKaliRuntimeRequirement,
+            ) -> ResearchKaliRuntimeReadiness:
+                return ResearchKaliRuntimeReadiness(
+                    requirement=requirement,
+                    state=ResearchKaliRuntimeReadinessState.READY,
+                    reason="Fake WSL/Kali runtime is ready.",
+                    observed_distribution=requirement.distribution,
+                    observed_executable_path=requirement.executable_path,
+                    observed_version=f"{requirement.version_prefix}18.36",
+                )
+
+        engine = CognitiveEngine(
+            KnowledgeEngine(),
+            self.memory_manager,
+            Planner(),
+            self.event_bus,
+            ResponseComposer(),
+            self.session_manager,
+            SessionRenameTransactionService(
+                session_manager=self.session_manager,
+                memory_manager=self.memory_manager,
+                event_bus=self.event_bus,
+            ),
+            program_scope_revision_store=self.scope_store,
+            kali_operation_authorization_store=self.authorization_store,
+            kali_runtime_probe=ReadyProbe(),
+        )
+
+        with (
+            patch("socket.getaddrinfo") as getaddrinfo,
+            patch("subprocess.run") as run,
+            patch("subprocess.Popen") as popen,
+        ):
+            response = engine.process(
+                BrainRequest(
+                    message="check Kali runtime",
+                    metadata={
+                        "intent": KALI_RUNTIME_READINESS_INTENT,
+                        "operator_opt_in": True,
+                    },
+                )
+            )
+
+        self.assertTrue(response.success, response.message)
+        self.assertEqual(response.intent, KALI_RUNTIME_READINESS_INTENT)
+        self.assertIsNotNone(response.kali_runtime_readiness)
+        self.assertIn("Distribution required: kali-linux", response.message)
+        self.assertIn("Executable required: /usr/bin/dig", response.message)
+        self.assertIn("Execution: not started", response.message)
+        getaddrinfo.assert_not_called()
+        run.assert_not_called()
+        popen.assert_not_called()
 
     def test_structured_preview_routes_without_dns_process_or_write(self) -> None:
         with (

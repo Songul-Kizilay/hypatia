@@ -56,6 +56,7 @@ from research.ResearchKaliOperationPreview import (
     ResearchKaliOperationFakeRun,
     ResearchKaliOperationPreview,
 )
+from research.ResearchKaliRuntimeEnvironment import ResearchKaliRuntimeReadiness
 from research.ResearchPairedProviderQualityReport import (
     ResearchPairedProviderQualityReport,
 )
@@ -184,6 +185,7 @@ class BrainResponse:
     kali_operation_preview: ResearchKaliOperationPreview | None = None
     kali_operation_authorization: ResearchKaliOperationAuthorization | None = None
     kali_operation_fake_run: ResearchKaliOperationFakeRun | None = None
+    kali_runtime_readiness: ResearchKaliRuntimeReadiness | None = None
     research_plan_authorization: ResearchPlanAuthorization | None = None
     research_plan_authorizations: tuple[ResearchPlanAuthorization, ...] = ()
     source_reputations: tuple[SourceReputation, ...] = ()

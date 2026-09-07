@@ -2,6 +2,24 @@
 
 All notable project changes are recorded here.
 
+## [0.3.312] - 2026-09-07
+
+### Added
+
+- Added an explicit `kali_runtime_readiness` boundary for reviewed WSL/Kali
+  runtime prerequisites.
+- The readiness report is opt-in only and names the required transport,
+  distribution, executable path and version prefix before any future real
+  runner can be considered.
+- CognitiveEngine can route readiness checks with a replaceable probe; the
+  default production probe fails closed when no host adapter is configured.
+
+### Safety and limits
+
+- This release still adds no real Kali runner, terminal, shell, child process,
+  DNS lookup or target network traffic.
+- Missing operator opt-in refuses before even the readiness probe is called.
+
 ## [0.3.311] - 2026-09-07
 
 ### Added
