@@ -93,6 +93,9 @@ from research.JsonFileReflectionReportStore import (
 from research.JsonFileResearchExecutionStore import (
     JsonFileResearchExecutionStore,
 )
+from research.JsonFileResearchKaliOperationAuthorizationStore import (
+    JsonFileResearchKaliOperationAuthorizationStore,
+)
 from research.JsonFileResearchPlanAuthorizationStore import (
     JsonFileResearchPlanAuthorizationStore,
 )
@@ -528,6 +531,7 @@ class Bootstrap:
         failure_lesson_store = self._failure_lesson_store()
         hypothesis_store = self._hypothesis_store()
         plan_authorization_store = self._plan_authorization_store()
+        kali_operation_authorization_store = self._kali_operation_authorization_store()
         program_scope_revision_store = self._program_scope_revision_store()
         vulnerability_graph_store = self._vulnerability_graph_store()
         research_source_content_store = JsonFileResearchSourceContentStore(
@@ -609,6 +613,7 @@ class Bootstrap:
             failure_lesson_store=failure_lesson_store,
             hypothesis_store=hypothesis_store,
             plan_authorization_store=plan_authorization_store,
+            kali_operation_authorization_store=kali_operation_authorization_store,
             program_scope_revision_store=program_scope_revision_store,
             vulnerability_graph_store=vulnerability_graph_store,
             research_source_discovery_provider=(
@@ -680,6 +685,7 @@ class Bootstrap:
         if one_shot_deferred_scheduler is not None:
             container.register(one_shot_deferred_scheduler)
         container.register(program_scope_revision_store)
+        container.register(kali_operation_authorization_store)
 
         self.container = container
 
@@ -898,6 +904,17 @@ class Bootstrap:
                 self._memory_path,
                 self._research_run_path,
             )
+        )
+
+    def _kali_operation_authorization_store(
+        self,
+    ) -> JsonFileResearchKaliOperationAuthorizationStore:
+        """Create the operation approval store for future Kali runner gates."""
+        run_path = self._research_run_path or self._research_run_store_path(
+            self._memory_path
+        )
+        return JsonFileResearchKaliOperationAuthorizationStore(
+            run_path.with_name("kali_operation_authorizations.json")
         )
 
     def _hypothesis_store(self) -> JsonFileHypothesisStore | None:

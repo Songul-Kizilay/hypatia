@@ -3,7 +3,8 @@
 **Status:** Accepted design; execution is not implemented. Scope-revision
 enforcement landed in v0.3.305. Bounded execution-policy recording landed in
 v0.3.306. Inert operation preview landed in v0.3.307. Exact operation-digest
-authorization landed in v0.3.308.
+authorization landed in v0.3.308. Durable operation-authorization persistence
+landed in v0.3.309.
 
 ## Purpose
 
@@ -29,6 +30,9 @@ effects, budget and evidence handling are known before they run.
 - Hypatia can now approve that exact preview digest through a separate explicit
   human authorization step, still without constructing a command line or
   starting execution.
+- Kali operation authorizations are stored in a separate bounded JSON document
+  and a failed write refuses the approval rather than leaving an in-memory-only
+  decision.
 - The desktop can preview and exactly confirm save/revoke decisions for those
   program-scope revision records.
 - Program-scope revisions are enforced at approval, Start, restore and every
@@ -178,13 +182,15 @@ without becoming permanent target prohibitions.
    profile in v0.3.307.**
 4. Add explicit human authorization bound to the exact operation digest. **Done
    for the DNS-record lookup profile in v0.3.308.**
-5. Add a fake-runner integration with deterministic fixtures and prove zero
+5. Persist operation authorizations so the future runner has a durable,
+   auditable approval source. **Done in v0.3.309.**
+6. Add a fake-runner integration with deterministic fixtures and prove zero
    process creation on every refusal path.
-6. Add an opt-in WSL/Kali installation boundary and the single first reviewed
+7. Add an opt-in WSL/Kali installation boundary and the single first reviewed
    operation. Tests use a fake child-process adapter and local fixtures; no
    third-party target traffic is allowed.
-7. Connect typed observations to evidence review and reporting.
-8. Only then permit the bounded autonomous loop to select that exact capability
+8. Connect typed observations to evidence review and reporting.
+9. Only then permit the bounded autonomous loop to select that exact capability
    inside an already approved job.
 
 ## Acceptance tests before real execution

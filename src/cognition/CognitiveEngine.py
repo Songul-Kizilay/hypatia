@@ -172,6 +172,9 @@ from research.ResearchEvidenceIntegrityAuditor import ResearchEvidenceIntegrityA
 from research.ResearchExecutionAllowance import ResearchExecutionAllowance
 from research.ResearchExecutionStore import ResearchExecutionStore
 from research.ResearchFailureLesson import ResearchFailureLesson
+from research.ResearchKaliOperationAuthorizationStore import (
+    ResearchKaliOperationAuthorizationStore,
+)
 from research.ResearchPlan import ResearchPlan
 from research.ResearchPlanAuthorizationStore import (
     ResearchPlanAuthorizationStore,
@@ -289,6 +292,9 @@ class CognitiveEngine:
         failure_lesson_store: FailureLessonStore | None = None,
         hypothesis_store: HypothesisStore | None = None,
         plan_authorization_store: ResearchPlanAuthorizationStore | None = None,
+        kali_operation_authorization_store: (
+            ResearchKaliOperationAuthorizationStore | None
+        ) = None,
         program_scope_revision_store: ResearchProgramScopeRevisionStore | None = None,
         vulnerability_graph_store: VulnerabilityGraphStore | None = None,
         research_source_discovery_provider: (
@@ -622,6 +628,7 @@ class CognitiveEngine:
                 KaliOperationAuthorizationApplicationService(
                     response_composer,
                     self._kali_operation_preview_service,
+                    authorization_store=kali_operation_authorization_store,
                 )
             )
         self._source_ingestion_events = SourceIngestionEvents(event_bus)

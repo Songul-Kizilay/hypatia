@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
 from datetime import UTC, datetime
 from pathlib import Path
@@ -20,6 +21,10 @@ from cognition.KaliOperationAuthorizationApplicationService import (
 from cognition.KaliOperationPreviewApplicationService import (
     KaliOperationPreviewApplicationService,
 )
+from core.Exceptions import ResearchError
+from research.JsonFileResearchKaliOperationAuthorizationStore import (
+    JsonFileResearchKaliOperationAuthorizationStore,
+)
 from research.ResearchKaliOperationPreview import (
     ResearchDnsRecordType,
     ResearchKaliOperationKind,
@@ -32,6 +37,20 @@ from tests.cognition.test_kali_operation_preview_application_service import (
 )
 
 AUTH_TIME = datetime(2026, 9, 7, 12, 1, tzinfo=UTC)
+
+
+class FailingKaliOperationAuthorizationStore:
+    def __init__(self) -> None:
+        self.load_calls = 0
+        self.save_calls = 0
+
+    def load(self) -> list[object]:
+        self.load_calls += 1
+        return []
+
+    def save(self, authorizations: list[object]) -> None:
+        self.save_calls += 1
+        raise ResearchError("no write")
 
 
 class KaliOperationAuthorizationApplicationServiceTests(unittest.TestCase):
@@ -116,6 +135,65 @@ class KaliOperationAuthorizationApplicationServiceTests(unittest.TestCase):
         getaddrinfo.assert_not_called()
         run.assert_not_called()
         popen.assert_not_called()
+
+    def test_authorization_is_persisted_when_store_is_available(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonFileResearchKaliOperationAuthorizationStore(
+                Path(directory) / "kali-operation-authorizations.json"
+            )
+            service = KaliOperationAuthorizationApplicationService(
+                ResponseComposer(),
+                self.preview_service,
+                authorization_store=store,
+                clock=lambda: AUTH_TIME,
+                id_factory=lambda: "kali-auth-1",
+            )
+            digest = self.digest_for_request()
+
+            response = service.process_authorization(
+                self.request(operation_digest=digest)
+            )
+
+            self.assertTrue(response.success, response.message)
+            [authorization] = store.load()
+            self.assertEqual(authorization.authorization_id, "kali-auth-1")
+            self.assertEqual(authorization.operation_digest, digest)
+
+            restored = KaliOperationAuthorizationApplicationService(
+                ResponseComposer(),
+                self.preview_service,
+                authorization_store=store,
+                clock=lambda: AUTH_TIME,
+                id_factory=lambda: "kali-auth-2",
+            )
+            second = restored.process_authorization(
+                self.request(operation_digest=digest)
+            )
+            self.assertTrue(second.success, second.message)
+            self.assertEqual(
+                [entry.authorization_id for entry in store.load()],
+                ["kali-auth-1", "kali-auth-2"],
+            )
+
+    def test_store_write_failure_refuses_without_reporting_authorization(
+        self,
+    ) -> None:
+        store = FailingKaliOperationAuthorizationStore()
+        service = KaliOperationAuthorizationApplicationService(
+            ResponseComposer(),
+            self.preview_service,
+            authorization_store=store,  # type: ignore[arg-type]
+            clock=lambda: AUTH_TIME,
+            id_factory=lambda: "kali-auth-1",
+        )
+        response = service.process_authorization(
+            self.request(operation_digest=self.digest_for_request())
+        )
+
+        self.assertFalse(response.success)
+        self.assertIsNone(response.kali_operation_authorization)
+        self.assertIn("could not be recorded", response.message)
+        self.assertEqual(store.save_calls, 1)
 
     def test_digest_mismatch_refuses_before_dns_or_process(self) -> None:
         with (

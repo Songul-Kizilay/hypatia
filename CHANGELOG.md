@@ -2,6 +2,24 @@
 
 All notable project changes are recorded here.
 
+## [0.3.309] - 2026-09-07
+
+### Added
+
+- Added atomic JSON persistence for Kali operation authorization records.
+- Production bootstrap now wires a separate
+  `kali_operation_authorizations.json` store so future runner gates can read
+  exact operation approvals after restart.
+- Authorization creation now fails closed if the approval cannot be durably
+  recorded.
+
+### Safety and limits
+
+- This release still adds no Kali runner, terminal, shell, child process,
+  generic command execution, DNS lookup or network traffic.
+- Persisted operation approvals remain separate from plan approvals and do not
+  start or resume any execution on their own.
+
 ## [0.3.308] - 2026-09-07
 
 ### Added

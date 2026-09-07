@@ -8,7 +8,7 @@ They should not have to approve every routine step of an already approved job.
 The system must explain observations, distinguish hypotheses from verified
 findings, preserve evidence, and stop rather than expand its own authority.
 
-## Current checkpoint: v0.3.308
+## Current checkpoint: v0.3.309
 
 This increment supplies a tested request-target gate, not a finished bounty
 agent. `ResearchTargetScope` is immutable, bounded to 100 combined rules, and
@@ -285,3 +285,15 @@ revision digest, execution-policy digest and short expiry window. It still does
 not build a command line, launch a terminal, start Kali, create a child process,
 perform DNS, use the network or persist runner state. The next safe milestone
 is a fake runner that consumes this boundary without creating a real process.
+
+## v0.3.309: durable Kali operation authorization store
+
+Kali operation approvals now have a separate bounded JSON store wired through
+production bootstrap as `kali_operation_authorizations.json`. A successful
+authorization must be written durably before the response reports success; a
+write failure refuses the authorization.
+
+This creates an auditable approval source for the future fake runner, while
+keeping the authority separate from research-plan approvals. The store does not
+start, resume or schedule execution, and it still contains no command line,
+terminal instruction, executable path or Kali process state.
