@@ -299,7 +299,8 @@ class TargetResearchDraftDialog:
         self.status.set(
             "Scope preview ready: "
             f"{revision.program_id} · {revision.revision_id} · "
-            f"{revision.revision_digest[:12]}... · not saved"
+            f"{revision.revision_digest[:12]}... · "
+            f"{_scope_policy_summary(revision)} · not saved"
         )
 
     def _confirm_scope_enrollment(self) -> None:
@@ -329,7 +330,8 @@ class TargetResearchDraftDialog:
         self.status.set(
             "Scope saved: "
             f"{revision.program_id} · {revision.revision_id} · "
-            f"{revision.revision_digest[:12]}... · plan still needs approval"
+            f"{revision.revision_digest[:12]}... · "
+            f"{_scope_policy_summary(revision)} · plan still needs approval"
         )
 
     def _preview_scope_revocation(self) -> None:
@@ -354,7 +356,8 @@ class TargetResearchDraftDialog:
         self.status.set(
             "Scope revoke preview ready: "
             f"{preview.revision.program_id} · {preview.revision.revision_id} · "
-            f"{preview.revision.revision_digest[:12]}... · not revoked"
+            f"{preview.revision.revision_digest[:12]}... · "
+            f"{_scope_policy_summary(preview.revision)} · not revoked"
         )
 
     def _confirm_scope_revocation(self) -> None:
@@ -442,5 +445,16 @@ class TargetResearchDraftDialog:
 def _scope_revision_label(revision: ResearchProgramScopeRevision) -> str:
     return (
         f"{revision.program_id} · {revision.revision_id} · "
-        f"{revision.revision_digest[:12]}..."
+        f"{revision.revision_digest[:12]}... · {_scope_policy_summary(revision)}"
+    )
+
+
+def _scope_policy_summary(revision: ResearchProgramScopeRevision) -> str:
+    policy = revision.execution_policy
+    checks = ",".join(value.value for value in policy.permitted_check_classes)
+    ports = ",".join(str(value) for value in policy.permitted_ports)
+    return (
+        f"checks {checks}; ports {ports}; "
+        f"{policy.max_request_count} req/"
+        f"{policy.max_requests_per_minute} rpm/{policy.max_seconds:g}s"
     )

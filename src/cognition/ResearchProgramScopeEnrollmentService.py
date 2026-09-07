@@ -23,6 +23,10 @@ from research.ResearchProgramScopeEnrollmentPreview import (
     PROGRAM_SCOPE_REVOKE_ACTION,
     ResearchProgramScopeEnrollmentPreview,
 )
+from research.ResearchProgramScopeExecutionPolicy import (
+    DEFAULT_PROGRAM_SCOPE_EXECUTION_POLICY,
+    ResearchProgramScopeExecutionPolicy,
+)
 from research.ResearchProgramScopeRevision import (
     MAX_PROGRAM_SCOPE_REVISION_VALIDITY_SECONDS,
     ResearchProgramScopeRevision,
@@ -71,6 +75,7 @@ class ResearchProgramScopeEnrollmentService:
         scope: ResearchTargetScope,
         *,
         expires_at: datetime | None = None,
+        execution_policy: ResearchProgramScopeExecutionPolicy | None = None,
     ) -> ResearchProgramScopeEnrollmentPreview:
         """Build the exact new revision a later confirmation could append."""
         self._require_pending_capacity()
@@ -95,6 +100,7 @@ class ResearchProgramScopeEnrollmentService:
             expires_at=expires_at
             or confirmed_at
             + timedelta(seconds=MAX_PROGRAM_SCOPE_REVISION_VALIDITY_SECONDS),
+            execution_policy=execution_policy or DEFAULT_PROGRAM_SCOPE_EXECUTION_POLICY,
         )
         if (
             any(value.revision_id == revision.revision_id for value in self._revisions)

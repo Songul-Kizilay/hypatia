@@ -8,7 +8,7 @@ They should not have to approve every routine step of an already approved job.
 The system must explain observations, distinguish hypotheses from verified
 findings, preserve evidence, and stop rather than expand its own authority.
 
-## Current checkpoint: v0.3.305
+## Current checkpoint: v0.3.306
 
 This increment supplies a tested request-target gate, not a finished bounty
 agent. `ResearchTargetScope` is immutable, bounded to 100 combined rules, and
@@ -243,3 +243,16 @@ Refusals happen before approval consumption, durable execution checkpoints,
 budget spend, DNS lookup, provider calls or network traffic. This is still not
 Kali execution; it is the required authority gate that future structured Kali
 operations must reuse.
+
+## v0.3.306: explicit program execution policy snapshot
+
+Program-scope revisions now record an explicit bounded execution policy:
+permitted check classes, permitted ports, maximum request count, maximum
+request rate and maximum time. The initial default policy truthfully represents
+the existing HTTPS-only acquisition surface: public HTTPS content on port 443,
+with bounded request/rate/time limits. A separate policy digest protects those
+facts without changing existing scope revision identity.
+
+This still does not run Kali or add a process capability. It is the policy
+record a future inert Kali-operation preview and authorization path must bind
+before any child process can be considered.

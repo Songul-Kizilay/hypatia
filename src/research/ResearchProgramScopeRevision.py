@@ -16,6 +16,11 @@ from core.Exceptions import ResearchError
 from research.ResearchAuthorizer import ResearchAuthorizer
 from research.ResearchAutonomyBudget import MAX_AUTONOMY_SECONDS
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
+from research.ResearchProgramScopeExecutionPolicy import (
+    DEFAULT_PROGRAM_SCOPE_EXECUTION_POLICY,
+    ResearchProgramScopeExecutionPolicy,
+    execution_policy_digest,
+)
 from research.ResearchTargetScope import ResearchTargetScope
 from research.ResearchTargetScopeCodec import (
     canonical_target_scope_bytes,
@@ -44,9 +49,13 @@ class ResearchProgramScopeRevision:
     scope: ResearchTargetScope
     confirmed_at: datetime
     expires_at: datetime
+    execution_policy: ResearchProgramScopeExecutionPolicy = (
+        DEFAULT_PROGRAM_SCOPE_EXECUTION_POLICY
+    )
     revoked_at: datetime | None = None
     revoked_by: ResearchAuthorizer | None = None
     scope_digest: str = field(init=False)
+    execution_policy_digest: str = field(init=False)
     revision_digest: str = field(init=False)
     capabilities: frozenset[ResearchPlanStepCapability] = field(
         init=False, default=PROGRAM_SCOPE_CAPABILITIES
@@ -69,6 +78,10 @@ class ResearchProgramScopeRevision:
         )
         if not isinstance(self.scope, ResearchTargetScope):
             raise ResearchError("Program scope revision requires a validated scope.")
+        if not isinstance(self.execution_policy, ResearchProgramScopeExecutionPolicy):
+            raise ResearchError(
+                "Program scope revision requires a validated execution policy."
+            )
         self._aware(self.confirmed_at, "confirmation time")
         self._aware(self.expires_at, "expiry time")
         confirmed_instant = self.confirmed_at.astimezone(UTC)
@@ -98,6 +111,11 @@ class ResearchProgramScopeRevision:
         object.__setattr__(self, "revision_id", revision_id)
         object.__setattr__(self, "program_id", program_id)
         object.__setattr__(self, "scope_digest", target_scope_digest(self.scope))
+        object.__setattr__(
+            self,
+            "execution_policy_digest",
+            execution_policy_digest(self.execution_policy),
+        )
         object.__setattr__(self, "revision_digest", _revision_digest(self))
 
     @property

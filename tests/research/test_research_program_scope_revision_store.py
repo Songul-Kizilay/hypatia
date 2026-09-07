@@ -16,6 +16,12 @@ from research.JsonFileResearchProgramScopeRevisionStore import (
 )
 from research.ResearchAuthorizer import ResearchAuthorizer
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
+from research.ResearchProgramScopeExecutionPolicy import (
+    DEFAULT_PROGRAM_SCOPE_EXECUTION_POLICY,
+    ResearchProgramScopeCheckClass,
+    ResearchProgramScopeExecutionPolicy,
+    execution_policy_digest,
+)
 from research.ResearchProgramScopeRevision import (
     MAX_PROGRAM_SCOPE_PROGRAM_ID_CHARACTERS,
     MAX_PROGRAM_SCOPE_REVISION_ID_CHARACTERS,
@@ -50,6 +56,9 @@ def revision_fixture(
     scope: ResearchTargetScope | None = None,
     confirmed_at: datetime = _CONFIRMED,
     expires_at: datetime | None = None,
+    execution_policy: ResearchProgramScopeExecutionPolicy = (
+        DEFAULT_PROGRAM_SCOPE_EXECUTION_POLICY
+    ),
 ) -> ResearchProgramScopeRevision:
     return ResearchProgramScopeRevision(
         revision_id=revision_id,
@@ -57,6 +66,7 @@ def revision_fixture(
         scope=scope or scope_fixture(),
         confirmed_at=confirmed_at,
         expires_at=expires_at or confirmed_at + timedelta(hours=1),
+        execution_policy=execution_policy,
     )
 
 
@@ -66,6 +76,14 @@ class ProgramScopeRevisionTests(unittest.TestCase):
         self.assertEqual(revision.revision_id, "revision-1")
         self.assertEqual(revision.program_id, "program-a")
         self.assertEqual(revision.scope_digest, target_scope_digest(revision.scope))
+        self.assertEqual(
+            revision.execution_policy,
+            DEFAULT_PROGRAM_SCOPE_EXECUTION_POLICY,
+        )
+        self.assertEqual(
+            revision.execution_policy_digest,
+            execution_policy_digest(revision.execution_policy),
+        )
         self.assertEqual(len(revision.revision_digest), 64)
         self.assertEqual(
             revision.capabilities,
@@ -90,6 +108,7 @@ class ProgramScopeRevisionTests(unittest.TestCase):
         }
         for field, value in (
             ("scope_digest", "0" * 64),
+            ("execution_policy_digest", "0" * 64),
             ("revision_digest", "0" * 64),
             ("capabilities", frozenset()),
             ("transport", "http:80"),
@@ -97,6 +116,44 @@ class ProgramScopeRevisionTests(unittest.TestCase):
         ):
             with self.subTest(field=field), self.assertRaises(TypeError):
                 ResearchProgramScopeRevision(**values, **{field: value})  # type: ignore[arg-type]
+
+    def test_custom_execution_policy_is_bounded_and_digest_bound(self) -> None:
+        policy = ResearchProgramScopeExecutionPolicy(
+            permitted_check_classes=(
+                ResearchProgramScopeCheckClass.PUBLIC_HTTPS_CONTENT,
+                ResearchProgramScopeCheckClass.DNS_RECORD_LOOKUP,
+            ),
+            permitted_ports=(443, 8443),
+            max_request_count=5,
+            max_requests_per_minute=2,
+            max_seconds=120.0,
+        )
+        revision = revision_fixture()
+        custom = revision_fixture(execution_policy=policy)
+        self.assertNotEqual(
+            revision.execution_policy_digest,
+            custom.execution_policy_digest,
+        )
+        self.assertEqual(revision.revision_digest, custom.revision_digest)
+
+    def test_invalid_execution_policy_is_rejected(self) -> None:
+        for factory in (
+            lambda: ResearchProgramScopeExecutionPolicy(permitted_check_classes=()),
+            lambda: ResearchProgramScopeExecutionPolicy(
+                permitted_check_classes=(
+                    ResearchProgramScopeCheckClass.PUBLIC_HTTPS_CONTENT,
+                    ResearchProgramScopeCheckClass.PUBLIC_HTTPS_CONTENT,
+                )
+            ),
+            lambda: ResearchProgramScopeExecutionPolicy(permitted_ports=()),
+            lambda: ResearchProgramScopeExecutionPolicy(permitted_ports=(443, 443)),
+            lambda: ResearchProgramScopeExecutionPolicy(permitted_ports=(0,)),
+            lambda: ResearchProgramScopeExecutionPolicy(max_request_count=0),
+            lambda: ResearchProgramScopeExecutionPolicy(max_requests_per_minute=0),
+            lambda: ResearchProgramScopeExecutionPolicy(max_seconds=0),
+        ):
+            with self.subTest(factory=factory), self.assertRaises(ResearchError):
+                factory()
 
     def test_revision_is_frozen(self) -> None:
         revision = revision_fixture()
@@ -236,12 +293,26 @@ class ProgramScopeRevisionCodecTests(unittest.TestCase):
         )
         self.assertEqual(loaded, revisions)
         document = json.loads(encode_program_scope_revisions(revisions))
-        self.assertEqual(document["schema_version"], 1)
+        self.assertEqual(document["schema_version"], 2)
         self.assertEqual(
             document["revisions"][0]["capabilities"],
             ["source_accept", "source_fetch"],
         )
         self.assertEqual(document["revisions"][0]["transport"], PROGRAM_SCOPE_TRANSPORT)
+        self.assertEqual(
+            document["revisions"][0]["execution_policy"],
+            {
+                "max_request_count": 3,
+                "max_requests_per_minute": 3,
+                "max_seconds": 60.0,
+                "permitted_check_classes": ["public_https_content"],
+                "permitted_ports": [443],
+            },
+        )
+        self.assertEqual(
+            document["revisions"][0]["execution_policy_digest"],
+            revisions[0].execution_policy_digest,
+        )
         self.assertEqual(document["revisions"][0]["confirmed_by"], "human")
 
     def test_fixed_audit_facts_and_derived_state_are_strict_on_decode(self) -> None:
@@ -249,6 +320,8 @@ class ProgramScopeRevisionCodecTests(unittest.TestCase):
             ("capabilities", ["source_fetch"]),
             ("capabilities", ["source_fetch", "source_accept"]),
             ("transport", "https:8443"),
+            ("execution_policy", {"permitted_ports": [443]}),
+            ("execution_policy_digest", "0" * 64),
             ("confirmed_by", "model"),
             ("state", "active"),
             ("scope_digest", "0" * 64),
@@ -258,6 +331,25 @@ class ProgramScopeRevisionCodecTests(unittest.TestCase):
             document["revisions"][0][field] = value
             with self.subTest(field=field), self.assertRaises(ResearchError):
                 decode_program_scope_revisions(json.dumps(document).encode())
+
+    def test_legacy_v1_history_restores_default_policy_truthfully(self) -> None:
+        revision = revision_fixture()
+        document = json.loads(encode_program_scope_revisions([revision]))
+        document["schema_version"] = 1
+        del document["revisions"][0]["execution_policy"]
+        del document["revisions"][0]["execution_policy_digest"]
+
+        loaded = decode_program_scope_revisions(json.dumps(document).encode())
+
+        self.assertEqual(loaded[0].revision_digest, revision.revision_digest)
+        self.assertEqual(
+            loaded[0].execution_policy,
+            DEFAULT_PROGRAM_SCOPE_EXECUTION_POLICY,
+        )
+        self.assertEqual(
+            loaded[0].execution_policy_digest,
+            execution_policy_digest(DEFAULT_PROGRAM_SCOPE_EXECUTION_POLICY),
+        )
 
     def test_authority_field_changes_fail_without_a_matching_revision_digest(
         self,
@@ -320,7 +412,7 @@ class ProgramScopeRevisionCodecTests(unittest.TestCase):
                 decode_program_scope_revisions(payload.replace(original, duplicate, 1))
 
     def test_schema_type_and_corrupt_bytes_are_rejected(self) -> None:
-        for version in (True, 1.0, "1", None, 0, 2):
+        for version in (True, 1.0, "1", None, 0, 3):
             document = json.loads(encode_program_scope_revisions([revision_fixture()]))
             document["schema_version"] = version
             with self.subTest(version=version), self.assertRaises(ResearchError):

@@ -17,6 +17,10 @@ from research.ResearchProgramScopeEnrollmentPreview import (
     PROGRAM_SCOPE_CREATE_ACTION,
     PROGRAM_SCOPE_REVOKE_ACTION,
 )
+from research.ResearchProgramScopeExecutionPolicy import (
+    ResearchProgramScopeCheckClass,
+    ResearchProgramScopeExecutionPolicy,
+)
 from research.ResearchProgramScopeRevision import ResearchProgramScopeRevision
 from research.ResearchTargetScope import ResearchTargetScope, TargetHostRule
 
@@ -144,6 +148,32 @@ class ProgramScopeEnrollmentServiceTests(unittest.TestCase):
         self.assertEqual(store.save_calls, [])
         with self.assertRaises(FrozenInstanceError):
             preview.action = "revoke"  # type: ignore[misc]
+
+    def test_create_preview_records_exact_execution_policy_without_running(
+        self,
+    ) -> None:
+        store = MemoryStore()
+        service = self.service(store, ids=["revision-created"])
+        policy = ResearchProgramScopeExecutionPolicy(
+            permitted_check_classes=(
+                ResearchProgramScopeCheckClass.PUBLIC_HTTPS_CONTENT,
+                ResearchProgramScopeCheckClass.DNS_RECORD_LOOKUP,
+            ),
+            permitted_ports=(443,),
+            max_request_count=2,
+            max_requests_per_minute=1,
+            max_seconds=30.0,
+        )
+
+        preview = service.preview_create(
+            "program-a",
+            scope(),
+            execution_policy=policy,
+        )
+
+        self.assertEqual(preview.revision.execution_policy, policy)
+        self.assertEqual(service.revisions(), ())
+        self.assertEqual(store.save_calls, [])
 
     def test_create_confirmation_persists_previewed_value_then_publishes(self) -> None:
         store = MemoryStore()

@@ -9,6 +9,13 @@ from typing import Any
 
 from core.Exceptions import ResearchError
 from research.ResearchAuthorizer import ResearchAuthorizer
+from research.ResearchProgramScopeExecutionPolicy import (
+    DEFAULT_PROGRAM_SCOPE_EXECUTION_POLICY,
+    ResearchProgramScopeExecutionPolicy,
+    execution_policy_digest,
+    execution_policy_document,
+    parse_execution_policy,
+)
 from research.ResearchProgramScopeRevision import (
     PROGRAM_SCOPE_CAPABILITIES,
     PROGRAM_SCOPE_TRANSPORT,
@@ -23,10 +30,11 @@ from research.ResearchTargetScopeCodec import (
 
 MAX_PROGRAM_SCOPE_REVISION_STORE_BYTES = 4 * 1024 * 1024
 MAX_PROGRAM_SCOPE_REVISIONS = 500
-PROGRAM_SCOPE_REVISION_SCHEMA_VERSION = 1
+PROGRAM_SCOPE_REVISION_SCHEMA_VERSION = 2
+_LEGACY_PROGRAM_SCOPE_REVISION_SCHEMA_VERSION = 1
 
 _DOCUMENT_FIELDS = frozenset({"schema_version", "revisions"})
-_ENTRY_FIELDS = frozenset(
+_ENTRY_FIELDS_V1 = frozenset(
     {
         "revision_id",
         "program_id",
@@ -43,6 +51,9 @@ _ENTRY_FIELDS = frozenset(
         "revoked_by",
     }
 )
+_ENTRY_FIELDS_V2 = _ENTRY_FIELDS_V1 | frozenset(
+    {"execution_policy", "execution_policy_digest"}
+)
 _MODEL_FIELDS = frozenset(
     {
         "revision_id",
@@ -50,9 +61,11 @@ _MODEL_FIELDS = frozenset(
         "scope",
         "confirmed_at",
         "expires_at",
+        "execution_policy",
         "revoked_at",
         "revoked_by",
         "scope_digest",
+        "execution_policy_digest",
         "revision_digest",
         "capabilities",
         "transport",
@@ -110,17 +123,20 @@ def decode_program_scope_revisions(
         ) from error
     if not isinstance(document, dict) or set(document) != _DOCUMENT_FIELDS:
         raise ResearchError("Program scope revision history fields are invalid.")
-    if (
-        type(document["schema_version"]) is not int
-        or document["schema_version"] != PROGRAM_SCOPE_REVISION_SCHEMA_VERSION
+    if type(document["schema_version"]) is not int or document[
+        "schema_version"
+    ] not in (
+        _LEGACY_PROGRAM_SCOPE_REVISION_SCHEMA_VERSION,
+        PROGRAM_SCOPE_REVISION_SCHEMA_VERSION,
     ):
         raise ResearchError("Program scope revision history schema is unsupported.")
+    schema_version = document["schema_version"]
     values = document["revisions"]
     if not isinstance(values, list):
         raise ResearchError("Program scope revisions must be a list.")
     if len(values) > MAX_PROGRAM_SCOPE_REVISIONS:
         raise ResearchError("Program scope revision history has too many entries.")
-    revisions = [_parse_entry(value) for value in values]
+    revisions = [_parse_entry(value, schema_version) for value in values]
     validate_program_scope_revision_history(revisions)
     return revisions
 
@@ -170,6 +186,8 @@ def _entry_document(revision: ResearchProgramScopeRevision) -> dict[str, Any]:
         "revision_digest": revision.revision_digest,
         "capabilities": list(_CAPABILITY_FACTS),
         "transport": PROGRAM_SCOPE_TRANSPORT,
+        "execution_policy": execution_policy_document(revision.execution_policy),
+        "execution_policy_digest": revision.execution_policy_digest,
         "confirmed_at": revision.confirmed_at.isoformat(),
         "confirmed_by": ResearchAuthorizer.HUMAN.value,
         "expires_at": revision.expires_at.isoformat(),
@@ -183,8 +201,16 @@ def _entry_document(revision: ResearchProgramScopeRevision) -> dict[str, Any]:
     }
 
 
-def _parse_entry(value: object) -> ResearchProgramScopeRevision:
-    if not isinstance(value, dict) or set(value) != _ENTRY_FIELDS:
+def _parse_entry(
+    value: object,
+    schema_version: int,
+) -> ResearchProgramScopeRevision:
+    entry_fields = (
+        _ENTRY_FIELDS_V1
+        if schema_version == _LEGACY_PROGRAM_SCOPE_REVISION_SCHEMA_VERSION
+        else _ENTRY_FIELDS_V2
+    )
+    if not isinstance(value, dict) or set(value) != entry_fields:
         raise ResearchError("A program scope revision entry is invalid.")
     if value["capabilities"] != _CAPABILITY_FACTS:
         raise ResearchError("Program scope revision capabilities are invalid.")
@@ -220,6 +246,11 @@ def _parse_entry(value: object) -> ResearchProgramScopeRevision:
         revoked_by = ResearchAuthorizer.HUMAN
     else:
         raise ResearchError("Program scope revision revocation provenance is invalid.")
+    execution_policy = (
+        DEFAULT_PROGRAM_SCOPE_EXECUTION_POLICY
+        if schema_version == _LEGACY_PROGRAM_SCOPE_REVISION_SCHEMA_VERSION
+        else parse_execution_policy(value["execution_policy"])
+    )
 
     revision = ResearchProgramScopeRevision(
         revision_id=_text(value["revision_id"]),
@@ -227,6 +258,7 @@ def _parse_entry(value: object) -> ResearchProgramScopeRevision:
         scope=scope,
         confirmed_at=_timestamp(value["confirmed_at"]),
         expires_at=_timestamp(value["expires_at"]),
+        execution_policy=execution_policy,
         revoked_at=revoked_at,
         revoked_by=revoked_by,
     )
@@ -236,6 +268,13 @@ def _parse_entry(value: object) -> ResearchProgramScopeRevision:
         raise ResearchError("Program scope revision scope digest does not match.")
     if value["revision_digest"] != revision.revision_digest:
         raise ResearchError("Program scope revision digest does not match.")
+    if (
+        schema_version == PROGRAM_SCOPE_REVISION_SCHEMA_VERSION
+        and value["execution_policy_digest"] != revision.execution_policy_digest
+    ):
+        raise ResearchError(
+            "Program scope revision execution policy digest does not match."
+        )
     return revision
 
 
@@ -246,6 +285,14 @@ def _validate_revision(revision: ResearchProgramScopeRevision) -> None:
         raise ResearchError("Program scope revision capabilities are invalid.")
     if revision.transport != PROGRAM_SCOPE_TRANSPORT:
         raise ResearchError("Program scope revision transport is invalid.")
+    if not isinstance(revision.execution_policy, ResearchProgramScopeExecutionPolicy):
+        raise ResearchError("Program scope revision execution policy is invalid.")
+    if revision.execution_policy_digest != execution_policy_digest(
+        revision.execution_policy
+    ):
+        raise ResearchError(
+            "Program scope revision execution policy digest does not match."
+        )
     if revision.confirmed_by is not ResearchAuthorizer.HUMAN:
         raise ResearchError(
             "Program scope revision confirmation provenance is invalid."

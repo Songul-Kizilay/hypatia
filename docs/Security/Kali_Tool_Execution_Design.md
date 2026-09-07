@@ -1,7 +1,8 @@
 # Scope-bound Kali tool execution security design
 
 **Status:** Accepted design; execution is not implemented. Scope-revision
-enforcement landed in v0.3.305.
+enforcement landed in v0.3.305. Bounded execution-policy recording landed in
+v0.3.306.
 
 ## Purpose
 
@@ -20,6 +21,8 @@ effects, budget and evidence handling are known before they run.
   a central effect and invocation gate.
 - No shell or generic process capability is registered.
 - Research target rules and immutable program-scope revision records exist.
+- Program-scope revisions now record explicit bounded execution policy facts:
+  permitted check classes, ports, request count, request rate and time budget.
 - The desktop can preview and exactly confirm save/revoke decisions for those
   program-scope revision records.
 - Program-scope revisions are enforced at approval, Start, restore and every
@@ -162,7 +165,8 @@ without becoming permanent target prohibitions.
 1. Enforce exact active program-scope revisions at approval, Start, restore and
    every Advance, before side effects. **Done in v0.3.305.**
 2. Extend enrollment with explicit permitted check classes, ports, rate limits,
-   request counts and time budgets.
+   request counts and time budgets. **Initial policy recording done in
+   v0.3.306.**
 3. Add an inert structured Kali operation preview. It builds and displays no
    raw command string and starts no process.
 4. Add explicit human authorization bound to the exact operation digest.

@@ -2,6 +2,28 @@
 
 All notable project changes are recorded here.
 
+## [0.3.306] - 2026-09-07
+
+### Added
+
+- Program-scope revisions now carry an explicit bounded execution policy for
+  future target operations: permitted check classes, permitted ports, request
+  count, request rate and time budget.
+- The policy is immutable, validated, persisted under program-scope revision
+  schema v2, and protected by its own policy digest without changing existing
+  scope revision identity.
+- Scope enrollment preview can carry an exact policy while still performing no
+  execution, DNS lookup, network request, model call or durable write until the
+  existing explicit confirmation step.
+
+### Safety and limits
+
+- This release still adds no Kali runner, terminal, shell, process capability,
+  scan, probe, exploit or arbitrary command execution. It only records the
+  policy facts a later reviewed Kali-operation layer must enforce.
+- Legacy schema-v1 scope histories remain readable and restore the existing
+  HTTPS-only policy truthfully instead of widening authority.
+
 ## [0.3.305] - 2026-09-06
 
 ### Added
