@@ -28,6 +28,9 @@ from cognition.FailureMemoryApplicationService import (
 from cognition.HypothesisApplicationService import (
     HypothesisApplicationService,
 )
+from cognition.KaliOperationAuthorizationApplicationService import (
+    KaliOperationAuthorizationApplicationService,
+)
 from cognition.KaliOperationPreviewApplicationService import (
     KaliOperationPreviewApplicationService,
 )
@@ -605,11 +608,20 @@ class CognitiveEngine:
         self._kali_operation_preview_service: (
             KaliOperationPreviewApplicationService | None
         ) = None
+        self._kali_operation_authorization_service: (
+            KaliOperationAuthorizationApplicationService | None
+        ) = None
         if program_scope_revision_store is not None:
             self._kali_operation_preview_service = (
                 KaliOperationPreviewApplicationService(
                     response_composer,
                     program_scope_revision_store,
+                )
+            )
+            self._kali_operation_authorization_service = (
+                KaliOperationAuthorizationApplicationService(
+                    response_composer,
+                    self._kali_operation_preview_service,
                 )
             )
         self._source_ingestion_events = SourceIngestionEvents(event_bus)
@@ -676,6 +688,18 @@ class CognitiveEngine:
                     "Program scope revisions are unavailable in this runtime.",
                 )
             return self._kali_operation_preview_service.process_preview(request)
+
+        if KaliOperationAuthorizationApplicationService.is_authorization_request(
+            request
+        ):
+            if self._kali_operation_authorization_service is None:
+                return self._response_composer.kali_operation_authorization_failure(
+                    request,
+                    "Program scope revisions are unavailable in this runtime.",
+                )
+            return self._kali_operation_authorization_service.process_authorization(
+                request
+            )
 
         if self._research_plan_execution_service.is_start_request(request):
             return self._research_plan_execution_service.process_start(request)

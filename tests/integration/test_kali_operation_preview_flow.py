@@ -15,6 +15,9 @@ if str(SRC_DIR) not in sys.path:
 
 from brain.BrainRequest import BrainRequest
 from cognition.CognitiveEngine import CognitiveEngine
+from cognition.KaliOperationAuthorizationApplicationService import (
+    KALI_OPERATION_AUTHORIZATION_INTENT,
+)
 from cognition.KaliOperationPreviewApplicationService import (
     KALI_OPERATION_PREVIEW_INTENT,
 )
@@ -119,6 +122,55 @@ class KaliOperationPreviewFlowTests(unittest.TestCase):
         getaddrinfo.assert_not_called()
         popen.assert_not_called()
 
+    def test_structured_authorization_routes_without_execution(self) -> None:
+        preview = self.engine.process(
+            BrainRequest(
+                message="preview Kali DNS operation",
+                metadata={
+                    "intent": KALI_OPERATION_PREVIEW_INTENT,
+                    "program_id": "program-a",
+                    "scope_revision_id": self.revision.revision_id,
+                    "scope_revision_digest": self.revision.revision_digest,
+                    "kali_operation_kind": (
+                        ResearchKaliOperationKind.DNS_RECORD_LOOKUP.value
+                    ),
+                    "hostname": "www.example.test",
+                    "dns_record_type": ResearchDnsRecordType.A.value,
+                },
+            )
+        ).kali_operation_preview
+        assert preview is not None
+
+        with (
+            patch("socket.getaddrinfo") as getaddrinfo,
+            patch("subprocess.Popen") as popen,
+        ):
+            response = self.engine.process(
+                BrainRequest(
+                    message="authorize Kali DNS operation",
+                    metadata={
+                        "intent": KALI_OPERATION_AUTHORIZATION_INTENT,
+                        "program_id": "program-a",
+                        "scope_revision_id": self.revision.revision_id,
+                        "scope_revision_digest": self.revision.revision_digest,
+                        "kali_operation_kind": (
+                            ResearchKaliOperationKind.DNS_RECORD_LOOKUP.value
+                        ),
+                        "hostname": "www.example.test",
+                        "dns_record_type": ResearchDnsRecordType.A.value,
+                        "operation_digest": preview.operation_digest,
+                    },
+                )
+            )
+
+        self.assertTrue(response.success, response.message)
+        self.assertEqual(response.intent, KALI_OPERATION_AUTHORIZATION_INTENT)
+        self.assertIsNotNone(response.kali_operation_authorization)
+        self.assertIn("Execution: not started", response.message)
+        self.assertIn("Command line: not constructed", response.message)
+        getaddrinfo.assert_not_called()
+        popen.assert_not_called()
+
     def test_structured_preview_refuses_when_scope_store_is_absent(self) -> None:
         engine = CognitiveEngine(
             KnowledgeEngine(),
@@ -143,6 +195,31 @@ class KaliOperationPreviewFlowTests(unittest.TestCase):
         self.assertFalse(response.success)
         self.assertIn("scope revisions are unavailable", response.message)
         self.assertIsNone(response.kali_operation_preview)
+
+    def test_structured_authorization_refuses_when_scope_store_is_absent(self) -> None:
+        engine = CognitiveEngine(
+            KnowledgeEngine(),
+            self.memory_manager,
+            Planner(),
+            self.event_bus,
+            ResponseComposer(),
+            self.session_manager,
+            SessionRenameTransactionService(
+                session_manager=self.session_manager,
+                memory_manager=self.memory_manager,
+                event_bus=self.event_bus,
+            ),
+        )
+        response = engine.process(
+            BrainRequest(
+                message="authorize Kali DNS operation",
+                metadata={"intent": KALI_OPERATION_AUTHORIZATION_INTENT},
+            )
+        )
+
+        self.assertFalse(response.success)
+        self.assertIn("scope revisions are unavailable", response.message)
+        self.assertIsNone(response.kali_operation_authorization)
 
 
 if __name__ == "__main__":

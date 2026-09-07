@@ -58,6 +58,9 @@ from research.ResearchExecutionContinuation import (
     ResearchExecutionContinuation,
 )
 from research.ResearchFailureLesson import ResearchFailureLesson
+from research.ResearchKaliOperationAuthorization import (
+    ResearchKaliOperationAuthorization,
+)
 from research.ResearchKaliOperationPreview import ResearchKaliOperationPreview
 from research.ResearchPairedProviderQualityReport import (
     ResearchPairedProviderQualityReport,
@@ -1097,6 +1100,61 @@ class ResponseComposer:
             ),
             request_id=request.request_id,
             intent="kali_operation_preview",
+            memory_count=0,
+            success=False,
+        )
+
+    def kali_operation_authorization(
+        self,
+        request: BrainRequest,
+        authorization: ResearchKaliOperationAuthorization,
+    ) -> BrainResponse:
+        """Report a human approval record without starting execution."""
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Kali operation authorization:",
+                    f"Authorization ID: {authorization.authorization_id}",
+                    f"Operation digest: {authorization.operation_digest}",
+                    f"Program: {authorization.program_id}",
+                    f"Scope revision: {authorization.scope_revision_id}",
+                    f"Scope revision digest: {authorization.scope_revision_digest}",
+                    "Execution policy digest: "
+                    f"{authorization.execution_policy_digest}",
+                    f"Authorized by: {authorization.authorized_by.value}",
+                    f"Authorized at: {authorization.authorized_at.isoformat()}",
+                    f"Expires at: {authorization.expires_at.isoformat()}",
+                    "Command line: not constructed",
+                    "Execution: not started",
+                    "Process: not created",
+                    "Network/DNS: not used",
+                )
+            ),
+            request_id=request.request_id,
+            intent="kali_operation_authorization",
+            memory_count=0,
+            kali_operation_authorization=authorization,
+        )
+
+    def kali_operation_authorization_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Report a refused operation approval without side effects."""
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Kali operation authorization refused:",
+                    f"Reason: {message}",
+                    "Command line: not constructed",
+                    "Execution: not started",
+                    "Process: not created",
+                    "Network/DNS: not used",
+                )
+            ),
+            request_id=request.request_id,
+            intent="kali_operation_authorization",
             memory_count=0,
             success=False,
         )

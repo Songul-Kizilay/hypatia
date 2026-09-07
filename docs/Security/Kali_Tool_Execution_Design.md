@@ -2,7 +2,8 @@
 
 **Status:** Accepted design; execution is not implemented. Scope-revision
 enforcement landed in v0.3.305. Bounded execution-policy recording landed in
-v0.3.306. Inert operation preview landed in v0.3.307.
+v0.3.306. Inert operation preview landed in v0.3.307. Exact operation-digest
+authorization landed in v0.3.308.
 
 ## Purpose
 
@@ -25,6 +26,9 @@ effects, budget and evidence handling are known before they run.
   permitted check classes, ports, request count, request rate and time budget.
 - Hypatia can now build an inert DNS-record lookup operation preview bound to
   the exact active scope revision and execution-policy digest.
+- Hypatia can now approve that exact preview digest through a separate explicit
+  human authorization step, still without constructing a command line or
+  starting execution.
 - The desktop can preview and exactly confirm save/revoke decisions for those
   program-scope revision records.
 - Program-scope revisions are enforced at approval, Start, restore and every
@@ -172,7 +176,8 @@ without becoming permanent target prohibitions.
 3. Add an inert structured Kali operation preview. It builds and displays no
    raw command string and starts no process. **Done for the DNS-record lookup
    profile in v0.3.307.**
-4. Add explicit human authorization bound to the exact operation digest.
+4. Add explicit human authorization bound to the exact operation digest. **Done
+   for the DNS-record lookup profile in v0.3.308.**
 5. Add a fake-runner integration with deterministic fixtures and prove zero
    process creation on every refusal path.
 6. Add an opt-in WSL/Kali installation boundary and the single first reviewed

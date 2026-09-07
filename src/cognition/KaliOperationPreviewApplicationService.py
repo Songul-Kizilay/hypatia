@@ -46,14 +46,17 @@ class KaliOperationPreviewApplicationService:
     def process_preview(self, request: BrainRequest) -> BrainResponse:
         """Build a side-effect-free operation preview or a bounded refusal."""
         try:
-            preview = self._preview(request)
+            preview = self.preview_for_request(request)
         except ResearchError as error:
             return self._response_composer.kali_operation_preview_failure(
                 request, str(error)
             )
         return self._response_composer.kali_operation_preview(request, preview)
 
-    def _preview(self, request: BrainRequest) -> ResearchKaliOperationPreview:
+    def preview_for_request(
+        self, request: BrainRequest
+    ) -> ResearchKaliOperationPreview:
+        """Rebuild the exact inert operation preview from structured metadata."""
         kind = self._operation_kind(request.metadata.get("kali_operation_kind"))
         if kind is not ResearchKaliOperationKind.DNS_RECORD_LOOKUP:
             raise ResearchError("Kali operation preview kind is not supported.")

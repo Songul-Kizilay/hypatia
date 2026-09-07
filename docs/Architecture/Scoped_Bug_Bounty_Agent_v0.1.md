@@ -8,7 +8,7 @@ They should not have to approve every routine step of an already approved job.
 The system must explain observations, distinguish hypotheses from verified
 findings, preserve evidence, and stop rather than expand its own authority.
 
-## Current checkpoint: v0.3.307
+## Current checkpoint: v0.3.308
 
 This increment supplies a tested request-target gate, not a finished bounty
 agent. `ResearchTargetScope` is immutable, bounded to 100 combined rules, and
@@ -272,3 +272,16 @@ DNS-record lookup profile. The preview is bound to:
 The preview does not construct a raw command string, start Kali, launch a
 terminal, create a process, perform DNS, use the network or write durable state.
 It is the visible proposal a future exact operation authorization must approve.
+
+## v0.3.308: exact Kali operation authorization
+
+Hypatia can now authorize the first structured Kali-operation preview by exact
+operation digest. The authorization service rebuilds the preview from the
+current active program-scope revision before approval, then refuses if the
+supplied digest no longer matches the operation facts.
+
+The authorization names the human decision, operation digest, program, scope
+revision digest, execution-policy digest and short expiry window. It still does
+not build a command line, launch a terminal, start Kali, create a child process,
+perform DNS, use the network or persist runner state. The next safe milestone
+is a fake runner that consumes this boundary without creating a real process.

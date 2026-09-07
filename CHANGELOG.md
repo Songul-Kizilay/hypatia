@@ -2,6 +2,26 @@
 
 All notable project changes are recorded here.
 
+## [0.3.308] - 2026-09-07
+
+### Added
+
+- Added explicit human authorization for the first reviewed Kali operation
+  profile by binding approval to one exact inert operation digest.
+- Kali operation authorization re-derives the preview from canonical active
+  program-scope state before approval, so changed host, record type, scope
+  revision, policy or operation facts refuse instead of inheriting approval.
+- Authorization responses expose the operation digest, scope revision digest,
+  execution policy digest, authorization window and human authorizer.
+
+### Safety and limits
+
+- This release still adds no Kali runner, terminal, shell, child process,
+  generic command execution, DNS lookup or network traffic.
+- Operation approval does not construct a command line and does not start
+  execution; it is a bounded prerequisite for a future fake runner and then a
+  reviewed WSL/Kali adapter.
+
 ## [0.3.307] - 2026-09-07
 
 ### Added

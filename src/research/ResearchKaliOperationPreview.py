@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
@@ -20,6 +21,7 @@ from research.ResearchProgramScopeExecutionPolicy import (
 
 MAX_KALI_OPERATION_HOSTNAME_CHARACTERS = 253
 _KALI_OPERATION_DIGEST_SCHEMA = "hypatia:kali-operation-preview:v1"
+_SHA256_HEX_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 
 class ResearchKaliOperationKind(StrEnum):
@@ -138,7 +140,6 @@ def kali_operation_preview_document(
         "max_request_count": preview.max_request_count,
         "max_requests_per_minute": preview.max_requests_per_minute,
         "max_seconds": preview.max_seconds,
-        "created_at": preview.created_at.isoformat(),
     }
 
 
@@ -161,3 +162,8 @@ def canonical_kali_operation_preview_bytes(
 def kali_operation_preview_digest(preview: ResearchKaliOperationPreview) -> str:
     """Identify one inert operation proposal."""
     return hashlib.sha256(canonical_kali_operation_preview_bytes(preview)).hexdigest()
+
+
+def is_kali_operation_digest(value: object) -> bool:
+    """Return whether a value can name one reviewed operation preview."""
+    return isinstance(value, str) and _SHA256_HEX_PATTERN.fullmatch(value) is not None
