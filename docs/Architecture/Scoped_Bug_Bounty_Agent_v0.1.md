@@ -8,7 +8,7 @@ They should not have to approve every routine step of an already approved job.
 The system must explain observations, distinguish hypotheses from verified
 findings, preserve evidence, and stop rather than expand its own authority.
 
-## Current checkpoint: v0.3.309
+## Current checkpoint: v0.3.310
 
 This increment supplies a tested request-target gate, not a finished bounty
 agent. `ResearchTargetScope` is immutable, bounded to 100 combined rules, and
@@ -295,5 +295,18 @@ write failure refuses the authorization.
 
 This creates an auditable approval source for the future fake runner, while
 keeping the authority separate from research-plan approvals. The store does not
-start, resume or schedule execution, and it still contains no command line,
-terminal instruction, executable path or Kali process state.
+start, resume or schedule execution, and it still contains no terminal
+instruction or Kali process state.
+
+## v0.3.310: inert reviewed Kali command plan
+
+Hypatia can now derive the reviewed terminal argv plan for the first
+DNS-record lookup operation. The plan is code-owned, visible in the preview and
+bound into the operation digest before human authorization.
+
+This is still not execution. No terminal, child process, DNS lookup or network
+traffic exists. The plan is not a shell command string and does not accept
+user-authored or model-authored flags; it records the fixed `/usr/bin/dig`
+argv shape, normalized in-scope hostname, reviewed DNS record type,
+`shell=False` and closed stdin so the future fake runner has a narrow contract
+to consume.

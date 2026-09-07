@@ -116,7 +116,8 @@ class KaliOperationPreviewFlowTests(unittest.TestCase):
         self.assertTrue(response.success, response.message)
         self.assertEqual(response.intent, KALI_OPERATION_PREVIEW_INTENT)
         self.assertIsNotNone(response.kali_operation_preview)
-        self.assertIn("Command line: not constructed", response.message)
+        self.assertIn("Command plan: reviewed argv only", response.message)
+        self.assertIn("argv[0]: /usr/bin/dig", response.message)
         self.assertIn("Execution: not started", response.message)
         self.assertEqual(len(self.scope_store.load()), 1)
         getaddrinfo.assert_not_called()
@@ -167,7 +168,7 @@ class KaliOperationPreviewFlowTests(unittest.TestCase):
         self.assertEqual(response.intent, KALI_OPERATION_AUTHORIZATION_INTENT)
         self.assertIsNotNone(response.kali_operation_authorization)
         self.assertIn("Execution: not started", response.message)
-        self.assertIn("Command line: not constructed", response.message)
+        self.assertIn("Command plan: bound by operation digest", response.message)
         getaddrinfo.assert_not_called()
         popen.assert_not_called()
 

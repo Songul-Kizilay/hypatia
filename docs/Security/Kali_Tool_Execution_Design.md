@@ -4,7 +4,8 @@
 enforcement landed in v0.3.305. Bounded execution-policy recording landed in
 v0.3.306. Inert operation preview landed in v0.3.307. Exact operation-digest
 authorization landed in v0.3.308. Durable operation-authorization persistence
-landed in v0.3.309.
+landed in v0.3.309. Reviewed inert command-plan construction landed in
+v0.3.310.
 
 ## Purpose
 
@@ -33,6 +34,9 @@ effects, budget and evidence handling are known before they run.
 - Kali operation authorizations are stored in a separate bounded JSON document
   and a failed write refuses the approval rather than leaving an in-memory-only
   decision.
+- The DNS-record lookup preview now includes a reviewed, code-owned argv plan
+  for `/usr/bin/dig` with fixed options, `shell=False` and closed stdin. The
+  argv facts are part of the operation digest, but no runner consumes them yet.
 - The desktop can preview and exactly confirm save/revoke decisions for those
   program-scope revision records.
 - Program-scope revisions are enforced at approval, Start, restore and every
@@ -184,13 +188,16 @@ without becoming permanent target prohibitions.
    for the DNS-record lookup profile in v0.3.308.**
 5. Persist operation authorizations so the future runner has a durable,
    auditable approval source. **Done in v0.3.309.**
-6. Add a fake-runner integration with deterministic fixtures and prove zero
+6. Add a reviewed inert command-plan projection for the first operation. It may
+   expose exact argv facts but must not create a process. **Done for the
+   DNS-record lookup profile in v0.3.310.**
+7. Add a fake-runner integration with deterministic fixtures and prove zero
    process creation on every refusal path.
-7. Add an opt-in WSL/Kali installation boundary and the single first reviewed
+8. Add an opt-in WSL/Kali installation boundary and the single first reviewed
    operation. Tests use a fake child-process adapter and local fixtures; no
    third-party target traffic is allowed.
-8. Connect typed observations to evidence review and reporting.
-9. Only then permit the bounded autonomous loop to select that exact capability
+9. Connect typed observations to evidence review and reporting.
+10. Only then permit the bounded autonomous loop to select that exact capability
    inside an already approved job.
 
 ## Acceptance tests before real execution

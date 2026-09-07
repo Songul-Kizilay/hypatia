@@ -128,7 +128,7 @@ class KaliOperationAuthorizationApplicationServiceTests(unittest.TestCase):
             self.revision.execution_policy_digest,
         )
         self.assertIn("Execution: not started", response.message)
-        self.assertIn("Command line: not constructed", response.message)
+        self.assertIn("Command plan: bound by operation digest", response.message)
         self.assertNotIn("dig ", response.message)
         self.assertNotIn("wsl", response.message.casefold())
         self.assertFalse(self.store.save_calls)

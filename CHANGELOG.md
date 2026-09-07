@@ -2,6 +2,24 @@
 
 All notable project changes are recorded here.
 
+## [0.3.310] - 2026-09-07
+
+### Added
+
+- Added a reviewed, code-owned Kali command plan for the DNS-record lookup
+  operation preview.
+- The preview now exposes an inert argv tuple for `/usr/bin/dig` with fixed
+  options, normalized in-scope hostname and reviewed DNS record type.
+- The operation digest now includes the reviewed command-plan facts, so a
+  human authorization binds the exact inert terminal plan that was previewed.
+
+### Safety and limits
+
+- This release still adds no Kali runner, terminal, shell, child process, DNS
+  lookup or network traffic.
+- No user-authored or model-authored command string is accepted; the plan is an
+  argv tuple only and keeps `shell=False` with closed stdin.
+
 ## [0.3.309] - 2026-09-07
 
 ### Added

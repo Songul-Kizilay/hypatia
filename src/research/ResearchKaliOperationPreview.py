@@ -38,6 +38,51 @@ class ResearchDnsRecordType(StrEnum):
     CNAME = "CNAME"
 
 
+class ResearchKaliCommandTransport(StrEnum):
+    """Reviewed transport profile names; not an executable launcher."""
+
+    WSL_KALI = "wsl_kali"
+
+
+@dataclass(frozen=True, slots=True)
+class ResearchKaliOperationCommandPlan:
+    """Code-owned terminal argv plan for one reviewed Kali operation.
+
+    The plan is still inert: it starts no process, performs no DNS lookup and
+    grants no authority. It is intentionally an argv tuple, never a shell
+    command string.
+    """
+
+    transport: ResearchKaliCommandTransport
+    executable_path: str
+    argv: tuple[str, ...]
+    shell: bool = False
+    stdin: str = "closed"
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.transport, ResearchKaliCommandTransport):
+            raise ResearchError("Kali command plan transport is invalid.")
+        if (
+            not isinstance(self.executable_path, str)
+            or not self.executable_path.startswith("/")
+            or not self.executable_path.strip()
+        ):
+            raise ResearchError("Kali command plan executable path is invalid.")
+        if not isinstance(self.argv, tuple) or not self.argv:
+            raise ResearchError("Kali command plan argv is invalid.")
+        if self.argv[0] != self.executable_path:
+            raise ResearchError("Kali command plan argv must name the executable.")
+        for argument in self.argv:
+            if not isinstance(argument, str) or not argument:
+                raise ResearchError("Kali command plan argv is invalid.")
+            if "\x00" in argument or "\r" in argument or "\n" in argument:
+                raise ResearchError("Kali command plan argv contains control data.")
+        if self.shell is not False:
+            raise ResearchError("Kali command plan must not use a shell.")
+        if self.stdin != "closed":
+            raise ResearchError("Kali command plan stdin must be closed.")
+
+
 @dataclass(frozen=True, slots=True)
 class ResearchKaliOperationPreview:
     """A complete side-effect-free operation proposal for operator review."""
@@ -55,6 +100,7 @@ class ResearchKaliOperationPreview:
     max_requests_per_minute: int
     max_seconds: float
     created_at: datetime
+    command_plan: ResearchKaliOperationCommandPlan = field(init=False)
     operation_digest: str = field(init=False)
 
     def __post_init__(self) -> None:
@@ -117,8 +163,49 @@ class ResearchKaliOperationPreview:
             raise ResearchError("Kali operation preview time must be timezone-aware.")
         object.__setattr__(self, "hostname", normalized_hostname)
         object.__setattr__(
+            self,
+            "command_plan",
+            kali_operation_command_plan(
+                operation_kind=self.operation_kind,
+                hostname=normalized_hostname,
+                dns_record_type=self.dns_record_type,
+            ),
+        )
+        object.__setattr__(
             self, "operation_digest", kali_operation_preview_digest(self)
         )
+
+
+def kali_operation_command_plan(
+    *,
+    operation_kind: ResearchKaliOperationKind,
+    hostname: str,
+    dns_record_type: ResearchDnsRecordType,
+) -> ResearchKaliOperationCommandPlan:
+    """Build the reviewed argv plan for one supported operation."""
+    if operation_kind is not ResearchKaliOperationKind.DNS_RECORD_LOOKUP:
+        raise ResearchError("Kali operation command plan kind is not supported.")
+    if not isinstance(dns_record_type, ResearchDnsRecordType):
+        raise ResearchError("Kali operation command plan DNS record type is invalid.")
+    if not isinstance(hostname, str):
+        raise ResearchError("Kali operation command plan hostname is invalid.")
+    normalized_hostname = hostname.strip().lower().removesuffix(".")
+    if not normalized_hostname or len(normalized_hostname) > (
+        MAX_KALI_OPERATION_HOSTNAME_CHARACTERS
+    ):
+        raise ResearchError("Kali operation command plan hostname is invalid.")
+    return ResearchKaliOperationCommandPlan(
+        transport=ResearchKaliCommandTransport.WSL_KALI,
+        executable_path="/usr/bin/dig",
+        argv=(
+            "/usr/bin/dig",
+            "+time=5",
+            "+tries=1",
+            "+short",
+            normalized_hostname,
+            dns_record_type.value,
+        ),
+    )
 
 
 def kali_operation_preview_document(
@@ -140,6 +227,22 @@ def kali_operation_preview_document(
         "max_request_count": preview.max_request_count,
         "max_requests_per_minute": preview.max_requests_per_minute,
         "max_seconds": preview.max_seconds,
+        "command_plan": kali_operation_command_plan_document(preview.command_plan),
+    }
+
+
+def kali_operation_command_plan_document(
+    command_plan: ResearchKaliOperationCommandPlan,
+) -> dict[str, object]:
+    """Return the reviewed argv facts without rendering a shell command line."""
+    if not isinstance(command_plan, ResearchKaliOperationCommandPlan):
+        raise ResearchError("Kali command plan is invalid.")
+    return {
+        "transport": command_plan.transport.value,
+        "executable_path": command_plan.executable_path,
+        "argv": list(command_plan.argv),
+        "shell": command_plan.shell,
+        "stdin": command_plan.stdin,
     }
 
 

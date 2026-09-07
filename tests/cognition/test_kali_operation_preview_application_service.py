@@ -21,6 +21,7 @@ from research.ResearchAuthorizer import ResearchAuthorizer
 from research.ResearchKaliOperationPreview import (
     ResearchDnsRecordType,
     ResearchKaliOperationKind,
+    kali_operation_command_plan_document,
     kali_operation_preview_document,
 )
 from research.ResearchProgramScopeExecutionPolicy import (
@@ -149,22 +150,64 @@ class KaliOperationPreviewApplicationServiceTests(unittest.TestCase):
         self.assertEqual(preview.dns_record_type, ResearchDnsRecordType.A)
         self.assertEqual(preview.permitted_ports, (53, 443))
         self.assertIn("Operation digest:", response.message)
-        self.assertIn("Command line: not constructed", response.message)
+        self.assertIn("Command plan: reviewed argv only", response.message)
+        self.assertIn("Executable: /usr/bin/dig", response.message)
+        self.assertIn("argv[0]: /usr/bin/dig", response.message)
+        self.assertIn("argv[4]: www.example.test", response.message)
         self.assertNotIn("dig ", response.message)
-        self.assertNotIn("wsl", response.message.casefold())
         self.assertFalse(self.store.save_calls)
         getaddrinfo.assert_not_called()
         run.assert_not_called()
         popen.assert_not_called()
 
-    def test_preview_document_contains_no_command_string(self) -> None:
+    def test_preview_document_contains_reviewed_argv_but_no_command_string(
+        self,
+    ) -> None:
         response = self.service.process_preview(self.request())
         preview = response.kali_operation_preview
         assert preview is not None
         document = kali_operation_preview_document(preview)
         self.assertNotIn("command", document)
-        self.assertNotIn("argv", document)
-        self.assertNotIn("executable", document)
+        command_plan = document["command_plan"]
+        self.assertIsInstance(command_plan, dict)
+        assert isinstance(command_plan, dict)
+        self.assertEqual(command_plan["transport"], "wsl_kali")
+        self.assertEqual(command_plan["executable_path"], "/usr/bin/dig")
+        self.assertEqual(
+            command_plan["argv"],
+            [
+                "/usr/bin/dig",
+                "+time=5",
+                "+tries=1",
+                "+short",
+                "www.example.test",
+                "A",
+            ],
+        )
+        self.assertIs(command_plan["shell"], False)
+        self.assertEqual(command_plan["stdin"], "closed")
+
+    def test_command_plan_is_code_owned_and_digest_bound(self) -> None:
+        first = self.service.process_preview(self.request()).kali_operation_preview
+        second = self.service.process_preview(
+            self.request(dns_record_type=ResearchDnsRecordType.AAAA.value)
+        ).kali_operation_preview
+        assert first is not None
+        assert second is not None
+        self.assertEqual(
+            kali_operation_command_plan_document(first.command_plan)["argv"],
+            [
+                "/usr/bin/dig",
+                "+time=5",
+                "+tries=1",
+                "+short",
+                "www.example.test",
+                "A",
+            ],
+        )
+        self.assertNotEqual(first.operation_digest, second.operation_digest)
+        self.assertNotIn("shell", " ".join(first.command_plan.argv).casefold())
+        self.assertNotIn("|", first.command_plan.argv)
 
     def test_policy_without_dns_lookup_refuses_before_dns_or_process(self) -> None:
         self.store = FakeProgramScopeRevisionStore(

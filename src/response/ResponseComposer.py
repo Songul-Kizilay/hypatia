@@ -1048,7 +1048,11 @@ class ResponseComposer:
         request: BrainRequest,
         preview: ResearchKaliOperationPreview,
     ) -> BrainResponse:
-        """Render one inert Kali operation proposal without a command string."""
+        """Render one inert Kali operation proposal without a shell string."""
+        argv_lines = tuple(
+            f"  argv[{index}]: {argument}"
+            for index, argument in enumerate(preview.command_plan.argv)
+        )
         message = "\n".join(
             (
                 "Kali operation preview:",
@@ -1067,7 +1071,12 @@ class ResponseComposer:
                 f"{preview.max_request_count} request(s), "
                 f"{preview.max_requests_per_minute}/min, "
                 f"{preview.max_seconds:g}s",
-                "Command line: not constructed",
+                "Command plan: reviewed argv only; no shell command string",
+                f"Transport profile: {preview.command_plan.transport.value}",
+                f"Executable: {preview.command_plan.executable_path}",
+                f"Shell: {preview.command_plan.shell}",
+                f"Stdin: {preview.command_plan.stdin}",
+                *argv_lines,
                 "Execution: not started",
                 "Process: not created",
                 "Network/DNS: not used",
@@ -1092,7 +1101,7 @@ class ResponseComposer:
                 (
                     "Kali operation preview rejected:",
                     f"Reason: {message}",
-                    "Command line: not constructed",
+                    "Command plan: not constructed",
                     "Execution: not started",
                     "Process: not created",
                     "Network/DNS: not used",
@@ -1124,7 +1133,7 @@ class ResponseComposer:
                     f"Authorized by: {authorization.authorized_by.value}",
                     f"Authorized at: {authorization.authorized_at.isoformat()}",
                     f"Expires at: {authorization.expires_at.isoformat()}",
-                    "Command line: not constructed",
+                    "Command plan: bound by operation digest; not executed",
                     "Execution: not started",
                     "Process: not created",
                     "Network/DNS: not used",
@@ -1147,7 +1156,7 @@ class ResponseComposer:
                 (
                     "Kali operation authorization refused:",
                     f"Reason: {message}",
-                    "Command line: not constructed",
+                    "Command plan: not executed",
                     "Execution: not started",
                     "Process: not created",
                     "Network/DNS: not used",
