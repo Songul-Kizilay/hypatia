@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -16,11 +17,13 @@ from cognition.KaliRuntimeReadinessApplicationService import (
     KALI_RUNTIME_READINESS_INTENT,
     KaliRuntimeReadinessApplicationService,
 )
+from core.Exceptions import ResearchError
 from research.ResearchKaliRuntimeEnvironment import (
     ResearchKaliRuntimeReadiness,
     ResearchKaliRuntimeReadinessState,
     ResearchKaliRuntimeRequirement,
 )
+from research.WslKaliRuntimeProbe import WslKaliRuntimeProbe
 from response.ResponseComposer import ResponseComposer
 
 
@@ -139,6 +142,109 @@ class KaliRuntimeReadinessApplicationServiceTests(unittest.TestCase):
         getaddrinfo.assert_not_called()
         run.assert_not_called()
         popen.assert_not_called()
+
+    def test_wsl_probe_uses_fixed_version_argv_without_shell_or_target_dns(
+        self,
+    ) -> None:
+        completed = subprocess.CompletedProcess(
+            args=(),
+            returncode=0,
+            stdout="DiG 9.18.36-1-Debian\n",
+            stderr="",
+        )
+        service = KaliRuntimeReadinessApplicationService(
+            ResponseComposer(),
+            probe=WslKaliRuntimeProbe(
+                wsl_executable_path=r"C:\Windows\System32\wsl.exe"
+            ),
+        )
+
+        with (
+            patch("socket.getaddrinfo") as getaddrinfo,
+            patch("subprocess.run", return_value=completed) as run,
+            patch("subprocess.Popen") as popen,
+        ):
+            response = service.process_readiness(self.request(operator_opt_in=True))
+
+        self.assertTrue(response.success, response.message)
+        run.assert_called_once_with(
+            (
+                r"C:\Windows\System32\wsl.exe",
+                "-d",
+                "kali-linux",
+                "--",
+                "/usr/bin/dig",
+                "-v",
+            ),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            stdin=subprocess.DEVNULL,
+            shell=False,
+            timeout=5.0,
+            check=False,
+        )
+        self.assertIn("State: ready", response.message)
+        self.assertIn("Observed version: DiG 9.18.36-1-Debian", response.message)
+        getaddrinfo.assert_not_called()
+        popen.assert_not_called()
+
+    def test_wsl_probe_refuses_nonzero_or_wrong_version(self) -> None:
+        cases = (
+            (
+                subprocess.CompletedProcess(
+                    args=(),
+                    returncode=1,
+                    stdout="",
+                    stderr="distribution not found",
+                ),
+                "non-zero exit code",
+            ),
+            (
+                subprocess.CompletedProcess(
+                    args=(),
+                    returncode=0,
+                    stdout="unexpected tool 1.0",
+                    stderr="",
+                ),
+                "version did not match",
+            ),
+        )
+        for completed, expected in cases:
+            with self.subTest(expected=expected):
+                service = KaliRuntimeReadinessApplicationService(
+                    ResponseComposer(),
+                    probe=WslKaliRuntimeProbe(
+                        wsl_executable_path=r"C:\Windows\System32\wsl.exe"
+                    ),
+                )
+
+                with (
+                    patch("socket.getaddrinfo") as getaddrinfo,
+                    patch("subprocess.run", return_value=completed),
+                    patch("subprocess.Popen") as popen,
+                ):
+                    response = service.process_readiness(
+                        self.request(operator_opt_in=True)
+                    )
+
+                self.assertFalse(response.success)
+                self.assertIn(expected, response.message)
+                self.assertIn("Process: not created", response.message)
+                self.assertIn("Network/DNS: not used", response.message)
+                getaddrinfo.assert_not_called()
+                popen.assert_not_called()
+
+    def test_wsl_probe_rejects_unreviewed_launcher_or_timeout(self) -> None:
+        for kwargs in (
+            {"wsl_executable_path": "wsl.exe"},
+            {"wsl_executable_path": r"C:\Windows\System32\bash.exe"},
+            {"timeout_seconds": 30.0},
+        ):
+            with self.subTest(kwargs=kwargs):
+                with self.assertRaises(ResearchError):
+                    WslKaliRuntimeProbe(**kwargs)
 
 
 if __name__ == "__main__":

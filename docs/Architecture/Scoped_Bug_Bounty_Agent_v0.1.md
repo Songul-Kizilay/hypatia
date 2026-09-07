@@ -8,7 +8,7 @@ They should not have to approve every routine step of an already approved job.
 The system must explain observations, distinguish hypotheses from verified
 findings, preserve evidence, and stop rather than expand its own authority.
 
-## Current checkpoint: v0.3.312
+## Current checkpoint: v0.3.313
 
 This increment supplies a tested request-target gate, not a finished bounty
 agent. `ResearchTargetScope` is immutable, bounded to 100 combined rules, and
@@ -44,6 +44,18 @@ probe fails closed when no host adapter is configured.
 This is not terminal access. The readiness boundary starts no process, performs
 no DNS lookup, sends no target traffic and grants no authority. Missing
 operator opt-in refuses before even the probe is called.
+
+## v0.3.313: reviewed WSL/Kali readiness probe adapter
+
+Hypatia now has a host adapter for the readiness boundary that can check a
+configured WSL launcher and the Kali `dig` executable version using a fixed
+argv tuple. The adapter requires the reviewed `kali-linux` distribution,
+`/usr/bin/dig` path and `DiG 9.` version prefix, with `shell=False`, closed
+stdin, bounded output and a hard timeout.
+
+This is still not the DNS lookup operation. The adapter only checks local
+runtime prerequisites and CognitiveEngine remains fail-closed unless a host
+probe is explicitly injected.
 
 The existing production opener reuses the validator before opening, before each
 redirect, at HTTPS connection address pinning, and before reading the final

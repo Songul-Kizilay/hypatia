@@ -2,6 +2,24 @@
 
 All notable project changes are recorded here.
 
+## [0.3.313] - 2026-09-07
+
+### Added
+
+- Added a reviewed WSL/Kali runtime probe adapter for the readiness boundary.
+- The adapter uses a fixed argv tuple for `wsl.exe -d kali-linux --
+  /usr/bin/dig -v`, with `shell=False`, closed stdin, bounded output and a hard
+  timeout.
+- Readiness can now distinguish missing WSL/Kali, non-zero probe exits and
+  unexpected `dig` versions without running a target operation.
+
+### Safety and limits
+
+- This release still does not run the reviewed DNS lookup operation and sends
+  no target traffic.
+- CognitiveEngine continues to fail closed unless a host runtime probe is
+  explicitly injected.
+
 ## [0.3.312] - 2026-09-07
 
 ### Added
