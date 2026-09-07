@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 import tempfile
 import unittest
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -17,6 +17,10 @@ from brain.BrainRequest import BrainRequest
 from cognition.KaliOperationAuthorizationApplicationService import (
     KALI_OPERATION_AUTHORIZATION_INTENT,
     KaliOperationAuthorizationApplicationService,
+)
+from cognition.KaliOperationFakeRunnerApplicationService import (
+    KALI_OPERATION_FAKE_RUN_INTENT,
+    KaliOperationFakeRunnerApplicationService,
 )
 from cognition.KaliOperationPreviewApplicationService import (
     KaliOperationPreviewApplicationService,
@@ -74,6 +78,23 @@ class KaliOperationAuthorizationApplicationServiceTests(unittest.TestCase):
             message="authorize Kali operation",
             metadata={
                 "intent": KALI_OPERATION_AUTHORIZATION_INTENT,
+                "program_id": "program-a",
+                "scope_revision_id": self.revision.revision_id,
+                "scope_revision_digest": self.revision.revision_digest,
+                "kali_operation_kind": (
+                    ResearchKaliOperationKind.DNS_RECORD_LOOKUP.value
+                ),
+                "hostname": "www.example.test.",
+                "dns_record_type": ResearchDnsRecordType.A.value,
+                **metadata,
+            },
+        )
+
+    def fake_run_request(self, **metadata: object) -> BrainRequest:
+        return BrainRequest(
+            message="fake run Kali operation",
+            metadata={
+                "intent": KALI_OPERATION_FAKE_RUN_INTENT,
                 "program_id": "program-a",
                 "scope_revision_id": self.revision.revision_id,
                 "scope_revision_digest": self.revision.revision_digest,
@@ -244,6 +265,121 @@ class KaliOperationAuthorizationApplicationServiceTests(unittest.TestCase):
                 )
                 self.assertFalse(response.success)
                 self.assertIsNone(response.kali_operation_authorization)
+
+    def test_fake_runner_uses_recorded_authorization_without_process_or_dns(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonFileResearchKaliOperationAuthorizationStore(
+                Path(directory) / "kali-operation-authorizations.json"
+            )
+            authorizer = KaliOperationAuthorizationApplicationService(
+                ResponseComposer(),
+                self.preview_service,
+                authorization_store=store,
+                clock=lambda: AUTH_TIME,
+                id_factory=lambda: "kali-auth-1",
+            )
+            digest = self.digest_for_request()
+            authorization = authorizer.process_authorization(
+                self.request(operation_digest=digest)
+            ).kali_operation_authorization
+            assert authorization is not None
+            runner = KaliOperationFakeRunnerApplicationService(
+                ResponseComposer(),
+                self.preview_service,
+                store,
+                clock=lambda: AUTH_TIME,
+            )
+
+            with (
+                patch("socket.getaddrinfo") as getaddrinfo,
+                patch("subprocess.run") as run,
+                patch("subprocess.Popen") as popen,
+            ):
+                response = runner.process_fake_run(
+                    self.fake_run_request(
+                        authorization_id=authorization.authorization_id,
+                        operation_digest=digest,
+                    )
+                )
+
+            self.assertTrue(response.success, response.message)
+            result = response.kali_operation_fake_run
+            assert result is not None
+            self.assertEqual(result.authorization_id, "kali-auth-1")
+            self.assertEqual(result.operation_digest, digest)
+            self.assertFalse(result.process_created)
+            self.assertFalse(result.network_used)
+            self.assertEqual(result.command_plan.argv[0], "/usr/bin/dig")
+            self.assertIn("Execution: simulated only", response.message)
+            self.assertIn("Process: not created", response.message)
+            self.assertIn("Network/DNS: not used", response.message)
+            getaddrinfo.assert_not_called()
+            run.assert_not_called()
+            popen.assert_not_called()
+
+    def test_fake_runner_refuses_missing_expired_or_mismatched_authorization(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonFileResearchKaliOperationAuthorizationStore(
+                Path(directory) / "kali-operation-authorizations.json"
+            )
+            digest = self.digest_for_request()
+            authorizer = KaliOperationAuthorizationApplicationService(
+                ResponseComposer(),
+                self.preview_service,
+                authorization_store=store,
+                clock=lambda: AUTH_TIME,
+                id_factory=lambda: "kali-auth-1",
+            )
+            authorizer.process_authorization(self.request(operation_digest=digest))
+            cases = (
+                (
+                    "missing",
+                    AUTH_TIME,
+                    {"authorization_id": "missing-auth", "operation_digest": digest},
+                    "requires one recorded authorization",
+                ),
+                (
+                    "expired",
+                    AUTH_TIME + timedelta(seconds=301),
+                    {"authorization_id": "kali-auth-1", "operation_digest": digest},
+                    "has expired",
+                ),
+                (
+                    "mismatch",
+                    AUTH_TIME,
+                    {
+                        "authorization_id": "kali-auth-1",
+                        "operation_digest": digest,
+                        "dns_record_type": ResearchDnsRecordType.AAAA.value,
+                    },
+                    "does not match the preview",
+                ),
+            )
+            for label, moment, metadata, reason in cases:
+                with self.subTest(label=label):
+                    runner = KaliOperationFakeRunnerApplicationService(
+                        ResponseComposer(),
+                        self.preview_service,
+                        store,
+                        clock=lambda moment=moment: moment,
+                    )
+                    with (
+                        patch("socket.getaddrinfo") as getaddrinfo,
+                        patch("subprocess.Popen") as popen,
+                    ):
+                        response = runner.process_fake_run(
+                            self.fake_run_request(**metadata)
+                        )
+
+                    self.assertFalse(response.success)
+                    self.assertIn(reason, response.message)
+                    self.assertIsNone(response.kali_operation_fake_run)
+                    getaddrinfo.assert_not_called()
+                    popen.assert_not_called()
 
 
 if __name__ == "__main__":

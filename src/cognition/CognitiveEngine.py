@@ -31,6 +31,9 @@ from cognition.HypothesisApplicationService import (
 from cognition.KaliOperationAuthorizationApplicationService import (
     KaliOperationAuthorizationApplicationService,
 )
+from cognition.KaliOperationFakeRunnerApplicationService import (
+    KaliOperationFakeRunnerApplicationService,
+)
 from cognition.KaliOperationPreviewApplicationService import (
     KaliOperationPreviewApplicationService,
 )
@@ -617,6 +620,9 @@ class CognitiveEngine:
         self._kali_operation_authorization_service: (
             KaliOperationAuthorizationApplicationService | None
         ) = None
+        self._kali_operation_fake_runner_service: (
+            KaliOperationFakeRunnerApplicationService | None
+        ) = None
         if program_scope_revision_store is not None:
             self._kali_operation_preview_service = (
                 KaliOperationPreviewApplicationService(
@@ -631,6 +637,14 @@ class CognitiveEngine:
                     authorization_store=kali_operation_authorization_store,
                 )
             )
+            if kali_operation_authorization_store is not None:
+                self._kali_operation_fake_runner_service = (
+                    KaliOperationFakeRunnerApplicationService(
+                        response_composer,
+                        self._kali_operation_preview_service,
+                        kali_operation_authorization_store,
+                    )
+                )
         self._source_ingestion_events = SourceIngestionEvents(event_bus)
         self._knowledge_reconciliation_service = (
             KnowledgeReconciliationApplicationService(
@@ -707,6 +721,14 @@ class CognitiveEngine:
             return self._kali_operation_authorization_service.process_authorization(
                 request
             )
+
+        if KaliOperationFakeRunnerApplicationService.is_fake_run_request(request):
+            if self._kali_operation_fake_runner_service is None:
+                return self._response_composer.kali_operation_fake_run_failure(
+                    request,
+                    "Kali operation authorizations are unavailable in this runtime.",
+                )
+            return self._kali_operation_fake_runner_service.process_fake_run(request)
 
         if self._research_plan_execution_service.is_start_request(request):
             return self._research_plan_execution_service.process_start(request)

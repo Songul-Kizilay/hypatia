@@ -5,7 +5,7 @@ enforcement landed in v0.3.305. Bounded execution-policy recording landed in
 v0.3.306. Inert operation preview landed in v0.3.307. Exact operation-digest
 authorization landed in v0.3.308. Durable operation-authorization persistence
 landed in v0.3.309. Reviewed inert command-plan construction landed in
-v0.3.310.
+v0.3.310. Deterministic no-process fake-runner gating landed in v0.3.311.
 
 ## Purpose
 
@@ -37,6 +37,10 @@ effects, budget and evidence handling are known before they run.
 - The DNS-record lookup preview now includes a reviewed, code-owned argv plan
   for `/usr/bin/dig` with fixed options, `shell=False` and closed stdin. The
   argv facts are part of the operation digest, but no runner consumes them yet.
+- Hypatia can now exercise the future runner boundary with deterministic fake
+  output after reloading the persisted authorization and re-checking the exact
+  operation digest. This still creates no terminal, child process, DNS lookup
+  or target traffic.
 - The desktop can preview and exactly confirm save/revoke decisions for those
   program-scope revision records.
 - Program-scope revisions are enforced at approval, Start, restore and every
@@ -192,7 +196,8 @@ without becoming permanent target prohibitions.
    expose exact argv facts but must not create a process. **Done for the
    DNS-record lookup profile in v0.3.310.**
 7. Add a fake-runner integration with deterministic fixtures and prove zero
-   process creation on every refusal path.
+   process creation on every refusal path. **Done for the DNS-record lookup
+   profile in v0.3.311.**
 8. Add an opt-in WSL/Kali installation boundary and the single first reviewed
    operation. Tests use a fake child-process adapter and local fixtures; no
    third-party target traffic is allowed.

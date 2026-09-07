@@ -52,7 +52,10 @@ from research.ResearchFailureLesson import ResearchFailureLesson
 from research.ResearchKaliOperationAuthorization import (
     ResearchKaliOperationAuthorization,
 )
-from research.ResearchKaliOperationPreview import ResearchKaliOperationPreview
+from research.ResearchKaliOperationPreview import (
+    ResearchKaliOperationFakeRun,
+    ResearchKaliOperationPreview,
+)
 from research.ResearchPairedProviderQualityReport import (
     ResearchPairedProviderQualityReport,
 )
@@ -180,6 +183,7 @@ class BrainResponse:
     research_provider_comparison: ResearchProviderComparisonReport | None = None
     kali_operation_preview: ResearchKaliOperationPreview | None = None
     kali_operation_authorization: ResearchKaliOperationAuthorization | None = None
+    kali_operation_fake_run: ResearchKaliOperationFakeRun | None = None
     research_plan_authorization: ResearchPlanAuthorization | None = None
     research_plan_authorizations: tuple[ResearchPlanAuthorization, ...] = ()
     source_reputations: tuple[SourceReputation, ...] = ()

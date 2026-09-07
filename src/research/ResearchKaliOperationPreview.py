@@ -84,6 +84,47 @@ class ResearchKaliOperationCommandPlan:
 
 
 @dataclass(frozen=True, slots=True)
+class ResearchKaliOperationFakeRun:
+    """Deterministic no-process result for exercising the runner gate."""
+
+    authorization_id: str
+    operation_digest: str
+    program_id: str
+    scope_revision_id: str
+    scope_revision_digest: str
+    execution_policy_digest: str
+    operation_kind: ResearchKaliOperationKind
+    command_plan: ResearchKaliOperationCommandPlan
+    simulated_stdout: tuple[str, ...]
+    process_created: bool = False
+    network_used: bool = False
+
+    def __post_init__(self) -> None:
+        for value, label in (
+            (self.authorization_id, "authorization ID"),
+            (self.program_id, "program ID"),
+            (self.scope_revision_id, "scope revision ID"),
+            (self.scope_revision_digest, "scope revision digest"),
+            (self.execution_policy_digest, "execution policy digest"),
+        ):
+            if not isinstance(value, str) or not value.strip():
+                raise ResearchError(f"Kali fake run {label} cannot be empty.")
+        if not is_kali_operation_digest(self.operation_digest):
+            raise ResearchError("Kali fake run operation digest is invalid.")
+        if not isinstance(self.operation_kind, ResearchKaliOperationKind):
+            raise ResearchError("Kali fake run operation kind is invalid.")
+        if not isinstance(self.command_plan, ResearchKaliOperationCommandPlan):
+            raise ResearchError("Kali fake run command plan is invalid.")
+        if not isinstance(self.simulated_stdout, tuple):
+            raise ResearchError("Kali fake run output must be immutable.")
+        for line in self.simulated_stdout:
+            if not isinstance(line, str) or "\x00" in line:
+                raise ResearchError("Kali fake run output is invalid.")
+        if self.process_created is not False or self.network_used is not False:
+            raise ResearchError("Kali fake run must not perform real work.")
+
+
+@dataclass(frozen=True, slots=True)
 class ResearchKaliOperationPreview:
     """A complete side-effect-free operation proposal for operator review."""
 

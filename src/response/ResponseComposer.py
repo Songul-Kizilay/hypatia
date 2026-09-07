@@ -61,7 +61,10 @@ from research.ResearchFailureLesson import ResearchFailureLesson
 from research.ResearchKaliOperationAuthorization import (
     ResearchKaliOperationAuthorization,
 )
-from research.ResearchKaliOperationPreview import ResearchKaliOperationPreview
+from research.ResearchKaliOperationPreview import (
+    ResearchKaliOperationFakeRun,
+    ResearchKaliOperationPreview,
+)
 from research.ResearchPairedProviderQualityReport import (
     ResearchPairedProviderQualityReport,
 )
@@ -1164,6 +1167,68 @@ class ResponseComposer:
             ),
             request_id=request.request_id,
             intent="kali_operation_authorization",
+            memory_count=0,
+            success=False,
+        )
+
+    def kali_operation_fake_run(
+        self,
+        request: BrainRequest,
+        result: ResearchKaliOperationFakeRun,
+    ) -> BrainResponse:
+        """Report a deterministic no-process runner-gate exercise."""
+        argv_lines = tuple(
+            f"  argv[{index}]: {argument}"
+            for index, argument in enumerate(result.command_plan.argv)
+        )
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Kali operation fake run:",
+                    f"Authorization ID: {result.authorization_id}",
+                    f"Operation digest: {result.operation_digest}",
+                    f"Program: {result.program_id}",
+                    f"Scope revision: {result.scope_revision_id}",
+                    f"Scope revision digest: {result.scope_revision_digest}",
+                    "Execution policy digest: " f"{result.execution_policy_digest}",
+                    f"Operation: {result.operation_kind.value}",
+                    "Command plan: validated argv only; no shell command string",
+                    f"Transport profile: {result.command_plan.transport.value}",
+                    f"Executable: {result.command_plan.executable_path}",
+                    f"Shell: {result.command_plan.shell}",
+                    f"Stdin: {result.command_plan.stdin}",
+                    *argv_lines,
+                    "Fixture output:",
+                    *result.simulated_stdout,
+                    "Execution: simulated only",
+                    "Process: not created",
+                    "Network/DNS: not used",
+                )
+            ),
+            request_id=request.request_id,
+            intent="kali_operation_fake_run",
+            memory_count=0,
+            kali_operation_fake_run=result,
+        )
+
+    def kali_operation_fake_run_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Report a fake-run refusal without side effects."""
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Kali operation fake run refused:",
+                    f"Reason: {message}",
+                    "Execution: not simulated",
+                    "Process: not created",
+                    "Network/DNS: not used",
+                )
+            ),
+            request_id=request.request_id,
+            intent="kali_operation_fake_run",
             memory_count=0,
             success=False,
         )

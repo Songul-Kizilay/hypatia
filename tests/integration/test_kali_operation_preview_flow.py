@@ -18,6 +18,9 @@ from cognition.CognitiveEngine import CognitiveEngine
 from cognition.KaliOperationAuthorizationApplicationService import (
     KALI_OPERATION_AUTHORIZATION_INTENT,
 )
+from cognition.KaliOperationFakeRunnerApplicationService import (
+    KALI_OPERATION_FAKE_RUN_INTENT,
+)
 from cognition.KaliOperationPreviewApplicationService import (
     KALI_OPERATION_PREVIEW_INTENT,
 )
@@ -25,6 +28,9 @@ from eventbus.EventBus import EventBus
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from memory.MemoryManager import MemoryManager
 from planner.Planner import Planner
+from research.JsonFileResearchKaliOperationAuthorizationStore import (
+    JsonFileResearchKaliOperationAuthorizationStore,
+)
 from research.JsonFileResearchProgramScopeRevisionStore import (
     JsonFileResearchProgramScopeRevisionStore,
 )
@@ -55,6 +61,9 @@ class KaliOperationPreviewFlowTests(unittest.TestCase):
         self.session_manager.create("work")
         self.scope_store = JsonFileResearchProgramScopeRevisionStore(
             self.root / "scopes.json"
+        )
+        self.authorization_store = JsonFileResearchKaliOperationAuthorizationStore(
+            self.root / "kali-operation-authorizations.json"
         )
         self.revision = ResearchProgramScopeRevision(
             "scope-revision-1",
@@ -89,6 +98,7 @@ class KaliOperationPreviewFlowTests(unittest.TestCase):
                 event_bus=self.event_bus,
             ),
             program_scope_revision_store=self.scope_store,
+            kali_operation_authorization_store=self.authorization_store,
         )
 
     def test_structured_preview_routes_without_dns_process_or_write(self) -> None:
@@ -170,6 +180,76 @@ class KaliOperationPreviewFlowTests(unittest.TestCase):
         self.assertIn("Execution: not started", response.message)
         self.assertIn("Command plan: bound by operation digest", response.message)
         getaddrinfo.assert_not_called()
+        popen.assert_not_called()
+
+    def test_structured_fake_run_routes_without_real_execution(self) -> None:
+        preview = self.engine.process(
+            BrainRequest(
+                message="preview Kali DNS operation",
+                metadata={
+                    "intent": KALI_OPERATION_PREVIEW_INTENT,
+                    "program_id": "program-a",
+                    "scope_revision_id": self.revision.revision_id,
+                    "scope_revision_digest": self.revision.revision_digest,
+                    "kali_operation_kind": (
+                        ResearchKaliOperationKind.DNS_RECORD_LOOKUP.value
+                    ),
+                    "hostname": "www.example.test",
+                    "dns_record_type": ResearchDnsRecordType.A.value,
+                },
+            )
+        ).kali_operation_preview
+        assert preview is not None
+        authorization = self.engine.process(
+            BrainRequest(
+                message="authorize Kali DNS operation",
+                metadata={
+                    "intent": KALI_OPERATION_AUTHORIZATION_INTENT,
+                    "program_id": "program-a",
+                    "scope_revision_id": self.revision.revision_id,
+                    "scope_revision_digest": self.revision.revision_digest,
+                    "kali_operation_kind": (
+                        ResearchKaliOperationKind.DNS_RECORD_LOOKUP.value
+                    ),
+                    "hostname": "www.example.test",
+                    "dns_record_type": ResearchDnsRecordType.A.value,
+                    "operation_digest": preview.operation_digest,
+                },
+            )
+        ).kali_operation_authorization
+        assert authorization is not None
+
+        with (
+            patch("socket.getaddrinfo") as getaddrinfo,
+            patch("subprocess.run") as run,
+            patch("subprocess.Popen") as popen,
+        ):
+            response = self.engine.process(
+                BrainRequest(
+                    message="fake run Kali DNS operation",
+                    metadata={
+                        "intent": KALI_OPERATION_FAKE_RUN_INTENT,
+                        "program_id": "program-a",
+                        "scope_revision_id": self.revision.revision_id,
+                        "scope_revision_digest": self.revision.revision_digest,
+                        "kali_operation_kind": (
+                            ResearchKaliOperationKind.DNS_RECORD_LOOKUP.value
+                        ),
+                        "hostname": "www.example.test",
+                        "dns_record_type": ResearchDnsRecordType.A.value,
+                        "operation_digest": preview.operation_digest,
+                        "authorization_id": authorization.authorization_id,
+                    },
+                )
+            )
+
+        self.assertTrue(response.success, response.message)
+        self.assertEqual(response.intent, KALI_OPERATION_FAKE_RUN_INTENT)
+        self.assertIsNotNone(response.kali_operation_fake_run)
+        self.assertIn("Execution: simulated only", response.message)
+        self.assertIn("Process: not created", response.message)
+        getaddrinfo.assert_not_called()
+        run.assert_not_called()
         popen.assert_not_called()
 
     def test_structured_preview_refuses_when_scope_store_is_absent(self) -> None:

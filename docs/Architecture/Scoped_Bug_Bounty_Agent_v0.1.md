@@ -8,7 +8,7 @@ They should not have to approve every routine step of an already approved job.
 The system must explain observations, distinguish hypotheses from verified
 findings, preserve evidence, and stop rather than expand its own authority.
 
-## Current checkpoint: v0.3.310
+## Current checkpoint: v0.3.311
 
 This increment supplies a tested request-target gate, not a finished bounty
 agent. `ResearchTargetScope` is immutable, bounded to 100 combined rules, and
@@ -310,3 +310,14 @@ user-authored or model-authored flags; it records the fixed `/usr/bin/dig`
 argv shape, normalized in-scope hostname, reviewed DNS record type,
 `shell=False` and closed stdin so the future fake runner has a narrow contract
 to consume.
+
+## v0.3.311: deterministic no-process Kali fake runner
+
+Hypatia can now route an explicit fake-run request for the first Kali
+operation. The fake runner reloads the persisted human authorization, rebuilds
+the current preview from active scope state, checks the exact operation digest
+and binding facts, then returns deterministic fixture output.
+
+This is a runner gate test, not real execution. Missing, expired, mismatched
+or stale approvals fail closed, and no terminal, child process, DNS lookup,
+network traffic or evidence ingestion is performed.
