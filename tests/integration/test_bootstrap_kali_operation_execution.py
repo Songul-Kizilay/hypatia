@@ -47,7 +47,11 @@ class BootstrapKaliOperationExecutionTests(unittest.TestCase):
     ) -> None:
         with (
             tempfile.TemporaryDirectory() as temporary_directory,
-            patch.dict(os.environ, {}, clear=True),
+            patch.dict(
+                os.environ,
+                {"HYPATIA_RESEARCH_SOURCE_DISCOVERY_PROVIDER": "disabled"},
+                clear=True,
+            ),
             patch("subprocess.run") as run,
             patch("subprocess.Popen") as popen,
         ):
@@ -78,7 +82,10 @@ class BootstrapKaliOperationExecutionTests(unittest.TestCase):
             tempfile.TemporaryDirectory() as temporary_directory,
             patch.dict(
                 os.environ,
-                {KALI_OPERATION_EXECUTION_ENABLED_VARIABLE: "true"},
+                {
+                    "HYPATIA_RESEARCH_SOURCE_DISCOVERY_PROVIDER": "disabled",
+                    KALI_OPERATION_EXECUTION_ENABLED_VARIABLE: "true",
+                },
                 clear=True,
             ),
             patch("subprocess.run") as run,
