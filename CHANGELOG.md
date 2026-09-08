@@ -2,6 +2,23 @@
 
 All notable project changes are recorded here.
 
+## [0.3.318] - 2026-09-08
+
+### Added
+
+- Added a second reviewed Kali operation profile for HTTPS response-header
+  lookup using `/usr/bin/curl` through the existing WSL/Kali argv transport.
+- Operation-run readiness now checks the executable required by the exact
+  operation profile, so DNS uses `dig -v` and HTTPS headers use
+  `curl --version`.
+
+### Safety and limits
+
+- The new HTTPS profile remains scope-bound, policy-bound, preview-bound,
+  digest-bound, authorization-bound and opt-in before any process can run.
+- No general terminal, shell command string, scanner, exploit tool, recursive
+  crawl, automatic claim, evidence recording or memory write is introduced.
+
 ## [0.3.317] - 2026-09-08
 
 ### Added

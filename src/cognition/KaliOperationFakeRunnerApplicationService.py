@@ -88,6 +88,8 @@ class KaliOperationFakeRunnerApplicationService:
             raise ResearchError("Kali fake run authorization binding is stale.")
         if preview.operation_kind is not ResearchKaliOperationKind.DNS_RECORD_LOOKUP:
             raise ResearchError("Kali fake run operation kind is not supported.")
+        if preview.dns_record_type is None:
+            raise ResearchError("Kali fake run DNS record type is invalid.")
         return ResearchKaliOperationFakeRun(
             authorization_id=authorization.authorization_id,
             operation_digest=preview.operation_digest,

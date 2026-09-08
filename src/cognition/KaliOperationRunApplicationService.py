@@ -23,6 +23,10 @@ from research.ResearchKaliOperationPreview import (
     is_kali_operation_digest,
 )
 from research.ResearchKaliRuntimeEnvironment import (
+    EXPECTED_CURL_EXECUTABLE,
+    EXPECTED_CURL_VERSION_PREFIX,
+    EXPECTED_DIG_EXECUTABLE,
+    EXPECTED_DIG_VERSION_PREFIX,
     ResearchKaliRuntimeProbe,
     ResearchKaliRuntimeRequirement,
 )
@@ -80,7 +84,7 @@ class KaliOperationRunApplicationService:
         preview = self._preview_service.preview_for_request(request)
         if preview.operation_digest != expected_digest:
             raise ResearchError("Kali operation run digest does not match the preview.")
-        if preview.operation_kind is not ResearchKaliOperationKind.DNS_RECORD_LOOKUP:
+        if not isinstance(preview.operation_kind, ResearchKaliOperationKind):
             raise ResearchError("Kali operation run kind is not supported.")
 
         authorizations = self._authorization_store.load()
@@ -108,7 +112,9 @@ class KaliOperationRunApplicationService:
         ):
             raise ResearchError("Kali operation run authorization binding is stale.")
 
-        readiness = self._runtime_probe.readiness(ResearchKaliRuntimeRequirement())
+        readiness = self._runtime_probe.readiness(
+            self._runtime_requirement(preview.operation_kind)
+        )
         if not readiness.ready:
             raise ResearchError(f"Kali runtime is not ready: {readiness.reason}")
 
@@ -133,6 +139,24 @@ class KaliOperationRunApplicationService:
             command_plan=preview.command_plan,
             process_result=process_result,
         )
+
+    @staticmethod
+    def _runtime_requirement(
+        operation_kind: ResearchKaliOperationKind,
+    ) -> ResearchKaliRuntimeRequirement:
+        if operation_kind is ResearchKaliOperationKind.DNS_RECORD_LOOKUP:
+            return ResearchKaliRuntimeRequirement(
+                executable_path=EXPECTED_DIG_EXECUTABLE,
+                version_prefix=EXPECTED_DIG_VERSION_PREFIX,
+                version_arguments=("-v",),
+            )
+        if operation_kind is ResearchKaliOperationKind.HTTPS_HEADER_LOOKUP:
+            return ResearchKaliRuntimeRequirement(
+                executable_path=EXPECTED_CURL_EXECUTABLE,
+                version_prefix=EXPECTED_CURL_VERSION_PREFIX,
+                version_arguments=("--version",),
+            )
+        raise ResearchError("Kali operation run kind is not supported.")
 
     @staticmethod
     def _required_text(value: object, label: str) -> str:

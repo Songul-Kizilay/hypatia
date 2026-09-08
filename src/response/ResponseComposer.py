@@ -1072,7 +1072,12 @@ class ResponseComposer:
                 f"Operation: {preview.operation_kind.value}",
                 f"Check class: {preview.check_class.value}",
                 f"Hostname: {preview.hostname}",
-                f"DNS record type: {preview.dns_record_type.value}",
+                "DNS record type: "
+                + (
+                    preview.dns_record_type.value
+                    if preview.dns_record_type is not None
+                    else "not applicable"
+                ),
                 "Permitted ports: "
                 + ", ".join(str(port) for port in preview.permitted_ports),
                 "Budget: "

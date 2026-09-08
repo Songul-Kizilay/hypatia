@@ -28,6 +28,7 @@ class ResearchKaliOperationKind(StrEnum):
     """Reviewed operation profiles; not executable program names."""
 
     DNS_RECORD_LOOKUP = "dns_record_lookup"
+    HTTPS_HEADER_LOOKUP = "https_header_lookup"
 
 
 class ResearchDnsRecordType(StrEnum):
@@ -135,7 +136,7 @@ class ResearchKaliOperationPreview:
     operation_kind: ResearchKaliOperationKind
     check_class: ResearchProgramScopeCheckClass
     hostname: str
-    dns_record_type: ResearchDnsRecordType
+    dns_record_type: ResearchDnsRecordType | None
     permitted_ports: tuple[int, ...]
     max_request_count: int
     max_requests_per_minute: int
@@ -162,8 +163,15 @@ class ResearchKaliOperationPreview:
         normalized_hostname = self.hostname.strip().lower().removesuffix(".")
         if len(normalized_hostname) > MAX_KALI_OPERATION_HOSTNAME_CHARACTERS:
             raise ResearchError("Kali operation preview hostname is too long.")
-        if not isinstance(self.dns_record_type, ResearchDnsRecordType):
-            raise ResearchError("Kali operation preview DNS record type is invalid.")
+        if self.operation_kind is ResearchKaliOperationKind.DNS_RECORD_LOOKUP:
+            if not isinstance(self.dns_record_type, ResearchDnsRecordType):
+                raise ResearchError(
+                    "Kali operation preview DNS record type is invalid."
+                )
+        elif self.dns_record_type is not None:
+            raise ResearchError(
+                "Kali operation preview DNS record type is not applicable."
+            )
         if not isinstance(self.permitted_ports, tuple) or not self.permitted_ports:
             raise ResearchError("Kali operation preview permitted ports are invalid.")
         for port in self.permitted_ports:
@@ -221,13 +229,11 @@ def kali_operation_command_plan(
     *,
     operation_kind: ResearchKaliOperationKind,
     hostname: str,
-    dns_record_type: ResearchDnsRecordType,
+    dns_record_type: ResearchDnsRecordType | None = None,
 ) -> ResearchKaliOperationCommandPlan:
     """Build the reviewed argv plan for one supported operation."""
-    if operation_kind is not ResearchKaliOperationKind.DNS_RECORD_LOOKUP:
+    if not isinstance(operation_kind, ResearchKaliOperationKind):
         raise ResearchError("Kali operation command plan kind is not supported.")
-    if not isinstance(dns_record_type, ResearchDnsRecordType):
-        raise ResearchError("Kali operation command plan DNS record type is invalid.")
     if not isinstance(hostname, str):
         raise ResearchError("Kali operation command plan hostname is invalid.")
     normalized_hostname = hostname.strip().lower().removesuffix(".")
@@ -235,18 +241,44 @@ def kali_operation_command_plan(
         MAX_KALI_OPERATION_HOSTNAME_CHARACTERS
     ):
         raise ResearchError("Kali operation command plan hostname is invalid.")
-    return ResearchKaliOperationCommandPlan(
-        transport=ResearchKaliCommandTransport.WSL_KALI,
-        executable_path="/usr/bin/dig",
-        argv=(
-            "/usr/bin/dig",
-            "+time=5",
-            "+tries=1",
-            "+short",
-            normalized_hostname,
-            dns_record_type.value,
-        ),
-    )
+    if operation_kind is ResearchKaliOperationKind.DNS_RECORD_LOOKUP:
+        if not isinstance(dns_record_type, ResearchDnsRecordType):
+            raise ResearchError(
+                "Kali operation command plan DNS record type is invalid."
+            )
+        return ResearchKaliOperationCommandPlan(
+            transport=ResearchKaliCommandTransport.WSL_KALI,
+            executable_path="/usr/bin/dig",
+            argv=(
+                "/usr/bin/dig",
+                "+time=5",
+                "+tries=1",
+                "+short",
+                normalized_hostname,
+                dns_record_type.value,
+            ),
+        )
+    if operation_kind is ResearchKaliOperationKind.HTTPS_HEADER_LOOKUP:
+        if dns_record_type is not None:
+            raise ResearchError(
+                "Kali operation command plan DNS record type is not applicable."
+            )
+        return ResearchKaliOperationCommandPlan(
+            transport=ResearchKaliCommandTransport.WSL_KALI,
+            executable_path="/usr/bin/curl",
+            argv=(
+                "/usr/bin/curl",
+                "--head",
+                "--silent",
+                "--show-error",
+                "--max-time",
+                "10",
+                "--proto",
+                "=https",
+                f"https://{normalized_hostname}/",
+            ),
+        )
+    raise ResearchError("Kali operation command plan kind is not supported.")
 
 
 def kali_operation_preview_document(
@@ -263,7 +295,11 @@ def kali_operation_preview_document(
         "operation_kind": preview.operation_kind.value,
         "check_class": preview.check_class.value,
         "hostname": preview.hostname,
-        "dns_record_type": preview.dns_record_type.value,
+        "dns_record_type": (
+            preview.dns_record_type.value
+            if preview.dns_record_type is not None
+            else None
+        ),
         "permitted_ports": list(preview.permitted_ports),
         "max_request_count": preview.max_request_count,
         "max_requests_per_minute": preview.max_requests_per_minute,

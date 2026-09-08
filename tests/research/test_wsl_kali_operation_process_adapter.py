@@ -33,6 +33,13 @@ def command_plan():
     )
 
 
+def https_header_command_plan():
+    return kali_operation_command_plan(
+        operation_kind=ResearchKaliOperationKind.HTTPS_HEADER_LOOKUP,
+        hostname="www.example.test",
+    )
+
+
 class WslKaliOperationProcessAdapterTests(unittest.TestCase):
     def test_adapter_runs_reviewed_argv_through_wsl_without_shell(self) -> None:
         completed = subprocess.CompletedProcess(
@@ -82,6 +89,49 @@ class WslKaliOperationProcessAdapterTests(unittest.TestCase):
         )
         getaddrinfo.assert_not_called()
         popen.assert_not_called()
+
+    def test_adapter_runs_reviewed_curl_argv_without_shell(self) -> None:
+        completed = subprocess.CompletedProcess(
+            args=(),
+            returncode=0,
+            stdout="HTTP/2 200\nserver: example\n",
+            stderr="",
+        )
+        adapter = WslKaliOperationProcessAdapter(
+            wsl_executable_path=r"C:\Windows\System32\wsl.exe"
+        )
+        plan = https_header_command_plan()
+
+        with patch("subprocess.run", return_value=completed) as run:
+            result = adapter.run(plan, timeout_seconds=10.0)
+
+        self.assertEqual(result.command_plan, plan)
+        self.assertEqual(result.stdout_lines, ("HTTP/2 200", "server: example"))
+        run.assert_called_once_with(
+            (
+                r"C:\Windows\System32\wsl.exe",
+                "-d",
+                "kali-linux",
+                "--",
+                "/usr/bin/curl",
+                "--head",
+                "--silent",
+                "--show-error",
+                "--max-time",
+                "10",
+                "--proto",
+                "=https",
+                "https://www.example.test/",
+            ),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            stdin=subprocess.DEVNULL,
+            shell=False,
+            timeout=10.0,
+            check=False,
+        )
 
     def test_adapter_bounds_stdout_and_stderr_lines(self) -> None:
         long_line = "x" * (MAX_KALI_OPERATION_OUTPUT_LINE_CHARACTERS + 20)

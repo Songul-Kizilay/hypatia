@@ -50,7 +50,7 @@ class WslKaliRuntimeProbe(ResearchKaliRuntimeProbe):
             requirement.distribution,
             "--",
             requirement.executable_path,
-            "-v",
+            *requirement.version_arguments,
         )
         try:
             completed = subprocess.run(

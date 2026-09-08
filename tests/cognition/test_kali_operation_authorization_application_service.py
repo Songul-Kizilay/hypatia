@@ -73,12 +73,14 @@ class ReadyKaliRuntimeProbe:
     def __init__(self, *, ready: bool = True) -> None:
         self.ready = ready
         self.calls = 0
+        self.requirements: list[ResearchKaliRuntimeRequirement] = []
 
     def readiness(
         self,
         requirement: ResearchKaliRuntimeRequirement,
     ) -> ResearchKaliRuntimeReadiness:
         self.calls += 1
+        self.requirements.append(requirement)
         return ResearchKaliRuntimeReadiness(
             requirement=requirement,
             state=(
@@ -182,6 +184,54 @@ class KaliOperationAuthorizationApplicationServiceTests(unittest.TestCase):
     def digest_for_request(self, **metadata: object) -> str:
         preview = self.preview_service.preview_for_request(self.request(**metadata))
         return preview.operation_digest
+
+    def test_https_header_run_checks_curl_readiness_and_uses_curl_plan(self) -> None:
+        digest = self.digest_for_request(
+            kali_operation_kind=ResearchKaliOperationKind.HTTPS_HEADER_LOOKUP.value
+        )
+        authorization_response = self.service.process_authorization(
+            self.request(
+                kali_operation_kind=ResearchKaliOperationKind.HTTPS_HEADER_LOOKUP.value,
+                operation_digest=digest,
+            )
+        )
+        authorization = authorization_response.kali_operation_authorization
+        assert authorization is not None
+        temporary_directory = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary_directory.cleanup)
+        store = JsonFileResearchKaliOperationAuthorizationStore(
+            Path(temporary_directory.name) / "authorizations.json"
+        )
+        store.save([authorization])
+        probe = ReadyKaliRuntimeProbe()
+        adapter = RecordingKaliProcessAdapter()
+        runner = KaliOperationRunApplicationService(
+            ResponseComposer(),
+            self.preview_service,
+            store,
+            probe,
+            adapter,
+            clock=lambda: AUTH_TIME,
+        )
+
+        response = runner.process_run(
+            self.run_request(
+                operator_opt_in=True,
+                kali_operation_kind=ResearchKaliOperationKind.HTTPS_HEADER_LOOKUP.value,
+                operation_digest=digest,
+                authorization_id=authorization.authorization_id,
+            )
+        )
+
+        self.assertTrue(response.success, response.message)
+        self.assertEqual(probe.calls, 1)
+        self.assertEqual(probe.requirements[0].executable_path, "/usr/bin/curl")
+        self.assertEqual(probe.requirements[0].version_arguments, ("--version",))
+        self.assertEqual(adapter.calls, 1)
+        run_result = response.kali_operation_run
+        assert run_result is not None
+        self.assertEqual(run_result.command_plan.executable_path, "/usr/bin/curl")
+        self.assertIn("https://www.example.test/", run_result.command_plan.argv)
 
     def test_authorization_is_explicit_structured_intent_only(self) -> None:
         self.assertTrue(self.service.is_authorization_request(self.request()))

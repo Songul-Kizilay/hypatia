@@ -160,6 +160,57 @@ class KaliOperationPreviewApplicationServiceTests(unittest.TestCase):
         run.assert_not_called()
         popen.assert_not_called()
 
+    def test_https_header_lookup_preview_uses_reviewed_curl_argv(self) -> None:
+        with (
+            patch("socket.getaddrinfo") as getaddrinfo,
+            patch("subprocess.run") as run,
+            patch("subprocess.Popen") as popen,
+        ):
+            response = self.service.process_preview(
+                self.request(
+                    kali_operation_kind=(
+                        ResearchKaliOperationKind.HTTPS_HEADER_LOOKUP.value
+                    )
+                )
+            )
+
+        self.assertTrue(response.success, response.message)
+        preview = response.kali_operation_preview
+        assert preview is not None
+        self.assertEqual(
+            preview.operation_kind,
+            ResearchKaliOperationKind.HTTPS_HEADER_LOOKUP,
+        )
+        self.assertEqual(
+            preview.check_class, ResearchProgramScopeCheckClass.PUBLIC_HTTPS_CONTENT
+        )
+        self.assertIsNone(preview.dns_record_type)
+        self.assertEqual(preview.command_plan.executable_path, "/usr/bin/curl")
+        self.assertEqual(
+            preview.command_plan.argv,
+            (
+                "/usr/bin/curl",
+                "--head",
+                "--silent",
+                "--show-error",
+                "--max-time",
+                "10",
+                "--proto",
+                "=https",
+                "https://www.example.test/",
+            ),
+        )
+        self.assertIn("Operation: https_header_lookup", response.message)
+        self.assertIn("Check class: public_https_content", response.message)
+        self.assertIn("DNS record type: not applicable", response.message)
+        self.assertIn("Executable: /usr/bin/curl", response.message)
+        self.assertNotIn("curl ", response.message)
+        self.assertFalse(preview.command_plan.shell)
+        self.assertFalse(self.store.save_calls)
+        getaddrinfo.assert_not_called()
+        run.assert_not_called()
+        popen.assert_not_called()
+
     def test_preview_document_contains_reviewed_argv_but_no_command_string(
         self,
     ) -> None:
@@ -229,9 +280,60 @@ class KaliOperationPreviewApplicationServiceTests(unittest.TestCase):
                 )
             )
         self.assertFalse(response.success)
-        self.assertIn("does not permit DNS", response.message)
+        self.assertIn("does not permit dns_record_lookup", response.message)
         getaddrinfo.assert_not_called()
         popen.assert_not_called()
+
+    def test_policy_without_https_content_or_port_refuses_before_process(
+        self,
+    ) -> None:
+        cases = (
+            (
+                ResearchProgramScopeExecutionPolicy(
+                    permitted_check_classes=(
+                        ResearchProgramScopeCheckClass.DNS_RECORD_LOOKUP,
+                    ),
+                    permitted_ports=(53,),
+                ),
+                "does not permit public_https_content",
+            ),
+            (
+                ResearchProgramScopeExecutionPolicy(
+                    permitted_check_classes=(
+                        ResearchProgramScopeCheckClass.PUBLIC_HTTPS_CONTENT,
+                    ),
+                    permitted_ports=(80,),
+                ),
+                "does not permit HTTPS port 443",
+            ),
+        )
+        for policy, reason in cases:
+            with self.subTest(reason=reason):
+                self.store = FakeProgramScopeRevisionStore(
+                    [revision_fixture(execution_policy=policy)]
+                )
+                revision = self.store.load()[0]
+                self.service = KaliOperationPreviewApplicationService(
+                    ResponseComposer(),
+                    self.store,
+                    clock=lambda: NOW,
+                )
+                with (
+                    patch("socket.getaddrinfo") as getaddrinfo,
+                    patch("subprocess.Popen") as popen,
+                ):
+                    response = self.service.process_preview(
+                        self.request(
+                            kali_operation_kind=(
+                                ResearchKaliOperationKind.HTTPS_HEADER_LOOKUP.value
+                            ),
+                            scope_revision_digest=revision.revision_digest,
+                        )
+                    )
+                self.assertFalse(response.success)
+                self.assertIn(reason, response.message)
+                getaddrinfo.assert_not_called()
+                popen.assert_not_called()
 
     def test_out_of_scope_or_excluded_host_refuses_before_dns_or_process(self) -> None:
         for hostname, reason in (

@@ -15,6 +15,8 @@ from research.ResearchKaliOperationPreview import ResearchKaliCommandTransport
 EXPECTED_KALI_DISTRIBUTION = "kali-linux"
 EXPECTED_DIG_EXECUTABLE = "/usr/bin/dig"
 EXPECTED_DIG_VERSION_PREFIX = "DiG 9."
+EXPECTED_CURL_EXECUTABLE = "/usr/bin/curl"
+EXPECTED_CURL_VERSION_PREFIX = "curl "
 
 
 class ResearchKaliRuntimeReadinessState(StrEnum):
@@ -32,6 +34,7 @@ class ResearchKaliRuntimeRequirement:
     distribution: str = EXPECTED_KALI_DISTRIBUTION
     executable_path: str = EXPECTED_DIG_EXECUTABLE
     version_prefix: str = EXPECTED_DIG_VERSION_PREFIX
+    version_arguments: tuple[str, ...] = ("-v",)
 
     def __post_init__(self) -> None:
         if not isinstance(self.transport, ResearchKaliCommandTransport):
@@ -45,6 +48,15 @@ class ResearchKaliRuntimeRequirement:
                 raise ResearchError(f"Kali runtime {label} cannot be empty.")
         if not self.executable_path.startswith("/"):
             raise ResearchError("Kali runtime executable path is invalid.")
+        if not isinstance(self.version_arguments, tuple) or not self.version_arguments:
+            raise ResearchError("Kali runtime version arguments are invalid.")
+        for argument in self.version_arguments:
+            if not isinstance(argument, str) or not argument.strip():
+                raise ResearchError("Kali runtime version arguments are invalid.")
+            if "\x00" in argument or "\r" in argument or "\n" in argument:
+                raise ResearchError(
+                    "Kali runtime version arguments contain control data."
+                )
         if any(
             "\x00" in value or "\r" in value or "\n" in value
             for value in (

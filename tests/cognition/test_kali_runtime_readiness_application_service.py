@@ -190,6 +190,43 @@ class KaliRuntimeReadinessApplicationServiceTests(unittest.TestCase):
         getaddrinfo.assert_not_called()
         popen.assert_not_called()
 
+    def test_wsl_probe_uses_requirement_specific_version_arguments(self) -> None:
+        completed = subprocess.CompletedProcess(
+            args=(),
+            returncode=0,
+            stdout="curl 8.11.1\n",
+            stderr="",
+        )
+        probe = WslKaliRuntimeProbe(wsl_executable_path=r"C:\Windows\System32\wsl.exe")
+        requirement = ResearchKaliRuntimeRequirement(
+            executable_path="/usr/bin/curl",
+            version_prefix="curl ",
+            version_arguments=("--version",),
+        )
+
+        with patch("subprocess.run", return_value=completed) as run:
+            readiness = probe.readiness(requirement)
+
+        self.assertTrue(readiness.ready)
+        run.assert_called_once_with(
+            (
+                r"C:\Windows\System32\wsl.exe",
+                "-d",
+                "kali-linux",
+                "--",
+                "/usr/bin/curl",
+                "--version",
+            ),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            stdin=subprocess.DEVNULL,
+            shell=False,
+            timeout=5.0,
+            check=False,
+        )
+
     def test_wsl_probe_refuses_nonzero_or_wrong_version(self) -> None:
         cases = (
             (

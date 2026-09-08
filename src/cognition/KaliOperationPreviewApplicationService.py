@@ -58,9 +58,6 @@ class KaliOperationPreviewApplicationService:
     ) -> ResearchKaliOperationPreview:
         """Rebuild the exact inert operation preview from structured metadata."""
         kind = self._operation_kind(request.metadata.get("kali_operation_kind"))
-        if kind is not ResearchKaliOperationKind.DNS_RECORD_LOOKUP:
-            raise ResearchError("Kali operation preview kind is not supported.")
-        record_type = self._dns_record_type(request.metadata.get("dns_record_type"))
         hostname = cast(str, request.metadata.get("hostname"))
         revision = self._active_revision(
             program_id=cast(str, request.metadata.get("program_id")),
@@ -69,22 +66,29 @@ class KaliOperationPreviewApplicationService:
         )
         revision.scope.require_hostname(hostname)
         policy = revision.execution_policy
-        if (
-            ResearchProgramScopeCheckClass.DNS_RECORD_LOOKUP
-            not in policy.permitted_check_classes
-        ):
+        check_class = self._check_class_for_kind(kind)
+        if check_class not in policy.permitted_check_classes:
             raise ResearchError(
-                "Program scope policy does not permit DNS record lookup."
+                f"Program scope policy does not permit {check_class.value}."
             )
+        if (
+            kind is ResearchKaliOperationKind.HTTPS_HEADER_LOOKUP
+            and 443 not in policy.permitted_ports
+        ):
+            raise ResearchError("Program scope policy does not permit HTTPS port 443.")
         return ResearchKaliOperationPreview(
             program_id=revision.program_id,
             scope_revision_id=revision.revision_id,
             scope_revision_digest=revision.revision_digest,
             execution_policy_digest=revision.execution_policy_digest,
             operation_kind=kind,
-            check_class=ResearchProgramScopeCheckClass.DNS_RECORD_LOOKUP,
+            check_class=check_class,
             hostname=hostname,
-            dns_record_type=record_type,
+            dns_record_type=(
+                self._dns_record_type(request.metadata.get("dns_record_type"))
+                if kind is ResearchKaliOperationKind.DNS_RECORD_LOOKUP
+                else None
+            ),
             permitted_ports=policy.permitted_ports,
             max_request_count=policy.max_request_count,
             max_requests_per_minute=policy.max_requests_per_minute,
@@ -100,6 +104,16 @@ class KaliOperationPreviewApplicationService:
             return ResearchKaliOperationKind(value)
         except ValueError as error:
             raise ResearchError("Kali operation preview kind is invalid.") from error
+
+    @staticmethod
+    def _check_class_for_kind(
+        kind: ResearchKaliOperationKind,
+    ) -> ResearchProgramScopeCheckClass:
+        if kind is ResearchKaliOperationKind.DNS_RECORD_LOOKUP:
+            return ResearchProgramScopeCheckClass.DNS_RECORD_LOOKUP
+        if kind is ResearchKaliOperationKind.HTTPS_HEADER_LOOKUP:
+            return ResearchProgramScopeCheckClass.PUBLIC_HTTPS_CONTENT
+        raise ResearchError("Kali operation preview kind is not supported.")
 
     @staticmethod
     def _dns_record_type(value: object) -> ResearchDnsRecordType:
