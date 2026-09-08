@@ -71,6 +71,9 @@ class KaliOperationAuthorizationApplicationService:
             raise ResearchError(
                 "Kali operation authorization digest does not match the preview."
             )
+        # The run service consumes approvals in the shared store. Refresh before
+        # adding one so this service's earlier cache cannot resurrect spent IDs.
+        self._restore()
         authorization = ResearchKaliOperationAuthorization.for_preview(
             authorization_id=self._id_factory(),
             preview=preview,
@@ -89,8 +92,10 @@ class KaliOperationAuthorizationApplicationService:
     def _restore(self) -> None:
         if self._authorization_store is None:
             return
-        for authorization in self._authorization_store.load():
-            self._authorizations[authorization.authorization_id] = authorization
+        self._authorizations = {
+            authorization.authorization_id: authorization
+            for authorization in self._authorization_store.load()
+        }
 
     def _persist(self) -> bool:
         if self._authorization_store is None:

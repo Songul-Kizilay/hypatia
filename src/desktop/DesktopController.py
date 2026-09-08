@@ -19,7 +19,9 @@ from research.ResearchClaimConfidence import ResearchClaimConfidence
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchInformationTrust import ResearchInformationTrust
+from research.ResearchKaliOperationPreview import ResearchKaliOperationPreview
 from research.ResearchPlanRestriction import ResearchPlanRestriction
+from research.ResearchProgramScopeRevision import ResearchProgramScopeRevision
 from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
 )
@@ -253,6 +255,79 @@ class DesktopController:
         if not message.strip():
             raise ValueError("A desktop message cannot be empty.")
         return self._brain.process(message)
+
+    def preview_kali_operation(
+        self,
+        revision: ResearchProgramScopeRevision,
+        hostname: str,
+        operation_kind: str,
+        dns_record_type: str = "A",
+    ) -> BrainResponse:
+        """Preview the operator's exact selection through the existing boundary."""
+        return self._brain.process(
+            BrainRequest(
+                "Preview Kali operation",
+                metadata={
+                    "intent": "kali_operation_preview",
+                    "program_id": revision.program_id,
+                    "scope_revision_id": revision.revision_id,
+                    "scope_revision_digest": revision.revision_digest,
+                    "hostname": hostname.strip(),
+                    "kali_operation_kind": operation_kind,
+                    "dns_record_type": dns_record_type,
+                },
+            )
+        )
+
+    @staticmethod
+    def _kali_preview_metadata(
+        preview: ResearchKaliOperationPreview,
+    ) -> dict[str, object]:
+        return {
+            "program_id": preview.program_id,
+            "scope_revision_id": preview.scope_revision_id,
+            "scope_revision_digest": preview.scope_revision_digest,
+            "hostname": preview.hostname,
+            "kali_operation_kind": preview.operation_kind.value,
+            "dns_record_type": (
+                preview.dns_record_type.value if preview.dns_record_type else None
+            ),
+            "operation_digest": preview.operation_digest,
+        }
+
+    def authorize_kali_operation(
+        self, preview: ResearchKaliOperationPreview
+    ) -> BrainResponse:
+        """Bind a separate operator confirmation to the returned preview."""
+        return self._brain.process(
+            BrainRequest(
+                "Authorize Kali operation",
+                metadata={
+                    **self._kali_preview_metadata(preview),
+                    "intent": "kali_operation_authorization",
+                },
+            )
+        )
+
+    def run_kali_operation(
+        self,
+        preview: ResearchKaliOperationPreview,
+        authorization_id: str,
+        *,
+        operator_opt_in: bool = False,
+    ) -> BrainResponse:
+        """Request one bounded run; runtime revalidates all authority."""
+        return self._brain.process(
+            BrainRequest(
+                "Run Kali operation",
+                metadata={
+                    **self._kali_preview_metadata(preview),
+                    "intent": "kali_operation_run",
+                    "authorization_id": authorization_id,
+                    "operator_opt_in": operator_opt_in,
+                },
+            )
+        )
 
     def select_session(self, session_id: str) -> BrainResponse:
         """Activate an existing session through its explicit Brain command."""

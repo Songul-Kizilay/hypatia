@@ -2,6 +2,31 @@
 
 All notable project changes are recorded here.
 
+## [0.3.319] - 2026-09-08
+
+### Added
+
+- Added a Turkish Kali desktop tab when program-scope enrollment is available:
+  select a registered scope and hostname, choose DNS lookup or HTTPS headers,
+  then explicitly preview, authorize and run through the existing services.
+- Form edits invalidate local preview/approval state; late responses cannot
+  restore approval for a changed selection. Runs use the shared desktop worker.
+- Controller and panel tests cover real approval persistence, both reviewed
+  profiles with a fake process adapter, refusal, cancellation and stale results.
+
+### Limits
+
+- Live execution still requires the existing Kali runtime opt-in and a policy
+  permitting the chosen operation. No live target request was used for validation.
+- Output is displayed for review; it is not automatically recorded as evidence.
+
+### Fixed
+
+- Refresh the authorization service's persisted approvals before creating a new
+  one. A stale service cache could otherwise write back an approval already
+  consumed by the run service. Sequential desktop runs test that spent IDs stay
+  absent and cannot be replayed after another approval is issued.
+
 ## [0.3.318] - 2026-09-08
 
 ### Added

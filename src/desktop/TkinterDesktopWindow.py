@@ -23,6 +23,7 @@ from desktop.DesktopController import (
 )
 from desktop.DesktopRequestRunner import DesktopRequestRunner
 from desktop.FilesystemContentPreview import FilesystemContentPreview
+from desktop.KaliOperationPanel import KaliOperationPanel
 from desktop.MarkdownTextSegments import (
     MarkdownStyle,
     markdown_segments,
@@ -1031,6 +1032,16 @@ class TkinterDesktopWindow:
             simple_research_tab,
             research_tab,
         ]
+        if self._program_scope_enrollment_service is not None:
+            kali_tab = ttk.Frame(self._workspace_tabs, padding=10)
+            self._workspace_tabs.add(kali_tab, text="Kali")
+            tabs.append(kali_tab)
+            self._kali_panel = KaliOperationPanel(
+                kali_tab,
+                self._controller,
+                self._program_scope_enrollment_service.revisions,
+                self._start_request,
+            )
         # The Tools tab appears only when a console was composed. An empty
         # panel offering to run nothing would read as a feature that is broken
         # rather than a capability this installation was not given.
