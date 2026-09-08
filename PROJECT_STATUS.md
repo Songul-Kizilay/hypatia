@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.321 (Genesis)`
+`v0.3.322 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
@@ -25,16 +25,20 @@ fixes the default-scope Kali timeout mismatch. Local validation completed:
 5,787 tests OK with 3 platform skips, plus Ruff, Black, MyPy and diff checks.
 Version v0.3.321 adds a question-to-opening-plan preview (local search followed
 by explicitly selected provider discovery). The full autonomous research journey
-and desktop transfer of that preview into an approved execution remain open.
+remains open. Version v0.3.322 adds explicit desktop transfer into the existing
+approval/start interface, preserving the exact typed opening and digest.
 Local validation for v0.3.321 completed: 5,795 tests OK with 3 platform skips,
 plus Ruff, Black, MyPy and diff checks. Remote CI must be checked against the
 exact release commit; local results do not establish remote success.
+Windows and Linux CI for v0.3.321 both completed successfully. Local validation
+for v0.3.322 completed: 5,803 tests OK with 3 platform skips; Black, Ruff and
+MyPy passed. Remote CI must still be checked against the exact v0.3.322 commit.
 
 ## Delivery Terminology
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.321`** is the current source/package release line.
+- **Runtime release `v0.3.322`** is the current source/package release line.
   GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the

@@ -11,7 +11,7 @@ from functools import partial
 from math import ceil
 from time import monotonic
 from tkinter import filedialog, font, messagebox, scrolledtext, ttk
-from typing import Literal, Protocol
+from typing import Literal, Protocol, TypedDict
 
 from brain.BrainResponse import BrainResponse
 from brain.SessionSummary import SessionSummary
@@ -28,6 +28,7 @@ from desktop.MarkdownTextSegments import (
     MarkdownStyle,
     markdown_segments,
 )
+from desktop.QuestionResearchDraft import QuestionResearchDraft
 from desktop.ResearchStateRefreshSignal import ResearchStateRefreshSignal
 from desktop.ResearchWorkspaceReadModel import (
     ResearchRunSort,
@@ -295,6 +296,10 @@ _RESEARCH_ANALYSIS_TAB_TITLES = (
     "Claims & contradictions",
     "Plan draft",
 )
+
+
+class _OpeningPlanOptions(TypedDict, total=False):
+    opening_draft: QuestionResearchDraft
 
 
 @dataclass(frozen=True, slots=True)
@@ -1928,6 +1933,8 @@ class TkinterDesktopWindow:
             wraplength=680,
         ).grid(row=2, column=0, sticky="w", pady=(6, 0))
         self._target_plan_draft: TargetResearchDraft | None = None
+        self._question_plan_draft: QuestionResearchDraft | None = None
+        self._question_plan_previous_text: tuple[str, str] | None = None
         self._reference_plan_text: tuple[str, str] | None = None
         self._target_plan_status = tk.StringVar(
             value="Reference plan mode — no bug-bounty target selected"
@@ -1973,6 +1980,16 @@ class TkinterDesktopWindow:
             text="Sorudan başlangıç planı hazırla",
             command=self._preview_question_plan,
         ).grid(row=1, column=0, columnspan=3, sticky="w", pady=4)
+        ttk.Button(
+            plan_actions,
+            text="Başlangıç planını onay alanına aktar",
+            command=self._select_question_plan,
+        ).grid(row=2, column=0, columnspan=2, sticky="w")
+        ttk.Button(
+            plan_actions,
+            text="Önceki taslağa dön",
+            command=self._clear_question_plan,
+        ).grid(row=2, column=2, sticky="e")
         ttk.Label(research_plan_frame, text="Complete preview or rejection").grid(
             row=7,
             column=0,
@@ -3155,6 +3172,7 @@ class TkinterDesktopWindow:
                 source_id_lines,
                 constraint_lines,
                 self._plan_restriction.get(),
+                **self._opening_plan_options(),
                 **target_options,
             ),
             self._complete_research_plan_draft_preview,
@@ -3167,12 +3185,64 @@ class TkinterDesktopWindow:
         provider = self._research_discovery_provider.get()
         self._start_request(
             lambda: self._controller.preview_question_plan(question, provider),
-            self._complete_research_plan_draft_preview,
+            self._complete_question_plan_preview,
             "research opening preview",
         )
 
+    def _complete_question_plan_preview(self, response: BrainResponse) -> None:
+        self._complete_research_plan_draft_preview(response)
+        preview = response.research_plan_draft_preview
+        if response.success and preview is not None and preview.allowed:
+            self._previewed_question_opening = preview.plan
+
+    def _select_question_plan(self) -> None:
+        """Select exactly the visible opening; approval and start stay separate."""
+        plan = getattr(self, "_previewed_question_opening", None)
+        if plan is None:
+            self._status.set("Önce sorudan bir başlangıç planı hazırlayın.")
+            return
+        if (
+            getattr(self, "_target_plan_draft", None) is not None
+            or self._text_value(self._research_plan_constraints).strip()
+            or self._plan_restriction.get() not in ("", "advisory")
+        ):
+            self._status.set("Hedef veya kısıtları olan taslak değiştirilemez.")
+            return
+        if self._research_question.get().strip() != plan.question:
+            self._status.set("Soru değişti; yeni bir başlangıç planı hazırlayın.")
+            return
+        draft = QuestionResearchDraft(plan)
+        if getattr(self, "_question_plan_draft", None) is None:
+            self._question_plan_previous_text = (
+                self._text_value(self._research_plan_instructions),
+                self._text_value(self._research_plan_source_ids),
+            )
+        self._question_plan_draft = draft
+        self._replace_plan_text(
+            self._research_plan_instructions, draft.instruction_text, disabled=True
+        )
+        self._replace_plan_text(self._research_plan_source_ids, "", disabled=True)
+        self._invalidate_plan_approval_preview()
+        self._status.set(
+            "Başlangıç planı seçildi. Preview approval ile inceleyin; henüz onay yok."
+        )
+
+    def _clear_question_plan(self) -> None:
+        if getattr(self, "_question_plan_draft", None) is None:
+            return
+        instructions, sources = self._question_plan_previous_text or ("", "")
+        self._question_plan_draft = None
+        self._question_plan_previous_text = None
+        self._replace_plan_text(self._research_plan_instructions, instructions)
+        self._replace_plan_text(self._research_plan_source_ids, sources)
+        self._invalidate_plan_approval_preview()
+        self._status.set("Önceki taslak geri yüklendi; hiçbir araştırma başlatılmadı.")
+
     def _open_target_plan_editor(self) -> None:
         """Edit an inert target-bound plan draft; perform no network access."""
+        if getattr(self, "_question_plan_draft", None) is not None:
+            self._status.set("Hedef planı için önce önceki taslağa dönün.")
+            return
         palette = _accessibility_palette(self._theme_mode.get())
         TargetResearchDraftDialog(
             self._root,
@@ -3187,6 +3257,8 @@ class TkinterDesktopWindow:
         )
 
     def _apply_target_plan_draft(self, draft: TargetResearchDraft) -> None:
+        if getattr(self, "_question_plan_draft", None) is not None:
+            raise ValueError("Return to the previous draft before selecting a target.")
         if not isinstance(draft, TargetResearchDraft):
             raise ValueError("Target plan requires a validated target draft.")
         if getattr(self, "_target_plan_draft", None) is None:
@@ -3244,6 +3316,10 @@ class TkinterDesktopWindow:
         draft = getattr(self, "_target_plan_draft", None)
         return {} if draft is None else {"target_draft": draft}
 
+    def _opening_plan_options(self) -> _OpeningPlanOptions:
+        draft = getattr(self, "_question_plan_draft", None)
+        return {} if draft is None else {"opening_draft": draft}
+
     def _invalidate_plan_approval_preview(self) -> None:
         self._previewed_authority = None
         self._previewed_fit = None
@@ -3256,6 +3332,7 @@ class TkinterDesktopWindow:
         response: BrainResponse,
     ) -> None:
         """Show the complete ready or rejected runtime preview without confirmation."""
+        self._previewed_question_opening = None
         self._research_plan_preview.configure(state=tk.NORMAL)
         self._research_plan_preview.delete("1.0", tk.END)
         self._research_plan_preview.insert(tk.END, response.message)
@@ -5810,6 +5887,7 @@ class TkinterDesktopWindow:
                 # operator can see, not a constraint-free version of it.
                 self._text_value(self._research_plan_constraints),
                 self._plan_restriction.get(),
+                **self._opening_plan_options(),
                 **target_options,
             )
         )
@@ -5891,6 +5969,7 @@ class TkinterDesktopWindow:
                 self._authorization_seconds.get(),
                 self._text_value(self._research_plan_constraints),
                 self._plan_restriction.get(),
+                **self._opening_plan_options(),
                 **target_options,
             )
         )
@@ -5930,6 +6009,7 @@ class TkinterDesktopWindow:
                 self._plan_approval_run_id.get(),
                 self._text_value(self._research_plan_constraints),
                 self._plan_restriction.get(),
+                **self._opening_plan_options(),
                 **target_options,
             )
         )

@@ -8,6 +8,7 @@ from typing import Protocol
 from brain.BrainRequest import BrainRequest
 from brain.BrainResponse import BrainResponse
 from core.CancellationSignal import CancellationToken
+from desktop.QuestionResearchDraft import QuestionResearchDraft
 from desktop.TargetResearchDraft import TargetResearchDraft
 from research.DeferredExecutionControlView import DeferredExecutionControlView
 from research.OneShotDeferredExecutionSchedule import OneShotDeferredExecutionSchedule
@@ -34,6 +35,24 @@ from research.ResearchSourceUsefulness import ResearchSourceUsefulness
 #: of the restriction vocabulary itself: "no restriction" is the absence of
 #: one, not a kind of one.
 ADVISORY_RESTRICTION_LABEL = "advisory"
+
+
+def _opening_draft_metadata(
+    draft: QuestionResearchDraft | None,
+    target: TargetResearchDraft | None,
+    question: str,
+    instructions: str,
+    sources: str,
+    constraints: str,
+    restriction: str,
+) -> dict[str, object]:
+    if draft is None:
+        return {}
+    if not isinstance(draft, QuestionResearchDraft):
+        raise ValueError("An opening requires a validated question draft.")
+    if target is not None or constraints.strip() or _plan_restriction(restriction):
+        raise ValueError("Opening mode cannot discard targets or constraints.")
+    return draft.metadata(question, instructions, sources)
 
 
 def _target_draft_metadata(draft: TargetResearchDraft | None) -> dict[str, object]:
@@ -457,6 +476,7 @@ class DesktopController:
         restriction: str = "",
         *,
         target_draft: TargetResearchDraft | None = None,
+        opening_draft: QuestionResearchDraft | None = None,
     ) -> BrainResponse:
         """Preview one explicit ordered plan without saving or executing it.
 
@@ -493,6 +513,15 @@ class DesktopController:
                     ),
                     "research_plan_restriction": _plan_restriction(restriction),
                     **_target_draft_metadata(target_draft),
+                    **_opening_draft_metadata(
+                        opening_draft,
+                        target_draft,
+                        question,
+                        instruction_lines,
+                        source_id_lines,
+                        constraint_lines,
+                        restriction,
+                    ),
                 },
             )
         )
@@ -511,6 +540,7 @@ class DesktopController:
         restriction: str = "",
         *,
         target_draft: TargetResearchDraft | None = None,
+        opening_draft: QuestionResearchDraft | None = None,
     ) -> BrainResponse:
         """Show the approval this plan would record. Records nothing.
 
@@ -536,6 +566,7 @@ class DesktopController:
             constraint_lines=constraint_lines,
             restriction=restriction,
             target_draft=target_draft,
+            opening_draft=opening_draft,
         )
 
     @staticmethod
@@ -570,6 +601,7 @@ class DesktopController:
         restriction: str = "",
         *,
         target_draft: TargetResearchDraft | None = None,
+        opening_draft: QuestionResearchDraft | None = None,
     ) -> BrainResponse:
         """Record exactly one previewed approval. Starts no research.
 
@@ -598,6 +630,7 @@ class DesktopController:
             constraint_lines=constraint_lines,
             restriction=restriction,
             target_draft=target_draft,
+            opening_draft=opening_draft,
         )
 
     def start_authorized_execution(
@@ -611,6 +644,7 @@ class DesktopController:
         restriction: str = "",
         *,
         target_draft: TargetResearchDraft | None = None,
+        opening_draft: QuestionResearchDraft | None = None,
     ) -> BrainResponse:
         """Spend one recorded approval on one foreground execution start.
 
@@ -632,6 +666,7 @@ class DesktopController:
             constraint_lines=constraint_lines,
             restriction=restriction,
             target_draft=target_draft,
+            opening_draft=opening_draft,
         )
 
     def research_execution_status(self, execution_id: str) -> BrainResponse:
@@ -899,6 +934,7 @@ class DesktopController:
         constraint_lines: str = "",
         restriction: str = "",
         target_draft: TargetResearchDraft | None = None,
+        opening_draft: QuestionResearchDraft | None = None,
     ) -> BrainResponse:
         if not all(
             isinstance(value, str)
@@ -924,6 +960,17 @@ class DesktopController:
         }
         metadata.update(extra)
         metadata.update(_target_draft_metadata(target_draft))
+        metadata.update(
+            _opening_draft_metadata(
+                opening_draft,
+                target_draft,
+                question,
+                instruction_lines,
+                source_id_lines,
+                constraint_lines,
+                restriction,
+            )
+        )
         return self._brain.process(
             BrainRequest(message=message, source="desktop", metadata=metadata)
         )

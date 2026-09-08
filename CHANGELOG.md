@@ -2,6 +2,22 @@
 
 All notable project changes are recorded here.
 
+## [0.3.322] - 2026-09-08
+
+### Added
+
+- Explicit desktop handoff from a question-opening preview to the existing
+  approval and zero-step start controls. Typed capabilities and provider survive
+  the transfer with the same canonical plan digest; display text is not parsed
+  as capability authority. No authorization or execution occurs on selection.
+- Previous editor contents can be restored. Target/constraint conflicts and
+  changed opening fields are refused; switching drafts clears cached approval.
+- A deterministic end-to-end test covers preview, explicit confirmation,
+  zero-step start and bounded continuation to candidate discovery with a fake
+  provider. Reusing the consumed approval is refused. No source is fetched or
+  accepted by the opening; this is not yet a full research report generator.
+- v0.3.321 Windows and Linux CI both completed successfully before this release.
+
 ## [0.3.321] - 2026-09-08
 
 ### Added

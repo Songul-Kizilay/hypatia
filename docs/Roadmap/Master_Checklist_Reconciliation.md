@@ -71,10 +71,15 @@ goal), while the research draft boundary required already-authored steps. This
 opening fills the first drafting gap without modifying those legacy semantics.
 It is a fixed template, not LLM goal decomposition or adaptive replanning.
 
-Follow-up: make the exact preview reviewable and approvable through the existing
-authorization interface, then verify a bounded continuation to candidate discovery
-with fake providers. Stop there for source review. Do not imply that discovery
-already provides evidence, candidate claims, comparison or a report.
+Version v0.3.322 connects that exact preview to the ordinary authorization and
+zero-step start interface through an explicit selection. Prior editor contents
+are retained for restoration. A fake-provider end-to-end test verifies approval,
+consumption and bounded continuation to candidate discovery, without fetch or
+acceptance. This proves the opening journey, not the complete research loop.
+
+Follow-up: assess bounded candidate acquisition and evidence proposals through
+existing operations, retaining separate review for permanent source acceptance.
+Discovery alone provides neither evidence, candidate claims nor a report.
 
 - [ ] Trace natural-language goal input to the actual planner, approval and execution paths.
 - [ ] Map each of the ten requested first-major-milestone steps to a reachable
