@@ -52,6 +52,9 @@ class BootstrapKaliOperationExecutionTests(unittest.TestCase):
                 {"HYPATIA_RESEARCH_SOURCE_DISCOVERY_PROVIDER": "disabled"},
                 clear=True,
             ),
+            patch("core.Bootstrap.HttpResearchSourceFetcher"),
+            patch("core.Bootstrap.NvdResearchSourceDiscoveryProvider"),
+            patch("core.Bootstrap.NvdResearchSourceFetcher"),
             patch("subprocess.run") as run,
             patch("subprocess.Popen") as popen,
         ):
@@ -88,6 +91,9 @@ class BootstrapKaliOperationExecutionTests(unittest.TestCase):
                 },
                 clear=True,
             ),
+            patch("core.Bootstrap.HttpResearchSourceFetcher"),
+            patch("core.Bootstrap.NvdResearchSourceDiscoveryProvider"),
+            patch("core.Bootstrap.NvdResearchSourceFetcher"),
             patch("subprocess.run") as run,
             patch("subprocess.Popen") as popen,
         ):
