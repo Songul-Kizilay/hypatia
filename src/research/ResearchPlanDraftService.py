@@ -75,6 +75,31 @@ class ResearchPlanDraftService:
             return ResearchPlanDraftPreview.rejected(str(error))
         return ResearchPlanDraftPreview.ready(plan)
 
+    def preview_question(
+        self, question: str, provider: str
+    ) -> ResearchPlanDraftPreview:
+        """Draft a fixed research opening; question prose cannot add capabilities."""
+        try:
+            selected = self._provider(provider)
+            if selected is None:
+                raise ResearchError("Choose a research discovery provider.")
+        except ResearchError as error:
+            return ResearchPlanDraftPreview.rejected(str(error))
+        return self.preview(
+            question,
+            (
+                ResearchPlanStepDraftInput(
+                    instruction=question,
+                    capability=ResearchPlanStepCapability.LOCAL_KNOWLEDGE_SEARCH.value,
+                ),
+                ResearchPlanStepDraftInput(
+                    instruction="Discover candidate sources for the research question.",
+                    capability=ResearchPlanStepCapability.SOURCE_DISCOVERY.value,
+                    discovery_provider=selected.value,
+                ),
+            ),
+        )
+
     @staticmethod
     def _build_constraints(
         constraint_drafts: tuple[str, ...],

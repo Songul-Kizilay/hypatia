@@ -57,6 +57,25 @@ goal. The first major milestone therefore remains open even when that test passe
 Use the user's example: “Research indirect prompt injection defenses.” Keep it
 general research; no target testing or Kali integration in this milestone.
 
+### Opening connection added in v0.3.321
+
+`ResearchPlanDraftService.preview_question` builds a fixed two-step opening:
+local knowledge search followed by discovery on an explicitly selected provider.
+`research_question_plan_preview` reaches it through the existing application
+service. The advanced desktop button displays the ordinary plan preview. It does
+not transfer the proposal into the editor, create approval or start execution.
+Same question and provider preserve the same canonical content digest.
+
+The earlier generic `Planner` only supplied heuristic task titles (or Clarify
+goal), while the research draft boundary required already-authored steps. This
+opening fills the first drafting gap without modifying those legacy semantics.
+It is a fixed template, not LLM goal decomposition or adaptive replanning.
+
+Follow-up: make the exact preview reviewable and approvable through the existing
+authorization interface, then verify a bounded continuation to candidate discovery
+with fake providers. Stop there for source review. Do not imply that discovery
+already provides evidence, candidate claims, comparison or a report.
+
 - [ ] Trace natural-language goal input to the actual planner, approval and execution paths.
 - [ ] Map each of the ten requested first-major-milestone steps to a reachable
       operation and a test, or explicitly mark it missing.

@@ -44,10 +44,15 @@ class ResearchPlanPreviewApplicationService:
     @staticmethod
     def is_draft_preview_request(request: BrainRequest) -> bool:
         """Recognize only the explicit structured plan-preview intent."""
-        return request.metadata.get("intent") == "research_plan_draft_preview"
+        return request.metadata.get("intent") in (
+            "research_plan_draft_preview",
+            "research_question_plan_preview",
+        )
 
     def process_draft_preview(self, request: BrainRequest) -> BrainResponse:
         """Compose the complete no-write preview or bounded rejection."""
+        if request.metadata.get("intent") == "research_question_plan_preview":
+            return self._process_question_preview(request)
         question = cast(str, request.metadata.get("research_plan_question"))
         step_drafts = cast(
             tuple[ResearchPlanStepDraft, ...],
@@ -79,6 +84,31 @@ class ResearchPlanPreviewApplicationService:
             preview,
             prior_lessons,
             lesson_trace,
+        )
+
+    def _process_question_preview(self, request: BrainRequest) -> BrainResponse:
+        """Use one explicit template without discarding an authored plan."""
+        if any(
+            key in request.metadata
+            for key in (
+                "research_plan_steps",
+                "research_plan_constraints",
+                RESEARCH_PLAN_RESTRICTION_KEY,
+                RESEARCH_PLAN_TARGET_BINDING_KEY,
+            )
+        ):
+            preview = ResearchPlanDraftPreview.rejected(
+                "Question planning cannot replace supplied steps, "
+                "constraints or targets."
+            )
+        else:
+            preview = self._draft_service.preview_question(
+                cast(str, request.metadata.get("research_plan_question")),
+                cast(str, request.metadata.get("discovery_provider")),
+            )
+        lessons = self._prior_lessons(preview)
+        return self._response_composer.research_plan_draft_preview(
+            request, preview, lessons, self._lesson_trace(preview, lessons)
         )
 
     def _prior_lessons(

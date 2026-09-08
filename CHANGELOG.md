@@ -2,6 +2,26 @@
 
 All notable project changes are recorded here.
 
+## [0.3.321] - 2026-09-08
+
+### Added
+
+- An explicit question-to-opening-plan preview through the existing research
+  draft service and Brain route. It produces local knowledge search followed by
+  source discovery using the operator-selected Crossref or NVD provider.
+- Research (Advanced) includes a Turkish opening-plan preview button. It leaves
+  the authored editor intact and captures question/provider before worker dispatch.
+- Question wording never adds capabilities, URLs, targets or authority. Mixed
+  template and authored steps/constraints/target inputs are rejected rather than
+  silently discarded. Generated plans retain the ordinary canonical digest.
+
+### Limits
+
+- This is the opening-plan connection, not complete autonomous research. Preview
+  does not approve, run, select sources or generate a report. The generated plan
+  is not copied into the editor or authorized automatically.
+- v0.3.320 Linux and Windows CI both completed successfully before this release.
+
 ## [0.3.320] - 2026-09-08
 
 ### Fixed

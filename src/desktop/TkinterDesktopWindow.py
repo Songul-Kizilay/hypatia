@@ -1968,6 +1968,11 @@ class TkinterDesktopWindow:
             text="Preview plan — no write",
             command=self._preview_research_plan_draft,
         ).grid(row=0, column=2, sticky="e")
+        ttk.Button(
+            plan_actions,
+            text="Sorudan başlangıç planı hazırla",
+            command=self._preview_question_plan,
+        ).grid(row=1, column=0, columnspan=3, sticky="w", pady=4)
         ttk.Label(research_plan_frame, text="Complete preview or rejection").grid(
             row=7,
             column=0,
@@ -3154,6 +3159,16 @@ class TkinterDesktopWindow:
             ),
             self._complete_research_plan_draft_preview,
             "research plan preview",
+        )
+
+    def _preview_question_plan(self) -> None:
+        """Show a separate opening proposal while preserving the authored editor."""
+        question = self._research_question.get()
+        provider = self._research_discovery_provider.get()
+        self._start_request(
+            lambda: self._controller.preview_question_plan(question, provider),
+            self._complete_research_plan_draft_preview,
+            "research opening preview",
         )
 
     def _open_target_plan_editor(self) -> None:

@@ -949,6 +949,22 @@ class DesktopController:
             )
         )
 
+    def preview_question_plan(self, question: str, provider: str) -> BrainResponse:
+        """Request the canonical research opening for an explicit provider choice."""
+        if not isinstance(question, str) or not question.strip():
+            raise ValueError("A research question cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="Preview research opening from question",
+                source="desktop",
+                metadata={
+                    "intent": "research_question_plan_preview",
+                    "research_plan_question": question.strip(),
+                    "discovery_provider": provider,
+                },
+            )
+        )
+
     def report_provider_comparison(self, research_run_id: str) -> BrainResponse:
         """Show one run's two provider result sets side by side."""
         return self._run_only_request(
