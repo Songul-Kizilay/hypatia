@@ -9,7 +9,8 @@ v0.3.310. Deterministic no-process fake-runner gating landed in v0.3.311.
 Opt-in WSL/Kali runtime-readiness reporting landed in v0.3.312. A reviewed
 WSL/Kali `dig -v` readiness probe adapter landed in v0.3.313. The first
 reviewed operation-run boundary with injected process adapter landed in
-v0.3.314.
+v0.3.314. A bounded WSL/Kali process adapter for reviewed command plans landed
+in v0.3.315.
 
 ## Purpose
 
@@ -57,6 +58,10 @@ effects, budget and evidence handling are known before they run.
   persisted authorization, ready runtime prerequisites and an explicitly
   injected process adapter. Production bootstrap still does not install that
   adapter.
+- A WSL/Kali process adapter can now run exactly the reviewed argv plan through
+  `wsl.exe -d kali-linux -- ...` with `shell=False`, closed stdin, bounded
+  stdout/stderr and a hard timeout. It accepts no shell command string and no
+  model-authored command line.
 - The desktop can preview and exactly confirm save/revoke decisions for those
   program-scope revision records.
 - Program-scope revisions are enforced at approval, Start, restore and every

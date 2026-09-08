@@ -8,7 +8,7 @@ They should not have to approve every routine step of an already approved job.
 The system must explain observations, distinguish hypotheses from verified
 findings, preserve evidence, and stop rather than expand its own authority.
 
-## Current checkpoint: v0.3.314
+## Current checkpoint: v0.3.315
 
 This increment supplies a tested request-target gate, not a finished bounty
 agent. `ResearchTargetScope` is immutable, bounded to 100 combined rules, and
@@ -69,6 +69,20 @@ The production app still does not wire a real process adapter, so default
 operation runs refuse safely. A successful operation result is displayed as
 untrusted process output and is not evidence until a later evidence-review
 milestone connects it.
+
+## v0.3.315: bounded WSL/Kali process adapter
+
+Hypatia now has a host adapter capable of running exactly the reviewed command
+plan through WSL/Kali. For the current DNS-record lookup profile, the adapter
+constructs `wsl.exe -d kali-linux -- /usr/bin/dig +time=5 +tries=1 +short
+<host> <type>` from the already-reviewed argv tuple, never from a shell command
+string.
+
+The adapter uses `shell=False`, closed stdin, bounded stdout/stderr lines and a
+hard timeout. It is still not wired into production bootstrap by default:
+operation execution remains unavailable unless the runtime deliberately injects
+both readiness and process adapters. Output is still untrusted process output,
+not recorded evidence.
 
 The existing production opener reuses the validator before opening, before each
 redirect, at HTTPS connection address pinning, and before reading the final

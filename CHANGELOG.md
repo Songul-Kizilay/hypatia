@@ -2,6 +2,24 @@
 
 All notable project changes are recorded here.
 
+## [0.3.315] - 2026-09-08
+
+### Added
+
+- Added a bounded `WslKaliOperationProcessAdapter` for running exactly one
+  reviewed WSL/Kali command plan.
+- The adapter invokes `wsl.exe -d kali-linux -- <reviewed argv>` with
+  `shell=False`, closed stdin, a hard timeout and bounded stdout/stderr lines.
+- Added adapter-level tests for exact argv construction, bounded output,
+  timeout reporting and launcher/distribution refusal.
+
+### Safety and limits
+
+- Production bootstrap still does not install the process adapter by default.
+- The adapter accepts no shell command string, no arbitrary executable profile
+  and no model-authored command line.
+- Process output remains untrusted and is not evidence.
+
 ## [0.3.314] - 2026-09-07
 
 ### Added
