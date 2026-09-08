@@ -7,7 +7,9 @@ authorization landed in v0.3.308. Durable operation-authorization persistence
 landed in v0.3.309. Reviewed inert command-plan construction landed in
 v0.3.310. Deterministic no-process fake-runner gating landed in v0.3.311.
 Opt-in WSL/Kali runtime-readiness reporting landed in v0.3.312. A reviewed
-WSL/Kali `dig -v` readiness probe adapter landed in v0.3.313.
+WSL/Kali `dig -v` readiness probe adapter landed in v0.3.313. The first
+reviewed operation-run boundary with injected process adapter landed in
+v0.3.314.
 
 ## Purpose
 
@@ -50,6 +52,11 @@ effects, budget and evidence handling are known before they run.
 - A WSL/Kali readiness adapter can check the local `dig` version using a fixed
   argv tuple, closed stdin, `shell=False`, bounded output and a hard timeout.
   It does not run the DNS lookup operation or contact a target.
+- The first reviewed operation-run boundary now exists for DNS-record lookup.
+  It requires explicit run opt-in, exact preview re-derivation, a matching
+  persisted authorization, ready runtime prerequisites and an explicitly
+  injected process adapter. Production bootstrap still does not install that
+  adapter.
 - The desktop can preview and exactly confirm save/revoke decisions for those
   program-scope revision records.
 - Program-scope revisions are enforced at approval, Start, restore and every
@@ -209,10 +216,10 @@ without becoming permanent target prohibitions.
    profile in v0.3.311.**
 8. Add an opt-in WSL/Kali installation boundary and the single first reviewed
    operation. **Initial opt-in runtime-readiness boundary done in v0.3.312.**
-   The reviewed WSL/Kali version-probe adapter landed in v0.3.313. The real
-   single reviewed operation remains separate work. Tests use a fake
-   child-process adapter and local fixtures; no third-party target traffic is
-   allowed.
+   The reviewed WSL/Kali version-probe adapter landed in v0.3.313. The first
+   run boundary with an injected process adapter landed in v0.3.314; production
+   bootstrap still leaves it unwired. Tests use a fake child-process adapter
+   and local fixtures; no third-party target traffic is allowed.
 9. Connect typed observations to evidence review and reporting.
 10. Only then permit the bounded autonomous loop to select that exact capability
    inside an already approved job.

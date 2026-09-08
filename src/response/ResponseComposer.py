@@ -61,6 +61,7 @@ from research.ResearchFailureLesson import ResearchFailureLesson
 from research.ResearchKaliOperationAuthorization import (
     ResearchKaliOperationAuthorization,
 )
+from research.ResearchKaliOperationExecution import ResearchKaliOperationRun
 from research.ResearchKaliOperationPreview import (
     ResearchKaliOperationFakeRun,
     ResearchKaliOperationPreview,
@@ -1286,6 +1287,74 @@ class ResponseComposer:
             ),
             request_id=request.request_id,
             intent="kali_runtime_readiness",
+            memory_count=0,
+            success=False,
+        )
+
+    def kali_operation_run(
+        self,
+        request: BrainRequest,
+        result: ResearchKaliOperationRun,
+    ) -> BrainResponse:
+        """Render one reviewed Kali operation result as untrusted output."""
+        argv_lines = tuple(
+            f"  argv[{index}]: {argument}"
+            for index, argument in enumerate(result.command_plan.argv)
+        )
+        process = result.process_result
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Kali operation run completed:",
+                    f"Authorization ID consumed: {result.authorization_id}",
+                    f"Operation digest: {result.operation_digest}",
+                    f"Program: {result.program_id}",
+                    f"Scope revision: {result.scope_revision_id}",
+                    f"Scope revision digest: {result.scope_revision_digest}",
+                    "Execution policy digest: " f"{result.execution_policy_digest}",
+                    f"Operation: {result.operation_kind.value}",
+                    "Command plan: validated argv only; no shell command string",
+                    f"Transport profile: {result.command_plan.transport.value}",
+                    f"Executable: {result.command_plan.executable_path}",
+                    f"Shell: {result.command_plan.shell}",
+                    f"Stdin: {result.command_plan.stdin}",
+                    *argv_lines,
+                    f"Exit code: {process.exit_code}",
+                    f"Timed out: {process.timed_out}",
+                    "Stdout:",
+                    *(process.stdout_lines or ("[empty]",)),
+                    "Stderr:",
+                    *(process.stderr_lines or ("[empty]",)),
+                    "Output trust: untrusted process output; not evidence yet",
+                    "Authorization: consumed before process start",
+                    "Evidence: not recorded",
+                )
+            ),
+            request_id=request.request_id,
+            intent="kali_operation_run",
+            memory_count=0,
+            success=process.exit_code == 0 and not process.timed_out,
+            kali_operation_run=result,
+        )
+
+    def kali_operation_run_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Report a reviewed operation-run refusal before target work."""
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Kali operation run refused:",
+                    f"Reason: {message}",
+                    "Execution: not started",
+                    "Process: not created",
+                    "Evidence: not recorded",
+                )
+            ),
+            request_id=request.request_id,
+            intent="kali_operation_run",
             memory_count=0,
             success=False,
         )

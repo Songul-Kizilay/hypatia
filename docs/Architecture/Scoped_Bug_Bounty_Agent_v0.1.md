@@ -8,7 +8,7 @@ They should not have to approve every routine step of an already approved job.
 The system must explain observations, distinguish hypotheses from verified
 findings, preserve evidence, and stop rather than expand its own authority.
 
-## Current checkpoint: v0.3.313
+## Current checkpoint: v0.3.314
 
 This increment supplies a tested request-target gate, not a finished bounty
 agent. `ResearchTargetScope` is immutable, bounded to 100 combined rules, and
@@ -56,6 +56,19 @@ stdin, bounded output and a hard timeout.
 This is still not the DNS lookup operation. The adapter only checks local
 runtime prerequisites and CognitiveEngine remains fail-closed unless a host
 probe is explicitly injected.
+
+## v0.3.314: first reviewed operation-run boundary
+
+Hypatia now has an application boundary for the first reviewed Kali operation:
+DNS-record lookup. It requires a separate explicit run opt-in, re-derives the
+current preview, checks one exact persisted authorization, verifies runtime
+readiness, consumes the authorization before process start, then delegates only
+to an injected process adapter.
+
+The production app still does not wire a real process adapter, so default
+operation runs refuse safely. A successful operation result is displayed as
+untrusted process output and is not evidence until a later evidence-review
+milestone connects it.
 
 The existing production opener reuses the validator before opening, before each
 redirect, at HTTPS connection address pinning, and before reading the final

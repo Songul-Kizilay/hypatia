@@ -2,6 +2,25 @@
 
 All notable project changes are recorded here.
 
+## [0.3.314] - 2026-09-07
+
+### Added
+
+- Added the first reviewed `kali_operation_run` application boundary for the
+  DNS-record lookup profile.
+- The run boundary re-derives the current preview, checks the exact persisted
+  authorization, verifies runtime readiness, consumes the authorization, then
+  delegates only to an injected process adapter.
+- CognitiveEngine refuses operation runs unless a runtime probe and process
+  adapter are explicitly installed.
+
+### Safety and limits
+
+- Production bootstrap still installs no Kali process adapter, so the default
+  app runtime remains fail-closed for real operation runs.
+- Process output is rendered as untrusted output and is not recorded as
+  evidence.
+
 ## [0.3.313] - 2026-09-07
 
 ### Added

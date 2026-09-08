@@ -24,6 +24,7 @@ from cognition.KaliOperationFakeRunnerApplicationService import (
 from cognition.KaliOperationPreviewApplicationService import (
     KALI_OPERATION_PREVIEW_INTENT,
 )
+from cognition.KaliOperationRunApplicationService import KALI_OPERATION_RUN_INTENT
 from cognition.KaliRuntimeReadinessApplicationService import (
     KALI_RUNTIME_READINESS_INTENT,
 )
@@ -36,6 +37,9 @@ from research.JsonFileResearchKaliOperationAuthorizationStore import (
 )
 from research.JsonFileResearchProgramScopeRevisionStore import (
     JsonFileResearchProgramScopeRevisionStore,
+)
+from research.ResearchKaliOperationExecution import (
+    ResearchKaliOperationProcessResult,
 )
 from research.ResearchKaliOperationPreview import (
     ResearchDnsRecordType,
@@ -366,6 +370,155 @@ class KaliOperationPreviewFlowTests(unittest.TestCase):
         self.assertFalse(response.success)
         self.assertIn("scope revisions are unavailable", response.message)
         self.assertIsNone(response.kali_operation_authorization)
+
+    def test_operation_run_route_is_unavailable_without_process_adapter(
+        self,
+    ) -> None:
+        with (
+            patch("socket.getaddrinfo") as getaddrinfo,
+            patch("subprocess.run") as run,
+            patch("subprocess.Popen") as popen,
+        ):
+            response = self.engine.process(
+                BrainRequest(
+                    message="run Kali DNS operation",
+                    metadata={
+                        "intent": KALI_OPERATION_RUN_INTENT,
+                        "operator_opt_in": True,
+                        "program_id": "program-a",
+                        "scope_revision_id": self.revision.revision_id,
+                        "scope_revision_digest": self.revision.revision_digest,
+                        "kali_operation_kind": (
+                            ResearchKaliOperationKind.DNS_RECORD_LOOKUP.value
+                        ),
+                        "hostname": "www.example.test",
+                        "dns_record_type": ResearchDnsRecordType.A.value,
+                        "operation_digest": "0" * 64,
+                        "authorization_id": "kali-auth-1",
+                    },
+                )
+            )
+
+        self.assertFalse(response.success)
+        self.assertEqual(response.intent, KALI_OPERATION_RUN_INTENT)
+        self.assertIsNone(response.kali_operation_run)
+        self.assertIn("runner is unavailable", response.message)
+        getaddrinfo.assert_not_called()
+        run.assert_not_called()
+        popen.assert_not_called()
+
+    def test_operation_run_routes_only_with_injected_runtime_and_adapter(
+        self,
+    ) -> None:
+        class ReadyProbe:
+            def readiness(
+                self,
+                requirement: ResearchKaliRuntimeRequirement,
+            ) -> ResearchKaliRuntimeReadiness:
+                return ResearchKaliRuntimeReadiness(
+                    requirement=requirement,
+                    state=ResearchKaliRuntimeReadinessState.READY,
+                    reason="Fake WSL/Kali runtime is ready.",
+                    observed_distribution=requirement.distribution,
+                    observed_executable_path=requirement.executable_path,
+                    observed_version=f"{requirement.version_prefix}18.36",
+                )
+
+        class Adapter:
+            def run(self, command_plan, *, timeout_seconds: float):
+                return ResearchKaliOperationProcessResult(
+                    command_plan=command_plan,
+                    exit_code=0,
+                    stdout_lines=("192.0.2.10",),
+                )
+
+        engine = CognitiveEngine(
+            KnowledgeEngine(),
+            self.memory_manager,
+            Planner(),
+            self.event_bus,
+            ResponseComposer(),
+            self.session_manager,
+            SessionRenameTransactionService(
+                session_manager=self.session_manager,
+                memory_manager=self.memory_manager,
+                event_bus=self.event_bus,
+            ),
+            program_scope_revision_store=self.scope_store,
+            kali_operation_authorization_store=self.authorization_store,
+            kali_runtime_probe=ReadyProbe(),
+            kali_operation_process_adapter=Adapter(),
+        )
+        preview = engine.process(
+            BrainRequest(
+                message="preview Kali DNS operation",
+                metadata={
+                    "intent": KALI_OPERATION_PREVIEW_INTENT,
+                    "program_id": "program-a",
+                    "scope_revision_id": self.revision.revision_id,
+                    "scope_revision_digest": self.revision.revision_digest,
+                    "kali_operation_kind": (
+                        ResearchKaliOperationKind.DNS_RECORD_LOOKUP.value
+                    ),
+                    "hostname": "www.example.test",
+                    "dns_record_type": ResearchDnsRecordType.A.value,
+                },
+            )
+        ).kali_operation_preview
+        assert preview is not None
+        authorization = engine.process(
+            BrainRequest(
+                message="authorize Kali DNS operation",
+                metadata={
+                    "intent": KALI_OPERATION_AUTHORIZATION_INTENT,
+                    "program_id": "program-a",
+                    "scope_revision_id": self.revision.revision_id,
+                    "scope_revision_digest": self.revision.revision_digest,
+                    "kali_operation_kind": (
+                        ResearchKaliOperationKind.DNS_RECORD_LOOKUP.value
+                    ),
+                    "hostname": "www.example.test",
+                    "dns_record_type": ResearchDnsRecordType.A.value,
+                    "operation_digest": preview.operation_digest,
+                },
+            )
+        ).kali_operation_authorization
+        assert authorization is not None
+
+        with (
+            patch("socket.getaddrinfo") as getaddrinfo,
+            patch("subprocess.run") as run,
+            patch("subprocess.Popen") as popen,
+        ):
+            response = engine.process(
+                BrainRequest(
+                    message="run Kali DNS operation",
+                    metadata={
+                        "intent": KALI_OPERATION_RUN_INTENT,
+                        "operator_opt_in": True,
+                        "program_id": "program-a",
+                        "scope_revision_id": self.revision.revision_id,
+                        "scope_revision_digest": self.revision.revision_digest,
+                        "kali_operation_kind": (
+                            ResearchKaliOperationKind.DNS_RECORD_LOOKUP.value
+                        ),
+                        "hostname": "www.example.test",
+                        "dns_record_type": ResearchDnsRecordType.A.value,
+                        "operation_digest": preview.operation_digest,
+                        "authorization_id": authorization.authorization_id,
+                    },
+                )
+            )
+
+        self.assertTrue(response.success, response.message)
+        self.assertEqual(response.intent, KALI_OPERATION_RUN_INTENT)
+        self.assertIsNotNone(response.kali_operation_run)
+        self.assertEqual(self.authorization_store.load(), [])
+        self.assertIn("Authorization ID consumed", response.message)
+        self.assertIn("Evidence: not recorded", response.message)
+        getaddrinfo.assert_not_called()
+        run.assert_not_called()
+        popen.assert_not_called()
 
 
 if __name__ == "__main__":

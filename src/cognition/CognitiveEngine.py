@@ -37,6 +37,9 @@ from cognition.KaliOperationFakeRunnerApplicationService import (
 from cognition.KaliOperationPreviewApplicationService import (
     KaliOperationPreviewApplicationService,
 )
+from cognition.KaliOperationRunApplicationService import (
+    KaliOperationRunApplicationService,
+)
 from cognition.KaliRuntimeReadinessApplicationService import (
     KaliRuntimeReadinessApplicationService,
 )
@@ -181,6 +184,9 @@ from research.ResearchFailureLesson import ResearchFailureLesson
 from research.ResearchKaliOperationAuthorizationStore import (
     ResearchKaliOperationAuthorizationStore,
 )
+from research.ResearchKaliOperationExecution import (
+    ResearchKaliOperationProcessAdapter,
+)
 from research.ResearchKaliRuntimeEnvironment import ResearchKaliRuntimeProbe
 from research.ResearchPlan import ResearchPlan
 from research.ResearchPlanAuthorizationStore import (
@@ -303,6 +309,9 @@ class CognitiveEngine:
             ResearchKaliOperationAuthorizationStore | None
         ) = None,
         kali_runtime_probe: ResearchKaliRuntimeProbe | None = None,
+        kali_operation_process_adapter: (
+            ResearchKaliOperationProcessAdapter | None
+        ) = None,
         program_scope_revision_store: ResearchProgramScopeRevisionStore | None = None,
         vulnerability_graph_store: VulnerabilityGraphStore | None = None,
         research_source_discovery_provider: (
@@ -628,6 +637,9 @@ class CognitiveEngine:
         self._kali_operation_fake_runner_service: (
             KaliOperationFakeRunnerApplicationService | None
         ) = None
+        self._kali_operation_run_service: KaliOperationRunApplicationService | None = (
+            None
+        )
         self._kali_runtime_readiness_service = KaliRuntimeReadinessApplicationService(
             response_composer,
             probe=kali_runtime_probe,
@@ -654,6 +666,19 @@ class CognitiveEngine:
                         kali_operation_authorization_store,
                     )
                 )
+                if (
+                    kali_runtime_probe is not None
+                    and kali_operation_process_adapter is not None
+                ):
+                    self._kali_operation_run_service = (
+                        KaliOperationRunApplicationService(
+                            response_composer,
+                            self._kali_operation_preview_service,
+                            kali_operation_authorization_store,
+                            kali_runtime_probe,
+                            kali_operation_process_adapter,
+                        )
+                    )
         self._source_ingestion_events = SourceIngestionEvents(event_bus)
         self._knowledge_reconciliation_service = (
             KnowledgeReconciliationApplicationService(
@@ -741,6 +766,14 @@ class CognitiveEngine:
 
         if KaliRuntimeReadinessApplicationService.is_readiness_request(request):
             return self._kali_runtime_readiness_service.process_readiness(request)
+
+        if KaliOperationRunApplicationService.is_run_request(request):
+            if self._kali_operation_run_service is None:
+                return self._response_composer.kali_operation_run_failure(
+                    request,
+                    "Kali operation runner is unavailable in this runtime.",
+                )
+            return self._kali_operation_run_service.process_run(request)
 
         if self._research_plan_execution_service.is_start_request(request):
             return self._research_plan_execution_service.process_start(request)

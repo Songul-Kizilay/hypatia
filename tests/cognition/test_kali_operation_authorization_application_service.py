@@ -25,13 +25,25 @@ from cognition.KaliOperationFakeRunnerApplicationService import (
 from cognition.KaliOperationPreviewApplicationService import (
     KaliOperationPreviewApplicationService,
 )
+from cognition.KaliOperationRunApplicationService import (
+    KALI_OPERATION_RUN_INTENT,
+    KaliOperationRunApplicationService,
+)
 from core.Exceptions import ResearchError
 from research.JsonFileResearchKaliOperationAuthorizationStore import (
     JsonFileResearchKaliOperationAuthorizationStore,
 )
+from research.ResearchKaliOperationExecution import (
+    ResearchKaliOperationProcessResult,
+)
 from research.ResearchKaliOperationPreview import (
     ResearchDnsRecordType,
     ResearchKaliOperationKind,
+)
+from research.ResearchKaliRuntimeEnvironment import (
+    ResearchKaliRuntimeReadiness,
+    ResearchKaliRuntimeReadinessState,
+    ResearchKaliRuntimeRequirement,
 )
 from response.ResponseComposer import ResponseComposer
 from tests.cognition.test_kali_operation_preview_application_service import (
@@ -55,6 +67,49 @@ class FailingKaliOperationAuthorizationStore:
     def save(self, authorizations: list[object]) -> None:
         self.save_calls += 1
         raise ResearchError("no write")
+
+
+class ReadyKaliRuntimeProbe:
+    def __init__(self, *, ready: bool = True) -> None:
+        self.ready = ready
+        self.calls = 0
+
+    def readiness(
+        self,
+        requirement: ResearchKaliRuntimeRequirement,
+    ) -> ResearchKaliRuntimeReadiness:
+        self.calls += 1
+        return ResearchKaliRuntimeReadiness(
+            requirement=requirement,
+            state=(
+                ResearchKaliRuntimeReadinessState.READY
+                if self.ready
+                else ResearchKaliRuntimeReadinessState.UNAVAILABLE
+            ),
+            reason="ready" if self.ready else "not ready",
+            observed_distribution=requirement.distribution if self.ready else None,
+            observed_executable_path=(
+                requirement.executable_path if self.ready else None
+            ),
+            observed_version=(
+                f"{requirement.version_prefix}18.36" if self.ready else None
+            ),
+        )
+
+
+class RecordingKaliProcessAdapter:
+    def __init__(self) -> None:
+        self.calls = 0
+        self.timeout_seconds: float | None = None
+
+    def run(self, command_plan, *, timeout_seconds: float):
+        self.calls += 1
+        self.timeout_seconds = timeout_seconds
+        return ResearchKaliOperationProcessResult(
+            command_plan=command_plan,
+            exit_code=0,
+            stdout_lines=("192.0.2.10",),
+        )
 
 
 class KaliOperationAuthorizationApplicationServiceTests(unittest.TestCase):
@@ -95,6 +150,23 @@ class KaliOperationAuthorizationApplicationServiceTests(unittest.TestCase):
             message="fake run Kali operation",
             metadata={
                 "intent": KALI_OPERATION_FAKE_RUN_INTENT,
+                "program_id": "program-a",
+                "scope_revision_id": self.revision.revision_id,
+                "scope_revision_digest": self.revision.revision_digest,
+                "kali_operation_kind": (
+                    ResearchKaliOperationKind.DNS_RECORD_LOOKUP.value
+                ),
+                "hostname": "www.example.test.",
+                "dns_record_type": ResearchDnsRecordType.A.value,
+                **metadata,
+            },
+        )
+
+    def run_request(self, **metadata: object) -> BrainRequest:
+        return BrainRequest(
+            message="run Kali operation",
+            metadata={
+                "intent": KALI_OPERATION_RUN_INTENT,
                 "program_id": "program-a",
                 "scope_revision_id": self.revision.revision_id,
                 "scope_revision_digest": self.revision.revision_digest,
@@ -380,6 +452,177 @@ class KaliOperationAuthorizationApplicationServiceTests(unittest.TestCase):
                     self.assertIsNone(response.kali_operation_fake_run)
                     getaddrinfo.assert_not_called()
                     popen.assert_not_called()
+
+    def test_operation_run_consumes_authorization_before_process_adapter(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonFileResearchKaliOperationAuthorizationStore(
+                Path(directory) / "kali-operation-authorizations.json"
+            )
+            digest = self.digest_for_request()
+            authorizer = KaliOperationAuthorizationApplicationService(
+                ResponseComposer(),
+                self.preview_service,
+                authorization_store=store,
+                clock=lambda: AUTH_TIME,
+                id_factory=lambda: "kali-auth-1",
+            )
+            authorization = authorizer.process_authorization(
+                self.request(operation_digest=digest)
+            ).kali_operation_authorization
+            assert authorization is not None
+            probe = ReadyKaliRuntimeProbe()
+            adapter = RecordingKaliProcessAdapter()
+            runner = KaliOperationRunApplicationService(
+                ResponseComposer(),
+                self.preview_service,
+                store,
+                probe,
+                adapter,
+                clock=lambda: AUTH_TIME,
+            )
+
+            with (
+                patch("socket.getaddrinfo") as getaddrinfo,
+                patch("subprocess.run") as run,
+                patch("subprocess.Popen") as popen,
+            ):
+                response = runner.process_run(
+                    self.run_request(
+                        authorization_id=authorization.authorization_id,
+                        operation_digest=digest,
+                        operator_opt_in=True,
+                    )
+                )
+
+            self.assertTrue(response.success, response.message)
+            result = response.kali_operation_run
+            assert result is not None
+            self.assertEqual(result.authorization_id, "kali-auth-1")
+            self.assertTrue(result.authorization_consumed)
+            self.assertEqual(result.process_result.stdout_lines, ("192.0.2.10",))
+            self.assertEqual(store.load(), [])
+            self.assertEqual(probe.calls, 1)
+            self.assertEqual(adapter.calls, 1)
+            self.assertEqual(
+                adapter.timeout_seconds, self.revision.execution_policy.max_seconds
+            )
+            self.assertIn("Authorization ID consumed: kali-auth-1", response.message)
+            self.assertIn("Output trust: untrusted process output", response.message)
+            self.assertIn("Evidence: not recorded", response.message)
+            getaddrinfo.assert_not_called()
+            run.assert_not_called()
+            popen.assert_not_called()
+
+    def test_operation_run_refuses_before_process_without_opt_in_or_readiness(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonFileResearchKaliOperationAuthorizationStore(
+                Path(directory) / "kali-operation-authorizations.json"
+            )
+            digest = self.digest_for_request()
+            authorizer = KaliOperationAuthorizationApplicationService(
+                ResponseComposer(),
+                self.preview_service,
+                authorization_store=store,
+                clock=lambda: AUTH_TIME,
+                id_factory=lambda: "kali-auth-1",
+            )
+            authorization = authorizer.process_authorization(
+                self.request(operation_digest=digest)
+            ).kali_operation_authorization
+            assert authorization is not None
+            cases = (
+                (
+                    "missing opt-in",
+                    self.run_request(
+                        authorization_id=authorization.authorization_id,
+                        operation_digest=digest,
+                    ),
+                    ReadyKaliRuntimeProbe(),
+                    "requires explicit run opt-in",
+                ),
+                (
+                    "runtime unavailable",
+                    self.run_request(
+                        authorization_id=authorization.authorization_id,
+                        operation_digest=digest,
+                        operator_opt_in=True,
+                    ),
+                    ReadyKaliRuntimeProbe(ready=False),
+                    "runtime is not ready",
+                ),
+            )
+            for label, request, probe, expected in cases:
+                with self.subTest(label=label):
+                    adapter = RecordingKaliProcessAdapter()
+                    runner = KaliOperationRunApplicationService(
+                        ResponseComposer(),
+                        self.preview_service,
+                        store,
+                        probe,
+                        adapter,
+                        clock=lambda: AUTH_TIME,
+                    )
+                    with (
+                        patch("socket.getaddrinfo") as getaddrinfo,
+                        patch("subprocess.Popen") as popen,
+                    ):
+                        response = runner.process_run(request)
+
+                    self.assertFalse(response.success)
+                    self.assertIsNone(response.kali_operation_run)
+                    self.assertIn(expected, response.message)
+                    self.assertEqual(adapter.calls, 0)
+                    self.assertEqual(len(store.load()), 1)
+                    getaddrinfo.assert_not_called()
+                    popen.assert_not_called()
+
+    def test_operation_run_refuses_missing_authorization_before_runtime_probe(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = JsonFileResearchKaliOperationAuthorizationStore(
+                Path(directory) / "kali-operation-authorizations.json"
+            )
+            digest = self.digest_for_request()
+            probe = ReadyKaliRuntimeProbe()
+            adapter = RecordingKaliProcessAdapter()
+            runner = KaliOperationRunApplicationService(
+                ResponseComposer(),
+                self.preview_service,
+                store,
+                probe,
+                adapter,
+                clock=lambda: AUTH_TIME,
+            )
+
+            with (
+                patch("socket.getaddrinfo") as getaddrinfo,
+                patch("subprocess.run") as run,
+                patch("subprocess.Popen") as popen,
+            ):
+                response = runner.process_run(
+                    self.run_request(
+                        authorization_id="missing-auth",
+                        operation_digest=digest,
+                        operator_opt_in=True,
+                    )
+                )
+
+            self.assertFalse(response.success)
+            self.assertIsNone(response.kali_operation_run)
+            self.assertIn(
+                "requires one recorded authorization",
+                response.message,
+            )
+            self.assertEqual(probe.calls, 0)
+            self.assertEqual(adapter.calls, 0)
+            getaddrinfo.assert_not_called()
+            run.assert_not_called()
+            popen.assert_not_called()
 
 
 if __name__ == "__main__":
