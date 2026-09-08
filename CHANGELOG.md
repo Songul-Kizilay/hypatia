@@ -2,6 +2,22 @@
 
 All notable project changes are recorded here.
 
+## [0.3.317] - 2026-09-08
+
+### Added
+
+- Added a review-only Kali operation evidence-candidate model derived from
+  bounded stdout after an explicitly authorized operation run.
+- `kali_operation_run` responses now expose the derived candidate and render
+  it separately from raw stdout/stderr.
+
+### Safety and limits
+
+- Kali output remains untrusted process output. The candidate view records no
+  evidence, creates no claim, accepts no source and writes no memory.
+- Candidate lines are bounded and derived only from stdout; stderr remains a
+  diagnostic channel and is not promoted into evidence candidates.
+
 ## [0.3.316] - 2026-09-08
 
 ### Added

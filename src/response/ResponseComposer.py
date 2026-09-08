@@ -61,7 +61,10 @@ from research.ResearchFailureLesson import ResearchFailureLesson
 from research.ResearchKaliOperationAuthorization import (
     ResearchKaliOperationAuthorization,
 )
-from research.ResearchKaliOperationExecution import ResearchKaliOperationRun
+from research.ResearchKaliOperationExecution import (
+    ResearchKaliOperationRun,
+    kali_operation_evidence_candidate_for_run,
+)
 from research.ResearchKaliOperationPreview import (
     ResearchKaliOperationFakeRun,
     ResearchKaliOperationPreview,
@@ -1302,6 +1305,11 @@ class ResponseComposer:
             for index, argument in enumerate(result.command_plan.argv)
         )
         process = result.process_result
+        candidate = kali_operation_evidence_candidate_for_run(result)
+        candidate_lines = tuple(
+            f"  candidate[{index}]: {line}"
+            for index, line in enumerate(candidate.candidate_lines)
+        )
         return BrainResponse(
             message="\n".join(
                 (
@@ -1326,8 +1334,23 @@ class ResponseComposer:
                     "Stderr:",
                     *(process.stderr_lines or ("[empty]",)),
                     "Output trust: untrusted process output; not evidence yet",
+                    "Evidence candidate:",
+                    *(
+                        candidate_lines
+                        or ("[none from stdout; operator review still required]",)
+                    ),
+                    "Evidence candidate source: stdout only",
+                    (
+                        "Evidence candidate truncated: "
+                        f"{candidate.candidate_lines_truncated}"
+                    ),
+                    (
+                        "Evidence candidate status: review-only; not recorded, "
+                        "not a claim, not an accepted source"
+                    ),
                     "Authorization: consumed before process start",
                     "Evidence: not recorded",
+                    "Memory: not written",
                 )
             ),
             request_id=request.request_id,
@@ -1335,6 +1358,7 @@ class ResponseComposer:
             memory_count=0,
             success=process.exit_code == 0 and not process.timed_out,
             kali_operation_run=result,
+            kali_operation_evidence_candidate=candidate,
         )
 
     def kali_operation_run_failure(
