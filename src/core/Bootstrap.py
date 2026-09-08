@@ -20,6 +20,7 @@ from core.RuntimeOptIn import (
     curiosity_enabled,
     failure_memory_enabled,
     hypothesis_engine_enabled,
+    kali_operation_execution_enabled,
     plan_authorization_enabled,
     reflection_enabled,
     research_execution_persistence_enabled,
@@ -123,6 +124,8 @@ from research.ResearchSourceContentRestorer import ResearchSourceContentRestorer
 from research.ResearchSourceDiscoveryProvider import ResearchSourceDiscoveryProvider
 from research.ResearchSourceFetcher import ResearchSourceFetcher
 from research.RoutedResearchSourceFetcher import RoutedResearchSourceFetcher
+from research.WslKaliOperationProcessAdapter import WslKaliOperationProcessAdapter
+from research.WslKaliRuntimeProbe import WslKaliRuntimeProbe
 from response.ResponseComposer import ResponseComposer
 from security.JsonFileVulnerabilityGraphStore import (
     JsonFileVulnerabilityGraphStore,
@@ -165,6 +168,8 @@ class Bootstrap:
         ) = None,
         research_source_content_path: Path | None = None,
         research_program_scope_revision_path: Path | None = None,
+        kali_runtime_probe: WslKaliRuntimeProbe | None = None,
+        kali_operation_process_adapter: WslKaliOperationProcessAdapter | None = None,
     ) -> None:
         self._memory_path = memory_path
         self._session_path = session_path
@@ -192,6 +197,8 @@ class Bootstrap:
         self._research_claim_contradiction_proposal_provider = (
             research_claim_contradiction_proposal_provider
         )
+        self._kali_runtime_probe = kali_runtime_probe
+        self._kali_operation_process_adapter = kali_operation_process_adapter
 
     @classmethod
     def from_process_environment(
@@ -237,6 +244,10 @@ class Bootstrap:
             research_source_discovery_provider=research_source_discovery_provider,
             research_source_discovery_providers=(
                 Bootstrap._load_process_research_source_discovery_providers()
+            ),
+            kali_runtime_probe=Bootstrap._load_process_kali_runtime_probe(),
+            kali_operation_process_adapter=(
+                Bootstrap._load_process_kali_operation_process_adapter()
             ),
         )
 
@@ -366,6 +377,22 @@ class Bootstrap:
     def _load_process_chat_semantic_memory_enabled() -> bool:
         """Keep semantic chat retrieval opt-in and off by default."""
         return os.environ.get("HYPATIA_CHAT_SEMANTIC_MEMORY_ENABLED") == "true"
+
+    @staticmethod
+    def _load_process_kali_runtime_probe() -> WslKaliRuntimeProbe | None:
+        """Install the reviewed WSL/Kali readiness probe only by explicit opt-in."""
+        if not kali_operation_execution_enabled(os.environ):
+            return None
+        return WslKaliRuntimeProbe()
+
+    @staticmethod
+    def _load_process_kali_operation_process_adapter() -> (
+        WslKaliOperationProcessAdapter | None
+    ):
+        """Install the reviewed WSL/Kali process adapter only by explicit opt-in."""
+        if not kali_operation_execution_enabled(os.environ):
+            return None
+        return WslKaliOperationProcessAdapter()
 
     @staticmethod
     def _load_process_semantic_memory_index_runtime(
@@ -614,6 +641,8 @@ class Bootstrap:
             hypothesis_store=hypothesis_store,
             plan_authorization_store=plan_authorization_store,
             kali_operation_authorization_store=kali_operation_authorization_store,
+            kali_runtime_probe=self._kali_runtime_probe,
+            kali_operation_process_adapter=self._kali_operation_process_adapter,
             program_scope_revision_store=program_scope_revision_store,
             vulnerability_graph_store=vulnerability_graph_store,
             research_source_discovery_provider=(
@@ -686,6 +715,10 @@ class Bootstrap:
             container.register(one_shot_deferred_scheduler)
         container.register(program_scope_revision_store)
         container.register(kali_operation_authorization_store)
+        if self._kali_runtime_probe is not None:
+            container.register(self._kali_runtime_probe)
+        if self._kali_operation_process_adapter is not None:
+            container.register(self._kali_operation_process_adapter)
 
         self.container = container
 

@@ -2,6 +2,24 @@
 
 All notable project changes are recorded here.
 
+## [0.3.316] - 2026-09-08
+
+### Added
+
+- Added `HYPATIA_KALI_OPERATION_EXECUTION_ENABLED=true` as the explicit
+  production opt-in for installing reviewed WSL/Kali runtime adapters.
+- Bootstrap now installs and registers the WSL/Kali readiness probe and process
+  adapter only when that exact opt-in is present.
+- Added bootstrap tests proving the default runtime installs no Kali execution
+  adapter and the enabled runtime starts no subprocess during initialization.
+
+### Safety and limits
+
+- The opt-in only installs adapters; it does not authorize a scope, approve an
+  operation, run a command, start DNS traffic or record evidence.
+- The accepted opt-in value remains strict lowercase `true`; values such as
+  `True`, `1` or `yes` leave execution disabled.
+
 ## [0.3.315] - 2026-09-08
 
 ### Added

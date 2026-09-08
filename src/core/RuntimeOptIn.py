@@ -25,6 +25,7 @@ RESEARCH_EXECUTION_PERSISTENCE_ENABLED_VARIABLE = (
 )
 BACKGROUND_RESEARCH_ENABLED_VARIABLE = "HYPATIA_BACKGROUND_RESEARCH_ENABLED"
 PLAN_AUTHORIZATION_ENABLED_VARIABLE = "HYPATIA_PLAN_AUTHORIZATION_ENABLED"
+KALI_OPERATION_EXECUTION_ENABLED_VARIABLE = "HYPATIA_KALI_OPERATION_EXECUTION_ENABLED"
 
 #: The single accepted value. Anything else, including "True", "1", and "yes",
 #: leaves the capability off. An opt-in that guesses what someone meant is an
@@ -80,3 +81,13 @@ def plan_authorization_enabled(environment: Mapping[str, str]) -> bool:
     a capability nobody has to reason about yet.
     """
     return opted_in(environment, PLAN_AUTHORIZATION_ENABLED_VARIABLE)
+
+
+def kali_operation_execution_enabled(environment: Mapping[str, str]) -> bool:
+    """Return whether the reviewed WSL/Kali operation adapter is installed.
+
+    Off by default. Enabling the adapter still does not run an operation by
+    itself; every run must pass scope, digest, authorization, readiness and
+    explicit run opt-in gates first.
+    """
+    return opted_in(environment, KALI_OPERATION_EXECUTION_ENABLED_VARIABLE)

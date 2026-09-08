@@ -8,7 +8,7 @@ They should not have to approve every routine step of an already approved job.
 The system must explain observations, distinguish hypotheses from verified
 findings, preserve evidence, and stop rather than expand its own authority.
 
-## Current checkpoint: v0.3.315
+## Current checkpoint: v0.3.316
 
 This increment supplies a tested request-target gate, not a finished bounty
 agent. `ResearchTargetScope` is immutable, bounded to 100 combined rules, and
@@ -83,6 +83,18 @@ hard timeout. It is still not wired into production bootstrap by default:
 operation execution remains unavailable unless the runtime deliberately injects
 both readiness and process adapters. Output is still untrusted process output,
 not recorded evidence.
+
+## v0.3.316: explicit production opt-in for Kali adapters
+
+Production bootstrap can now install the WSL/Kali readiness probe and operation
+process adapter when the process environment contains exactly
+`HYPATIA_KALI_OPERATION_EXECUTION_ENABLED=true`.
+
+This is still not autonomous terminal access. The flag only makes the reviewed
+adapters available. A real operation still needs a saved scope revision, a
+reviewed operation preview, exact operation authorization, runtime readiness
+and a separate explicit run request. Initialization with the flag does not
+start WSL, run `dig`, contact a target or record evidence.
 
 The existing production opener reuses the validator before opening, before each
 redirect, at HTTPS connection address pinning, and before reading the final
