@@ -54,6 +54,11 @@ goal. The first major milestone therefore remains open even when that test passe
 
 ## Next substantive milestone: first research journey gap assessment
 
+The ten requested activities are now mapped to inspected code and missing
+connections in [First research journey audit](First_Research_Journey_Audit.md).
+The decisive next boundary is provisional fetched-text handoff: current
+`source_fetch` returns a summary, not content usable by a later extractor.
+
 Use the user's example: “Research indirect prompt injection defenses.” Keep it
 general research; no target testing or Kali integration in this milestone.
 
