@@ -15,6 +15,7 @@ from research.ResearchKaliOperationAuthorizationStore import (
     ResearchKaliOperationAuthorizationStore,
 )
 from research.ResearchKaliOperationExecution import (
+    MAX_KALI_OPERATION_TIMEOUT_SECONDS,
     ResearchKaliOperationProcessAdapter,
     ResearchKaliOperationRun,
 )
@@ -126,7 +127,9 @@ class KaliOperationRunApplicationService:
         self._authorization_store.save(remaining)
         process_result = self._process_adapter.run(
             preview.command_plan,
-            timeout_seconds=preview.max_seconds,
+            timeout_seconds=min(
+                preview.max_seconds, MAX_KALI_OPERATION_TIMEOUT_SECONDS
+            ),
         )
         return ResearchKaliOperationRun(
             authorization_id=authorization.authorization_id,

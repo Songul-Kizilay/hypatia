@@ -2,6 +2,18 @@
 
 All notable project changes are recorded here.
 
+## [0.3.320] - 2026-09-08
+
+### Fixed
+
+- Run Kali operations with the smaller of the scope's time budget and the
+  process adapter's 30-second ceiling. The default HTTPS scope allows 60 seconds;
+  passing that unchanged previously consumed approval and then failed before
+  process creation. Smaller scope budgets remain binding and the process limit
+  is not increased.
+- Added a desktop-to-real-adapter regression test with process creation mocked;
+  it reproduces the old refusal without sending target traffic.
+
 ## [0.3.319] - 2026-09-08
 
 ### Added

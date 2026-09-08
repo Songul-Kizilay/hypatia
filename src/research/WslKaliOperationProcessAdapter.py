@@ -14,6 +14,7 @@ from core.Exceptions import ResearchError
 from research.ResearchKaliOperationExecution import (
     MAX_KALI_OPERATION_OUTPUT_LINE_CHARACTERS,
     MAX_KALI_OPERATION_OUTPUT_LINES,
+    MAX_KALI_OPERATION_TIMEOUT_SECONDS,
     ResearchKaliOperationProcessAdapter,
     ResearchKaliOperationProcessResult,
 )
@@ -21,8 +22,6 @@ from research.ResearchKaliOperationPreview import (
     ResearchKaliCommandTransport,
     ResearchKaliOperationCommandPlan,
 )
-
-MAX_KALI_OPERATION_TIMEOUT_SECONDS = 30.0
 
 
 class WslKaliOperationProcessAdapter(ResearchKaliOperationProcessAdapter):

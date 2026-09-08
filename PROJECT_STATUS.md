@@ -2,17 +2,34 @@
 
 ## Runtime Version
 
-`v0.3.265 (Genesis)`
+`v0.3.320 (Genesis)`
 
-This is the version reported by the runtime and package metadata. It captures
-the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
-local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
+This is the current source/package version. The milestone ledger is CHANGELOG.md;
+the older capability narrative below is not a complete audit of this release.
+
+### 2026-09-08 checklist reconciliation
+
+The new user-supplied master checklist sets the product priorities. Its checked
+and unchecked boxes are not implementation evidence. In particular, research
+execution, bounded continuation, execution persistence and NVD provider code
+already exist; they must be assessed and reused before introducing duplicate
+AgentRun stores or a second executor.
+
+See [the current priority assessment](docs/Roadmap/Master_Checklist_Reconciliation.md)
+for source/test pointers, unresolved requirements, and the next acceptance
+scenario. The full natural-language autonomous research/report journey remains
+unproven. Autonomous target exploitation is not a development deliverable.
+
+The previous v0.3.319 commit passed Linux and Windows CI. Version v0.3.320
+fixes the default-scope Kali timeout mismatch. Local validation completed:
+5,787 tests OK with 3 platform skips, plus Ruff, Black, MyPy and diff checks.
+Remote verification for v0.3.320 must be read from that commit's CI results.
 
 ## Delivery Terminology
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.265`** is the current source/package release line.
+- **Runtime release `v0.3.320`** is the current source/package release line.
   GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the

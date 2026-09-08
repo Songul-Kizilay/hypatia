@@ -27,6 +27,10 @@ from research.JsonFileResearchKaliOperationAuthorizationStore import (
     JsonFileResearchKaliOperationAuthorizationStore,
 )
 from research.ResearchKaliOperationExecution import ResearchKaliOperationProcessResult
+from research.ResearchProgramScopeExecutionPolicy import (
+    ResearchProgramScopeExecutionPolicy,
+)
+from research.WslKaliOperationProcessAdapter import WslKaliOperationProcessAdapter
 from response.ResponseComposer import ResponseComposer
 from tests.cognition.test_kali_operation_authorization_application_service import (
     ReadyKaliRuntimeProbe,
@@ -251,6 +255,40 @@ class KaliOperationPanelTests(unittest.TestCase):
         self.assertEqual(self.panel._authorization_id, authorization_id)
         self.assertEqual(self.pending, [])
         self.adapter.run.assert_not_called()
+
+    def test_default_https_scope_runs_with_the_smaller_process_time_limit(self):
+        self._check_scope_timeout(60.0, 30.0)
+
+    def test_smaller_scope_timeout_remains_binding(self):
+        self._check_scope_timeout(5.0, 5.0)
+
+    def _check_scope_timeout(self, scope_seconds, expected_timeout):
+        now = datetime.now(UTC)
+        self.revision = revision_fixture(
+            confirmed_at=now - timedelta(minutes=1),
+            expires_at=now + timedelta(minutes=30),
+            execution_policy=ResearchProgramScopeExecutionPolicy(
+                max_seconds=scope_seconds
+            ),
+        )
+        self.scopes.save([self.revision])
+        self.panel.refresh()
+        self.panel.scope.set(next(iter(self.panel._scope_choices)))
+        self.panel.operation.set("HTTPS başlıklarını oku (curl)")
+        self.preview_and_approve()
+        preview = self.panel._preview
+        self.assertEqual(preview.max_seconds, scope_seconds)
+        self.adapter.run.side_effect = WslKaliOperationProcessAdapter().run
+        completed = Mock(returncode=0, stdout="HTTP/2 200", stderr="")
+        with patch(
+            "research.WslKaliOperationProcessAdapter.subprocess.run",
+            return_value=completed,
+        ) as process:
+            self.panel.run()
+            self.finish()
+        process.assert_called_once()
+        self.assertEqual(process.call_args.kwargs["timeout"], expected_timeout)
+        self.assertEqual(self.store.load(), [])
 
     def test_out_of_scope_host_cannot_be_approved(self):
         self.panel.hostname.set("admin.example.test")

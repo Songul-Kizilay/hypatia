@@ -15,6 +15,10 @@ Hypatia v0.3.319, kayıtlı program kapsamları bulunan masaüstü kurulumların
 5. **Çalıştır** düğmesi ağ isteği başlamadan önce ayrıca onay sorar.
    Çalışma arka plandaki masaüstü işçisiyle yürür; sonuç aynı panelde görünür.
 
+Çalıştırma süresi, kapsamın süre bütçesi ile 30 saniyelik işlem sınırından
+küçük olanını aşamaz. Örneğin kapsam 60 saniye verse de işlem sınırı 30 saniyedir;
+kapsam 5 saniye veriyorsa 5 saniye uygulanır. Aracın kendi süresi daha kısa olabilir.
+
 Hedefi, kapsamı veya işlem türünü değiştirirsen yeniden önizleme ve onay gerekir.
 İzin tek kullanım içindir. Sonuç, incelemen için gösterilir ve kendiliğinden
 kanıt, bulgu veya hafıza kaydına dönüşmez.
