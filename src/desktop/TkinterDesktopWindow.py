@@ -29,6 +29,7 @@ from desktop.MarkdownTextSegments import (
     markdown_segments,
 )
 from desktop.QuestionResearchDraft import QuestionResearchDraft
+from desktop.ResearchSourcePreviewPanel import ResearchSourcePreviewPanel
 from desktop.ResearchStateRefreshSignal import ResearchStateRefreshSignal
 from desktop.ResearchWorkspaceReadModel import (
     ResearchRunSort,
@@ -964,6 +965,9 @@ class TkinterDesktopWindow:
                 pass
             self._one_shot_after_id = None
         self._clear_tool_content()
+        source_reader = getattr(self, "_source_preview_panel", None)
+        if source_reader is not None:
+            source_reader.clear()
         self._request_completion_handler = None
         self._request_runner.stop()
         self._root.destroy()
@@ -1031,11 +1035,15 @@ class TkinterDesktopWindow:
         # claims, and failure stages stay, and nothing was removed from it.
         self._workspace_tabs.add(simple_research_tab, text="Research")
         self._workspace_tabs.add(research_tab, text="Research (Advanced)")
+        source_preview_tab = ttk.Frame(self._workspace_tabs, padding=10)
+        self._workspace_tabs.add(source_preview_tab, text="Source previews")
+        self._source_preview_panel = ResearchSourcePreviewPanel(source_preview_tab)
         tabs = [
             chat_tab,
             knowledge_tab,
             simple_research_tab,
             research_tab,
+            source_preview_tab,
         ]
         if self._program_scope_enrollment_service is not None:
             kali_tab = ttk.Frame(self._workspace_tabs, padding=10)
@@ -2954,6 +2962,9 @@ class TkinterDesktopWindow:
             font=font,
         )
         text_widgets = [self._transcript, self._composer]
+        source_reader = getattr(self, "_source_preview_panel", None)
+        if source_reader is not None:
+            text_widgets.extend(source_reader.text_widgets)
         text_widgets.extend(
             widget
             for widget in (
@@ -8259,6 +8270,11 @@ class TkinterDesktopWindow:
     def _append_response(self, response: BrainResponse) -> None:
         outcome = "completed" if response.success else "failed"
         self._status.set(f"{response.intent}: {outcome}")
+        source_reader = getattr(self, "_source_preview_panel", None)
+        if source_reader is not None and source_reader.accept_response(response):
+            self._status.set(
+                f"{response.intent}: {outcome}. Open Source previews to read."
+            )
         citation_text = _format_citations(response.knowledge_citations)
         citations = f"\nSources:\n{citation_text}" if citation_text else ""
         self._append_to_transcript(f"Hypatia: {response.message}{citations}\n")

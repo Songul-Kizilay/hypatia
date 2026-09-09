@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.323 (Genesis)`
+`v0.3.324 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
@@ -38,12 +38,17 @@ and foreground continuation. It is not yet a desktop reader or evidence extracto
 Local validation for v0.3.323 completed on 2026-09-10: 5,813 tests OK with
 3 platform skips; 62 focused tests, Black, Ruff, MyPy and diff checks passed.
 Remote CI must be checked against the exact release commit before claiming success.
+Windows and Linux CI for v0.3.323 both subsequently passed at `abf06d0`.
+Version v0.3.324 adds the desktop Source previews reader. Local validation:
+5,822 tests OK with 3 platform skips; 203 focused desktop tests, Black, Ruff and
+MyPy passed. Real Tk widget and execution-to-reader checks passed without target
+traffic. Remote CI must be verified against this release's exact commit.
 
 ## Delivery Terminology
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.323`** is the current source/package release line.
+- **Runtime release `v0.3.324`** is the current source/package release line.
   GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the

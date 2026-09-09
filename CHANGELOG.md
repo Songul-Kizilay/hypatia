@@ -2,6 +2,28 @@
 
 All notable project changes are recorded here.
 
+## [0.3.324] - 2026-09-10
+
+### Added
+
+- Desktop Source previews tab for the latest transient research acquisition
+  batch, with source selection, requested/source/acquisition URLs, timestamps,
+  extracted-text byte counts and digests. Text is shown literally in a read-only
+  widget, separately from chat and durable status messages.
+- Clear previews releases the batch; close also clears it. A new execution
+  response replaces the batch or reports no text, including restored status.
+  Unrelated chat does not discard the currently displayed research text.
+- Reader text and provenance follow the existing comfort/theme/font controls.
+  The reader has no fetch, acceptance, export, model or command controls.
+
+### Limits
+
+- This is reading, not evidence extraction or automatic candidate selection.
+  Only the latest batch is retained, with the existing ten-source bound; mixed
+  execution/run identities or repeated step identities are refused.
+- Status refresh does not recover old text. Nothing is silently refetched or
+  accepted; the complete autonomous research/report journey remains unfinished.
+
 ## [0.3.323] - 2026-09-09
 
 ### Added

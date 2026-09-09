@@ -61,6 +61,12 @@ binding. Foreground continuation retains at most ten previews, each capped at
 implement batch candidate selection, a desktop reader, extraction or the full
 slice below. The preceding summary-only finding describes the v0.3.322 baseline.
 
+Update for v0.3.324: the Source previews desktop tab now presents the latest
+transient batch literally, with provenance, source selection and explicit clear.
+It is connected to the shared response presentation used by foreground and
+desktop-worker continuation. It adds no acceptance, model request or refetch.
+Candidate-batch planning and provisional evidence extraction are still missing.
+
 An operator-reviewed **reference-source acquisition batch** should reuse the
 ordinary plan, authorization and executor, rather than add a second HTTP engine.
 Its first deliverable is useful provisional reading, not permanent evidence.
