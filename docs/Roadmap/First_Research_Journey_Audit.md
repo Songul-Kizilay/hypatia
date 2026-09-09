@@ -53,6 +53,14 @@ There is no useful source body for such an extractor in the present fetch result
 
 ## Proposed next implementation slice — not implemented here
 
+Update for v0.3.323: the first backend handoff now exists as
+`ResearchSourcePreview` carried by `ResearchPlanStepOperationResult` and the
+immediate `BrainResponse`. Advance checks its execution/run/step/requested-URL
+binding. Foreground continuation retains at most ten previews, each capped at
+65,536 UTF-8 bytes. Status and restart do not restore text. This does not yet
+implement batch candidate selection, a desktop reader, extraction or the full
+slice below. The preceding summary-only finding describes the v0.3.322 baseline.
+
 An operator-reviewed **reference-source acquisition batch** should reuse the
 ordinary plan, authorization and executor, rather than add a second HTTP engine.
 Its first deliverable is useful provisional reading, not permanent evidence.

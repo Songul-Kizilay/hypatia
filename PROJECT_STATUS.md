@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.322 (Genesis)`
+`v0.3.323 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
@@ -32,13 +32,18 @@ plus Ruff, Black, MyPy and diff checks. Remote CI must be checked against the
 exact release commit; local results do not establish remote success.
 Windows and Linux CI for v0.3.321 both completed successfully. Local validation
 for v0.3.322 completed: 5,803 tests OK with 3 platform skips; Black, Ruff and
-MyPy passed. Remote CI must still be checked against the exact v0.3.322 commit.
+MyPy passed. Windows and Linux CI for v0.3.322 subsequently both passed.
+Version v0.3.323 adds a bounded transient fetched-text result to ordinary advance
+and foreground continuation. It is not yet a desktop reader or evidence extractor.
+Local validation for v0.3.323 completed on 2026-09-10: 5,813 tests OK with
+3 platform skips; 62 focused tests, Black, Ruff, MyPy and diff checks passed.
+Remote CI must be checked against the exact release commit before claiming success.
 
 ## Delivery Terminology
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.322`** is the current source/package release line.
+- **Runtime release `v0.3.323`** is the current source/package release line.
   GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the

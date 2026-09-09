@@ -106,6 +106,7 @@ from research.ResearchPlanRestriction import ResearchPlanRestriction
 from research.ResearchPlanRestrictionConflict import (
     plan_restriction_conflicts,
 )
+from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 from research.ResearchPlanStepState import ResearchPlanStepState
 from research.ResearchPlanStepStatus import ResearchPlanStepStatus
 from research.ResearchPlanTargetBinding import ResearchPlanTargetBinding
@@ -113,6 +114,7 @@ from research.ResearchPlanTargetScopeRevisionGuard import (
     target_scope_revision_refusal,
 )
 from research.ResearchProgramScopeRevisionStore import ResearchProgramScopeRevisionStore
+from research.ResearchSourcePreview import ResearchSourcePreview
 from research.StartsResearchPlanExecution import ResearchPlanExecutionStartRefusal
 from response.ResponseComposer import ResponseComposer
 
@@ -758,6 +760,7 @@ class ResearchPlanExecutionApplicationService:
                 plan_id,
             )
         attempted: list[str] = []
+        previews: list[ResearchSourcePreview] = []
         reason = ResearchContinuationStopReason.BOUND_REACHED
         while len(attempted) < bound:
             state = self._executions[plan_id]
@@ -770,6 +773,7 @@ class ResearchPlanExecutionApplicationService:
                 reason = ResearchContinuationStopReason.NO_PENDING_STEP
                 break
             response = self.process_advance(request)
+            previews.extend(response.research_source_previews)
             after = self._executions[plan_id]
             if self._step_status(after, step_id) is not ResearchPlanStepStatus.PENDING:
                 attempted.append(step_id)
@@ -790,10 +794,15 @@ class ResearchPlanExecutionApplicationService:
             next_step_id=final.next_pending_step_id or "",
             allowance=self._allowances.get(plan_id),
         )
-        return self._response_composer.research_plan_execution_continued(
-            request,
-            continuation,
-            final,
+        return replace(
+            self._response_composer.research_plan_execution_continued(
+                request,
+                continuation,
+                final,
+            ),
+            # At most one bounded body per attempted step; continuation has a
+            # hard ten-step ceiling. Nothing is retained on the service itself.
+            research_source_previews=tuple(previews),
         )
 
     @staticmethod
@@ -987,6 +996,7 @@ class ResearchPlanExecutionApplicationService:
                     research_run_id=stored.research_run_id,
                     cancellation_token=request.cancellation_token,
                     target_binding=plan.target_binding,
+                    execution_id=plan_id,
                 ),
             )
         except ResearchError as error:
@@ -1055,11 +1065,26 @@ class ResearchPlanExecutionApplicationService:
             return self._superseded(request, plan_id, step_id, operation.operation_name)
         self._events.step_completed(plan_id, step_id, operation.operation_name)
         self._persist(plan_id)
-        return self._response_composer.research_plan_execution_status(
-            request,
-            completed,
-            self._allowances.get(plan_id),
-            self._next_capability(plan_id, completed),
+        preview = result.source_preview
+        preview_matches = (
+            preview is not None
+            and step.capability is ResearchPlanStepCapability.SOURCE_FETCH
+            and preview.execution_id == plan_id
+            and preview.run_id == stored.research_run_id
+            and preview.step_id == step_id
+            and preview.requested_url == step.authorized_source_url
+            and not (
+                request.cancellation_token and request.cancellation_token.is_cancelled()
+            )
+        )
+        return replace(
+            self._response_composer.research_plan_execution_status(
+                request,
+                completed,
+                self._allowances.get(plan_id),
+                self._next_capability(plan_id, completed),
+            ),
+            research_source_previews=(preview,) if preview_matches and preview else (),
         )
 
     def _commit_outcome(

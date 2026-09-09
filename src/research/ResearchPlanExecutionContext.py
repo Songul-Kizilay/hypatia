@@ -28,8 +28,15 @@ class ResearchPlanExecutionContext:
     research_run_id: str | None = None
     cancellation_token: CancellationToken | None = None
     target_binding: ResearchPlanTargetBinding | None = None
+    execution_id: str | None = None
 
     def __post_init__(self) -> None:
+        if self.execution_id is not None and (
+            not isinstance(self.execution_id, str)
+            or not self.execution_id.strip()
+            or len(self.execution_id) > 200
+        ):
+            raise ResearchError("Research execution identity is invalid.")
         if self.target_binding is not None and not isinstance(
             self.target_binding, ResearchPlanTargetBinding
         ):

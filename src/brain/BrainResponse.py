@@ -101,6 +101,7 @@ from research.ResearchSourceComparisonPreview import ResearchSourceComparisonPre
 from research.ResearchSourceContentRestorationStatus import (
     ResearchSourceContentRestorationStatus,
 )
+from research.ResearchSourcePreview import ResearchSourcePreview
 from research.SourceLoadStage import SourceLoadStage
 from research.SourceReputation import SourceReputation
 from security.SecurityPostureReport import SecurityPostureReport
@@ -168,6 +169,9 @@ class BrainResponse:
     learned_memory_audit: LearnedMemoryAuditReport | None = None
     research_plan_execution: ResearchPlanExecutionState | None = None
     research_execution_continuation: ResearchExecutionContinuation | None = None
+    research_source_previews: tuple[ResearchSourcePreview, ...] = field(
+        default=(), repr=False
+    )
     research_plan_budget_fit: ResearchPlanBudgetFit | None = None
     research_autonomy: ResearchAutonomyResult | None = None
     background_research_task: BackgroundResearchTask | None = None

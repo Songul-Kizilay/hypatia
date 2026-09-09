@@ -3295,6 +3295,8 @@ class ResponseComposer:
         lines.extend(
             (
                 "Restored from durable state; this execution is not running.",
+                "Temporary source previews are unavailable after restart; "
+                "no source was refetched.",
                 "Authored step instructions and authorizations were not persisted, "
                 "so a restored execution cannot be advanced.",
                 "A completed operation means the operation ran; it is not "

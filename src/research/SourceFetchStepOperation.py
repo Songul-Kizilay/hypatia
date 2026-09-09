@@ -18,7 +18,9 @@ a source remains a separate explicit contract. Because nothing is persisted,
 cancellation after bytes arrive leaves no partial research state behind.
 
 Fetched content is untrusted data with no instruction authority, and it is never
-sent to a language model here.
+sent to a language model here. When an execution identity is supplied, a bounded
+transient preview travels separately from the audit summary. Oversized previews
+are unavailable, not truncated; acquisition itself still succeeded.
 """
 
 from __future__ import annotations
@@ -30,6 +32,7 @@ from research.ResearchPlanStep import ResearchPlanStep
 from research.ResearchPlanStepOperationResult import ResearchPlanStepOperationResult
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchSourceFetcher import ResearchSourceFetcher
+from research.ResearchSourcePreview import ResearchSourcePreview
 
 MAX_REPORTED_URL_CHARACTERS = 200
 
@@ -89,9 +92,25 @@ class SourceFetchStepOperation:
             f"{run.run_id}: {source.content_type}, "
             f"{len(source.content)} character(s)."
         )
+        preview = None
+        preview_notice = ""
+        if context.execution_id is not None:
+            try:
+                preview = ResearchSourcePreview(
+                    execution_id=context.execution_id,
+                    run_id=run_id,
+                    step_id=step.step_id,
+                    requested_url=url,
+                    source=source,
+                )
+            except ResearchError:
+                # Acquisition succeeded; a preview limit is not a failed fetch
+                # and must never invite an implicit retry or partial acceptance.
+                preview_notice = " Bounded text preview unavailable."
         return ResearchPlanStepOperationResult(
             performed=True,
-            detail=f"{summary} {_ACQUISITION_BOUNDARY}",
+            detail=f"{summary} {_ACQUISITION_BOUNDARY}{preview_notice}",
+            source_preview=preview,
         )
 
     def _record_failure(self, run_id: str) -> None:

@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from core.Exceptions import ResearchError
+from research.ResearchSourcePreview import ResearchSourcePreview
 
 MAX_RESEARCH_STEP_OPERATION_DETAIL_CHARACTERS = 500
 
@@ -23,8 +24,15 @@ class ResearchPlanStepOperationResult:
     performed: bool
     detail: str
     succeeded: bool = True
+    source_preview: ResearchSourcePreview | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
+        if self.source_preview is not None and (
+            not isinstance(self.source_preview, ResearchSourcePreview)
+            or not self.performed
+            or not self.succeeded
+        ):
+            raise ResearchError("Only successful acquisition can carry source preview.")
         if not isinstance(self.performed, bool):
             raise ResearchError("Research step operation flag must be boolean.")
         if not isinstance(self.succeeded, bool):

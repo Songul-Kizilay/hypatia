@@ -2,6 +2,32 @@
 
 All notable project changes are recorded here.
 
+## [0.3.323] - 2026-09-09
+
+### Added
+
+- Successful explicit source-fetch operations can return a typed transient text
+  preview through the execution response, separately from the 500-character audit
+  detail. Each preview binds execution, run, step, requested URL, acquired-source
+  provenance, UTF-8 byte count and SHA-256 of the extracted text.
+- A preview contains at most 65,536 UTF-8 bytes; oversize or invalid preview data
+  yields an explicit unavailable notice, without truncating, retrying or claiming
+  that the completed acquisition failed. Ten-step foreground continuation can
+  return at most ten previews (655,360 content bytes); this is a response-retention
+  bound, not a cumulative network-byte budget.
+- Previews are not saved in execution snapshots, accepted into knowledge, sent to
+  a model, or returned by later status requests. Restart status explicitly states
+  that temporary previews are unavailable and no source was refetched.
+- Regression tests cover byte boundaries, cancellation, restart, identity mismatch,
+  content-free representations and bounded multi-step return values.
+
+### Limits
+
+- This adds the backend content handoff only. Desktop reading, discovery-candidate
+  batch selection, evidence proposals and full autonomous reports remain open.
+- Sources still require exact URL authorization. No authority, transport policy,
+  persistent-source schema or plan digest has been widened.
+
 ## [0.3.322] - 2026-09-08
 
 ### Added
