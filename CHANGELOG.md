@@ -2,6 +2,31 @@
 
 All notable project changes are recorded here.
 
+## [0.3.326] - 2026-09-10
+
+### Added
+
+- Desktop candidate basket: Add to fetch batch, Clear batch, and Review fetch
+  batch. One discovery and at most ten distinct resources are selected explicitly.
+  Refreshing candidates clears the basket; selecting another run cannot reuse it.
+- Review shows the exact URLs, run, discovery and plan digest, then transfers
+  typed fetch steps into the existing approval form with locked instruction text.
+  Review is not authorization. The existing previous-draft action restores prior
+  text; targets, constraints and a different question are never silently replaced.
+- Acquisition draft handoff preserves exact URLs and origin receipts through
+  approval and zero-step start. The controller re-reads canonical discovery state
+  and compares the plan digest before approval preview, confirmation and start.
+- Button-level integration verifies two selected candidates reach bounded fetch
+  results without implicit acquisition or persistent source acceptance. A real
+  Tk desktop smoke check verifies selection and locked text with fake providers.
+
+### Limits
+
+- Candidate selection is still operator-driven. Automatic provisional evidence
+  extraction, adaptive search and complete autonomous reports remain open.
+- The existing `opening_draft` keyword now also accepts an exact acquisition
+  handoff; manual and question-opening callers retain their current behavior.
+
 ## [0.3.325] - 2026-09-10
 
 ### Added

@@ -8,6 +8,7 @@ from typing import Protocol
 from brain.BrainRequest import BrainRequest
 from brain.BrainResponse import BrainResponse
 from core.CancellationSignal import CancellationToken
+from desktop.AcquisitionResearchDraft import AcquisitionResearchDraft
 from desktop.QuestionResearchDraft import QuestionResearchDraft
 from desktop.TargetResearchDraft import TargetResearchDraft
 from research.DeferredExecutionControlView import DeferredExecutionControlView
@@ -21,6 +22,7 @@ from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchKaliOperationPreview import ResearchKaliOperationPreview
+from research.ResearchPlanDigest import plan_digest
 from research.ResearchPlanRestriction import ResearchPlanRestriction
 from research.ResearchProgramScopeRevision import ResearchProgramScopeRevision
 from research.ResearchRunMarkdownExportPreview import (
@@ -38,7 +40,7 @@ ADVISORY_RESTRICTION_LABEL = "advisory"
 
 
 def _opening_draft_metadata(
-    draft: QuestionResearchDraft | None,
+    draft: QuestionResearchDraft | AcquisitionResearchDraft | None,
     target: TargetResearchDraft | None,
     question: str,
     instructions: str,
@@ -48,7 +50,7 @@ def _opening_draft_metadata(
 ) -> dict[str, object]:
     if draft is None:
         return {}
-    if not isinstance(draft, QuestionResearchDraft):
+    if not isinstance(draft, (QuestionResearchDraft, AcquisitionResearchDraft)):
         raise ValueError("An opening requires a validated question draft.")
     if target is not None or constraints.strip() or _plan_restriction(restriction):
         raise ValueError("Opening mode cannot discard targets or constraints.")
@@ -476,7 +478,7 @@ class DesktopController:
         restriction: str = "",
         *,
         target_draft: TargetResearchDraft | None = None,
-        opening_draft: QuestionResearchDraft | None = None,
+        opening_draft: QuestionResearchDraft | AcquisitionResearchDraft | None = None,
     ) -> BrainResponse:
         """Preview one explicit ordered plan without saving or executing it.
 
@@ -540,7 +542,7 @@ class DesktopController:
         restriction: str = "",
         *,
         target_draft: TargetResearchDraft | None = None,
-        opening_draft: QuestionResearchDraft | None = None,
+        opening_draft: QuestionResearchDraft | AcquisitionResearchDraft | None = None,
     ) -> BrainResponse:
         """Show the approval this plan would record. Records nothing.
 
@@ -601,7 +603,7 @@ class DesktopController:
         restriction: str = "",
         *,
         target_draft: TargetResearchDraft | None = None,
-        opening_draft: QuestionResearchDraft | None = None,
+        opening_draft: QuestionResearchDraft | AcquisitionResearchDraft | None = None,
     ) -> BrainResponse:
         """Record exactly one previewed approval. Starts no research.
 
@@ -644,7 +646,7 @@ class DesktopController:
         restriction: str = "",
         *,
         target_draft: TargetResearchDraft | None = None,
-        opening_draft: QuestionResearchDraft | None = None,
+        opening_draft: QuestionResearchDraft | AcquisitionResearchDraft | None = None,
     ) -> BrainResponse:
         """Spend one recorded approval on one foreground execution start.
 
@@ -934,7 +936,7 @@ class DesktopController:
         constraint_lines: str = "",
         restriction: str = "",
         target_draft: TargetResearchDraft | None = None,
-        opening_draft: QuestionResearchDraft | None = None,
+        opening_draft: QuestionResearchDraft | AcquisitionResearchDraft | None = None,
     ) -> BrainResponse:
         if not all(
             isinstance(value, str)
@@ -947,6 +949,24 @@ class DesktopController:
             raise ValueError("A research question cannot be empty.")
         if not normalized_run_id:
             raise ValueError("A research run ID cannot be empty.")
+        if isinstance(opening_draft, AcquisitionResearchDraft):
+            if normalized_run_id != opening_draft.run.run_id:
+                raise ValueError(
+                    "The acquisition draft belongs to another research run."
+                )
+            current = self.preview_acquisition_batch(
+                normalized_run_id,
+                opening_draft.discovery_id,
+                opening_draft.selected_urls,
+            )
+            preview = current.research_plan_draft_preview
+            if (
+                not current.success
+                or preview is None
+                or preview.plan is None
+                or plan_digest(preview.plan) != plan_digest(opening_draft.plan)
+            ):
+                raise ValueError("The recorded selection changed. Review a new batch.")
         metadata: dict[str, object] = {
             "intent": intent,
             "research_run_id": normalized_run_id,

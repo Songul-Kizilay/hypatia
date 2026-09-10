@@ -17,6 +17,7 @@ from brain.BrainResponse import BrainResponse
 from brain.SessionSummary import SessionSummary
 from core.CancellationSignal import CancellationSignal
 from core.Exceptions import HypatiaError, ResearchError
+from desktop.AcquisitionResearchDraft import AcquisitionResearchDraft
 from desktop.DesktopController import (
     ADVISORY_RESTRICTION_LABEL,
     DesktopController,
@@ -75,6 +76,7 @@ from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchPlanBudgetRequirement import ResearchPlanBudgetFit
+from research.ResearchPlanDigest import plan_digest
 from research.ResearchPlanRestriction import ResearchPlanRestriction
 from research.ResearchRun import ResearchRun
 from research.ResearchRunMarkdownExportPreview import (
@@ -300,7 +302,7 @@ _RESEARCH_ANALYSIS_TAB_TITLES = (
 
 
 class _OpeningPlanOptions(TypedDict, total=False):
-    opening_draft: QuestionResearchDraft
+    opening_draft: QuestionResearchDraft | AcquisitionResearchDraft
 
 
 @dataclass(frozen=True, slots=True)
@@ -686,6 +688,7 @@ class TkinterDesktopWindow:
         ] = ()
         self._research_persisted_comparison_note_run_id = ""
         self._research_candidate_run_id = ""
+        self._research_candidate_snapshot: ResearchRun | None = None
         self._research_candidate_discovery_id = ""
         self._research_claim_contradiction_proposal_run_id = ""
         self._research_claim_contradiction_proposals: tuple[
@@ -1941,7 +1944,9 @@ class TkinterDesktopWindow:
             wraplength=680,
         ).grid(row=2, column=0, sticky="w", pady=(6, 0))
         self._target_plan_draft: TargetResearchDraft | None = None
-        self._question_plan_draft: QuestionResearchDraft | None = None
+        self._question_plan_draft: (
+            QuestionResearchDraft | AcquisitionResearchDraft | None
+        ) = None
         self._question_plan_previous_text: tuple[str, str] | None = None
         self._reference_plan_text: tuple[str, str] | None = None
         self._target_plan_status = tk.StringVar(
@@ -2175,18 +2180,39 @@ class TkinterDesktopWindow:
             sticky="w",
             pady=(8, 0),
         )
+        candidate_area = ttk.Frame(research_sources_frame)
+        candidate_area.grid(row=4, column=1, sticky="ew", padx=8, pady=(8, 0))
+        candidate_area.columnconfigure(0, weight=1)
         self._research_candidate_selector = ttk.Combobox(
-            research_sources_frame,
+            candidate_area,
             textvariable=self._research_candidate,
             values=(),
             state="readonly",
         )
         self._research_candidate_selector.grid(
-            row=4,
-            column=1,
+            row=0,
+            column=0,
             sticky="ew",
             padx=(8, 8),
             pady=(8, 0),
+        )
+        batch_bar = ttk.Frame(candidate_area)
+        batch_bar.grid(row=1, column=0, sticky="ew", pady=(6, 0))
+        self._batch_selection_status = tk.StringVar(
+            value="No fetch candidates selected"
+        )
+        for column, (label, command) in enumerate(
+            (
+                ("Add to fetch batch", self._add_acquisition_candidate),
+                ("Clear batch", self._clear_acquisition_batch),
+                ("Review fetch batch", self._select_acquisition_batch),
+            )
+        ):
+            self._request_button(batch_bar, label, command).grid(
+                row=0, column=column, padx=(0, 6)
+            )
+        ttk.Label(batch_bar, textvariable=self._batch_selection_status).grid(
+            row=1, column=0, columnspan=3, sticky="w"
         )
         ttk.Button(
             research_sources_frame,
@@ -7619,6 +7645,7 @@ class TkinterDesktopWindow:
         if not run.discoveries:
             return
         self._research_candidate_run_id = run.run_id
+        self._research_candidate_snapshot = run
         candidates: list[ResearchSourceCandidate] = []
         discovery_ids: list[str] = []
         labels: list[str] = []
@@ -7657,12 +7684,102 @@ class TkinterDesktopWindow:
             self._research_candidate_discovery_id = discovery_ids[0]
 
     def _clear_research_candidates(self) -> None:
+        self._research_candidate_snapshot = None
+        self._clear_acquisition_batch()
         self._research_candidates = ()
         self._research_candidate_discovery_ids = ()
         self._research_candidate_run_id = ""
         self._research_candidate_discovery_id = ""
         self._research_candidate.set("")
         self._research_candidate_selector.configure(values=())
+
+    def _clear_acquisition_batch(self) -> None:
+        self._batch_source_urls: tuple[str, ...] = ()
+        self._batch_discovery_id = ""
+        status = getattr(self, "_batch_selection_status", None)
+        if status is not None:
+            status.set("No fetch candidates selected")
+
+    def _add_acquisition_candidate(self) -> None:
+        selected = self._selected_research_candidate()
+        if selected is None:
+            self._status.set("Select a recorded candidate first.")
+            return
+        _, discovery_id, candidate = selected
+        urls = getattr(self, "_batch_source_urls", ())
+        if urls and discovery_id != self._batch_discovery_id:
+            self._status.set(
+                "Use one discovery per batch; clear the batch to change it."
+            )
+            return
+        if len(urls) >= 10 or any(
+            identity_of(url) == identity_of(candidate.url) for url in urls
+        ):
+            self._status.set("Select at most ten distinct source resources.")
+            return
+        self._batch_discovery_id = discovery_id
+        self._batch_source_urls = (*urls, candidate.url)
+        self._batch_selection_status.set(
+            f"{len(self._batch_source_urls)} source(s) selected; nothing fetched"
+        )
+
+    def _select_acquisition_batch(self) -> None:
+        run = getattr(self, "_research_candidate_snapshot", None)
+        urls = getattr(self, "_batch_source_urls", ())
+        if run is None or not urls or run.run_id != self._research_run_id.get().strip():
+            self._status.set("Select candidates from the current research run first.")
+            return
+        if (
+            getattr(self, "_target_plan_draft", None) is not None
+            or self._text_value(self._research_plan_constraints).strip()
+            or self._plan_restriction.get() not in ("", "advisory")
+            or self._research_question.get().strip() != run.question
+        ):
+            self._status.set(
+                "Batch selection cannot replace a different question, "
+                "target or constraints."
+            )
+            return
+        response = self._controller.preview_acquisition_batch(
+            run.run_id, self._batch_discovery_id, urls
+        )
+        self._append_response(response)
+        preview = response.research_plan_draft_preview
+        if not response.success or preview is None or preview.plan is None:
+            return
+        try:
+            draft = AcquisitionResearchDraft(
+                run, self._batch_discovery_id, urls, preview.plan
+            )
+        except ValueError as error:
+            self._status.set(str(error))
+            return
+        if not messagebox.askyesno(
+            "Select this exact fetch batch?",
+            f"Run: {run.run_id}\nDiscovery: {draft.discovery_id}\n\n"
+            + "\n".join(urls)
+            + f"\n\nPlan digest: {plan_digest(draft.plan)}\n\n"
+            "This selects a draft only. Preview approval, confirm and start "
+            "remain separate. "
+            "Fetched text will be temporary, not accepted evidence.",
+            parent=self._root,
+        ):
+            return
+        if getattr(self, "_question_plan_draft", None) is None:
+            self._question_plan_previous_text = (
+                self._text_value(self._research_plan_instructions),
+                self._text_value(self._research_plan_source_ids),
+            )
+        self._question_plan_draft = draft
+        self._replace_plan_text(
+            self._research_plan_instructions, draft.instruction_text, disabled=True
+        )
+        self._replace_plan_text(self._research_plan_source_ids, "", disabled=True)
+        self._invalidate_plan_approval_preview()
+        self._status.set(
+            "Fetch batch selected. Use Preview approval; "
+            "nothing is approved or fetched."
+        )
 
     def _use_selected_research_candidate(self) -> None:
         """Copy one explicitly selected candidate URL without fetching it."""

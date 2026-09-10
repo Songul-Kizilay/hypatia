@@ -74,6 +74,13 @@ tests traverse existing approval/start/continuation; a visual candidate selector
 and typed handoff to desktop approval remain open. This is not yet the complete
 interactive batch path or automatic provisional evidence extraction.
 
+Update for v0.3.326: the Advanced research candidate basket connects exact batch
+review to the ordinary approval/start form. Controller-side canonical revalidation
+runs again before each authority action. Button-level integration exercises
+candidate selection -> exact approval -> zero-step start -> two bounded fetches
+with transient previews; real Tk construction/selection is smoke-checked separately.
+This closes the manual batch handoff, not autonomous selection or evidence synthesis.
+
 An operator-reviewed **reference-source acquisition batch** should reuse the
 ordinary plan, authorization and executor, rather than add a second HTTP engine.
 Its first deliverable is useful provisional reading, not permanent evidence.

@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.325 (Genesis)`
+`v0.3.326 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
@@ -49,12 +49,19 @@ through Brain and the desktop controller. Visual selection/handoff remains open;
 this is not yet a complete point-and-click acquisition workflow. Local validation:
 5,829 tests OK with 3 platform skips; 24 focused tests, Black, Ruff, MyPy and
 diff checks passed. Remote CI requires the exact release commit's result.
+Windows and Linux CI for v0.3.325 both passed at `1474e62`.
+Version v0.3.326 connects a desktop candidate basket to exact typed acquisition
+draft review and the existing approval/start controls. The controller rechecks
+current discovery membership and plan digest before approval preview, confirmation
+and start. Local validation completed: 5,836 tests OK with 3 platform skips;
+47 focused tests, Black, Ruff, MyPy and a real Tk selection smoke passed.
+Remote CI must be checked against this release's exact commit.
 
 ## Delivery Terminology
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.325`** is the current source/package release line.
+- **Runtime release `v0.3.326`** is the current source/package release line.
   GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
