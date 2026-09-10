@@ -67,6 +67,13 @@ It is connected to the shared response presentation used by foreground and
 desktop-worker continuation. It adds no acceptance, model request or refetch.
 Candidate-batch planning and provisional evidence extraction are still missing.
 
+Update for v0.3.325: explicit recorded-candidate batch planning now has a Brain
+intent and desktop controller method. It resolves current run/discovery membership
+and produces exact URL fetch steps with digest-covered origin receipts. Integration
+tests traverse existing approval/start/continuation; a visual candidate selector
+and typed handoff to desktop approval remain open. This is not yet the complete
+interactive batch path or automatic provisional evidence extraction.
+
 An operator-reviewed **reference-source acquisition batch** should reuse the
 ordinary plan, authorization and executor, rather than add a second HTTP engine.
 Its first deliverable is useful provisional reading, not permanent evidence.

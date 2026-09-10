@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.324 (Genesis)`
+`v0.3.325 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
@@ -43,12 +43,18 @@ Version v0.3.324 adds the desktop Source previews reader. Local validation:
 5,822 tests OK with 3 platform skips; 203 focused desktop tests, Black, Ruff and
 MyPy passed. Real Tk widget and execution-to-reader checks passed without target
 traffic. Remote CI must be verified against this release's exact commit.
+Windows and Linux CI for v0.3.324 both passed at `e43179c`.
+Version v0.3.325 adds the no-write recorded-candidate acquisition-batch preview
+through Brain and the desktop controller. Visual selection/handoff remains open;
+this is not yet a complete point-and-click acquisition workflow. Local validation:
+5,829 tests OK with 3 platform skips; 24 focused tests, Black, Ruff, MyPy and
+diff checks passed. Remote CI requires the exact release commit's result.
 
 ## Delivery Terminology
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.324`** is the current source/package release line.
+- **Runtime release `v0.3.325`** is the current source/package release line.
   GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the

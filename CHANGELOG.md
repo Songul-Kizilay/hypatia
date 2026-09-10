@@ -2,6 +2,29 @@
 
 All notable project changes are recorded here.
 
+## [0.3.325] - 2026-09-10
+
+### Added
+
+- An explicit acquisition-batch preview resolves one discovery from the current
+  open research run and selects one to ten exact recorded candidate URLs. Wrong
+  run/discovery, changed URLs, duplicate resource identities, mutable selection
+  containers and authored-plan/constraint/target overrides are refused.
+- The ordinary planner creates only `source_fetch` steps. A literal origin
+  receipt (run, discovery, provider, discovery time) is included in the existing
+  digest-covered instruction; titles/snippets are not used as instructions.
+  No plan schema, digest algorithm, grant or execution engine changes.
+- Brain routing and a desktop controller preview method are connected. Tests
+  exercise exact approval, changed-URL refusal, zero-step start and two bounded
+  fetches returning transient text without source acceptance or replay authority.
+
+### Limits
+
+- This exposes inert batch planning, not automatic acquisition. The visual
+  candidate selector and exact typed handoff to desktop approval are still open.
+- Membership is checked at preview time. The resulting plan must be separately
+  reviewed and authorized; it does not grant authority to future discoveries.
+
 ## [0.3.324] - 2026-09-10
 
 ### Added

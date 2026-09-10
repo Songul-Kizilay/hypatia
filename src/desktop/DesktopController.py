@@ -996,6 +996,23 @@ class DesktopController:
             )
         )
 
+    def preview_acquisition_batch(
+        self, run_id: str, discovery_id: str, selected_urls: tuple[str, ...]
+    ) -> BrainResponse:
+        """Prepare an inert exact-candidate plan; approval and start are separate."""
+        return self._brain.process(
+            BrainRequest(
+                message="Preview selected reference-source acquisition batch",
+                source="desktop",
+                metadata={
+                    "intent": "research_acquisition_batch_preview",
+                    "research_run_id": run_id,
+                    "discovery_id": discovery_id,
+                    "selected_candidate_urls": selected_urls,
+                },
+            )
+        )
+
     def preview_question_plan(self, question: str, provider: str) -> BrainResponse:
         """Request the canonical research opening for an explicit provider choice."""
         if not isinstance(question, str) or not question.strip():

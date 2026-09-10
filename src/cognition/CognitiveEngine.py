@@ -627,6 +627,7 @@ class CognitiveEngine:
                 if self._failure_memory_service is not None
                 else None
             ),
+            research_run_manager=research_run_manager,
         )
         self._kali_operation_preview_service: (
             KaliOperationPreviewApplicationService | None
