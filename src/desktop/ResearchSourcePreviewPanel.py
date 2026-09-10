@@ -7,6 +7,8 @@ from datetime import UTC
 from tkinter import scrolledtext, ttk
 
 from brain.BrainResponse import BrainResponse
+from core.Exceptions import ResearchError
+from research.ResearchPassageProposal import propose_passages
 from research.ResearchSourcePreview import ResearchSourcePreview
 
 
@@ -41,11 +43,70 @@ class ResearchSourcePreviewPanel:
             parent, height=15, wrap="word", undo=False
         )
         self.body.grid(row=4, column=0, sticky="nsew")
+        finder = ttk.LabelFrame(
+            parent, text="Find candidate passages locally", padding=6
+        )
+        finder.grid(row=5, column=0, sticky="ew", pady=(8, 0))
+        finder.columnconfigure(0, weight=1)
+        self.passage_query = tk.StringVar(master=parent)
+        ttk.Entry(finder, textvariable=self.passage_query).grid(
+            row=0, column=0, sticky="ew"
+        )
+        ttk.Button(
+            finder, text="Suggest passages", command=self._suggest_passages
+        ).grid(row=0, column=1, padx=8)
+        self.passages = scrolledtext.ScrolledText(
+            finder, height=7, wrap="word", undo=False
+        )
+        self.passages.grid(row=1, column=0, columnspan=2, sticky="ew", pady=6)
+        self.passage_query.trace_add("write", self._clear_passages)
         self.clear()
 
     @property
     def text_widgets(self) -> tuple[tk.Text, ...]:
-        return (self.provenance, self.body)
+        return (self.provenance, self.body, self.passages)
+
+    def _clear_passages(self, *_args: object) -> None:
+        output = getattr(self, "passages", None)
+        if output is not None:
+            self._literal(output, "")
+
+    def _suggest_passages(self) -> None:
+        self._clear_passages()
+        try:
+            proposals = propose_passages(self.passage_query.get(), self._previews)
+        except ResearchError as error:
+            self._literal(self.passages, str(error))
+            return
+        lines = [
+            "Keyword matches only — not accepted evidence or a truth judgment.",
+            "Terms of at least 3 characters; exact word overlap, "
+            "no semantic inference.",
+            "Long lines use 800-character windows, which can split words or sentences.",
+            "No model call, saving or refetch. "
+            "Review each quote in its full source context.",
+        ]
+        if not proposals:
+            lines.append("No matching passages in the current batch.")
+        for index, proposal in enumerate(proposals, 1):
+            preview = proposal.preview
+            lines.extend(
+                (
+                    "",
+                    f"Candidate {index} · source {self._previews.index(preview) + 1}",
+                    f"Run {preview.run_id} / execution {preview.execution_id} "
+                    f"/ step {preview.step_id}",
+                    f"Source: {preview.source.url}",
+                    f"Extracted-text SHA-256: {preview.content_sha256}",
+                    f"Character range [{proposal.start}, {proposal.end}) "
+                    "· not original file bytes",
+                    "Matched terms: " + ", ".join(proposal.matched_terms),
+                    "--- untrusted quotation ---",
+                    proposal.quote,
+                    "--- end quotation ---",
+                )
+            )
+        self._literal(self.passages, "\n".join(lines))
 
     def accept_response(self, response: BrainResponse) -> bool:
         """Replace a batch, never accumulate bodies across responses."""
@@ -107,6 +168,7 @@ class ResearchSourcePreviewPanel:
     ) -> None:
         """Release the batch and clear both widgets without refetching."""
         self._previews = ()
+        self._clear_passages()
         self.selector.set("")
         self.selector.configure(values=())
         self.status.set(message)

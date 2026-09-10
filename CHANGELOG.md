@@ -2,6 +2,29 @@
 
 All notable project changes are recorded here.
 
+## [0.3.327] - 2026-09-10
+
+### Added
+
+- Source previews now offers a local Suggest passages action over the current
+  transient batch. It ranks exact line/window quotations by distinct query-word
+  overlap, with stable ties, at most ten displayed proposals, and no model call.
+- Each proposed quotation retains its source preview, extracted-text digest and
+  exact character range. Quotes are derived from that range, not supplied by a
+  generator. Bounds are 800 characters per passage, ten sources per batch and
+  twenty proposals maximum at the pure-function boundary.
+- Results are read-only, kept out of chat and persistent evidence records, and
+  cleared when the query changes, the batch changes, or the reader is cleared.
+
+### Limits
+
+- This is lexical candidate extraction, not semantic evidence evaluation. Terms
+  shorter than three characters are ignored; there is no stemming or synonym
+  matching. Long-line windows can split words/sentences. No match means no proposal.
+- Keyword relevance is not confidence, truth, acceptance or source independence.
+  Full-context human review, semantic synthesis, promotion and the complete
+  autonomous research/report loop remain separate unfinished work.
+
 ## [0.3.326] - 2026-09-10
 
 ### Added

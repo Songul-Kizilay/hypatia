@@ -81,6 +81,12 @@ candidate selection -> exact approval -> zero-step start -> two bounded fetches
 with transient previews; real Tk construction/selection is smoke-checked separately.
 This closes the manual batch handoff, not autonomous selection or evidence synthesis.
 
+Update for v0.3.327: Source previews can propose exact passages locally using
+distinct query-word overlap. Proposals carry original extracted-text character
+ranges and preview provenance, not accepted-document IDs. This is a first lexical
+candidate extraction path, with explicit limitations; it does not demonstrate
+semantic evidence sufficiency, automatic synthesis, promotion or autonomous reports.
+
 An operator-reviewed **reference-source acquisition batch** should reuse the
 ordinary plan, authorization and executor, rather than add a second HTTP engine.
 Its first deliverable is useful provisional reading, not permanent evidence.

@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.326 (Genesis)`
+`v0.3.327 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
@@ -56,12 +56,18 @@ current discovery membership and plan digest before approval preview, confirmati
 and start. Local validation completed: 5,836 tests OK with 3 platform skips;
 47 focused tests, Black, Ruff, MyPy and a real Tk selection smoke passed.
 Remote CI must be checked against this release's exact commit.
+Windows and Linux CI for v0.3.326 passed at `5db183a`.
+Version v0.3.327 introduces transient local keyword passage proposals with exact
+quotations and source ranges. This is not semantic evidence extraction or source
+acceptance. Local validation completed: 5,844 tests OK with 3 platform skips;
+49 focused tests, Black, Ruff, MyPy and real Tk passage/cleanup checks passed.
+Remote CI must be checked against the exact release commit.
 
 ## Delivery Terminology
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.326`** is the current source/package release line.
+- **Runtime release `v0.3.327`** is the current source/package release line.
   GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
