@@ -87,6 +87,15 @@ ranges and preview provenance, not accepted-document IDs. This is a first lexica
 candidate extraction path, with explicit limitations; it does not demonstrate
 semantic evidence sufficiency, automatic synthesis, promotion or autonomous reports.
 
+Update for v0.3.328: a strict semantic proposal adapter now validates one
+structured response against exact temporary bodies, rejecting missing or
+ambiguous quotations and retaining their original preview provenance. This is
+only an adapter with fake-model contract tests, not a live desktop feature or
+semantic quality evaluation. The next missing connection is an explicit
+question/source-bound disclosure and budget gate before any configured model
+receives the source text. Fetch approval and local display must not imply that
+permission. No acceptance or synthesis follows from the generated rationale.
+
 An operator-reviewed **reference-source acquisition batch** should reuse the
 ordinary plan, authorization and executor, rather than add a second HTTP engine.
 Its first deliverable is useful provisional reading, not permanent evidence.

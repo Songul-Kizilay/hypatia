@@ -2,6 +2,33 @@
 
 All notable project changes are recorded here.
 
+## [0.3.328] - 2026-09-10
+
+### Added
+
+- An unconnected semantic evidence proposal adapter for transient source previews.
+  One structured model response can propose at most five exact quotations from
+  at most three sources totalling 16,384 UTF-8 bytes. Oversized input is rejected,
+  not silently truncated. No transport, store, retry or tool runner is introduced.
+- Model-facing source aliases resolve only against the supplied batch. Quotes
+  must occur exactly once in the named source; invented, ambiguous, duplicate or
+  malformed proposals reject the entire result. Exact offsets and original
+  preview provenance are retained separately from the untrusted rationale.
+- Strict response fields, Unicode and size checks; no generated authority,
+  confidence, accepted-document IDs or actions are accepted. No history or source
+  metadata is included in the prompt beyond aliases and literal bodies.
+
+### Limits
+
+- This adapter is not wired into Bootstrap, Brain or the desktop. It has no live
+  model feature yet. Its tests use a fake structured model and do not establish
+  semantic quality, prompt-injection immunity or the truth of model rationales.
+- The next integration must explicitly bind model disclosure permission to the
+  question and exact temporary source set and enforce the existing model budget
+  before invocation. Fetch permission alone must not authorize model disclosure.
+- Source acceptance, persistence, synthesis and the full research/report journey
+  remain unfinished. The existing desktop Suggest passages stays local/lexical.
+
 ## [0.3.327] - 2026-09-10
 
 ### Added

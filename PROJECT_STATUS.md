@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.327 (Genesis)`
+`v0.3.328 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
@@ -63,11 +63,20 @@ acceptance. Local validation completed: 5,844 tests OK with 3 platform skips;
 49 focused tests, Black, Ruff, MyPy and real Tk passage/cleanup checks passed.
 Remote CI must be checked against the exact release commit.
 
+Windows and Linux CI for v0.3.327 passed at `8222100`.
+Version v0.3.328 adds an unconnected structured semantic evidence adapter with
+exact quotation/provenance validation. It is not a live model UI feature.
+Local validation completed: 5,863 tests OK with 3 platform skips; 44 focused
+tests, Black, Ruff, MyPy and an existing-provider/fake-transport smoke passed.
+No model network request was made. Explicit question/source-bound disclosure
+and budget enforcement must precede runtime integration. Remote CI must be
+checked against the exact release commit.
+
 ## Delivery Terminology
 
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.327`** is the current source/package release line.
+- **Runtime release `v0.3.328`** is the current source/package release line.
   GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
