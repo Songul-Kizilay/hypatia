@@ -2,6 +2,30 @@
 
 All notable project changes are recorded here.
 
+## [0.3.329] - 2026-09-11
+
+### Added
+
+- Immutable transient semantic-input review, preserving the exact question,
+  ordered source previews and proposal limit. Its fingerprint includes every
+  source-preview field, including the extracted text and acquisition provenance.
+- The semantic adapter consumes this same validated request. A prepared-call
+  boundary rejects a different expected fingerprint before invoking the model;
+  the original propose method delegates through the shared input contract.
+- Exact model-data projection remains question plus source aliases and bodies.
+  Review provenance is bound locally but not added to model input. No persistence,
+  endpoint selection, additional request or authorization mechanism is added.
+
+### Limits
+
+- A content fingerprint is not authorization and does not replace plan_digest.
+  Runtime integration still needs a typed model operation, the reviewed input
+  bound into the ordinary plan, explicit disclosure enforcement and model budget
+  charging. The existing executor context does not yet carry disclosure, and the
+  operation registry has no model operation. This release does not wire one.
+- Tests establish immutable input and changed-review rejection using a fake
+  model. They do not establish live semantic quality or a complete research loop.
+
 ## [0.3.328] - 2026-09-10
 
 ### Added

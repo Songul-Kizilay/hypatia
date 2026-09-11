@@ -15,8 +15,8 @@ from llm.LLMConversationMessage import LLMConversationMessage
 from llm.LLMProvider import LLMError
 from research.ResearchSourcePreview import ResearchSourcePreview
 from research.SemanticEvidenceCandidate import SemanticEvidenceCandidate
+from research.SemanticEvidenceRequest import SemanticEvidenceRequest
 
-MAX_SEMANTIC_SOURCE_BYTES = 16_384
 MAX_SEMANTIC_RESPONSE_CHARACTERS = 16_000
 _SYSTEM = (
     "You propose evidence for human review, never decide truth or take actions. "
@@ -61,31 +61,25 @@ class LLMSemanticEvidenceProposalProvider:
         *,
         limit: int = 5,
     ) -> tuple[SemanticEvidenceCandidate, ...]:
+        request = SemanticEvidenceRequest(question, previews, limit)
+        return self.propose_prepared(request, request.content_fingerprint)
+
+    def propose_prepared(
+        self, request: SemanticEvidenceRequest, expected_fingerprint: str
+    ) -> tuple[SemanticEvidenceCandidate, ...]:
+        """Reject changed review inputs before a call; this is NOT authorization.
+
+        The caller still owns disclosure/budget checks. Possession of a matching
+        fingerprint alone never establishes that a person approved a model call.
+        """
         if (
-            not isinstance(question, str)
-            or not question.strip()
-            or len(question) > 2000
-            or type(limit) is not int
-            or not 1 <= limit <= 5
-            or not isinstance(previews, tuple)
-            or not 1 <= len(previews) <= 3
-            or any(not isinstance(p, ResearchSourcePreview) for p in previews)
-            or len({(p.execution_id, p.run_id) for p in previews}) != 1
-            or len({p.step_id for p in previews}) != len(previews)
-            or sum(p.content_byte_count for p in previews) > MAX_SEMANTIC_SOURCE_BYTES
+            not isinstance(request, SemanticEvidenceRequest)
+            or not isinstance(expected_fingerprint, str)
+            or request.content_fingerprint != expected_fingerprint
         ):
-            raise ResearchError("Semantic proposal input exceeds its bounded contract.")
-        # Only question, ephemeral aliases and exact bodies are disclosed here.
-        # URLs, identifiers, titles and local history are unnecessary model inputs.
-        data = {
-            "question": question,
-            "sources": [
-                {"source": str(index), "text": p.source.content}
-                for index, p in enumerate(previews)
-            ],
-        }
+            raise ResearchError("Semantic evidence request changed since review.")
+        limit, previews = request.limit, request.previews
         try:
-            question.encode("utf-8")
             prompt = (
                 f"Propose at most {limit} relevant evidence candidates. Return JSON "
                 '{"candidates":[{"source":"0","quote":"exact unique excerpt",'
@@ -94,7 +88,7 @@ class LLMSemanticEvidenceProposalProvider:
                 "Each quote must occur exactly once in its named source; at most "
                 "800 characters per quote and 500 per rationale. "
                 "Do not invent quotes.\n"
-                "UNTRUSTED_DATA\n" + json.dumps(data, ensure_ascii=True)
+                "UNTRUSTED_DATA\n" + request.model_input_json()
             )
             prompt.encode("utf-8")
             payload = self._model.generate_json(

@@ -96,6 +96,19 @@ question/source-bound disclosure and budget gate before any configured model
 receives the source text. Fetch approval and local display must not imply that
 permission. No acceptance or synthesis follows from the generated rationale.
 
+Update for v0.3.329: semantic inputs now have one immutable review contract and
+fingerprint, used directly by the adapter. Changed question, limit, source order,
+body or provenance invalidates a previously supplied fingerprint before any call.
+This fingerprint is not a second authority or a substitute for plan_digest.
+Inspection of the existing executor found no model operation in its registry and
+no disclosure field in ResearchPlanExecutionContext. The existing accepted-claim
+contradiction proposal path calls its provider directly, so copying that path
+would not establish the intended per-plan disclosure/model-budget enforcement.
+The next integration must bind this review into a typed ordinary plan step,
+preserve explicit disclosure through the execution boundary, charge its declared
+model cost before an attempt, and refuse lost transient input after restart
+rather than refetching. No such execution is enabled by v0.3.329.
+
 An operator-reviewed **reference-source acquisition batch** should reuse the
 ordinary plan, authorization and executor, rather than add a second HTTP engine.
 Its first deliverable is useful provisional reading, not permanent evidence.

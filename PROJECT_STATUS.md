@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.328 (Genesis)`
+`v0.3.329 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
@@ -74,9 +74,16 @@ checked against the exact release commit.
 
 ## Delivery Terminology
 
+Windows and Linux CI for v0.3.328 passed at `0fea620`.
+Version v0.3.329 adds immutable reviewable semantic inputs and adapter-side
+changed-fingerprint rejection, not disclosure authorization or a live UI action.
+Local validation completed: 5,870 tests OK with 3 platform skips; 51 focused
+tests, Black, Ruff, MyPy and diff checks passed. No live model call was made.
+Remote CI must be checked against the exact release commit.
+
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.328`** is the current source/package release line.
+- **Runtime release `v0.3.329`** is the current source/package release line.
   GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
