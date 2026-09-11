@@ -2,6 +2,42 @@
 
 All notable project changes are recorded here.
 
+## [0.3.332] - 2026-09-12
+
+### Added
+
+- One explicit goal-start request now derives the existing research opening,
+  records its exact approval, starts its execution and performs local search
+  plus selected-provider discovery through the existing autonomy service.
+  A narrow goal-start handler retains approval access outside the autonomy
+  runner and scheduler; their existing no-new-approval boundary is preserved.
+  Desktop action uses one initial scope/budget confirmation and the existing
+  cancellable worker. No manual Continue is needed between those two steps.
+- Explicit opening-only scope, configured provider and zero-model-call budget
+  are mandatory. Authored plans, target scope and additional capability fields
+  cannot be smuggled through this action. Existing Manual controls remain.
+- Same-process duplicate request and concurrent-start protection. Run,
+  discovery, approval and execution audit reuse existing stores; the run stays
+  collecting and the response explicitly reports research incomplete.
+
+### Fixed
+
+- Autonomy stops immediately when an advance is refused without a state change,
+  instead of repeating that action until its outer attempt limit is exhausted.
+- Nonfinite autonomous time budgets are rejected.
+
+### Limits
+
+- This is an autonomous opening, not the North Star research journey. Automatic
+  candidate selection/fetch, canonical evidence recording, comparison,
+  goal-scoped replanning and cited final answers remain open. No new mission
+  authority, scheduler or execution store was introduced.
+- Existing between-operation time limits are not hard provider preemption.
+  Restart preserves audit but does not replay a goal; request deduplication is
+  process-local, not durable idempotency. No live model/provider test is claimed.
+- See `docs/Roadmap/Autonomous_Research_Connection_Assessment.md` for the actual
+  architecture, missing connections and ordered implementation plan.
+
 ## [0.3.331] - 2026-09-11
 
 ### Added

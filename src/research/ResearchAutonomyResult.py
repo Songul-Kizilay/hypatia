@@ -21,6 +21,7 @@ class AutonomyStopReason(StrEnum):
     STEP_BLOCKED = "step_blocked"
     STEP_INTERRUPTED = "step_interrupted"
     STEP_FAILED = "step_failed"
+    ADVANCE_REFUSED = "advance_refused"
     CANCELLED = "cancelled"
     STEP_BUDGET_EXHAUSTED = "step_budget_exhausted"
     NETWORK_BUDGET_EXHAUSTED = "network_budget_exhausted"

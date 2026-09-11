@@ -1,7 +1,7 @@
 """Bounded autonomous continuation of one already-approved execution.
 
 Autonomy is a loop over the existing execution service, not a second execution
-engine. Every step it runs is a step a human already authored and authorized,
+engine. Every step it runs belongs to a plan authorized by a human action,
 advanced through the same `process_advance` path with the same registry, the
 same operations, and the same run manager.
 
@@ -14,6 +14,7 @@ Budgets are enforced before each advance, never after the fact, and network and
 model costs come from the declared capability cost table rather than from
 operation names. Time comes from an injected clock so runs are deterministic in
 tests and never sleep.
+
 """
 
 from __future__ import annotations
@@ -126,6 +127,18 @@ class ResearchAutonomyApplicationService:
             )
             advanced = self._execution_service.live_execution(plan_id)
             assert advanced is not None
+            if advanced == state:
+                return self._finish(
+                    request,
+                    plan_id,
+                    AutonomyStopReason.ADVANCE_REFUSED,
+                    state,
+                    steps_attempted,
+                    operations_performed,
+                    network_operations,
+                    llm_operations,
+                    self._clock() - started_at,
+                )
             state = advanced
             if self._step_status(state, step_id) is ResearchPlanStepStatus.COMPLETED:
                 operations_performed += 1

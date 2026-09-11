@@ -8,6 +8,7 @@ forever by never succeeding.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import isfinite
 
 from core.Exceptions import ResearchError
 
@@ -54,6 +55,7 @@ class ResearchAutonomyBudget:
             or not isinstance(self.max_seconds, int | float)
             or self.max_seconds < 0
             or self.max_seconds > MAX_AUTONOMY_SECONDS
+            or not isfinite(self.max_seconds)
         ):
             raise ResearchError(
                 "Research autonomy time budget must be within its hard ceiling."

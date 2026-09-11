@@ -71,6 +71,9 @@ from cognition.ResearchAuthoredHistoryApplicationService import (
 from cognition.ResearchAutonomyApplicationService import (
     ResearchAutonomyApplicationService,
 )
+from cognition.ResearchGoalStartApplicationService import (
+    ResearchGoalStartApplicationService,
+)
 from cognition.ResearchHonestyApplicationService import (
     ResearchHonestyApplicationService,
 )
@@ -511,6 +514,17 @@ class CognitiveEngine:
             response_composer,
             event_bus=event_bus,
         )
+        self._research_goal_start_service = ResearchGoalStartApplicationService(
+            self._research_plan_execution_service,
+            self._research_autonomy_service,
+            research_run_manager=research_run_manager,
+            authorizations=(
+                self._plan_authorization_service
+                if plan_authorization_store is not None
+                else None
+            ),
+            discovery_providers=frozenset(self._research_source_discovery_providers),
+        )
         self._background_research_scheduler = (
             BackgroundResearchSchedulerApplicationService(
                 self._research_autonomy_service,
@@ -794,6 +808,8 @@ class CognitiveEngine:
         if self._research_plan_execution_service.is_advance_request(request):
             return self._research_plan_execution_service.process_advance(request)
 
+        if self._research_goal_start_service.is_goal_request(request):
+            return self._research_goal_start_service.process_goal(request)
         if self._research_autonomy_service.is_run_request(request):
             return self._research_autonomy_service.process_run(request)
 

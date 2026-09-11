@@ -39,6 +39,7 @@ _OUTCOMES: dict[AutonomyStopReason, BackgroundTaskOutcome] = {
     AutonomyStopReason.EXECUTION_TERMINAL: BackgroundTaskOutcome.COMPLETED,
     AutonomyStopReason.NO_PENDING_STEP: BackgroundTaskOutcome.COMPLETED,
     AutonomyStopReason.STEP_BLOCKED: BackgroundTaskOutcome.BLOCKED,
+    AutonomyStopReason.ADVANCE_REFUSED: BackgroundTaskOutcome.BLOCKED,
     AutonomyStopReason.STEP_INTERRUPTED: BackgroundTaskOutcome.INTERRUPTED,
     AutonomyStopReason.STEP_FAILED: BackgroundTaskOutcome.FAILED,
     AutonomyStopReason.CANCELLED: BackgroundTaskOutcome.CANCELLED,

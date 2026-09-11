@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.331 (Genesis)`
+`v0.3.332 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
@@ -97,9 +97,20 @@ unaccepted. Local validation completed: 5,899 tests OK with 3 platform skips;
 and desktop are not yet connected to this operation. No live model call was made.
 Remote CI must be checked against this release's exact commit.
 
+Windows and Linux CI for v0.3.331 passed at `9f6176d`.
+Version v0.3.332 connects one explicit goal/scope/budget action to the existing
+opening planner, canonical approval and autonomous execution. Local search and
+selected-provider discovery run without further Continue clicks. It remains an
+opening only: the response says research is incomplete, not that the question
+has been answered. See [the autonomous connection assessment](docs/Roadmap/Autonomous_Research_Connection_Assessment.md).
+Local validation: 5,917 tests OK with 3 platform skips; 111 final focused tests,
+Black, Ruff, MyPy (512 source files), diff checks and a real Tk layout smoke
+passed. No live model or external discovery was tested. Remote CI requires
+verification against the exact new commit.
+
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.331`** is the current source/package release line.
+- **Runtime release `v0.3.332`** is the current source/package release line.
   GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the

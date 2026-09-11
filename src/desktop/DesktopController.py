@@ -17,6 +17,7 @@ from research.OneShotDeferredExecutionScheduleView import (
     OneShotDeferredExecutionScheduleView,
 )
 from research.ProviderComparisonRequest import ProviderComparisonRequest
+from research.ResearchAutonomyBudget import ResearchAutonomyBudget
 from research.ResearchClaimConfidence import ResearchClaimConfidence
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchEpistemicState import ResearchEpistemicState
@@ -1029,6 +1030,31 @@ class DesktopController:
                     "research_run_id": run_id,
                     "discovery_id": discovery_id,
                     "selected_candidate_urls": selected_urls,
+                },
+            )
+        )
+
+    def start_research_goal(
+        self,
+        question: str,
+        provider: str,
+        budget: ResearchAutonomyBudget,
+        *,
+        cancellation_token: CancellationToken | None = None,
+    ) -> BrainResponse:
+        """One confirmed opening action; no synthetic Continue button presses."""
+        return self._brain.process(
+            BrainRequest(
+                message=question,
+                source="desktop",
+                cancellation_token=cancellation_token,
+                metadata={
+                    "intent": "research_goal_start",
+                    "research_goal_scope": (
+                        "local_search_and_selected_provider_discovery"
+                    ),
+                    "discovery_provider": provider,
+                    "research_autonomy_budget": budget,
                 },
             )
         )

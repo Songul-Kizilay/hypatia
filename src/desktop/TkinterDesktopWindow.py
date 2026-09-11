@@ -2003,6 +2003,11 @@ class TkinterDesktopWindow:
             text="Önceki taslağa dön",
             command=self._clear_question_plan,
         ).grid(row=2, column=2, sticky="e")
+        ttk.Button(
+            plan_actions,
+            text="Run research opening automatically",
+            command=self._start_research_goal,
+        ).grid(row=3, column=0, columnspan=3, sticky="w", pady=4)
         ttk.Label(research_plan_frame, text="Complete preview or rejection").grid(
             row=7,
             column=0,
@@ -3214,6 +3219,56 @@ class TkinterDesktopWindow:
             ),
             self._complete_research_plan_draft_preview,
             "research plan preview",
+        )
+
+    def _start_research_goal(self) -> None:
+        """Approve the limited opening once, then use the existing worker."""
+        if (
+            getattr(self, "_target_plan_draft", None) is not None
+            or self._research_plan_constraints.get("1.0", "end-1c").strip()
+            or self._plan_restriction.get() != ADVISORY_RESTRICTION_LABEL
+        ):
+            self._status.set("Opening cannot discard target scope or constraints.")
+            return
+        question = self._research_question.get().strip()
+        provider = self._research_discovery_provider.get()
+        if not question:
+            self._status.set("Enter a research question first.")
+            return
+        try:
+            budget = budget_from(
+                {
+                    "max_step_advances": self._authorization_advances.get(),
+                    "max_network_operations": self._authorization_network.get(),
+                    "max_seconds": self._authorization_seconds.get(),
+                }
+            )
+        except ResearchError as error:
+            self._status.set(str(error))
+            return
+        if not messagebox.askyesno(
+            "Start bounded research opening?",
+            f"Question: {question}\nProvider: {provider}\n"
+            f"Limits: {budget.max_step_advances} steps, "
+            f"{budget.max_network_operations} network attempts, "
+            f"{budget.max_seconds:g} seconds, 0 model calls.\n\n"
+            "This authorizes local search and one query to the selected provider. "
+            "Both run automatically. No source fetching, evidence acceptance, "
+            "target testing or replanning is authorized. "
+            "The result will be an incomplete research report, not a final answer.",
+        ):
+            return
+        signal = CancellationSignal()
+        self._start_request(
+            lambda: self._controller.start_research_goal(
+                question,
+                provider,
+                budget,
+                cancellation_token=signal,
+            ),
+            self._append_response,
+            "autonomous research opening",
+            cancellation_signal=signal,
         )
 
     def _preview_question_plan(self) -> None:
