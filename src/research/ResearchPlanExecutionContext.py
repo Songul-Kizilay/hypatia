@@ -33,8 +33,15 @@ class ResearchPlanExecutionContext:
     # Set by the execution owner from a successfully consumed approval only.
     # Legacy/unapproved/restored contexts do not imply disclosure permission.
     disclosure: ResearchDisclosure = ResearchDisclosure.NONE
+    research_question: str | None = None
 
     def __post_init__(self) -> None:
+        if self.research_question is not None and (
+            not isinstance(self.research_question, str)
+            or not self.research_question.strip()
+            or len(self.research_question) > 2000
+        ):
+            raise ResearchError("Research execution question is invalid.")
         if not isinstance(self.disclosure, ResearchDisclosure):
             raise ResearchError("Research execution disclosure is invalid.")
         if self.execution_id is not None and (

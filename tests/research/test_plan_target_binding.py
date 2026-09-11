@@ -28,6 +28,7 @@ from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 from research.ResearchPlanStepStatus import ResearchPlanStepStatus
 from research.ResearchPlanTargetBinding import ResearchPlanTargetBinding
 from research.ResearchTargetScope import ResearchTargetScope, TargetHostRule
+from research.SemanticEvidenceStepBinding import SemanticEvidenceStepBinding
 
 MOMENT = datetime(2026, 9, 3, tzinfo=UTC)
 SCOPE_REVISION_DIGEST = "a" * 64
@@ -104,7 +105,17 @@ class PlanTargetBindingTests(unittest.TestCase):
 
     def test_only_bounded_target_acquisition_capabilities_are_accepted(self) -> None:
         for capability in ResearchPlanStepCapability:
-            step = replace(reference_plan().steps[0], capability=capability)
+            if capability is ResearchPlanStepCapability.SEMANTIC_EVIDENCE_PROPOSAL:
+                step = ResearchPlanStep(
+                    "step-1",
+                    "Propose",
+                    capability=capability,
+                    semantic_evidence_binding=SemanticEvidenceStepBinding(
+                        "a" * 64, "http://127.0.0.1/model", "test"
+                    ),
+                )
+            else:
+                step = replace(reference_plan().steps[0], capability=capability)
             with self.subTest(capability=capability):
                 if capability in {
                     ResearchPlanStepCapability.SOURCE_FETCH,

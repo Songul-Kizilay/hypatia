@@ -11,10 +11,8 @@ The bounds are not invented here. `ResearchAutonomyBudget` already refuses
 negatives, non-integers and anything above the hard ceilings it enforces, so
 this hands values to it and lets it judge them.
 
-Model operations are not offered. Every capability the operation registry knows
-declares a cost of zero there, so granting more would be granting authority
-nothing can spend — and this chain reaches no model at all. The dimension stays
-at its default rather than appearing as a control that does nothing.
+Model operations default to zero. A caller may explicitly choose a bounded
+model count for a typed semantic step; the parser never raises it to fit a plan.
 """
 
 from __future__ import annotations
@@ -24,9 +22,12 @@ from typing import Any
 from core.Exceptions import ResearchError
 from research.ResearchAutonomyBudget import ResearchAutonomyBudget
 
-#: The dimensions an operator may set, paired with how each is read. Model
-#: operations are absent on purpose; see the module docstring.
-_OPERATOR_CHOSEN_FIELDS = ("max_step_advances", "max_network_operations")
+#: Each explicitly chosen count uses the same strict integer parser.
+_OPERATOR_CHOSEN_FIELDS = (
+    "max_step_advances",
+    "max_network_operations",
+    "max_llm_operations",
+)
 _SECONDS_FIELD = "max_seconds"
 
 

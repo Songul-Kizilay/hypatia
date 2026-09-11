@@ -102,6 +102,7 @@ from research.ResearchSourceContentRestorationStatus import (
     ResearchSourceContentRestorationStatus,
 )
 from research.ResearchSourcePreview import ResearchSourcePreview
+from research.SemanticEvidenceStepResult import SemanticEvidenceStepResult
 from research.SourceLoadStage import SourceLoadStage
 from research.SourceReputation import SourceReputation
 from security.SecurityPostureReport import SecurityPostureReport
@@ -170,6 +171,9 @@ class BrainResponse:
     research_plan_execution: ResearchPlanExecutionState | None = None
     research_execution_continuation: ResearchExecutionContinuation | None = None
     research_source_previews: tuple[ResearchSourcePreview, ...] = field(
+        default=(), repr=False
+    )
+    semantic_evidence_proposals: tuple[SemanticEvidenceStepResult, ...] = field(
         default=(), repr=False
     )
     research_plan_budget_fit: ResearchPlanBudgetFit | None = None

@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 
 from core.Exceptions import ResearchError
 from research.ResearchSourcePreview import ResearchSourcePreview
+from research.SemanticEvidenceStepResult import SemanticEvidenceStepResult
 
 MAX_RESEARCH_STEP_OPERATION_DETAIL_CHARACTERS = 500
 
@@ -25,8 +26,18 @@ class ResearchPlanStepOperationResult:
     detail: str
     succeeded: bool = True
     source_preview: ResearchSourcePreview | None = field(default=None, repr=False)
+    semantic_evidence: SemanticEvidenceStepResult | None = field(
+        default=None, repr=False
+    )
 
     def __post_init__(self) -> None:
+        if self.semantic_evidence is not None and (
+            not isinstance(self.semantic_evidence, SemanticEvidenceStepResult)
+            or not self.performed
+            or not self.succeeded
+            or self.source_preview is not None
+        ):
+            raise ResearchError("Only successful semantic work can carry proposals.")
         if self.source_preview is not None and (
             not isinstance(self.source_preview, ResearchSourcePreview)
             or not self.performed

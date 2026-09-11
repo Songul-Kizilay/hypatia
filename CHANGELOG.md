@@ -2,6 +2,43 @@
 
 All notable project changes are recorded here.
 
+## [0.3.331] - 2026-09-11
+
+### Added
+
+- Executable semantic-evidence proposal operation for the existing typed research
+  plan registry. An exact binding covers input fingerprint, endpoint and model
+  in the canonical plan digest. The draft and approval previews display it.
+  Existing non-semantic plans retain their original digest bytes.
+- One attempt reserves one network operation and one model operation, including
+  loopback inference. Approval metadata can explicitly choose a model-call limit;
+  its default remains zero. The ordinary executor charges before dispatch and
+  does not refund failed/declined attempts. A model step without an approved
+  allowance is refused before dispatch.
+- The operation checks disclosure, exact destination, model, current run/question,
+  request fingerprint and cancellation. LOCAL_ONLY cannot reach a remote endpoint.
+  Missing transient input is refused, never refetched. The configured destination
+  constructs the provider itself; source text cannot select endpoints or tools.
+- Validated proposals return through a bounded transient BrainResponse channel,
+  including foreground Continue. They are not written as evidence, claims, source
+  bodies, execution snapshot content or ordinary chat text. Status/restart does
+  not restore them. Cancellation discards generated proposals.
+
+### Limits
+
+- Backend composition and approval/execution are tested with injected fake
+  transport. The default Bootstrap and desktop do not yet register/expose this
+  operation or own its transient input lookup. No live model call was made and
+  semantic answer quality has not been evaluated. Next is the desktop-reviewed
+  transient-input handoff and runtime registration, not another inert wrapper.
+- Endpoint validation reuses the existing LLM policy. Production transport must
+  retain redirect rejection and bounded timeouts. The cost counts one declared
+  transport attempt, not tokens or model-internal work. Refusal may spend the
+  declared attempt allowance without a transport call, as existing semantics do.
+- Restored executions have no disclosure permission; they cannot silently call
+  a model. Target-bound plans remain restricted to fetch/accept and cannot carry
+  this semantic capability. No source acceptance or autonomous report is added.
+
 ## [0.3.330] - 2026-09-11
 
 ### Changed

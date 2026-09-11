@@ -20,6 +20,7 @@ from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchPlanAuthorization import ResearchPlanAuthorization
 from research.ResearchPlanBudgetRequirement import ResearchPlanBudgetFit
 from research.ResearchPlanTargetBinding import ResearchPlanTargetBinding
+from research.SemanticEvidenceStepBinding import SemanticEvidenceStepBinding
 
 MAX_AUTHORIZATION_PREVIEW_REASON_CHARACTERS = 500
 
@@ -45,8 +46,18 @@ class ResearchPlanAuthorizationPreview:
     #: out rather than leaving somebody to read it out of a sentence.
     budget_fit: ResearchPlanBudgetFit | None = None
     target_binding: ResearchPlanTargetBinding | None = None
+    semantic_bindings: tuple[SemanticEvidenceStepBinding, ...] = ()
 
     def __post_init__(self) -> None:
+        if (
+            not isinstance(self.semantic_bindings, tuple)
+            or len(self.semantic_bindings) > 20
+            or any(
+                not isinstance(b, SemanticEvidenceStepBinding)
+                for b in self.semantic_bindings
+            )
+        ):
+            raise ResearchError("Authorization preview model bindings are invalid.")
         if self.target_binding is not None and not isinstance(
             self.target_binding, ResearchPlanTargetBinding
         ):
@@ -79,6 +90,7 @@ class ResearchPlanAuthorizationPreview:
         discovery_providers: tuple[ResearchDiscoveryProviderName, ...] = (),
         budget_fit: ResearchPlanBudgetFit | None = None,
         target_binding: ResearchPlanTargetBinding | None = None,
+        semantic_bindings: tuple[SemanticEvidenceStepBinding, ...] = (),
     ) -> ResearchPlanAuthorizationPreview:
         """Show exactly what confirming would record."""
         return cls(
@@ -88,6 +100,7 @@ class ResearchPlanAuthorizationPreview:
             authorization=authorization,
             budget_fit=budget_fit,
             target_binding=target_binding,
+            semantic_bindings=semantic_bindings,
         )
 
     @classmethod

@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.330 (Genesis)`
+`v0.3.331 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
@@ -88,9 +88,18 @@ operation or disclosure recovery is enabled. Local validation completed:
 5,878 tests OK with 3 platform skips; 61 focused tests, Black, Ruff, MyPy and
 diff checks passed. Remote CI requires this release's exact commit.
 
+Windows and Linux CI for v0.3.330 passed at `be2dc87`.
+Version v0.3.331 makes an exact input/model-bound semantic proposal step executable
+through the existing approval, Start and Advance/Continue chain. Model/network
+attempts are budgeted before dispatch; validated proposals remain transient and
+unaccepted. Local validation completed: 5,899 tests OK with 3 platform skips;
+59 focused tests, Black, Ruff, MyPy and diff checks passed. The default runtime
+and desktop are not yet connected to this operation. No live model call was made.
+Remote CI must be checked against this release's exact commit.
+
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.330`** is the current source/package release line.
+- **Runtime release `v0.3.331`** is the current source/package release line.
   GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the

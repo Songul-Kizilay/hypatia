@@ -301,13 +301,23 @@ class NothingAboutThePlanChangesTests(CuriosityBudgetFixture):
             ),
         )
 
-    def test_model_operations_are_not_grantable_here_either(self) -> None:
+    def test_model_budget_does_not_add_capabilities_or_run_research(self) -> None:
         response = self._authorize(max_llm_operations="5")
 
         self.assertEqual(
             response.research_plan_authorization.budget.max_llm_operations,
-            DEFAULT.max_llm_operations,
+            5,
         )
+        self.assertEqual(
+            response.research_plan_authorization.capabilities,
+            frozenset(
+                {
+                    ResearchPlanStepCapability.LOCAL_KNOWLEDGE_SEARCH,
+                    ResearchPlanStepCapability.SOURCE_DISCOVERY,
+                }
+            ),
+        )
+        self.assertEqual(self.operation.calls, [])
 
     def test_authorizing_runs_no_research(self) -> None:
         self._authorize(max_network_operations="2")

@@ -29,6 +29,10 @@ CAPABILITY_COSTS: dict[ResearchPlanStepCapability, ResearchOperationCost] = {
     ResearchPlanStepCapability.CLAIM_CONTRADICTION: _LOCAL,
     ResearchPlanStepCapability.SOURCE_COMPARISON: _LOCAL,
     ResearchPlanStepCapability.RESEARCH_RUN_COMPLETION: _LOCAL,
+    # Even loopback inference uses a transport; reserve both bounds uniformly.
+    ResearchPlanStepCapability.SEMANTIC_EVIDENCE_PROPOSAL: ResearchOperationCost(
+        network_operations=1, llm_operations=1
+    ),
 }
 
 

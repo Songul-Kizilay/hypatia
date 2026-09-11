@@ -386,8 +386,13 @@ class UnchangedSemanticsTests(AttemptDurabilityFixture):
                     [],
                 )
 
-    def test_no_model_or_tool_is_reachable_from_the_attempt_path(self) -> None:
+    def test_executor_delegates_model_work_without_direct_provider_or_tool_calls(
+        self,
+    ) -> None:
         vocabulary = module_vocabulary(SERVICE_SOURCE)
+        # The executor now checks the typed model-cost dimension before invoking
+        # a registered operation. This exact accounting field is not a provider.
+        vocabulary = [word for word in vocabulary if word != "llm_operations"]
 
         for forbidden in ("ollama", "llm", "prompt", "subprocess", "shell"):
             with self.subTest(name=forbidden):

@@ -46,6 +46,7 @@ from research.ResearchPlanRestriction import ResearchPlanRestriction
 from research.ResearchPlanRestrictionConflict import plan_restriction_conflicts
 from research.ResearchPlanStep import ResearchPlanStep
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
+from research.SemanticEvidenceStepBinding import SemanticEvidenceStepBinding
 from tests.research.test_plan_constraints import (
     LEGACY_BYTES,
     LEGACY_DIGEST,
@@ -88,6 +89,14 @@ def restricted_plan(
                 step_id="step-1",
                 instruction=instruction,
                 capability=capability,
+                semantic_evidence_binding=(
+                    SemanticEvidenceStepBinding(
+                        "a" * 64, "http://127.0.0.1/model", "test"
+                    )
+                    if capability
+                    is ResearchPlanStepCapability.SEMANTIC_EVIDENCE_PROPOSAL
+                    else None
+                ),
             ),
         ),
         created_at=MOMENT,
@@ -100,13 +109,14 @@ def restricted_plan(
 class TheBlockedSetComesFromDeclaredCostTests(unittest.TestCase):
     """No provider names, no keywords: the network cost table decides."""
 
-    def test_the_network_capabilities_are_exactly_the_expected_three(self) -> None:
+    def test_the_network_capabilities_include_the_explicit_model_step(self) -> None:
         self.assertEqual(
             set(NETWORK_CAPABILITIES),
             {
                 ResearchPlanStepCapability.SOURCE_DISCOVERY,
                 ResearchPlanStepCapability.SOURCE_FETCH,
                 ResearchPlanStepCapability.SOURCE_ACCEPT,
+                ResearchPlanStepCapability.SEMANTIC_EVIDENCE_PROPOSAL,
             },
         )
 

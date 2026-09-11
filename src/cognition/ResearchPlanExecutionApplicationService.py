@@ -115,6 +115,7 @@ from research.ResearchPlanTargetScopeRevisionGuard import (
 )
 from research.ResearchProgramScopeRevisionStore import ResearchProgramScopeRevisionStore
 from research.ResearchSourcePreview import ResearchSourcePreview
+from research.SemanticEvidenceStepResult import SemanticEvidenceStepResult
 from research.StartsResearchPlanExecution import ResearchPlanExecutionStartRefusal
 from response.ResponseComposer import ResponseComposer
 
@@ -763,6 +764,7 @@ class ResearchPlanExecutionApplicationService:
             )
         attempted: list[str] = []
         previews: list[ResearchSourcePreview] = []
+        semantic_results: list[SemanticEvidenceStepResult] = []
         reason = ResearchContinuationStopReason.BOUND_REACHED
         while len(attempted) < bound:
             state = self._executions[plan_id]
@@ -776,6 +778,7 @@ class ResearchPlanExecutionApplicationService:
                 break
             response = self.process_advance(request)
             previews.extend(response.research_source_previews)
+            semantic_results.extend(response.semantic_evidence_proposals)
             after = self._executions[plan_id]
             if self._step_status(after, step_id) is not ResearchPlanStepStatus.PENDING:
                 attempted.append(step_id)
@@ -805,6 +808,7 @@ class ResearchPlanExecutionApplicationService:
             # At most one bounded body per attempted step; continuation has a
             # hard ten-step ceiling. Nothing is retained on the service itself.
             research_source_previews=tuple(previews),
+            semantic_evidence_proposals=tuple(semantic_results),
         )
 
     @staticmethod
@@ -935,6 +939,10 @@ class ResearchPlanExecutionApplicationService:
 
         allowance = self._allowances.get(plan_id)
         cost = cost_for(step.capability)
+        if cost.llm_operations and allowance is None:
+            return self._response_composer.research_plan_execution_rejected(
+                request, "Model steps require an explicit approved execution budget."
+            )
         if allowance is not None and not allowance.affords(cost):
             # Refused before the attempt, so nothing is charged and no
             # operation runs. Pressing the button again cannot get past this.
@@ -1000,6 +1008,7 @@ class ResearchPlanExecutionApplicationService:
                     target_binding=plan.target_binding,
                     execution_id=plan_id,
                     disclosure=stored.disclosure,
+                    research_question=plan.question,
                 ),
             )
         except ResearchError as error:
@@ -1069,6 +1078,21 @@ class ResearchPlanExecutionApplicationService:
         self._events.step_completed(plan_id, step_id, operation.operation_name)
         self._persist(plan_id)
         preview = result.source_preview
+        semantic = result.semantic_evidence
+        semantic_matches = (
+            semantic is not None
+            and step.capability is ResearchPlanStepCapability.SEMANTIC_EVIDENCE_PROPOSAL
+            and step.semantic_evidence_binding is not None
+            and semantic.request.content_fingerprint
+            == step.semantic_evidence_binding.input_fingerprint
+            and semantic.execution_id == plan_id
+            and semantic.step_id == step_id
+            and semantic.request.previews[0].run_id == stored.research_run_id
+            and semantic.request.question.strip() == plan.question
+            and not (
+                request.cancellation_token and request.cancellation_token.is_cancelled()
+            )
+        )
         preview_matches = (
             preview is not None
             and step.capability is ResearchPlanStepCapability.SOURCE_FETCH
@@ -1088,6 +1112,9 @@ class ResearchPlanExecutionApplicationService:
                 self._next_capability(plan_id, completed),
             ),
             research_source_previews=(preview,) if preview_matches and preview else (),
+            semantic_evidence_proposals=(
+                (semantic,) if semantic_matches and semantic else ()
+            ),
         )
 
     def _commit_outcome(

@@ -224,6 +224,11 @@ class ResearchPlanAuthorizationApplicationService:
                     )
                 ),
                 target_binding=plan.target_binding,
+                semantic_bindings=tuple(
+                    step.semantic_evidence_binding
+                    for step in plan.steps
+                    if step.semantic_evidence_binding is not None
+                ),
             ),
         )
 

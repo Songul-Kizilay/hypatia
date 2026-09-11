@@ -119,6 +119,20 @@ is the typed semantic operation with reviewed-input binding, endpoint/disclosure
 enforcement and the existing pre-attempt model-cost accounting, then its desktop
 review/approval action. Do not replace these with another review-only wrapper.
 
+Update for v0.3.331: a semantic model operation now runs through the ordinary
+registry and executor when explicitly composed. Tests traverse approval preview,
+confirmation, zero-step Start, charged Advance and transient proposal results.
+The typed binding includes reviewed input fingerprint, endpoint and model;
+preview rendering makes them visible. A model-budget choice remains explicit
+and defaults to zero. The operation enforces disclosure and destination, and
+refuses changed/missing inputs, wrong run/question and cancellation. Existing
+plan digests are unchanged when the new binding is absent.
+This is an executable backend connection, not a live desktop feature: Bootstrap
+registration and the desktop-owned bounded transient request lookup/approval
+handoff remain to implement. No live-model quality claim is supported. Restart
+still has no permission or automatic refetch. The next work should close that
+interactive handoff and test it with the existing source reader and model setup.
+
 An operator-reviewed **reference-source acquisition batch** should reuse the
 ordinary plan, authorization and executor, rather than add a second HTTP engine.
 Its first deliverable is useful provisional reading, not permanent evidence.

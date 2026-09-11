@@ -37,6 +37,7 @@ from enum import Enum
 
 from core.Exceptions import ResearchError
 from research.ResearchPlan import ResearchPlan
+from research.ResearchPlanStep import ResearchPlanStep
 
 #: Included in the hashed payload so a future encoding change cannot silently
 #: produce the same digest for a plan it would now describe differently.
@@ -162,6 +163,10 @@ def _encode(value: object) -> bytes:
 
 def _encode_dataclass(value: object, *, skip: frozenset[str]) -> bytes:
     """Encode every declared field in declaration order, minus the skipped."""
+    # Absence adds no authority: preserve pre-semantic plan encodings exactly.
+    # Present bindings are fully encoded by the ordinary field walker.
+    if isinstance(value, ResearchPlanStep) and value.semantic_evidence_binding is None:
+        skip = skip | {"semantic_evidence_binding"}
     payload = _encode(type(value).__name__)
     for field in fields(value):  # type: ignore[arg-type]
         if field.name in skip:

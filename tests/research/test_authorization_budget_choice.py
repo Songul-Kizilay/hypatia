@@ -96,11 +96,14 @@ class ReadingWhatTheOperatorTypedTests(unittest.TestCase):
 
         self.assertEqual(chosen.max_network_operations, 0)
 
-    def test_model_operations_are_not_offered(self) -> None:
-        """No registered capability spends them, so there is no control for it."""
+    def test_model_operations_require_an_explicit_bounded_choice(self) -> None:
         chosen = budget_from({"max_llm_operations": "5"})
 
-        self.assertEqual(chosen.max_llm_operations, DEFAULT.max_llm_operations)
+        self.assertEqual(chosen.max_llm_operations, 5)
+        self.assertEqual(budget_from({}).max_llm_operations, 0)
+        for value in (True, "bad", -1, 26, 1.5):
+            with self.assertRaises(ResearchError):
+                budget_from({"max_llm_operations": value})
 
 
 class RefusingRatherThanFallingBackTests(unittest.TestCase):

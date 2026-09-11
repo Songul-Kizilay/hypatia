@@ -983,6 +983,8 @@ class ResponseComposer:
                         "   Source discovery provider: "
                         f"{step.discovery_provider.label}"
                     )
+                if step.semantic_evidence_binding is not None:
+                    lines.extend(step.semantic_evidence_binding.lines())
             if plan.constraints:
                 # Listed apart from the steps, and numbered separately, so a
                 # constraint can never be read back as "step 11".
@@ -2558,6 +2560,11 @@ class ResponseComposer:
             *self._authorization_terms(authorization),
             *_target_binding_lines(preview.target_binding),
             *_discovery_provider_lines(preview.discovery_providers),
+            *(
+                line
+                for binding in preview.semantic_bindings
+                for line in binding.lines()
+            ),
             *_budget_fit_lines(preview.budget_fit),
             "",
             "Nothing is recorded until you confirm this exact approval.",

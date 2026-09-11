@@ -26,6 +26,7 @@ from research.ResearchContradictionAuthorization import (
     ResearchContradictionAuthorization,
 )
 from research.ResearchEvidenceAuthorization import ResearchEvidenceAuthorization
+from research.SemanticEvidenceStepBinding import SemanticEvidenceStepBinding
 
 MAX_LEGACY_DRAFT_TUPLE_LENGTH = 6
 
@@ -45,6 +46,7 @@ class ResearchPlanStepDraftInput:
     contradiction_authorization: ResearchContradictionAuthorization | None = None
     comparison_authorization: ResearchComparisonAuthorization | None = None
     completion_authorization: ResearchCompletionAuthorization | None = None
+    semantic_evidence_binding: SemanticEvidenceStepBinding | None = None
 
     @classmethod
     def from_value(cls, value: object) -> ResearchPlanStepDraftInput:
