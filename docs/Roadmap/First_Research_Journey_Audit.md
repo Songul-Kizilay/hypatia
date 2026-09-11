@@ -109,6 +109,16 @@ preserve explicit disclosure through the execution boundary, charge its declared
 model cost before an attempt, and refuse lost transient input after restart
 rather than refetching. No such execution is enabled by v0.3.329.
 
+Update for v0.3.330: the live operation context now carries disclosure from the
+successfully consumed approval through authored/derived Start and Advance/Continue.
+This closes the live permission-handoff gap noted above. It does not register a
+model capability, enforce endpoint locality or connect semantic input/results.
+Restored contexts deliberately carry NONE because durable snapshots do not record
+disclosure; restart is not permission to disclose. The next substantive connection
+is the typed semantic operation with reviewed-input binding, endpoint/disclosure
+enforcement and the existing pre-attempt model-cost accounting, then its desktop
+review/approval action. Do not replace these with another review-only wrapper.
+
 An operator-reviewed **reference-source acquisition batch** should reuse the
 ordinary plan, authorization and executor, rather than add a second HTTP engine.
 Its first deliverable is useful provisional reading, not permanent evidence.

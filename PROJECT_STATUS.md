@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.329 (Genesis)`
+`v0.3.330 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
@@ -81,9 +81,16 @@ Local validation completed: 5,870 tests OK with 3 platform skips; 51 focused
 tests, Black, Ruff, MyPy and diff checks passed. No live model call was made.
 Remote CI must be checked against the exact release commit.
 
+Windows and Linux CI for v0.3.329 passed at `f7a74c2`.
+Version v0.3.330 preserves approved disclosure in live execution contexts through
+Start and Advance/Continue. Restored contexts default to NONE; no new model
+operation or disclosure recovery is enabled. Local validation completed:
+5,878 tests OK with 3 platform skips; 61 focused tests, Black, Ruff, MyPy and
+diff checks passed. Remote CI requires this release's exact commit.
+
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.329`** is the current source/package release line.
+- **Runtime release `v0.3.330`** is the current source/package release line.
   GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the

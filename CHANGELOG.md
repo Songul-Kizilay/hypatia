@@ -2,6 +2,28 @@
 
 All notable project changes are recorded here.
 
+## [0.3.330] - 2026-09-11
+
+### Changed
+
+- Live execution contexts now carry the exact typed disclosure value from the
+  successfully consumed plan approval. Both authored and derived-plan Start
+  paths propagate it; Advance and bounded Continue retain it per operation.
+- A missing approval consumer or a restored execution has disclosure NONE.
+  Start/Advance request metadata cannot supply or override this value. Restored
+  snapshots do not contain disclosure, so rebind does not infer consent from
+  remaining model budget, prior capability or an old approval.
+
+### Limits
+
+- This is permission propagation, not a new permission grant or model action.
+  No model step is registered and no endpoint is contacted. A future semantic
+  operation must enforce disclosure against endpoint locality and require its
+  exact reviewed input plus the existing pre-attempt model budget charge.
+- No snapshot schema or durable permission recovery is introduced. Future model
+  work after restart must refuse missing permission/input instead of silently
+  recreating it. Existing non-model operations retain their current behavior.
+
 ## [0.3.329] - 2026-09-11
 
 ### Added

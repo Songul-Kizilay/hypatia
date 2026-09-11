@@ -16,6 +16,7 @@ from dataclasses import dataclass
 
 from core.CancellationSignal import CancellationToken
 from core.Exceptions import ResearchError
+from research.ResearchDisclosure import ResearchDisclosure
 from research.ResearchPlanTargetBinding import ResearchPlanTargetBinding
 
 MAX_RESEARCH_EXECUTION_RUN_ID_CHARACTERS = 200
@@ -29,8 +30,13 @@ class ResearchPlanExecutionContext:
     cancellation_token: CancellationToken | None = None
     target_binding: ResearchPlanTargetBinding | None = None
     execution_id: str | None = None
+    # Set by the execution owner from a successfully consumed approval only.
+    # Legacy/unapproved/restored contexts do not imply disclosure permission.
+    disclosure: ResearchDisclosure = ResearchDisclosure.NONE
 
     def __post_init__(self) -> None:
+        if not isinstance(self.disclosure, ResearchDisclosure):
+            raise ResearchError("Research execution disclosure is invalid.")
         if self.execution_id is not None and (
             not isinstance(self.execution_id, str)
             or not self.execution_id.strip()

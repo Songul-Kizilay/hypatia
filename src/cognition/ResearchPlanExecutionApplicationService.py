@@ -281,6 +281,7 @@ class ResearchPlanExecutionApplicationService:
             self._allowances[plan.plan_id] = ResearchExecutionAllowance(
                 budget=decision.authorization.budget
             )
+            context = replace(context, disclosure=decision.authorization.disclosure)
 
         state = ResearchPlanExecutionState.prepare(plan).start()
         with self._commit_lock:
@@ -348,6 +349,7 @@ class ResearchPlanExecutionApplicationService:
             self._allowances[plan.plan_id] = ResearchExecutionAllowance(
                 budget=decision.authorization.budget
             )
+            context = replace(context, disclosure=decision.authorization.disclosure)
         state = ResearchPlanExecutionState.prepare(plan).start()
         with self._commit_lock:
             self._executions[plan.plan_id] = state
@@ -997,6 +999,7 @@ class ResearchPlanExecutionApplicationService:
                     cancellation_token=request.cancellation_token,
                     target_binding=plan.target_binding,
                     execution_id=plan_id,
+                    disclosure=stored.disclosure,
                 ),
             )
         except ResearchError as error:
