@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.333 (Genesis)`
+`v0.3.334 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
@@ -122,9 +122,24 @@ Deterministic external providers only; live research/model calls were not tested
 The original approval, five-step cumulative budget and refusal-without-retry
 boundaries passed. Remote CI must be checked against the release commit.
 
+Windows and Linux CI for v0.3.333 passed at `695b8bb`.
+Version v0.3.334 extends the one-confirmation path to two reference evidence
+chains and one cited lexical comparison, including grounding-only assessments.
+All eleven advances share the original approval and allowance (five network
+reservations, zero model calls), with 16 KiB cumulative inspected text. The new
+desktop action requires adequate initial limits; it never raises them silently.
+This is not semantic comparison, independent corroboration or contradiction
+investigation. Those operations, follow-up/adaptive planning, completion
+evaluation and a cited final answer remain beyond the automatic boundary.
+Local v0.3.334 release gates: 5,955 tests OK with 3 existing platform skips;
+149 focused tests, Black (847 files), Ruff, MyPy (514 source files), whitespace
+checks and real hidden-Tk layout smoke passed. External discovery/fetch were
+deterministic fakes; no live research/model calls. Remote CI must be verified
+against the exact release commit.
+
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.333`** is the current source/package release line.
+- **Runtime release `v0.3.334`** is the current source/package release line.
   GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the

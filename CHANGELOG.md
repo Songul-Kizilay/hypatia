@@ -2,6 +2,43 @@
 
 All notable project changes are recorded here.
 
+## [0.3.334] - 2026-09-12
+
+### Added
+
+- One initial comparison-mission confirmation drives local search, discovery,
+  two distinct reference fetch/inspection/acceptance/evidence chains, two
+  grounding-only assessments and one canonical cited lexical comparison.
+  No intervening Continue or new per-step approval is required. Existing
+  planner, executor, allowance, assessments and comparison records are reused.
+- Comparison scope is part of the original digest and cannot be added to an
+  already approved one-source mission. All eleven advances share the original
+  cumulative allowance: five network reservations, zero model calls. The
+  successful fixture makes three external calls (discovery plus two fetches);
+  acceptance conservatively retains its reservation while reusing inspected text.
+- A shared 16 KiB inspected-text limit spans both sources. Canonical URL identity
+  prevents selecting the same reference twice; a redirect back to an acquired
+  reference refuses the second acceptance. Identical bodies are flagged as
+  possible duplicates, never independent corroboration.
+- Comparison rechecks recorded evidence integrity and cites both canonical
+  evidence and current assessments. Changed or superseded inputs, failed
+  fetches, missing provenance, exhausted limits and cancellation stop without
+  retry. Initial limits are never silently increased by the desktop action.
+
+### Limits
+
+- This compares question-term coverage, not semantic claims. Grounding-only
+  assessments leave trust unassessed and independence unknown. Different URLs
+  do not prove independence; absent excerpt terms do not imply absent source
+  claims. No truth, agreement, contradiction, winner or completion is inferred.
+- Next human boundary: semantic comparison and contradiction investigation,
+  followed by follow-up research, adaptive replanning, completion evaluation
+  and a cited final answer. The research run remains collecting.
+- The shared text bound is not an aggregate HTTP-wire-byte quota. Existing
+  transport limits remain. Missing transient observations after restart still
+  refuse resumption; durable spending is not reset. No target or model traffic
+  is enabled by this milestone.
+
 ## [0.3.333] - 2026-09-12
 
 ### Added

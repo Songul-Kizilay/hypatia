@@ -99,6 +99,7 @@ class EvidenceRecordingStepOperation:
         truncated = " (excerpt truncated)" if recorded.excerpt_truncated else ""
         return ResearchPlanStepOperationResult(
             performed=True,
+            evidence_id=recorded.evidence_id,
             detail=(
                 f"Recorded evidence {recorded.evidence_id} for run {run_id} from "
                 f"document {recorded.source_document_id} chunk "

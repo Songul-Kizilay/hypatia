@@ -6,8 +6,9 @@ implementation exists, and the manager keeps enforcing the 2-to-5 accepted
 source bound, evidence and assessment ownership, and text bounds.
 
 A comparison is a description, not a verdict. This operation selects no winner,
-ranks nothing, promotes no source's trust, and verifies no claim. Any judgement
-lives in the authored text a human wrote.
+ranks nothing, promotes no source's trust, and verifies no claim. Manual text is
+human-authored; a digest-bound mission can supply a clearly labelled lexical
+comparison of its own canonical evidence and grounding-only assessments.
 """
 
 from __future__ import annotations

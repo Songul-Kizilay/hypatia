@@ -1042,10 +1042,13 @@ class DesktopController:
         *,
         cancellation_token: CancellationToken | None = None,
         record_evidence: bool = False,
+        compare_sources: bool = False,
     ) -> BrainResponse:
         """One confirmed scoped action; no synthetic Continue button presses."""
-        if not isinstance(record_evidence, bool):
-            raise ValueError("Evidence mission selection must be boolean.")
+        if not isinstance(record_evidence, bool) or not isinstance(
+            compare_sources, bool
+        ):
+            raise ValueError("Mission selection must be boolean.")
         return self._brain.process(
             BrainRequest(
                 message=question,
@@ -1054,9 +1057,13 @@ class DesktopController:
                 metadata={
                     "intent": "research_goal_start",
                     "research_goal_scope": (
-                        "selected_provider_reference_evidence"
-                        if record_evidence
-                        else "local_search_and_selected_provider_discovery"
+                        "selected_provider_reference_comparison"
+                        if compare_sources
+                        else (
+                            "selected_provider_reference_evidence"
+                            if record_evidence
+                            else "local_search_and_selected_provider_discovery"
+                        )
                     ),
                     "discovery_provider": provider,
                     "research_autonomy_budget": budget,

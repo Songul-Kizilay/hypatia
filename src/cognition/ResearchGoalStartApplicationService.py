@@ -18,7 +18,7 @@ from cognition.ResearchPlanExecutionApplicationService import (
 from core.Exceptions import ResearchError
 from research.ResearchAutonomyBudget import ResearchAutonomyBudget
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
-from research.ResearchMissionScope import MISSION_CAPABILITIES, ResearchMissionScope
+from research.ResearchMissionScope import COMPARISON_POLICY, ResearchMissionScope
 from research.ResearchPlanDraftService import ResearchPlanDraftService
 from research.ResearchPlanStep import ResearchPlanStep
 from research.ResearchRunManager import ResearchRunManager
@@ -27,6 +27,7 @@ from research.StartsResearchPlanExecution import ResearchPlanExecutionStartRefus
 RESEARCH_GOAL_START_INTENT = "research_goal_start"
 OPENING_SCOPE = "local_search_and_selected_provider_discovery"
 EVIDENCE_SCOPE = "selected_provider_reference_evidence"
+COMPARISON_SCOPE = "selected_provider_reference_comparison"
 
 
 class ResearchGoalStartApplicationService:
@@ -82,10 +83,11 @@ class ResearchGoalStartApplicationService:
         if (
             set(request.metadata) != allowed
             or not isinstance(scope, str)
-            or scope not in {OPENING_SCOPE, EVIDENCE_SCOPE}
+            or scope not in {OPENING_SCOPE, EVIDENCE_SCOPE, COMPARISON_SCOPE}
         ):
             raise ResearchError("Goal start requires an explicit supported scope.")
-        evidence_mission = scope == EVIDENCE_SCOPE
+        evidence_mission = scope in {EVIDENCE_SCOPE, COMPARISON_SCOPE}
+        comparison_mission = scope == COMPARISON_SCOPE
         if evidence_mission and not self._evidence_available:
             raise ResearchError(
                 "Source acquisition is unavailable; mission not started."
@@ -124,21 +126,28 @@ class ResearchGoalStartApplicationService:
             raise ResearchError("Research goal cannot form a valid opening plan.")
         plan = preview.plan
         if evidence_mission:
+            mission_scope = (
+                ResearchMissionScope(
+                    provider, source_policy=COMPARISON_POLICY, max_sources=2
+                )
+                if comparison_mission
+                else ResearchMissionScope(provider)
+            )
             plan = replace(
                 plan,
                 steps=plan.steps
                 + tuple(
                     ResearchPlanStep(
-                        step_id=f"mission-{capability.value}",
+                        step_id=f"mission-{index}-{capability.value}",
                         instruction=(
                             "Derive from this mission's preceding observation only: "
                             + capability.value
                         ),
                         capability=capability,
                     )
-                    for capability in MISSION_CAPABILITIES[2:]
+                    for index, capability in enumerate(mission_scope.capabilities[2:])
                 ),
-                mission_scope=ResearchMissionScope(provider),
+                mission_scope=mission_scope,
             )
         if not self._authorizations.budget_fit_for(plan, budget).sufficient:
             raise ResearchError("Budget cannot cover the opening; nothing was started.")
@@ -169,6 +178,16 @@ class ResearchGoalStartApplicationService:
         updated = self._runs.get(run.run_id)
         count = sum(len(record.candidates) for record in updated.discoveries)
         if evidence_mission:
+            boundary = (
+                "Remaining human boundary: semantic contradiction investigation, "
+                "follow-up research, replanning, completion evaluation and a cited "
+                "answer are not yet mission-driven.\n"
+                if comparison_mission
+                else "Remaining human boundary: comparison and contradictions, "
+                "follow-up research and replanning are not yet mission-driven. "
+                "Completion evaluation and a cited answer remain incomplete.\n"
+            )
+            comparisons = "\n\n".join(note.text for note in updated.comparison_notes)
             return replace(
                 response,
                 intent=RESEARCH_GOAL_START_INTENT,
@@ -177,19 +196,22 @@ class ResearchGoalStartApplicationService:
                     state.plan_id
                 ),
                 message=(
-                    "Research incomplete — bounded reference evidence slice.\n\n"
+                    "Research incomplete — bounded reference research slice.\n\n"
                     f"Research question: {updated.question}\n"
                     f"Discovery: {count} candidate(s); "
                     f"accepted sources: {len(updated.sources)}; "
                     f"recorded evidence: {len(updated.evidence)}.\n"
+                    f"Recorded comparisons: {len(updated.comparison_notes)}.\n"
                     "Evidence validation means exact-source grounding, not truth. "
                     "Selection is lexical matching, not model reasoning.\n"
                     "One original approval and one cumulative execution allowance; "
                     "no derived approval, refetch or caller-side Continue.\n"
-                    "Remaining human boundary: comparison/contradiction investigation, "
-                    "follow-up research and replanning are not yet mission-driven. "
-                    "Completion evaluation and a cited answer remain incomplete.\n\n"
-                    "Research trace:\n" + response.message
+                    + boundary
+                    + "\n"
+                    + comparisons
+                    + "\n\n"
+                    + "Research trace:\n"
+                    + response.message
                 ),
             )
         return replace(

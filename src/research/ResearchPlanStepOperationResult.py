@@ -30,8 +30,15 @@ class ResearchPlanStepOperationResult:
         default=None, repr=False
     )
     discovery_id: str = ""
+    evidence_id: str = ""
+    assessment_id: str = ""
 
     def __post_init__(self) -> None:
+        for identity in (self.evidence_id, self.assessment_id):
+            if not isinstance(identity, str) or len(identity) > 200:
+                raise ResearchError("Operation record identity is invalid.")
+            if identity and (not self.performed or not self.succeeded):
+                raise ResearchError("Only successful work can carry record identity.")
         if not isinstance(self.discovery_id, str) or len(self.discovery_id) > 200:
             raise ResearchError("Operation discovery identity is invalid.")
         if self.discovery_id and (not self.performed or not self.succeeded):

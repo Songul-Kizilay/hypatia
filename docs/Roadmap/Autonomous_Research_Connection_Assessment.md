@@ -1,6 +1,58 @@
 # Autonomous research connection assessment
 
-## Current connection: v0.3.333
+## Current connection: v0.3.334
+
+Starting checkpoint: `695b8bb` / v0.3.333, clean and equal to origin;
+both Windows and Linux CI passed for that exact commit.
+
+**Research and compare two sources automatically** is a separate initial
+mission choice, not a new approval during a running mission. Its digest binds
+the selected provider, two-source policy and eleven ordered capabilities:
+local search, discovery, fetch/accept/evidence/assessment for source A,
+fetch/accept/evidence/assessment for source B, then comparison. The same
+executor and autonomy loop advance all slots without caller-side Continue.
+No new agent engine, grant type, scheduler or persistence store was introduced.
+
+The original allowance covers all eleven advances and five network
+reservations (one discovery, two fetches and two conservative acceptance
+reservations). Acceptance reuses the inspected version, so the deterministic
+successful fixture makes three external calls. No model calls are permitted.
+The UI refuses an insufficient initial budget; it never silently raises it.
+
+The 16 KiB inspected-text limit is cumulative across both sources, not renewed
+for each fetch. Canonical candidate/final URL identity prevents reusing an
+acquired reference. Source/evidence/assessment provenance stays in the existing
+run records; only bounded derivation observations are transient. Comparison
+revalidates both excerpts against indexed content and cites the current
+grounding-only assessments. Superseded assessments cannot be silently replaced.
+Failures, cancellation and refused advances stop rather than retrying.
+
+The output compares lexical question-term coverage and flags identical fetched
+bodies. It explicitly does **not** equate different URLs with independence,
+term overlap with corroboration, or missing excerpt terms with a contradiction.
+Trust remains unassessed and independence unknown. The run stays collecting.
+
+**Next human boundary:** semantic comparison and contradiction investigation.
+Follow-up research, adaptive replanning, completion evaluation and a cited final
+answer remain outside the automatic mission. The complete North Star is not
+claimed. As before, this text limit is not a transport-byte quota, time checks
+occur between operations, and missing transient observations after restart
+refuse resumption without refetch or a fresh allowance.
+
+`tests/integration/test_research_mission_comparison.py` exercises the complete
+two-source path with real application/domain/persistence boundaries and fake
+external providers. Coverage includes shared spending/text bounds, larger
+caller budgets, duplicate sources/bodies, changed evidence, superseded
+assessments, source-text injection, missing identity, cancellation and no retry.
+The existing one-source mission and manual-operation tests remain in place.
+
+Local release gates: **5,955 tests OK, 3 existing platform skips**, 149 focused
+tests, Black (847 files), Ruff, MyPy (514 source files) and whitespace checks.
+A real hidden-Tk smoke confirmed both mission actions appear exactly once and
+do not dispatch research merely by opening the window. Remote CI requires the
+exact new commit's result; local checks alone do not establish CI success.
+
+## Previous connection: v0.3.333
 
 Verified starting checkout: `d9ed83b` / v0.3.332, clean, equal to origin;
 Windows and Linux checks for that SHA both passed.

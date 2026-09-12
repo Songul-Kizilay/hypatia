@@ -1,6 +1,6 @@
 """Resolve approved predecessor bindings, never execute or grant permission.
 
-Transient observations are bounded to one source per execution. Canonical run,
+Transient text is bounded cumulatively across the mission. Canonical run,
 knowledge, approval, executor and allowance remain the only owners of durable
 facts and authority. Missing observations fail closed; no refetch or retry.
 """
@@ -12,8 +12,12 @@ from urllib.parse import urlsplit
 
 from core.Exceptions import ResearchError
 from knowledge.KnowledgeEngine import KnowledgeEngine
+from research.ResearchAssessmentAuthorization import ResearchAssessmentAuthorization
+from research.ResearchComparisonAuthorization import ResearchComparisonAuthorization
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchEvidenceAuthorization import ResearchEvidenceAuthorization
+from research.ResearchEvidenceIntegrityAuditor import ResearchEvidenceIntegrityAuditor
+from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchPlan import ResearchPlan
 from research.ResearchPlanDigest import plan_digest
 from research.ResearchPlanExecutionContext import ResearchPlanExecutionContext
@@ -21,9 +25,12 @@ from research.ResearchPlanStep import ResearchPlanStep
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability as Cap
 from research.ResearchPlanStepOperationResult import ResearchPlanStepOperationResult
 from research.ResearchQueryTerms import normalized_terms
+from research.ResearchRun import ResearchRun
 from research.ResearchRunManager import ResearchRunManager
+from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
 from research.ResearchSourcePreview import ResearchSourcePreview
 from research.ResearchSourceRelevanceRanker import ResearchSourceRelevanceRanker
+from research.SourceIdentity import identity_of
 
 
 @dataclass(slots=True)
@@ -33,6 +40,12 @@ class _Observations:
     discovery_id: str = ""
     selected_url: str = ""
     preview: ResearchSourcePreview | None = None
+    attempted_urls: tuple[str, ...] = ()
+    acquired_urls: tuple[str, ...] = ()
+    body_hashes: tuple[str, ...] = ()
+    inspected_bytes: int = 0
+    evidence: tuple[ResearchEvidenceRecord, ...] = ()
+    assessments: tuple[ResearchSourceAssessmentRecord, ...] = ()
 
 
 class ResearchMissionStepResolver:
@@ -84,9 +97,34 @@ class ResearchMissionStepResolver:
             or record.provider != self._providers.get(scope.provider)
         ):
             raise ResearchError("Mission discovery provenance no longer matches.")
+        if step.capability is Cap.SOURCE_COMPARISON:
+            return self._comparison(plan, step, context, observed, run), context
+        if step.capability is Cap.SOURCE_ASSESSMENT:
+            self._validate_recorded_evidence(observed, run)
+            evidence = observed.evidence[-1]
+            return (
+                replace(
+                    step,
+                    assessment_authorization=ResearchAssessmentAuthorization(
+                        evidence.source_document_id,
+                        (evidence.evidence_id,),
+                        "Automatic source-grounding assessment only. The cited "
+                        "excerpt matches its indexed source at this check. Lexical "
+                        "relevance is not correctness; trust, independence, "
+                        "applicability and publication status remain "
+                        f"unassessed/unknown. Mission {observed.digest}.",
+                    ),
+                ),
+                context,
+            )
         if step.capability is Cap.SOURCE_FETCH:
-            if observed.selected_url:
+            if (
+                observed.selected_url
+                or len(observed.attempted_urls) >= scope.max_sources
+            ):
                 raise ResearchError("Mission source attempt cannot be repeated.")
+            if observed.inspected_bytes >= scope.max_source_bytes:
+                raise ResearchError("Cumulative inspected-text budget exhausted.")
             ranked = ResearchSourceRelevanceRanker().rank(
                 plan.question, record.candidates
             )
@@ -95,6 +133,11 @@ class ResearchMissionStepResolver:
                     r.candidate
                     for r in ranked
                     if not r.is_duplicate
+                    and identity_of(r.candidate.url)
+                    not in {
+                        identity_of(url)
+                        for url in (*observed.attempted_urls, *observed.acquired_urls)
+                    }
                     and r.relevance.score > 0
                     and set(normalized_terms(plan.question)).intersection(
                         normalized_terms(r.candidate.title + " " + r.candidate.snippet)
@@ -106,6 +149,7 @@ class ResearchMissionStepResolver:
             if candidate is None:
                 raise ResearchError("No in-scope relevant source candidate; no retry.")
             observed.selected_url = candidate.url
+            observed.attempted_urls += (candidate.url,)
             return replace(step, authorized_source_url=candidate.url), context
         preview = observed.preview
         if (
@@ -184,13 +228,118 @@ class ResearchMissionStepResolver:
                 or preview.step_id != step.step_id
                 or preview.requested_url != observed.selected_url
                 or preview.content_byte_count > scope.max_source_bytes
+                or observed.inspected_bytes + preview.content_byte_count
+                > scope.max_source_bytes
+                or identity_of(preview.source.url)
+                in {identity_of(url) for url in observed.acquired_urls}
                 or not self._public_reference(preview.source.url)
             ):
                 raise ResearchError("Fetched preview failed mission inspection.")
             observed.preview = preview
+            observed.acquired_urls += (preview.source.url,)
+            observed.body_hashes += (preview.content_sha256,)
+            observed.inspected_bytes += preview.content_byte_count
         elif step.capability is Cap.EVIDENCE_RECORDING:
+            run = self._runs.get(observed.run_id)
+            evidence = next(
+                (e for e in run.evidence if e.evidence_id == result.evidence_id), None
+            )
+            if (
+                evidence is None
+                or observed.preview is None
+                or evidence.source_document_id
+                != observed.preview.source.to_document().document_id
+            ):
+                raise ResearchError("Recorded evidence provenance is unavailable.")
+            observed.evidence += (evidence,)
             # Retain origin identity to prevent replay, discard transient body.
             observed.preview = None
+            observed.selected_url = ""
+        elif step.capability is Cap.SOURCE_ASSESSMENT:
+            run = self._runs.get(observed.run_id)
+            assessment = next(
+                (a for a in run.assessments if a.assessment_id == result.assessment_id),
+                None,
+            )
+            if (
+                assessment is None
+                or not observed.evidence
+                or assessment.evidence_ids != (observed.evidence[-1].evidence_id,)
+            ):
+                raise ResearchError("Recorded assessment provenance is unavailable.")
+            observed.assessments += (assessment,)
+
+    def _validate_recorded_evidence(
+        self, observed: _Observations, run: ResearchRun
+    ) -> None:
+        if not observed.evidence or any(
+            e not in run.evidence for e in observed.evidence
+        ):
+            raise ResearchError("Mission evidence changed or is missing.")
+        audit = ResearchEvidenceIntegrityAuditor(self._knowledge).audit([run])
+        if (
+            not audit.available
+            or audit.changed_evidence_count
+            or audit.missing_evidence_count
+        ):
+            raise ResearchError("Mission evidence no longer matches canonical content.")
+
+    def _comparison(
+        self,
+        plan: ResearchPlan,
+        step: ResearchPlanStep,
+        context: ResearchPlanExecutionContext,
+        observed: _Observations,
+        run: ResearchRun,
+    ) -> ResearchPlanStep:
+        self._validate_recorded_evidence(observed, run)
+        if (
+            plan.mission_scope is None
+            or plan.mission_scope.max_sources != 2
+            or len(observed.evidence) != 2
+            or len(observed.assessments) != 2
+            or len({e.source_document_id for e in observed.evidence}) != 2
+            or any(a not in run.assessments for a in observed.assessments)
+            or context.cancelled
+        ):
+            raise ResearchError(
+                "Comparison requires two complete mission evidence chains."
+            )
+        left, right = observed.evidence
+        query_terms = set(normalized_terms(plan.question))
+        left_terms = query_terms.intersection(normalized_terms(left.excerpt))
+        right_terms = query_terms.intersection(normalized_terms(right.excerpt))
+
+        def terms(values: set[str]) -> str:
+            return ", ".join(sorted(values))[:200] or "none"
+
+        repeated = observed.body_hashes[0] == observed.body_hashes[1]
+        body_relationship = (
+            "identical; possible duplicate content" if repeated else "different bytes"
+        )
+        text = (
+            "Automatic lexical evidence comparison (not a semantic verdict).\n"
+            f"Evidence A: {left.evidence_id}; B: {right.evidence_id}.\n"
+            f"Question terms in both excerpts: {terms(left_terms & right_terms)}.\n"
+            f"Terms only in A's excerpt: {terms(left_terms - right_terms)}.\n"
+            f"Terms only in B's excerpt: {terms(right_terms - left_terms)}.\n"
+            f"Exact fetched bodies: {body_relationship}.\n"
+            "Different URLs do not establish independent sources or corroboration. "
+            "A term missing from an excerpt is not absent from the full source. "
+            "Agreement and contradiction remain unassessed; no winner or trust "
+            "promotion. Both cited chunks passed current integrity checks. "
+            f"Cumulative inspected text: {observed.inspected_bytes} UTF-8 bytes. "
+            f"Mission {observed.digest}."
+        )
+        return replace(
+            step,
+            comparison_authorization=ResearchComparisonAuthorization(
+                tuple(e.source_document_id for e in observed.evidence),
+                tuple(e.evidence_id for e in observed.evidence),
+                tuple(a.assessment_id for a in observed.assessments),
+                text,
+            ),
+        )
 
     @staticmethod
     def _public_reference(url: str) -> bool:

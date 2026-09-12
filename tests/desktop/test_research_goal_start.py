@@ -15,6 +15,26 @@ def value(text):
 
 
 class ResearchGoalStartUiTests(unittest.TestCase):
+    def test_comparison_is_explicit_once_and_never_raises_budget(self):
+        window = self.window()
+        with patch("desktop.TkinterDesktopWindow.messagebox.askyesno") as confirm:
+            TkinterDesktopWindow._start_research_comparison(window)
+        confirm.assert_not_called()
+        window._start_request.assert_not_called()
+        window._authorization_advances = value("11")
+        window._authorization_network = value("5")
+        with patch(
+            "desktop.TkinterDesktopWindow.messagebox.askyesno", return_value=True
+        ) as confirm:
+            TkinterDesktopWindow._start_research_comparison(window)
+        confirm.assert_called_once()
+        self.assertIn("two distinct", confirm.call_args.args[1])
+        self.assertIn("cumulative 16 KiB", confirm.call_args.args[1])
+        window._start_request.call_args.args[0]()
+        self.assertTrue(
+            window._controller.start_research_goal.call_args.kwargs["compare_sources"]
+        )
+
     def window(self):
         return SimpleNamespace(
             _target_plan_draft=None,

@@ -6,9 +6,9 @@ implementation exists, and the manager keeps enforcing that the document is an
 accepted source on the run, that referenced evidence belongs to it, and that a
 superseded assessment is valid.
 
-The assessment text and information-trust label are authored, never derived.
-Nothing about a successful fetch, a successful acceptance, or a completed
-operation may set them, and no language model participates in this milestone.
+Manual assessment text and labels remain authored. An explicitly scoped mission
+may derive a grounding-only assessment with trust left UNASSESSED; successful
+fetching or acceptance never promotes trust. No model runs in this operation.
 
 Information trust describes confidence in what a source says. It never grants
 the source's text instruction authority, and it is neither evidence nor claim
@@ -76,6 +76,7 @@ class SourceAssessmentStepOperation:
         )
         return ResearchPlanStepOperationResult(
             performed=True,
+            assessment_id=recorded.assessment_id,
             detail=(
                 f"Recorded assessment {recorded.assessment_id} for document "
                 f"{recorded.source_document_id} in run {run_id}{superseded}: "

@@ -2008,6 +2008,11 @@ class TkinterDesktopWindow:
             text="Research through evidence automatically",
             command=self._start_research_goal,
         ).grid(row=3, column=0, columnspan=3, sticky="w", pady=4)
+        ttk.Button(
+            plan_actions,
+            text="Research and compare two sources automatically",
+            command=self._start_research_comparison,
+        ).grid(row=4, column=0, columnspan=3, sticky="w", pady=4)
         ttk.Label(research_plan_frame, text="Complete preview or rejection").grid(
             row=7,
             column=0,
@@ -3221,7 +3226,11 @@ class TkinterDesktopWindow:
             "research plan preview",
         )
 
-    def _start_research_goal(self) -> None:
+    def _start_research_comparison(self) -> None:
+        """Use the same single-confirmation worker for the comparison scope."""
+        TkinterDesktopWindow._start_research_goal(self, compare_sources=True)
+
+    def _start_research_goal(self, *, compare_sources: bool = False) -> None:
         """Approve reference research through evidence once, then use the worker."""
         if (
             getattr(self, "_target_plan_draft", None) is not None
@@ -3246,20 +3255,41 @@ class TkinterDesktopWindow:
         except ResearchError as error:
             self._status.set(str(error))
             return
-        if not messagebox.askyesno(
-            "Start bounded research through evidence?",
-            f"Question: {question}\nProvider: {provider}\n"
-            f"Limits: {budget.max_step_advances} steps, "
-            f"{budget.max_network_operations} network attempts, "
-            f"{budget.max_seconds:g} seconds, 0 model calls.\n\n"
+        if compare_sources and (
+            budget.max_step_advances < 11 or budget.max_network_operations < 5
+        ):
+            self._status.set(
+                "Comparison needs at least 11 steps and 5 network reservations. "
+                "Set initial mission limits first; they are never raised silently."
+            )
+            return
+        scope_description = (
             "This authorizes local search, one query to the selected provider, "
+            "automatic selection of two distinct public HTTPS references, fetching, "
+            "inspection, acceptance, one grounded evidence record per source, "
+            "grounding-only assessments (trust remains unassessed), and one "
+            "lexical comparison citing both records. All eleven steps share the "
+            "same budget and a cumulative 16 KiB inspected-text limit. Different "
+            "URLs do not prove independence. Acceptance reuses fetched text but "
+            "reserves one network attempt per source. No target testing, model "
+            "calls, semantic contradiction analysis or replanning is authorized. "
+            if compare_sources
+            else "This authorizes local search, one query to the selected provider, "
             "automatic selection of one relevant public HTTPS reference, fetching, "
             "inspection, source acceptance and one source-grounded evidence record. "
             "The inspected text is limited to 16 KiB. Acceptance reuses fetched text "
             "but conservatively reserves one network attempt. All five steps share "
             "the same budget. No target testing, model calls or replanning "
             "is authorized. "
-            "The result will be an incomplete research report, not a final answer.",
+        )
+        if not messagebox.askyesno(
+            "Start bounded research through evidence?",
+            f"Question: {question}\nProvider: {provider}\n"
+            f"Limits: {budget.max_step_advances} steps, "
+            f"{budget.max_network_operations} network attempts, "
+            f"{budget.max_seconds:g} seconds, 0 model calls.\n\n"
+            + scope_description
+            + "The result will be an incomplete research report, not a final answer.",
         ):
             return
         signal = CancellationSignal()
@@ -3270,6 +3300,7 @@ class TkinterDesktopWindow:
                 budget,
                 cancellation_token=signal,
                 record_evidence=True,
+                compare_sources=compare_sources,
             ),
             self._append_response,
             "autonomous reference evidence",
