@@ -985,6 +985,8 @@ class ResponseComposer:
                     )
                 if step.semantic_evidence_binding is not None:
                     lines.extend(step.semantic_evidence_binding.lines())
+                if step.semantic_comparison_binding is not None:
+                    lines.extend(step.semantic_comparison_binding.lines())
             if plan.constraints:
                 # Listed apart from the steps, and numbered separately, so a
                 # constraint can never be read back as "step 11".

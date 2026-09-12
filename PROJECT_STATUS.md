@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.335 (Genesis)`
+`v0.3.336 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.

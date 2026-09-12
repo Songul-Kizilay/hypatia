@@ -27,6 +27,7 @@ from research.ResearchPlan import ResearchPlan
 from research.ResearchPlanAuthorization import (
     ResearchPlanAuthorization,
     capabilities_of,
+    comparison_authority_refusal,
     restrictions_of,
 )
 from research.ResearchPlanAuthorizationVerdict import (
@@ -63,6 +64,10 @@ def verify_plan_authorization(
     # than reconciled, in either direction.
     if authorization.approved_restrictions != restrictions_of(plan):
         return ResearchPlanAuthorizationVerdict.RESTRICTION_MISMATCH
+    if refusal := comparison_authority_refusal(
+        plan, research_run_id.strip(), authorization.disclosure, authorization.budget
+    ):
+        return refusal
     if authorization.is_consumed:
         return ResearchPlanAuthorizationVerdict.ALREADY_CONSUMED
     if authorization.has_expired_at(moment):

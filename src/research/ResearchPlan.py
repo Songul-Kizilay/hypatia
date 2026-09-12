@@ -62,6 +62,12 @@ class ResearchPlan:
             raise ResearchError("Research plan has too many steps.")
         if not all(isinstance(step, ResearchPlanStep) for step in self.steps):
             raise ResearchError("Research plan contains an invalid step.")
+        if any(
+            step.semantic_comparison_binding is not None
+            and step.semantic_comparison_binding.request.question != question
+            for step in self.steps
+        ):
+            raise ResearchError("Comparison input must bind the exact plan question.")
         step_ids = tuple(step.step_id for step in self.steps)
         if len(step_ids) != len(set(step_ids)):
             raise ResearchError("Research plan contains duplicate step IDs.")

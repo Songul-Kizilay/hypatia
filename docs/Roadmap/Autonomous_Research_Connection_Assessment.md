@@ -1,6 +1,46 @@
 # Autonomous research connection assessment
 
-## Current backend prerequisite: v0.3.335
+## Current approval prerequisite: v0.3.336
+
+Exact-pair semantic comparison is now representable for initial approval through
+the existing authored plan draft/preview/confirmation path. The two excerpts must
+already exist as canonical evidence in the run, with accepted source identities.
+`SemanticComparisonStepBinding` embeds the existing immutable comparison request:
+ordered full evidence snapshots, question/run identity and input fingerprint.
+Endpoint/model, explicit disclosure and declared capability cost are digest-bound.
+The distinct `SEMANTIC_EVIDENCE_COMPARISON` capability is neither extraction nor
+local lexical `SOURCE_COMPARISON`.
+
+The existing authorization budget must cover the complete plan: one advance,
+one network operation and one model operation per declared comparison. There is
+no separate comparison allowance. The canonical verifier rechecks disclosure,
+run binding and declared cost policy; confirmation rejects changed comparison
+budget/disclosure pending a fresh preview. Source snapshots are rechecked at the
+application approval boundary. Preview names the exact content and destination.
+Approval persistence stays at schema 3 with no excerpt bodies or new permissions
+added to legacy records. Plans without this binding retain their old digests.
+
+**Automatic comparison remains unwired.** No operation registry entry, adapter
+connection, model call, new retry or execution loop was added. Automatic mission
+entry still rejects unsupported model budgets and the desktop stays lexical.
+An authored zero-step start cannot advance this unregistered operation or spend
+a model call. Dynamic mission scope does not acquire comparison permission.
+Approval of future or dynamically selected excerpts remains unsupported; an
+already selected exact pair is required before the initial approval preview.
+
+Next boundary: implement a separately reviewed execution connection for this
+exact-pair contract using the existing executor and cumulative allowance, with
+current authority and source checks, cancellation and output validation. This
+release does not establish live model accuracy or complete autonomous research.
+
+Local release gates: 5,988 tests run, OK with 3 platform skips (93.686 seconds);
+83 focused approval/restriction/autonomy tests and 12 target-binding tests passed.
+Black checked 854 files, Ruff passed, MyPy passed 518 source files, and
+`git diff --check` passed. Fourteen new contract tests use deterministic stored
+evidence and fake discovery/fetch. The suite emitted resource-cleanup warnings.
+No live model calls, push or remote CI run was performed for this release.
+
+## Previous backend prerequisite: v0.3.335
 
 Starting checkpoint: `93a6ab7` / v0.3.334, clean and equal to origin; Windows
 and Linux CI both passed. The user-facing automatic path below is unchanged.

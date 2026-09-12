@@ -36,6 +36,7 @@ for entry in (SRC_DIR, ROOT_DIR):
 
 from core.Exceptions import ResearchError
 from research.ResearchCapabilityCost import cost_for
+from research.ResearchDisclosure import ResearchDisclosure
 from research.ResearchPlanConstraint import ResearchPlanConstraint
 from research.ResearchPlanDigest import (
     CANONICAL_SCHEMA,
@@ -46,6 +47,8 @@ from research.ResearchPlanRestriction import ResearchPlanRestriction
 from research.ResearchPlanRestrictionConflict import plan_restriction_conflicts
 from research.ResearchPlanStep import ResearchPlanStep
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
+from research.SemanticComparisonRequest import SemanticComparisonRequest
+from research.SemanticComparisonStepBinding import SemanticComparisonStepBinding
 from research.SemanticEvidenceStepBinding import SemanticEvidenceStepBinding
 from tests.research.test_plan_constraints import (
     LEGACY_BYTES,
@@ -55,6 +58,7 @@ from tests.research.test_plan_constraints import (
     SSRF_QUESTION,
     plan,
 )
+from tests.research.test_semantic_comparison_proposal import evidence
 
 NO_EXTERNAL = ResearchPlanRestriction.NO_EXTERNAL_SOURCE_ACCESS
 
@@ -89,6 +93,24 @@ def restricted_plan(
                 step_id="step-1",
                 instruction=instruction,
                 capability=capability,
+                semantic_comparison_binding=(
+                    SemanticComparisonStepBinding(
+                        SemanticComparisonRequest(
+                            "run-1",
+                            SSRF_QUESTION,
+                            (
+                                evidence(0, "First excerpt"),
+                                evidence(1, "Second excerpt"),
+                            ),
+                        ),
+                        "http://127.0.0.1/model",
+                        "test",
+                        ResearchDisclosure.LOCAL_ONLY,
+                    )
+                    if capability
+                    is ResearchPlanStepCapability.SEMANTIC_EVIDENCE_COMPARISON
+                    else None
+                ),
                 semantic_evidence_binding=(
                     SemanticEvidenceStepBinding(
                         "a" * 64, "http://127.0.0.1/model", "test"
@@ -117,6 +139,7 @@ class TheBlockedSetComesFromDeclaredCostTests(unittest.TestCase):
                 ResearchPlanStepCapability.SOURCE_FETCH,
                 ResearchPlanStepCapability.SOURCE_ACCEPT,
                 ResearchPlanStepCapability.SEMANTIC_EVIDENCE_PROPOSAL,
+                ResearchPlanStepCapability.SEMANTIC_EVIDENCE_COMPARISON,
             },
         )
 

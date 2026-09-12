@@ -31,6 +31,7 @@ from research.ResearchContradictionAuthorization import (
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchEvidenceAuthorization import ResearchEvidenceAuthorization
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
+from research.SemanticComparisonStepBinding import SemanticComparisonStepBinding
 from research.SemanticEvidenceStepBinding import SemanticEvidenceStepBinding
 
 MAX_RESEARCH_PLAN_STEP_ID_CHARACTERS = 200
@@ -57,8 +58,36 @@ class ResearchPlanStep:
     comparison_authorization: ResearchComparisonAuthorization | None = None
     completion_authorization: ResearchCompletionAuthorization | None = None
     semantic_evidence_binding: SemanticEvidenceStepBinding | None = None
+    semantic_comparison_binding: SemanticComparisonStepBinding | None = None
 
     def __post_init__(self) -> None:
+        if self.capability is ResearchPlanStepCapability.SEMANTIC_EVIDENCE_COMPARISON:
+            if not isinstance(
+                self.semantic_comparison_binding, SemanticComparisonStepBinding
+            ):
+                raise ResearchError(
+                    "Semantic comparison requires an exact pair binding."
+                )
+            if (
+                self.selected_source_document_ids
+                or self.authorized_source_url
+                or any(
+                    v is not None
+                    for v in (
+                        self.evidence_authorization,
+                        self.assessment_authorization,
+                        self.claim_authorization,
+                        self.contradiction_authorization,
+                        self.comparison_authorization,
+                        self.completion_authorization,
+                        self.discovery_provider,
+                        self.semantic_evidence_binding,
+                    )
+                )
+            ):
+                raise ResearchError("Semantic comparison cannot carry other authority.")
+        elif self.semantic_comparison_binding is not None:
+            raise ResearchError("Only semantic comparison may carry a pair binding.")
         if self.capability is ResearchPlanStepCapability.SEMANTIC_EVIDENCE_PROPOSAL:
             if not isinstance(
                 self.semantic_evidence_binding, SemanticEvidenceStepBinding

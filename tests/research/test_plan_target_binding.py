@@ -29,6 +29,7 @@ from research.ResearchPlanStepStatus import ResearchPlanStepStatus
 from research.ResearchPlanTargetBinding import ResearchPlanTargetBinding
 from research.ResearchTargetScope import ResearchTargetScope, TargetHostRule
 from research.SemanticEvidenceStepBinding import SemanticEvidenceStepBinding
+from tests.research.test_plan_restrictions import restricted_plan
 
 MOMENT = datetime(2026, 9, 3, tzinfo=UTC)
 SCOPE_REVISION_DIGEST = "a" * 64
@@ -112,6 +113,19 @@ class PlanTargetBindingTests(unittest.TestCase):
                     capability=capability,
                     semantic_evidence_binding=SemanticEvidenceStepBinding(
                         "a" * 64, "http://127.0.0.1/model", "test"
+                    ),
+                )
+            elif capability is ResearchPlanStepCapability.SEMANTIC_EVIDENCE_COMPARISON:
+                step = restricted_plan(capability).steps[0]
+                binding = step.semantic_comparison_binding
+                assert binding is not None
+                step = replace(
+                    step,
+                    semantic_comparison_binding=replace(
+                        binding,
+                        request=replace(
+                            binding.request, question=reference_plan().question
+                        ),
                     ),
                 )
             else:

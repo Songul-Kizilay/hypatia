@@ -40,8 +40,11 @@ from research.ResearchPlan import ResearchPlan
 from research.ResearchPlanAuthorizationConsumption import (
     ResearchPlanAuthorizationConsumption,
 )
+from research.ResearchPlanAuthorizationVerdict import ResearchPlanAuthorizationVerdict
+from research.ResearchPlanBudgetRequirement import ResearchPlanBudgetFit
 from research.ResearchPlanDigest import is_plan_digest, plan_digest
 from research.ResearchPlanRestriction import ResearchPlanRestriction
+from research.ResearchPlanRestrictionConflict import plan_restriction_conflicts
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 
 MAX_AUTHORIZATION_ID_CHARACTERS = 200
@@ -148,6 +151,13 @@ class ResearchPlanAuthorization:
             raise ResearchError(
                 "Research plan authorization requires a validated plan."
             )
+        refusal = comparison_authority_refusal(
+            plan, research_run_id, disclosure, budget
+        )
+        if refusal is not None:
+            raise ResearchError(
+                f"Semantic comparison approval refused: {refusal.value}."
+            )
         return cls(
             authorization_id=authorization_id,
             plan_digest=plan_digest(plan),
@@ -223,6 +233,34 @@ class ResearchPlanAuthorization:
         if len(normalized) > maximum:
             raise ResearchError(f"{label} is too long.")
         return normalized
+
+
+def comparison_authority_refusal(
+    plan: ResearchPlan,
+    run_id: str,
+    disclosure: ResearchDisclosure,
+    budget: ResearchAutonomyBudget,
+) -> ResearchPlanAuthorizationVerdict | None:
+    """Check the new contract only; legacy approval semantics stay unchanged."""
+    bindings = [
+        s.semantic_comparison_binding
+        for s in plan.steps
+        if s.semantic_comparison_binding is not None
+    ]
+    if bindings and plan_restriction_conflicts(plan):
+        return ResearchPlanAuthorizationVerdict.RESTRICTION_MISMATCH
+    for binding in bindings:
+        if binding.request.run_id != run_id:
+            return ResearchPlanAuthorizationVerdict.RUN_MISMATCH
+        if binding.disclosure is not disclosure:
+            return ResearchPlanAuthorizationVerdict.DISCLOSURE_UNSATISFIED
+        try:
+            binding.__post_init__()  # Recheck declared cost against current policy.
+        except ResearchError:
+            return ResearchPlanAuthorizationVerdict.CAPABILITY_MISMATCH
+    if bindings and not ResearchPlanBudgetFit.of(plan, budget).sufficient:
+        return ResearchPlanAuthorizationVerdict.BUDGET_EXCEEDED
+    return None
 
 
 def capabilities_of(plan: ResearchPlan) -> frozenset[ResearchPlanStepCapability]:

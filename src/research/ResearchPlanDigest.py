@@ -169,6 +169,11 @@ def _encode_dataclass(value: object, *, skip: frozenset[str]) -> bytes:
     # Present bindings are fully encoded by the ordinary field walker.
     if isinstance(value, ResearchPlanStep) and value.semantic_evidence_binding is None:
         skip = skip | {"semantic_evidence_binding"}
+    if (
+        isinstance(value, ResearchPlanStep)
+        and value.semantic_comparison_binding is None
+    ):
+        skip = skip | {"semantic_comparison_binding"}
     payload = _encode(type(value).__name__)
     for field in fields(value):  # type: ignore[arg-type]
         if field.name in skip:

@@ -175,6 +175,14 @@ class ResearchPlanAuthorizationApplicationService:
             )
         try:
             chosen = budget_from(request.metadata)
+            if any(s.semantic_comparison_binding for s in plan.steps):
+                for step in plan.steps:
+                    binding = step.semantic_comparison_binding
+                    if (
+                        binding is not None
+                        and binding.disclosure is not self._disclosure(request)
+                    ):
+                        raise ResearchError("Exact comparison disclosure is required.")
         except ResearchError as error:
             return self._response_composer.research_plan_authorization_preview(
                 request,
@@ -225,9 +233,13 @@ class ResearchPlanAuthorizationApplicationService:
                 ),
                 target_binding=plan.target_binding,
                 semantic_bindings=tuple(
-                    step.semantic_evidence_binding
+                    binding
                     for step in plan.steps
-                    if step.semantic_evidence_binding is not None
+                    for binding in (
+                        step.semantic_evidence_binding,
+                        step.semantic_comparison_binding,
+                    )
+                    if binding is not None
                 ),
             ),
         )
@@ -292,6 +304,8 @@ class ResearchPlanAuthorizationApplicationService:
         if scope_refusal := self._target_scope_refusal(plan):
             self._events.refused("target_scope_revision")
             raise ResearchError(scope_refusal)
+        if refusal := self._comparison_source_refusal(plan, research_run_id):
+            raise ResearchError(refusal)
         fit = self.budget_fit_for(plan, budget)
         if not fit.sufficient:
             self._events.refused("insufficient_budget")
@@ -387,6 +401,15 @@ class ResearchPlanAuthorizationApplicationService:
             return self._response_composer.research_plan_authorization_rejected(
                 request,
                 str(error),
+            )
+        if any(s.semantic_comparison_binding for s in plan.steps) and (
+            chosen != authorization.budget
+            or self._disclosure(request) is not authorization.disclosure
+        ):
+            self._pending.pop(authorization_id, None)
+            return self._response_composer.research_plan_authorization_rejected(
+                request,
+                "Comparison budget or disclosure changed; preview fresh approval.",
             )
         fit = self.budget_fit_for(plan, chosen)
         if not fit.sufficient:
@@ -531,7 +554,36 @@ class ResearchPlanAuthorizationApplicationService:
                 request.metadata.get(RESEARCH_PLAN_TARGET_BINDING_KEY),
             ),
         )
-        return preview.plan if preview.allowed else None
+        plan = preview.plan if preview.allowed else None
+        if plan is not None and self._comparison_source_refusal(
+            plan, self._required_run_id(request)
+        ):
+            return None
+        return plan
+
+    def _comparison_source_refusal(self, plan: ResearchPlan, run_id: str) -> str | None:
+        bindings = [
+            s.semantic_comparison_binding
+            for s in plan.steps
+            if s.semantic_comparison_binding is not None
+        ]
+        if not bindings:
+            return None
+        run = self._run_manager.get(run_id)
+        if run.status.terminal or run.question != plan.question:
+            return "Comparison requires the current open research run and question."
+        if conflict := self._restriction_refusal(plan):
+            return conflict
+        for binding in bindings:
+            if binding.request.run_id != run_id or any(
+                e not in run.evidence
+                or not any(
+                    source.document_id == e.source_document_id for source in run.sources
+                )
+                for e in binding.request.evidence
+            ):
+                return "Exact selected comparison evidence is missing or changed."
+        return None
 
     def _required_run_id(self, request: BrainRequest) -> str:
         """Require a run that actually exists, not merely a plausible ID."""

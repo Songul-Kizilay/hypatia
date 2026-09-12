@@ -2,6 +2,28 @@
 
 All notable project changes are recorded here.
 
+## [0.3.336] - 2026-09-12
+
+### Added
+
+- Canonical authored-plan approval for semantic comparison of two already
+  selected, recorded evidence excerpts. A distinct capability binds their full
+  ordered snapshots, source identities, question, endpoint/model, disclosure and
+  declared cost into the existing plan digest. Preview displays the exact inputs.
+- Approval checks current run membership, accepted sources, disclosure and the
+  existing cumulative budget. Declared cost is one advance, one network operation
+  and one model operation. Changed comparison budget/disclosure requires a fresh
+  preview; changed plan bindings invalidate the existing digest-bound approval.
+- Legacy approvals gain no capability; absent bindings preserve legacy digests
+  and the existing approval persistence schema remains unchanged.
+
+### Limits
+
+- Contract only: no comparison operation is registered or wired to automatic
+  missions. Desktop comparison remains lexical. Future/dynamically selected
+  excerpts cannot be approved by this contract. No live model calls or accuracy
+  claim; no new permission store, comparison budget, retries or autonomous loop.
+
 ## [0.3.335] - 2026-09-12
 
 ### Added

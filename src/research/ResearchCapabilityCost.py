@@ -33,6 +33,9 @@ CAPABILITY_COSTS: dict[ResearchPlanStepCapability, ResearchOperationCost] = {
     ResearchPlanStepCapability.SEMANTIC_EVIDENCE_PROPOSAL: ResearchOperationCost(
         network_operations=1, llm_operations=1
     ),
+    ResearchPlanStepCapability.SEMANTIC_EVIDENCE_COMPARISON: ResearchOperationCost(
+        network_operations=1, llm_operations=1
+    ),
 }
 
 
