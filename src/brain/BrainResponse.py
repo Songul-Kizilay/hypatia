@@ -102,6 +102,7 @@ from research.ResearchSourceContentRestorationStatus import (
     ResearchSourceContentRestorationStatus,
 )
 from research.ResearchSourcePreview import ResearchSourcePreview
+from research.SemanticComparisonStepResult import SemanticComparisonStepResult
 from research.SemanticEvidenceStepResult import SemanticEvidenceStepResult
 from research.SourceLoadStage import SourceLoadStage
 from research.SourceReputation import SourceReputation
@@ -175,6 +176,9 @@ class BrainResponse:
     )
     semantic_evidence_proposals: tuple[SemanticEvidenceStepResult, ...] = field(
         default=(), repr=False
+    )
+    semantic_comparison_proposals: tuple[SemanticComparisonStepResult, ...] = field(
+        default_factory=tuple, repr=False
     )
     research_plan_budget_fit: ResearchPlanBudgetFit | None = None
     research_autonomy: ResearchAutonomyResult | None = None

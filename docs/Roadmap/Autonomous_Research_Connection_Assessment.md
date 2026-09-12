@@ -1,6 +1,51 @@
 # Autonomous research connection assessment
 
-## Current approval prerequisite: v0.3.336
+## Current canonical executor support: v0.3.337
+
+The v0.3.336 exact-pair approval contract is now executable through the existing
+ResearchPlanExecutionApplicationService when trusted composition supplies
+`SemanticComparisonStepOperation` to CognitiveEngine. Its transport is constructed
+from one fixed endpoint/model; a different approved destination is refused, not
+substituted. The default runtime does not register an operation implicitly.
+
+The same canonical start consumes the exact approval and initializes its existing
+allowance. Advance checks affordability, charges the declared 1 advance / 1 network
+operation / 1 model operation, and checkpoints the running attempt before the
+operation can call the model. Prior spending is retained. Checkpoint failure uses
+the existing rollback semantics; operation refusal, invalid model output or
+cancellation after this boundary do not refund the attempt or retry it.
+
+Before disclosure the operation verifies the ordered approved evidence against
+current run records and accepted source identities, exact run/question identity,
+destination and disclosure. Extraction/lexical capabilities cannot dispatch it.
+The existing backend still rejects malformed, duplicate and invented-quotation
+output and accepts tentative possible agreement/conflict or not-comparable output.
+Cancellation is cooperative: an in-flight transport may finish, but its output
+is discarded and spending retained. No transport abort is claimed.
+
+**Observable result:** `BrainResponse.semantic_comparison_proposals` returns bounded
+`SemanticComparisonStepResult` values from ordinary advance and bounded continuation.
+The result binds execution/step identity, the exact request and validated candidates.
+It is transient like semantic extraction proposals. Existing execution persistence
+records the attempt, outcome summary and allowance, not the candidate body; restart
+does not recover that body or silently rerun the model. No truth, evidence, claim,
+contradiction or comparison-note write is introduced.
+
+**Remaining boundaries:** automatic mission entry remains model-budget-rejecting,
+future/dynamic pairs remain unsupported, desktop comparison stays lexical, and
+default runtime destination configuration is not added. No live model calls or
+live accuracy evaluation were performed. Autonomous contradiction investigation,
+follow-up research, adaptive replanning, completion and cited reporting remain
+outside this milestone. There is no new permission store, allowance or retry loop.
+
+Local v0.3.337 gates: 6,011 tests run, OK with 3 platform skips (121.547 seconds).
+The focused set passed 77 tests, including 23 new real-executor tests using fake
+transport. Black checked 857 files; Ruff passed; MyPy passed 520 source files;
+`git diff --check` passed. Resource-cleanup warnings were emitted by the full
+suite and are not reported as test failures. No live model call, push or remote
+CI trigger was performed.
+
+## Previous approval prerequisite: v0.3.336
 
 Exact-pair semantic comparison is now representable for initial approval through
 the existing authored plan draft/preview/confirmation path. The two excerpts must

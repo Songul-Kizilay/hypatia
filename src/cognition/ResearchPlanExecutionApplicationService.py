@@ -116,6 +116,7 @@ from research.ResearchPlanTargetScopeRevisionGuard import (
 )
 from research.ResearchProgramScopeRevisionStore import ResearchProgramScopeRevisionStore
 from research.ResearchSourcePreview import ResearchSourcePreview
+from research.SemanticComparisonStepResult import SemanticComparisonStepResult
 from research.SemanticEvidenceStepResult import SemanticEvidenceStepResult
 from research.StartsResearchPlanExecution import ResearchPlanExecutionStartRefusal
 from response.ResponseComposer import ResponseComposer
@@ -782,6 +783,7 @@ class ResearchPlanExecutionApplicationService:
         attempted: list[str] = []
         previews: list[ResearchSourcePreview] = []
         semantic_results: list[SemanticEvidenceStepResult] = []
+        comparison_results: list[SemanticComparisonStepResult] = []
         reason = ResearchContinuationStopReason.BOUND_REACHED
         while len(attempted) < bound:
             state = self._executions[plan_id]
@@ -796,6 +798,7 @@ class ResearchPlanExecutionApplicationService:
             response = self.process_advance(request)
             previews.extend(response.research_source_previews)
             semantic_results.extend(response.semantic_evidence_proposals)
+            comparison_results.extend(response.semantic_comparison_proposals)
             after = self._executions[plan_id]
             if self._step_status(after, step_id) is not ResearchPlanStepStatus.PENDING:
                 attempted.append(step_id)
@@ -826,6 +829,7 @@ class ResearchPlanExecutionApplicationService:
             # hard ten-step ceiling. Nothing is retained on the service itself.
             research_source_previews=tuple(previews),
             semantic_evidence_proposals=tuple(semantic_results),
+            semantic_comparison_proposals=tuple(comparison_results),
         )
 
     @staticmethod
@@ -1113,6 +1117,21 @@ class ResearchPlanExecutionApplicationService:
         self._events.step_completed(plan_id, step_id, operation.operation_name)
         self._persist(plan_id)
         preview = result.source_preview
+        comparison = result.semantic_comparison
+        comparison_matches = (
+            comparison is not None
+            and step.capability
+            is ResearchPlanStepCapability.SEMANTIC_EVIDENCE_COMPARISON
+            and step.semantic_comparison_binding is not None
+            and comparison.request == step.semantic_comparison_binding.request
+            and comparison.execution_id == plan_id
+            and comparison.step_id == step_id
+            and comparison.request.run_id == stored.research_run_id
+            and comparison.request.question == plan.question
+            and not (
+                request.cancellation_token and request.cancellation_token.is_cancelled()
+            )
+        )
         semantic = result.semantic_evidence
         semantic_matches = (
             semantic is not None
@@ -1147,6 +1166,9 @@ class ResearchPlanExecutionApplicationService:
                 self._next_capability(plan_id, completed),
             ),
             research_source_previews=(preview,) if preview_matches and preview else (),
+            semantic_comparison_proposals=(
+                (comparison,) if comparison_matches and comparison else ()
+            ),
             semantic_evidence_proposals=(
                 (semantic,) if semantic_matches and semantic else ()
             ),

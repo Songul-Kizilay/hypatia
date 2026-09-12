@@ -2,6 +2,27 @@
 
 All notable project changes are recorded here.
 
+## [0.3.337] - 2026-09-12
+
+### Added
+
+- Exact-pair semantic comparison operation for the canonical executor. Trusted
+  composition can supply a destination-pinned operation to CognitiveEngine;
+  default composition remains unregistered. Existing exact approval, cumulative
+  allowance and durable pre-attempt checkpoint semantics are reused unchanged.
+- Before model disclosure, the operation checks exact endpoint/model, disclosure,
+  run/question identity, current ordered evidence snapshots and accepted sources.
+  Refusal, failed validation and cancellation never fall back or retry.
+- Typed transient comparison results reach BrainResponse through ordinary
+  advance and bounded continuation. Attempt/outcome/spending use existing durable
+  execution records; candidate bodies are not persisted as facts or evidence.
+
+### Limits
+
+- Automatic mission entry still rejects model budgets; desktop remains lexical.
+  No future excerpt selection, default runtime model configuration, live model
+  call, comparison acceptance or model accuracy claim is introduced.
+
 ## [0.3.336] - 2026-09-12
 
 ### Added

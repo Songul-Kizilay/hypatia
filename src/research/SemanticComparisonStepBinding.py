@@ -1,4 +1,4 @@
-"""Exact preselected pair for canonical approval; no executable operation."""
+"""Exact preselected pair for canonical approval, never dynamic selection."""
 
 from dataclasses import dataclass, field
 
@@ -42,7 +42,8 @@ class SemanticComparisonStepBinding:
 
     def lines(self) -> tuple[str, ...]:
         return (
-            "Semantic evidence comparison: contract only; execution is not wired.",
+            "Semantic evidence comparison: automatic execution is not wired; "
+            "canonical executor requires the exact configured operation.",
             f"Exact model endpoint: {self.endpoint}",
             f"Exact model: {self.model}",
             f"Disclosure: {self.disclosure.value}; "

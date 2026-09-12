@@ -216,6 +216,7 @@ from research.ResearchSourceContentRestorationStatus import (
 from research.ResearchSourceContentStore import ResearchSourceContentStore
 from research.ResearchSourceDiscoveryProvider import ResearchSourceDiscoveryProvider
 from research.ResearchSourceFetcher import ResearchSourceFetcher
+from research.SemanticComparisonStepOperation import SemanticComparisonStepOperation
 from research.SourceAcceptStepOperation import SourceAcceptStepOperation
 from research.SourceAssessmentStepOperation import (
     SourceAssessmentStepOperation,
@@ -335,6 +336,7 @@ class CognitiveEngine:
             ResearchEvidenceIntegrityAuditor | None
         ) = None,
         research_plan_draft_service: ResearchPlanDraftService | None = None,
+        semantic_comparison_operation: SemanticComparisonStepOperation | None = None,
     ) -> None:
         if llm_history_max_turns is not None and (
             isinstance(llm_history_max_turns, bool) or llm_history_max_turns <= 0
@@ -418,6 +420,11 @@ class CognitiveEngine:
                 ResearchPlanStepCapability.ACCEPTED_SOURCE_LISTING,
                 AcceptedSourceListingStepOperation(research_run_manager),
             )
+            if semantic_comparison_operation is not None:
+                operation_registry.register(
+                    ResearchPlanStepCapability.SEMANTIC_EVIDENCE_COMPARISON,
+                    semantic_comparison_operation,
+                )
             operation_registry.register(
                 ResearchPlanStepCapability.EVIDENCE_RECORDING,
                 EvidenceRecordingStepOperation(

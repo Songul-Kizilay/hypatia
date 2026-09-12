@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 
 from core.Exceptions import ResearchError
 from research.ResearchSourcePreview import ResearchSourcePreview
+from research.SemanticComparisonStepResult import SemanticComparisonStepResult
 from research.SemanticEvidenceStepResult import SemanticEvidenceStepResult
 
 MAX_RESEARCH_STEP_OPERATION_DETAIL_CHARACTERS = 500
@@ -32,8 +33,24 @@ class ResearchPlanStepOperationResult:
     discovery_id: str = ""
     evidence_id: str = ""
     assessment_id: str = ""
+    semantic_comparison: SemanticComparisonStepResult | None = field(
+        default=None, repr=False
+    )
 
     def __post_init__(self) -> None:
+        if self.semantic_comparison is not None and (
+            not isinstance(self.semantic_comparison, SemanticComparisonStepResult)
+            or not self.performed
+            or not self.succeeded
+            or self.source_preview is not None
+            or self.semantic_evidence is not None
+            or self.discovery_id
+            or self.evidence_id
+            or self.assessment_id
+        ):
+            raise ResearchError(
+                "Only successful comparison can carry tentative output."
+            )
         for identity in (self.evidence_id, self.assessment_id):
             if not isinstance(identity, str) or len(identity) > 200:
                 raise ResearchError("Operation record identity is invalid.")

@@ -1,4 +1,4 @@
-"""One bounded structured comparison proposal; intentionally not runtime-wired.
+"""One bounded structured comparison proposal; no automatic mission wiring.
 
 Uses the existing structured model interface. No store, executor, approval,
 tool, endpoint selection, retry or automatic acceptance lives here. A caller
