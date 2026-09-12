@@ -21,6 +21,8 @@ no claim, elevates no epistemic state, and makes no source trustworthy.
 
 from __future__ import annotations
 
+from hashlib import sha256
+
 from core.Exceptions import ResearchError
 from knowledge.Chunk import Chunk
 from knowledge.KnowledgeEngine import KnowledgeEngine
@@ -75,6 +77,17 @@ class EvidenceRecordingStepOperation:
             authorization.document_id,
             authorization.chunk_index,
         )
+        if context.source_preview is not None:
+            preview = context.source_preview
+            if (
+                preview.run_id != run_id
+                or preview.execution_id != context.execution_id
+                or preview.source.to_document().document_id != chunk.document_id
+                or chunk.content not in preview.source.content
+                or sha256(chunk.content.encode("utf-8")).hexdigest()
+                != context.evidence_chunk_sha256
+            ):
+                raise ResearchError("Evidence candidate changed or is not grounded.")
         self._raise_if_cancelled(context)
 
         updated = self._research_run_manager.add_evidence(

@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.332 (Genesis)`
+`v0.3.333 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
@@ -108,9 +108,23 @@ Black, Ruff, MyPy (512 source files), diff checks and a real Tk layout smoke
 passed. No live model or external discovery was tested. Remote CI requires
 verification against the exact new commit.
 
+Windows and Linux CI for v0.3.332 passed at `d9ed83b`.
+Version v0.3.333 connects a single confirmed reference mission through one
+automatically selected/fetched/accepted source and one grounded evidence record.
+All five steps reuse the same consumed approval and cumulative execution
+allowance. Evidence is lexically selected and source-validated, not a verified
+claim. Comparison, contradictions, follow-up planning, completion evaluation and
+a cited final answer remain beyond the automatic boundary. See the updated
+autonomous connection assessment for exact bounds and validation status.
+Local v0.3.333 gates: 5,938 tests OK with 3 existing platform skips, 146 focused
+tests, Black/Ruff/MyPy (514 source files), diff checks and real Tk layout smoke.
+Deterministic external providers only; live research/model calls were not tested.
+The original approval, five-step cumulative budget and refusal-without-retry
+boundaries passed. Remote CI must be checked against the release commit.
+
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.332`** is the current source/package release line.
+- **Runtime release `v0.3.333`** is the current source/package release line.
   GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the

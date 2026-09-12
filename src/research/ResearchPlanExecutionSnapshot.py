@@ -90,8 +90,17 @@ class ResearchPlanExecutionSnapshot:
     #: Full canonical plan identity, including program, scope and every step.
     #: Legacy snapshots did not record this proof and must not imply one.
     target_plan_digest: str | None = None
+    mission_plan_digest: str | None = None
 
     def __post_init__(self) -> None:
+        if self.target_plan_digest is not None and self.mission_plan_digest is not None:
+            raise ResearchError(
+                "Target and reference mission digests cannot be combined."
+            )
+        if self.mission_plan_digest is not None and not is_plan_digest(
+            self.mission_plan_digest
+        ):
+            raise ResearchError("Execution snapshot mission digest is invalid.")
         if self.target_plan_digest is not None and not is_plan_digest(
             self.target_plan_digest
         ):
@@ -147,6 +156,7 @@ class ResearchPlanExecutionSnapshot:
         research_run_id: str | None = None,
         allowance: ResearchExecutionAllowance | None = None,
         target_plan_digest: str | None = None,
+        mission_plan_digest: str | None = None,
     ) -> ResearchPlanExecutionSnapshot:
         """Capture the current state, pairing each step with its capability."""
         capabilities = {step.step_id: step.capability for step in steps}
@@ -158,6 +168,7 @@ class ResearchPlanExecutionSnapshot:
             research_run_id=research_run_id,
             allowance=allowance,
             target_plan_digest=target_plan_digest,
+            mission_plan_digest=mission_plan_digest,
             recorded_at=recorded_at,
             steps=tuple(
                 ResearchPlanExecutionStepSnapshot(

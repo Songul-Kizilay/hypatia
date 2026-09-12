@@ -29,8 +29,13 @@ class ResearchPlanStepOperationResult:
     semantic_evidence: SemanticEvidenceStepResult | None = field(
         default=None, repr=False
     )
+    discovery_id: str = ""
 
     def __post_init__(self) -> None:
+        if not isinstance(self.discovery_id, str) or len(self.discovery_id) > 200:
+            raise ResearchError("Operation discovery identity is invalid.")
+        if self.discovery_id and (not self.performed or not self.succeeded):
+            raise ResearchError("Only successful discovery can carry its identity.")
         if self.semantic_evidence is not None and (
             not isinstance(self.semantic_evidence, SemanticEvidenceStepResult)
             or not self.performed

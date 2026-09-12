@@ -142,6 +142,7 @@ class SourceDiscoveryStepOperation:
             summary = f"{summary} No candidates matched this question."
         return ResearchPlanStepOperationResult(
             performed=True,
+            discovery_id=updated.discoveries[-1].discovery_id,
             detail=f"{summary} {_TRUST_BOUNDARY}",
         )
 

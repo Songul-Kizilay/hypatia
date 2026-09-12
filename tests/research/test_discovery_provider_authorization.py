@@ -32,6 +32,7 @@ from research.ResearchPlanStep import ResearchPlanStep
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 from research.ResearchPlanStepDraftInput import ResearchPlanStepDraftInput
 from research.ResearchSourceCandidate import ResearchSourceCandidate
+from research.ResearchSourceDiscoveryRecord import ResearchSourceDiscoveryRecord
 from research.SourceDiscoveryStepOperation import SourceDiscoveryStepOperation
 
 NOW = datetime(2026, 8, 26, 12, 0, tzinfo=UTC)
@@ -243,10 +244,20 @@ class _RecordingRunManager:
         run_id: str,
         question: str,
         provider: str,
-        candidates: object,
+        candidates: list[ResearchSourceCandidate],
     ) -> object:
         self.discoveries.append((provider, question))
-        return _Run()
+        return _Run(
+            (
+                ResearchSourceDiscoveryRecord(
+                    f"discovery-{len(self.discoveries)}",
+                    question,
+                    provider,
+                    tuple(candidates),
+                    NOW,
+                ),
+            )
+        )
 
     def record_failure(self, *args: object, **kwargs: object) -> None:
         return None
@@ -255,6 +266,9 @@ class _RecordingRunManager:
 class _Run:
     run_id = "run-1"
     question = "HTTP request smuggling in Next.js middleware"
+
+    def __init__(self, discoveries=()) -> None:
+        self.discoveries = discoveries
 
     class status:
         terminal = False

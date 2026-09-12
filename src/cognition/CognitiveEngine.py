@@ -191,6 +191,7 @@ from research.ResearchKaliOperationExecution import (
     ResearchKaliOperationProcessAdapter,
 )
 from research.ResearchKaliRuntimeEnvironment import ResearchKaliRuntimeProbe
+from research.ResearchMissionStepResolver import ResearchMissionStepResolver
 from research.ResearchPlan import ResearchPlan
 from research.ResearchPlanAuthorizationStore import (
     ResearchPlanAuthorizationStore,
@@ -496,6 +497,20 @@ class CognitiveEngine:
 
         self._research_plan_execution_service = ResearchPlanExecutionApplicationService(
             response_composer,
+            mission_resolver=(
+                ResearchMissionStepResolver(
+                    research_run_manager,
+                    knowledge_engine,
+                    {
+                        name: provider.provider_name
+                        for name, provider in (
+                            self._research_source_discovery_providers.items()
+                        )
+                    },
+                )
+                if research_run_manager is not None
+                else None
+            ),
             operation_registry=operation_registry,
             event_bus=event_bus,
             execution_store=research_execution_store,
@@ -524,6 +539,7 @@ class CognitiveEngine:
                 else None
             ),
             discovery_providers=frozenset(self._research_source_discovery_providers),
+            evidence_available=research_source_fetcher is not None,
         )
         self._background_research_scheduler = (
             BackgroundResearchSchedulerApplicationService(

@@ -12,12 +12,13 @@ this context describes what it runs against.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from core.CancellationSignal import CancellationToken
 from core.Exceptions import ResearchError
 from research.ResearchDisclosure import ResearchDisclosure
 from research.ResearchPlanTargetBinding import ResearchPlanTargetBinding
+from research.ResearchSourcePreview import ResearchSourcePreview
 
 MAX_RESEARCH_EXECUTION_RUN_ID_CHARACTERS = 200
 
@@ -34,8 +35,20 @@ class ResearchPlanExecutionContext:
     # Legacy/unapproved/restored contexts do not imply disclosure permission.
     disclosure: ResearchDisclosure = ResearchDisclosure.NONE
     research_question: str | None = None
+    source_preview: ResearchSourcePreview | None = field(default=None, repr=False)
+    evidence_chunk_sha256: str = ""
 
     def __post_init__(self) -> None:
+        if self.source_preview is not None and not isinstance(
+            self.source_preview, ResearchSourcePreview
+        ):
+            raise ResearchError("Execution source preview is invalid.")
+        if self.evidence_chunk_sha256 and (
+            self.source_preview is None
+            or len(self.evidence_chunk_sha256) != 64
+            or any(c not in "0123456789abcdef" for c in self.evidence_chunk_sha256)
+        ):
+            raise ResearchError("Execution evidence fingerprint is invalid.")
         if self.research_question is not None and (
             not isinstance(self.research_question, str)
             or not self.research_question.strip()

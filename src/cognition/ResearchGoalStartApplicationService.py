@@ -18,12 +18,15 @@ from cognition.ResearchPlanExecutionApplicationService import (
 from core.Exceptions import ResearchError
 from research.ResearchAutonomyBudget import ResearchAutonomyBudget
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
+from research.ResearchMissionScope import MISSION_CAPABILITIES, ResearchMissionScope
 from research.ResearchPlanDraftService import ResearchPlanDraftService
+from research.ResearchPlanStep import ResearchPlanStep
 from research.ResearchRunManager import ResearchRunManager
 from research.StartsResearchPlanExecution import ResearchPlanExecutionStartRefusal
 
 RESEARCH_GOAL_START_INTENT = "research_goal_start"
 OPENING_SCOPE = "local_search_and_selected_provider_discovery"
+EVIDENCE_SCOPE = "selected_provider_reference_evidence"
 
 
 class ResearchGoalStartApplicationService:
@@ -37,12 +40,14 @@ class ResearchGoalStartApplicationService:
         research_run_manager: ResearchRunManager | None,
         authorizations: ResearchPlanAuthorizationApplicationService | None,
         discovery_providers: frozenset[ResearchDiscoveryProviderName],
+        evidence_available: bool = False,
     ) -> None:
         self._execution_service = execution
         self._autonomy = autonomy
         self._runs = research_run_manager
         self._authorizations = authorizations
         self._discovery_providers = discovery_providers
+        self._evidence_available = evidence_available
         self._goal_lock = Lock()
         self._goal_request_ids: set[str] = set()
 
@@ -51,10 +56,10 @@ class ResearchGoalStartApplicationService:
         return request.metadata.get("intent") == RESEARCH_GOAL_START_INTENT
 
     def process_goal(self, request: BrainRequest) -> BrainResponse:
-        """One human goal-start action approves and runs the known opening.
+        """One human goal-start action approves a bounded derivation template.
 
-        Consent names the fixed local/discovery template, selected provider and
-        budget. It is not an approval for dynamic plans, targets or model calls.
+        Consent names opening-only or the reference-evidence slice, the selected
+        provider and cumulative budget. Targets and model calls remain excluded.
         No new execution loop or store is introduced. The run stays collecting.
         """
         if not self._goal_lock.acquire(blocking=False):
@@ -73,11 +78,18 @@ class ResearchGoalStartApplicationService:
             "discovery_provider",
             "research_autonomy_budget",
         }
+        scope = request.metadata.get("research_goal_scope")
         if (
             set(request.metadata) != allowed
-            or request.metadata.get("research_goal_scope") != OPENING_SCOPE
+            or not isinstance(scope, str)
+            or scope not in {OPENING_SCOPE, EVIDENCE_SCOPE}
         ):
-            raise ResearchError("Goal start requires the explicit opening scope only.")
+            raise ResearchError("Goal start requires an explicit supported scope.")
+        evidence_mission = scope == EVIDENCE_SCOPE
+        if evidence_mission and not self._evidence_available:
+            raise ResearchError(
+                "Source acquisition is unavailable; mission not started."
+            )
         budget = request.metadata.get("research_autonomy_budget")
         if not isinstance(budget, ResearchAutonomyBudget) or budget.max_llm_operations:
             raise ResearchError(
@@ -111,6 +123,23 @@ class ResearchGoalStartApplicationService:
         if preview.plan is None:
             raise ResearchError("Research goal cannot form a valid opening plan.")
         plan = preview.plan
+        if evidence_mission:
+            plan = replace(
+                plan,
+                steps=plan.steps
+                + tuple(
+                    ResearchPlanStep(
+                        step_id=f"mission-{capability.value}",
+                        instruction=(
+                            "Derive from this mission's preceding observation only: "
+                            + capability.value
+                        ),
+                        capability=capability,
+                    )
+                    for capability in MISSION_CAPABILITIES[2:]
+                ),
+                mission_scope=ResearchMissionScope(provider),
+            )
         if not self._authorizations.budget_fit_for(plan, budget).sufficient:
             raise ResearchError("Budget cannot cover the opening; nothing was started.")
         self._goal_request_ids.add(request.request_id)
@@ -139,6 +168,30 @@ class ResearchGoalStartApplicationService:
         )
         updated = self._runs.get(run.run_id)
         count = sum(len(record.candidates) for record in updated.discoveries)
+        if evidence_mission:
+            return replace(
+                response,
+                intent=RESEARCH_GOAL_START_INTENT,
+                research_runs=[updated],
+                research_plan_execution=self._execution_service.live_execution(
+                    state.plan_id
+                ),
+                message=(
+                    "Research incomplete — bounded reference evidence slice.\n\n"
+                    f"Research question: {updated.question}\n"
+                    f"Discovery: {count} candidate(s); "
+                    f"accepted sources: {len(updated.sources)}; "
+                    f"recorded evidence: {len(updated.evidence)}.\n"
+                    "Evidence validation means exact-source grounding, not truth. "
+                    "Selection is lexical matching, not model reasoning.\n"
+                    "One original approval and one cumulative execution allowance; "
+                    "no derived approval, refetch or caller-side Continue.\n"
+                    "Remaining human boundary: comparison/contradiction investigation, "
+                    "follow-up research and replanning are not yet mission-driven. "
+                    "Completion evaluation and a cited answer remain incomplete.\n\n"
+                    "Research trace:\n" + response.message
+                ),
+            )
         return replace(
             response,
             intent=RESEARCH_GOAL_START_INTENT,

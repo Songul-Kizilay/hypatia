@@ -109,6 +109,8 @@ def canonical_plan_bytes(plan: ResearchPlan) -> bytes:
         skip = skip | {"constraints"}
     if plan.target_binding is None:
         skip = skip | {"target_binding"}
+    if plan.mission_scope is None:
+        skip = skip | {"mission_scope"}
     payload = _encode(schema) + _encode_dataclass(plan, skip=skip)
     return _token(b"p", payload)
 

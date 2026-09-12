@@ -62,6 +62,7 @@ _EXECUTION_FIELDS = frozenset(
 #: Version 1 wrote every field above except the last.
 _EXECUTION_FIELDS_V1 = _EXECUTION_FIELDS - {"allowance"}
 _EXECUTION_FIELDS_WITH_TARGET = _EXECUTION_FIELDS | {"target_plan_digest"}
+_EXECUTION_FIELDS_WITH_MISSION = _EXECUTION_FIELDS | {"mission_plan_digest"}
 _ALLOWANCE_FIELDS = frozenset({"budget", "spend"})
 _BUDGET_FIELDS = frozenset(
     {
@@ -130,6 +131,8 @@ def encode_execution_snapshot(
     }
     if snapshot.target_plan_digest is not None:
         document["target_plan_digest"] = snapshot.target_plan_digest
+    if snapshot.mission_plan_digest is not None:
+        document["mission_plan_digest"] = snapshot.mission_plan_digest
     return document
 
 
@@ -139,8 +142,13 @@ def decode_execution_snapshot(document: object) -> ResearchPlanExecutionSnapshot
         _EXECUTION_FIELDS,
         _EXECUTION_FIELDS_V1,
         _EXECUTION_FIELDS_WITH_TARGET,
+        _EXECUTION_FIELDS_WITH_MISSION,
     ):
         raise ResearchError("Execution snapshot document is invalid.")
+    if "mission_plan_digest" in document and not is_plan_digest(
+        document["mission_plan_digest"]
+    ):
+        raise ResearchError("Execution snapshot mission digest is invalid.")
     if "target_plan_digest" in document and not is_plan_digest(
         document["target_plan_digest"]
     ):
@@ -166,6 +174,7 @@ def decode_execution_snapshot(document: object) -> ResearchPlanExecutionSnapshot
         recorded_at=_timestamp(document["recorded_at"]),
         allowance=_decode_allowance(document.get("allowance")),
         target_plan_digest=document.get("target_plan_digest"),
+        mission_plan_digest=document.get("mission_plan_digest"),
         steps=tuple(_decode_step(value) for value in steps_value),
     )
 

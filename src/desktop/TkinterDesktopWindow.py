@@ -2005,7 +2005,7 @@ class TkinterDesktopWindow:
         ).grid(row=2, column=2, sticky="e")
         ttk.Button(
             plan_actions,
-            text="Run research opening automatically",
+            text="Research through evidence automatically",
             command=self._start_research_goal,
         ).grid(row=3, column=0, columnspan=3, sticky="w", pady=4)
         ttk.Label(research_plan_frame, text="Complete preview or rejection").grid(
@@ -3222,13 +3222,13 @@ class TkinterDesktopWindow:
         )
 
     def _start_research_goal(self) -> None:
-        """Approve the limited opening once, then use the existing worker."""
+        """Approve reference research through evidence once, then use the worker."""
         if (
             getattr(self, "_target_plan_draft", None) is not None
             or self._research_plan_constraints.get("1.0", "end-1c").strip()
             or self._plan_restriction.get() != ADVISORY_RESTRICTION_LABEL
         ):
-            self._status.set("Opening cannot discard target scope or constraints.")
+            self._status.set("Mission cannot discard target scope or constraints.")
             return
         question = self._research_question.get().strip()
         provider = self._research_discovery_provider.get()
@@ -3247,14 +3247,18 @@ class TkinterDesktopWindow:
             self._status.set(str(error))
             return
         if not messagebox.askyesno(
-            "Start bounded research opening?",
+            "Start bounded research through evidence?",
             f"Question: {question}\nProvider: {provider}\n"
             f"Limits: {budget.max_step_advances} steps, "
             f"{budget.max_network_operations} network attempts, "
             f"{budget.max_seconds:g} seconds, 0 model calls.\n\n"
-            "This authorizes local search and one query to the selected provider. "
-            "Both run automatically. No source fetching, evidence acceptance, "
-            "target testing or replanning is authorized. "
+            "This authorizes local search, one query to the selected provider, "
+            "automatic selection of one relevant public HTTPS reference, fetching, "
+            "inspection, source acceptance and one source-grounded evidence record. "
+            "The inspected text is limited to 16 KiB. Acceptance reuses fetched text "
+            "but conservatively reserves one network attempt. All five steps share "
+            "the same budget. No target testing, model calls or replanning "
+            "is authorized. "
             "The result will be an incomplete research report, not a final answer.",
         ):
             return
@@ -3265,9 +3269,10 @@ class TkinterDesktopWindow:
                 provider,
                 budget,
                 cancellation_token=signal,
+                record_evidence=True,
             ),
             self._append_response,
-            "autonomous research opening",
+            "autonomous reference evidence",
             cancellation_signal=signal,
         )
 

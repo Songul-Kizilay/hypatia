@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from core.Exceptions import ResearchError
+from research.ResearchMissionScope import ResearchMissionScope
 from research.ResearchPlanConstraint import ResearchPlanConstraint
 from research.ResearchPlanStep import ResearchPlanStep
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
@@ -30,8 +31,21 @@ class ResearchPlan:
     constraints: tuple[ResearchPlanConstraint, ...] = ()
     #: Absent for existing reference research; present values enter approval.
     target_binding: ResearchPlanTargetBinding | None = None
+    mission_scope: ResearchMissionScope | None = None
 
     def __post_init__(self) -> None:
+        if self.mission_scope is not None:
+            if not isinstance(self.mission_scope, ResearchMissionScope):
+                raise ResearchError("Research mission scope is invalid.")
+            if self.target_binding is not None:
+                raise ResearchError(
+                    "Reference missions do not authorize target testing."
+                )
+            if not isinstance(self.steps, tuple) or not all(
+                isinstance(step, ResearchPlanStep) for step in self.steps
+            ):
+                raise ResearchError("Mission steps are invalid.")
+            self.mission_scope.validate_steps(self.steps)
         plan_id = self._normalize_bounded_text(
             self.plan_id,
             "Research plan ID",

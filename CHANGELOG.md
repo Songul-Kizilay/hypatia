@@ -2,6 +2,43 @@
 
 All notable project changes are recorded here.
 
+## [0.3.333] - 2026-09-12
+
+### Added
+
+- One confirmed reference mission now proceeds through local search, named
+  discovery, deterministic source selection, fetch/inspection, canonical source
+  acceptance, lexical evidence proposal, grounding validation and recording.
+  No caller-side Continue or per-step approval is required.
+- Digest-bound mission scope permits one provider-derived public HTTPS source
+  and one evidence record. Concrete URL/chunk inputs derive only from that
+  mission's predecessor observations. Original plan, capability set, question,
+  approval and execution identity remain unchanged. The existing executor and
+  autonomy loop own all five steps; no parallel agent engine or store was added.
+- The existing execution allowance is cumulative across derived steps and
+  persists with the original mission digest. Larger caller loop budgets cannot
+  enlarge it. Failed attempts remain charged; refusal stops the loop immediately.
+- Acceptance reuses the exact inspected body rather than fetching a second
+  version. Its existing network-cost reservation is conservatively retained:
+  five advances and three reserved network operations, with two external calls
+  (one discovery and one fetch) on the successful deterministic fixture.
+- Discovery returns its canonical record identity, preserving provider/query
+  provenance instead of inferring it from execution order or display text.
+
+### Limits
+
+- Selection and evidence proposals are lexical, not semantic model reasoning.
+  Validation proves source grounding, not truth or corroboration. The run stays
+  collecting; no claims, comparison or completion are invented.
+- One source with at most 16 KiB of inspected text. This is a retained-preview
+  limit, not a new aggregate HTTP-wire-byte quota; existing fetch limits and
+  public-address/redirect protections remain. No target testing or model calls.
+- Transient observations are not reconstructed after restart. Durable spending
+  and audit survive; missing text refuses resumption without automatic refetch.
+- Next human boundary: comparison/contradiction investigation and follow-up
+  planning. Autonomous replanning, completion evaluation and a cited final
+  answer are still pending; the complete North Star is not claimed.
+
 ## [0.3.332] - 2026-09-12
 
 ### Added

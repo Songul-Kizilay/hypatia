@@ -77,6 +77,7 @@ from research.ResearchExecutionContinuation import (
     ResearchExecutionContinuation,
 )
 from research.ResearchExecutionStore import ResearchExecutionStore
+from research.ResearchMissionStepResolver import ResearchMissionStepResolver
 from research.ResearchPlan import ResearchPlan
 from research.ResearchPlanAuthorizationConsumer import (
     ResearchPlanAuthorizationConsumer,
@@ -145,6 +146,7 @@ class ResearchPlanExecutionApplicationService:
         program_scope_revision_store: ResearchProgramScopeRevisionStore | None = None,
         clock: Callable[[], datetime] | None = None,
         max_active_executions: int = MAX_ACTIVE_RESEARCH_PLAN_EXECUTIONS,
+        mission_resolver: ResearchMissionStepResolver | None = None,
     ) -> None:
         if (
             isinstance(max_active_executions, bool)
@@ -171,6 +173,8 @@ class ResearchPlanExecutionApplicationService:
         self._authorization_consumer = authorization_consumer
         self._program_scope_revision_store = program_scope_revision_store
         self._allowances: dict[str, ResearchExecutionAllowance] = {}
+        self._mission_resolver = mission_resolver
+        self._mission_digests: dict[str, str] = {}
         self._clock = clock or (lambda: datetime.now(UTC))
         self._restored: dict[str, ResearchPlanExecutionSnapshot] = {}
         self._restore()
@@ -316,6 +320,12 @@ class ResearchPlanExecutionApplicationService:
             return ResearchPlanExecutionStartRefusal(
                 "Research plan already has execution state in this process."
             )
+        if plan.mission_scope is not None and (
+            self._mission_resolver is None or self._execution_store is None
+        ):
+            return ResearchPlanExecutionStartRefusal(
+                "Mission execution requires its resolver and durable execution store."
+            )
         if len(self._executions) >= self._max_active_executions:
             return ResearchPlanExecutionStartRefusal(
                 "Research plan execution capacity is full in this process."
@@ -356,6 +366,8 @@ class ResearchPlanExecutionApplicationService:
             self._executions[plan.plan_id] = state
             self._plans[plan.plan_id] = plan
             self._contexts[plan.plan_id] = context
+            if plan.mission_scope is not None:
+                self._mission_digests[plan.plan_id] = plan_digest(plan)
         self._events.started(state, context.has_research_run)
         self._persist(plan.plan_id)
         return state
@@ -385,6 +397,11 @@ class ResearchPlanExecutionApplicationService:
         if snapshot is None:
             return ResearchPlanExecutionStartRefusal(
                 "No durable execution with that identity was restored."
+            )
+        if snapshot.mission_plan_digest is not None or plan.mission_scope is not None:
+            return ResearchPlanExecutionStartRefusal(
+                "Mission transient source observations were not restored. "
+                "Recorded spending is retained; no silent refetch or replay."
             )
         if execution_id in self._executions:
             return ResearchPlanExecutionStartRefusal(
@@ -882,6 +899,15 @@ class ResearchPlanExecutionApplicationService:
                 request,
                 plan_id,
             )
+        if (plan.mission_scope is not None or plan_id in self._mission_digests) and (
+            plan.mission_scope is None
+            or self._mission_digests.get(plan_id) != plan_digest(plan)
+            or self._mission_resolver is None
+            or plan_id not in self._allowances
+        ):
+            return self._response_composer.research_plan_execution_rejected(
+                request, "Derived mission work lacks the original consumed authority."
+            )
         if scope_refusal := self._target_scope_refusal(plan):
             return self._response_composer.research_plan_execution_rejected(
                 request,
@@ -1000,17 +1026,26 @@ class ResearchPlanExecutionApplicationService:
             )
         try:
             stored = self._contexts.get(plan_id, ResearchPlanExecutionContext())
+            operation_context = ResearchPlanExecutionContext(
+                research_run_id=stored.research_run_id,
+                cancellation_token=request.cancellation_token,
+                target_binding=plan.target_binding,
+                execution_id=plan_id,
+                disclosure=stored.disclosure,
+                research_question=plan.question,
+            )
+            if plan.mission_scope is not None:
+                assert self._mission_resolver is not None
+                step, operation_context = self._mission_resolver.resolve(
+                    plan, step, operation_context
+                )
             result = operation.run(
                 step,
-                ResearchPlanExecutionContext(
-                    research_run_id=stored.research_run_id,
-                    cancellation_token=request.cancellation_token,
-                    target_binding=plan.target_binding,
-                    execution_id=plan_id,
-                    disclosure=stored.disclosure,
-                    research_question=plan.question,
-                ),
+                operation_context,
             )
+            if plan.mission_scope is not None:
+                assert self._mission_resolver is not None
+                self._mission_resolver.observe(plan, step, operation_context, result)
         except ResearchError as error:
             self._charge_elapsed(plan_id, attempt_started_at)
             failed = running.fail_step(step_id, str(error))
@@ -1261,6 +1296,7 @@ class ResearchPlanExecutionApplicationService:
                     if self._plans[plan_id].target_binding is not None
                     else None
                 ),
+                mission_plan_digest=self._mission_digests.get(plan_id),
             )
             for plan_id, state in self._executions.items()
         ]

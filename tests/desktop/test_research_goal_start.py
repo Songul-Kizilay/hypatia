@@ -39,10 +39,15 @@ class ResearchGoalStartUiTests(unittest.TestCase):
             TkinterDesktopWindow._start_research_goal(window)
         confirm.assert_called_once()
         self.assertIn("incomplete", confirm.call_args.args[1])
+        self.assertIn("one source-grounded evidence record", confirm.call_args.args[1])
+        self.assertIn("same budget", confirm.call_args.args[1])
         window._start_request.assert_called_once()
         action = window._start_request.call_args.args[0]
         action()
         window._controller.start_research_goal.assert_called_once()
+        self.assertTrue(
+            window._controller.start_research_goal.call_args.kwargs["record_evidence"]
+        )
         signal = window._start_request.call_args.kwargs["cancellation_signal"]
         self.assertIs(
             window._controller.start_research_goal.call_args.kwargs[

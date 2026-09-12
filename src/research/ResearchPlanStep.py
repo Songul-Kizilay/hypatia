@@ -5,8 +5,9 @@ selects an executable capability. ``capability`` is the separate explicit
 authorization, defaulting to none so an unauthorized step cannot run anything.
 
 ``authorized_source_url`` is the one exact source this step may acquire. It is
-empty by default, is never inferred from instruction text, and is never taken
-from a discovery result, so no step can fetch a source nobody authorized.
+empty by default and never inferred from instruction text. A digest-bound
+reference mission may resolve it from its own provider observation under its
+original scope; ordinary manual plans still require the exact authored URL.
 """
 
 from __future__ import annotations

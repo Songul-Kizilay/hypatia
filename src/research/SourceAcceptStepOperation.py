@@ -7,10 +7,11 @@ acceptance transaction is reimplemented here, and no second content channel
 exists: content flows through the canonical knowledge and source-content
 architecture only.
 
-Authorization is explicit. The URL comes only from the step's
-`authorized_source_url`; it is never inferred from instruction text and never
-taken from a discovery record, so discovery can never cascade into automatic
-acceptance.
+Authorization is explicit. The URL comes only from the resolved step's
+`authorized_source_url`, never from instruction text. For a reference mission,
+the executor supplies the exact inspected predecessor preview under the
+original digest-bound scope. That path reuses bytes instead of fetching again.
+Manual steps without a preview retain their canonical acquisition behavior.
 
 Accepted means accepted into the run's canonical source set and nothing more.
 No evidence, assessment, claim, trust, or conclusion follows from it.
@@ -75,7 +76,18 @@ class SourceAcceptStepOperation:
 
         self._raise_if_cancelled(context)
         try:
-            source = fetch_plan_source(url, context, self._source_fetcher)
+            preview = context.source_preview
+            if preview is not None:
+                if (
+                    preview.execution_id != context.execution_id
+                    or preview.run_id != run_id
+                    or preview.requested_url != url
+                    or context.target_binding is not None
+                ):
+                    raise ResearchError("Source acceptance preview binding differs.")
+                source = preview.source
+            else:
+                source = fetch_plan_source(url, context, self._source_fetcher)
         except ResearchError:
             self._record_failure(run_id, "Research source acquisition failed.")
             raise
