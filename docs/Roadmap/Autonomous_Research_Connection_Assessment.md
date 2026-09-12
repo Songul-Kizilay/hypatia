@@ -1,6 +1,50 @@
 # Autonomous research connection assessment
 
-## Current connection: v0.3.334
+## Current backend prerequisite: v0.3.335
+
+Starting checkpoint: `93a6ab7` / v0.3.334, clean and equal to origin; Windows
+and Linux CI both passed. The user-facing automatic path below is unchanged.
+
+`LLMSemanticComparisonProposalProvider` reuses the existing structured model
+interface and duplicate-key rejection. `SemanticComparisonRequest` binds the
+original question, run identity, two ordered canonical evidence snapshots and
+the candidate limit. It is transient, not a plan digest or disclosure approval.
+The model receives aliased excerpts and truncation flags, never operator notes
+or model-editable provenance. Maximum input is 16 KiB UTF-8; response at most
+16,000 characters and three pairs, with at most 800 characters per quotation
+and 500 per rationale. One request, no retry or fallback.
+
+`SemanticComparisonCandidate` requires an exact unique quote from each named
+excerpt. It may describe possible agreement, possible conflict, or incomparable
+conditions. Relations and rationales remain tentative untrusted interpretations:
+mechanical quotation validation cannot verify meaning, truth or independence.
+An empty proposal list means no supported proposal, not proof of agreement.
+
+No capability, planner, executor, approval, disclosure, budget, store or desktop
+behavior changes in this increment. No autonomous model call or canonical
+comparison/contradiction write is introduced. Current zero-model missions
+cannot silently acquire semantic powers. The explicit fake adapter invocation
+in the recorded-evidence integration test is NOT an authorized automatic path.
+
+**Next implementation boundary:** connect the adapter through a separately
+declared initial mission scope that binds its model destination and disclosure,
+charges its original cumulative allowance before attempts, and rechecks current
+run membership and source integrity. That path must use the existing executor
+and recording infrastructure without intermediate human approvals. It must
+stop on refusal or invalid output, not retry or expand scope. Semantic quality
+evaluation remains distinct from structural tests. Full contradiction
+investigation, follow-up research, adaptive replanning, goal completion and a
+cited final report are still unfinished.
+
+Local v0.3.335 release validation: **5,974 tests OK, 3 existing platform skips**;
+82 focused tests including 19 new unit/integration checks, Black (852 files),
+Ruff, MyPy (517 source files) and whitespace checks. The recorded-evidence test
+reuses the real mission pipeline with fake discovery/fetch, then explicitly
+invokes a fake model adapter and verifies no canonical records, approvals or
+spending were changed. No live model accuracy or automatic integration is claimed.
+Remote CI requires verification against this exact release's commit.
+
+## Latest user-facing connection: v0.3.334
 
 Starting checkpoint: `695b8bb` / v0.3.333, clean and equal to origin;
 both Windows and Linux CI passed for that exact commit.

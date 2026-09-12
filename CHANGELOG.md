@@ -2,6 +2,40 @@
 
 All notable project changes are recorded here.
 
+## [0.3.335] - 2026-09-12
+
+### Added
+
+- A bounded semantic-comparison proposal adapter using the existing structured
+  model interface. It consumes two immutable evidence records and the original
+  question, and returns at most three tentative pairs: possible agreement,
+  possible conflict, or not comparable. Both quotations must occur exactly once
+  in their respective recorded excerpts. No lexical overlap is required.
+- A transient input fingerprint covers the question, run ID, ordered full
+  evidence records and proposal limit. Models receive only aliased excerpts,
+  truncation flags and the question, not operator notes or provenance IDs.
+- Strict response schemas and all-or-nothing validation reject unknown fields,
+  invented or ambiguous quotes, duplicate pairs, false-certainty relation labels,
+  malformed JSON, duplicate keys, oversized output and invalid Unicode. One call
+  only, no retry, no source/output text in failure diagnostics.
+
+### Limits
+
+- Backend prerequisite only: NOT wired to automatic missions or the desktop.
+  Current missions retain their existing zero-model-call scope. The adapter
+  neither grants permission nor charges budget, writes records, selects a model
+  destination, or executes instructions. Its fingerprint is not authorization.
+- Future execution wiring must check current run membership and chunk integrity,
+  bind the model destination/disclosure in the initial mission, charge that
+  mission's cumulative allowance, and label generated interpretations honestly.
+  Model interpretation quality is not established by fake-response tests.
+- A validated quote proves source grounding, not that the proposed relationship
+  is correct. Empty output does not establish agreement or completeness. No
+  contradiction, claim, source-trust or completion record is created here.
+- The next user-facing boundary is unchanged: automatic semantic comparison and
+  contradiction investigation, followed by follow-up research, adaptive
+  replanning, completion evaluation and a cited final answer.
+
 ## [0.3.334] - 2026-09-12
 
 ### Added

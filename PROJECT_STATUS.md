@@ -2,7 +2,7 @@
 
 ## Runtime Version
 
-`v0.3.334 (Genesis)`
+`v0.3.335 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
@@ -137,9 +137,22 @@ checks and real hidden-Tk layout smoke passed. External discovery/fetch were
 deterministic fakes; no live research/model calls. Remote CI must be verified
 against the exact release commit.
 
+Windows and Linux CI for v0.3.334 passed at `93a6ab7`.
+Version v0.3.335 adds a backend-only, exact-quotation semantic-comparison adapter.
+It reuses the structured model interface and produces tentative interpretations
+over two recorded excerpts without writing research facts. It is not connected
+to automatic missions: initial disclosure/destination/budget integration and
+current-evidence checks at that execution boundary remain the next work.
+The desktop's current two-source comparison is still lexical, with zero model
+calls. Fake-response tests establish contracts, not live model accuracy.
+Local v0.3.335 release checks: 5,974 tests OK with 3 existing platform skips;
+82 focused tests including 19 new checks; Black (852 files), Ruff, MyPy (517
+source files) and diff checks passed. No live model or research traffic.
+Remote Windows/Linux CI must be verified against the exact release commit.
+
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.334`** is the current source/package release line.
+- **Runtime release `v0.3.335`** is the current source/package release line.
   GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
