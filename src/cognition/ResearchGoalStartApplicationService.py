@@ -233,6 +233,10 @@ class ResearchGoalStartApplicationService:
                     snapshot.plan_id,
                 )
                 if isinstance(state, ResearchPlanExecutionStartRefusal):
+                    self._execution_service.record_mission_recovery_refusal(
+                        snapshot.plan_id,
+                        state.reason,
+                    )
                     continue
                 allowance = snapshot.allowance
                 remaining = ResearchAutonomyBudget(
@@ -254,9 +258,13 @@ class ResearchGoalStartApplicationService:
                     )
                 )
                 resumed.append(snapshot.plan_id)
-            except ResearchError:
+            except ResearchError as error:
                 # The snapshot remains restored and status-reportable. A restart
                 # cannot transform a mismatch into new provider/model authority.
+                self._execution_service.record_mission_recovery_refusal(
+                    snapshot.plan_id,
+                    str(error),
+                )
                 continue
         return tuple(resumed)
 

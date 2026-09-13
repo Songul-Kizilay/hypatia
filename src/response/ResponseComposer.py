@@ -3280,6 +3280,7 @@ class ResponseComposer:
         self,
         request: BrainRequest,
         snapshot: ResearchPlanExecutionSnapshot,
+        recovery_reason: str | None = None,
     ) -> BrainResponse:
         """Render restored durable state without implying a resumable run."""
         lines = [
@@ -3300,6 +3301,10 @@ class ResponseComposer:
             lines.append(
                 f"Interrupted steps: {interrupted}. What those operations did is "
                 "unknown; nothing was replayed."
+            )
+        if recovery_reason:
+            lines.append(
+                "Automatic mission recovery stopped safely: " f"{recovery_reason}"
             )
         lines.extend(
             (

@@ -276,6 +276,16 @@ class LearningResearchJourneyTests(unittest.TestCase):
         self.assertIsNotNone(
             engine._research_plan_execution_service.restored_execution(snapshot.plan_id)
         )
+        status = engine._research_plan_execution_service.process_status(
+            BrainRequest(
+                message="status",
+                metadata={
+                    "intent": "research_plan_execution_status",
+                    "research_plan_id": snapshot.plan_id,
+                },
+            )
+        )
+        self.assertIn("preview was not durably accepted", status.message)
         self.assertEqual(self.provider.discover.call_count, 1)
         self.assertEqual(self.fetcher.fetch.call_count, 1)
         self.transport.assert_not_called()

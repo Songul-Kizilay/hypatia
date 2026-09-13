@@ -177,6 +177,7 @@ class ResearchPlanExecutionApplicationService:
         self._allowances: dict[str, ResearchExecutionAllowance] = {}
         self._mission_resolver = mission_resolver
         self._mission_digests: dict[str, str] = {}
+        self._mission_recovery_refusals: dict[str, str] = {}
         self._clock = clock or (lambda: datetime.now(UTC))
         self._restored: dict[str, ResearchPlanExecutionSnapshot] = {}
         self._restore()
@@ -584,6 +585,16 @@ class ResearchPlanExecutionApplicationService:
             if snapshot.mission_scope is not None
         )
 
+    def record_mission_recovery_refusal(self, plan_id: str, reason: str) -> None:
+        """Keep one bounded restart reason visible without changing durable state."""
+        if (
+            plan_id not in self._restored
+            or not isinstance(reason, str)
+            or not reason.strip()
+        ):
+            return
+        self._mission_recovery_refusals[plan_id] = reason.strip()[:500]
+
     def process_status(self, request: BrainRequest) -> BrainResponse:
         """Report live state, restored durable state, or neither."""
         plan_id = self._normalized_plan_id(request)
@@ -594,6 +605,7 @@ class ResearchPlanExecutionApplicationService:
                 return self._response_composer.research_plan_execution_restored(
                     request,
                     restored,
+                    self._mission_recovery_refusals.get(plan_id),
                 )
             return self._response_composer.research_plan_execution_missing(
                 request,
