@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.338
+## Current bounded text journey: v0.3.339
 
 ### Connected user journey
 
@@ -91,12 +91,29 @@ disabled and is stated in the report. The learning action displays a fixed maxim
 quietly widen an already approved mission. Existing lexical comparison buttons
 still perform lexical comparison and never inherit semantic permission.
 
+### Safe restart/resume: v0.3.339
+
+The bounded semantic learning mission can now resume automatically after an
+application/process restart only from a durable source/evidence/assessment
+checkpoint. The new process rebuilds the content-identical mission plan, checks
+its original digest, selected provider, endpoint/model, disclosure and remaining
+cumulative allowance, then restores predecessor identities from the canonical
+research run. It uses the existing executor/autonomy loop; no second agent,
+scheduler, approval or budget exists. Completed steps remain completed and are
+not replayed.
+
+The checkpoint keeps only discovery/evidence/assessment IDs, accepted URL
+identities, body hashes and inspected-byte accounting. It keeps neither source
+text nor a model proposal. An interruption after source fetch but before source
+acceptance, or after semantic comparison but before its durable tentative note,
+therefore remains restored and reportable rather than refetched or replayed.
+
 Not implemented here: general open-ended replanning, repeated/new provider queries,
 semantic source ranking, model-based completion evaluation, independent factual
 verification, autonomous target testing, screenshots/image perception or multimodal
-learning. Restart can read retained research and lessons; resuming/replaying a
-partially executed dynamic mission without its predecessor observations remains
-fail-closed. No live model/provider call was used for validation; deterministic
+learning. Legacy snapshots and a partially executed mission without its new
+durable predecessor checkpoint remain fail-closed. No live model/provider call
+was used for validation; deterministic
 tests do not prove model accuracy or internet source reliability.
 
 ### Verification and edit scope

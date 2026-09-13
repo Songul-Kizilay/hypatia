@@ -23,7 +23,10 @@ from datetime import datetime
 from core.Exceptions import ResearchError
 from research.ResearchAttemptRecovery import ResearchAttemptRecovery
 from research.ResearchAttemptResolution import ResearchAttemptResolution
+from research.ResearchDisclosure import ResearchDisclosure
 from research.ResearchExecutionAllowance import ResearchExecutionAllowance
+from research.ResearchMissionRecoveryCheckpoint import ResearchMissionRecoveryCheckpoint
+from research.ResearchMissionScope import ResearchMissionScope
 from research.ResearchPlanDigest import is_plan_digest
 from research.ResearchPlanExecutionState import ResearchPlanExecutionState
 from research.ResearchPlanExecutionStatus import ResearchPlanExecutionStatus
@@ -91,12 +94,39 @@ class ResearchPlanExecutionSnapshot:
     #: Legacy snapshots did not record this proof and must not imply one.
     target_plan_digest: str | None = None
     mission_plan_digest: str | None = None
+    #: New snapshots retain the exact semantic scope and its non-content
+    #: predecessor checkpoint. Older mission snapshots lack these fields and
+    #: therefore remain reportable but deliberately cannot auto-resume.
+    mission_scope: ResearchMissionScope | None = None
+    mission_disclosure: ResearchDisclosure = ResearchDisclosure.NONE
+    mission_checkpoint: ResearchMissionRecoveryCheckpoint | None = None
 
     def __post_init__(self) -> None:
         if self.target_plan_digest is not None and self.mission_plan_digest is not None:
             raise ResearchError(
                 "Target and reference mission digests cannot be combined."
             )
+        if not isinstance(self.mission_disclosure, ResearchDisclosure):
+            raise ResearchError("Execution snapshot mission disclosure is invalid.")
+        if self.mission_scope is None:
+            if (
+                self.mission_disclosure is not ResearchDisclosure.NONE
+                or self.mission_checkpoint is not None
+            ):
+                raise ResearchError("Execution snapshot mission recovery is invalid.")
+        elif (
+            self.mission_plan_digest is None
+            or self.mission_scope.semantic_policy is None
+            or self.mission_scope.semantic_policy.disclosure
+            is not self.mission_disclosure
+            or (
+                self.mission_checkpoint is not None
+                and not isinstance(
+                    self.mission_checkpoint, ResearchMissionRecoveryCheckpoint
+                )
+            )
+        ):
+            raise ResearchError("Execution snapshot mission recovery is invalid.")
         if self.mission_plan_digest is not None and not is_plan_digest(
             self.mission_plan_digest
         ):
@@ -157,6 +187,9 @@ class ResearchPlanExecutionSnapshot:
         allowance: ResearchExecutionAllowance | None = None,
         target_plan_digest: str | None = None,
         mission_plan_digest: str | None = None,
+        mission_scope: ResearchMissionScope | None = None,
+        mission_disclosure: ResearchDisclosure = ResearchDisclosure.NONE,
+        mission_checkpoint: ResearchMissionRecoveryCheckpoint | None = None,
     ) -> ResearchPlanExecutionSnapshot:
         """Capture the current state, pairing each step with its capability."""
         capabilities = {step.step_id: step.capability for step in steps}
@@ -169,6 +202,9 @@ class ResearchPlanExecutionSnapshot:
             allowance=allowance,
             target_plan_digest=target_plan_digest,
             mission_plan_digest=mission_plan_digest,
+            mission_scope=mission_scope,
+            mission_disclosure=mission_disclosure,
+            mission_checkpoint=mission_checkpoint,
             recorded_at=recorded_at,
             steps=tuple(
                 ResearchPlanExecutionStepSnapshot(

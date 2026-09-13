@@ -27,6 +27,7 @@ from research.ResearchMissionScope import (
     ResearchMissionScope,
 )
 from research.ResearchPlan import ResearchPlan
+from research.ResearchPlanDigest import plan_digest
 from research.ResearchPlanDraftPreview import ResearchPlanDraftPreview
 from research.ResearchPlanDraftService import ResearchPlanDraftService
 from research.ResearchPlanStep import ResearchPlanStep
@@ -188,6 +189,76 @@ class ResearchGoalStartApplicationService:
             ),
             mission_scope=mission_scope,
         )
+
+    @classmethod
+    def _rebuild_mission_plan(
+        cls, question: str, mission_scope: ResearchMissionScope
+    ) -> ResearchPlan:
+        """Recreate a content-identical plan; its fresh instance ID is ignored."""
+        preview = ResearchPlanDraftService().preview_question(
+            question, mission_scope.provider.value
+        )
+        if preview.plan is None:
+            raise ResearchError("Mission recovery cannot rebuild its approved plan.")
+        return cls._mission_plan(preview.plan, mission_scope)
+
+    def resume_restored_learning_missions(self) -> tuple[str, ...]:
+        """Resume only durable, exact semantic missions after application restart.
+
+        This is intentionally not a generic resume path. A legacy snapshot or a
+        checkpoint with transient preview/model output stays visible and stopped.
+        """
+        resumed: list[str] = []
+        if self._semantic_destination is None or self._runs is None:
+            return ()
+        for snapshot in self._execution_service.restored_mission_executions():
+            scope = snapshot.mission_scope
+            if (
+                scope is None
+                or scope.source_policy != SEMANTIC_POLICY
+                or scope.semantic_policy is None
+                or (scope.semantic_policy.endpoint, scope.semantic_policy.model)
+                != self._semantic_destination
+                or snapshot.research_run_id is None
+                or snapshot.allowance is None
+            ):
+                continue
+            try:
+                plan = self._rebuild_mission_plan(snapshot.question, scope)
+                if plan_digest(plan) != snapshot.mission_plan_digest:
+                    continue
+                state = self._execution_service.rebind_restored(
+                    plan,
+                    snapshot.research_run_id,
+                    snapshot.plan_id,
+                )
+                if isinstance(state, ResearchPlanExecutionStartRefusal):
+                    continue
+                allowance = snapshot.allowance
+                remaining = ResearchAutonomyBudget(
+                    max_step_advances=allowance.remaining_step_advances,
+                    max_network_operations=allowance.remaining_network_operations,
+                    max_llm_operations=allowance.remaining_llm_operations,
+                    max_seconds=allowance.remaining_seconds,
+                )
+                self._autonomy.process_run(
+                    BrainRequest(
+                        message="Resume exact durable research mission",
+                        source="restart_recovery",
+                        request_id=f"restart:{snapshot.plan_id}",
+                        metadata={
+                            "intent": RESEARCH_AUTONOMY_RUN_INTENT,
+                            "research_plan_id": snapshot.plan_id,
+                            "research_autonomy_budget": remaining,
+                        },
+                    )
+                )
+                resumed.append(snapshot.plan_id)
+            except ResearchError:
+                # The snapshot remains restored and status-reportable. A restart
+                # cannot transform a mismatch into new provider/model authority.
+                continue
+        return tuple(resumed)
 
     def _start_goal(self, request: BrainRequest) -> BrainResponse:
         allowed = {

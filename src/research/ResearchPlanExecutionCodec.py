@@ -34,8 +34,12 @@ from research.ResearchAttemptRecoveryDecision import (
 from research.ResearchAttemptResolution import ResearchAttemptResolution
 from research.ResearchAuthorizer import ResearchAuthorizer
 from research.ResearchAutonomyBudget import ResearchAutonomyBudget
+from research.ResearchDisclosure import ResearchDisclosure
+from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchExecutionAllowance import ResearchExecutionAllowance
 from research.ResearchExecutionSpend import ResearchExecutionSpend
+from research.ResearchMissionRecoveryCheckpoint import ResearchMissionRecoveryCheckpoint
+from research.ResearchMissionScope import ResearchMissionScope
 from research.ResearchPlanDigest import is_plan_digest
 from research.ResearchPlanExecutionSnapshot import (
     MAX_SNAPSHOT_DETAIL_CHARACTERS,
@@ -46,6 +50,7 @@ from research.ResearchPlanExecutionSnapshot import (
 from research.ResearchPlanExecutionStatus import ResearchPlanExecutionStatus
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 from research.ResearchPlanStepStatus import ResearchPlanStepStatus
+from research.SemanticMissionPolicy import SemanticMissionPolicy
 
 _EXECUTION_FIELDS = frozenset(
     {
@@ -63,6 +68,11 @@ _EXECUTION_FIELDS = frozenset(
 _EXECUTION_FIELDS_V1 = _EXECUTION_FIELDS - {"allowance"}
 _EXECUTION_FIELDS_WITH_TARGET = _EXECUTION_FIELDS | {"target_plan_digest"}
 _EXECUTION_FIELDS_WITH_MISSION = _EXECUTION_FIELDS | {"mission_plan_digest"}
+_EXECUTION_FIELDS_WITH_MISSION_RECOVERY = _EXECUTION_FIELDS_WITH_MISSION | {
+    "mission_scope",
+    "mission_disclosure",
+    "mission_checkpoint",
+}
 _ALLOWANCE_FIELDS = frozenset({"budget", "spend"})
 _BUDGET_FIELDS = frozenset(
     {
@@ -133,6 +143,12 @@ def encode_execution_snapshot(
         document["target_plan_digest"] = snapshot.target_plan_digest
     if snapshot.mission_plan_digest is not None:
         document["mission_plan_digest"] = snapshot.mission_plan_digest
+    if snapshot.mission_scope is not None:
+        document["mission_scope"] = _encode_mission_scope(snapshot.mission_scope)
+        document["mission_disclosure"] = snapshot.mission_disclosure.value
+        document["mission_checkpoint"] = _encode_mission_checkpoint(
+            snapshot.mission_checkpoint
+        )
     return document
 
 
@@ -143,6 +159,7 @@ def decode_execution_snapshot(document: object) -> ResearchPlanExecutionSnapshot
         _EXECUTION_FIELDS_V1,
         _EXECUTION_FIELDS_WITH_TARGET,
         _EXECUTION_FIELDS_WITH_MISSION,
+        _EXECUTION_FIELDS_WITH_MISSION_RECOVERY,
     ):
         raise ResearchError("Execution snapshot document is invalid.")
     if "mission_plan_digest" in document and not is_plan_digest(
@@ -175,8 +192,145 @@ def decode_execution_snapshot(document: object) -> ResearchPlanExecutionSnapshot
         allowance=_decode_allowance(document.get("allowance")),
         target_plan_digest=document.get("target_plan_digest"),
         mission_plan_digest=document.get("mission_plan_digest"),
+        mission_scope=(
+            _decode_mission_scope(document["mission_scope"])
+            if "mission_scope" in document
+            else None
+        ),
+        mission_disclosure=(
+            _enum(
+                document["mission_disclosure"],
+                ResearchDisclosure,
+                "mission disclosure",
+            )
+            if "mission_disclosure" in document
+            else ResearchDisclosure.NONE
+        ),
+        mission_checkpoint=(
+            _decode_mission_checkpoint(document["mission_checkpoint"])
+            if "mission_checkpoint" in document
+            else None
+        ),
         steps=tuple(_decode_step(value) for value in steps_value),
     )
+
+
+def _encode_mission_scope(scope: ResearchMissionScope) -> dict[str, Any]:
+    """Encode the exact, digest-bound semantic scope without granting it."""
+    policy = scope.semantic_policy
+    assert policy is not None
+    return {
+        "provider": scope.provider.value,
+        "source_policy": scope.source_policy,
+        "max_source_bytes": scope.max_source_bytes,
+        "max_sources": scope.max_sources,
+        "semantic_policy": {
+            "endpoint": policy.endpoint,
+            "model": policy.model,
+            "disclosure": policy.disclosure.value,
+            "max_input_bytes": policy.max_input_bytes,
+            "input_scope": policy.input_scope,
+            "selection": policy.selection,
+            "retention": policy.retention,
+        },
+    }
+
+
+def _decode_mission_scope(value: object) -> ResearchMissionScope:
+    fields = {
+        "provider",
+        "source_policy",
+        "max_source_bytes",
+        "max_sources",
+        "semantic_policy",
+    }
+    policy_fields = {
+        "endpoint",
+        "model",
+        "disclosure",
+        "max_input_bytes",
+        "input_scope",
+        "selection",
+        "retention",
+    }
+    if not isinstance(value, dict) or set(value) != fields:
+        raise ResearchError("Execution snapshot mission scope is invalid.")
+    policy_value = value["semantic_policy"]
+    if not isinstance(policy_value, dict) or set(policy_value) != policy_fields:
+        raise ResearchError("Execution snapshot mission policy is invalid.")
+    try:
+        provider = ResearchDiscoveryProviderName(value["provider"])
+    except (TypeError, ValueError) as error:
+        raise ResearchError(
+            "Execution snapshot mission provider is invalid."
+        ) from error
+    try:
+        policy = SemanticMissionPolicy(
+            endpoint=policy_value["endpoint"],
+            model=policy_value["model"],
+            disclosure=ResearchDisclosure(policy_value["disclosure"]),
+            max_input_bytes=policy_value["max_input_bytes"],
+            input_scope=policy_value["input_scope"],
+            selection=policy_value["selection"],
+            retention=policy_value["retention"],
+        )
+        return ResearchMissionScope(
+            provider=provider,
+            source_policy=value["source_policy"],
+            max_source_bytes=value["max_source_bytes"],
+            max_sources=value["max_sources"],
+            semantic_policy=policy,
+        )
+    except (ResearchError, TypeError, ValueError) as error:
+        raise ResearchError("Execution snapshot mission scope is invalid.") from error
+
+
+def _encode_mission_checkpoint(
+    checkpoint: ResearchMissionRecoveryCheckpoint | None,
+) -> dict[str, Any] | None:
+    if checkpoint is None:
+        return None
+    return {
+        "discovery_id": checkpoint.discovery_id,
+        "acquired_urls": list(checkpoint.acquired_urls),
+        "body_hashes": list(checkpoint.body_hashes),
+        "inspected_bytes": checkpoint.inspected_bytes,
+        "evidence_ids": list(checkpoint.evidence_ids),
+        "assessment_ids": list(checkpoint.assessment_ids),
+    }
+
+
+def _decode_mission_checkpoint(
+    value: object,
+) -> ResearchMissionRecoveryCheckpoint | None:
+    if value is None:
+        return None
+    fields = {
+        "discovery_id",
+        "acquired_urls",
+        "body_hashes",
+        "inspected_bytes",
+        "evidence_ids",
+        "assessment_ids",
+    }
+    if not isinstance(value, dict) or set(value) != fields:
+        raise ResearchError("Execution snapshot mission checkpoint is invalid.")
+    sequences = ("acquired_urls", "body_hashes", "evidence_ids", "assessment_ids")
+    if any(not isinstance(value[name], list) for name in sequences):
+        raise ResearchError("Execution snapshot mission checkpoint is invalid.")
+    try:
+        return ResearchMissionRecoveryCheckpoint(
+            discovery_id=value["discovery_id"],
+            acquired_urls=tuple(value["acquired_urls"]),
+            body_hashes=tuple(value["body_hashes"]),
+            inspected_bytes=value["inspected_bytes"],
+            evidence_ids=tuple(value["evidence_ids"]),
+            assessment_ids=tuple(value["assessment_ids"]),
+        )
+    except ResearchError as error:
+        raise ResearchError(
+            "Execution snapshot mission checkpoint is invalid."
+        ) from error
 
 
 def _encode_allowance(

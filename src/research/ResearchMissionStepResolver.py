@@ -18,12 +18,15 @@ from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchEvidenceAuthorization import ResearchEvidenceAuthorization
 from research.ResearchEvidenceIntegrityAuditor import ResearchEvidenceIntegrityAuditor
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
+from research.ResearchMissionRecoveryCheckpoint import ResearchMissionRecoveryCheckpoint
 from research.ResearchPlan import ResearchPlan
 from research.ResearchPlanDigest import plan_digest
 from research.ResearchPlanExecutionContext import ResearchPlanExecutionContext
+from research.ResearchPlanExecutionSnapshot import ResearchPlanExecutionStepSnapshot
 from research.ResearchPlanStep import ResearchPlanStep
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability as Cap
 from research.ResearchPlanStepOperationResult import ResearchPlanStepOperationResult
+from research.ResearchPlanStepStatus import ResearchPlanStepStatus
 from research.ResearchQueryTerms import normalized_terms
 from research.ResearchRun import ResearchRun
 from research.ResearchRunManager import ResearchRunManager
@@ -237,6 +240,168 @@ class ResearchMissionStepResolver:
                 f"source SHA256 {preview.content_sha256}.",
             ),
         ), replace(context, evidence_chunk_sha256=digest)
+
+    def checkpoint(
+        self, plan: ResearchPlan
+    ) -> ResearchMissionRecoveryCheckpoint | None:
+        """Return non-content predecessor facts for one safely resumable mission."""
+        observed = self._observed.get(plan.plan_id)
+        if observed is None:
+            return None
+        return ResearchMissionRecoveryCheckpoint(
+            discovery_id=observed.discovery_id,
+            acquired_urls=observed.acquired_urls,
+            body_hashes=observed.body_hashes,
+            inspected_bytes=observed.inspected_bytes,
+            evidence_ids=tuple(value.evidence_id for value in observed.evidence),
+            assessment_ids=tuple(value.assessment_id for value in observed.assessments),
+        )
+
+    def restore(
+        self,
+        plan: ResearchPlan,
+        checkpoint: ResearchMissionRecoveryCheckpoint | None,
+        steps: tuple[ResearchPlanExecutionStepSnapshot, ...],
+        run_id: str,
+    ) -> None:
+        """Rebuild only durable predecessor observations after a process restart.
+
+        A fetch preview and a model proposal are intentionally transient. If a
+        restart finds either boundary half-complete, it refuses before another
+        provider/model operation can be reached.
+        """
+        scope = plan.mission_scope
+        if scope is None or scope.semantic_policy is None:
+            raise ResearchError(
+                "Mission recovery requires the recorded semantic scope."
+            )
+        if plan.plan_id in self._observed:
+            raise ResearchError(
+                "Mission observations are already live in this process."
+            )
+        if len(self._observed) >= 20:
+            raise ResearchError("Mission observation capacity reached.")
+        by_id = {step.step_id: step for step in steps}
+        if {step.step_id for step in plan.steps} != set(by_id):
+            raise ResearchError(
+                "Mission recovery steps do not match the approved plan."
+            )
+        self._reject_transient_boundary(plan, by_id)
+        if checkpoint is None:
+            if any(
+                step.status is ResearchPlanStepStatus.COMPLETED
+                for step in by_id.values()
+            ):
+                raise ResearchError(
+                    "Mission durable predecessor checkpoint is unavailable."
+                )
+            self._observed[plan.plan_id] = _Observations(plan_digest(plan), run_id)
+            return
+        run = self._runs.get(run_id)
+        if run.question != plan.question or run.status.terminal:
+            raise ResearchError("Mission cannot change its original question or run.")
+        if not checkpoint.discovery_id:
+            raise ResearchError("Mission discovery checkpoint is unavailable.")
+        discovery = next(
+            (
+                value
+                for value in run.discoveries
+                if value.discovery_id == checkpoint.discovery_id
+            ),
+            None,
+        )
+        if (
+            discovery is None
+            or discovery.query != plan.question
+            or discovery.provider != self._providers.get(scope.provider)
+        ):
+            raise ResearchError("Mission discovery checkpoint no longer matches.")
+        sources = {value.document_id: value for value in run.sources}
+        if any(
+            not any(source.url == url for source in sources.values())
+            for url in checkpoint.acquired_urls
+        ):
+            raise ResearchError("Mission source checkpoint no longer matches.")
+        evidence_by_id = {value.evidence_id: value for value in run.evidence}
+        assessment_by_id = {value.assessment_id: value for value in run.assessments}
+        try:
+            evidence = tuple(evidence_by_id[value] for value in checkpoint.evidence_ids)
+            assessments = tuple(
+                assessment_by_id[value] for value in checkpoint.assessment_ids
+            )
+        except KeyError as error:
+            raise ResearchError(
+                "Mission evidence checkpoint no longer matches."
+            ) from error
+        evidence_ids = {value.evidence_id for value in evidence}
+        if any(value.source_document_id not in sources for value in evidence) or any(
+            not set(value.evidence_ids).issubset(evidence_ids) for value in assessments
+        ):
+            raise ResearchError("Mission assessment checkpoint no longer matches.")
+        observed = _Observations(
+            digest=plan_digest(plan),
+            run_id=run_id,
+            discovery_id=checkpoint.discovery_id,
+            attempted_urls=checkpoint.acquired_urls,
+            acquired_urls=checkpoint.acquired_urls,
+            body_hashes=checkpoint.body_hashes,
+            inspected_bytes=checkpoint.inspected_bytes,
+            evidence=evidence,
+            assessments=assessments,
+        )
+        self._validate_recorded_evidence(observed, run)
+        self._observed[plan.plan_id] = observed
+
+    @staticmethod
+    def _reject_transient_boundary(
+        plan: ResearchPlan,
+        steps: dict[str, ResearchPlanExecutionStepSnapshot],
+    ) -> None:
+        """Refuse uncertain previews/model results rather than replaying them."""
+        for index, step in enumerate(plan.steps):
+            state = steps[step.step_id]
+            if step.capability is Cap.SOURCE_FETCH and (
+                state.status is ResearchPlanStepStatus.COMPLETED
+                and (
+                    index + 1 >= len(plan.steps)
+                    or steps[plan.steps[index + 1].step_id].capability
+                    is not Cap.SOURCE_ACCEPT
+                    or steps[plan.steps[index + 1].step_id].status
+                    is not ResearchPlanStepStatus.COMPLETED
+                )
+            ):
+                raise ResearchError(
+                    "Mission inspected preview was not durably accepted; no refetch "
+                    "or replay is permitted."
+                )
+            if step.capability is Cap.SOURCE_ACCEPT and (
+                state.status is ResearchPlanStepStatus.COMPLETED
+                and (
+                    index + 1 >= len(plan.steps)
+                    or steps[plan.steps[index + 1].step_id].capability
+                    is not Cap.EVIDENCE_RECORDING
+                    or steps[plan.steps[index + 1].step_id].status
+                    is not ResearchPlanStepStatus.COMPLETED
+                )
+            ):
+                raise ResearchError(
+                    "Mission accepted source lacks its durable evidence checkpoint; "
+                    "no inferred preview or replay is permitted."
+                )
+            if step.capability is Cap.SEMANTIC_EVIDENCE_COMPARISON and (
+                state.status is ResearchPlanStepStatus.COMPLETED
+                and (
+                    index + 1 >= len(plan.steps)
+                    or steps[plan.steps[index + 1].step_id].capability
+                    is not Cap.SOURCE_COMPARISON
+                    or steps[plan.steps[index + 1].step_id].status
+                    is not ResearchPlanStepStatus.COMPLETED
+                )
+            ):
+                raise ResearchError(
+                    "Mission model output was not durably retained; no model replay "
+                    "is permitted."
+                )
 
     def observe(
         self,

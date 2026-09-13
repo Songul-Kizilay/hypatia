@@ -2,6 +2,31 @@
 
 All notable project changes are recorded here.
 
+## [0.3.339] - 2026-09-14
+
+### Added
+
+- Safe restart/resume for the current bounded semantic learning mission after a
+  durable source/evidence/assessment checkpoint. The existing mission plan,
+  consumed approval, exact endpoint/model/disclosure, source scope and one
+  cumulative allowance are reconstructed and verified before remaining approved
+  work continues. Completed operations are never replayed.
+- A non-content mission recovery checkpoint alongside execution persistence. It
+  stores only canonical discovery/evidence/assessment identities, accepted URL
+  identities, body fingerprints and inspected-byte accounting; source bodies,
+  transient fetch previews and model proposals remain outside this snapshot.
+
+### Boundaries
+
+- A restart after a fetched-but-unaccepted preview, or after a model result that
+  was not retained as its next durable note, remains fail-closed. Hypatia leaves
+  that execution restored and reportable without refetching, re-calling a model,
+  refunding budget or guessing an outcome.
+- This is a narrow recovery path for the existing semantic learning mission, not
+  a general scheduler, generic agent runtime, dynamic replanner or live-model
+  validation. No provider/model fallback, retry loop, desktop change, push or
+  remote CI is introduced.
+
 ## [0.3.338] - 2026-09-13
 
 ### Added

@@ -71,6 +71,7 @@ from research.ResearchCapabilityCost import cost_for
 from research.ResearchContinuationStopReason import (
     ResearchContinuationStopReason,
 )
+from research.ResearchDisclosure import ResearchDisclosure
 from research.ResearchExecutionAllowance import ResearchExecutionAllowance
 from research.ResearchExecutionContinuation import (
     MAX_FOREGROUND_CONTINUATION_STEPS,
@@ -399,10 +400,21 @@ class ResearchPlanExecutionApplicationService:
             return ResearchPlanExecutionStartRefusal(
                 "No durable execution with that identity was restored."
             )
-        if snapshot.mission_plan_digest is not None or plan.mission_scope is not None:
+        mission = (
+            snapshot.mission_plan_digest is not None or plan.mission_scope is not None
+        )
+        if mission and (
+            self._mission_resolver is None
+            or snapshot.mission_plan_digest is None
+            or snapshot.mission_scope is None
+            or plan.mission_scope != snapshot.mission_scope
+            or snapshot.mission_disclosure is ResearchDisclosure.NONE
+            or snapshot.research_run_id != research_run_id
+            or plan_digest(plan) != snapshot.mission_plan_digest
+        ):
             return ResearchPlanExecutionStartRefusal(
-                "Mission transient source observations were not restored. "
-                "Recorded spending is retained; no silent refetch or replay."
+                "Mission recovery lacks its exact recorded authority, scope or "
+                "disclosure; no source or model call was replayed."
             )
         if execution_id in self._executions:
             return ResearchPlanExecutionStartRefusal(
@@ -470,16 +482,34 @@ class ResearchPlanExecutionApplicationService:
                 detail=snapshot.detail,
             )
             context = ResearchPlanExecutionContext(
-                research_run_id=research_run_id, target_binding=plan.target_binding
+                research_run_id=research_run_id,
+                target_binding=plan.target_binding,
+                disclosure=(
+                    snapshot.mission_disclosure if mission else ResearchDisclosure.NONE
+                ),
             )
         except ResearchError as error:
             return ResearchPlanExecutionStartRefusal(str(error))
         bound = replace(plan, plan_id=execution_id)
+        if mission:
+            assert self._mission_resolver is not None
+            try:
+                self._mission_resolver.restore(
+                    bound,
+                    snapshot.mission_checkpoint,
+                    snapshot.steps,
+                    research_run_id,
+                )
+            except ResearchError as error:
+                return ResearchPlanExecutionStartRefusal(str(error))
         with self._commit_lock:
             self._executions[execution_id] = state
             self._plans[execution_id] = bound
         self._contexts[execution_id] = context
         self._allowances[execution_id] = snapshot.allowance
+        if mission:
+            assert snapshot.mission_plan_digest is not None
+            self._mission_digests[execution_id] = snapshot.mission_plan_digest
         self._restored.pop(execution_id, None)
         return state
 
@@ -545,6 +575,14 @@ class ResearchPlanExecutionApplicationService:
     ) -> ResearchPlanExecutionSnapshot | None:
         """Return restored durable state, which can be read but not advanced."""
         return self._restored.get(plan_id)
+
+    def restored_mission_executions(self) -> tuple[ResearchPlanExecutionSnapshot, ...]:
+        """Return only new-format mission snapshots eligible for safe recovery."""
+        return tuple(
+            snapshot
+            for snapshot in self._restored.values()
+            if snapshot.mission_scope is not None
+        )
 
     def process_status(self, request: BrainRequest) -> BrainResponse:
         """Report live state, restored durable state, or neither."""
@@ -1320,26 +1358,40 @@ class ResearchPlanExecutionApplicationService:
     def _snapshots(self) -> list[ResearchPlanExecutionSnapshot]:
         """Capture live executions, keeping restored history alongside them."""
         recorded_at = self._clock()
-        snapshots = [
-            ResearchPlanExecutionSnapshot.capture(
-                state,
-                self._plans[plan_id].question,
-                self._plans[plan_id].steps,
-                recorded_at,
-                self._contexts.get(
-                    plan_id,
-                    ResearchPlanExecutionContext(),
-                ).research_run_id,
-                self._allowances.get(plan_id),
-                target_plan_digest=(
-                    plan_digest(self._plans[plan_id])
-                    if self._plans[plan_id].target_binding is not None
-                    else None
-                ),
-                mission_plan_digest=self._mission_digests.get(plan_id),
+        snapshots: list[ResearchPlanExecutionSnapshot] = []
+        for plan_id, state in self._executions.items():
+            plan = self._plans[plan_id]
+            context = self._contexts.get(plan_id, ResearchPlanExecutionContext())
+            mission_scope = None
+            mission_disclosure = ResearchDisclosure.NONE
+            mission_checkpoint = None
+            scope = plan.mission_scope
+            if (
+                scope is not None
+                and scope.semantic_policy is not None
+                and context.disclosure is scope.semantic_policy.disclosure
+            ):
+                mission_scope = scope
+                mission_disclosure = context.disclosure
+                if self._mission_resolver is not None:
+                    mission_checkpoint = self._mission_resolver.checkpoint(plan)
+            snapshots.append(
+                ResearchPlanExecutionSnapshot.capture(
+                    state,
+                    plan.question,
+                    plan.steps,
+                    recorded_at,
+                    context.research_run_id,
+                    self._allowances.get(plan_id),
+                    target_plan_digest=(
+                        plan_digest(plan) if plan.target_binding is not None else None
+                    ),
+                    mission_plan_digest=self._mission_digests.get(plan_id),
+                    mission_scope=mission_scope,
+                    mission_disclosure=mission_disclosure,
+                    mission_checkpoint=mission_checkpoint,
+                )
             )
-            for plan_id, state in self._executions.items()
-        ]
         snapshots.extend(
             snapshot
             for plan_id, snapshot in self._restored.items()

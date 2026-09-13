@@ -2,10 +2,17 @@
 
 ## Runtime Version
 
-`v0.3.337 (Genesis)`
+`v0.3.339 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.339 adds the first narrow autonomous-mission recovery slice. After
+a restart, an already authorized bounded semantic learning mission resumes only
+from a durable source/evidence/assessment checkpoint, reusing the exact mission
+digest, scope, disclosure and cumulative allowance. Completed steps are not
+replayed. A transient fetched preview or unretained model result remains safely
+stopped and reportable; it is never guessed, refetched or re-called.
 
 ### 2026-09-08 checklist reconciliation
 

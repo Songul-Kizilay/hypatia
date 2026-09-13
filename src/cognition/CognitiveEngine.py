@@ -567,6 +567,7 @@ class CognitiveEngine:
                 else None
             ),
         )
+        self._research_goal_start_service.resume_restored_learning_missions()
         self._background_research_scheduler = (
             BackgroundResearchSchedulerApplicationService(
                 self._research_autonomy_service,

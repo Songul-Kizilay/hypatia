@@ -172,6 +172,156 @@ class LearningResearchJourneyTests(unittest.TestCase):
         restored = JsonFileResearchRunStore(self.root / "runs.json").load()
         self.assertEqual(restored[0], run)
 
+    def test_restart_resumes_from_durable_first_source_checkpoint_without_replay(self):
+        """A restart continues durable work, never a transient preview/model call."""
+        real_advance = self.execution.process_advance
+
+        def interrupt_after_first_assessment(request):
+            state = self.execution.live_execution(request.metadata["research_plan_id"])
+            if state is not None and state.completed_steps == 6:
+                raise RuntimeError("simulated process interruption")
+            return real_advance(request)
+
+        with patch.object(
+            self.execution,
+            "process_advance",
+            side_effect=interrupt_after_first_assessment,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "simulated process interruption"):
+                self.start()
+
+        snapshot = self.execution._execution_store.load()[0]
+        self.assertEqual(snapshot.steps[5].status.value, "completed")
+        self.assertIsNotNone(snapshot.mission_scope)
+        self.assertIsNotNone(snapshot.mission_checkpoint)
+        self.assertEqual(snapshot.mission_checkpoint.evidence_ids.__len__(), 1)
+        self.assertEqual(self.provider.discover.call_count, 1)
+        self.assertEqual(self.fetcher.fetch.call_count, 1)
+        self.transport.assert_not_called()
+
+        release_all()
+        restarted = Bootstrap(
+            memory_path=self.root / "memory.json",
+            session_path=self.root / "sessions.json",
+            knowledge_relation_path=self.root / "relations.json",
+            research_run_path=self.root / "runs.json",
+            llm_config=LLMRuntimeConfig(True, self.policy.endpoint, self.policy.model),
+            llm_provider=Mock(),
+            semantic_comparison_transport=self.transport,
+            research_source_fetcher=self.fetcher,
+            research_source_discovery_provider=self.provider,
+            research_source_discovery_providers={
+                ResearchDiscoveryProviderName.CROSSREF: self.provider
+            },
+        )
+        restarted.initialize()
+        engine = restarted.container.resolve(CognitiveEngine)
+        state = engine._research_plan_execution_service.live_execution(snapshot.plan_id)
+
+        self.assertIsNotNone(state)
+        self.assertEqual(state.completed_steps, 18)
+        self.assertEqual(self.provider.discover.call_count, 1)
+        self.assertEqual(self.fetcher.fetch.call_count, 3)
+        self.assertEqual(self.transport.call_count, 2)
+        allowance = engine._research_plan_execution_service.allowance(snapshot.plan_id)
+        self.assertEqual(
+            (
+                allowance.spend.step_advances,
+                allowance.spend.network_operations,
+                allowance.spend.llm_operations,
+            ),
+            (18, 9, 2),
+        )
+
+    def test_restart_refuses_transient_fetch_preview_without_replaying_it(self):
+        """A fetched-but-unaccepted page has no durable content checkpoint."""
+        real_advance = self.execution.process_advance
+
+        def interrupt_after_fetch(request):
+            state = self.execution.live_execution(request.metadata["research_plan_id"])
+            if state is not None and state.completed_steps == 3:
+                raise RuntimeError("simulated process interruption")
+            return real_advance(request)
+
+        with patch.object(
+            self.execution, "process_advance", side_effect=interrupt_after_fetch
+        ):
+            with self.assertRaisesRegex(RuntimeError, "simulated process interruption"):
+                self.start()
+
+        snapshot = self.execution._execution_store.load()[0]
+        self.assertEqual(snapshot.steps[2].status.value, "completed")
+        self.assertEqual(self.fetcher.fetch.call_count, 1)
+        release_all()
+        restarted = Bootstrap(
+            memory_path=self.root / "memory.json",
+            session_path=self.root / "sessions.json",
+            knowledge_relation_path=self.root / "relations.json",
+            research_run_path=self.root / "runs.json",
+            llm_config=LLMRuntimeConfig(True, self.policy.endpoint, self.policy.model),
+            llm_provider=Mock(),
+            semantic_comparison_transport=self.transport,
+            research_source_fetcher=self.fetcher,
+            research_source_discovery_provider=self.provider,
+            research_source_discovery_providers={
+                ResearchDiscoveryProviderName.CROSSREF: self.provider
+            },
+        )
+        restarted.initialize()
+        engine = restarted.container.resolve(CognitiveEngine)
+
+        self.assertIsNone(
+            engine._research_plan_execution_service.live_execution(snapshot.plan_id)
+        )
+        self.assertIsNotNone(
+            engine._research_plan_execution_service.restored_execution(snapshot.plan_id)
+        )
+        self.assertEqual(self.provider.discover.call_count, 1)
+        self.assertEqual(self.fetcher.fetch.call_count, 1)
+        self.transport.assert_not_called()
+
+    def test_restart_refuses_accepted_source_without_evidence_preview(self):
+        """Acceptance persists source text, not the transient evidence selection."""
+        real_advance = self.execution.process_advance
+
+        def interrupt_after_acceptance(request):
+            state = self.execution.live_execution(request.metadata["research_plan_id"])
+            if state is not None and state.completed_steps == 4:
+                raise RuntimeError("simulated process interruption")
+            return real_advance(request)
+
+        with patch.object(
+            self.execution, "process_advance", side_effect=interrupt_after_acceptance
+        ):
+            with self.assertRaisesRegex(RuntimeError, "simulated process interruption"):
+                self.start()
+
+        snapshot = self.execution._execution_store.load()[0]
+        release_all()
+        restarted = Bootstrap(
+            memory_path=self.root / "memory.json",
+            session_path=self.root / "sessions.json",
+            knowledge_relation_path=self.root / "relations.json",
+            research_run_path=self.root / "runs.json",
+            llm_config=LLMRuntimeConfig(True, self.policy.endpoint, self.policy.model),
+            llm_provider=Mock(),
+            semantic_comparison_transport=self.transport,
+            research_source_fetcher=self.fetcher,
+            research_source_discovery_provider=self.provider,
+            research_source_discovery_providers={
+                ResearchDiscoveryProviderName.CROSSREF: self.provider
+            },
+        )
+        restarted.initialize()
+        execution = restarted.container.resolve(
+            CognitiveEngine
+        )._research_plan_execution_service
+
+        self.assertIsNone(execution.live_execution(snapshot.plan_id))
+        self.assertIsNotNone(execution.restored_execution(snapshot.plan_id))
+        self.assertEqual(self.fetcher.fetch.call_count, 1)
+        self.transport.assert_not_called()
+
     def test_not_comparable_stops_without_followup_or_retry(self):
         self.relation = "not_comparable"
         response = self.start()
