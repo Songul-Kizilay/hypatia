@@ -22,6 +22,9 @@ class ResearchMissionRecoveryCheckpoint:
     inspected_bytes: int = 0
     evidence_ids: tuple[str, ...] = ()
     assessment_ids: tuple[str, ...] = ()
+    semantic_note_id: str = ""
+    semantic_input_fingerprint: str = ""
+    semantic_relation: str = ""
 
     def __post_init__(self) -> None:
         values = (
@@ -49,9 +52,39 @@ class ResearchMissionRecoveryCheckpoint:
                 or any(character not in "0123456789abcdef" for character in value)
                 for value in self.body_hashes
             )
+            or not isinstance(self.semantic_note_id, str)
+            or not isinstance(self.semantic_input_fingerprint, str)
+            or not isinstance(self.semantic_relation, str)
+            or self.semantic_note_id != self.semantic_note_id.strip()
+            or self.semantic_relation
+            not in {
+                "",
+                "possible_agreement",
+                "possible_conflict",
+                "not_comparable",
+                "no_supported_comparison",
+            }
+            or bool(self.semantic_note_id) != bool(self.semantic_input_fingerprint)
+            or bool(self.semantic_note_id) != bool(self.semantic_relation)
+            or (
+                self.semantic_input_fingerprint
+                and (
+                    len(self.semantic_input_fingerprint) != 64
+                    or any(
+                        character not in "0123456789abcdef"
+                        for character in self.semantic_input_fingerprint
+                    )
+                )
+            )
         ):
             raise ResearchError("Mission recovery checkpoint is invalid.")
         object.__setattr__(self, "discovery_id", self.discovery_id.strip())
+        object.__setattr__(self, "semantic_note_id", self.semantic_note_id.strip())
+        object.__setattr__(
+            self,
+            "semantic_input_fingerprint",
+            self.semantic_input_fingerprint.strip(),
+        )
         for field in ("acquired_urls", "body_hashes", "evidence_ids", "assessment_ids"):
             object.__setattr__(
                 self,

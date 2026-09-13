@@ -2,6 +2,30 @@
 
 All notable project changes are recorded here.
 
+## [0.3.340] - 2026-09-14
+
+### Added
+
+- Restart recovery now retains a bounded, non-content adaptation checkpoint
+  after the first validated semantic result has been recorded as a canonical
+  tentative comparison note. The checkpoint binds the note ID, exact model-input
+  fingerprint and one structural relation outcome; it never stores or recreates
+  model output.
+- On restart, only the existing pre-approved optional third-source branch may
+  continue. A retained `possible_conflict` or empty supported comparison can use
+  that one branch; `possible_agreement` and `not_comparable` end it without a
+  retry, new query or additional spend.
+
+### Boundaries
+
+- The canonical run note, original plan digest, source/evidence/assessment IDs,
+  recorded fingerprint, disclosure-bound scope and existing cumulative allowance
+  are checked before continuation. Missing, legacy, changed or mismatched note
+  state remains restored and reportable without a fetch or model call.
+- This remains one fixed conditional transition in the existing plan. It is not
+  general replanning, source ranking, model-directed planning, provider fallback,
+  retry behavior, a new authorization path, or a fresh budget.
+
 ## [0.3.339] - 2026-09-14
 
 ### Added

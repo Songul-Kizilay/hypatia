@@ -73,6 +73,21 @@ _EXECUTION_FIELDS_WITH_MISSION_RECOVERY = _EXECUTION_FIELDS_WITH_MISSION | {
     "mission_disclosure",
     "mission_checkpoint",
 }
+_MISSION_CHECKPOINT_FIELDS_V1 = frozenset(
+    {
+        "discovery_id",
+        "acquired_urls",
+        "body_hashes",
+        "inspected_bytes",
+        "evidence_ids",
+        "assessment_ids",
+    }
+)
+_MISSION_CHECKPOINT_FIELDS = _MISSION_CHECKPOINT_FIELDS_V1 | {
+    "semantic_note_id",
+    "semantic_input_fingerprint",
+    "semantic_relation",
+}
 _ALLOWANCE_FIELDS = frozenset({"budget", "spend"})
 _BUDGET_FIELDS = frozenset(
     {
@@ -297,6 +312,9 @@ def _encode_mission_checkpoint(
         "inspected_bytes": checkpoint.inspected_bytes,
         "evidence_ids": list(checkpoint.evidence_ids),
         "assessment_ids": list(checkpoint.assessment_ids),
+        "semantic_note_id": checkpoint.semantic_note_id,
+        "semantic_input_fingerprint": checkpoint.semantic_input_fingerprint,
+        "semantic_relation": checkpoint.semantic_relation,
     }
 
 
@@ -305,15 +323,10 @@ def _decode_mission_checkpoint(
 ) -> ResearchMissionRecoveryCheckpoint | None:
     if value is None:
         return None
-    fields = {
-        "discovery_id",
-        "acquired_urls",
-        "body_hashes",
-        "inspected_bytes",
-        "evidence_ids",
-        "assessment_ids",
-    }
-    if not isinstance(value, dict) or set(value) != fields:
+    if not isinstance(value, dict) or set(value) not in (
+        _MISSION_CHECKPOINT_FIELDS_V1,
+        _MISSION_CHECKPOINT_FIELDS,
+    ):
         raise ResearchError("Execution snapshot mission checkpoint is invalid.")
     sequences = ("acquired_urls", "body_hashes", "evidence_ids", "assessment_ids")
     if any(not isinstance(value[name], list) for name in sequences):
@@ -326,6 +339,9 @@ def _decode_mission_checkpoint(
             inspected_bytes=value["inspected_bytes"],
             evidence_ids=tuple(value["evidence_ids"]),
             assessment_ids=tuple(value["assessment_ids"]),
+            semantic_note_id=value.get("semantic_note_id", ""),
+            semantic_input_fingerprint=value.get("semantic_input_fingerprint", ""),
+            semantic_relation=value.get("semantic_relation", ""),
         )
     except ResearchError as error:
         raise ResearchError(

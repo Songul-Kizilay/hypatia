@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.339
+## Current bounded text journey: v0.3.340
 
 ### Connected user journey
 
@@ -116,7 +116,45 @@ durable predecessor checkpoint remain fail-closed. No live model/provider call
 was used for validation; deterministic
 tests do not prove model accuracy or internet source reliability.
 
-### Verification and edit scope
+### Persisted semantic adaptation: v0.3.340
+
+After the first semantic comparison is structurally validated and recorded as a
+canonical tentative comparison note, the execution checkpoint records only its
+note ID, input fingerprint and one bounded relation outcome. It does not retain
+model output, source text or a second interpretation store. Recovery rechecks
+that note in the original run against the original plan digest, recorded source,
+evidence and assessment identities, and the exact input fingerprint before the
+existing autonomy loop can reach the plan's pre-authorized optional follow-up.
+
+`possible_conflict` and an empty supported comparison may continue into that one
+third-source branch; `possible_agreement` and `not_comparable` preserve the
+existing early-delivery stop. No dynamic pair selection, new query, provider,
+endpoint, disclosure permission, capability or budget can result from the note.
+Legacy checkpoints without this adaptation record, altered notes, missing notes,
+or any provenance mismatch remain restored and visibly blocked without spending
+or replaying a fetch/model operation.
+
+This does not establish general adaptive replanning or autonomous contradiction
+investigation. The next boundary is a separately bounded completion evaluation:
+it must decide whether the original question has sufficient cited support without
+promoting tentative semantic interpretations to verified truth.
+
+### v0.3.340 verification
+
+The real Bootstrap -> controller -> approval -> executor -> durable run/restart
+boundary is covered with deterministic discovery, fetch and model substitutes.
+New coverage proves one retained conflict continues exactly one authorized
+follow-up after restart without duplicating earlier work; changed-note and legacy
+checkpoint cases remain visibly blocked before another fetch or model call; and
+`not_comparable` remains an honest no-follow-up stop after restart.
+
+Local verification: 58 focused recovery/snapshot/target-binding tests passed;
+the full suite passed with **6,054 discovered tests**; Black checked 862 files,
+Ruff passed, MyPy passed 523 source files, and `git diff --check` passed. The
+full test commands produced no new failure output. No live provider/model call,
+push or remote CI trigger occurred.
+
+### v0.3.339 verification and edit scope
 
 Tests exercise actual Bootstrap -> controller -> goal -> approval -> autonomy ->
 executor -> fake model -> durable note/report paths, plus desktop confirmation and

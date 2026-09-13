@@ -131,6 +131,25 @@ class LearningResearchJourneyTests(unittest.TestCase):
             **kwargs,
         )
 
+    def restart(self):
+        release_all()
+        restarted = Bootstrap(
+            memory_path=self.root / "memory.json",
+            session_path=self.root / "sessions.json",
+            knowledge_relation_path=self.root / "relations.json",
+            research_run_path=self.root / "runs.json",
+            llm_config=LLMRuntimeConfig(True, self.policy.endpoint, self.policy.model),
+            llm_provider=Mock(),
+            semantic_comparison_transport=self.transport,
+            research_source_fetcher=self.fetcher,
+            research_source_discovery_provider=self.provider,
+            research_source_discovery_providers={
+                ResearchDiscoveryProviderName.CROSSREF: self.provider
+            },
+        )
+        restarted.initialize()
+        return restarted.container.resolve(CognitiveEngine)
+
     def test_one_approval_conflict_followup_then_cited_report(self):
         with (
             patch.object(
@@ -232,6 +251,152 @@ class LearningResearchJourneyTests(unittest.TestCase):
             ),
             (18, 9, 2),
         )
+
+    def test_restart_uses_persisted_conflict_note_for_one_followup(self):
+        """A retained tentative conflict unlocks only the declared next branch."""
+        real_advance = self.execution.process_advance
+
+        def interrupt_before_followup(request):
+            state = self.execution.live_execution(request.metadata["research_plan_id"])
+            if state is not None and state.completed_steps == 12:
+                raise RuntimeError("simulated restart after retained semantic note")
+            return real_advance(request)
+
+        with patch.object(
+            self.execution,
+            "process_advance",
+            side_effect=interrupt_before_followup,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "retained semantic note"):
+                self.start()
+
+        snapshot = self.execution._execution_store.load()[0]
+        checkpoint = snapshot.mission_checkpoint
+        self.assertIsNotNone(checkpoint)
+        self.assertEqual(checkpoint.semantic_relation, "possible_conflict")
+        self.assertTrue(checkpoint.semantic_note_id)
+        self.assertEqual(self.fetcher.fetch.call_count, 2)
+        self.assertEqual(self.transport.call_count, 1)
+
+        engine = self.restart()
+        state = engine._research_plan_execution_service.live_execution(snapshot.plan_id)
+        self.assertIsNotNone(state)
+        self.assertEqual(state.completed_steps, 18)
+        self.assertEqual(self.provider.discover.call_count, 1)
+        self.assertEqual(self.fetcher.fetch.call_count, 3)
+        self.assertEqual(self.transport.call_count, 2)
+        allowance = engine._research_plan_execution_service.allowance(snapshot.plan_id)
+        self.assertEqual(
+            (
+                allowance.spend.step_advances,
+                allowance.spend.network_operations,
+                allowance.spend.llm_operations,
+            ),
+            (18, 9, 2),
+        )
+
+    def test_restart_not_comparable_stops_without_replaying_or_followup(self):
+        """A retained non-comparable result ends the optional branch honestly."""
+        self.relation = "not_comparable"
+        response = self.start()
+        snapshot = self.execution._execution_store.load()[0]
+        self.assertEqual(response.research_plan_execution.completed_steps, 12)
+        engine = self.restart()
+        state = engine._research_plan_execution_service.live_execution(snapshot.plan_id)
+        self.assertIsNotNone(state)
+        self.assertEqual(state.completed_steps, 12)
+        self.assertEqual(self.provider.discover.call_count, 1)
+        self.assertEqual(self.fetcher.fetch.call_count, 2)
+        self.assertEqual(self.transport.call_count, 1)
+
+    def test_restart_refuses_altered_semantic_note_before_followup(self):
+        """A note text change cannot silently spend the approved followup call."""
+        real_advance = self.execution.process_advance
+
+        def interrupt_before_followup(request):
+            state = self.execution.live_execution(request.metadata["research_plan_id"])
+            if state is not None and state.completed_steps == 12:
+                raise RuntimeError("simulated restart after retained semantic note")
+            return real_advance(request)
+
+        with patch.object(
+            self.execution,
+            "process_advance",
+            side_effect=interrupt_before_followup,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "retained semantic note"):
+                self.start()
+
+        snapshot = self.execution._execution_store.load()[0]
+        checkpoint = snapshot.mission_checkpoint
+        self.assertIsNotNone(checkpoint)
+        path = self.root / "runs.json"
+        document = json.loads(path.read_text(encoding="utf-8"))
+        document["runs"][0]["comparison_notes"][0]["text"] = "altered retained note"
+        path.write_text(json.dumps(document), encoding="utf-8")
+
+        engine = self.restart()
+        execution = engine._research_plan_execution_service
+        self.assertIsNone(execution.live_execution(snapshot.plan_id))
+        self.assertIsNotNone(execution.restored_execution(snapshot.plan_id))
+        status = execution.process_status(
+            BrainRequest(
+                message="status",
+                metadata={
+                    "intent": "research_plan_execution_status",
+                    "research_plan_id": snapshot.plan_id,
+                },
+            )
+        )
+        self.assertIn("semantic note provenance", status.message)
+        self.assertEqual(self.fetcher.fetch.call_count, 2)
+        self.assertEqual(self.transport.call_count, 1)
+
+    def test_restart_refuses_legacy_note_checkpoint_before_followup(self):
+        """Older checkpoints never gain an inferred semantic branch decision."""
+        real_advance = self.execution.process_advance
+
+        def interrupt_before_followup(request):
+            state = self.execution.live_execution(request.metadata["research_plan_id"])
+            if state is not None and state.completed_steps == 12:
+                raise RuntimeError("simulated restart after retained semantic note")
+            return real_advance(request)
+
+        with patch.object(
+            self.execution,
+            "process_advance",
+            side_effect=interrupt_before_followup,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "retained semantic note"):
+                self.start()
+
+        snapshot = self.execution._execution_store.load()[0]
+        path = self.root / "research_executions.json"
+        document = json.loads(path.read_text(encoding="utf-8"))
+        checkpoint = document["executions"][0]["mission_checkpoint"]
+        for key in (
+            "semantic_note_id",
+            "semantic_input_fingerprint",
+            "semantic_relation",
+        ):
+            checkpoint.pop(key)
+        path.write_text(json.dumps(document), encoding="utf-8")
+
+        engine = self.restart()
+        execution = engine._research_plan_execution_service
+        self.assertIsNone(execution.live_execution(snapshot.plan_id))
+        status = execution.process_status(
+            BrainRequest(
+                message="status",
+                metadata={
+                    "intent": "research_plan_execution_status",
+                    "research_plan_id": snapshot.plan_id,
+                },
+            )
+        )
+        self.assertIn("adaptation checkpoint is unavailable", status.message)
+        self.assertEqual(self.fetcher.fetch.call_count, 2)
+        self.assertEqual(self.transport.call_count, 1)
 
     def test_restart_refuses_transient_fetch_preview_without_replaying_it(self):
         """A fetched-but-unaccepted page has no durable content checkpoint."""

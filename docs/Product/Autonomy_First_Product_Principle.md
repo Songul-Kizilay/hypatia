@@ -17,6 +17,12 @@ or silently repeated. Hypatia should state that uncertainty plainly and stop at
 the boundary rather than manufacture a conclusion, spend again, or conceal the
 gap.
 
+A persisted tentative interpretation may select only a branch that was already
+declared in the original mission. It must be bound back to the canonical run,
+sources, evidence, disclosure and input identity before the branch runs. It
+cannot authorize a new query, provider, model destination, disclosure, capability
+or budget, and it never upgrades a tentative relation into a verified fact.
+
 This principle does not permit unrestricted internet exploration, target testing,
 tool execution, provider substitution or fact promotion. It guides the product
 toward useful end-to-end learning while preserving explicit scope, privacy,

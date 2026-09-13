@@ -53,6 +53,9 @@ class _Observations:
     evidence: tuple[ResearchEvidenceRecord, ...] = ()
     assessments: tuple[ResearchSourceAssessmentRecord, ...] = ()
     comparison: SemanticComparisonStepResult | None = None
+    semantic_note_id: str = ""
+    semantic_input_fingerprint: str = ""
+    semantic_relation: str = ""
 
 
 class ResearchMissionStepResolver:
@@ -255,6 +258,9 @@ class ResearchMissionStepResolver:
             inspected_bytes=observed.inspected_bytes,
             evidence_ids=tuple(value.evidence_id for value in observed.evidence),
             assessment_ids=tuple(value.assessment_id for value in observed.assessments),
+            semantic_note_id=observed.semantic_note_id,
+            semantic_input_fingerprint=observed.semantic_input_fingerprint,
+            semantic_relation=observed.semantic_relation,
         )
 
     def restore(
@@ -350,6 +356,7 @@ class ResearchMissionStepResolver:
             assessments=assessments,
         )
         self._validate_recorded_evidence(observed, run)
+        self._restore_semantic_adaptation(plan, by_id, checkpoint, observed, run)
         self._observed[plan.plan_id] = observed
 
     @staticmethod
@@ -481,6 +488,17 @@ class ResearchMissionStepResolver:
             ):
                 raise ResearchError("Mission semantic result was lost or changed.")
             observed.comparison = value
+        elif (
+            step.capability is Cap.SOURCE_COMPARISON
+            and plan.mission_scope is not None
+            and len(plan.steps) > 11
+            and step.step_id == plan.steps[11].step_id
+        ):
+            if plan.mission_scope.semantic_policy is None:
+                return
+            self._observe_semantic_note(
+                plan, step, observed, self._runs.get(observed.run_id)
+            )
 
     def followup_unnecessary(self, plan: ResearchPlan, step_id: str | None) -> bool:
         scope = plan.mission_scope
@@ -494,13 +512,129 @@ class ResearchMissionStepResolver:
         if (
             observed is None
             or observed.digest != plan_digest(plan)
-            or observed.comparison is None
+            or not observed.semantic_relation
         ):
             return False
-        candidates = observed.comparison.candidates
-        return bool(candidates) and all(
-            c.relation.value != "possible_conflict" for c in candidates
+        return observed.semantic_relation in {
+            "possible_agreement",
+            "not_comparable",
+        }
+
+    def _observe_semantic_note(
+        self,
+        plan: ResearchPlan,
+        step: ResearchPlanStep,
+        observed: _Observations,
+        run: ResearchRun,
+    ) -> None:
+        """Bind one retained semantic result to its canonical comparison note."""
+        result = observed.comparison
+        authorization = step.comparison_authorization
+        if result is None or authorization is None:
+            raise ResearchError(
+                "Mission semantic note lacks validated comparison state."
+            )
+        note = next(
+            (
+                value
+                for value in reversed(run.comparison_notes)
+                if value.source_document_ids == authorization.document_ids
+                and value.evidence_ids == authorization.evidence_ids
+                and value.assessment_ids == authorization.assessment_ids
+                and value.text == authorization.text
+            ),
+            None,
         )
+        if note is None:
+            raise ResearchError("Mission semantic note was not durably retained.")
+        relation = (
+            result.candidates[0].relation.value
+            if result.candidates
+            else "no_supported_comparison"
+        )
+        observed.semantic_note_id = note.note_id
+        observed.semantic_input_fingerprint = result.request.content_fingerprint
+        observed.semantic_relation = relation
+
+    def _restore_semantic_adaptation(
+        self,
+        plan: ResearchPlan,
+        steps: dict[str, ResearchPlanExecutionStepSnapshot],
+        checkpoint: ResearchMissionRecoveryCheckpoint,
+        observed: _Observations,
+        run: ResearchRun,
+    ) -> None:
+        """Restore only a recorded note's bounded branch decision.
+
+        The model response remains transient.  This reads the canonical retained
+        note plus the non-content checkpoint and never attempts to recreate a
+        model result or infer one from ordinary note prose.
+        """
+        semantic_index = next(
+            (
+                index
+                for index, value in enumerate(plan.steps)
+                if value.capability is Cap.SEMANTIC_EVIDENCE_COMPARISON
+                and steps[value.step_id].status is ResearchPlanStepStatus.COMPLETED
+            ),
+            None,
+        )
+        if semantic_index is None:
+            return
+        note_index = semantic_index + 1
+        if (
+            note_index >= len(plan.steps)
+            or plan.steps[note_index].capability is not Cap.SOURCE_COMPARISON
+            or steps[plan.steps[note_index].step_id].status
+            is not ResearchPlanStepStatus.COMPLETED
+        ):
+            return
+        if not checkpoint.semantic_note_id:
+            raise ResearchError(
+                "Mission semantic note adaptation checkpoint is unavailable."
+            )
+        note = next(
+            (
+                value
+                for value in run.comparison_notes
+                if value.note_id == checkpoint.semantic_note_id
+            ),
+            None,
+        )
+        if note is None:
+            raise ResearchError("Mission semantic note checkpoint no longer matches.")
+        expected_evidence = tuple(value.evidence_id for value in observed.evidence[:2])
+        expected_documents = tuple(
+            value.source_document_id for value in observed.evidence[:2]
+        )
+        expected_assessments = tuple(
+            value.assessment_id
+            for value in observed.assessments
+            if value.evidence_ids[0] in expected_evidence
+        )
+        if (
+            note.evidence_ids != expected_evidence
+            or note.source_document_ids != expected_documents
+            or note.assessment_ids != expected_assessments
+            or f"Input SHA256 {checkpoint.semantic_input_fingerprint};" not in note.text
+            or f"mission {plan_digest(plan)}." not in note.text
+            or "Mission semantic research note; tentative interpretation, not truth."
+            not in note.text
+            or (
+                checkpoint.semantic_relation == "no_supported_comparison"
+                and "No supported comparison proposal; evidence gap remains."
+                not in note.text
+            )
+            or (
+                checkpoint.semantic_relation != "no_supported_comparison"
+                and f"Tentative relation: {checkpoint.semantic_relation}."
+                not in note.text
+            )
+        ):
+            raise ResearchError("Mission semantic note provenance no longer matches.")
+        observed.semantic_note_id = checkpoint.semantic_note_id
+        observed.semantic_input_fingerprint = checkpoint.semantic_input_fingerprint
+        observed.semantic_relation = checkpoint.semantic_relation
 
     def _semantic_note(
         self, step: ResearchPlanStep, observed: _Observations, run: ResearchRun
