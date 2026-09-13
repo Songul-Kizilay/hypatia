@@ -746,6 +746,7 @@ class TkinterDesktopWindow:
         label: str,
         *,
         cancellation_signal: CancellationSignal | None = None,
+        preserve_cancelled_result: bool = False,
     ) -> None:
         """Start one long action without blocking or queueing the Tk event loop."""
 
@@ -759,6 +760,7 @@ class TkinterDesktopWindow:
             present,
             label,
             cancellation_signal=cancellation_signal,
+            preserve_cancelled_result=preserve_cancelled_result,
         )
 
     def _start_tool_request(
@@ -789,17 +791,23 @@ class TkinterDesktopWindow:
         label: str,
         *,
         cancellation_signal: CancellationSignal | None = None,
+        preserve_cancelled_result: bool = False,
     ) -> Literal["started", "busy", "stopped", "failed"]:
         """Reserve the one desktop worker for one bounded local action."""
         if self._closing:
             self._status.set("Hypatia is closing.")
             return "stopped"
-        start_result = self._request_runner.start(
-            action,
-            cancel_callback=(
-                cancellation_signal.cancel if cancellation_signal is not None else None
-            ),
+        cancel_callback = (
+            cancellation_signal.cancel if cancellation_signal is not None else None
         )
+        if preserve_cancelled_result:
+            start_result = self._request_runner.start(
+                action, cancel_callback=cancel_callback, preserve_cancelled_result=True
+            )
+        else:
+            start_result = self._request_runner.start(
+                action, cancel_callback=cancel_callback
+            )
         if start_result == "started":
             self._request_completion_handler = on_success
             self._request_label = label
@@ -831,7 +839,12 @@ class TkinterDesktopWindow:
                 self._status.set(
                     "Request cancelled after the active operation finished."
                 )
-                continue
+                if not (
+                    handler is not None
+                    and isinstance(completion.value, BrainResponse)
+                    and completion.value.intent == "research_goal_start"
+                ):
+                    continue
             if completion.error is not None:
                 if isinstance(completion.error, ValueError):
                     self._status.set(str(completion.error))
@@ -2013,6 +2026,11 @@ class TkinterDesktopWindow:
             text="Research and compare two sources automatically",
             command=self._start_research_comparison,
         ).grid(row=4, column=0, columnspan=3, sticky="w", pady=4)
+        ttk.Button(
+            plan_actions,
+            text="Research, learn and explain — preview permission",
+            command=self._start_learning_research,
+        ).grid(row=5, column=0, columnspan=3, sticky="w", pady=4)
         ttk.Label(research_plan_frame, text="Complete preview or rejection").grid(
             row=7,
             column=0,
@@ -3224,6 +3242,74 @@ class TkinterDesktopWindow:
             ),
             self._complete_research_plan_draft_preview,
             "research plan preview",
+        )
+
+    def _start_learning_research(self) -> None:
+        """Preview exact configured destination, then one explicit confirmation."""
+        if getattr(self, "_authorization_seconds", None) is None:
+            self._status.set("Enable research plan authorization before starting.")
+            return
+        if (
+            getattr(self, "_target_plan_draft", None) is not None
+            or self._research_plan_constraints.get("1.0", "end-1c").strip()
+            or self._plan_restriction.get() != ADVISORY_RESTRICTION_LABEL
+        ):
+            self._status.set("Mission cannot discard target scope or constraints.")
+            return
+        question = self._research_question.get().strip()
+        provider = self._research_discovery_provider.get()
+        if not question:
+            self._status.set("Enter a research question first.")
+            return
+        try:
+            budget = budget_from(
+                {
+                    "max_step_advances": 18,
+                    "max_network_operations": 9,
+                    "max_llm_operations": 2,
+                    "max_seconds": self._authorization_seconds.get(),
+                }
+            )
+        except (ResearchError, ValueError) as error:
+            self._status.set(str(error))
+            return
+
+        def confirmed(response: BrainResponse) -> None:
+            preview = response.research_plan_draft_preview
+            if not response.success or preview is None or preview.plan is None:
+                self._append_response(response)
+                return
+            scope = preview.plan.mission_scope
+            if scope is None or scope.semantic_policy is None:
+                self._status.set(
+                    "Semantic mission policy unavailable; nothing started."
+                )
+                return
+            if not messagebox.askyesno(
+                "Approve bounded learning research?", response.message
+            ):
+                return
+            signal = CancellationSignal()
+            self._start_request(
+                lambda: self._controller.start_learning_research(
+                    question,
+                    provider,
+                    budget,
+                    scope.semantic_policy,
+                    cancellation_token=signal,
+                ),
+                self._append_response,
+                "bounded learning research",
+                cancellation_signal=signal,
+                preserve_cancelled_result=True,
+            )
+
+        self._start_request(
+            lambda: self._controller.preview_learning_research(
+                question, provider, budget
+            ),
+            confirmed,
+            "learning research permission preview",
         )
 
     def _start_research_comparison(self) -> None:

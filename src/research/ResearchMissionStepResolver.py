@@ -30,6 +30,9 @@ from research.ResearchRunManager import ResearchRunManager
 from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
 from research.ResearchSourcePreview import ResearchSourcePreview
 from research.ResearchSourceRelevanceRanker import ResearchSourceRelevanceRanker
+from research.SemanticComparisonRequest import SemanticComparisonRequest
+from research.SemanticComparisonStepBinding import SemanticComparisonStepBinding
+from research.SemanticComparisonStepResult import SemanticComparisonStepResult
 from research.SourceIdentity import identity_of
 
 
@@ -46,6 +49,7 @@ class _Observations:
     inspected_bytes: int = 0
     evidence: tuple[ResearchEvidenceRecord, ...] = ()
     assessments: tuple[ResearchSourceAssessmentRecord, ...] = ()
+    comparison: SemanticComparisonStepResult | None = None
 
 
 class ResearchMissionStepResolver:
@@ -98,7 +102,38 @@ class ResearchMissionStepResolver:
         ):
             raise ResearchError("Mission discovery provenance no longer matches.")
         if step.capability is Cap.SOURCE_COMPARISON:
+            if scope.semantic_policy is not None:
+                return self._semantic_note(step, observed, run), context
             return self._comparison(plan, step, context, observed, run), context
+        if step.capability is Cap.SEMANTIC_EVIDENCE_COMPARISON:
+            self._validate_recorded_evidence(observed, run)
+            policy = scope.semantic_policy
+            if policy is None or context.disclosure is not policy.disclosure:
+                raise ResearchError("Mission semantic disclosure was not approved.")
+            if len(observed.evidence) not in (2, 3) or len(observed.assessments) != len(
+                observed.evidence
+            ):
+                raise ResearchError(
+                    "Semantic selection lacks complete predecessor evidence."
+                )
+            pair = (observed.evidence[0], observed.evidence[-1])
+            if len({e.source_document_id for e in pair}) != 2:
+                raise ResearchError("Mission comparison requires two distinct sources.")
+            request = SemanticComparisonRequest(
+                run.run_id, plan.question, pair, limit=1
+            )
+            if len(request.model_input_json().encode("utf-8")) > policy.max_input_bytes:
+                raise ResearchError("Approved per-call disclosure limit exhausted.")
+            return (
+                replace(
+                    step,
+                    semantic_mission_policy=None,
+                    semantic_comparison_binding=SemanticComparisonStepBinding(
+                        request, policy.endpoint, policy.model, policy.disclosure
+                    ),
+                ),
+                context,
+            )
         if step.capability is Cap.SOURCE_ASSESSMENT:
             self._validate_recorded_evidence(observed, run)
             evidence = observed.evidence[-1]
@@ -118,6 +153,8 @@ class ResearchMissionStepResolver:
                 context,
             )
         if step.capability is Cap.SOURCE_FETCH:
+            if self.followup_unnecessary(plan, step.step_id):
+                raise ResearchError("Follow-up is unnecessary; no further source call.")
             if (
                 observed.selected_url
                 or len(observed.attempted_urls) >= scope.max_sources
@@ -268,6 +305,84 @@ class ResearchMissionStepResolver:
             ):
                 raise ResearchError("Recorded assessment provenance is unavailable.")
             observed.assessments += (assessment,)
+        elif step.capability is Cap.SEMANTIC_EVIDENCE_COMPARISON:
+            value = result.semantic_comparison
+            if (
+                value is None
+                or step.semantic_comparison_binding is None
+                or value.request != step.semantic_comparison_binding.request
+                or value.execution_id != plan.plan_id
+                or value.step_id != step.step_id
+            ):
+                raise ResearchError("Mission semantic result was lost or changed.")
+            observed.comparison = value
+
+    def followup_unnecessary(self, plan: ResearchPlan, step_id: str | None) -> bool:
+        scope = plan.mission_scope
+        if (
+            scope is None
+            or scope.semantic_policy is None
+            or step_id != plan.steps[12].step_id
+        ):
+            return False
+        observed = self._observed.get(plan.plan_id)
+        if (
+            observed is None
+            or observed.digest != plan_digest(plan)
+            or observed.comparison is None
+        ):
+            return False
+        candidates = observed.comparison.candidates
+        return bool(candidates) and all(
+            c.relation.value != "possible_conflict" for c in candidates
+        )
+
+    def _semantic_note(
+        self, step: ResearchPlanStep, observed: _Observations, run: ResearchRun
+    ) -> ResearchPlanStep:
+        self._validate_recorded_evidence(observed, run)
+        result = observed.comparison
+        if result is None or result.request.run_id != run.run_id:
+            raise ResearchError("No validated mission comparison to retain.")
+        rows = []
+        for c in result.candidates:
+            rows.append(
+                f"Tentative relation: {c.relation.value}.\n"
+                f"A quotation (first 350 characters): {c.left_quote[:350]}\n"
+                f"B quotation (first 350 characters): {c.right_quote[:350]}\n"
+                f"Untrusted model rationale (first 160 characters): {c.rationale[:160]}"
+            )
+        text = (
+            "Mission semantic research note; tentative interpretation, not truth.\n"
+            + (
+                "\n".join(rows)
+                or "No supported comparison proposal; evidence gap remains."
+            )
+            + "\nUnique exact quotations were checked against recorded excerpts. "
+            "This does not establish meaning, independence or correctness. "
+            "No verified claim or trust promotion. "
+            + (
+                "Bounded follow-up compared the first source with one new source. "
+                if len(observed.evidence) == 3
+                else "Initial pair comparison. "
+            )
+            + f"Input SHA256 {result.request.content_fingerprint}; "
+            f"mission {observed.digest}."
+        )
+        ids = tuple(e.evidence_id for e in result.request.evidence)
+        return replace(
+            step,
+            comparison_authorization=ResearchComparisonAuthorization(
+                tuple(e.source_document_id for e in result.request.evidence),
+                ids,
+                tuple(
+                    a.assessment_id
+                    for a in observed.assessments
+                    if a.evidence_ids[0] in ids
+                ),
+                text,
+            ),
+        )
 
     def _validate_recorded_evidence(
         self, observed: _Observations, run: ResearchRun

@@ -165,6 +165,8 @@ class ResearchAutonomyApplicationService:
         blocked = progress_block(state)
         if blocked is not None:
             return blocked
+        if self._execution_service.mission_delivery_ready(state.plan_id):
+            return AutonomyStopReason.RESEARCH_DELIVERABLE_READY
 
         step_id = state.next_pending_step_id
         assert step_id is not None

@@ -247,6 +247,22 @@ def comparison_authority_refusal(
         for s in plan.steps
         if s.semantic_comparison_binding is not None
     ]
+    policies = [
+        s.semantic_mission_policy
+        for s in plan.steps
+        if s.semantic_mission_policy is not None
+    ]
+    if policies:
+        if plan.mission_scope is None or any(
+            p != plan.mission_scope.semantic_policy for p in policies
+        ):
+            return ResearchPlanAuthorizationVerdict.CAPABILITY_MISMATCH
+        if any(p.disclosure is not disclosure for p in policies):
+            return ResearchPlanAuthorizationVerdict.DISCLOSURE_UNSATISFIED
+        if plan_restriction_conflicts(plan):
+            return ResearchPlanAuthorizationVerdict.RESTRICTION_MISMATCH
+        if not ResearchPlanBudgetFit.of(plan, budget).sufficient:
+            return ResearchPlanAuthorizationVerdict.BUDGET_EXCEEDED
     if bindings and plan_restriction_conflicts(plan):
         return ResearchPlanAuthorizationVerdict.RESTRICTION_MISMATCH
     for binding in bindings:

@@ -536,6 +536,15 @@ class CognitiveEngine:
             response_composer,
             event_bus=event_bus,
         )
+        self._failure_memory_service: FailureMemoryApplicationService | None = None
+        if research_run_manager is not None:
+            self._failure_memory_service = FailureMemoryApplicationService(
+                research_run_manager,
+                response_composer,
+                lesson_store=failure_lesson_store,
+                hypothesis_store=hypothesis_store,
+                event_bus=event_bus,
+            )
         self._research_goal_start_service = ResearchGoalStartApplicationService(
             self._research_plan_execution_service,
             self._research_autonomy_service,
@@ -547,6 +556,16 @@ class CognitiveEngine:
             ),
             discovery_providers=frozenset(self._research_source_discovery_providers),
             evidence_available=research_source_fetcher is not None,
+            failure_memory=(
+                self._failure_memory_service
+                if failure_lesson_store is not None
+                else None
+            ),
+            semantic_destination=(
+                semantic_comparison_operation.destination
+                if semantic_comparison_operation is not None
+                else None
+            ),
         )
         self._background_research_scheduler = (
             BackgroundResearchSchedulerApplicationService(
@@ -584,15 +603,6 @@ class CognitiveEngine:
                 research_run_manager,
                 response_composer,
                 report_store=reflection_report_store,
-                hypothesis_store=hypothesis_store,
-                event_bus=event_bus,
-            )
-        self._failure_memory_service: FailureMemoryApplicationService | None = None
-        if research_run_manager is not None:
-            self._failure_memory_service = FailureMemoryApplicationService(
-                research_run_manager,
-                response_composer,
-                lesson_store=failure_lesson_store,
                 hypothesis_store=hypothesis_store,
                 event_bus=event_bus,
             )

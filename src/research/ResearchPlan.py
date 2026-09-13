@@ -34,6 +34,16 @@ class ResearchPlan:
     mission_scope: ResearchMissionScope | None = None
 
     def __post_init__(self) -> None:
+        if (
+            self.mission_scope is None
+            and isinstance(self.steps, tuple)
+            and any(
+                isinstance(s, ResearchPlanStep)
+                and s.semantic_mission_policy is not None
+                for s in self.steps
+            )
+        ):
+            raise ResearchError("Deferred semantic inputs require a canonical mission.")
         if self.mission_scope is not None:
             if not isinstance(self.mission_scope, ResearchMissionScope):
                 raise ResearchError("Research mission scope is invalid.")

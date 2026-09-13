@@ -22,6 +22,10 @@ class SemanticComparisonStepOperation:
 
     operation_name = "semantic_evidence_comparison"
 
+    @property
+    def destination(self) -> tuple[str, str]:
+        return self._endpoint, self._model
+
     def __init__(
         self,
         *,

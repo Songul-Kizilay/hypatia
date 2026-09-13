@@ -39,6 +39,14 @@ from llm.LLMEnvironmentSettings import (
 from llm.LLMProvider import LLMProvider
 from llm.LLMRuntimeActivator import activate_llm
 from llm.LLMRuntimeConfig import LLMRuntimeConfig
+from llm.OpenAICompatibleProvider import ChatCompletionTransport
+from llm.UrllibChatCompletionTransport import (
+    DEFAULT_TIMEOUT_SECONDS as MODEL_DEFAULT_TIMEOUT_SECONDS,
+)
+from llm.UrllibChatCompletionTransport import (
+    LOCAL_DEFAULT_TIMEOUT_SECONDS,
+    UrllibChatCompletionTransport,
+)
 from memory.JsonFileMemoryStore import JsonFileMemoryStore
 from memory.JsonFileSemanticEmbeddingCache import JsonFileSemanticEmbeddingCache
 from memory.KeywordLearnedMemorySelector import KeywordLearnedMemorySelector
@@ -124,6 +132,7 @@ from research.ResearchSourceContentRestorer import ResearchSourceContentRestorer
 from research.ResearchSourceDiscoveryProvider import ResearchSourceDiscoveryProvider
 from research.ResearchSourceFetcher import ResearchSourceFetcher
 from research.RoutedResearchSourceFetcher import RoutedResearchSourceFetcher
+from research.SemanticComparisonStepOperation import SemanticComparisonStepOperation
 from research.WslKaliOperationProcessAdapter import WslKaliOperationProcessAdapter
 from research.WslKaliRuntimeProbe import WslKaliRuntimeProbe
 from response.ResponseComposer import ResponseComposer
@@ -170,6 +179,7 @@ class Bootstrap:
         research_program_scope_revision_path: Path | None = None,
         kali_runtime_probe: WslKaliRuntimeProbe | None = None,
         kali_operation_process_adapter: WslKaliOperationProcessAdapter | None = None,
+        semantic_comparison_transport: ChatCompletionTransport | None = None,
     ) -> None:
         self._memory_path = memory_path
         self._session_path = session_path
@@ -180,6 +190,7 @@ class Bootstrap:
             research_program_scope_revision_path
         )
         self._llm_provider = llm_provider
+        self._semantic_comparison_transport = semantic_comparison_transport
         self._llm_config = llm_config
         self._llm_api_key = llm_api_key
         self._llm_system_prompt = llm_system_prompt
@@ -596,6 +607,22 @@ class Bootstrap:
         planner = Planner()
         response_composer = ResponseComposer()
         llm_provider = self._configured_llm_provider()
+        semantic_operation = None
+        if self._llm_config is not None and self._llm_config.enabled:
+            config_model = self._llm_config
+            timeout = config_model.timeout_seconds or (
+                LOCAL_DEFAULT_TIMEOUT_SECONDS
+                if is_loopback_llm_endpoint(config_model.base_url)
+                else MODEL_DEFAULT_TIMEOUT_SECONDS
+            )
+            semantic_operation = SemanticComparisonStepOperation(
+                endpoint=config_model.base_url,
+                model=config_model.model,
+                api_key=self._llm_api_key,
+                transport=self._semantic_comparison_transport
+                or UrllibChatCompletionTransport(timeout),
+                run_manager=research_run_manager,
+            )
         research_claim_contradiction_proposal_provider = (
             self._research_claim_contradiction_proposal_provider
         )
@@ -624,6 +651,7 @@ class Bootstrap:
             session_manager,
             session_rename_service,
             llm_provider=llm_provider,
+            semantic_comparison_operation=semantic_operation,
             llm_history_max_turns=self._llm_history_max_turns,
             learned_memory_candidate_extractor=learned_memory_candidate_extractor,
             learned_memory_context_limit=self._learned_memory_context_limit,

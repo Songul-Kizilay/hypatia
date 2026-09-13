@@ -1,6 +1,143 @@
 # Autonomous research connection assessment
 
-## Current canonical executor support: v0.3.337
+## Current bounded text journey: v0.3.338
+
+### Connected user journey
+
+The desktop Research plan area now offers **Research, learn and explain — preview
+permission**. It requests an inert preview from the real goal service, displays
+the configured exact endpoint/model, disclosure, question/provider, input and
+retention policy, and cumulative limits. One confirmation starts the journey
+through DesktopController, Brain, CognitiveEngine and the existing autonomy and
+canonical executor. Preview does not create a run, approval, attempt or model call.
+Declining it starts nothing. Configuring a model alone grants no research authority.
+
+The new explicit `bounded_semantic_learning_research` scope differs from both the
+unchanged zero-model reference scopes and pre-recorded exact-pair execution:
+
+1. Local knowledge search and one selected-provider discovery.
+2. Two lexically relevant, distinct public HTTPS references are selected from that
+   discovery. Each is fetched once, inspected/accepted from the existing preview,
+   and contributes one exactly grounded evidence record and grounding assessment.
+3. The first two recorded excerpts are compared using the approved semantic model.
+   Exact unique quotes and structured tentative relations are validated.
+4. A local comparison-note operation retains the result as **tentative**, citing
+   the exact evidence/assessment/source identities and input fingerprint.
+5. Possible conflict or an empty supported proposal activates one pre-approved
+   follow-up branch: one further candidate from the same discovery is read and
+   compared with the first source. It cannot select a fourth source or retry.
+   Agreement/not-comparable ends the bounded delivery without running that branch.
+6. The report includes the question, research subquestions, actual quoted evidence,
+   URLs and hashes, tentative comparisons, an explanatory example, limitations,
+   plan adaptation and spending. Existing opted-in failure memory retains canonical
+   research lessons and displays relevant prior lessons as advice, never authority.
+
+This is the first bounded text journey, not general autonomous intelligence. The
+three subquestions are fixed research scaffolding, not model-generated subject
+decomposition. Plan adaptation chooses an originally approved conditional branch;
+it does not rewrite the authority or issue a new search query. The report is a
+deterministic evidence/interpretation explanation, not a model-written verified
+answer. A different URL does not establish source independence. Source relevance
+and evidence selection remain lexical; semantic quality is unmeasured.
+
+### Authority, accounting and durable output
+
+`SemanticMissionPolicy` is nested in the existing canonical mission scope/steps
+and therefore the existing plan digest. It permits only recorded evidence produced
+by this mission's approved selected-provider source chain. It binds endpoint/model,
+disclosure, fixed ordered-pair selection, a maximum 8 KiB UTF-8 question/excerpt
+payload per model call (fixed instructions/schema are additional), and retention.
+The original source-text inspection limit remains 16 KiB cumulatively, across at
+most three sources. Evidence from another run, changed records/content, missing
+predecessor provenance, changed destination or disclosure is refused before the
+model sees anything. Restriction conflicts remain refused by canonical approval.
+
+The existing cost table charges each semantic call as one advance, one network
+and one model operation. The complete worst-case plan costs **18 advances / 9
+network reservations / 2 model operations**. Acceptance reuses inspected text but
+retains its existing conservative network reservation. All costs, including prior
+spending and active time, use the one consumed approval's allowance. Running
+attempt/checkpoint precedes external invocation; the existing refund-on-checkpoint-
+failure and no-refund-after-attempt rules are unchanged. There are no retries,
+fallback providers, new permission stores, budgets or execution engines.
+
+Normal success writes source identities/evidence/assessments and labelled semantic
+notes through existing research persistence. Optional opted-in failure memory
+derives lessons only from canonical run records and preserves provenance. Model
+proposals are not promoted to verified claims, contradictions, trust or general
+personal memory. The full model proposal body remains transient; bounded notes
+retain labelled excerpts/rationale and exact input identity. A crash between the
+model call and note operation does not magically recover that body or replay it.
+
+For early delivery, `research_deliverable_ready` stops autonomy and prevents a
+later manual advance from spending the unnecessary branch. The plan's unused
+steps remain pending rather than falsely completed; the run remains collecting,
+not epistemically complete. The background task outcome marks this bounded task
+delivered/non-retryable, without changing canonical step statuses. Exhaustion,
+malformed output, cancellation, refusal, or unavailable sources yields a truthful
+partial report. In-flight transport cancellation is cooperative, not an immediate
+socket abort; its late model result is discarded and its attempt stays charged.
+Only the learning UI request opts into showing that partial report on cancellation.
+
+### Running and limits
+
+Use the existing configured model and selected discovery provider. Durable mission
+approval and execution persistence must be enabled through the existing
+`HYPATIA_PLAN_AUTHORIZATION_ENABLED` and
+`HYPATIA_RESEARCH_EXECUTION_PERSISTENCE_ENABLED` settings. Advisory durable lessons
+are available only with `HYPATIA_FAILURE_MEMORY_ENABLED`; disabled memory stays
+disabled and is stated in the report. The learning action displays a fixed maximum
+18/9/2 budget before confirmation and uses the entered time limit; it does not
+quietly widen an already approved mission. Existing lexical comparison buttons
+still perform lexical comparison and never inherit semantic permission.
+
+Not implemented here: general open-ended replanning, repeated/new provider queries,
+semantic source ranking, model-based completion evaluation, independent factual
+verification, autonomous target testing, screenshots/image perception or multimodal
+learning. Restart can read retained research and lessons; resuming/replaying a
+partially executed dynamic mission without its predecessor observations remains
+fail-closed. No live model/provider call was used for validation; deterministic
+tests do not prove model accuracy or internet source reliability.
+
+### Verification and edit scope
+
+Tests exercise actual Bootstrap -> controller -> goal -> approval -> autonomy ->
+executor -> fake model -> durable note/report paths, plus desktop confirmation and
+cancellation, canonical construction/approval, changed/missing authority/evidence,
+cumulative budgets and persisted-attempt ordering. Local final verification:
+
+- Full suite: **6,047 tests run, OK, 3 existing platform skips**, 136.743 seconds.
+  This adds 36 tests to the verified v0.3.337 baseline without removing tests.
+- Focused research/contract/scheduler/desktop group: 86 tests passed. After the
+  final UI compatibility/default-time fixes, all 914 desktop tests also passed.
+- Black check: 861 files unchanged. Ruff: passed. MyPy: 522 source files passed.
+  `git diff --check`: passed.
+- The full process emitted 47 `ResourceWarning` lines, including unclosed
+  BufferedRandom handles. These are remaining cleanup warnings, not failing tests
+  and not claimed fixed. Git also reported ordinary CRLF-to-LF normalization
+  notices, not whitespace-check failures.
+- No live model call, push or remote CI trigger. GUI routing/worker behavior was
+  exercised deterministically; a live visual desktop session was not evaluated.
+
+The initial full-suite regressions (new stop-reason classification and an optional
+worker keyword leaking into legacy UI adapters) were fixed in production code,
+not by weakening existing assertions.
+
+The cohesive file allowlist comprises:
+- Cognition: CognitiveEngine, ResearchGoalStartApplicationService,
+  ResearchPlanExecutionApplicationService, ResearchAutonomyApplicationService.
+- Core/desktop: Bootstrap, Version, DesktopController, TkinterDesktopWindow,
+  DesktopRequestRunner (only opt-in cancelled-report retention).
+- Research: SemanticMissionPolicy, ResearchMissionScope, ResearchPlan,
+  ResearchPlanStep, ResearchPlanDigest, ResearchPlanAuthorization,
+  ResearchMissionStepResolver, SemanticComparisonStepOperation,
+  ResearchAutonomyResult, BackgroundTaskOutcome, ResearchTeachingReport.
+- Tests: integration/test_learning_research_journey,
+  research/test_semantic_mission_policy, desktop/test_research_goal_start,
+  desktop/test_desktop_request_runner.
+- Release documentation: pyproject.toml, CHANGELOG.md, this assessment.
+
+## Previous canonical executor support: v0.3.337
 
 The v0.3.336 exact-pair approval contract is now executable through the existing
 ResearchPlanExecutionApplicationService when trusted composition supplies

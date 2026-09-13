@@ -893,6 +893,18 @@ class ResearchPlanExecutionApplicationService:
                 return ResearchContinuationStopReason.BUDGET_EXHAUSTED
         return ResearchContinuationStopReason.ADVANCE_REFUSED
 
+    def mission_delivery_ready(self, plan_id: str) -> bool:
+        plan = self._plans.get(plan_id)
+        state = self._executions.get(plan_id)
+        return bool(
+            plan is not None
+            and state is not None
+            and self._mission_resolver is not None
+            and self._mission_resolver.followup_unnecessary(
+                plan, state.next_pending_step_id
+            )
+        )
+
     def process_advance(self, request: BrainRequest) -> BrainResponse:
         """Run one real research operation for the next pending step."""
         plan_id = self._normalized_plan_id(request)
@@ -916,6 +928,12 @@ class ResearchPlanExecutionApplicationService:
             return self._response_composer.research_plan_execution_rejected(
                 request,
                 scope_refusal,
+            )
+        if self.mission_delivery_ready(plan_id):
+            return self._response_composer.research_plan_execution_rejected(
+                request,
+                "Bounded deliverable ready; optional follow-up is unnecessary. "
+                "No further attempt or charge.",
             )
         interrupted = next(
             (

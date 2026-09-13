@@ -2,6 +2,41 @@
 
 All notable project changes are recorded here.
 
+## [0.3.338] - 2026-09-13
+
+### Added
+
+- First bounded text research journey from real Bootstrap and the desktop goal
+  entry: inert permission preview, one confirmation, local search, one selected
+  discovery provider, up to three reference sources, grounded recorded excerpts,
+  approved semantic comparison, one conditional follow-up, and a cited teaching
+  report. No intermediate Continue or new approval is required.
+- Canonical digest-bound mission policy for later-selected mission-owned evidence:
+  exact endpoint/model/disclosure, fixed input selection, per-call content limit,
+  retention policy and existing cumulative capability costs. Maximum 18 advances,
+  9 network reservations and 2 model operations; no allowance reset or retries.
+- Destination-pinned comparison registration when existing model configuration
+  is enabled. Existing executor checkpoints/accounting and source/evidence
+  validation are retained. Tentative comparison notes use the existing durable
+  research-note contract and do not become claims or verified facts.
+- Existing opted-in failure memory retains and recalls provenance-linked advisory
+  lessons. Unavailable retention does not discard the research report. The new
+  desktop request explicitly preserves partial reports after cancellation;
+  other desktop cancellation behavior remains unchanged.
+
+### Boundaries
+
+- Pair/source selection is deterministic lexical selection, not a general model
+  planner. Adaptation selects one pre-approved conditional branch using one
+  further candidate from the original discovery, not arbitrary recursive search.
+  Agreement/not-comparable stops without retrying or spending the optional branch.
+- Research runs remain collecting; tentative comparisons do not establish truth.
+  Early delivery does not mark unused optional plan steps completed. Reports use
+  quotes and labelled interpretations, not independently verified synthesis.
+- Existing reference/exact-pair approvals gain no implicit model permission.
+  Restart retains canonical records but does not replay interrupted missions.
+  No vision, live model accuracy, target testing, paid call, push or remote CI.
+
 ## [0.3.337] - 2026-09-12
 
 ### Added

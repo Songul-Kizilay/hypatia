@@ -33,6 +33,7 @@ from research.ResearchEvidenceAuthorization import ResearchEvidenceAuthorization
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 from research.SemanticComparisonStepBinding import SemanticComparisonStepBinding
 from research.SemanticEvidenceStepBinding import SemanticEvidenceStepBinding
+from research.SemanticMissionPolicy import SemanticMissionPolicy
 
 MAX_RESEARCH_PLAN_STEP_ID_CHARACTERS = 200
 MAX_RESEARCH_PLAN_STEP_INSTRUCTION_CHARACTERS = 2_000
@@ -59,11 +60,17 @@ class ResearchPlanStep:
     completion_authorization: ResearchCompletionAuthorization | None = None
     semantic_evidence_binding: SemanticEvidenceStepBinding | None = None
     semantic_comparison_binding: SemanticComparisonStepBinding | None = None
+    semantic_mission_policy: SemanticMissionPolicy | None = None
 
     def __post_init__(self) -> None:
         if self.capability is ResearchPlanStepCapability.SEMANTIC_EVIDENCE_COMPARISON:
-            if not isinstance(
-                self.semantic_comparison_binding, SemanticComparisonStepBinding
+            if not (
+                isinstance(
+                    self.semantic_comparison_binding, SemanticComparisonStepBinding
+                )
+                and self.semantic_mission_policy is None
+                or isinstance(self.semantic_mission_policy, SemanticMissionPolicy)
+                and self.semantic_comparison_binding is None
             ):
                 raise ResearchError(
                     "Semantic comparison requires an exact pair binding."
@@ -86,7 +93,10 @@ class ResearchPlanStep:
                 )
             ):
                 raise ResearchError("Semantic comparison cannot carry other authority.")
-        elif self.semantic_comparison_binding is not None:
+        elif (
+            self.semantic_comparison_binding is not None
+            or self.semantic_mission_policy is not None
+        ):
             raise ResearchError("Only semantic comparison may carry a pair binding.")
         if self.capability is ResearchPlanStepCapability.SEMANTIC_EVIDENCE_PROPOSAL:
             if not isinstance(

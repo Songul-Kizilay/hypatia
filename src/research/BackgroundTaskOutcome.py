@@ -38,6 +38,8 @@ class BackgroundTaskOutcome(StrEnum):
 _OUTCOMES: dict[AutonomyStopReason, BackgroundTaskOutcome] = {
     AutonomyStopReason.EXECUTION_TERMINAL: BackgroundTaskOutcome.COMPLETED,
     AutonomyStopReason.NO_PENDING_STEP: BackgroundTaskOutcome.COMPLETED,
+    # The bounded task delivered; unused optional plan steps did not execute.
+    AutonomyStopReason.RESEARCH_DELIVERABLE_READY: BackgroundTaskOutcome.COMPLETED,
     AutonomyStopReason.STEP_BLOCKED: BackgroundTaskOutcome.BLOCKED,
     AutonomyStopReason.ADVANCE_REFUSED: BackgroundTaskOutcome.BLOCKED,
     AutonomyStopReason.STEP_INTERRUPTED: BackgroundTaskOutcome.INTERRUPTED,

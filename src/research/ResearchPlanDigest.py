@@ -36,6 +36,7 @@ from datetime import datetime
 from enum import Enum
 
 from core.Exceptions import ResearchError
+from research.ResearchMissionScope import ResearchMissionScope
 from research.ResearchPlan import ResearchPlan
 from research.ResearchPlanStep import ResearchPlanStep
 
@@ -174,6 +175,10 @@ def _encode_dataclass(value: object, *, skip: frozenset[str]) -> bytes:
         and value.semantic_comparison_binding is None
     ):
         skip = skip | {"semantic_comparison_binding"}
+    if isinstance(value, ResearchPlanStep) and value.semantic_mission_policy is None:
+        skip = skip | {"semantic_mission_policy"}
+    if isinstance(value, ResearchMissionScope) and value.semantic_policy is None:
+        skip = skip | {"semantic_policy"}
     payload = _encode(type(value).__name__)
     for field in fields(value):  # type: ignore[arg-type]
         if field.name in skip:

@@ -27,6 +27,7 @@ class DesktopRequestRunner:
         self._stopped = False
         self._cancel_requested = False
         self._cancel_callback: Callable[[], None] | None = None
+        self._preserve_cancelled_result = False
         self._completions: deque[DesktopRequestCompletion[object]] = deque()
 
     def start[T](
@@ -34,6 +35,7 @@ class DesktopRequestRunner:
         action: Callable[[], T],
         *,
         cancel_callback: Callable[[], None] | None = None,
+        preserve_cancelled_result: bool = False,
     ) -> Literal["started", "busy", "stopped", "failed"]:
         """Start one daemon request without queueing a second request."""
         with self._lock:
@@ -44,6 +46,7 @@ class DesktopRequestRunner:
             self._running = True
             self._cancel_requested = False
             self._cancel_callback = cancel_callback
+            self._preserve_cancelled_result = preserve_cancelled_result
             worker = Thread(
                 target=self._run,
                 args=(action,),
@@ -69,7 +72,14 @@ class DesktopRequestRunner:
             self._cancel_callback = None
             if not self._stopped:
                 self._completions.append(
-                    DesktopRequestCompletion(cancelled=True)
+                    DesktopRequestCompletion(
+                        cancelled=True,
+                        value=(
+                            completion.value
+                            if self._preserve_cancelled_result
+                            else None
+                        ),
+                    )
                     if self._cancel_requested
                     else completion
                 )
@@ -99,8 +109,15 @@ class DesktopRequestRunner:
                     if self._cancel_requested:
                         return "already_requested"
                     self._cancel_requested = True
+                    value = (
+                        self._completions[0].value
+                        if self._preserve_cancelled_result
+                        else None
+                    )
                     self._completions.clear()
-                    self._completions.append(DesktopRequestCompletion(cancelled=True))
+                    self._completions.append(
+                        DesktopRequestCompletion(cancelled=True, value=value)
+                    )
                     return "requested"
                 return "idle"
             if self._cancel_requested:

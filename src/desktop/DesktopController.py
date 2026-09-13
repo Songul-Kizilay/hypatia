@@ -1034,6 +1034,43 @@ class DesktopController:
             )
         )
 
+    def preview_learning_research(self, question, provider, budget) -> BrainResponse:
+        """Inert disclosure preview; confirmation is a separate UI action."""
+        return self._brain.process(
+            BrainRequest(
+                message=question,
+                source="desktop",
+                metadata={
+                    "intent": "research_learning_preview",
+                    "discovery_provider": provider,
+                    "research_autonomy_budget": budget,
+                },
+            )
+        )
+
+    def start_learning_research(
+        self, question, provider, budget, policy, *, cancellation_token=None
+    ) -> BrainResponse:
+        """One initial confirmation of the displayed canonical mission envelope."""
+        from research.SemanticMissionPolicy import SemanticMissionPolicy
+
+        if not isinstance(policy, SemanticMissionPolicy):
+            raise ValueError("An explicit semantic mission policy is required.")
+        return self._brain.process(
+            BrainRequest(
+                message=question,
+                source="desktop",
+                cancellation_token=cancellation_token,
+                metadata={
+                    "intent": "research_goal_start",
+                    "research_goal_scope": "bounded_semantic_learning_research",
+                    "discovery_provider": provider,
+                    "research_autonomy_budget": budget,
+                    "semantic_mission_policy": policy,
+                },
+            )
+        )
+
     def start_research_goal(
         self,
         question: str,

@@ -27,6 +27,7 @@ class AutonomyStopReason(StrEnum):
     NETWORK_BUDGET_EXHAUSTED = "network_budget_exhausted"
     LLM_BUDGET_EXHAUSTED = "llm_budget_exhausted"
     TIME_BUDGET_EXHAUSTED = "time_budget_exhausted"
+    RESEARCH_DELIVERABLE_READY = "research_deliverable_ready"
 
 
 @dataclass(frozen=True, slots=True)
