@@ -2,19 +2,18 @@
 
 ## Runtime Version
 
-`v0.3.344 (Genesis)`
+`v0.3.345 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.344 retains a bounded semantic mission request ID in its existing
-durable execution snapshot, so replaying the same recorded start after restart
-is refused before new work begins. It does not claim crash-before-persistence
-idempotency, and legacy snapshots gain no invented ID. v0.3.343 makes a
-fail-closed restart refusal visible when its exact model destination, run
-binding, allowance or scope is unavailable. Neither release adds a lifecycle
-transition, scheduler behavior, authority, new persistence store or automatic
-run closure.
+Version v0.3.345 fails closed if a bounded semantic mission's initial execution
+snapshot cannot be written: no live mission remains and no autonomous work can
+start. Its request ID is added to the duplicate guard only after that snapshot
+lands, so an unrecorded start can be retried without a false idempotency claim.
+The consumed approval remains consumed. v0.3.344 retains durable request IDs
+after successful starts. Neither release adds a lifecycle transition, scheduler
+behavior, new authority, persistence store or automatic run closure.
 
 ### 2026-09-08 checklist reconciliation
 

@@ -383,6 +383,26 @@ class ResearchPlanExecutionApplicationService:
                     self._mission_request_ids[plan.plan_id] = (
                         normalized_mission_request_id
                     )
+        if plan.mission_scope is not None and not self._persist_checkpoint(
+            plan.plan_id
+        ):
+            # A semantic mission promises that its exact scope, allowance and
+            # caller id are recoverable before autonomy can begin. Do not leave
+            # an in-process execution (or advertise durable idempotency) when
+            # that initial snapshot did not land. The already-consumed approval
+            # remains consumed: a failed durable write cannot safely be undone.
+            with self._commit_lock:
+                if self._executions.get(plan.plan_id) == state:
+                    self._executions.pop(plan.plan_id, None)
+                    self._plans.pop(plan.plan_id, None)
+                    self._contexts.pop(plan.plan_id, None)
+                    self._allowances.pop(plan.plan_id, None)
+                    self._mission_digests.pop(plan.plan_id, None)
+                    self._mission_request_ids.pop(plan.plan_id, None)
+            return ResearchPlanExecutionStartRefusal(
+                "Mission execution could not be recorded durably, "
+                "so it was not started."
+            )
         self._events.started(state, context.has_research_run)
         self._persist(plan.plan_id)
         return state

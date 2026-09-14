@@ -2,6 +2,21 @@
 
 All notable project changes are recorded here.
 
+## [0.3.345] - 2026-09-14
+
+### Changed
+
+- A bounded semantic mission now fails closed when its initial durable execution
+  snapshot cannot be written. It is removed from the live executor before any
+  autonomy step, provider call, source fetch, or model call can occur.
+
+### Boundaries
+
+- The already-consumed approval remains consumed because its durable spending
+  record cannot safely be rolled back. The caller request ID is deliberately
+  not placed in the duplicate guard until the snapshot succeeds, so the failed
+  request does not falsely claim restart-safe idempotency and may be retried.
+
 ## [0.3.344] - 2026-09-14
 
 ### Added

@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.344
+## Current bounded text journey: v0.3.345
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -103,6 +103,21 @@ cumulative allowance.
 This is deliberately not a new transactional start store. A crash before the
 execution snapshot exists remains outside this guarantee, and legacy snapshots
 without a request ID remain readable without fabricated duplicate protection.
+
+### Fail-closed durable mission start: v0.3.345
+
+A bounded semantic mission now confirms its initial execution snapshot before
+it becomes a live execution or begins autonomy. If that write fails, the
+in-memory execution, allowance, scope bookkeeping and request ID are removed;
+no provider, source, or model operation can run from the failed start. The
+caller request is not entered into the duplicate guard, because it never gained
+the durable record on which v0.3.344's idempotency guarantee depends.
+
+The authorization consumption record remains consumed rather than being
+silently reversed. This preserves the existing fail-closed authority rule but
+means the retry derives a new bounded run and approval. There is still no
+cross-store transaction: a crash before the execution snapshot remains an
+explicitly unsupported ambiguity rather than a claim of exactly-once start.
 
 ### Authority, accounting and durable output
 

@@ -248,6 +248,23 @@ class LearningResearchJourneyTests(unittest.TestCase):
             calls,
         )
 
+    def test_snapshot_write_failure_starts_no_mission_or_duplicate_guard(self):
+        """A mission is not started or keyed until its first snapshot lands."""
+        request_id = "failed-durable-mission-request"
+        with patch.object(self.execution, "_persist_checkpoint", return_value=False):
+            refused = self.start(request_id=request_id)
+
+        self.assertFalse(refused.success)
+        self.assertIn("Execution start refused", refused.message)
+        self.assertEqual(self.execution._execution_store.load(), [])
+        self.provider.discover.assert_not_called()
+        self.fetcher.fetch.assert_not_called()
+        self.transport.assert_not_called()
+
+        retry = self.start(request_id=request_id)
+        self.assertTrue(retry.success, retry.message)
+        self.provider.discover.assert_called_once()
+
     def test_one_approval_conflict_followup_then_cited_report(self):
         with (
             patch.object(

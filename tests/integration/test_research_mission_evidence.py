@@ -367,20 +367,15 @@ class MissionEvidenceTests(unittest.TestCase):
         self.assertEqual(response.research_runs[0].sources, ())
         self.fetcher.fetch.assert_called_once()
 
-    def test_checkpoint_failure_causes_zero_provider_calls(self):
+    def test_initial_snapshot_failure_starts_no_autonomy_or_provider_calls(self):
         with patch.object(self.execution, "_persist_checkpoint", return_value=False):
             response = self.start()
-        self.assertEqual(
-            response.research_autonomy.stop_reason, AutonomyStopReason.ADVANCE_REFUSED
-        )
+        self.assertFalse(response.success)
+        self.assertIsNone(response.research_autonomy)
+        self.assertIsNone(response.research_plan_execution)
+        self.assertEqual(self.store.load(), [])
         self.provider.discover.assert_not_called()
         self.fetcher.fetch.assert_not_called()
-        self.assertEqual(
-            self.execution.allowance(
-                response.research_plan_execution.plan_id
-            ).spend.step_advances,
-            0,
-        )
 
     def test_unknown_scope_object_is_refused_without_throwing(self):
         response = self.engine.process(

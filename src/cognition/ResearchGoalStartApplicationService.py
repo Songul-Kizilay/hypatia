@@ -403,7 +403,6 @@ class ResearchGoalStartApplicationService:
             plan = self._mission_plan(plan, mission_scope)
         if not self._authorizations.budget_fit_for(plan, budget).sufficient:
             raise ResearchError("Budget cannot cover the opening; nothing was started.")
-        self._goal_request_ids.add(request.request_id)
         run = self._runs.create(plan.question)
         approval = self._authorizations.record_for_plan(
             plan,
@@ -429,6 +428,10 @@ class ResearchGoalStartApplicationService:
             raise ResearchError(
                 "Execution start refused; no research operation started."
             )
+        # The request becomes a duplicate only after its mission execution has
+        # crossed the durable snapshot boundary. A failed start must not claim
+        # restart-safe idempotency or prevent an operator from retrying it.
+        self._goal_request_ids.add(request.request_id)
         response = self._autonomy.process_run(
             replace(
                 request,
