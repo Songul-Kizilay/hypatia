@@ -2,12 +2,18 @@
 
 ## Runtime Version
 
-`v0.3.349 (Genesis)`
+`v0.3.350 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.349 adds a derived, evidence-grounded assessment of how well a
+Version v0.3.350 makes the existing evidence-grounded result more legible in
+the deterministic teaching report: typed coverage and bounded reason codes
+state what is supported, what remains limited, and why the mission stopped.
+It reads existing execution, evidence and contradiction state only; report or
+model wording cannot upgrade the result, and it changes no lifecycle, budget,
+authority, source selection or follow-up behavior. Version v0.3.349 adds a
+derived, evidence-grounded assessment of how well a
 bounded mission met its own deliverable. It composes the existing execution
 outcome, canonical evidence readiness and, where available, the durable
 contradiction-investigation checkpoint into `satisfied`, `partially_satisfied`,

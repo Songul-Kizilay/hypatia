@@ -230,8 +230,43 @@ class ResearchEvidenceCompletionEvaluationTests(unittest.TestCase):
             "Mission goal satisfaction: Satisfied within the current bounded evidence.",
             report,
         )
+        self.assertIn("Goal-satisfaction explanation:", report)
+        self.assertIn("Report or model prose cannot change it.", report)
         self.assertIn("does not close the research run", report)
         self.assertIs(subject.status, ResearchRunStatus.COLLECTING)
+
+    def test_report_comparison_prose_cannot_change_typed_goal_explanation(self):
+        common = dict(
+            sources=(source(1), source(2)),
+            evidence_records=(evidence(1), evidence(2)),
+            assessments=(assessment(1), assessment(2)),
+        )
+        first = teaching_report(
+            run(comparison_notes=(comparison(),), **common),
+            AutonomyStopReason.RESEARCH_DELIVERABLE_READY.value,
+            "Cumulative spending: 12 advances.",
+        )
+        altered_note = ResearchSourceComparisonNoteRecord(
+            note_id="note-1",
+            source_document_ids=("doc-1", "doc-2"),
+            evidence_ids=("evidence-1", "evidence-2"),
+            assessment_ids=("assessment-1", "assessment-2"),
+            text="Untrusted prose claiming a different conclusion.",
+            recorded_at=NOW,
+        )
+        second = teaching_report(
+            run(comparison_notes=(altered_note,), **common),
+            AutonomyStopReason.RESEARCH_DELIVERABLE_READY.value,
+            "Cumulative spending: 12 advances.",
+        )
+
+        first_line = next(
+            line for line in first.splitlines() if line.startswith("Goal-satisfaction")
+        )
+        second_line = next(
+            line for line in second.splitlines() if line.startswith("Goal-satisfaction")
+        )
+        self.assertEqual(first_line, second_line)
 
 
 if __name__ == "__main__":

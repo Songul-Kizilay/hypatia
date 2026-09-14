@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.349
+## Current bounded text journey: v0.3.350
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -96,6 +96,23 @@ budget, store, provider/model call, retry, follow-up or scheduler behavior; it
 does not close the research run or mutate canonical evidence. The next Phase 2
 decision remains whether to generalize bounded replanning safely, rather than
 mistaking this evaluation for permission to create new work.
+
+### Typed goal explanation in the teaching report: v0.3.350
+
+The deterministic teaching report now renders an operator-facing explanation
+of the existing mission goal-satisfaction projection. It exposes only typed,
+bounded facts: accepted/evidence-bearing source coverage and a finite set of
+reasons such as missing evidence or corroboration, unresolved tentative
+contradiction, existing scope/authority block, cumulative budget exhaustion,
+failure, cancellation or interruption.
+
+The explanation is a read-only rendering of the existing execution outcome,
+evidence-completion limitations and, when present, the durable contradiction
+checkpoint. It is neither a semantic adjudicator nor a report parser: source
+and model prose cannot alter it. It does not change mission lifecycle,
+authorization, cumulative allowance, plan digest, source slots, provider/model
+selection, retry behavior or run closure. An unchanged recovered state renders
+the same explanation.
 
 ### Visible fail-closed restart refusals: v0.3.343
 

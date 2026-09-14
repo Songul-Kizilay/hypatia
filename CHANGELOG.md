@@ -2,6 +2,24 @@
 
 All notable project changes are recorded here.
 
+## [0.3.350] - 2026-09-14
+
+### Added
+
+- The deterministic teaching report now renders a typed, bounded
+  goal-satisfaction explanation beside the existing mission outcome. It shows
+  retained coverage and only canonical reasons why the bounded deliverable is
+  supported, incomplete, contradiction-limited, blocked, budget-limited,
+  failed or cancelled.
+
+### Boundaries
+
+- Explanation wording is projected only from the existing execution outcome,
+  evidence-completion limitations and durable contradiction state. Source or
+  model prose cannot upgrade satisfaction, create authority, change a budget,
+  close a run, promote a claim or start follow-up work. An unchanged restored
+  state renders the same explanation.
+
 ## [0.3.349] - 2026-09-14
 
 ### Added

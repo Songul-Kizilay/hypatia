@@ -4,6 +4,7 @@ from research.ResearchEvidenceCompletionEvaluation import (
     ResearchEvidenceCompletionEvaluation,
     evaluate_evidence_completion,
 )
+from research.ResearchMissionGoalExplanation import explain_mission_goal_satisfaction
 from research.ResearchMissionOutcome import mission_outcome_for
 from research.ResearchMissionRecoveryCheckpoint import ResearchMissionRecoveryCheckpoint
 from research.ResearchRun import ResearchRun
@@ -19,6 +20,11 @@ def teaching_report(
     """Render canonical evidence and its non-mutating readiness evaluation."""
     evaluation = evaluation or evaluate_evidence_completion(run, stop)
     mission_outcome = mission_outcome_for(run, stop, checkpoint)
+    goal_explanation = explain_mission_goal_satisfaction(
+        mission_outcome,
+        stop,
+        checkpoint,
+    )
     sources = {s.document_id: s for s in run.sources}
     lines = [
         "Bounded research report",
@@ -87,6 +93,12 @@ def teaching_report(
                 "declare the question universally resolved."
             ),
             mission_outcome.summary(),
+            goal_explanation.summary(),
+            (
+                "The goal-satisfaction explanation is derived only from typed "
+                "execution, evidence and contradiction state. Report or model "
+                "prose cannot change it."
+            ),
         ]
     )
     lines.extend(
