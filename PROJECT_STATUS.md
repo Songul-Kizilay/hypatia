@@ -2,12 +2,16 @@
 
 ## Runtime Version
 
-`v0.3.350 (Genesis)`
+`v0.3.351 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.350 makes the existing evidence-grounded result more legible in
+Version v0.3.351 separates a completed execution, a satisfied bounded goal and
+a mission that is ready for user conclusion. Its typed readiness projection is
+read-only: `ready` requires the existing `satisfied` result but never closes a
+run, treats evidence as universal truth or creates follow-up work. Version
+v0.3.350 makes the existing evidence-grounded result more legible in
 the deterministic teaching report: typed coverage and bounded reason codes
 state what is supported, what remains limited, and why the mission stopped.
 It reads existing execution, evidence and contradiction state only; report or

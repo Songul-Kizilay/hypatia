@@ -23,6 +23,9 @@ from research.ResearchEvidenceCompletionEvaluation import (
 from research.ResearchEvidenceCompletionEvaluation import (
     ResearchEvidenceCompletionStatus as EvidenceStatus,
 )
+from research.ResearchMissionCompletionReadiness import (
+    evaluate_mission_completion_readiness,
+)
 from research.ResearchMissionGoalExplanation import (
     ResearchMissionGoalExplanationReason as Reason,
 )
@@ -72,7 +75,16 @@ def outcome(
         execution_outcome=execution,
         contradiction_outcome=contradiction_outcome,
     )
-    return ResearchMissionOutcome(execution, readiness, satisfaction)
+    return ResearchMissionOutcome(
+        execution,
+        readiness,
+        satisfaction,
+        evaluate_mission_completion_readiness(
+            goal_status,
+            evidence_status,
+            execution,
+        ),
+    )
 
 
 def unresolved_checkpoint() -> ResearchMissionRecoveryCheckpoint:
@@ -197,6 +209,11 @@ class ResearchMissionGoalExplanationTests(unittest.TestCase):
             subject.execution_outcome,
             subject.evidence_evaluation,
             inconsistent,
+            evaluate_mission_completion_readiness(
+                GoalStatus.SATISFIED,
+                EvidenceStatus.SUFFICIENTLY_SUPPORTED,
+                BackgroundTaskOutcome.COMPLETED,
+            ),
         )
 
         checkpoint = unresolved_checkpoint()

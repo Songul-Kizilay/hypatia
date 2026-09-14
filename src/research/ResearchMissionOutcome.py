@@ -11,6 +11,10 @@ from research.ResearchEvidenceCompletionEvaluation import (
     ResearchEvidenceCompletionEvaluation,
     evaluate_evidence_completion,
 )
+from research.ResearchMissionCompletionReadiness import (
+    ResearchMissionCompletionReadiness,
+    evaluate_mission_completion_readiness,
+)
 from research.ResearchMissionGoalSatisfaction import (
     ResearchMissionGoalSatisfaction,
     evaluate_mission_goal_satisfaction,
@@ -31,6 +35,7 @@ class ResearchMissionOutcome:
     execution_outcome: BackgroundTaskOutcome
     evidence_evaluation: ResearchEvidenceCompletionEvaluation
     goal_satisfaction: ResearchMissionGoalSatisfaction
+    completion_readiness: ResearchMissionCompletionReadiness
 
     def __post_init__(self) -> None:
         if not isinstance(self.execution_outcome, BackgroundTaskOutcome):
@@ -41,6 +46,10 @@ class ResearchMissionOutcome:
             raise ResearchError("Research mission evidence evaluation is invalid.")
         if not isinstance(self.goal_satisfaction, ResearchMissionGoalSatisfaction):
             raise ResearchError("Research mission goal satisfaction is invalid.")
+        if not isinstance(
+            self.completion_readiness, ResearchMissionCompletionReadiness
+        ):
+            raise ResearchError("Research mission completion readiness is invalid.")
 
     @property
     def goal_satisfied(self) -> bool:
@@ -52,7 +61,8 @@ class ResearchMissionOutcome:
         return (
             f"Execution outcome: {self.execution_outcome.value}. "
             f"Evidence readiness: {self.evidence_evaluation.summary()}. "
-            f"Mission goal satisfaction: {self.goal_satisfaction.summary()}."
+            f"Mission goal satisfaction: {self.goal_satisfaction.summary()}. "
+            f"Mission completion readiness: {self.completion_readiness.summary()}."
         )
 
 
@@ -77,12 +87,19 @@ def mission_outcome_for(
         raise ResearchError("Research mission outcome stop reason is invalid.")
     execution_outcome = outcome_for(normalized_stop)
     evidence_evaluation = evaluate_evidence_completion(run, normalized_stop)
+    goal_satisfaction = evaluate_mission_goal_satisfaction(
+        execution_outcome,
+        evidence_evaluation,
+        checkpoint,
+    )
     return ResearchMissionOutcome(
         execution_outcome=execution_outcome,
         evidence_evaluation=evidence_evaluation,
-        goal_satisfaction=evaluate_mission_goal_satisfaction(
+        goal_satisfaction=goal_satisfaction,
+        completion_readiness=evaluate_mission_completion_readiness(
+            goal_satisfaction.status,
+            evidence_evaluation.status,
             execution_outcome,
-            evidence_evaluation,
             checkpoint,
         ),
     )

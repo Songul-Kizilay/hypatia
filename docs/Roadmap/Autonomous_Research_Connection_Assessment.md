@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.350
+## Current bounded text journey: v0.3.351
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -113,6 +113,19 @@ and model prose cannot alter it. It does not change mission lifecycle,
 authorization, cumulative allowance, plan digest, source slots, provider/model
 selection, retry behavior or run closure. An unchanged recovered state renders
 the same explanation.
+
+### Mission completion readiness: v0.3.351
+
+The mission outcome now also exposes a pure completion-readiness projection:
+`ready`, or not-ready evidence, conflict, boundary, budget, execution, failure
+or cancellation. This answers whether the user can consider the bounded
+deliverable concluded; it remains separate from both execution completion and
+the narrower evidence-grounded goal-satisfaction result.
+
+`ready` requires existing `satisfied` goal state. It does not close the run,
+promote a claim, infer truth, mutate checkpoint state, consume authority or
+budget, choose a source/provider/model, retry, or create a follow-up. An
+unchanged restored mission yields the same readiness result.
 
 ### Visible fail-closed restart refusals: v0.3.343
 

@@ -17,6 +17,9 @@ for entry in (SRC_DIR, ROOT_DIR):
 from research.BackgroundTaskOutcome import BackgroundTaskOutcome
 from research.ResearchAutonomyResult import AutonomyStopReason
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
+from research.ResearchMissionCompletionReadiness import (
+    ResearchMissionCompletionReadinessStatus,
+)
 from research.ResearchMissionGoalSatisfaction import (
     ResearchMissionGoalSatisfactionStatus,
 )
@@ -78,6 +81,11 @@ class ResearchMissionOutcomeTests(unittest.TestCase):
         self.assertIn(
             "Mission goal satisfaction: Partially satisfied", outcome.summary()
         )
+        self.assertIs(
+            outcome.completion_readiness.status,
+            ResearchMissionCompletionReadinessStatus.NOT_READY_EVIDENCE,
+        )
+        self.assertIn("Mission completion readiness: Not ready", outcome.summary())
 
     def test_budget_exhaustion_is_incomplete_work_not_a_failed_goal(self):
         outcome = mission_outcome_for(

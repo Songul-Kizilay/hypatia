@@ -2,6 +2,22 @@
 
 All notable project changes are recorded here.
 
+## [0.3.351] - 2026-09-14
+
+### Added
+
+- A read-only mission completion-readiness projection now distinguishes an
+  execution finishing, an evidence-grounded goal being satisfied, and a bounded
+  mission being ready for the user to conclude. It reports finite `ready` or
+  not-ready evidence, conflict, boundary, budget, execution, failure and
+  cancellation states through the existing mission summary and teaching report.
+
+### Boundaries
+
+- `ready` requires the existing bounded `satisfied` goal result; it does not
+  close a run or establish truth. The projection has no authority, provider,
+  source-selection, budget, planner, retry, persistence or lifecycle effect.
+
 ## [0.3.350] - 2026-09-14
 
 ### Added
