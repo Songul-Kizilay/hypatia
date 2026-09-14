@@ -2,6 +2,21 @@
 
 All notable project changes are recorded here.
 
+## [0.3.343] - 2026-09-14
+
+### Added
+
+- Restored bounded semantic missions that cannot safely resume because their
+  configured model destination, run binding, allowance, or semantic scope is
+  unavailable now retain an explicit status reason. The reason is visible
+  through the existing restored-execution status path.
+
+### Boundaries
+
+- This does not broaden restart recovery, retry work, rebuild a plan, alter a
+  snapshot, spend a budget unit, or create model/provider authority. A refused
+  mission stays restored and reportable; no source or model call is replayed.
+
 ## [0.3.342] - 2026-09-14
 
 ### Added

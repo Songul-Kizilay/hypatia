@@ -2,17 +2,19 @@
 
 ## Runtime Version
 
-`v0.3.342 (Genesis)`
+`v0.3.343 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.342 adds a derived mission-outcome view. It reuses the existing
-execution outcome and evidence-only readiness evaluation, then explicitly states
-that mission-goal satisfaction is not declared. A delivered execution is not a
-goal-satisfaction claim; budget exhaustion, block, failure and cancellation also
-remain distinct execution facts. It adds no lifecycle transition, scheduler
-behavior, authority, persistence or automatic run closure.
+Version v0.3.343 makes a fail-closed semantic-mission restart refusal visible
+when its exact recorded model destination, run binding, allowance or scope is
+unavailable. The execution remains restored and reportable without a retry or
+source/model call. v0.3.342 added the derived mission-outcome view: a delivered
+execution is not a goal-satisfaction claim; budget exhaustion, block, failure
+and cancellation remain distinct execution facts. Neither release adds a
+lifecycle transition, scheduler behavior, authority, persistence or automatic
+run closure.
 
 ### 2026-09-08 checklist reconciliation
 

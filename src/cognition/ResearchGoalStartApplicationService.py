@@ -209,20 +209,16 @@ class ResearchGoalStartApplicationService:
         checkpoint with transient preview/model output stays visible and stopped.
         """
         resumed: list[str] = []
-        if self._semantic_destination is None or self._runs is None:
-            return ()
         for snapshot in self._execution_service.restored_mission_executions():
-            scope = snapshot.mission_scope
-            if (
-                scope is None
-                or scope.source_policy != SEMANTIC_POLICY
-                or scope.semantic_policy is None
-                or (scope.semantic_policy.endpoint, scope.semantic_policy.model)
-                != self._semantic_destination
-                or snapshot.research_run_id is None
-                or snapshot.allowance is None
-            ):
+            if refusal := self._recovery_precondition_refusal(snapshot):
+                self._execution_service.record_mission_recovery_refusal(
+                    snapshot.plan_id, refusal
+                )
                 continue
+            scope = snapshot.mission_scope
+            assert scope is not None
+            assert snapshot.research_run_id is not None
+            assert snapshot.allowance is not None
             try:
                 plan = self._rebuild_mission_plan(snapshot.question, scope)
                 if plan_digest(plan) != snapshot.mission_plan_digest:
@@ -267,6 +263,60 @@ class ResearchGoalStartApplicationService:
                 )
                 continue
         return tuple(resumed)
+
+    def _recovery_precondition_refusal(self, snapshot: object) -> str | None:
+        """Explain a restart refusal before rebuilding or spending anything.
+
+        A restored mission with unavailable current composition was already
+        fail-closed.  Recording that reason makes the same safe decision
+        operator-visible instead of looking like no mission was found.  This
+        helper neither changes the snapshot nor retries the work.
+        """
+        from research.ResearchPlanExecutionSnapshot import ResearchPlanExecutionSnapshot
+
+        if not isinstance(snapshot, ResearchPlanExecutionSnapshot):
+            return (
+                "Mission recovery record is invalid; no source or model call "
+                "was replayed."
+            )
+        scope = snapshot.mission_scope
+        if scope is None or scope.source_policy != SEMANTIC_POLICY:
+            return (
+                "Mission recovery scope is not a supported bounded semantic "
+                "mission; no source or model call was replayed."
+            )
+        policy = scope.semantic_policy
+        if policy is None:
+            return (
+                "Mission recovery lacks its recorded semantic policy; no source "
+                "or model call was replayed."
+            )
+        if self._runs is None:
+            return (
+                "Mission recovery lacks durable research-run access; no source "
+                "or model call was replayed."
+            )
+        if self._semantic_destination is None:
+            return (
+                "Mission recovery has no configured model destination; no source "
+                "or model call was replayed."
+            )
+        if (policy.endpoint, policy.model) != self._semantic_destination:
+            return (
+                "Configured model destination differs from the exact recorded "
+                "mission destination; no source or model call was replayed."
+            )
+        if snapshot.research_run_id is None:
+            return (
+                "Mission recovery lacks its recorded research-run binding; no "
+                "source or model call was replayed."
+            )
+        if snapshot.allowance is None:
+            return (
+                "Mission recovery lacks its recorded cumulative allowance; no "
+                "source or model call was replayed."
+            )
+        return None
 
     def _start_goal(self, request: BrainRequest) -> BrainResponse:
         allowed = {

@@ -131,14 +131,18 @@ class LearningResearchJourneyTests(unittest.TestCase):
             **kwargs,
         )
 
-    def restart(self):
+    def restart(self, *, endpoint=None, model=None):
         release_all()
         restarted = Bootstrap(
             memory_path=self.root / "memory.json",
             session_path=self.root / "sessions.json",
             knowledge_relation_path=self.root / "relations.json",
             research_run_path=self.root / "runs.json",
-            llm_config=LLMRuntimeConfig(True, self.policy.endpoint, self.policy.model),
+            llm_config=LLMRuntimeConfig(
+                True,
+                self.policy.endpoint if endpoint is None else endpoint,
+                self.policy.model if model is None else model,
+            ),
             llm_provider=Mock(),
             semantic_comparison_transport=self.transport,
             research_source_fetcher=self.fetcher,
@@ -149,6 +153,44 @@ class LearningResearchJourneyTests(unittest.TestCase):
         )
         restarted.initialize()
         return restarted.container.resolve(CognitiveEngine)
+
+    def test_restart_reports_destination_mismatch_without_replaying_work(self):
+        """A changed model destination remains visible and fail-closed."""
+        real_advance = self.execution.process_advance
+
+        def interrupt_after_first_assessment(request):
+            state = self.execution.live_execution(request.metadata["research_plan_id"])
+            if state is not None and state.completed_steps == 6:
+                raise RuntimeError("simulated process interruption")
+            return real_advance(request)
+
+        with patch.object(
+            self.execution,
+            "process_advance",
+            side_effect=interrupt_after_first_assessment,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "simulated process interruption"):
+                self.start()
+
+        snapshot = self.execution._execution_store.load()[0]
+        engine = self.restart(endpoint="http://127.0.0.1:11434/v1/other")
+        execution = engine._research_plan_execution_service
+
+        self.assertIsNone(execution.live_execution(snapshot.plan_id))
+        status = execution.process_status(
+            BrainRequest(
+                message="status",
+                metadata={
+                    "intent": "research_plan_execution_status",
+                    "research_plan_id": snapshot.plan_id,
+                },
+            )
+        )
+        self.assertIn("Configured model destination differs", status.message)
+        self.assertIn("no source or model call was replayed", status.message)
+        self.assertEqual(self.provider.discover.call_count, 1)
+        self.assertEqual(self.fetcher.fetch.call_count, 1)
+        self.transport.assert_not_called()
 
     def test_one_approval_conflict_followup_then_cited_report(self):
         with (

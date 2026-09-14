@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.342
+## Current bounded text journey: v0.3.343
 
 ### Connected user journey
 
@@ -70,6 +70,20 @@ No new lifecycle, run transition, scheduler behavior or automatic closure exists
 here. The separate future boundary is an evidence-grounded, scope-specific goal
 satisfaction contract; it cannot be inferred from a completed step list or a
 teaching report.
+
+### Visible fail-closed restart refusals: v0.3.343
+
+The narrow restart coordinator already refused a restored semantic mission when
+its exact destination, durable research-run binding, cumulative allowance, or
+semantic scope could not be re-established. That safe refusal is now visible in
+the existing restored-execution status response instead of being an unexplained
+startup skip. The restored execution is not rebuilt, retried, charged, or
+advanced; it remains reportable with the bounded reason that no source or model
+call was replayed.
+
+This does not make restart recovery general. It adds no persistence field,
+automatic repair, provider/model fallback, new approval, new budget, scheduler
+behavior, or desktop control.
 
 ### Authority, accounting and durable output
 
