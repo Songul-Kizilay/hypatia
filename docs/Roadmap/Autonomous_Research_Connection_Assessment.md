@@ -2,6 +2,11 @@
 
 ## Current bounded text journey: v0.3.343
 
+The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
+is deliberately layered on this runtime. It does not turn the current bounded
+text journey into autonomous target testing, vulnerability finding, monitoring,
+or general tool orchestration.
+
 ### Connected user journey
 
 The desktop Research plan area now offers **Research, learn and explain — preview
