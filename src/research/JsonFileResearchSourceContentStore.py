@@ -40,9 +40,15 @@ class _BoundedUtf8Writer:
 class JsonFileResearchSourceContentStore:
     """Persist a complete versioned content snapshot with integrity validation."""
 
-    _SCHEMA_VERSION = 1
+    #: Version 2 persists how the bytes were obtained. Restoration rebuilds the
+    #: indexed document from these records alone, so a version 1 snapshot could
+    #: only describe every source as an ordinary HTTPS read — true of every
+    #: source that existed when it was written, and false for an accepted CVE
+    #: whose record comes from the API rather than from the page naming it.
+    _SCHEMA_VERSION = 2
+    _SUPPORTED_SCHEMA_VERSIONS = (1, 2)
     _DOCUMENT_FIELDS = {"schema_version", "records"}
-    _RECORD_FIELDS = {
+    _RECORD_FIELDS_V1 = {
         "document_id",
         "url",
         "title",
@@ -53,6 +59,7 @@ class JsonFileResearchSourceContentStore:
         "content_byte_count",
         "content_sha256",
     }
+    _RECORD_FIELDS_V2 = _RECORD_FIELDS_V1 | {"content_resource", "acquisition"}
     _MAXIMUM_RECORDS = 64
     _MAXIMUM_TOTAL_CONTENT_BYTES = 32_000_000
     _MAXIMUM_STORE_FILE_BYTES = 40_000_000
@@ -126,7 +133,7 @@ class JsonFileResearchSourceContentStore:
         if (
             isinstance(schema_version, bool)
             or not isinstance(schema_version, int)
-            or schema_version != self._SCHEMA_VERSION
+            or schema_version not in self._SUPPORTED_SCHEMA_VERSIONS
         ):
             raise ResearchError(
                 "Research source content store has an unsupported schema version."
@@ -134,13 +141,35 @@ class JsonFileResearchSourceContentStore:
         records = document["records"]
         if not isinstance(records, list):
             raise ResearchError("Research source content store records must be a list.")
-        parsed = [self._parse_record(value) for value in records]
+        parsed = [self._parse_record(value, schema_version) for value in records]
         self._validate_records(parsed)
         return parsed
 
-    def _parse_record(self, value: Any) -> ResearchSourceContentRecord:
-        if not isinstance(value, dict) or set(value) != self._RECORD_FIELDS:
+    def _parse_record(
+        self,
+        value: Any,
+        schema_version: int,
+    ) -> ResearchSourceContentRecord:
+        """Decode one record under the exact field set its version defines.
+
+        A version 1 record takes the defaults, which say exactly what version 1
+        was able to say: an ordinary HTTPS read whose content resource is the
+        URL itself. That is what those records meant when they were written, so
+        reading them this way states their provenance rather than inventing it.
+        """
+        expected = (
+            self._RECORD_FIELDS_V1 if schema_version == 1 else self._RECORD_FIELDS_V2
+        )
+        if not isinstance(value, dict) or set(value) != expected:
             raise ResearchError("Research source content store has an invalid record.")
+        optional: dict[str, Any] = (
+            {}
+            if schema_version == 1
+            else {
+                "content_resource": value["content_resource"],
+                "acquisition": value["acquisition"],
+            }
+        )
         return ResearchSourceContentRecord(
             document_id=value["document_id"],
             url=value["url"],
@@ -151,6 +180,7 @@ class JsonFileResearchSourceContentStore:
             stored_at=self._parse_datetime(value["stored_at"], "stored_at"),
             content_byte_count=value["content_byte_count"],
             content_sha256=value["content_sha256"],
+            **optional,
         )
 
     @staticmethod
@@ -181,6 +211,8 @@ class JsonFileResearchSourceContentStore:
             "stored_at": record.stored_at.isoformat(),
             "content_byte_count": record.content_byte_count,
             "content_sha256": record.content_sha256,
+            "content_resource": record.content_resource,
+            "acquisition": record.acquisition,
         }
 
     @classmethod

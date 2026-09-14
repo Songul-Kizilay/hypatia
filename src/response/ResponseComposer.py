@@ -8,6 +8,7 @@ from datetime import datetime
 from brain.BrainRequest import BrainRequest
 from brain.BrainResponse import BrainResponse
 from brain.SessionSummary import SessionSummary
+from cognition.LiveInformationRequestKind import LiveInformationRequestKind
 from knowledge.Chunk import Chunk
 from knowledge.KnowledgeCitation import KnowledgeCitation
 from knowledge.KnowledgeDocumentReference import KnowledgeDocumentReference
@@ -19,8 +20,21 @@ from knowledge.KnowledgeRelationRevocation import KnowledgeRelationRevocation
 from knowledge.KnowledgeRelationRevocationPreview import (
     KnowledgeRelationRevocationPreview,
 )
+from memory.LearnedMemoryAuditReport import LearnedMemoryAuditReport
 from memory.MemoryRecord import MemoryRecord
 from planner.Plan import Plan
+from research.BackgroundResearchTask import BackgroundResearchTask
+from research.CanonicalResearchSummary import CanonicalResearchSummary
+from research.CuriosityResearchProposal import CuriosityResearchProposal
+from research.FailureMemoryRecallMatch import FailureMemoryRecallMatch
+from research.HypothesisAppraisal import HypothesisAppraisal
+from research.HypothesisHistoryView import HypothesisHistoryView
+from research.KnowledgeReconciliationReport import (
+    KnowledgeReconciliationReport,
+)
+from research.ResearchAttemptResolution import ResearchAttemptResolution
+from research.ResearchAutonomyResult import ResearchAutonomyResult
+from research.ResearchCalibrationReport import ResearchCalibrationReport
 from research.ResearchClaimContradictionPreview import (
     ResearchClaimContradictionPreview,
 )
@@ -31,9 +45,57 @@ from research.ResearchClaimContradictionWritePreview import (
     ResearchClaimContradictionWritePreview,
 )
 from research.ResearchClaimPreview import ResearchClaimPreview
+from research.ResearchClaimRevisionPreparation import (
+    ResearchClaimRevisionPreparation,
+)
 from research.ResearchClaimWritePreview import ResearchClaimWritePreview
+from research.ResearchCuriosityPreview import ResearchCuriosityPreview
+from research.ResearchCuriosityQuestion import ResearchCuriosityQuestion
+from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchEvidenceIntegrityStatus import ResearchEvidenceIntegrityStatus
+from research.ResearchExecutionAllowance import ResearchExecutionAllowance
+from research.ResearchExecutionContinuation import (
+    ResearchExecutionContinuation,
+)
+from research.ResearchFailureLesson import ResearchFailureLesson
+from research.ResearchKaliOperationAuthorization import (
+    ResearchKaliOperationAuthorization,
+)
+from research.ResearchKaliOperationExecution import (
+    ResearchKaliOperationRun,
+    kali_operation_evidence_candidate_for_run,
+)
+from research.ResearchKaliOperationPreview import (
+    ResearchKaliOperationFakeRun,
+    ResearchKaliOperationPreview,
+)
+from research.ResearchKaliRuntimeEnvironment import ResearchKaliRuntimeReadiness
+from research.ResearchPairedProviderQualityReport import (
+    ResearchPairedProviderQualityReport,
+)
+from research.ResearchPlanAuthorization import ResearchPlanAuthorization
+from research.ResearchPlanAuthorizationPreview import (
+    ResearchPlanAuthorizationPreview,
+)
+from research.ResearchPlanAuthorizationVerdict import (
+    ResearchPlanAuthorizationVerdict,
+)
+from research.ResearchPlanBudgetRequirement import ResearchPlanBudgetFit
 from research.ResearchPlanDraftPreview import ResearchPlanDraftPreview
+from research.ResearchPlanExecutionSnapshot import (
+    ResearchPlanExecutionSnapshot,
+)
+from research.ResearchPlanExecutionState import ResearchPlanExecutionState
+from research.ResearchPlanFailureLessonTrace import ResearchPlanFailureLessonTrace
+from research.ResearchPlanStepStatus import ResearchPlanStepStatus
+from research.ResearchPlanTargetBinding import ResearchPlanTargetBinding
+from research.ResearchProviderComparisonReport import (
+    ResearchProviderComparisonReport,
+)
+from research.ResearchProviderQualityReport import (
+    ResearchProviderQualityReport,
+)
+from research.ResearchReflectionReport import ResearchReflectionReport
 from research.ResearchRun import ResearchRun
 from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
@@ -61,11 +123,75 @@ from research.ResearchSourceComparisonPreview import ResearchSourceComparisonPre
 from research.ResearchSourceContentRestorationStatus import (
     ResearchSourceContentRestorationStatus,
 )
+from research.ResearchTargetScopeCodec import target_scope_digest
+from research.SourceLoadStage import SourceLoadStage
+from research.SourceReputation import SourceReputation
+from response.HonestyPhrasebook import phrase
+from response.ResponseLanguage import detect_response_language
+from security.SecurityPostureReport import SecurityPostureReport
+from security.VulnerabilityFamily import VulnerabilityFamily
+from security.VulnerabilityFamilyGraph import RelatedFamily
+from security.VulnerabilityRelation import VulnerabilityRelation
 from session.SessionDeleteExecutionResult import SessionDeleteExecutionResult
 from session.SessionDeletePolicy import SessionDeleteStatus
 from session.SessionRecord import SessionRecord
 from session.SessionRenamePreview import SessionRenamePreview
 from session.SessionRenameResult import SessionRenameResult
+
+#: How much of a hypothesis a list entry shows. A hypothesis may be 400
+#: characters; a catalogue someone is scanning should stay scannable, and the
+#: full wording is one appraisal away.
+MAX_LISTED_HYPOTHESIS_STATEMENT_LENGTH = 160
+
+#: Said on every approval response. The whole risk of recording permission is
+#: that recording it reads like using it.
+NO_RESEARCH_STARTED_NOTICE = (
+    "No research execution was started. Nothing was fetched, no model was "
+    "called, and no background work was queued."
+)
+
+#: One bounded note per verdict, for a person rather than for a parser. Nothing
+#: reads these back; the verdict itself is the structured value.
+_AUTHORIZATION_VERDICT_NOTES: dict[ResearchPlanAuthorizationVerdict, str] = {
+    ResearchPlanAuthorizationVerdict.VALID: "This approval covers exactly this plan.",
+    ResearchPlanAuthorizationVerdict.DIGEST_MISMATCH: (
+        "The plan changed after it was previewed, so the approval no longer "
+        "describes it. Preview the new plan and approve that instead."
+    ),
+    ResearchPlanAuthorizationVerdict.RUN_MISMATCH: (
+        "This approval was given for a different research run."
+    ),
+    ResearchPlanAuthorizationVerdict.CAPABILITY_MISMATCH: (
+        "The approval grants capabilities this plan does not declare."
+    ),
+    ResearchPlanAuthorizationVerdict.EXPIRED: (
+        "This approval has expired. Approvals are not renewed; preview the "
+        "plan again to give a new one."
+    ),
+    ResearchPlanAuthorizationVerdict.UNKNOWN: (
+        "No recorded approval was named, or none with that identity exists."
+    ),
+    ResearchPlanAuthorizationVerdict.ALREADY_CONSUMED: (
+        "This approval has already been used. One approval permits one "
+        "attempt, whether or not that attempt succeeded."
+    ),
+    ResearchPlanAuthorizationVerdict.BUDGET_EXCEEDED: (
+        "This work asks for a wider budget than was approved."
+    ),
+    ResearchPlanAuthorizationVerdict.DISCLOSURE_UNSATISFIED: (
+        "This work asks to disclose more to a model than was approved."
+    ),
+    ResearchPlanAuthorizationVerdict.NOT_RECORDED: (
+        "The approval could not be durably written as used, so nothing was "
+        "started. An approval that is not recorded as spent would still be "
+        "available after a restart."
+    ),
+}
+
+_WEAKNESS_CLASS_DISCLAIMER = (
+    "A weakness class is a concept, not a finding. Recording or relating "
+    "one says nothing about whether any system, product, or person is affected."
+)
 
 
 class ResponseComposer:
@@ -574,19 +700,35 @@ class ResponseComposer:
         document: KnowledgeDocumentReference,
         *,
         run: ResearchRun | None = None,
+        stage: SourceLoadStage = SourceLoadStage.INDEXED_WITHOUT_RUN,
         intent: str = "research_source_load",
     ) -> BrainResponse:
-        """Report one explicitly selected internet source after local indexing."""
+        """Report how far one source load got, never further than it went.
+
+        The headline is chosen from the stage rather than from the presence of a
+        document. A document exists in both successful outcomes, so leading with
+        "loaded" and quietly appending a run line let a knowledge-only index read
+        as an accepted research source.
+        """
+        attached = stage.attached_to_run and run is not None
         lines = [
-            "Research source loaded:",
+            (
+                "Research source accepted into the run:"
+                if attached
+                else "Indexed locally, but NOT accepted into a research run:"
+            ),
             f"Title: {document.title}",
             f"Source: {document.source}",
             f"Type: {document.document_type.value}",
             f"Chunks: {document.chunk_count}",
-            f"ID: {document.document_id}",
+            f"Local document ID: {document.document_id}",
+            f"Stage reached: {stage.value}",
         ]
-        if run is not None:
+        if attached:
+            assert run is not None
             lines.append(f"Research run: {run.run_id}")
+            lines.append(f"Accepted sources in this run: {len(run.sources)}")
+        lines.append(stage.summary)
         return BrainResponse(
             message="\n".join(lines),
             request_id=request.request_id,
@@ -594,6 +736,7 @@ class ResponseComposer:
             memory_count=0,
             knowledge_documents=[document],
             research_runs=[] if run is None else [run],
+            source_load_stage=stage,
         )
 
     def research_source_load_failure(
@@ -701,28 +844,43 @@ class ResponseComposer:
         self,
         request: BrainRequest,
         run: ResearchRun,
+        prior_lessons: tuple[ResearchFailureLesson, ...] = (),
     ) -> BrainResponse:
-        """Report a newly persisted auditable research run."""
+        """Report a newly persisted auditable research run.
+
+        Prior lessons are printed after the run, never instead of it. The run
+        exists by the time this is composed, so nothing in the advisory section
+        may read as a condition on it.
+        """
+        lines = [
+            "Research run created:",
+            f"Question: {run.question}",
+            f"Status: {run.status.value}",
+            f"Sources: {len(run.sources)}",
+            f"Discoveries: {len(run.discoveries)}",
+            f"Evidence: {len(run.evidence)}",
+            f"Assessments: {len(run.assessments)}",
+            f"Comparison notes: {len(run.comparison_notes)}",
+            f"Claims: {len(run.claims)}",
+            f"Failures: {len(run.failures)}",
+            f"ID: {run.run_id}",
+        ]
+        if prior_lessons:
+            lines.extend(("", f"Possibly relevant prior lessons: {len(prior_lessons)}"))
+            for lesson in prior_lessons:
+                lines.append(f"- [{lesson.kind.value}] {lesson.statement}")
+                lines.append(f"  from: {', '.join(lesson.provenance)}")
+            lines.append(
+                "These are advisory. This run was created either way, nothing "
+                "was blocked, and no plan, claim, or confidence changed."
+            )
         return BrainResponse(
-            message="\n".join(
-                [
-                    "Research run created:",
-                    f"Question: {run.question}",
-                    f"Status: {run.status.value}",
-                    f"Sources: {len(run.sources)}",
-                    f"Discoveries: {len(run.discoveries)}",
-                    f"Evidence: {len(run.evidence)}",
-                    f"Assessments: {len(run.assessments)}",
-                    f"Comparison notes: {len(run.comparison_notes)}",
-                    f"Claims: {len(run.claims)}",
-                    f"Failures: {len(run.failures)}",
-                    f"ID: {run.run_id}",
-                ]
-            ),
+            message="\n".join(lines),
             request_id=request.request_id,
             intent="research_run_create",
             memory_count=0,
             research_runs=[run],
+            failure_lessons=prior_lessons,
         )
 
     def research_source_content_restoration_status(
@@ -788,8 +946,10 @@ class ResponseComposer:
         self,
         request: BrainRequest,
         preview: ResearchPlanDraftPreview,
+        prior_lessons: tuple[ResearchFailureLesson, ...] = (),
+        lesson_trace: ResearchPlanFailureLessonTrace | None = None,
     ) -> BrainResponse:
-        """Render one inert authored plan or its bounded validation reason."""
+        """Render one inert authored plan plus optional advisory lessons."""
         plan = preview.plan
         if not preview.allowed:
             message = "\n".join(
@@ -806,7 +966,9 @@ class ResponseComposer:
                 "Research plan draft preview:",
                 f"Question: {plan.question}",
                 f"Steps: {len(plan.steps)}",
+                f"Constraints: {len(plan.constraints)}",
                 f"Selected sources: {len(plan.selected_source_document_ids)}",
+                *_target_binding_lines(plan.target_binding),
             ]
             for index, step in enumerate(plan.steps, start=1):
                 selected_sources = ", ".join(step.selected_source_document_ids)
@@ -816,9 +978,64 @@ class ResponseComposer:
                         f"   Selected sources: {selected_sources or 'none'}",
                     )
                 )
+                if step.discovery_provider is not None:
+                    lines.append(
+                        "   Source discovery provider: "
+                        f"{step.discovery_provider.label}"
+                    )
+                if step.semantic_evidence_binding is not None:
+                    lines.extend(step.semantic_evidence_binding.lines())
+                if step.semantic_comparison_binding is not None:
+                    lines.extend(step.semantic_comparison_binding.lines())
+            if plan.constraints:
+                # Listed apart from the steps, and numbered separately, so a
+                # constraint can never be read back as "step 11".
+                lines.append("Plan constraints:")
+                for index, constraint in enumerate(plan.constraints, start=1):
+                    lines.append(f"C{index}. {constraint.text}")
+                    # Said for every constraint, so advisory text is never left
+                    # looking like it might be enforced.
+                    lines.append(
+                        "    Enforcement: "
+                        + (
+                            constraint.restriction.value
+                            if constraint.restriction is not None
+                            else "advisory only"
+                        )
+                    )
+                lines.append(
+                    "Constraints are approved plan content and are bound into "
+                    "the plan's digest. They are not executable steps. Only a "
+                    "restriction named above is mechanically enforced; "
+                    "advisory text blocks nothing on its own."
+                )
+            lines.extend((f"Plan ID: {plan.plan_id}",))
+            if prior_lessons:
+                lines.extend(
+                    ("", f"Possibly relevant prior lessons: {len(prior_lessons)}")
+                )
+                for lesson in prior_lessons:
+                    lines.append(f"- [{lesson.kind.value}] {lesson.statement}")
+                    lines.append(f"  from: {', '.join(lesson.provenance)}")
+                    if lesson_trace is None:
+                        lines.append("  Authored-step wording overlap: unavailable")
+                        continue
+                    references = lesson_trace.references_for(lesson.lesson_id)
+                    if not references:
+                        lines.append("  Authored-step wording overlap: none")
+                    for reference in references:
+                        lines.append(
+                            "  Authored-step wording overlap: "
+                            f"{reference.step_id} "
+                            f"({', '.join(reference.shared_terms)})"
+                        )
+                lines.append(
+                    "This is a lexical trace, not a judgement that a lesson is "
+                    "addressed. The authored plan, its future digest, authorization, "
+                    "capabilities, and execution are unchanged."
+                )
             lines.extend(
                 (
-                    f"Plan ID: {plan.plan_id}",
                     "Status: ready for explicit confirmation",
                     "Persistent writes: not used",
                     "Execution: not started",
@@ -832,6 +1049,2424 @@ class ResponseComposer:
             memory_count=0,
             success=preview.allowed,
             research_plan_draft_preview=preview,
+            failure_lessons=prior_lessons if preview.allowed else (),
+            research_plan_failure_lesson_trace=(
+                lesson_trace if preview.allowed else None
+            ),
+        )
+
+    def kali_operation_preview(
+        self,
+        request: BrainRequest,
+        preview: ResearchKaliOperationPreview,
+    ) -> BrainResponse:
+        """Render one inert Kali operation proposal without a shell string."""
+        argv_lines = tuple(
+            f"  argv[{index}]: {argument}"
+            for index, argument in enumerate(preview.command_plan.argv)
+        )
+        message = "\n".join(
+            (
+                "Kali operation preview:",
+                f"Program: {preview.program_id}",
+                f"Scope revision: {preview.scope_revision_id}",
+                f"Scope revision digest: {preview.scope_revision_digest}",
+                f"Execution policy digest: {preview.execution_policy_digest}",
+                f"Operation digest: {preview.operation_digest}",
+                f"Operation: {preview.operation_kind.value}",
+                f"Check class: {preview.check_class.value}",
+                f"Hostname: {preview.hostname}",
+                "DNS record type: "
+                + (
+                    preview.dns_record_type.value
+                    if preview.dns_record_type is not None
+                    else "not applicable"
+                ),
+                "Permitted ports: "
+                + ", ".join(str(port) for port in preview.permitted_ports),
+                "Budget: "
+                f"{preview.max_request_count} request(s), "
+                f"{preview.max_requests_per_minute}/min, "
+                f"{preview.max_seconds:g}s",
+                "Command plan: reviewed argv only; no shell command string",
+                f"Transport profile: {preview.command_plan.transport.value}",
+                f"Executable: {preview.command_plan.executable_path}",
+                f"Shell: {preview.command_plan.shell}",
+                f"Stdin: {preview.command_plan.stdin}",
+                *argv_lines,
+                "Execution: not started",
+                "Process: not created",
+                "Network/DNS: not used",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="kali_operation_preview",
+            memory_count=0,
+            kali_operation_preview=preview,
+        )
+
+    def kali_operation_preview_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Render a fail-closed Kali operation preview refusal."""
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Kali operation preview rejected:",
+                    f"Reason: {message}",
+                    "Command plan: not constructed",
+                    "Execution: not started",
+                    "Process: not created",
+                    "Network/DNS: not used",
+                )
+            ),
+            request_id=request.request_id,
+            intent="kali_operation_preview",
+            memory_count=0,
+            success=False,
+        )
+
+    def kali_operation_authorization(
+        self,
+        request: BrainRequest,
+        authorization: ResearchKaliOperationAuthorization,
+    ) -> BrainResponse:
+        """Report a human approval record without starting execution."""
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Kali operation authorization:",
+                    f"Authorization ID: {authorization.authorization_id}",
+                    f"Operation digest: {authorization.operation_digest}",
+                    f"Program: {authorization.program_id}",
+                    f"Scope revision: {authorization.scope_revision_id}",
+                    f"Scope revision digest: {authorization.scope_revision_digest}",
+                    "Execution policy digest: "
+                    f"{authorization.execution_policy_digest}",
+                    f"Authorized by: {authorization.authorized_by.value}",
+                    f"Authorized at: {authorization.authorized_at.isoformat()}",
+                    f"Expires at: {authorization.expires_at.isoformat()}",
+                    "Command plan: bound by operation digest; not executed",
+                    "Execution: not started",
+                    "Process: not created",
+                    "Network/DNS: not used",
+                )
+            ),
+            request_id=request.request_id,
+            intent="kali_operation_authorization",
+            memory_count=0,
+            kali_operation_authorization=authorization,
+        )
+
+    def kali_operation_authorization_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Report a refused operation approval without side effects."""
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Kali operation authorization refused:",
+                    f"Reason: {message}",
+                    "Command plan: not executed",
+                    "Execution: not started",
+                    "Process: not created",
+                    "Network/DNS: not used",
+                )
+            ),
+            request_id=request.request_id,
+            intent="kali_operation_authorization",
+            memory_count=0,
+            success=False,
+        )
+
+    def kali_operation_fake_run(
+        self,
+        request: BrainRequest,
+        result: ResearchKaliOperationFakeRun,
+    ) -> BrainResponse:
+        """Report a deterministic no-process runner-gate exercise."""
+        argv_lines = tuple(
+            f"  argv[{index}]: {argument}"
+            for index, argument in enumerate(result.command_plan.argv)
+        )
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Kali operation fake run:",
+                    f"Authorization ID: {result.authorization_id}",
+                    f"Operation digest: {result.operation_digest}",
+                    f"Program: {result.program_id}",
+                    f"Scope revision: {result.scope_revision_id}",
+                    f"Scope revision digest: {result.scope_revision_digest}",
+                    "Execution policy digest: " f"{result.execution_policy_digest}",
+                    f"Operation: {result.operation_kind.value}",
+                    "Command plan: validated argv only; no shell command string",
+                    f"Transport profile: {result.command_plan.transport.value}",
+                    f"Executable: {result.command_plan.executable_path}",
+                    f"Shell: {result.command_plan.shell}",
+                    f"Stdin: {result.command_plan.stdin}",
+                    *argv_lines,
+                    "Fixture output:",
+                    *result.simulated_stdout,
+                    "Execution: simulated only",
+                    "Process: not created",
+                    "Network/DNS: not used",
+                )
+            ),
+            request_id=request.request_id,
+            intent="kali_operation_fake_run",
+            memory_count=0,
+            kali_operation_fake_run=result,
+        )
+
+    def kali_operation_fake_run_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Report a fake-run refusal without side effects."""
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Kali operation fake run refused:",
+                    f"Reason: {message}",
+                    "Execution: not simulated",
+                    "Process: not created",
+                    "Network/DNS: not used",
+                )
+            ),
+            request_id=request.request_id,
+            intent="kali_operation_fake_run",
+            memory_count=0,
+            success=False,
+        )
+
+    def kali_runtime_readiness(
+        self,
+        request: BrainRequest,
+        readiness: ResearchKaliRuntimeReadiness,
+    ) -> BrainResponse:
+        """Render reviewed WSL/Kali runtime readiness without execution."""
+        requirement = readiness.requirement
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Kali runtime readiness:",
+                    f"State: {readiness.state.value}",
+                    f"Reason: {readiness.reason}",
+                    f"Transport required: {requirement.transport.value}",
+                    f"Distribution required: {requirement.distribution}",
+                    f"Executable required: {requirement.executable_path}",
+                    f"Version prefix required: {requirement.version_prefix}",
+                    "Observed distribution: "
+                    f"{readiness.observed_distribution or 'not observed'}",
+                    "Observed executable: "
+                    f"{readiness.observed_executable_path or 'not observed'}",
+                    f"Observed version: {readiness.observed_version or 'not observed'}",
+                    "Execution: not started",
+                    "Process: not created",
+                    "Network/DNS: not used",
+                )
+            ),
+            request_id=request.request_id,
+            intent="kali_runtime_readiness",
+            memory_count=0,
+            success=readiness.ready,
+            kali_runtime_readiness=readiness,
+        )
+
+    def kali_runtime_readiness_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Report a readiness refusal before any runtime probing."""
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Kali runtime readiness refused:",
+                    f"Reason: {message}",
+                    "Execution: not started",
+                    "Process: not created",
+                    "Network/DNS: not used",
+                )
+            ),
+            request_id=request.request_id,
+            intent="kali_runtime_readiness",
+            memory_count=0,
+            success=False,
+        )
+
+    def kali_operation_run(
+        self,
+        request: BrainRequest,
+        result: ResearchKaliOperationRun,
+    ) -> BrainResponse:
+        """Render one reviewed Kali operation result as untrusted output."""
+        argv_lines = tuple(
+            f"  argv[{index}]: {argument}"
+            for index, argument in enumerate(result.command_plan.argv)
+        )
+        process = result.process_result
+        candidate = kali_operation_evidence_candidate_for_run(result)
+        candidate_lines = tuple(
+            f"  candidate[{index}]: {line}"
+            for index, line in enumerate(candidate.candidate_lines)
+        )
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Kali operation run completed:",
+                    f"Authorization ID consumed: {result.authorization_id}",
+                    f"Operation digest: {result.operation_digest}",
+                    f"Program: {result.program_id}",
+                    f"Scope revision: {result.scope_revision_id}",
+                    f"Scope revision digest: {result.scope_revision_digest}",
+                    "Execution policy digest: " f"{result.execution_policy_digest}",
+                    f"Operation: {result.operation_kind.value}",
+                    "Command plan: validated argv only; no shell command string",
+                    f"Transport profile: {result.command_plan.transport.value}",
+                    f"Executable: {result.command_plan.executable_path}",
+                    f"Shell: {result.command_plan.shell}",
+                    f"Stdin: {result.command_plan.stdin}",
+                    *argv_lines,
+                    f"Exit code: {process.exit_code}",
+                    f"Timed out: {process.timed_out}",
+                    "Stdout:",
+                    *(process.stdout_lines or ("[empty]",)),
+                    "Stderr:",
+                    *(process.stderr_lines or ("[empty]",)),
+                    "Output trust: untrusted process output; not evidence yet",
+                    "Evidence candidate:",
+                    *(
+                        candidate_lines
+                        or ("[none from stdout; operator review still required]",)
+                    ),
+                    "Evidence candidate source: stdout only",
+                    (
+                        "Evidence candidate truncated: "
+                        f"{candidate.candidate_lines_truncated}"
+                    ),
+                    (
+                        "Evidence candidate status: review-only; not recorded, "
+                        "not a claim, not an accepted source"
+                    ),
+                    "Authorization: consumed before process start",
+                    "Evidence: not recorded",
+                    "Memory: not written",
+                )
+            ),
+            request_id=request.request_id,
+            intent="kali_operation_run",
+            memory_count=0,
+            success=process.exit_code == 0 and not process.timed_out,
+            kali_operation_run=result,
+            kali_operation_evidence_candidate=candidate,
+        )
+
+    def kali_operation_run_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Report a reviewed operation-run refusal before target work."""
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Kali operation run refused:",
+                    f"Reason: {message}",
+                    "Execution: not started",
+                    "Process: not created",
+                    "Evidence: not recorded",
+                )
+            ),
+            request_id=request.request_id,
+            intent="kali_operation_run",
+            memory_count=0,
+            success=False,
+        )
+
+    def learned_memory_audit(
+        self,
+        request: BrainRequest,
+        report: LearnedMemoryAuditReport,
+    ) -> BrainResponse:
+        """Render bounded learned-memory health without any stored value."""
+        lines = [
+            "Learned memory audit:",
+            f"Total learned records: {report.total_learned_records}",
+            f"Active: {report.active_memories}",
+            f"Superseded: {report.superseded_memories}",
+            f"Superseded share: {report.superseded_ratio:.0%}",
+            f"Distinct identities: {report.identities}",
+            f"Identities with history: {report.identities_with_multiple_versions}",
+            f"Most versions for one identity: {report.max_versions_for_one_identity}",
+            f"Conflicting-history identities: {report.conflicting_history_identities}",
+            f"Duplicate value candidates: {report.duplicate_value_candidates}",
+        ]
+        if report.conflicting_history_samples:
+            lines.append("Conflicting history (sample):")
+            lines.extend(
+                f"- {sample.kind} | {sample.key} | versions: {sample.versions}"
+                for sample in report.conflicting_history_samples
+            )
+        if report.duplicate_value_candidate_samples:
+            lines.append("Duplicate value candidates (sample):")
+            lines.extend(
+                f"- {candidate.first_kind} | {candidate.first_key}"
+                f" <-> {candidate.second_kind} | {candidate.second_key}"
+                for candidate in report.duplicate_value_candidate_samples
+            )
+        if report.samples_truncated:
+            lines.append("Samples truncated: yes")
+        lines.extend(
+            (
+                "Candidates are for review only; no equivalence was decided.",
+                "Persistent writes: not used",
+                "Merges, deletions, and rewrites: not performed",
+            )
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="learned_memory_audit",
+            memory_count=report.active_memories,
+            learned_memory_audit=report,
+        )
+
+    def research_plan_execution_status(
+        self,
+        request: BrainRequest,
+        state: ResearchPlanExecutionState,
+        allowance: ResearchExecutionAllowance | None = None,
+        next_capability: str = "",
+    ) -> BrainResponse:
+        """Render bounded execution state without implying performed research."""
+        lines = [
+            "Research plan execution:",
+            f"Plan ID: {state.plan_id}",
+            f"Status: {state.status.value}",
+            f"Steps: {len(state.steps)}",
+            f"Completed steps: {state.completed_steps}",
+            f"Pending steps: {state.pending_steps}",
+            f"Running step: {state.running_step_id or 'none'}",
+        ]
+        if next_capability:
+            lines.append(f"Next step capability: {next_capability}")
+        if allowance is not None:
+            lines.append("")
+            lines.extend(allowance.lines())
+            lines.append(
+                "Another advance is allowed: "
+                + ("yes" if not allowance.exhausted else "no, the budget is spent")
+            )
+            lines.append("")
+        for index, step in enumerate(state.steps, start=1):
+            detail = f" | {step.detail}" if step.detail else ""
+            operation = f" | operation: {step.operation}" if step.operation else ""
+            lines.append(
+                f"{index}. {step.step_id}: {step.status.value}{operation}{detail}"
+            )
+        if state.detail:
+            lines.append(f"Detail: {state.detail}")
+        interrupted = [
+            step.step_id
+            for step in state.steps
+            if step.status is ResearchPlanStepStatus.INTERRUPTED
+        ]
+        if interrupted:
+            lines.append("")
+            lines.append(
+                "Attempt interrupted; outcome unknown: " + ", ".join(interrupted) + "."
+            )
+            lines.append(
+                "The attempt was charged and may have reached its provider "
+                "before the process ended, so whether it did anything is not "
+                "known. Advancing will not run it again."
+            )
+        ruled = [
+            step
+            for step in state.steps
+            if step.resolution is not ResearchAttemptResolution.NONE
+        ]
+        for step in ruled:
+            lines.append(f"Operator ruling on {step.step_id}: {step.resolution.value}")
+        for step in state.steps:
+            recovery = step.recovery
+            if recovery is None:
+                continue
+            lines.append("")
+            lines.append(
+                f"Operator decision on {step.step_id}: {recovery.decision.value}"
+            )
+            if recovery.claimed_operation:
+                lines.append(
+                    "Operation the operator says produced it: "
+                    f"{recovery.claimed_operation} (their account, unverified)"
+                )
+            if recovery.summary:
+                lines.append(
+                    "Supplied by the operator, NOT observed by Hypatia and not a "
+                    f"provider result: {recovery.summary}"
+                )
+        lines.append(f"Research operations performed: {state.steps_with_research_work}")
+        if not state.performed_research_work:
+            lines.append("No research work has run; this reports execution state only.")
+        lines.extend(
+            (
+                "A completed operation means the operation ran; it is not "
+                "evidence and not a verified claim.",
+                "Evidence, assessment, and claims: not established here",
+                "Persistent writes: not used",
+                "Execution state: in-memory only, lost when Hypatia exits",
+            )
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_plan_execution",
+            memory_count=0,
+            research_plan_execution=state,
+        )
+
+    def background_task_status(
+        self,
+        request: BrainRequest,
+        task: BackgroundResearchTask,
+    ) -> BrainResponse:
+        """Render one background task without any research content."""
+        message = "\n".join(
+            (
+                "Background research task:",
+                f"Task ID: {task.task_id}",
+                f"Execution ID: {task.execution_id}",
+                f"Status: {task.status.value}",
+                f"Retries: {task.retry_count} of {task.max_retries}",
+                f"Last outcome: {task.outcome or 'none'}",
+                "Budget: "
+                f"{task.budget.max_step_advances} step(s), "
+                f"{task.budget.max_network_operations} network, "
+                f"{task.budget.max_llm_operations} model, "
+                f"{task.budget.max_seconds:.0f}s",
+                "Scheduling only; running a task establishes no evidence and "
+                "verifies no claim.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="background_research_task",
+            memory_count=0,
+            background_research_task=task,
+        )
+
+    def background_task_missing(
+        self,
+        request: BrainRequest,
+        task_id: str,
+    ) -> BrainResponse:
+        """Report an unknown task without inventing one."""
+        message = "\n".join(
+            (
+                "Background research task not found:",
+                f"Task ID: {task_id}",
+                "No task with that identifier is known to this scheduler.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="background_research_task",
+            memory_count=0,
+            success=False,
+        )
+
+    def background_task_rejected(
+        self,
+        request: BrainRequest,
+        reason: str,
+    ) -> BrainResponse:
+        """Report one bounded refusal without changing any task."""
+        message = "\n".join(
+            (
+                "Background research task rejected:",
+                f"Reason: {reason}",
+                "No task state changed.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="background_research_task",
+            memory_count=0,
+            success=False,
+        )
+
+    def background_task_list(
+        self,
+        request: BrainRequest,
+        tasks: tuple[BackgroundResearchTask, ...],
+    ) -> BrainResponse:
+        """Render bounded task identities and statuses only."""
+        lines = [f"Background research tasks: {len(tasks)}"]
+        lines.extend(
+            # Both identities, because they control different things: the task
+            # is what the queue pauses, the execution is what research runs on.
+            f"- task {task.task_id}: {task.status.value}"
+            f" | execution {task.execution_id}"
+            f" (retries {task.retry_count}/{task.max_retries})"
+            for task in tasks
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="background_research_task",
+            memory_count=0,
+        )
+
+    def background_worker_cycle(
+        self,
+        request: BrainRequest,
+        ran: tuple[BackgroundResearchTask, ...],
+        tasks: tuple[BackgroundResearchTask, ...],
+    ) -> BrainResponse:
+        """Report exactly what one bounded worker cycle did."""
+        lines = [
+            "Background worker cycle:",
+            f"Tasks run this cycle: {len(ran)}",
+        ]
+        lines.extend(
+            f"- {task.task_id}: {task.status.value} ({task.outcome or 'none'})"
+            for task in ran
+        )
+        lines.extend(
+            (
+                f"Known tasks: {len(tasks)}",
+                "One cycle runs a bounded number of approved tasks and stops.",
+                "Running a task establishes no evidence and verifies no claim.",
+            )
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="background_research_task",
+            memory_count=0,
+        )
+
+    def live_research_not_performed(
+        self,
+        request: BrainRequest,
+        kind: LiveInformationRequestKind,
+        summary: CanonicalResearchSummary,
+    ) -> BrainResponse:
+        """Say plainly that no live research ran, and offer the real workflow.
+
+        The statement comes first and the counters follow. Someone asking a
+        normal question should learn in the first sentence that nothing was
+        researched, without reading a diagnostic to find out.
+        """
+        language = detect_response_language(request.message)
+        if kind is LiveInformationRequestKind.URL_ACCESS:
+            return self._url_not_opened(request, kind, summary)
+        lines = [
+            phrase("no_live_research", language),
+            phrase("use_research", language),
+            "",
+            phrase("details_heading", language),
+            f"- request kind: {kind.value}",
+            *(f"- {line}" for line in summary.lines()),
+        ]
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="live_research_declined",
+            memory_count=0,
+            canonical_research_summary=summary,
+            live_information_request=kind,
+        )
+
+    def _url_not_opened(
+        self,
+        request: BrainRequest,
+        kind: LiveInformationRequestKind,
+        summary: CanonicalResearchSummary,
+    ) -> BrainResponse:
+        """Report that a link was not opened, and claim nothing about the site.
+
+        Not fetching a page and a page being unreachable are different facts,
+        and only one of them was established. Saying the site is inaccessible
+        would be a claim about someone else's server made without contacting it.
+        """
+        language = detect_response_language(request.message)
+        lines = [
+            phrase("url_not_opened", language),
+            phrase("url_unknown_reachability", language),
+            phrase("url_use_research", language),
+            "",
+            phrase("details_heading", language),
+            *(f"- {line}" for line in summary.lines()),
+        ]
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="live_research_declined",
+            memory_count=0,
+            canonical_research_summary=summary,
+            live_information_request=kind,
+        )
+
+    def research_evidence_provenance(
+        self,
+        request: BrainRequest,
+        summary: CanonicalResearchSummary,
+    ) -> BrainResponse:
+        """Answer an evidence question from persisted counts, never from prose."""
+        language = detect_response_language(request.message)
+        lines = [
+            phrase(self._evidence_phrase_key(summary), language),
+            phrase("nothing_fabricated", language),
+            "",
+            phrase("evidence_heading", language),
+            *(f"- {line}" for line in summary.lines()),
+        ]
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_evidence_provenance",
+            memory_count=0,
+            canonical_research_summary=summary,
+            live_information_request=(LiveInformationRequestKind.EVIDENCE_PROVENANCE),
+        )
+
+    @staticmethod
+    def _evidence_phrase_key(summary: CanonicalResearchSummary) -> str:
+        """Choose the sentence from the same counters the reply prints.
+
+        The previous version branched on whether anything at all was recorded,
+        so a run with no sources fell through to "Sources exist but no evidence
+        record does" while printing "Sources accepted: 0" two lines above. The
+        prose now reads the same two numbers the reader can see.
+        """
+        if summary.evidence_count:
+            return "evidence_recorded"
+        if summary.source_count:
+            return "evidence_sources_without_evidence"
+        return "evidence_none_at_all"
+
+    def research_reflection(
+        self,
+        request: BrainRequest,
+        report: ResearchReflectionReport,
+        stored: bool,
+    ) -> BrainResponse:
+        """Render how a run went, never what its subject turned out to be."""
+        lines = [
+            "Research reflection:",
+            f"Run ID: {report.run_id}",
+            f"Findings: {len(report.findings)} ({len(report.lessons)} to learn from)",
+            "",
+        ]
+        lines.extend(
+            f"- [{finding.kind.value}] {finding.detail}" for finding in report.findings
+        )
+        lines.extend(
+            (
+                "",
+                "Canonical research state for this run:",
+                *report.summary.lines(),
+                "",
+                "Stored." if stored else "Not stored.",
+                "This describes how the research went, not whether its "
+                "conclusions are true. Reflecting performed no operation, "
+                "established no evidence, and promoted nothing.",
+            )
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_reflection",
+            memory_count=0,
+            research_reflection=report,
+        )
+
+    def research_reflection_list(
+        self,
+        request: BrainRequest,
+        reports: tuple[ResearchReflectionReport, ...],
+    ) -> BrainResponse:
+        """Render stored reflections without producing a new one."""
+        lines = [f"Stored reflections: {len(reports)}"]
+        lines.extend(
+            f"- {report.report_id}: {len(report.findings)} finding(s), "
+            f"{len(report.lessons)} lesson(s)"
+            for report in reports
+        )
+        lines.append("Listing reflections performs no research.")
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_reflection",
+            memory_count=0,
+            research_reflections=reports,
+        )
+
+    def research_reflection_persistence_failed(
+        self,
+        request: BrainRequest,
+        report: ResearchReflectionReport,
+    ) -> BrainResponse:
+        """Report a reflection that exists here but was not written down."""
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "This reflection was not durably written.",
+                    f"Report: {report.report_id}",
+                    "Durable write: failed.",
+                    "Restarting Hypatia may lose it.",
+                    "Reflecting on this run again retries the write.",
+                    "No research run, claim, evidence, or assessment changed.",
+                )
+            ),
+            request_id=request.request_id,
+            intent="research_reflection",
+            memory_count=0,
+            success=False,
+            research_reflection=report,
+        )
+
+    def research_reflection_rejected(
+        self,
+        request: BrainRequest,
+        reason: str,
+    ) -> BrainResponse:
+        """Report one bounded refusal without storing anything."""
+        message = "\n".join(
+            (
+                "Research reflection rejected:",
+                f"Reason: {reason}",
+                "Nothing was stored and no run changed.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="research_reflection",
+            memory_count=0,
+            success=False,
+        )
+
+    def failure_lessons(
+        self,
+        request: BrainRequest,
+        lessons: tuple[ResearchFailureLesson, ...],
+        stored: bool,
+        *,
+        dropped: int = 0,
+    ) -> BrainResponse:
+        """Render lessons together with the records that make them checkable."""
+        lines = [
+            "Failure lessons:",
+            f"Lessons: {len(lessons)}",
+            "",
+        ]
+        for lesson in lessons:
+            lines.append(f"- [{lesson.kind.value}] {lesson.statement}")
+            lines.append(f"  from: {', '.join(lesson.provenance)}")
+        if dropped:
+            lines.append(f"Beyond the per-run limit, not derived: {dropped}")
+        lines.extend(
+            (
+                "",
+                "Remembered." if stored else "Not remembered.",
+                "A lesson records that something did not work here, not that it "
+                "cannot work. Deriving one performed no research and changed no "
+                "run, hypothesis, claim, or assessment.",
+            )
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="failure_memory",
+            memory_count=0,
+            failure_lessons=lessons,
+        )
+
+    def failure_lesson_list(
+        self,
+        request: BrainRequest,
+        lessons: tuple[ResearchFailureLesson, ...],
+    ) -> BrainResponse:
+        """Render everything remembered, deriving nothing new.
+
+        The lesson leads, for the reason the hypothesis listing does: a
+        catalogue identified only by record ID cannot be read by anyone
+        deciding what to do about it.
+        """
+        lines = [f"Remembered failure lessons: {len(lessons)}"]
+        for lesson in lessons:
+            lines.append(f"- [{lesson.kind.value}] {lesson.statement}")
+            lines.append(f"  {lesson.lesson_id} ({len(lesson.provenance)} record(s))")
+        lines.append("Listing lessons performs no research.")
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="failure_memory",
+            memory_count=0,
+            failure_lessons=lessons,
+        )
+
+    def failure_lessons_persistence_failed(
+        self,
+        request: BrainRequest,
+        lessons: tuple[ResearchFailureLesson, ...],
+        *,
+        dropped: int = 0,
+    ) -> BrainResponse:
+        """Report lessons retained only in memory after a durable-write failure."""
+        lines = [
+            "Failure lessons were not durably remembered.",
+            f"Lessons retained in this process: {len(lessons)}",
+        ]
+        if dropped:
+            lines.append(f"Beyond the per-run limit, not derived: {dropped}")
+        lines.extend(
+            (
+                "Durable write: failed.",
+                "Restarting Hypatia may lose these in-memory lessons.",
+                "No research run, hypothesis, claim, or assessment changed.",
+            )
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="failure_memory",
+            memory_count=0,
+            success=False,
+            failure_lessons=lessons,
+        )
+
+    def failure_lesson_recall(
+        self,
+        request: BrainRequest,
+        lessons: tuple[ResearchFailureLesson, ...],
+        matches: tuple[FailureMemoryRecallMatch, ...] = (),
+    ) -> BrainResponse:
+        """Offer prior lessons as advice, never as a decision."""
+        matches_by_lesson_id = {match.lesson.lesson_id: match for match in matches}
+        lines = [
+            "Possibly relevant prior lessons:",
+            f"Lessons: {len(lessons)}",
+            "",
+        ]
+        for lesson in lessons:
+            lines.append(f"- [{lesson.kind.value}] {lesson.statement}")
+            match = matches_by_lesson_id.get(lesson.lesson_id)
+            if match is not None:
+                lines.append(f"  matched terms: {', '.join(match.shared_terms)}")
+            lines.append(f"  from: {', '.join(lesson.provenance)}")
+        if not lessons:
+            lines.append("Nothing remembered overlaps this question.")
+        lines.extend(
+            (
+                "",
+                "These are advisory. Nothing was blocked, no capability was "
+                "refused, and no claim was downgraded. Something failing once "
+                "is not a reason not to try it.",
+            )
+        )
+        if matches:
+            lines.append(
+                "Matched terms explain lexical overlap only; they do not prove "
+                "that a prior lesson applies to this question."
+            )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="failure_memory",
+            memory_count=0,
+            failure_lessons=lessons,
+            failure_memory_recall_matches=matches,
+        )
+
+    def failure_memory_rejected(
+        self,
+        request: BrainRequest,
+        reason: str,
+    ) -> BrainResponse:
+        """Report one bounded refusal without remembering anything."""
+        message = "\n".join(
+            (
+                "Failure memory request rejected:",
+                f"Reason: {reason}",
+                "Nothing was remembered and no run changed.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="failure_memory",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_calibration(
+        self,
+        request: BrainRequest,
+        report: ResearchCalibrationReport,
+    ) -> BrainResponse:
+        """Render the fit between authored claims and their own support."""
+        lines = [
+            "Claim calibration:",
+            f"Run ID: {report.run_id}",
+            f"Claims: {len(report.calibrations)}",
+            f"Needing a second look: {len(report.needing_attention)}",
+            f"Claims with source warnings: {len(report.warned)} "
+            f"({report.warning_count} warning(s))",
+            "",
+        ]
+        for entry in report.calibrations:
+            lines.append(f"- {entry.claim_id} [{entry.verdict.value}]")
+            lines.append("  Claim:")
+            lines.extend(f"    {line}" for line in entry.claim_text.splitlines())
+            lines.append(f"  {entry.summary()}")
+            lines.append(f"  evidence IDs: {', '.join(entry.evidence_ids)}")
+            lines.append(
+                "  source document IDs: " f"{', '.join(entry.source_document_ids)}"
+            )
+            lines.append("  Evidence support profile:")
+            lines.extend(f"    {line}" for line in entry.profile.lines())
+            # The warnings are listed under the claim but never folded into its
+            # verdict. They answer a different question: not whether the claim
+            # outruns its support, but whether somebody who read one of those
+            # sources wrote down a reason to look again.
+            for warning in entry.warnings:
+                lines.append(f"  ! {warning.summary()}")
+            if not entry.warnings:
+                lines.append("  No assessment-aware warnings.")
+        if not report.calibrations:
+            lines.append("This run has no active claims to calibrate.")
+        lines.extend(
+            (
+                "",
+                "No claim was changed. A supported ceiling is what our own "
+                "record can carry, not a verdict on the claim: meeting it does "
+                "not make a claim true, and exceeding it does not make one "
+                "false. Understating is never reported as a problem.",
+                "",
+                "Warnings are warnings only. Nothing was corrected: no "
+                "confidence was lowered, no claim withdrawn, no evidence "
+                "removed, and no source rejected. They report what a person "
+                "recorded about a source, which is a reason to look rather "
+                "than a finding that the claim is wrong. A claim with no "
+                "warnings has not been verified — it may simply be resting on "
+                "sources nobody has assessed yet.",
+            )
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_calibration",
+            memory_count=0,
+            research_calibration=report,
+        )
+
+    def research_calibration_rejected(
+        self,
+        request: BrainRequest,
+        reason: str,
+    ) -> BrainResponse:
+        """Report one bounded refusal without changing any claim."""
+        message = "\n".join(
+            (
+                "Claim calibration rejected:",
+                f"Reason: {reason}",
+                "No claim changed.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="research_calibration",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_claim_revision_preparation(
+        self,
+        request: BrainRequest,
+        preparation: ResearchClaimRevisionPreparation,
+    ) -> BrainResponse:
+        """Render one inert bridge from calibration to human authoring."""
+        calibration = preparation.calibration
+        lines = [
+            "Claim review preparation:",
+            f"Run ID: {preparation.run_id}",
+            f"Current claim ID: {calibration.claim_id}",
+            "Current claim:",
+        ]
+        lines.extend(f"  {line}" for line in calibration.claim_text.splitlines())
+        lines.extend(
+            (
+                f"Calibration: {calibration.summary()}",
+                f"Verdict: {calibration.verdict.value}",
+                "Current evidence IDs: "
+                f"{', '.join(preparation.current_evidence_ids)}",
+                "Current source document IDs: "
+                f"{', '.join(preparation.current_source_document_ids)}",
+                "If you choose to author a replacement, supersedes claim ID: "
+                f"{preparation.supersedes_claim_id}",
+            )
+        )
+        for warning in calibration.warnings:
+            lines.append(f"Warning to review: {warning.summary()}")
+        if not calibration.warnings:
+            lines.append("No assessment-aware warning accompanies this mismatch.")
+        lines.extend(
+            (
+                "",
+                "No replacement was drafted or recorded. Hypatia did not choose "
+                "new claim text, an epistemic state, or confidence. The IDs above "
+                "describe the current claim only; a person must decide what, if "
+                "anything, a separately previewed revision should say and cite.",
+                "No claim, evidence, source, plan, authorization, execution, or "
+                "background task changed.",
+            )
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_calibration_revision_prepare",
+            memory_count=0,
+            research_claim_revision_preparation=preparation,
+        )
+
+    def research_claim_revision_preparation_rejected(
+        self,
+        request: BrainRequest,
+        reason: str,
+    ) -> BrainResponse:
+        """Refuse an invalid preparation request without changing a claim."""
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Claim review preparation rejected:",
+                    f"Reason: {reason}",
+                    "No claim, confidence, evidence, or research state changed.",
+                )
+            ),
+            request_id=request.request_id,
+            intent="research_calibration_revision_prepare",
+            memory_count=0,
+            success=False,
+        )
+
+    def provider_comparison(
+        self,
+        request: BrainRequest,
+        report: ResearchProviderComparisonReport,
+    ) -> BrainResponse:
+        """Render both provider result sets, preferring neither."""
+        return BrainResponse(
+            message="\n".join(report.lines()),
+            request_id=request.request_id,
+            intent="provider_comparison",
+            memory_count=0,
+            research_provider_comparison=report,
+        )
+
+    def provider_comparison_rejected(
+        self,
+        request: BrainRequest,
+        reason: str,
+    ) -> BrainResponse:
+        """Explain why there is nothing to compare, having compared nothing."""
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Provider comparison rejected:",
+                    f"Reason: {reason}",
+                    "No provider was contacted and nothing was changed.",
+                )
+            ),
+            request_id=request.request_id,
+            intent="provider_comparison",
+            memory_count=0,
+            success=False,
+        )
+
+    def provider_quality(
+        self,
+        request: BrainRequest,
+        report: ResearchProviderQualityReport,
+    ) -> BrainResponse:
+        """Render how assessed provider samples performed, choosing nothing."""
+        return BrainResponse(
+            message="\n".join(
+                ("Provider quality — descriptive only:", "", *report.lines())
+            ),
+            request_id=request.request_id,
+            intent="provider_quality",
+            memory_count=0,
+            research_provider_quality=report,
+        )
+
+    def paired_provider_quality(
+        self,
+        request: BrainRequest,
+        report: ResearchPairedProviderQualityReport,
+    ) -> BrainResponse:
+        """Render aligned same-question observations, choosing nothing."""
+        return BrainResponse(
+            message="\n".join(
+                ("Paired provider quality — descriptive only:", "", *report.lines())
+            ),
+            request_id=request.request_id,
+            intent="paired_provider_quality",
+            memory_count=0,
+            research_paired_provider_quality=report,
+        )
+
+    def source_reputation(
+        self,
+        request: BrainRequest,
+        reputations: tuple[SourceReputation, ...],
+    ) -> BrainResponse:
+        """Render our own assessment history per origin, gating nothing."""
+        lines = [
+            "Source reputation:",
+            f"Origins: {len(reputations)}",
+            "",
+        ]
+        for reputation in reputations:
+            lines.extend(f"  {line}" for line in reputation.lines())
+            lines.append("")
+        if not reputations:
+            lines.append("No accepted source matches, so there is nothing to report.")
+            lines.append("")
+        lines.extend(
+            (
+                "This counts our own assessments, not the publisher. A standing "
+                "of provisional means the sample is too small to generalise "
+                "from, and no standing gates anything: no fetch was refused, no "
+                "evidence discounted, no source pre-assessed, and no assessment "
+                "changed.",
+            )
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="source_reputation",
+            memory_count=0,
+            source_reputations=reputations,
+        )
+
+    def source_reputation_rejected(
+        self,
+        request: BrainRequest,
+        reason: str,
+    ) -> BrainResponse:
+        """Report one bounded refusal without changing any assessment."""
+        message = "\n".join(
+            (
+                "Source reputation request rejected:",
+                f"Reason: {reason}",
+                "No assessment changed.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="source_reputation",
+            memory_count=0,
+            success=False,
+        )
+
+    def hypothesis_appraisal(
+        self,
+        request: BrainRequest,
+        appraisal: HypothesisAppraisal,
+    ) -> BrainResponse:
+        """Render one hypothesis and its standing, concluding nothing."""
+        lines = [
+            "Research hypothesis:",
+            f"ID: {appraisal.hypothesis.hypothesis_id}",
+            *appraisal.lines(),
+            "",
+            "Supporting and opposing evidence are counted separately and never "
+            "netted. No status here means the hypothesis is true: supported "
+            "requires more than one independent supporting source, an active "
+            "authored trust assessment of at least medium for every supporting "
+            "source, and no opposing evidence. That is still where most "
+            "abandoned theories stood right until the observation that undid "
+            "them.",
+            "",
+            "Evidence recorded as addressing the discriminating test is an "
+            "authored association only. It does not say whether that evidence "
+            "supports or opposes the hypothesis.",
+        ]
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_hypothesis",
+            memory_count=0,
+            hypothesis_appraisal=appraisal,
+        )
+
+    def hypothesis_history(
+        self,
+        request: BrainRequest,
+        view: HypothesisHistoryView,
+    ) -> BrainResponse:
+        """Render one hypothesis's standing beside what was withdrawn from it."""
+        return BrainResponse(
+            message="\n".join(view.lines()),
+            request_id=request.request_id,
+            intent="research_hypothesis_history",
+            memory_count=0,
+            hypothesis_history=view,
+        )
+
+    def hypothesis_list(
+        self,
+        request: BrainRequest,
+        appraisals: tuple[HypothesisAppraisal, ...],
+    ) -> BrainResponse:
+        """Render every hypothesis with its derived standing.
+
+        The statement leads. A list that identified each entry only by record
+        ID is unreadable by anyone deciding which hypothesis to act on, which
+        is the entire reason to look at the list.
+        """
+        lines = [f"Research hypotheses: {len(appraisals)}"]
+        for appraisal in appraisals:
+            statement = appraisal.hypothesis.one_line_statement(
+                MAX_LISTED_HYPOTHESIS_STATEMENT_LENGTH
+            )
+            lines.append(f'- [{appraisal.status.value}] "{statement}"')
+            lines.append(
+                f"  {appraisal.hypothesis.hypothesis_id} | "
+                f"for {appraisal.supporting_source_count} / "
+                f"against {appraisal.opposing_source_count} source(s); "
+                "test-addressing evidence "
+                f"{appraisal.discriminating_test_evidence_count}; "
+                f"support trust {appraisal.supporting_assessed_source_count}/"
+                f"{appraisal.supporting_source_count} assessed, lowest "
+                f"{appraisal.lowest_supporting_trust.value}"
+            )
+        lines.append(
+            "Test-addressing evidence is authored, not inferred. Listing "
+            "hypotheses performs no research and settles nothing."
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_hypothesis",
+            memory_count=0,
+            hypothesis_appraisals=appraisals,
+        )
+
+    def hypothesis_rejected(
+        self,
+        request: BrainRequest,
+        reason: str,
+    ) -> BrainResponse:
+        """Report one bounded refusal without changing any hypothesis."""
+        message = "\n".join(
+            (
+                "Research hypothesis request rejected:",
+                f"Reason: {reason}",
+                "No hypothesis changed.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="research_hypothesis",
+            memory_count=0,
+            success=False,
+        )
+
+    def hypothesis_persistence_failed(
+        self,
+        request: BrainRequest,
+        appraisal: HypothesisAppraisal,
+    ) -> BrainResponse:
+        """Report a hypothesis change retained only in the current process."""
+        return BrainResponse(
+            message="\n".join(
+                (
+                    "Research hypothesis was not durably saved.",
+                    f"ID: {appraisal.hypothesis.hypothesis_id}",
+                    f"Status in this process: {appraisal.status.value}",
+                    "Durable write: failed.",
+                    "Restarting Hypatia may lose this in-memory change.",
+                    "No status here means the hypothesis is true.",
+                )
+            ),
+            request_id=request.request_id,
+            intent="research_hypothesis",
+            memory_count=0,
+            success=False,
+            hypothesis_appraisal=appraisal,
+        )
+
+    def vulnerability_family(
+        self,
+        request: BrainRequest,
+        family: VulnerabilityFamily,
+    ) -> BrainResponse:
+        """Render one recorded weakness class."""
+        message = "\n".join(
+            (
+                "Vulnerability family recorded:",
+                f"ID: {family.family_id}",
+                f"Name: {family.name}",
+                f"Weakness: {family.summary}",
+                f"Generally prevented by: {family.prevention}",
+                _WEAKNESS_CLASS_DISCLAIMER,
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="vulnerability_graph",
+            memory_count=0,
+            vulnerability_family=family,
+        )
+
+    def vulnerability_relation(
+        self,
+        request: BrainRequest,
+        relation: VulnerabilityRelation,
+    ) -> BrainResponse:
+        """Render one authored edge between two weakness classes."""
+        message = "\n".join(
+            (
+                "Vulnerability relation recorded:",
+                f"{relation.from_family_id} {relation.kind.value} "
+                f"{relation.to_family_id}",
+                f"Because: {relation.rationale}",
+                _WEAKNESS_CLASS_DISCLAIMER,
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="vulnerability_graph",
+            memory_count=0,
+            vulnerability_relation=relation,
+        )
+
+    def vulnerability_neighbourhood(
+        self,
+        request: BrainRequest,
+        family: VulnerabilityFamily,
+        related: tuple[RelatedFamily, ...],
+        ancestors: tuple[VulnerabilityFamily, ...],
+    ) -> BrainResponse:
+        """Render what else is worth thinking about near one weakness class."""
+        lines = [
+            f"Around {family.name}:",
+            f"Weakness: {family.summary}",
+            "",
+        ]
+        if ancestors:
+            lines.append("More general classes:")
+            lines.extend(f"- {entry.name}" for entry in ancestors)
+            lines.append("")
+        lines.append(f"Related classes: {len(related)}")
+        lines.extend(
+            f"- {entry.family.name} ({entry.via.value}, depth {entry.depth})"
+            for entry in related
+        )
+        if not related:
+            lines.append("Nothing recorded relates to this one yet.")
+        lines.extend(
+            (
+                "",
+                "These are suggestions about what to read next, not about what "
+                "to attack. " + _WEAKNESS_CLASS_DISCLAIMER,
+            )
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="vulnerability_graph",
+            memory_count=0,
+            vulnerability_family=family,
+            related_vulnerability_families=related,
+        )
+
+    def vulnerability_family_list(
+        self,
+        request: BrainRequest,
+        families: tuple[VulnerabilityFamily, ...],
+    ) -> BrainResponse:
+        """Render every recorded weakness class."""
+        lines = [f"Vulnerability families: {len(families)}"]
+        lines.extend(f"- {entry.family_id}: {entry.name}" for entry in families)
+        lines.append(_WEAKNESS_CLASS_DISCLAIMER)
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="vulnerability_graph",
+            memory_count=0,
+            vulnerability_families=families,
+        )
+
+    def research_plan_authorization_preview(
+        self,
+        request: BrainRequest,
+        preview: ResearchPlanAuthorizationPreview,
+    ) -> BrainResponse:
+        """Show exactly what confirming would record, having recorded nothing.
+
+        The budget comparison is shown whichever way the preview went. Somebody
+        deciding whether to approve needs to see what the plan would cost even
+        when it fits, and especially when it does not.
+        """
+        if preview.authorization is None:
+            return BrainResponse(
+                message="\n".join(
+                    (
+                        "Research plan approval preview:",
+                        f"Reason: {preview.reason}",
+                        *_budget_fit_lines(preview.budget_fit),
+                        "Nothing was approved and no research was started.",
+                    )
+                ),
+                request_id=request.request_id,
+                intent="research_plan_authorization",
+                memory_count=0,
+                success=False,
+                research_plan_budget_fit=preview.budget_fit,
+            )
+        authorization = preview.authorization
+        lines = [
+            "Research plan approval preview:",
+            f"Approval ID: {authorization.authorization_id}",
+            "",
+            # Both identities, adjacent and labelled. Someone approving needs
+            # to see that the preview they are looking at is not the thing
+            # being approved.
+            f"Plan (this preview): {preview.plan_id}",
+            f"Plan content approved: {authorization.plan_digest}",
+            f"Research run: {authorization.research_run_id}",
+            "",
+            *self._authorization_terms(authorization),
+            *_target_binding_lines(preview.target_binding),
+            *_discovery_provider_lines(preview.discovery_providers),
+            *(
+                line
+                for binding in preview.semantic_bindings
+                for line in binding.lines()
+            ),
+            *_budget_fit_lines(preview.budget_fit),
+            "",
+            "Nothing is recorded until you confirm this exact approval.",
+            preview.reason,
+        ]
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_plan_authorization",
+            memory_count=0,
+            research_plan_authorization=authorization,
+            research_plan_budget_fit=preview.budget_fit,
+        )
+
+    def research_plan_authorization_confirmed(
+        self,
+        request: BrainRequest,
+        authorization: ResearchPlanAuthorization,
+    ) -> BrainResponse:
+        """Report one durably recorded approval that started nothing."""
+        lines = [
+            "Research plan approval recorded.",
+            f"Approval ID: {authorization.authorization_id}",
+            f"Plan content approved: {authorization.plan_digest}",
+            f"Research run: {authorization.research_run_id}",
+            "",
+            *self._authorization_terms(authorization),
+            "",
+            NO_RESEARCH_STARTED_NOTICE,
+        ]
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_plan_authorization",
+            memory_count=0,
+            research_plan_authorization=authorization,
+        )
+
+    def research_plan_authorization_write_failed(
+        self,
+        request: BrainRequest,
+        authorization: ResearchPlanAuthorization,
+    ) -> BrainResponse:
+        """Report an approval kept here but not written down."""
+        lines = [
+            "This approval was not durably recorded.",
+            f"Approval ID: {authorization.authorization_id}",
+            "Durable write: failed.",
+            "Restarting Hypatia may lose it.",
+            "Approving the same plan again retries the write.",
+            NO_RESEARCH_STARTED_NOTICE,
+        ]
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_plan_authorization",
+            memory_count=0,
+            success=False,
+            research_plan_authorization=authorization,
+        )
+
+    def research_plan_authorization_refused(
+        self,
+        request: BrainRequest,
+        verdict: ResearchPlanAuthorizationVerdict,
+    ) -> BrainResponse:
+        """Report why a previewed approval no longer covers this work."""
+        message = "\n".join(
+            (
+                "That approval was not recorded.",
+                f"Verification: {verdict.value}",
+                _AUTHORIZATION_VERDICT_NOTES[verdict],
+                "Nothing was approved and no research was started.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="research_plan_authorization",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_plan_authorization_rejected(
+        self,
+        request: BrainRequest,
+        reason: str,
+    ) -> BrainResponse:
+        """Report one bounded refusal without recording anything."""
+        message = "\n".join(
+            (
+                "Research plan approval request rejected:",
+                f"Reason: {reason}",
+                "Nothing was approved and no research was started.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="research_plan_authorization",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_plan_authorization_list(
+        self,
+        request: BrainRequest,
+        authorizations: tuple[ResearchPlanAuthorization, ...],
+        moment: datetime,
+    ) -> BrainResponse:
+        """Report recorded approvals and whether each is still valid now."""
+        lines = [f"Recorded research plan approvals: {len(authorizations)}"]
+        for authorization in authorizations:
+            consumption = authorization.consumption
+            if consumption is not None:
+                standing = "used"
+            elif authorization.has_expired_at(moment):
+                standing = "expired"
+            else:
+                standing = "valid now"
+            lines.append(
+                f"- [{standing}] {authorization.authorization_id} "
+                f"({authorization.disclosure.value})"
+            )
+            lines.append(
+                f"  plan {authorization.plan_digest} in run "
+                f"{authorization.research_run_id}"
+            )
+            if consumption is None:
+                lines.append("  unused")
+            else:
+                lines.append(
+                    f"  used by {consumption.execution_id} "
+                    f"at {consumption.consumed_at.isoformat()}"
+                )
+        lines.append(
+            "An approval is a record, not standing permission. "
+            + NO_RESEARCH_STARTED_NOTICE
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_plan_authorization",
+            memory_count=0,
+            research_plan_authorizations=authorizations,
+        )
+
+    @staticmethod
+    def _authorization_terms(
+        authorization: ResearchPlanAuthorization,
+    ) -> tuple[str, ...]:
+        """Render the exact terms being approved, in one bounded block."""
+        capabilities = ", ".join(
+            sorted(capability.value for capability in authorization.capabilities)
+        )
+        budget = authorization.budget
+        # Named rather than left to be inferred from the digest, so an approval
+        # can be read back and understood on its own. Restricts only; it grants
+        # nothing that the capabilities above do not already say.
+        restrictions = (
+            ", ".join(
+                sorted(
+                    restriction.value
+                    for restriction in authorization.approved_restrictions
+                )
+            )
+            or "none"
+        )
+        return (
+            f"Capabilities: {capabilities}",
+            f"Approved restrictions: {restrictions}",
+            f"Budget: {budget.max_step_advances} step(s), "
+            f"{budget.max_network_operations} network operation(s), "
+            f"{budget.max_llm_operations} model call(s), "
+            f"{budget.max_seconds:g} second(s)",
+            f"Model disclosure: {authorization.disclosure.value}",
+            f"Authorized by: {authorization.authorized_by.value}",
+            f"Approved at: {authorization.authorized_at.isoformat()}",
+            f"Expires at: {authorization.expires_at.isoformat()}",
+        )
+
+    def vulnerability_graph_persistence_failed(
+        self,
+        request: BrainRequest,
+        *,
+        family: VulnerabilityFamily | None = None,
+        relation: VulnerabilityRelation | None = None,
+    ) -> BrainResponse:
+        """Report a taxonomy entry that exists here but was not written down.
+
+        The entry is kept in this process rather than discarded, so the work is
+        not lost while the session lasts. Saying it was recorded would be the
+        more comfortable answer and the wrong one: a taxonomy someone believes
+        is saved, and is not, is worse than one they know they must re-enter.
+        """
+        if family is not None:
+            subject = f"Family: {family.family_id}"
+        elif relation is not None:
+            subject = f"Relation: {relation.from_family_id} -> {relation.to_family_id}"
+        else:
+            subject = "Entry recorded in this process."
+        message = "\n".join(
+            (
+                "The vulnerability graph was not durably written.",
+                subject,
+                "Durable write: failed.",
+                "Restarting Hypatia may lose this entry.",
+                "Recording it again retries the write.",
+                _WEAKNESS_CLASS_DISCLAIMER,
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="vulnerability_graph",
+            memory_count=0,
+            success=False,
+            vulnerability_family=family,
+            vulnerability_relation=relation,
+        )
+
+    def vulnerability_graph_rejected(
+        self,
+        request: BrainRequest,
+        reason: str,
+    ) -> BrainResponse:
+        """Report one bounded refusal without changing the graph."""
+        message = "\n".join(
+            (
+                "Vulnerability graph request rejected:",
+                f"Reason: {reason}",
+                "The graph did not change.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="vulnerability_graph",
+            memory_count=0,
+            success=False,
+        )
+
+    def security_posture(
+        self,
+        request: BrainRequest,
+        report: SecurityPostureReport,
+    ) -> BrainResponse:
+        """Render what was examined alongside what was found."""
+        highest = report.highest_severity
+        lines = [
+            "Security posture audit:",
+            *report.scope_lines(),
+            f"Findings: {len(report.findings)} "
+            f"({len(report.needing_action)} needing action)",
+            f"Highest severity: {'none' if highest is None else highest.value}",
+            "",
+        ]
+        lines.extend(
+            f"- [{finding.severity.value}] {finding.kind.value} "
+            f"({finding.subject_id}): {finding.detail}"
+            for finding in report.findings
+        )
+        if report.clean:
+            lines.append(
+                "Nothing was found. That means these specific properties held "
+                "in the data just now, not that the system is safe."
+            )
+        lines.extend(
+            (
+                "",
+                "This audit read Hypatia's own records. It contacted no external "
+                "system, examined nobody else's infrastructure, and repaired "
+                "nothing: what to do about a source already accepted and "
+                "reasoned from is a judgement it cannot make for you.",
+            )
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="security_posture",
+            memory_count=0,
+            security_posture=report,
+        )
+
+    def security_posture_rejected(
+        self,
+        request: BrainRequest,
+        reason: str,
+    ) -> BrainResponse:
+        """Report one bounded refusal without auditing anything."""
+        message = "\n".join(
+            (
+                "Security posture audit rejected:",
+                f"Reason: {reason}",
+                "Nothing was examined and nothing changed.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="security_posture",
+            memory_count=0,
+            success=False,
+        )
+
+    def knowledge_reconciliation(
+        self,
+        request: BrainRequest,
+        report: KnowledgeReconciliationReport,
+    ) -> BrainResponse:
+        """Render what is indexed against what research actually uses."""
+        lines = [
+            "Knowledge reconciliation:",
+            *report.lines(),
+            "",
+            "Knowledge-only means indexed locally and not referenced by any "
+            "research run. That is a normal state for anything loaded for local "
+            "search, not a problem and not a cleanup list.",
+        ]
+        if report.broken_references:
+            lines.append(
+                "A broken reference is a research run naming a document the "
+                "local index does not hold. That one is genuine breakage."
+            )
+        lines.append(
+            "This report read state only. Nothing was deleted, merged, or " "repaired."
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="knowledge_reconciliation",
+            memory_count=0,
+            knowledge_reconciliation=report,
+        )
+
+    def knowledge_only_resources(
+        self,
+        request: BrainRequest,
+        report: KnowledgeReconciliationReport,
+    ) -> BrainResponse:
+        """List indexed resources no research run references."""
+        records = report.knowledge_only
+        lines = [f"Knowledge-only resources: {len(records)}"]
+        lines.extend(f"- {record.line()}" for record in records)
+        if not records:
+            lines.append("Every indexed resource is referenced by a research run.")
+        lines.extend(
+            (
+                "",
+                "These are indexed and searchable locally. They are not research "
+                "evidence, and nothing here removes them.",
+            )
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="knowledge_reconciliation",
+            memory_count=0,
+            knowledge_reconciliation=report,
+        )
+
+    def curiosity_gaps(
+        self,
+        request: BrainRequest,
+        preview: ResearchCuriosityPreview,
+    ) -> BrainResponse:
+        """Report detected gaps, which are absences in our record, not findings."""
+        lines = [
+            "Knowledge gaps detected:",
+            f"Run ID: {preview.run_id}",
+            f"Gaps: {preview.gap_count}",
+        ]
+        lines.extend(f"- {gap.kind.value}: {gap.summary}" for gap in preview.gaps)
+        lines.append(
+            "A gap describes what our own record is missing, not what is true."
+        )
+        lines.append("Nothing was researched, proposed, or stored.")
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="curiosity",
+            memory_count=0,
+            research_curiosity=preview,
+        )
+
+    def curiosity_preview(
+        self,
+        request: BrainRequest,
+        preview: ResearchCuriosityPreview,
+    ) -> BrainResponse:
+        """Render ranked proposals and say plainly that none of them ran."""
+        lines = [
+            "Curiosity proposals:",
+            f"Run ID: {preview.run_id}",
+            f"Gaps: {preview.gap_count}",
+            f"Questions: {preview.question_count}",
+        ]
+        lines.extend(
+            f"- [{question.rank_score}] {question.text}"
+            for question in preview.questions
+        )
+        lines.append(
+            "Stored as proposals." if preview.stored else "Nothing was stored."
+        )
+        lines.append(
+            "A proposed question is a suggestion, not a plan: none of these "
+            "was researched, and none will run on its own."
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="curiosity",
+            memory_count=0,
+            research_curiosity=preview,
+        )
+
+    def curiosity_question_list(
+        self,
+        request: BrainRequest,
+        questions: tuple[ResearchCuriosityQuestion, ...],
+    ) -> BrainResponse:
+        """Render every stored proposal in rank order."""
+        lines = [f"Curiosity questions: {len(questions)}"]
+        lines.extend(
+            f"- {question.question_id} [{question.rank_score}] "
+            f"({question.status.value}): {question.text}"
+            for question in questions
+        )
+        lines.append("Listing proposals performs no research.")
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="curiosity",
+            memory_count=0,
+            curiosity_questions=questions,
+        )
+
+    def curiosity_question_decided(
+        self,
+        request: BrainRequest,
+        question: ResearchCuriosityQuestion,
+    ) -> BrainResponse:
+        """Record a ruling on one proposal without starting anything."""
+        message = "\n".join(
+            (
+                "Curiosity question decided:",
+                f"Question ID: {question.question_id}",
+                f"Status: {question.status.value}",
+                f"Rank: {question.rank_score}",
+                "Accepting a question records intent only; it starts no "
+                "research and queues no background task.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="curiosity",
+            memory_count=0,
+            curiosity_question=question,
+        )
+
+    def curiosity_question_missing(
+        self,
+        request: BrainRequest,
+        question_id: str,
+    ) -> BrainResponse:
+        """Report an unknown proposal without inventing one."""
+        message = "\n".join(
+            (
+                "Curiosity question not found:",
+                f"Question ID: {question_id}",
+                "No proposal with that identifier is stored.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="curiosity",
+            memory_count=0,
+            success=False,
+        )
+
+    def curiosity_persistence_failed(
+        self,
+        request: BrainRequest,
+        subject: str,
+    ) -> BrainResponse:
+        """Report proposals or a ruling that exist here but were not written."""
+        message = "\n".join(
+            (
+                "Curiosity was not durably written.",
+                f"Kept in this process: {subject}.",
+                "Durable write: failed.",
+                "Restarting Hypatia may lose it.",
+                "Repeating the request retries the write.",
+                "No research run, claim, evidence, or assessment changed.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="curiosity",
+            memory_count=0,
+            success=False,
+        )
+
+    def curiosity_proposal(
+        self,
+        request: BrainRequest,
+        proposal: CuriosityResearchProposal,
+        budget_fit: ResearchPlanBudgetFit | None = None,
+    ) -> BrainResponse:
+        """Render one inert proposal, authorizing and starting nothing.
+
+        The budget comparison rides along when there is one, so the operator
+        reads what this plan would need beside what they are about to grant,
+        before they grant it rather than after.
+        """
+        return BrainResponse(
+            message="\n".join((*proposal.lines(), *_budget_fit_lines(budget_fit))),
+            request_id=request.request_id,
+            intent="curiosity_prepare_proposal",
+            memory_count=0,
+            curiosity_proposal=proposal,
+            research_plan_budget_fit=budget_fit,
+        )
+
+    def curiosity_proposal_authorized(
+        self,
+        request: BrainRequest,
+        proposal: CuriosityResearchProposal,
+        authorization: ResearchPlanAuthorization,
+    ) -> BrainResponse:
+        """Report that a person approved this exact plan, and that it is idle.
+
+        Both facts are stated because either alone is misleading. An approval
+        that does not say it has not started reads like something happening; a
+        plan that does not say it is approved reads like nothing was decided.
+        """
+        lines = [
+            "RESEARCH PROPOSAL AUTHORIZED — approved by a person, not running",
+            f"Curiosity question: {proposal.question}",
+            f"Question ID: {proposal.curiosity_question_id}",
+            f"Plan digest: {authorization.plan_digest}",
+            f"Approval ID: {authorization.authorization_id}",
+            f"Approved by: {authorization.authorized_by.value}",
+            f"Approved at: {authorization.authorized_at.isoformat()}",
+            f"Valid until: {authorization.expires_at.isoformat()}",
+            "",
+            "Nothing has started. This approval permits a later, separate "
+            "action to begin exactly this plan; it does not begin it, and no "
+            "step has run.",
+        ]
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="curiosity_authorize_proposal",
+            memory_count=0,
+            curiosity_proposal=proposal,
+            research_plan_authorization=authorization,
+        )
+
+    def curiosity_proposal_execution_started(
+        self,
+        request: BrainRequest,
+        proposal: CuriosityResearchProposal,
+        authorization_id: str,
+        state: ResearchPlanExecutionState,
+    ) -> BrainResponse:
+        """Report one approved foreground start without implying a step ran."""
+        lines = [
+            "AUTHORIZED CURIOSITY PROPOSAL STARTED — running, zero steps run",
+            f"Curiosity question: {proposal.question}",
+            f"Question ID: {proposal.curiosity_question_id}",
+            f"Plan digest: {proposal.digest}",
+            f"Approval ID used: {authorization_id}",
+            f"Execution ID: {state.plan_id}",
+            f"Execution status: {state.status.value}",
+            f"Completed steps: {state.completed_steps}",
+            f"Pending steps: {state.pending_steps}",
+            "Research operations performed: 0",
+            "",
+            "The approval is now used. No provider was contacted and no "
+            "research step ran. The first step still requires a separate "
+            "explicit Advance action.",
+        ]
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="curiosity_start_authorized_proposal",
+            memory_count=0,
+            curiosity_proposal=proposal,
+            research_plan_execution=state,
+        )
+
+    def curiosity_proposal_execution_resumed(
+        self,
+        request: BrainRequest,
+        proposal: CuriosityResearchProposal,
+        authorization_id: str,
+        state: ResearchPlanExecutionState,
+    ) -> BrainResponse:
+        """Report one recovered execution without implying anything ran.
+
+        Resuming is bookkeeping, not progress: it makes an execution that was
+        already approved and already started reachable again in this process.
+        The counts shown are the recorded ones, so a step that finished before
+        the restart still reads as finished and will not be repeated.
+        """
+        lines = [
+            "DURABLE CURIOSITY EXECUTION RESUMED — no step run",
+            f"Curiosity question: {proposal.question}",
+            f"Question ID: {proposal.curiosity_question_id}",
+            f"Plan digest: {proposal.digest}",
+            f"Approval ID already used: {authorization_id}",
+            f"Execution ID: {state.plan_id}",
+            f"Execution status: {state.status.value}",
+            f"Completed steps: {state.completed_steps}",
+            f"Pending steps: {state.pending_steps}",
+            "Research operations performed: 0",
+            "",
+            "No new approval was created and the original one stays used. "
+            "Nothing was performed and no provider was contacted. Any further "
+            "step still requires a separate explicit Advance action.",
+        ]
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="curiosity_resume_execution",
+            memory_count=0,
+            curiosity_proposal=proposal,
+            research_plan_execution=state,
+        )
+
+    def curiosity_rejected(
+        self,
+        request: BrainRequest,
+        reason: str,
+    ) -> BrainResponse:
+        """Report one bounded refusal without changing any proposal."""
+        message = "\n".join(
+            (
+                "Curiosity request rejected:",
+                f"Reason: {reason}",
+                "No proposal changed.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="curiosity",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_autonomy_result(
+        self,
+        request: BrainRequest,
+        result: ResearchAutonomyResult,
+    ) -> BrainResponse:
+        """Render exactly what an autonomous run consumed and why it stopped."""
+        message = "\n".join(
+            (
+                "Autonomous research run:",
+                f"Plan ID: {result.plan_id}",
+                f"Stopped because: {result.stop_reason.value}",
+                f"Execution status: {result.execution_status}",
+                f"Steps attempted: {result.steps_attempted}",
+                f"Operations performed: {result.operations_performed}",
+                f"Network operations: {result.network_operations}",
+                f"LLM operations: {result.llm_operations}",
+                f"Elapsed seconds: {result.elapsed_seconds:.3f}",
+                "Only steps already authored and authorized were run.",
+                "A completed operation is not evidence, not a verified claim, "
+                "and not a research conclusion.",
+                "Stopping within budget is a normal outcome, not a failure.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="research_autonomy",
+            memory_count=0,
+            research_autonomy=result,
+        )
+
+    def research_autonomy_missing(
+        self,
+        request: BrainRequest,
+        plan_id: str,
+    ) -> BrainResponse:
+        """Refuse autonomy for an execution this process cannot advance."""
+        message = "\n".join(
+            (
+                "Autonomous research run rejected:",
+                f"Plan ID: {plan_id}",
+                "This process holds no live execution for that plan.",
+                "A restored execution cannot be advanced, and autonomy never "
+                "creates or authorizes a plan of its own.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="research_autonomy",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_plan_execution_restored(
+        self,
+        request: BrainRequest,
+        snapshot: ResearchPlanExecutionSnapshot,
+        recovery_reason: str | None = None,
+    ) -> BrainResponse:
+        """Render restored durable state without implying a resumable run."""
+        lines = [
+            "Research plan execution (restored):",
+            f"Plan ID: {snapshot.plan_id}",
+            f"Status: {snapshot.status.value}",
+            f"Steps: {len(snapshot.steps)}",
+        ]
+        for index, step in enumerate(snapshot.steps, start=1):
+            operation = f" | operation: {step.operation}" if step.operation else ""
+            lines.append(f"{index}. {step.step_id}: {step.status.value}{operation}")
+        interrupted = sum(
+            1
+            for step in snapshot.steps
+            if step.status is ResearchPlanStepStatus.INTERRUPTED
+        )
+        if interrupted:
+            lines.append(
+                f"Interrupted steps: {interrupted}. What those operations did is "
+                "unknown; nothing was replayed."
+            )
+        if recovery_reason:
+            lines.append(
+                "Automatic mission recovery stopped safely: " f"{recovery_reason}"
+            )
+        lines.extend(
+            (
+                "Restored from durable state; this execution is not running.",
+                "Temporary source previews are unavailable after restart; "
+                "no source was refetched.",
+                "Authored step instructions and authorizations were not persisted, "
+                "so a restored execution cannot be advanced.",
+                "A completed operation means the operation ran; it is not "
+                "evidence and not a verified claim.",
+            )
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_plan_execution",
+            memory_count=0,
+        )
+
+    def research_plan_execution_missing(
+        self,
+        request: BrainRequest,
+        plan_id: str,
+    ) -> BrainResponse:
+        """Report absent ephemeral state without inventing a resumable run."""
+        message = "\n".join(
+            (
+                "Research plan execution not found:",
+                f"Plan ID: {plan_id}",
+                "This process holds no execution state for that plan.",
+                "Execution state is in-memory only and is lost when Hypatia exits.",
+                "It is not resumed after a restart.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="research_plan_execution",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_plan_execution_budget_refused(
+        self,
+        request: BrainRequest,
+        plan_id: str,
+        capability: str,
+        allowance: ResearchExecutionAllowance,
+    ) -> BrainResponse:
+        """Report an advance refused before anything was attempted or charged.
+
+        Not a failure. The step was never begun, so nothing spent a network
+        call, nothing ran, and the budget below is exactly what it was before
+        the request arrived.
+        """
+        lines = [
+            "Research plan execution was not advanced.",
+            "Reason: the approved budget does not cover the next step.",
+            f"Execution: {plan_id}",
+            f"Next step capability: {capability}",
+            "",
+            *allowance.lines(),
+            "",
+            "Execution: not reached",
+            "Nothing was attempted, charged, fetched, or written.",
+        ]
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_plan_execution",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_plan_execution_unauthorized(
+        self,
+        request: BrainRequest,
+        verdict: ResearchPlanAuthorizationVerdict,
+    ) -> BrainResponse:
+        """Report work that was never reached, rather than work that failed.
+
+        An execution that was not permitted to begin has no state, no steps,
+        and no result. Calling it a failure would put a research failure in the
+        record for something research never attempted.
+        """
+        message = "\n".join(
+            (
+                "Research plan execution was not authorized.",
+                f"Authorization: {verdict.value}",
+                _AUTHORIZATION_VERDICT_NOTES[verdict],
+                "Execution: not reached",
+                "No approval was spent, no step ran, and nothing was written.",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="research_plan_execution",
+            memory_count=0,
+            success=False,
+        )
+
+    def research_plan_execution_continued(
+        self,
+        request: BrainRequest,
+        continuation: ResearchExecutionContinuation,
+        state: ResearchPlanExecutionState,
+    ) -> BrainResponse:
+        """Report what a bounded continuation did, counted rather than described.
+
+        Requested and attempted are shown side by side on purpose. They differ
+        whenever something stopped the run early, and that gap is the first
+        thing an operator needs to see.
+        """
+        lines = [
+            "Bounded foreground continuation finished.",
+            f"Execution ID: {continuation.execution_id}",
+            f"Steps requested: {continuation.requested_max_steps}",
+            f"Steps attempted: {continuation.attempted_steps}",
+            "Steps attempted in order: "
+            + (", ".join(continuation.attempted_step_ids) or "none"),
+            f"Stopped because: {continuation.stop_reason.value}",
+            f"Execution status: {continuation.final_status.value}",
+            f"Next pending step: {continuation.next_step_id or 'none'}",
+        ]
+        if continuation.allowance is not None:
+            lines.append("")
+            lines.extend(continuation.allowance.lines())
+        lines.append("")
+        lines.append(
+            "Nothing continues on its own. Any further step needs another "
+            "explicit action."
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_plan_execution_continue",
+            memory_count=0,
+            research_plan_execution=state,
+            research_execution_continuation=continuation,
+        )
+
+    def research_plan_execution_rejected(
+        self,
+        request: BrainRequest,
+        reason: str,
+    ) -> BrainResponse:
+        """Report one bounded refusal without starting or changing execution."""
+        message = "\n".join(
+            (
+                "Research plan execution rejected:",
+                f"Reason: {reason}",
+                "Execution: not started",
+                "Persistent writes: not used",
+            )
+        )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="research_plan_execution",
+            memory_count=0,
+            success=False,
         )
 
     def research_run_list_success(
@@ -2715,3 +5350,75 @@ class ResponseComposer:
             f"{index}. {session.session_id} — {count} "
             f"{conversation_label}{active_marker}"
         )
+
+
+def _target_binding_lines(
+    binding: ResearchPlanTargetBinding | None,
+) -> tuple[str, ...]:
+    """Disclose the full bounded scope before exact-plan confirmation."""
+    if binding is None:
+        return ()
+    scope = binding.scope
+    lines = [
+        f"Target program: {binding.program_id}",
+        f"Target scope content: {target_scope_digest(scope)}",
+        "Target transport: public HTTPS port 443, bounded text GET only",
+    ]
+    if binding.has_scope_revision:
+        lines.extend(
+            (
+                f"Target scope revision: {binding.scope_revision_id}",
+                f"Target scope revision digest: {binding.scope_revision_digest}",
+            )
+        )
+    for label, rules in (
+        ("Allowed host", scope.allowed_hosts),
+        ("Excluded host", scope.excluded_hosts),
+    ):
+        for rule in rules:
+            selection = (
+                "descendants only, not apex" if rule.subdomains_only else "exact"
+            )
+            lines.append(f"{label}: {rule.host} ({selection})")
+    for label, networks in (
+        ("Allowed IP network", scope.allowed_networks),
+        ("Excluded IP network", scope.excluded_networks),
+    ):
+        lines.extend(f"{label}: {network}" for network in networks)
+    lines.append(
+        "Exclusions win. This scope does not prove program ownership or consent; "
+        "path-specific rules and other test types are not supported here."
+    )
+    return tuple(lines)
+
+
+def _discovery_provider_lines(
+    providers: tuple[ResearchDiscoveryProviderName, ...],
+) -> tuple[str, ...]:
+    """Name the providers this approval would let a plan contact.
+
+    Said out loud rather than left implicit. Approving a plan approves a network
+    destination, and `none named` is worth stating too: it means a discovery
+    step would use whichever provider this installation was configured with,
+    which is a different and weaker thing to have agreed to.
+    """
+    if not providers:
+        return (
+            "Source discovery provider: none named "
+            "(a discovery step would use the configured default)",
+        )
+    return tuple(
+        f"Source discovery provider: {provider.label}" for provider in providers
+    )
+
+
+def _budget_fit_lines(fit: ResearchPlanBudgetFit | None) -> tuple[str, ...]:
+    """Render what the plan would cost against what is being approved.
+
+    Two numbers side by side rather than one. A requirement read on its own is
+    easily taken for a grant, and the reason it is here at all is so a person
+    can see that those are not the same thing.
+    """
+    if fit is None:
+        return ()
+    return ("", *fit.lines())

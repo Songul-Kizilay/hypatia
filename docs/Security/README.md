@@ -121,6 +121,77 @@ Hypatia currently runs as a local-first CLI. The initial security boundary is:
 - semantic embeddings are opt-in and restricted to the local Ollama endpoint
   policy enforced at bootstrap.
 
+- tool invocation is centrally gated. A tool declares its effects, and the
+  execution service compares that declaration against the effects the single
+  invocation authorized before the implementation is reached. There is no
+  ambient grant, no trusted-tool shortcut, and no path to a tool that skips the
+  gate. Lifecycle events carry counts, categories, and booleans, never argument
+  values or returned values. Four capabilities are registered: reading a clock,
+  counting supplied text, listing one authorized local directory, and reading
+  bounded metadata for one authorized local entry. On supported Windows desktop
+  composition, a fifth capability reads one explicitly confirmed, bounded UTF-8
+  range through the separate content effect. Its rooted range method and
+  text-policy Tool return only a typed local-only/untrusted payload after
+  success. Its current
+  sensitive-name floor refuses eight
+  bounded classes before native acquisition and again from the final
+  handle-derived name; it inspects no content and offers no override. No model,
+  cognition, memory, or research module can import the tool layer, name the
+  execution service, or construct an invocation.
+
+## Filesystem capability boundaries
+
+- [Read-only filesystem capability design](Filesystem_Capability_Design.md).
+  Directory listing and single-entry metadata are implemented behind an
+  operator-configured root and explicit per-invocation authorization. They
+  refuse links and expose no content.
+- [Filesystem content-access security design](Filesystem_Content_Access_Design.md).
+  The result/effect/request-identity contracts and a bounded Windows
+  NTFS rooted-open foundation plus the first sensitive-name refusal floor are
+  implemented, together with the isolated text-policy Tool and explicit local
+  desktop preview. No model context, memory, research, evidence, persistence,
+  export, clipboard, remote, or generic telemetry content path exists.
+- [Windows rooted-open production boundary](Windows_Rooted_Open_Production_Decision.md).
+  The fixed-system-DLL, handle-relative, no-follow NTFS construction is
+  implemented with bounded failures. Ordinary opaque acquisition reads zero
+  content bytes; the separate raw range method is reachable only through the
+  exact confirmed Windows Stage-A Tool path.
+  POSIX/Linux and non-NTFS filesystems are separate, unsupported milestones.
+- [Windows content-range read production decision](Windows_Content_Range_Read_Decision.md).
+  One synchronous `ReadFile` range implements the accepted byte-bound, EOF,
+  staleness and close-before-result contract as a bounded raw platform method.
+  The decoded-text Tool is registered only by supported Windows desktop
+  composition with the matching scope and explicit per-read confirmation.
+- [Filesystem content preview decision](Filesystem_Content_Preview_Decision.md).
+  The first Windows Stage-A operator contract is implemented:
+  startup-only bounded scope, exact one-read confirmation, central request-ID
+  projection, literal local-only presentation, and discard-on-cancel/close.
+  It authorizes no model, memory, research, persistence, export, clipboard,
+  automatic continuation, override, or POSIX path.
+- [Desktop workspace selection decision](Desktop_Workspace_Selection_Decision.md).
+  A future Windows-only folder picker is accepted as a restart-bound settings
+  flow: exact local preview, single-use confirmation, bounded atomic preference,
+  local-NTFS proof, fail-closed startup, and no live root hot-swap. It is not
+  implemented and authorizes no path disclosure to model, memory, research,
+  Tool telemetry, exports, clipboard, remote systems, or POSIX content access.
+
+- [Bounded research autonomy design](Bounded_Research_Autonomy_Design.md).
+  The security contract for the point where a proposed question becomes bounded
+  work. The execution, autonomy, and scheduling services already exist and are
+  deliberately unreachable from the desktop; the document records what is
+  already enforced, names the three gaps that make reachability unsafe today,
+  and defines authorization as an immutable content-addressed plan snapshot
+  that is single-use, expiring, and never inheritable by a modified plan. It
+  implements nothing, makes nothing reachable, and grants no filesystem, shell,
+  tool, or remote-disclosure authority.
+
+- [Scope-bound Kali tool execution design](Kali_Tool_Execution_Design.md).
+  The accepted future boundary is a reviewed catalogue of structured security
+  operations, never a general terminal or command string. Exact active program
+  scope, check-class/port/rate budgets, explicit operation authorization,
+  bounded process and output handling, and typed untrusted observations are
+  prerequisites. No Kali process or network request is implemented yet.
+
 The current full-repository security baseline is recorded in the Codex Security
 scan completed for v0.3 planning. Before Hypatia gains a networked UI, plugins,
 remote storage, or multi-user operation, this document must grow into a complete

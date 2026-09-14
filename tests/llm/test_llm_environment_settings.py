@@ -11,6 +11,8 @@ if str(SRC_DIR) not in sys.path:
     sys.path.append(str(SRC_DIR))
 
 from llm.LLMEnvironmentSettings import (
+    DEFAULT_LLM_HISTORY_MAX_TURNS,
+    UNBOUNDED_LLM_HISTORY,
     load_llm_environment_settings,
     load_llm_history_max_turns,
     load_llm_process_environment_settings,
@@ -26,9 +28,27 @@ class LLMEnvironmentSettingsTests(unittest.TestCase):
     def test_history_max_turns_loader_maps_optional_positive_integer(self) -> None:
         environment = {"HYPATIA_LLM_HISTORY_MAX_TURNS": "8"}
 
-        self.assertIsNone(load_llm_history_max_turns({}))
         self.assertEqual(load_llm_history_max_turns(environment), 8)
         self.assertEqual(environment, {"HYPATIA_LLM_HISTORY_MAX_TURNS": "8"})
+
+    def test_history_is_bounded_by_default(self) -> None:
+        """An unset limit must not mean an unbounded transcript.
+
+        A small local context window truncates the oldest-first ordering the
+        server receives, so an unbounded history pushes the newest user message
+        toward the edge and the model answers the previous question.
+        """
+        self.assertEqual(
+            load_llm_history_max_turns({}),
+            DEFAULT_LLM_HISTORY_MAX_TURNS,
+        )
+
+    def test_unbounded_history_remains_available_explicitly(self) -> None:
+        self.assertIsNone(
+            load_llm_history_max_turns(
+                {"HYPATIA_LLM_HISTORY_MAX_TURNS": UNBOUNDED_LLM_HISTORY}
+            )
+        )
 
     def test_history_max_turns_loader_rejects_invalid_values(self) -> None:
         expected_message = "HYPATIA_LLM_HISTORY_MAX_TURNS must be a positive integer."

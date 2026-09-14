@@ -1,0 +1,69 @@
+"""Bounded observability for claim calibration.
+
+Payloads carry the run identifier, bounded verdict counts, and how many claims
+need a second look. They never carry claim text, a research question, a URL, an
+evidence excerpt, or an exception message.
+"""
+
+from __future__ import annotations
+
+from eventbus.EventBus import EventBus
+from research.ResearchCalibrationReport import ResearchCalibrationReport
+from research.ResearchClaimRevisionPreparation import (
+    ResearchClaimRevisionPreparation,
+)
+
+CALIBRATION_REPORTED = "calibration.reported"
+CALIBRATION_REVISION_PREPARED = "calibration.revision_prepared"
+
+EVENT_SOURCE = "research.calibration"
+
+
+class CalibrationEvents:
+    """Publish bounded calibration events, or nothing without a bus."""
+
+    def __init__(self, event_bus: EventBus | None = None) -> None:
+        self._event_bus = event_bus
+
+    def reported(self, report: ResearchCalibrationReport) -> None:
+        self._emit(
+            CALIBRATION_REPORTED,
+            {
+                "run_id": report.run_id,
+                "claim_count": len(report.calibrations),
+                "attention_count": len(report.needing_attention),
+                "overstated_count": len(report.overstated),
+                "verdicts": report.counts(),
+                # Counts and bounded kind codes only. A warning names a source
+                # and an assessment, and neither belongs in telemetry: the
+                # payload says how many concerns were raised and of what kind,
+                # never what anybody wrote about which paper.
+                "warned_claim_count": len(report.warned),
+                "warning_count": report.warning_count,
+                "warning_kinds": report.warning_kind_counts(),
+                "claims_modified": 0,
+                "executed": False,
+            },
+        )
+
+    def revision_prepared(
+        self,
+        preparation: ResearchClaimRevisionPreparation,
+    ) -> None:
+        """Observe one inert handoff without exposing claim or provenance data."""
+        calibration = preparation.calibration
+        self._emit(
+            CALIBRATION_REVISION_PREPARED,
+            {
+                "run_id": preparation.run_id,
+                "verdict": calibration.verdict.value,
+                "warning_count": len(calibration.warnings),
+                "claims_modified": 0,
+                "executed": False,
+            },
+        )
+
+    def _emit(self, name: str, payload: dict[str, object]) -> None:
+        if self._event_bus is None:
+            return
+        self._event_bus.emit(name, payload, source=EVENT_SOURCE)

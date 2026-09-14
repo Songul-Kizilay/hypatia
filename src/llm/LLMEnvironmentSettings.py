@@ -14,10 +14,23 @@ def load_llm_system_prompt(environment: Mapping[str, str]) -> str | None:
     return environment.get("HYPATIA_LLM_SYSTEM_PROMPT")
 
 
+DEFAULT_LLM_HISTORY_MAX_TURNS = 12
+UNBOUNDED_LLM_HISTORY = "unbounded"
+
+
 def load_llm_history_max_turns(environment: Mapping[str, str]) -> int | None:
-    """Return the configured positive conversation history turn limit."""
+    """Return the conversation history turn limit, bounded unless overridden.
+
+    An unset value means a bounded default rather than unlimited history. Local
+    models commonly run with a small context window, and an unbounded
+    transcript pushes the newest user message toward the truncation edge, where
+    the model answers the previous question instead of the current one. The
+    literal "unbounded" restores the old behaviour for anyone who wants it.
+    """
     value = environment.get("HYPATIA_LLM_HISTORY_MAX_TURNS")
     if value is None:
+        return DEFAULT_LLM_HISTORY_MAX_TURNS
+    if value == UNBOUNDED_LLM_HISTORY:
         return None
     if not value.isascii() or not value.isdecimal():
         raise ValueError("HYPATIA_LLM_HISTORY_MAX_TURNS must be a positive integer.")

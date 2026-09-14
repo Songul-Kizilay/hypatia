@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from dataclasses import replace
 from datetime import UTC, datetime
+from hashlib import sha256
 from pathlib import Path
 from unittest.mock import patch
 
@@ -23,13 +24,20 @@ from research.ResearchFailureRecord import ResearchFailureRecord
 from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRun import ResearchRun
 from research.ResearchRunStatus import ResearchRunStatus
+from research.ResearchSourceApplicability import ResearchSourceApplicability
 from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
 from research.ResearchSourceCandidate import ResearchSourceCandidate
 from research.ResearchSourceComparisonNoteRecord import (
     ResearchSourceComparisonNoteRecord,
 )
 from research.ResearchSourceDiscoveryRecord import ResearchSourceDiscoveryRecord
+from research.ResearchSourceIndependence import ResearchSourceIndependence
+from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
 from research.ResearchSourceRecord import ResearchSourceRecord
+from research.ResearchSourceUsefulness import ResearchSourceUsefulness
+from research.ResearchVulnerabilityMetric import ResearchVulnerabilityMetric
+from research.ResearchVulnerabilityRecord import ResearchVulnerabilityRecord
+from research.ResearchVulnerabilityReference import ResearchVulnerabilityReference
 
 
 class JsonFileResearchRunStoreTests(unittest.TestCase):
@@ -73,9 +81,10 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
             ),
             failures=(
                 ResearchFailureRecord(
-                    stage="source_fetch",
+                    stage="source_discovery",
                     reason="Timed out.",
                     occurred_at=self.now,
+                    provider="nvd",
                 ),
             ),
             created_at=self.now,
@@ -147,7 +156,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
 
     def test_rejects_unknown_fields_schema_and_duplicate_ids(self) -> None:
         for document in (
-            {"schema_version": 10, "runs": []},
+            {"schema_version": 14, "runs": []},
             {"schema_version": True, "runs": []},
             {"schema_version": 1, "runs": [], "unexpected": True},
         ):
@@ -168,7 +177,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
         with self.assertRaisesRegex(ResearchError, "duplicate run IDs"):
             self.store.save([run, run])
 
-    def test_loads_v1_without_new_collections_and_rewrites_as_v9(self) -> None:
+    def test_loads_v1_without_new_collections_and_rewrites_as_v13(self) -> None:
         legacy_document = {
             "schema_version": 1,
             "runs": [
@@ -193,7 +202,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
         self.assertEqual(runs[0].assessments, ())
         self.assertEqual(runs[0].comparison_notes, ())
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 9)
+        self.assertEqual(rewritten["schema_version"], 13)
         self.assertEqual(rewritten["runs"][0]["evidence"], [])
         self.assertEqual(rewritten["runs"][0]["discoveries"], [])
         self.assertEqual(rewritten["runs"][0]["assessments"], [])
@@ -201,7 +210,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
         self.assertEqual(rewritten["runs"][0]["claims"], [])
         self.assertEqual(rewritten["runs"][0]["claim_contradictions"], [])
 
-    def test_loads_v2_without_discoveries_and_rewrites_as_v9(self) -> None:
+    def test_loads_v2_without_discoveries_and_rewrites_as_v13(self) -> None:
         legacy_document = {
             "schema_version": 2,
             "runs": [
@@ -224,14 +233,14 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
 
         self.assertEqual(runs[0].discoveries, ())
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 9)
+        self.assertEqual(rewritten["schema_version"], 13)
         self.assertEqual(rewritten["runs"][0]["discoveries"], [])
         self.assertEqual(rewritten["runs"][0]["assessments"], [])
         self.assertEqual(rewritten["runs"][0]["comparison_notes"], [])
         self.assertEqual(rewritten["runs"][0]["claims"], [])
         self.assertEqual(rewritten["runs"][0]["claim_contradictions"], [])
 
-    def test_loads_v3_without_assessments_and_rewrites_as_v9(self) -> None:
+    def test_loads_v3_without_assessments_and_rewrites_as_v13(self) -> None:
         legacy_document = {
             "schema_version": 3,
             "runs": [
@@ -255,13 +264,13 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
 
         self.assertEqual(runs[0].assessments, ())
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 9)
+        self.assertEqual(rewritten["schema_version"], 13)
         self.assertEqual(rewritten["runs"][0]["assessments"], [])
         self.assertEqual(rewritten["runs"][0]["comparison_notes"], [])
         self.assertEqual(rewritten["runs"][0]["claims"], [])
         self.assertEqual(rewritten["runs"][0]["claim_contradictions"], [])
 
-    def test_loads_v4_assessments_without_supersession_and_rewrites_as_v9(
+    def test_loads_v4_assessments_without_supersession_and_rewrites_as_v13(
         self,
     ) -> None:
         legacy_document = {
@@ -323,7 +332,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
         self.assertEqual(runs[0].sources[0].taint_label, "external_untrusted_data")
         self.assertEqual(runs[0].sources[0].instruction_authority, "none")
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 9)
+        self.assertEqual(rewritten["schema_version"], 13)
         self.assertIsNone(
             rewritten["runs"][0]["assessments"][0]["supersedes_assessment_id"]
         )
@@ -343,7 +352,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
         self.assertEqual(rewritten["runs"][0]["claims"], [])
         self.assertEqual(rewritten["runs"][0]["claim_contradictions"], [])
 
-    def test_loads_v5_without_comparison_notes_and_rewrites_as_v9(self) -> None:
+    def test_loads_v5_without_comparison_notes_and_rewrites_as_v13(self) -> None:
         legacy_document = {
             "schema_version": 5,
             "runs": [
@@ -368,12 +377,12 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
 
         self.assertEqual(runs[0].comparison_notes, ())
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 9)
+        self.assertEqual(rewritten["schema_version"], 13)
         self.assertEqual(rewritten["runs"][0]["comparison_notes"], [])
         self.assertEqual(rewritten["runs"][0]["claims"], [])
         self.assertEqual(rewritten["runs"][0]["claim_contradictions"], [])
 
-    def test_loads_v6_without_trust_metadata_and_rewrites_as_v9(self) -> None:
+    def test_loads_v6_without_trust_metadata_and_rewrites_as_v13(self) -> None:
         legacy_document = {
             "schema_version": 6,
             "runs": [
@@ -436,7 +445,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
             ResearchInformationTrust.UNASSESSED,
         )
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 9)
+        self.assertEqual(rewritten["schema_version"], 13)
         self.assertEqual(
             rewritten["runs"][0]["sources"][0]["taint_label"],
             "external_untrusted_data",
@@ -452,7 +461,7 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
         self.assertEqual(rewritten["runs"][0]["claims"], [])
         self.assertEqual(rewritten["runs"][0]["claim_contradictions"], [])
 
-    def test_loads_v7_without_claims_and_rewrites_as_v9(self) -> None:
+    def test_loads_v7_without_claims_and_rewrites_as_v13(self) -> None:
         run = self._minimal_run()
         self.store.save([run])
         legacy_document = json.loads(self.path.read_text(encoding="utf-8"))
@@ -466,11 +475,11 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
 
         self.assertEqual(runs[0].claims, ())
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 9)
+        self.assertEqual(rewritten["schema_version"], 13)
         self.assertEqual(rewritten["runs"][0]["claims"], [])
         self.assertEqual(rewritten["runs"][0]["claim_contradictions"], [])
 
-    def test_loads_v8_without_claim_contradictions_and_rewrites_as_v9(self) -> None:
+    def test_loads_v8_without_claim_contradictions_and_rewrites_as_v13(self) -> None:
         run = self._minimal_run()
         self.store.save([run])
         legacy_document = json.loads(self.path.read_text(encoding="utf-8"))
@@ -484,8 +493,353 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
         self.assertEqual(runs[0].claims, run.claims)
         self.assertEqual(runs[0].claim_contradictions, ())
         rewritten = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(rewritten["schema_version"], 9)
+        self.assertEqual(rewritten["schema_version"], 13)
         self.assertEqual(rewritten["runs"][0]["claim_contradictions"], [])
+
+    def test_v10_keeps_the_venue_and_year_a_candidate_was_discovered_with(
+        self,
+    ) -> None:
+        run = self._minimal_run()
+        discovery = ResearchSourceDiscoveryRecord(
+            "discovery-1",
+            "web application security",
+            "crossref",
+            (
+                ResearchSourceCandidate(
+                    url="https://doi.org/10.1/paper",
+                    title="A paper",
+                    snippet="USENIX Security · 2025",
+                    container="USENIX Security",
+                    published_year=2025,
+                ),
+            ),
+            self.now,
+        )
+        stored = replace(run, discoveries=(discovery,))
+        self.store.save([stored])
+
+        [loaded] = self.store.load()
+
+        candidate = loaded.discoveries[0].candidates[0]
+        self.assertEqual(candidate.container, "USENIX Security")
+        self.assertEqual(candidate.published_year, 2025)
+
+    def test_a_v9_candidate_loads_without_a_year_being_invented_for_it(self) -> None:
+        """It truthfully has none: the field was discarded before it was written."""
+        run = self._minimal_run()
+        discovery = ResearchSourceDiscoveryRecord(
+            "discovery-1",
+            "web application security",
+            "crossref",
+            (
+                ResearchSourceCandidate(
+                    url="https://doi.org/10.1/paper",
+                    title="A paper",
+                    snippet="USENIX Security · 2025",
+                    container="USENIX Security",
+                    published_year=2025,
+                ),
+            ),
+            self.now,
+        )
+        self.store.save([replace(run, discoveries=(discovery,))])
+        legacy_document = json.loads(self.path.read_text(encoding="utf-8"))
+        legacy_document["schema_version"] = 9
+        legacy_candidate = legacy_document["runs"][0]["discoveries"][0]["candidates"][0]
+        legacy_candidate.pop("container")
+        legacy_candidate.pop("published_year")
+        # A version 9 record predates the vulnerability record too: no provider
+        # had ever returned one, so the field simply was not there.
+        legacy_candidate.pop("vulnerability")
+        self.path.write_text(json.dumps(legacy_document), encoding="utf-8")
+
+        [loaded] = self.store.load()
+
+        candidate = loaded.discoveries[0].candidates[0]
+        self.assertIsNone(candidate.published_year)
+        self.assertEqual(candidate.container, "")
+        self.assertEqual(candidate.snippet, "USENIX Security · 2025")
+
+    def test_a_candidate_carrying_an_implausible_year_is_refused(self) -> None:
+        run = self._minimal_run()
+        discovery = ResearchSourceDiscoveryRecord(
+            "discovery-1",
+            "web application security",
+            "crossref",
+            (ResearchSourceCandidate("https://doi.org/10.1/p", "A paper", ""),),
+            self.now,
+        )
+        self.store.save([replace(run, discoveries=(discovery,))])
+        document = json.loads(self.path.read_text(encoding="utf-8"))
+        document["runs"][0]["discoveries"][0]["candidates"][0]["published_year"] = True
+        self.path.write_text(json.dumps(document), encoding="utf-8")
+
+        with self.assertRaises(ResearchError):
+            self.store.load()
+
+    def _run_with_assessment(self, **judgement: str) -> ResearchRun:
+        run = replace(
+            self._minimal_run(),
+            sources=(
+                ResearchSourceRecord(
+                    document_id="document-1",
+                    url="https://doi.org/10.1000/paper",
+                    title="A paper",
+                    content_type="text/plain",
+                    fetched_at=self.now,
+                    added_at=self.now,
+                ),
+            ),
+            evidence=(
+                ResearchEvidenceRecord(
+                    evidence_id="evidence-1",
+                    source_document_id="document-1",
+                    chunk_id="chunk-1",
+                    chunk_index=0,
+                    excerpt="Body text.",
+                    excerpt_truncated=False,
+                    chunk_sha256=sha256(b"Body text.").hexdigest(),
+                    note="A note.",
+                    recorded_at=self.now,
+                ),
+            ),
+        )
+        assessment = ResearchSourceAssessmentRecord(
+            assessment_id="assessment-1",
+            source_document_id="document-1",
+            evidence_ids=("evidence-1",),
+            text="I read it and it does not hold up.",
+            recorded_at=self.now,
+            information_trust=ResearchInformationTrust.LOW,
+            usefulness=ResearchSourceUsefulness(judgement.get("usefulness", "unknown")),
+            applicability=ResearchSourceApplicability(
+                judgement.get("applicability", "unknown")
+            ),
+            independence=ResearchSourceIndependence(
+                judgement.get("independence", "unknown")
+            ),
+            publication_status=ResearchSourcePublicationStatus(
+                judgement.get("publication_status", "unknown")
+            ),
+        )
+        return replace(run, assessments=(assessment,))
+
+    def test_v11_keeps_every_dimension_the_operator_answered(self) -> None:
+        stored = self._run_with_assessment(
+            usefulness="partially_useful",
+            applicability="background_only",
+            independence="derivative",
+            publication_status="retracted",
+        )
+        self.store.save([stored])
+
+        [loaded] = self.store.load()
+
+        assessment = loaded.assessments[0]
+        self.assertEqual(
+            assessment.usefulness, ResearchSourceUsefulness.PARTIALLY_USEFUL
+        )
+        self.assertEqual(
+            assessment.applicability, ResearchSourceApplicability.BACKGROUND_ONLY
+        )
+        self.assertEqual(assessment.independence, ResearchSourceIndependence.DERIVATIVE)
+        self.assertEqual(
+            assessment.publication_status,
+            ResearchSourcePublicationStatus.RETRACTED,
+        )
+        self.assertEqual(assessment.information_trust, ResearchInformationTrust.LOW)
+        self.assertEqual(assessment.text, stored.assessments[0].text)
+        self.assertEqual(assessment.recorded_at, stored.assessments[0].recorded_at)
+
+    def test_a_v10_assessment_loads_without_a_judgement_being_invented(self) -> None:
+        """Nobody was ever asked, so `unknown` is what those records hold."""
+        self.store.save([self._run_with_assessment(usefulness="useful")])
+        legacy = json.loads(self.path.read_text(encoding="utf-8"))
+        legacy["schema_version"] = 10
+        stored_assessment = legacy["runs"][0]["assessments"][0]
+        for field in (
+            "usefulness",
+            "applicability",
+            "independence",
+            "publication_status",
+        ):
+            stored_assessment.pop(field)
+        self.path.write_text(json.dumps(legacy), encoding="utf-8")
+
+        [loaded] = self.store.load()
+
+        assessment = loaded.assessments[0]
+        self.assertEqual(assessment.usefulness, ResearchSourceUsefulness.UNKNOWN)
+        self.assertEqual(assessment.applicability, ResearchSourceApplicability.UNKNOWN)
+        self.assertEqual(assessment.independence, ResearchSourceIndependence.UNKNOWN)
+        self.assertEqual(
+            assessment.publication_status, ResearchSourcePublicationStatus.UNKNOWN
+        )
+        self.assertEqual(assessment.information_trust, ResearchInformationTrust.LOW)
+
+    def test_a_judgement_this_build_cannot_read_fails_the_load(self) -> None:
+        """Showing it as never made would be worse than refusing to open it."""
+        self.store.save([self._run_with_assessment(usefulness="useful")])
+        document = json.loads(self.path.read_text(encoding="utf-8"))
+        document["runs"][0]["assessments"][0]["usefulness"] = "outstanding"
+        self.path.write_text(json.dumps(document), encoding="utf-8")
+
+        with self.assertRaises(ResearchError):
+            self.store.load()
+
+    def test_an_assessment_missing_a_dimension_at_v11_fails_closed(self) -> None:
+        self.store.save([self._run_with_assessment(usefulness="useful")])
+        document = json.loads(self.path.read_text(encoding="utf-8"))
+        document["runs"][0]["assessments"][0].pop("independence")
+        self.path.write_text(json.dumps(document), encoding="utf-8")
+
+        with self.assertRaises(ResearchError):
+            self.store.load()
+
+    def _run_with_vulnerability_candidate(self) -> ResearchRun:
+        run = self._minimal_run()
+        candidate = ResearchSourceCandidate(
+            url="https://nvd.nist.gov/vuln/detail/CVE-2025-29927",
+            title="CVE-2025-29927: Next.js middleware authorization bypass.",
+            snippet="Next.js middleware authorization bypass.",
+            container="security@vercel.com",
+            published_year=2025,
+            vulnerability=ResearchVulnerabilityRecord(
+                cve_id="CVE-2025-29927",
+                status="Analyzed",
+                source_identifier="security@vercel.com",
+                last_modified=self.now,
+                weaknesses=("CWE-285",),
+                metrics=(
+                    ResearchVulnerabilityMetric(
+                        version="3.1",
+                        source="nvd@nist.gov",
+                        score=9.1,
+                        severity="CRITICAL",
+                    ),
+                ),
+                references=(
+                    ResearchVulnerabilityReference(
+                        url="https://github.test/advisory",
+                        source="security@vercel.com",
+                        tags=("Patch",),
+                    ),
+                ),
+                reference_total=42,
+                known_exploited_at="2025-03-25",
+                known_exploited_name="Next.js Authorization Bypass",
+            ),
+        )
+        discovery = ResearchSourceDiscoveryRecord(
+            "discovery-1",
+            "Next.js middleware authorization bypass",
+            "nvd",
+            (candidate,),
+            self.now,
+        )
+        return replace(run, discoveries=(discovery,))
+
+    def test_v13_round_trips_a_vulnerability_record_exactly(self) -> None:
+        stored = self._run_with_vulnerability_candidate()
+        self.store.save([stored])
+
+        [loaded] = self.store.load()
+
+        record = loaded.discoveries[0].candidates[0].vulnerability
+        self.assertEqual(record, stored.discoveries[0].candidates[0].vulnerability)
+        self.assertEqual(record.reference_total, 42)
+        self.assertTrue(record.references_truncated)
+        self.assertTrue(record.known_exploited)
+
+    def test_a_v12_failure_loads_without_invented_provider_provenance(self) -> None:
+        run = replace(
+            self._minimal_run(),
+            failures=(
+                ResearchFailureRecord(
+                    stage="source_discovery",
+                    reason="Failed.",
+                    occurred_at=self.now,
+                    provider="nvd",
+                ),
+            ),
+        )
+        self.store.save([run])
+        legacy = json.loads(self.path.read_text(encoding="utf-8"))
+        legacy["schema_version"] = 12
+        legacy["runs"][0]["failures"][0].pop("provider")
+        self.path.write_text(json.dumps(legacy), encoding="utf-8")
+
+        [loaded] = self.store.load()
+
+        self.assertIsNone(loaded.failures[0].provider)
+
+    def test_a_scholarly_candidate_stores_no_vulnerability(self) -> None:
+        """Crossref never returned one, and an empty record would read like a CVE."""
+        run = self._minimal_run()
+        discovery = ResearchSourceDiscoveryRecord(
+            "discovery-1",
+            "web application security",
+            "crossref",
+            (
+                ResearchSourceCandidate(
+                    url="https://doi.org/10.1000/paper",
+                    title="A paper",
+                    snippet="",
+                    container="USENIX Security",
+                    published_year=2025,
+                ),
+            ),
+            self.now,
+        )
+        self.store.save([replace(run, discoveries=(discovery,))])
+
+        [loaded] = self.store.load()
+
+        self.assertIsNone(loaded.discoveries[0].candidates[0].vulnerability)
+
+    def test_a_v11_candidate_gains_no_invented_vulnerability(self) -> None:
+        self.store.save([self._run_with_vulnerability_candidate()])
+        legacy = json.loads(self.path.read_text(encoding="utf-8"))
+        legacy["schema_version"] = 11
+        legacy["runs"][0]["discoveries"][0]["candidates"][0].pop("vulnerability")
+        self.path.write_text(json.dumps(legacy), encoding="utf-8")
+
+        [loaded] = self.store.load()
+
+        self.assertIsNone(loaded.discoveries[0].candidates[0].vulnerability)
+
+    def test_a_malformed_vulnerability_record_fails_the_load(self) -> None:
+        """One this build cannot decode is one somebody discovered."""
+        self.store.save([self._run_with_vulnerability_candidate()])
+        document = json.loads(self.path.read_text(encoding="utf-8"))
+        document["runs"][0]["discoveries"][0]["candidates"][0]["vulnerability"][
+            "cve_id"
+        ] = "not-a-cve"
+        self.path.write_text(json.dumps(document), encoding="utf-8")
+
+        with self.assertRaises(ResearchError):
+            self.store.load()
+
+    def test_a_vulnerability_record_missing_a_field_fails_closed(self) -> None:
+        self.store.save([self._run_with_vulnerability_candidate()])
+        document = json.loads(self.path.read_text(encoding="utf-8"))
+        document["runs"][0]["discoveries"][0]["candidates"][0]["vulnerability"].pop(
+            "weaknesses"
+        )
+        self.path.write_text(json.dumps(document), encoding="utf-8")
+
+        with self.assertRaises(ResearchError):
+            self.store.load()
+
+    def test_a_stored_reference_is_never_turned_into_a_request(self) -> None:
+        """Loading a run reads a file. It does not open a socket."""
+        stored = self._run_with_vulnerability_candidate()
+        self.store.save([stored])
+
+        with patch("urllib.request.urlopen") as opened:
+            self.store.load()
+
+        opened.assert_not_called()
 
     def test_v9_rejects_mutable_source_authority_and_invalid_trust_labels(
         self,

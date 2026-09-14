@@ -5,7 +5,9 @@ from __future__ import annotations
 import sys
 import unittest
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+from hashlib import sha256
 from pathlib import Path
 from typing import Any, Literal
 from unittest.mock import Mock, patch
@@ -69,6 +71,7 @@ from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchRunStatusTransitionPreview import (
     ResearchRunStatusTransitionPreview,
 )
+from research.ResearchSourceApplicability import ResearchSourceApplicability
 from research.ResearchSourceAssessmentPreview import ResearchSourceAssessmentPreview
 from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
 from research.ResearchSourceAssessmentWritePreview import (
@@ -87,7 +90,121 @@ from research.ResearchSourceComparisonNoteWritePreview import (
 )
 from research.ResearchSourceComparisonPreview import ResearchSourceComparisonPreview
 from research.ResearchSourceDiscoveryRecord import ResearchSourceDiscoveryRecord
+from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
 from research.ResearchSourceRecord import ResearchSourceRecord
+from research.ResearchSourceUsefulness import ResearchSourceUsefulness
+
+
+def _configure_source_judgement(
+    window: Any,
+    usefulness: str = "unknown",
+    applicability: str = "unknown",
+    independence: str = "unknown",
+    publication_status: str = "unknown",
+) -> None:
+    """Attach the four structured judgement inputs the assessment form reads.
+
+    They default to `unknown` because that is what an operator who answered
+    nothing has said. A fixture that defaulted them to a favourable value would
+    make every unrelated assessment test quietly assert a judgement.
+    """
+    window._research_source_usefulness = RecordingInput(usefulness)
+    window._research_source_applicability = RecordingInput(applicability)
+    window._research_source_independence = RecordingInput(independence)
+    window._research_source_publication_status = RecordingInput(publication_status)
+
+
+ASSESSMENT_NOW = datetime(2026, 8, 21, tzinfo=UTC)
+
+
+def _research_run_with(
+    sources: tuple = (),
+    assessments: tuple = (),
+    discoveries: tuple = (),
+) -> ResearchRun:
+    """Build the smallest run that can carry a source and a judgement about it."""
+    return ResearchRun(
+        run_id="run-1",
+        question="request smuggling",
+        status=ResearchRunStatus.COLLECTING,
+        sources=sources,
+        failures=(),
+        created_at=ASSESSMENT_NOW,
+        updated_at=ASSESSMENT_NOW,
+        discoveries=discoveries,
+        # A judgement has to name evidence the run actually recorded, so a run
+        # carrying one has to carry that evidence too.
+        evidence=(
+            ()
+            if not assessments
+            else (
+                ResearchEvidenceRecord(
+                    evidence_id="evidence-1",
+                    source_document_id="document-1",
+                    chunk_id="chunk-1",
+                    chunk_index=0,
+                    excerpt="Body text.",
+                    excerpt_truncated=False,
+                    chunk_sha256=sha256(b"Body text.").hexdigest(),
+                    note="A note.",
+                    recorded_at=ASSESSMENT_NOW,
+                ),
+            )
+        ),
+        assessments=assessments,
+    )
+
+
+def _configure_research_candidate_selector(window: Any) -> None:
+    """Attach the state the candidate list needs, and nothing that acts."""
+    window._research_candidate = RecordingVariable("")
+    window._research_candidate_selector = RecordingCandidateSelector()
+    window._research_candidates = ()
+    window._research_candidate_discovery_ids = ()
+    window._research_candidate_run_id = ""
+    window._research_candidate_discovery_id = ""
+    window._research_candidate_discovery_ids = ()
+    window._research_run_id = RecordingInput("run-1")
+
+
+def _paired_run() -> ResearchRun:
+    """One run holding both halves of a paired comparison."""
+    return _research_run_with(
+        sources=(),
+        discoveries=(
+            ResearchSourceDiscoveryRecord(
+                "discovery-crossref",
+                "request smuggling",
+                "crossref",
+                (
+                    ResearchSourceCandidate(
+                        url="https://doi.org/10.1/smuggling",
+                        title="HTTP request smuggling defences",
+                        snippet="",
+                    ),
+                    ResearchSourceCandidate(
+                        url="https://doi.org/10.1/unrelated",
+                        title="A general survey",
+                        snippet="",
+                    ),
+                ),
+                ASSESSMENT_NOW,
+            ),
+            ResearchSourceDiscoveryRecord(
+                "discovery-nvd",
+                "request smuggling",
+                "nvd",
+                (
+                    ResearchSourceCandidate(
+                        url="https://nvd.nist.gov/vuln/detail/CVE-2005-2088",
+                        title="CVE-2005-2088: request smuggling in Apache",
+                        snippet="",
+                    ),
+                ),
+                ASSESSMENT_NOW,
+            ),
+        ),
+    )
 
 
 class AccessibilityPreferenceTests(unittest.TestCase):
@@ -826,6 +943,8 @@ class ResearchPlanDesktopPreviewTests(unittest.TestCase):
         instruction_editor.get.return_value = "Review evidence.\n"
         source_editor = Mock()
         source_editor.get.return_value = "document-2, document-1\n"
+        constraint_editor = Mock()
+        constraint_editor.get.return_value = "Do not fetch.\n"
         preview_output = Mock()
         appended: list[BrainResponse] = []
         request_labels: list[str] = []
@@ -833,6 +952,8 @@ class ResearchPlanDesktopPreviewTests(unittest.TestCase):
         window._research_question = RecordingInput("Compare findings.")
         window._research_plan_instructions = instruction_editor
         window._research_plan_source_ids = source_editor
+        window._research_plan_constraints = constraint_editor
+        window._plan_restriction = RecordingInput("advisory")
         window._research_plan_preview = preview_output
         window._append_response = appended.append
 
@@ -852,6 +973,8 @@ class ResearchPlanDesktopPreviewTests(unittest.TestCase):
             "Compare findings.",
             "Review evidence.\n",
             "document-2, document-1\n",
+            "Do not fetch.\n",
+            "advisory",
         )
         self.assertEqual(request_labels, ["research plan preview"])
         instruction_editor.get.assert_called_once_with("1.0", "end-1c")
@@ -1229,6 +1352,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_candidates = ()
         window._research_candidate_run_id = ""
         window._research_candidate_discovery_id = ""
+        window._research_candidate_discovery_ids = ()
         window._research_claim_contradiction_proposal = RecordingVariable("")
         window._research_claim_contradiction_proposal_selector = (
             RecordingCandidateSelector()
@@ -2205,6 +2329,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_candidates = ()
         window._research_candidate_run_id = "old-run"
         window._research_candidate_discovery_id = "discovery-1"
+        window._research_candidate_discovery_ids = ("discovery-1",)
         window._research_claim_contradiction_proposal = RecordingVariable(
             "Old proposal"
         )
@@ -3726,6 +3851,172 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             ["Select recorded evidence first."],
         )
 
+    def test_the_panel_shows_relevance_judgement_reputation_and_acceptance_apart(
+        self,
+    ) -> None:
+        """Four lines, four labels, no arithmetic between them.
+
+        The failure this guards against is a panel that reads `Relevance:
+        strong` and lets somebody conclude the source is sound. Each line names
+        what produced it, and the operator's own verdict sits next to the
+        ranker's without either one being folded into the other.
+        """
+        window: Any = object.__new__(TkinterDesktopWindow)
+        _configure_research_assessment_selector(window)
+        source = _research_source_record("document-1", "A paper")
+        source = replace(source, url="https://doi.org/10.1000/exact")
+        assessment = ResearchSourceAssessmentRecord(
+            assessment_id="assessment-1",
+            source_document_id="document-1",
+            evidence_ids=("evidence-1",),
+            text="Weak on a second read.",
+            recorded_at=ASSESSMENT_NOW,
+            information_trust=ResearchInformationTrust.LOW,
+            usefulness=ResearchSourceUsefulness.NOT_USEFUL,
+            applicability=ResearchSourceApplicability.BACKGROUND_ONLY,
+            publication_status=ResearchSourcePublicationStatus.RETRACTED,
+        )
+        run = _research_run_with(
+            sources=(source,),
+            assessments=(assessment,),
+            discoveries=(
+                ResearchSourceDiscoveryRecord(
+                    "discovery-1",
+                    "request smuggling",
+                    "crossref",
+                    (
+                        ResearchSourceCandidate(
+                            url="https://doi.org/10.1000/exact",
+                            title="Request smuggling",
+                            snippet="",
+                        ),
+                    ),
+                    ASSESSMENT_NOW,
+                ),
+            ),
+        )
+
+        window._render_research_source_dimensions(run, source)
+
+        rendered = window._research_source_dimensions.get()
+        self.assertIn("Relevance:", rendered)
+        self.assertIn("deterministic lexical ranking", rendered)
+        self.assertIn("Operator assessment:", rendered)
+        self.assertIn("human judgement", rendered)
+        self.assertIn("usefulness=not_useful", rendered)
+        self.assertIn("publication=retracted", rendered)
+        self.assertIn("Source reputation:", rendered)
+        self.assertIn("Evidence status:", rendered)
+
+    def test_a_strong_relevance_line_never_speaks_for_the_operator(self) -> None:
+        """Case A on screen: the ranker says strong, the person says not useful."""
+        window: Any = object.__new__(TkinterDesktopWindow)
+        _configure_research_assessment_selector(window)
+        source = replace(
+            _research_source_record("document-1", "A paper"),
+            url="https://doi.org/10.1000/exact",
+        )
+        run = _research_run_with(
+            sources=(source,),
+            assessments=(
+                ResearchSourceAssessmentRecord(
+                    assessment_id="assessment-1",
+                    source_document_id="document-1",
+                    evidence_ids=("evidence-1",),
+                    text="Not worth citing.",
+                    recorded_at=ASSESSMENT_NOW,
+                    usefulness=ResearchSourceUsefulness.NOT_USEFUL,
+                ),
+            ),
+            discoveries=(
+                ResearchSourceDiscoveryRecord(
+                    "discovery-1",
+                    "request smuggling",
+                    "crossref",
+                    (
+                        ResearchSourceCandidate(
+                            url="https://doi.org/10.1000/exact",
+                            title="Request smuggling",
+                            snippet="",
+                        ),
+                    ),
+                    ASSESSMENT_NOW,
+                ),
+            ),
+        )
+
+        window._render_research_source_dimensions(run, source)
+
+        rendered = window._research_source_dimensions.get()
+        relevance_line, assessment_line = rendered.splitlines()[:2]
+        self.assertIn("strong", relevance_line)
+        self.assertIn("usefulness=not_useful", assessment_line)
+        self.assertNotIn("not_useful", relevance_line)
+
+    def test_a_source_never_discovered_says_so_rather_than_scoring_zero(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        _configure_research_assessment_selector(window)
+        source = _research_source_record("document-1", "A paper")
+        run = _research_run_with(sources=(source,))
+
+        window._render_research_source_dimensions(run, source)
+
+        self.assertIn(
+            "not among the latest discovered candidates",
+            window._research_source_dimensions.get(),
+        )
+
+    def test_the_history_list_shows_which_judgement_stands_and_what_it_said(
+        self,
+    ) -> None:
+        original = ResearchSourceAssessmentRecord(
+            assessment_id="assessment-1",
+            source_document_id="document-1",
+            evidence_ids=("evidence-1",),
+            text="Looked strong.",
+            recorded_at=ASSESSMENT_NOW,
+            usefulness=ResearchSourceUsefulness.USEFUL,
+        )
+        revised = ResearchSourceAssessmentRecord(
+            assessment_id="assessment-2",
+            source_document_id="document-1",
+            evidence_ids=("evidence-1",),
+            text="Weak after all.",
+            recorded_at=ASSESSMENT_NOW,
+            supersedes_assessment_id="assessment-1",
+            usefulness=ResearchSourceUsefulness.NOT_USEFUL,
+            publication_status=ResearchSourcePublicationStatus.RETRACTED,
+        )
+
+        superseded_label = TkinterDesktopWindow._research_assessment_label(
+            original, is_current=False
+        )
+        current_label = TkinterDesktopWindow._research_assessment_label(
+            revised, is_current=True
+        )
+
+        self.assertIn("[superseded]", superseded_label)
+        self.assertIn("usefulness=useful", superseded_label)
+        self.assertIn("[current]", current_label)
+        self.assertIn("usefulness=not_useful", current_label)
+        self.assertIn("publication=retracted", current_label)
+
+    def test_an_unanswered_dimension_is_left_out_rather_than_shown_as_a_verdict(
+        self,
+    ) -> None:
+        record = ResearchSourceAssessmentRecord(
+            assessment_id="assessment-1",
+            source_document_id="document-1",
+            evidence_ids=("evidence-1",),
+            text="Just a note.",
+            recorded_at=ASSESSMENT_NOW,
+        )
+
+        label = TkinterDesktopWindow._research_assessment_label(record, is_current=True)
+
+        self.assertNotIn("unknown", label)
+        self.assertIn("Just a note.", label)
+
     def test_selected_source_renders_current_and_superseded_assessments(
         self,
     ) -> None:
@@ -4762,6 +5053,102 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
 
         self.assertEqual(controller.export_verifications, [])
 
+    def test_both_sides_of_a_paired_run_can_be_selected(self) -> None:
+        """The blocker this fixes: only the newest discovery used to be offered.
+
+        A paired comparison records one discovery per provider. Listing only
+        the most recent left the other provider's candidates readable in the
+        comparison report and impossible to accept, so a paired run could only
+        ever be assessed on one half — which is the half the measurement needs
+        both of.
+        """
+        window: Any = object.__new__(TkinterDesktopWindow)
+        _configure_research_candidate_selector(window)
+        run = _paired_run()
+
+        window._show_research_run_candidates(run)
+
+        labels = window._research_candidate_selector.values
+        self.assertEqual(len(labels), 3)
+        self.assertTrue(any(label.startswith("crossref ") for label in labels))
+        self.assertTrue(any(label.startswith("nvd ") for label in labels))
+
+    def test_each_candidate_keeps_the_discovery_that_returned_it(self) -> None:
+        """Accepting a Crossref candidate must not file it under NVD's search."""
+        window: Any = object.__new__(TkinterDesktopWindow)
+        _configure_research_candidate_selector(window)
+        window._show_research_run_candidates(_paired_run())
+
+        self.assertEqual(
+            window._research_candidate_discovery_ids,
+            ("discovery-crossref", "discovery-crossref", "discovery-nvd"),
+        )
+
+    def test_selecting_a_crossref_candidate_reports_the_crossref_discovery(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        _configure_research_candidate_selector(window)
+        window._show_research_run_candidates(_paired_run())
+        window._research_candidate_selector.current(0)
+
+        selected = window._selected_research_candidate()
+
+        assert selected is not None
+        run_id, discovery_id, candidate = selected
+        self.assertEqual(run_id, "run-1")
+        self.assertEqual(discovery_id, "discovery-crossref")
+        self.assertIn("doi.org", candidate.url)
+
+    def test_selecting_an_nvd_candidate_reports_the_nvd_discovery(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        _configure_research_candidate_selector(window)
+        window._show_research_run_candidates(_paired_run())
+        window._research_candidate_selector.current(2)
+
+        selected = window._selected_research_candidate()
+
+        assert selected is not None
+        _, discovery_id, candidate = selected
+        self.assertEqual(discovery_id, "discovery-nvd")
+        self.assertIn("nvd.nist.gov", candidate.url)
+
+    def test_each_side_is_still_ranked_within_its_own_discovery(self) -> None:
+        """One list is not one ranking: no row is ranked against the other side."""
+        window: Any = object.__new__(TkinterDesktopWindow)
+        _configure_research_candidate_selector(window)
+
+        window._show_research_run_candidates(_paired_run())
+
+        labels = window._research_candidate_selector.values
+        self.assertTrue(labels[0].startswith("crossref 1."))
+        self.assertTrue(labels[1].startswith("crossref 2."))
+        self.assertTrue(labels[2].startswith("nvd 1."))
+
+    def test_a_run_with_no_discoveries_offers_nothing_rather_than_failing(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        _configure_research_candidate_selector(window)
+
+        window._show_research_run_candidates(
+            _research_run_with(sources=(), discoveries=())
+        )
+
+        self.assertEqual(window._research_candidate_selector.values, ())
+        self.assertEqual(window._research_candidates, ())
+
+    def test_showing_candidates_accepts_nothing_and_requests_nothing(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        _configure_research_candidate_selector(window)
+        controller = RecordingResearchSourceLoadController()
+        window._controller = controller
+
+        window._show_research_run_candidates(_paired_run())
+
+        self.assertEqual(controller.discovery_calls, [])
+        self.assertEqual(controller.sources, [])
+
     def test_discovery_renders_unaccepted_candidates_without_loading_them(
         self,
     ) -> None:
@@ -4787,16 +5174,33 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         self.assertIsNotNone(controller.discovery_cancellation_tokens[0])
         self.assertEqual(controller.sources, [])
         self.assertEqual(responses, [controller.discovery_response])
-        self.assertEqual(window._research_candidates, controller.candidates)
+        self.assertEqual(set(window._research_candidates), set(controller.candidates))
         self.assertEqual(window._research_candidate_run_id, "run-123")
-        self.assertEqual(
-            selector.values,
-            (
-                "1. First paper — https://doi.org/10.1000/first",
-                "2. Second paper — https://doi.org/10.1000/second",
-            ),
-        )
+        # The exact label text is no longer asserted, because the list is now
+        # ordered by relevance rather than by arrival and the label carries the
+        # score that produced the order. What has to stay true is what this
+        # test is named for: every discovered candidate is offered, each row
+        # still shows its title and its URL, and nothing was fetched.
+        self.assertEqual(len(selector.values), len(controller.candidates))
+        for candidate in controller.candidates:
+            with self.subTest(candidate=candidate.url):
+                self.assertTrue(
+                    any(
+                        candidate.title in label and candidate.url in label
+                        for label in selector.values
+                    )
+                )
+        # A row now leads with the provider that returned it. It has to: one
+        # list can hold both halves of a paired run, and a bare position would
+        # not say which search a candidate came from.
+        for label in selector.values:
+            with self.subTest(row=label[:24]):
+                provider, _, remainder = label.partition(" ")
+                self.assertIn(provider, {"crossref", "nvd", "test-provider"})
+                self.assertRegex(remainder, r"^\d+\. ")
+                self.assertIn("provider #", label)
         self.assertEqual(selector.selected_index, 0)
+        self.assertEqual(controller.sources, [])
 
     def test_selected_candidate_only_copies_its_url_until_load_is_separate(
         self,
@@ -5116,6 +5520,12 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             "Corrected assessment.",
             "assessment-original",
             "high",
+            # The structured judgement travels with the text, and it travels
+            # exactly as chosen: two dimensions answered, two left unknown.
+            "useful",
+            "direct",
+            "unknown",
+            "unknown",
         )
         window._root = object()
         window._controller = controller
@@ -5125,6 +5535,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_assessment_text = RecordingInput(values[3])
         window._research_assessment_supersedes_id = RecordingInput(values[4])
         window._research_information_trust = RecordingInput(values[5])
+        _configure_source_judgement(window, "useful", "direct")
         window._status = RecordingStatus()
         window._append_response = responses.append
 
@@ -5184,6 +5595,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
                 window._research_assessment_text = RecordingInput("Assessment.")
                 window._research_assessment_supersedes_id = RecordingInput("")
                 window._research_information_trust = RecordingInput("medium")
+                _configure_source_judgement(window)
                 window._status = RecordingStatus()
                 window._append_response = lambda _response: None
 
@@ -5210,6 +5622,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_assessment_text = RecordingInput("Assessment.")
         window._research_assessment_supersedes_id = RecordingInput("")
         window._research_information_trust = RecordingInput("unassessed")
+        _configure_source_judgement(window)
         window._status = status
         window._append_response = lambda _response: self.fail("must not append")
 
@@ -5625,6 +6038,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_id = RecordingInput("run-123")
         window._research_candidate_run_id = "run-123"
         window._research_candidate_discovery_id = "discovery-1"
+        window._research_candidate_discovery_ids = ("discovery-1",)
         window._research_candidates = controller.candidates
         window._research_candidate_selector = RecordingCandidateSelector(0)
         window._status = RecordingStatus()
@@ -5651,6 +6065,215 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         )
         confirm.assert_called_once()
 
+    def test_accepted_candidate_refreshes_the_selected_run_from_canonical_state(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchSourceLoadController()
+        responses: list[BrainResponse] = []
+        rendered_runs: list[tuple[ResearchRun, ...]] = []
+        now = datetime(2026, 8, 20, tzinfo=UTC)
+        accepted_source = ResearchSourceRecord(
+            "document-accepted",
+            controller.candidates[0].url,
+            "Accepted candidate",
+            "text/plain",
+            now,
+            now,
+        )
+        accepted_run = replace(
+            controller.list_response.research_runs[0], sources=(accepted_source,)
+        )
+        controller.candidate_accept_response = BrainResponse(
+            message="Candidate accepted.",
+            request_id="candidate-accept",
+            intent="research_source_candidate_accept",
+            memory_count=0,
+            knowledge_documents=[
+                KnowledgeDocumentReference(
+                    "document-accepted",
+                    "Accepted candidate",
+                    controller.candidates[0].url,
+                    DocumentType.WEB,
+                    1,
+                )
+            ],
+            research_runs=[accepted_run],
+        )
+        controller.list_response = replace(
+            controller.list_response,
+            research_runs=[accepted_run],
+        )
+        window._root = object()
+        window._controller = controller
+        window._research_run_id = RecordingInput("run-123")
+        window._research_candidate_run_id = "run-123"
+        window._research_candidate_discovery_id = "discovery-1"
+        window._research_candidate_discovery_ids = ("discovery-1",)
+        window._research_candidates = controller.candidates
+        window._research_candidate_selector = RecordingCandidateSelector(0)
+        window._research_source_document_id = RecordingVariable("")
+        window._status = RecordingStatus()
+        window._append_response = responses.append
+        window._render_research_run_selector = lambda runs: rendered_runs.append(
+            tuple(runs)
+        )
+        _configure_request_boundary(window)
+
+        with patch(
+            "desktop.TkinterDesktopWindow.messagebox.askyesno", return_value=True
+        ):
+            window._preview_and_accept_research_candidate()
+        window._poll_requests()
+
+        self.assertEqual(
+            controller.candidate_accepts,
+            [("run-123", "discovery-1", controller.candidates[0].url)],
+        )
+        self.assertEqual(controller.list_calls, 1)
+        self.assertEqual(rendered_runs, [(accepted_run,)])
+        self.assertEqual(window._research_run_id.get(), "run-123")
+        self.assertEqual(window._research_source_document_id.get(), "document-accepted")
+        self.assertEqual(
+            responses,
+            [
+                controller.candidate_preview_response,
+                controller.candidate_accept_response,
+            ],
+        )
+
+    def _refused_load_window(self, controller: Any) -> tuple[Any, list[str]]:
+        """Build a window whose refresh writes a status, exactly as the real one does.
+
+        `_render_research_run_selector` ends by reselecting the run, and
+        `_select_research_run` finishes by setting the status to "no action
+        started". A stub that only records the runs would therefore prove
+        nothing about the bug being guarded here, so this one writes the same
+        status the real reselect writes.
+        """
+        window: Any = object.__new__(TkinterDesktopWindow)
+        status = RecordingStatus()
+        window._root = object()
+        window._controller = controller
+        window._research_run_id = RecordingInput("run-123")
+        window._research_candidate_run_id = "run-123"
+        window._research_candidate_discovery_id = "discovery-1"
+        window._research_candidate_discovery_ids = ("discovery-1",)
+        window._research_candidates = controller.candidates
+        window._research_candidate_selector = RecordingCandidateSelector(0)
+        window._research_source_document_id = RecordingVariable("")
+        window._status = status
+        window._append_response = lambda _response: None
+
+        def render(runs: object) -> None:
+            status.set("research run selected: run-123; no action started")
+
+        window._render_research_run_selector = render
+        _configure_request_boundary(window)
+        return window, status.values
+
+    def test_a_refused_load_is_not_relabelled_as_no_action_started(self) -> None:
+        """The reported symptom: confirming appeared to do nothing at all.
+
+        A fetch that is refused is a real, reportable outcome. It was reported,
+        and then the canonical re-read that follows overwrote the report with a
+        line saying no action had been started — beside a source count that had
+        legitimately not moved. The operator was left with no evidence that
+        their confirmation had been acted on.
+        """
+        controller = RecordingResearchSourceLoadController()
+        controller.candidate_accept_response = BrainResponse(
+            message=(
+                "Research source could not be loaded: Research source did not "
+                "contain readable text."
+            ),
+            request_id="candidate-accept",
+            intent="research_source_candidate_accept",
+            memory_count=0,
+            success=False,
+        )
+        window, statuses = self._refused_load_window(controller)
+
+        with patch(
+            "desktop.TkinterDesktopWindow.messagebox.askyesno", return_value=True
+        ):
+            window._preview_and_accept_research_candidate()
+        window._poll_requests()
+
+        self.assertEqual(
+            statuses[-1], "research candidate load: failed; no source was attached"
+        )
+        self.assertNotIn("no action started", statuses[-1])
+
+    def test_a_refused_load_attaches_no_source_and_keeps_the_same_run(self) -> None:
+        controller = RecordingResearchSourceLoadController()
+        controller.candidate_accept_response = BrainResponse(
+            message="Research source could not be loaded.",
+            request_id="candidate-accept",
+            intent="research_source_candidate_accept",
+            memory_count=0,
+            success=False,
+        )
+        window, _statuses = self._refused_load_window(controller)
+
+        with patch(
+            "desktop.TkinterDesktopWindow.messagebox.askyesno", return_value=True
+        ):
+            window._preview_and_accept_research_candidate()
+        window._poll_requests()
+
+        self.assertEqual(
+            controller.candidate_accepts,
+            [("run-123", "discovery-1", controller.candidates[0].url)],
+        )
+        self.assertEqual(controller.list_calls, 1)
+        self.assertEqual(controller.discovery_calls, [])
+        self.assertEqual(window._research_run_id.get(), "run-123")
+        self.assertEqual(window._research_source_document_id.get(), "")
+
+    def test_an_accepted_load_reports_the_attachment_last(self) -> None:
+        """Success is stated after the refresh too, for the same reason."""
+        controller = RecordingResearchSourceLoadController()
+        now = datetime(2026, 8, 20, tzinfo=UTC)
+        accepted_source = ResearchSourceRecord(
+            "document-accepted",
+            controller.candidates[0].url,
+            "Accepted candidate",
+            "text/plain",
+            now,
+            now,
+        )
+        accepted_run = replace(
+            controller.list_response.research_runs[0], sources=(accepted_source,)
+        )
+        controller.candidate_accept_response = BrainResponse(
+            message="Candidate accepted.",
+            request_id="candidate-accept",
+            intent="research_source_candidate_accept",
+            memory_count=0,
+            knowledge_documents=[
+                KnowledgeDocumentReference(
+                    "document-accepted",
+                    "Accepted candidate",
+                    controller.candidates[0].url,
+                    DocumentType.WEB,
+                    1,
+                )
+            ],
+            research_runs=[accepted_run],
+        )
+        window, statuses = self._refused_load_window(controller)
+
+        with patch(
+            "desktop.TkinterDesktopWindow.messagebox.askyesno", return_value=True
+        ):
+            window._preview_and_accept_research_candidate()
+        window._poll_requests()
+
+        self.assertEqual(statuses[-1], "research candidate load: source attached")
+        self.assertEqual(window._research_source_document_id.get(), "document-accepted")
+        self.assertEqual(len(controller.candidate_accepts), 1)
+
     def test_declined_candidate_preview_does_not_accept(self) -> None:
         window: Any = object.__new__(TkinterDesktopWindow)
         controller = RecordingResearchSourceLoadController()
@@ -5660,6 +6283,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_id = RecordingInput("run-123")
         window._research_candidate_run_id = "run-123"
         window._research_candidate_discovery_id = "discovery-1"
+        window._research_candidate_discovery_ids = ("discovery-1",)
         window._research_candidates = controller.candidates
         window._research_candidate_selector = RecordingCandidateSelector(0)
         window._status = status
@@ -5681,6 +6305,7 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
         window._research_run_id = RecordingInput("other-run")
         window._research_candidate_run_id = "run-123"
         window._research_candidate_discovery_id = "discovery-1"
+        window._research_candidate_discovery_ids = ("discovery-1",)
         window._research_candidates = controller.candidates
         window._research_candidate_selector = RecordingCandidateSelector(0)
         window._status = status
@@ -5740,6 +6365,7 @@ class RecordingResearchSourceLoadController:
         self.list_calls = 0
         self.export_previews: list[str] = []
         self.discovery_calls: list[str] = []
+        self.discovery_providers: list[str] = []
         self.discovery_cancellation_tokens: list[CancellationToken | None] = []
         self.export_saves: list[tuple[ResearchRunMarkdownExportPreview, str]] = []
         self.export_verifications: list[tuple[str, str]] = []
@@ -5806,7 +6432,7 @@ class RecordingResearchSourceLoadController:
                 ResearchSourceDiscoveryRecord(
                     discovery_id="discovery-1",
                     query=run.question,
-                    provider="crossref-rest-v1",
+                    provider="crossref",
                     candidates=self.candidates,
                     discovered_at=now,
                 ),
@@ -6237,11 +6863,13 @@ class RecordingResearchSourceLoadController:
     def discover_research_sources(
         self,
         run_id: str,
+        provider: str = "",
         *,
         cancellation_token: CancellationToken | None = None,
     ) -> BrainResponse:
         if not run_id.strip():
             raise ValueError("A research run ID cannot be empty.")
+        self.discovery_providers.append(provider)
         self.discovery_calls.append(run_id)
         self.discovery_cancellation_tokens.append(cancellation_token)
         return self.discovery_response
@@ -6383,6 +7011,10 @@ class RecordingResearchSourceLoadController:
         text: str,
         supersedes_assessment_id: str = "",
         information_trust: str = "unassessed",
+        usefulness: str = "unknown",
+        applicability: str = "unknown",
+        independence: str = "unknown",
+        publication_status: str = "unknown",
     ) -> BrainResponse:
         if not evidence_ids.strip():
             raise ValueError("Research assessment evidence IDs cannot be empty.")
@@ -6393,6 +7025,10 @@ class RecordingResearchSourceLoadController:
             text,
             supersedes_assessment_id,
             information_trust,
+            usefulness,
+            applicability,
+            independence,
+            publication_status,
         )
         self.assessment_write_previews.append(values)
         return self.assessment_write_preview_response
@@ -6429,6 +7065,10 @@ class RecordingResearchSourceLoadController:
         text: str,
         supersedes_assessment_id: str = "",
         information_trust: str = "unassessed",
+        usefulness: str = "unknown",
+        applicability: str = "unknown",
+        independence: str = "unknown",
+        publication_status: str = "unknown",
     ) -> BrainResponse:
         values = (
             run_id,
@@ -6437,6 +7077,10 @@ class RecordingResearchSourceLoadController:
             text,
             supersedes_assessment_id,
             information_trust,
+            usefulness,
+            applicability,
+            independence,
+            publication_status,
         )
         self.assessment_records.append(values)
         return self.assessment_record_response
@@ -6476,7 +7120,19 @@ class RecordingResearchSourceLoadController:
         return self.candidate_accept_response
 
 
+def _configure_research_run_candidates(window: Any) -> None:
+    """Attach the candidate state selecting a run now fills."""
+    window._research_candidate = RecordingVariable("")
+    window._research_candidate_selector = RecordingCandidateSelector()
+    window._research_candidates = ()
+    window._research_candidate_discovery_ids = ()
+    window._research_candidate_run_id = ""
+    window._research_candidate_discovery_id = ""
+    window._research_candidate_discovery_ids = ()
+
+
 def _configure_research_evidence_selector(window: Any) -> None:
+    _configure_research_run_candidates(window)
     _configure_research_source_coverage(window)
     window._research_evidence_choice = RecordingVariable("")
     window._research_evidence_selector = RecordingCandidateSelector()
@@ -6514,6 +7170,10 @@ def _configure_research_source_coverage(window: Any) -> None:
 
 
 def _configure_research_assessment_selector(window: Any) -> None:
+    # The panel now renders relevance, judgement, reputation and acceptance as
+    # four separate lines beside the selector, so a window that can render the
+    # selector has to be able to render those too.
+    window._research_source_dimensions = RecordingVariable("")
     window._research_assessment_choice = RecordingVariable("")
     window._research_assessment_selector = RecordingCandidateSelector()
     window._research_assessment_records = ()
@@ -6642,6 +7302,7 @@ def _configure_selected_research_assessments(
     window._research_assessment_selector = RecordingCandidateSelector(
         selected_index=selected_index
     )
+    window._research_source_dimensions = RecordingVariable("")
     window._research_assessment_choice = RecordingVariable("")
 
 
@@ -6862,6 +7523,9 @@ class RecordingRequestRoot:
 
 
 def _configure_request_boundary(window: Any) -> None:
+    # Discovery now asks which provider to contact before it contacts one, so a
+    # window that can issue a request has to be able to answer that.
+    window._research_discovery_provider = RecordingInput("crossref")
     window._request_runner = ImmediateRequestRunner()
     window._request_completion_handler = None
     window._request_controls = []

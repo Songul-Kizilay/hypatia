@@ -2,17 +2,187 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Protocol
 
 from brain.BrainRequest import BrainRequest
 from brain.BrainResponse import BrainResponse
 from core.CancellationSignal import CancellationToken
+from desktop.AcquisitionResearchDraft import AcquisitionResearchDraft
+from desktop.QuestionResearchDraft import QuestionResearchDraft
+from desktop.TargetResearchDraft import TargetResearchDraft
+from research.DeferredExecutionControlView import DeferredExecutionControlView
+from research.OneShotDeferredExecutionSchedule import OneShotDeferredExecutionSchedule
+from research.OneShotDeferredExecutionScheduleView import (
+    OneShotDeferredExecutionScheduleView,
+)
+from research.ProviderComparisonRequest import ProviderComparisonRequest
+from research.ResearchAutonomyBudget import ResearchAutonomyBudget
 from research.ResearchClaimConfidence import ResearchClaimConfidence
+from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchInformationTrust import ResearchInformationTrust
+from research.ResearchKaliOperationPreview import ResearchKaliOperationPreview
+from research.ResearchPlanDigest import plan_digest
+from research.ResearchPlanRestriction import ResearchPlanRestriction
+from research.ResearchProgramScopeRevision import ResearchProgramScopeRevision
 from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
 )
+from research.ResearchSourceApplicability import ResearchSourceApplicability
+from research.ResearchSourceIndependence import ResearchSourceIndependence
+from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
+from research.ResearchSourceUsefulness import ResearchSourceUsefulness
+
+#: What the operator picks when they want the text to stay advisory. Kept out
+#: of the restriction vocabulary itself: "no restriction" is the absence of
+#: one, not a kind of one.
+ADVISORY_RESTRICTION_LABEL = "advisory"
+
+
+def _opening_draft_metadata(
+    draft: QuestionResearchDraft | AcquisitionResearchDraft | None,
+    target: TargetResearchDraft | None,
+    question: str,
+    instructions: str,
+    sources: str,
+    constraints: str,
+    restriction: str,
+) -> dict[str, object]:
+    if draft is None:
+        return {}
+    if not isinstance(draft, (QuestionResearchDraft, AcquisitionResearchDraft)):
+        raise ValueError("An opening requires a validated question draft.")
+    if target is not None or constraints.strip() or _plan_restriction(restriction):
+        raise ValueError("Opening mode cannot discard targets or constraints.")
+    return draft.metadata(question, instructions, sources)
+
+
+def _target_draft_metadata(draft: TargetResearchDraft | None) -> dict[str, object]:
+    """Use explicit target steps, never infer capabilities from manual prose."""
+    if draft is None:
+        return {}
+    if not isinstance(draft, TargetResearchDraft):
+        raise ValueError("Target plan requires a validated target draft.")
+    return {
+        "research_plan_target_binding": draft.binding,
+        "research_plan_steps": draft.steps,
+    }
+
+
+class TrustedDeferredExecutionController(Protocol):
+    """Narrow desktop-only authority, deliberately not a Brain processor."""
+
+    def preview(self, task_id: str) -> DeferredExecutionControlView: ...
+
+    def grant(self, task_id: str) -> DeferredExecutionControlView: ...
+
+    def revoke(self, task_id: str) -> DeferredExecutionControlView: ...
+
+
+class TrustedOneShotDeferredExecutionController(Protocol):
+    """Narrow non-Brain port for one exact future attempt."""
+
+    def preview(
+        self, task_id: str, run_at: datetime
+    ) -> OneShotDeferredExecutionScheduleView: ...
+
+    def schedule(
+        self, task_id: str, run_at: datetime
+    ) -> OneShotDeferredExecutionScheduleView: ...
+
+    def cancel(self, task_id: str) -> OneShotDeferredExecutionSchedule: ...
+
+    def status(self, task_id: str) -> OneShotDeferredExecutionScheduleView | None: ...
+
+    def next_pending(self) -> OneShotDeferredExecutionSchedule | None: ...
+
+    def fire(
+        self,
+        schedule_id: str,
+        cancellation_token: CancellationToken | None = None,
+    ) -> OneShotDeferredExecutionSchedule: ...
+
+    def skip_due_to_busy(
+        self, schedule_id: str
+    ) -> OneShotDeferredExecutionSchedule: ...
+
+
+def _plan_restriction(value: str) -> ResearchPlanRestriction | None:
+    """Resolve the operator's typed selection, or nothing at all.
+
+    Blank and the advisory label both mean no enforcement. An unrecognised
+    value is refused rather than defaulted: silently falling back to "no
+    restriction" would turn a selection the operator made into one they did
+    not, in the direction that permits more.
+    """
+    normalized = value.strip()
+    if not normalized or normalized == ADVISORY_RESTRICTION_LABEL:
+        return None
+    try:
+        return ResearchPlanRestriction(normalized)
+    except ValueError as error:
+        raise ValueError("That plan restriction is not recognized.") from error
+
+
+def _plan_constraint_drafts(constraint_lines: str) -> tuple[str, ...]:
+    """Shape typed constraint rows, one per line, preserving exact order.
+
+    Blank lines are dropped rather than becoming empty constraints. Nothing
+    here pairs a constraint with a source row: constraints occupy no position
+    in the step/source alignment, so adding one cannot move a source onto a
+    different step.
+    """
+    return tuple(
+        stripped for line in constraint_lines.splitlines() if (stripped := line.strip())
+    )
+
+
+def _plan_step_drafts(
+    instruction_lines: str,
+    source_id_lines: str,
+) -> tuple[tuple[object, ...], ...]:
+    """Shape typed plan rows into the positional drafts the runtime accepts.
+
+    Shared by plan preview and approval so both send byte-identical steps. Two
+    copies of this shaping would eventually disagree, and a plan that digests
+    differently depending on which button produced it would make an approval
+    refuse the plan it was given for.
+    """
+    instructions = instruction_lines.splitlines()
+    source_rows = source_id_lines.splitlines()
+    row_count = max(len(instructions), len(source_rows))
+    return tuple(
+        (
+            instructions[index].strip() if index < len(instructions) else "",
+            tuple(
+                source_id.strip()
+                for source_id in (
+                    source_rows[index].split(",") if index < len(source_rows) else ()
+                )
+                if source_id.strip()
+            ),
+        )
+        for index in range(row_count)
+    )
+
+
+def _evidence_id_list(value: str) -> tuple[str, ...]:
+    """Read one typed field as the evidence IDs it names.
+
+    Commas and whitespace both separate, because a person copying identifiers
+    out of a list will produce either and should not have to care which. Empty
+    fragments are dropped rather than sent on as blank IDs the runtime would
+    have to refuse.
+    """
+    entries = tuple(
+        fragment.strip()
+        for fragment in value.replace(",", " ").split()
+        if fragment.strip()
+    )
+    if not entries:
+        raise ValueError("At least one recorded evidence ID is required.")
+    return entries
 
 
 class BrainProcessor(Protocol):
@@ -25,14 +195,161 @@ class BrainProcessor(Protocol):
 class DesktopController:
     """Keep UI actions small, explicit, and free of duplicate state."""
 
-    def __init__(self, brain: BrainProcessor) -> None:
+    def __init__(
+        self,
+        brain: BrainProcessor,
+        deferred_execution_control: TrustedDeferredExecutionController | None = None,
+        one_shot_deferred_execution_control: (
+            TrustedOneShotDeferredExecutionController | None
+        ) = None,
+    ) -> None:
         self._brain = brain
+        self._deferred_execution_control = deferred_execution_control
+        self._one_shot_deferred_execution_control = one_shot_deferred_execution_control
+
+    @property
+    def deferred_execution_control_available(self) -> bool:
+        return self._deferred_execution_control is not None
+
+    def deferred_execution_status(self, task_id: str) -> DeferredExecutionControlView:
+        return self._deferred_control().preview(task_id.strip())
+
+    def allow_deferred_execution(self, task_id: str) -> DeferredExecutionControlView:
+        return self._deferred_control().grant(task_id.strip())
+
+    def revoke_deferred_execution(self, task_id: str) -> DeferredExecutionControlView:
+        return self._deferred_control().revoke(task_id.strip())
+
+    def _deferred_control(self) -> TrustedDeferredExecutionController:
+        if self._deferred_execution_control is None:
+            raise ValueError("Deferred execution control is unavailable.")
+        return self._deferred_execution_control
+
+    @property
+    def one_shot_deferred_execution_available(self) -> bool:
+        return self._one_shot_deferred_execution_control is not None
+
+    def preview_one_shot_deferred_execution(
+        self, task_id: str, run_at: datetime
+    ) -> OneShotDeferredExecutionScheduleView:
+        return self._one_shot_control().preview(task_id.strip(), run_at)
+
+    def schedule_one_shot_deferred_execution(
+        self, task_id: str, run_at: datetime
+    ) -> OneShotDeferredExecutionScheduleView:
+        return self._one_shot_control().schedule(task_id.strip(), run_at)
+
+    def cancel_one_shot_deferred_execution(
+        self, task_id: str
+    ) -> OneShotDeferredExecutionSchedule:
+        return self._one_shot_control().cancel(task_id.strip())
+
+    def one_shot_deferred_execution_status(
+        self, task_id: str
+    ) -> OneShotDeferredExecutionScheduleView | None:
+        """Report the latest schedule and the exact grant it names."""
+        return self._one_shot_control().status(task_id.strip())
+
+    def next_one_shot_deferred_execution(
+        self,
+    ) -> OneShotDeferredExecutionSchedule | None:
+        return self._one_shot_control().next_pending()
+
+    def fire_one_shot_deferred_execution(
+        self,
+        schedule_id: str,
+        cancellation_token: CancellationToken | None = None,
+    ) -> OneShotDeferredExecutionSchedule:
+        return self._one_shot_control().fire(schedule_id.strip(), cancellation_token)
+
+    def skip_busy_one_shot_deferred_execution(
+        self, schedule_id: str
+    ) -> OneShotDeferredExecutionSchedule:
+        return self._one_shot_control().skip_due_to_busy(schedule_id.strip())
+
+    def _one_shot_control(self) -> TrustedOneShotDeferredExecutionController:
+        if self._one_shot_deferred_execution_control is None:
+            raise ValueError("One-shot deferred execution control is unavailable.")
+        return self._one_shot_deferred_execution_control
 
     def submit_message(self, message: str) -> BrainResponse:
         """Send non-empty composer text unchanged to the existing Brain."""
         if not message.strip():
             raise ValueError("A desktop message cannot be empty.")
         return self._brain.process(message)
+
+    def preview_kali_operation(
+        self,
+        revision: ResearchProgramScopeRevision,
+        hostname: str,
+        operation_kind: str,
+        dns_record_type: str = "A",
+    ) -> BrainResponse:
+        """Preview the operator's exact selection through the existing boundary."""
+        return self._brain.process(
+            BrainRequest(
+                "Preview Kali operation",
+                metadata={
+                    "intent": "kali_operation_preview",
+                    "program_id": revision.program_id,
+                    "scope_revision_id": revision.revision_id,
+                    "scope_revision_digest": revision.revision_digest,
+                    "hostname": hostname.strip(),
+                    "kali_operation_kind": operation_kind,
+                    "dns_record_type": dns_record_type,
+                },
+            )
+        )
+
+    @staticmethod
+    def _kali_preview_metadata(
+        preview: ResearchKaliOperationPreview,
+    ) -> dict[str, object]:
+        return {
+            "program_id": preview.program_id,
+            "scope_revision_id": preview.scope_revision_id,
+            "scope_revision_digest": preview.scope_revision_digest,
+            "hostname": preview.hostname,
+            "kali_operation_kind": preview.operation_kind.value,
+            "dns_record_type": (
+                preview.dns_record_type.value if preview.dns_record_type else None
+            ),
+            "operation_digest": preview.operation_digest,
+        }
+
+    def authorize_kali_operation(
+        self, preview: ResearchKaliOperationPreview
+    ) -> BrainResponse:
+        """Bind a separate operator confirmation to the returned preview."""
+        return self._brain.process(
+            BrainRequest(
+                "Authorize Kali operation",
+                metadata={
+                    **self._kali_preview_metadata(preview),
+                    "intent": "kali_operation_authorization",
+                },
+            )
+        )
+
+    def run_kali_operation(
+        self,
+        preview: ResearchKaliOperationPreview,
+        authorization_id: str,
+        *,
+        operator_opt_in: bool = False,
+    ) -> BrainResponse:
+        """Request one bounded run; runtime revalidates all authority."""
+        return self._brain.process(
+            BrainRequest(
+                "Run Kali operation",
+                metadata={
+                    **self._kali_preview_metadata(preview),
+                    "intent": "kali_operation_run",
+                    "authorization_id": authorization_id,
+                    "operator_opt_in": operator_opt_in,
+                },
+            )
+        )
 
     def select_session(self, session_id: str) -> BrainResponse:
         """Activate an existing session through its explicit Brain command."""
@@ -158,31 +475,29 @@ class DesktopController:
         question: str,
         instruction_lines: str,
         source_id_lines: str,
+        constraint_lines: str = "",
+        restriction: str = "",
+        *,
+        target_draft: TargetResearchDraft | None = None,
+        opening_draft: QuestionResearchDraft | AcquisitionResearchDraft | None = None,
     ) -> BrainResponse:
-        """Preview one explicit ordered plan without saving or executing it."""
+        """Preview one explicit ordered plan without saving or executing it.
+
+        Steps and constraints come from two separate fields because the author
+        already decided which is which. Nothing here inspects the wording to
+        sort them, so a line saying "do not access external sources" is a
+        constraint only if it was typed as one.
+        """
         if not all(
             isinstance(value, str)
-            for value in (question, instruction_lines, source_id_lines)
+            for value in (
+                question,
+                instruction_lines,
+                source_id_lines,
+                constraint_lines,
+            )
         ):
             raise ValueError("Research plan draft fields must be text.")
-        instructions = instruction_lines.splitlines()
-        source_rows = source_id_lines.splitlines()
-        row_count = max(len(instructions), len(source_rows))
-        steps = tuple(
-            (
-                instructions[index].strip() if index < len(instructions) else "",
-                tuple(
-                    source_id.strip()
-                    for source_id in (
-                        source_rows[index].split(",")
-                        if index < len(source_rows)
-                        else ()
-                    )
-                    if source_id.strip()
-                ),
-            )
-            for index in range(row_count)
-        )
         return self._brain.process(
             BrainRequest(
                 message="Preview explicit authored research plan",
@@ -190,8 +505,1257 @@ class DesktopController:
                 metadata={
                     "intent": "research_plan_draft_preview",
                     "research_plan_question": question.strip(),
-                    "research_plan_steps": steps,
+                    "research_plan_steps": _plan_step_drafts(
+                        instruction_lines,
+                        source_id_lines,
+                    ),
+                    # Sources align with step lines only, so constraints are
+                    # kept out of that pairing entirely.
+                    "research_plan_constraints": _plan_constraint_drafts(
+                        constraint_lines
+                    ),
+                    "research_plan_restriction": _plan_restriction(restriction),
+                    **_target_draft_metadata(target_draft),
+                    **_opening_draft_metadata(
+                        opening_draft,
+                        target_draft,
+                        question,
+                        instruction_lines,
+                        source_id_lines,
+                        constraint_lines,
+                        restriction,
+                    ),
                 },
+            )
+        )
+
+    def preview_plan_authorization(
+        self,
+        question: str,
+        instruction_lines: str,
+        source_id_lines: str,
+        research_run_id: str,
+        disclosure: str = "none",
+        max_step_advances: str = "",
+        max_network_operations: str = "",
+        max_seconds: str = "",
+        constraint_lines: str = "",
+        restriction: str = "",
+        *,
+        target_draft: TargetResearchDraft | None = None,
+        opening_draft: QuestionResearchDraft | AcquisitionResearchDraft | None = None,
+    ) -> BrainResponse:
+        """Show the approval this plan would record. Records nothing.
+
+        The budget fields are passed through exactly as typed, blanks included.
+        A blank means the operator left that bound alone; nothing here fills one
+        in for them, and nothing here reads an unusable value as a number.
+        """
+        return self._plan_authorization_request(
+            "research_plan_authorization_preview",
+            "Preview research plan approval",
+            question,
+            instruction_lines,
+            source_id_lines,
+            research_run_id,
+            extra={
+                "research_disclosure": disclosure.strip() or "none",
+                **self._budget_metadata(
+                    max_step_advances,
+                    max_network_operations,
+                    max_seconds,
+                ),
+            },
+            constraint_lines=constraint_lines,
+            restriction=restriction,
+            target_draft=target_draft,
+            opening_draft=opening_draft,
+        )
+
+    @staticmethod
+    def _budget_metadata(
+        max_step_advances: str,
+        max_network_operations: str,
+        max_seconds: str,
+    ) -> dict[str, str]:
+        """Return only the bounds the operator actually filled in.
+
+        Empty fields are omitted rather than sent as zero. Zero is a real and
+        very restrictive answer, and a blank box must never be read as one.
+        """
+        chosen = {
+            "max_step_advances": max_step_advances,
+            "max_network_operations": max_network_operations,
+            "max_seconds": max_seconds,
+        }
+        return {name: value for name, value in chosen.items() if value.strip()}
+
+    def confirm_plan_authorization(
+        self,
+        authorization_id: str,
+        question: str,
+        instruction_lines: str,
+        source_id_lines: str,
+        research_run_id: str,
+        max_step_advances: str = "",
+        max_network_operations: str = "",
+        max_seconds: str = "",
+        constraint_lines: str = "",
+        restriction: str = "",
+        *,
+        target_draft: TargetResearchDraft | None = None,
+        opening_draft: QuestionResearchDraft | AcquisitionResearchDraft | None = None,
+    ) -> BrainResponse:
+        """Record exactly one previewed approval. Starts no research.
+
+        The plan is re-sent rather than remembered here, so the runtime checks
+        the approval against the plan as it stands now instead of trusting what
+        this surface last displayed.
+        """
+        normalized_id = authorization_id.strip()
+        if not normalized_id:
+            raise ValueError("A previewed approval ID is required.")
+        return self._plan_authorization_request(
+            "research_plan_authorization_confirm",
+            "Confirm research plan approval",
+            question,
+            instruction_lines,
+            source_id_lines,
+            research_run_id,
+            extra={
+                "authorization_id": normalized_id,
+                **self._budget_metadata(
+                    max_step_advances,
+                    max_network_operations,
+                    max_seconds,
+                ),
+            },
+            constraint_lines=constraint_lines,
+            restriction=restriction,
+            target_draft=target_draft,
+            opening_draft=opening_draft,
+        )
+
+    def start_authorized_execution(
+        self,
+        authorization_id: str,
+        question: str,
+        instruction_lines: str,
+        source_id_lines: str,
+        research_run_id: str,
+        constraint_lines: str = "",
+        restriction: str = "",
+        *,
+        target_draft: TargetResearchDraft | None = None,
+        opening_draft: QuestionResearchDraft | AcquisitionResearchDraft | None = None,
+    ) -> BrainResponse:
+        """Spend one recorded approval on one foreground execution start.
+
+        Sends no budget and no disclosure. Starting spends neither, and a field
+        the surface could widen is a field somebody eventually widens; the
+        approved bounds stand as recorded.
+        """
+        normalized_id = authorization_id.strip()
+        if not normalized_id:
+            raise ValueError("A recorded approval ID is required.")
+        return self._plan_authorization_request(
+            "research_plan_execution_start",
+            "Start one authorized research plan execution",
+            question,
+            instruction_lines,
+            source_id_lines,
+            research_run_id,
+            extra={"authorization_id": normalized_id},
+            constraint_lines=constraint_lines,
+            restriction=restriction,
+            target_draft=target_draft,
+            opening_draft=opening_draft,
+        )
+
+    def research_execution_status(self, execution_id: str) -> BrainResponse:
+        """Read one execution's canonical state. Advances nothing."""
+        return self._execution_request(
+            "research_plan_execution_status",
+            "Report research plan execution status",
+            execution_id,
+        )
+
+    def advance_research_execution(self, execution_id: str) -> BrainResponse:
+        """Attempt exactly one step. Never two, and never a loop.
+
+        One call, one attempt. The operator asks again for the next step,
+        which is the difference between stepping and autonomy.
+        """
+        return self._execution_request(
+            "research_plan_execution_advance",
+            "Advance one research plan execution step",
+            execution_id,
+        )
+
+    def resolve_interrupted_attempt(
+        self,
+        execution_id: str,
+        step_id: str,
+        resolution: str,
+    ) -> BrainResponse:
+        """Record what the operator knows about an interrupted attempt.
+
+        Reaches no provider and spends no budget. All three identities are
+        required: a ruling that did not name exactly what it ruled on would be
+        a guess wearing a decision's clothes.
+        """
+        normalized_execution = execution_id.strip()
+        normalized_step = step_id.strip()
+        normalized_resolution = resolution.strip()
+        if not normalized_execution:
+            raise ValueError("An execution ID cannot be empty.")
+        if not normalized_step:
+            raise ValueError("A step ID cannot be empty.")
+        if not normalized_resolution:
+            raise ValueError("A ruling cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="Resolve interrupted research attempt",
+                source="desktop",
+                metadata={
+                    "intent": "research_plan_execution_resolve",
+                    "research_plan_id": normalized_execution,
+                    "step_id": normalized_step,
+                    "resolution": normalized_resolution,
+                },
+            )
+        )
+
+    def recover_interrupted_attempt(
+        self,
+        execution_id: str,
+        step_id: str,
+        decision: str,
+        summary: str = "",
+        claimed_operation: str = "",
+    ) -> BrainResponse:
+        """Record what the operator did about an attempt that ran unseen.
+
+        Carries only the decision and the operator's own account of it. There is
+        deliberately nowhere here to pass a capability, an approval or a budget:
+        recovering an outcome is not a way to acquire permission.
+        """
+        normalized_execution = execution_id.strip()
+        normalized_step = step_id.strip()
+        normalized_decision = decision.strip()
+        if not normalized_execution:
+            raise ValueError("An execution ID cannot be empty.")
+        if not normalized_step:
+            raise ValueError("A step ID cannot be empty.")
+        if not normalized_decision:
+            raise ValueError("A recovery decision cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="Recover research attempt outcome",
+                source="desktop",
+                metadata={
+                    "intent": "research_plan_execution_recover",
+                    "research_plan_id": normalized_execution,
+                    "step_id": normalized_step,
+                    "decision": normalized_decision,
+                    "summary": summary.strip(),
+                    "claimed_operation": claimed_operation.strip(),
+                },
+            )
+        )
+
+    def continue_research_execution(
+        self,
+        execution_id: str,
+        max_steps: str,
+    ) -> BrainResponse:
+        """Run the ordinary one-step advance, at most this many times.
+
+        Both the execution and the bound come from the operator. There is no
+        reading of a missing bound as "as many as it takes": an unusable one is
+        passed through and refused rather than replaced with a guess.
+        """
+        normalized_execution = execution_id.strip()
+        normalized_steps = str(max_steps).strip()
+        if not normalized_execution:
+            raise ValueError("An execution ID cannot be empty.")
+        if not normalized_steps:
+            raise ValueError("A step count cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="Continue research plan execution within a bound",
+                source="desktop",
+                metadata={
+                    "intent": "research_plan_execution_continue",
+                    "research_plan_id": normalized_execution,
+                    "max_steps": normalized_steps,
+                },
+            )
+        )
+
+    def create_background_task(self, execution_id: str) -> BrainResponse:
+        """Queue one exact execution for the scheduler. Runs nothing.
+
+        No budget is sent, so the scheduler applies its own default per-run
+        bound. That bound is not authority in any case: what the task may
+        actually spend stays the allowance the execution was already granted,
+        and queueing cannot raise it. The approval panel's budget fields are
+        deliberately not reused here — they belong to an authorization.
+        """
+        normalized = execution_id.strip()
+        if not normalized:
+            raise ValueError("An execution ID cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="Queue one background research task",
+                source="desktop",
+                metadata={
+                    "intent": "background_research_task_create",
+                    "research_plan_id": normalized,
+                },
+            )
+        )
+
+    def list_background_tasks(self) -> BrainResponse:
+        """Read the durable queue. Selects nothing and runs nothing."""
+        return self._brain.process(
+            BrainRequest(
+                message="List background research tasks",
+                source="desktop",
+                metadata={"intent": "background_research_task_list"},
+            )
+        )
+
+    def pause_background_task(self, task_id: str) -> BrainResponse:
+        """Stop the scheduler choosing this task until somebody resumes it."""
+        return self._background_task_ruling(
+            "background_research_task_pause",
+            "Pause one background research task",
+            task_id,
+        )
+
+    def resume_background_task(self, task_id: str) -> BrainResponse:
+        """Make this task selectable again. Runs no cycle."""
+        return self._background_task_ruling(
+            "background_research_task_resume",
+            "Resume one background research task",
+            task_id,
+        )
+
+    def cancel_background_task(self, task_id: str) -> BrainResponse:
+        """Stop the scheduler choosing this task, for good.
+
+        The queue entry only. The research execution it names is untouched and
+        keeps whatever state it already had; stopping that is a separate,
+        explicit action on the execution itself.
+        """
+        return self._background_task_ruling(
+            "background_research_task_cancel",
+            "Cancel one background research task",
+            task_id,
+        )
+
+    def _background_task_ruling(
+        self,
+        intent: str,
+        message: str,
+        task_id: str,
+    ) -> BrainResponse:
+        """Send one exact task identity to one existing scheduler intent."""
+        normalized = task_id.strip()
+        if not normalized:
+            raise ValueError("A background task ID cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message=message,
+                source="desktop",
+                metadata={"intent": intent, "background_task_id": normalized},
+            )
+        )
+
+    def run_background_scheduler_cycle(self) -> BrainResponse:
+        """Run exactly one bounded scheduler cycle. Schedules nothing further.
+
+        The scheduler decides which task, if any, is runnable and how much work
+        one cycle covers. Nothing here selects a task, advances a step or grants
+        authority; it asks the existing service to take one turn and reports
+        what it did.
+        """
+        return self._brain.process(
+            BrainRequest(
+                message="Run one background research worker cycle",
+                source="desktop",
+                metadata={"intent": "background_research_worker_cycle"},
+            )
+        )
+
+    def cancel_research_execution(self, execution_id: str) -> BrainResponse:
+        """Stop one execution. Refunds neither approval nor spent budget."""
+        return self._execution_request(
+            "research_plan_execution_cancel",
+            "Cancel one research plan execution",
+            execution_id,
+        )
+
+    def _execution_request(
+        self,
+        intent: str,
+        message: str,
+        execution_id: str,
+    ) -> BrainResponse:
+        normalized_id = execution_id.strip()
+        if not normalized_id:
+            raise ValueError("An execution ID cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message=message,
+                source="desktop",
+                metadata={
+                    "intent": intent,
+                    "research_plan_id": normalized_id,
+                },
+            )
+        )
+
+    def list_plan_authorizations(self) -> BrainResponse:
+        """Report recorded approvals without approving or running anything."""
+        return self._intent_only_request(
+            "research_plan_authorization_list",
+            "List research plan approvals",
+        )
+
+    def _plan_authorization_request(
+        self,
+        intent: str,
+        message: str,
+        question: str,
+        instruction_lines: str,
+        source_id_lines: str,
+        research_run_id: str,
+        *,
+        extra: dict[str, object],
+        constraint_lines: str = "",
+        restriction: str = "",
+        target_draft: TargetResearchDraft | None = None,
+        opening_draft: QuestionResearchDraft | AcquisitionResearchDraft | None = None,
+    ) -> BrainResponse:
+        if not all(
+            isinstance(value, str)
+            for value in (question, instruction_lines, source_id_lines)
+        ):
+            raise ValueError("Research plan approval fields must be text.")
+        normalized_question = question.strip()
+        normalized_run_id = research_run_id.strip()
+        if not normalized_question:
+            raise ValueError("A research question cannot be empty.")
+        if not normalized_run_id:
+            raise ValueError("A research run ID cannot be empty.")
+        if isinstance(opening_draft, AcquisitionResearchDraft):
+            if normalized_run_id != opening_draft.run.run_id:
+                raise ValueError(
+                    "The acquisition draft belongs to another research run."
+                )
+            current = self.preview_acquisition_batch(
+                normalized_run_id,
+                opening_draft.discovery_id,
+                opening_draft.selected_urls,
+            )
+            preview = current.research_plan_draft_preview
+            if (
+                not current.success
+                or preview is None
+                or preview.plan is None
+                or plan_digest(preview.plan) != plan_digest(opening_draft.plan)
+            ):
+                raise ValueError("The recorded selection changed. Review a new batch.")
+        metadata: dict[str, object] = {
+            "intent": intent,
+            "research_run_id": normalized_run_id,
+            "research_plan_question": normalized_question,
+            "research_plan_steps": _plan_step_drafts(
+                instruction_lines,
+                source_id_lines,
+            ),
+            "research_plan_constraints": _plan_constraint_drafts(constraint_lines),
+            "research_plan_restriction": _plan_restriction(restriction),
+        }
+        metadata.update(extra)
+        metadata.update(_target_draft_metadata(target_draft))
+        metadata.update(
+            _opening_draft_metadata(
+                opening_draft,
+                target_draft,
+                question,
+                instruction_lines,
+                source_id_lines,
+                constraint_lines,
+                restriction,
+            )
+        )
+        return self._brain.process(
+            BrainRequest(message=message, source="desktop", metadata=metadata)
+        )
+
+    def preview_provider_comparison_plan(self, question: str) -> BrainResponse:
+        """Preview the two-step plan a comparison asks for. Contact nobody.
+
+        This is the ordinary plan preview with the two discovery steps a
+        comparison needs. It reaches no provider: approval and two explicit
+        advances still stand between this and any request.
+        """
+        if not isinstance(question, str) or not question.strip():
+            raise ValueError("A research question cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="Preview provider comparison plan",
+                source="desktop",
+                metadata={
+                    "intent": "research_plan_draft_preview",
+                    "research_plan_question": question.strip(),
+                    "research_plan_steps": ProviderComparisonRequest().step_drafts(),
+                },
+            )
+        )
+
+    def preview_acquisition_batch(
+        self, run_id: str, discovery_id: str, selected_urls: tuple[str, ...]
+    ) -> BrainResponse:
+        """Prepare an inert exact-candidate plan; approval and start are separate."""
+        return self._brain.process(
+            BrainRequest(
+                message="Preview selected reference-source acquisition batch",
+                source="desktop",
+                metadata={
+                    "intent": "research_acquisition_batch_preview",
+                    "research_run_id": run_id,
+                    "discovery_id": discovery_id,
+                    "selected_candidate_urls": selected_urls,
+                },
+            )
+        )
+
+    def preview_learning_research(self, question, provider, budget) -> BrainResponse:
+        """Inert disclosure preview; confirmation is a separate UI action."""
+        return self._brain.process(
+            BrainRequest(
+                message=question,
+                source="desktop",
+                metadata={
+                    "intent": "research_learning_preview",
+                    "discovery_provider": provider,
+                    "research_autonomy_budget": budget,
+                },
+            )
+        )
+
+    def start_learning_research(
+        self, question, provider, budget, policy, *, cancellation_token=None
+    ) -> BrainResponse:
+        """One initial confirmation of the displayed canonical mission envelope."""
+        from research.SemanticMissionPolicy import SemanticMissionPolicy
+
+        if not isinstance(policy, SemanticMissionPolicy):
+            raise ValueError("An explicit semantic mission policy is required.")
+        return self._brain.process(
+            BrainRequest(
+                message=question,
+                source="desktop",
+                cancellation_token=cancellation_token,
+                metadata={
+                    "intent": "research_goal_start",
+                    "research_goal_scope": "bounded_semantic_learning_research",
+                    "discovery_provider": provider,
+                    "research_autonomy_budget": budget,
+                    "semantic_mission_policy": policy,
+                },
+            )
+        )
+
+    def start_research_goal(
+        self,
+        question: str,
+        provider: str,
+        budget: ResearchAutonomyBudget,
+        *,
+        cancellation_token: CancellationToken | None = None,
+        record_evidence: bool = False,
+        compare_sources: bool = False,
+    ) -> BrainResponse:
+        """One confirmed scoped action; no synthetic Continue button presses."""
+        if not isinstance(record_evidence, bool) or not isinstance(
+            compare_sources, bool
+        ):
+            raise ValueError("Mission selection must be boolean.")
+        return self._brain.process(
+            BrainRequest(
+                message=question,
+                source="desktop",
+                cancellation_token=cancellation_token,
+                metadata={
+                    "intent": "research_goal_start",
+                    "research_goal_scope": (
+                        "selected_provider_reference_comparison"
+                        if compare_sources
+                        else (
+                            "selected_provider_reference_evidence"
+                            if record_evidence
+                            else "local_search_and_selected_provider_discovery"
+                        )
+                    ),
+                    "discovery_provider": provider,
+                    "research_autonomy_budget": budget,
+                },
+            )
+        )
+
+    def preview_question_plan(self, question: str, provider: str) -> BrainResponse:
+        """Request the canonical research opening for an explicit provider choice."""
+        if not isinstance(question, str) or not question.strip():
+            raise ValueError("A research question cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="Preview research opening from question",
+                source="desktop",
+                metadata={
+                    "intent": "research_question_plan_preview",
+                    "research_plan_question": question.strip(),
+                    "discovery_provider": provider,
+                },
+            )
+        )
+
+    def report_provider_comparison(self, research_run_id: str) -> BrainResponse:
+        """Show one run's two provider result sets side by side."""
+        return self._run_only_request(
+            "provider_comparison_report",
+            "Report provider comparison",
+            research_run_id,
+        )
+
+    def report_provider_quality(self) -> BrainResponse:
+        """Describe how assessed provider samples performed, across every run."""
+        return self._brain.process(
+            BrainRequest(
+                message="Report provider quality",
+                source="desktop",
+                metadata={"intent": "provider_quality_report"},
+            )
+        )
+
+    def report_paired_provider_quality(self) -> BrainResponse:
+        """Compare only runs where both providers answered the same question."""
+        return self._brain.process(
+            BrainRequest(
+                message="Report paired provider quality",
+                source="desktop",
+                metadata={"intent": "paired_provider_quality_report"},
+            )
+        )
+
+    def report_claim_calibration(self, research_run_id: str) -> BrainResponse:
+        """Report how far each claim outruns its evidence, adjusting none."""
+        return self._run_only_request(
+            "research_calibration_report",
+            "Report claim calibration",
+            research_run_id,
+        )
+
+    def prepare_claim_revision_review(
+        self,
+        research_run_id: str,
+        claim_id: str,
+    ) -> BrainResponse:
+        """Show an inert, exact handoff for one calibrated current claim."""
+        normalized_run_id = research_run_id.strip()
+        normalized_claim_id = claim_id.strip()
+        if not normalized_run_id:
+            raise ValueError("A research run ID cannot be empty.")
+        if not normalized_claim_id:
+            raise ValueError("A research claim ID cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="Prepare calibrated claim review",
+                source="desktop",
+                metadata={
+                    "intent": "research_calibration_revision_prepare",
+                    "research_run_id": normalized_run_id,
+                    "research_claim_id": normalized_claim_id,
+                },
+            )
+        )
+
+    def preview_reflection(self, research_run_id: str) -> BrainResponse:
+        """Report how one run went without storing the account."""
+        return self._run_only_request(
+            "research_reflection_preview",
+            "Preview research reflection",
+            research_run_id,
+        )
+
+    def store_reflection(self, research_run_id: str) -> BrainResponse:
+        """Keep one account of how a run went, changing nothing about the run."""
+        return self._run_only_request(
+            "research_reflection_store",
+            "Store research reflection",
+            research_run_id,
+        )
+
+    def list_reflections(self) -> BrainResponse:
+        """Report stored reflections without producing a new one."""
+        return self._intent_only_request(
+            "research_reflection_list",
+            "List research reflections",
+        )
+
+    def detect_curiosity_gaps(self, research_run_id: str) -> BrainResponse:
+        """Report where one run's own record is thin, proposing nothing."""
+        return self._run_only_request(
+            "curiosity_gap_detect",
+            "Detect research gaps",
+            research_run_id,
+        )
+
+    def preview_curiosity_questions(self, research_run_id: str) -> BrainResponse:
+        """Draft and rank questions for one run without storing any."""
+        return self._run_only_request(
+            "curiosity_question_preview",
+            "Preview curiosity questions",
+            research_run_id,
+        )
+
+    def store_curiosity_questions(self, research_run_id: str) -> BrainResponse:
+        """Keep the ranked proposals for one run, deciding nothing."""
+        return self._run_only_request(
+            "curiosity_question_store",
+            "Store curiosity questions",
+            research_run_id,
+        )
+
+    def list_curiosity_questions(self) -> BrainResponse:
+        """Report every stored proposal without running anything."""
+        return self._intent_only_request(
+            "curiosity_question_list",
+            "List curiosity questions",
+        )
+
+    def accept_curiosity_question(self, question_id: str) -> BrainResponse:
+        """Record that one proposal is worth pursuing. Starts no research."""
+        return self._curiosity_ruling(
+            "curiosity_question_accept",
+            "Accept curiosity question",
+            question_id,
+        )
+
+    def prepare_curiosity_research_proposal(
+        self,
+        question_id: str,
+        max_step_advances: str = "",
+        max_network_operations: str = "",
+        max_seconds: str = "",
+    ) -> BrainResponse:
+        """Draft an inert research proposal for one accepted question.
+
+        A second explicit decision, separate from accepting the question. It
+        reads what would be researched and authorizes none of it: no provider is
+        contacted, no source is loaded, and no approval is created or implied.
+
+        The budget fields ride along so the preview can show what the plan needs
+        beside what would be granted. Carrying them approves nothing.
+        """
+        return self._curiosity_ruling(
+            "curiosity_prepare_proposal",
+            "Prepare research proposal for curiosity question",
+            question_id,
+            extra=self._budget_metadata(
+                max_step_advances,
+                max_network_operations,
+                max_seconds,
+            ),
+        )
+
+    def authorize_curiosity_research_proposal(
+        self,
+        question_id: str,
+        expected_plan_digest: str,
+        max_step_advances: str = "",
+        max_network_operations: str = "",
+        max_seconds: str = "",
+    ) -> BrainResponse:
+        """Approve one exact previewed proposal, starting nothing.
+
+        Carries the digest the operator was shown so the application can refuse
+        anything else. The plan itself is never sent from here: it is derived
+        again from canonical state, and this only says which one was read.
+        """
+        normalized_question = question_id.strip()
+        normalized_digest = expected_plan_digest.strip()
+        if not normalized_question:
+            raise ValueError("A curiosity question ID cannot be empty.")
+        if not normalized_digest:
+            raise ValueError("An expected plan digest cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="Authorize curiosity research proposal",
+                source="desktop",
+                metadata={
+                    **self._budget_metadata(
+                        max_step_advances,
+                        max_network_operations,
+                        max_seconds,
+                    ),
+                    "intent": "curiosity_authorize_proposal",
+                    "curiosity_question_id": normalized_question,
+                    "expected_plan_digest": normalized_digest,
+                },
+            )
+        )
+
+    def start_authorized_curiosity_research_proposal(
+        self,
+        question_id: str,
+        expected_plan_digest: str,
+        authorization_id: str,
+    ) -> BrainResponse:
+        """Spend one approval on a zero-step foreground execution start."""
+        normalized_question = question_id.strip()
+        normalized_digest = expected_plan_digest.strip()
+        normalized_authorization = authorization_id.strip()
+        if not normalized_question:
+            raise ValueError("A curiosity question ID cannot be empty.")
+        if not normalized_digest:
+            raise ValueError("An expected plan digest cannot be empty.")
+        if not normalized_authorization:
+            raise ValueError("A recorded approval ID cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="Start authorized curiosity research proposal",
+                source="desktop",
+                metadata={
+                    "intent": "curiosity_start_authorized_proposal",
+                    "curiosity_question_id": normalized_question,
+                    "expected_plan_digest": normalized_digest,
+                    "authorization_id": normalized_authorization,
+                },
+            )
+        )
+
+    def resume_research_execution(
+        self,
+        question_id: str,
+        execution_id: str,
+    ) -> BrainResponse:
+        """Make one durable execution reachable again. Runs no step.
+
+        Both identities are required and neither is guessed. There is no
+        "resume the latest" here on purpose: the operator names the exact
+        execution, and naming nothing resumes nothing.
+        """
+        normalized_question = question_id.strip()
+        normalized_execution = execution_id.strip()
+        if not normalized_question:
+            raise ValueError("A curiosity question ID cannot be empty.")
+        if not normalized_execution:
+            raise ValueError("An execution ID cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="Resume durable research plan execution",
+                source="desktop",
+                metadata={
+                    "intent": "curiosity_resume_execution",
+                    "curiosity_question_id": normalized_question,
+                    "research_plan_id": normalized_execution,
+                },
+            )
+        )
+
+    def dismiss_curiosity_question(self, question_id: str) -> BrainResponse:
+        """Record that one proposal is not worth pursuing."""
+        return self._curiosity_ruling(
+            "curiosity_question_dismiss",
+            "Dismiss curiosity question",
+            question_id,
+        )
+
+    def _curiosity_ruling(
+        self,
+        intent: str,
+        message: str,
+        question_id: str,
+        extra: dict[str, str] | None = None,
+    ) -> BrainResponse:
+        normalized_id = question_id.strip()
+        if not normalized_id:
+            raise ValueError("A curiosity question ID cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message=message,
+                source="desktop",
+                metadata={
+                    **(extra or {}),
+                    "intent": intent,
+                    "curiosity_question_id": normalized_id,
+                },
+            )
+        )
+
+    def _run_only_request(
+        self,
+        intent: str,
+        message: str,
+        research_run_id: str,
+    ) -> BrainResponse:
+        normalized_run_id = research_run_id.strip()
+        if not normalized_run_id:
+            raise ValueError("A research run ID cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message=message,
+                source="desktop",
+                metadata={"intent": intent, "research_run_id": normalized_run_id},
+            )
+        )
+
+    def _intent_only_request(self, intent: str, message: str) -> BrainResponse:
+        return self._brain.process(
+            BrainRequest(
+                message=message,
+                source="desktop",
+                metadata={"intent": intent},
+            )
+        )
+
+    def propose_hypothesis(
+        self,
+        research_run_id: str,
+        statement: str,
+        discriminating_test: str,
+    ) -> BrainResponse:
+        """Propose one conjecture together with what would count against it.
+
+        The discriminating test is required here, not optional, because the
+        runtime requires it. A conjecture that names nothing capable of
+        counting against it survives any amount of evidence.
+        """
+        values = {
+            "research_run_id": research_run_id.strip(),
+            "hypothesis_statement": statement.strip(),
+            "hypothesis_discriminating_test": discriminating_test.strip(),
+        }
+        if not all(values.values()):
+            raise ValueError(
+                "A hypothesis needs a research run, a statement, and an "
+                "observation that would count against it."
+            )
+        return self._brain.process(
+            BrainRequest(
+                message="Propose research hypothesis",
+                source="desktop",
+                metadata={"intent": "research_hypothesis_propose", **values},
+            )
+        )
+
+    def support_hypothesis(
+        self,
+        hypothesis_id: str,
+        evidence_ids: str,
+    ) -> BrainResponse:
+        """Attach already-recorded evidence to the supporting side."""
+        return self._hypothesis_evidence_request(
+            "research_hypothesis_support",
+            "Support research hypothesis",
+            hypothesis_id,
+            evidence_ids,
+        )
+
+    def associate_hypothesis_test_evidence(
+        self,
+        hypothesis_id: str,
+        evidence_ids: str,
+    ) -> BrainResponse:
+        """Record that this evidence addresses the discriminating test.
+
+        A different statement from supporting or opposing, and deliberately a
+        separate control: evidence can bear on a hypothesis without touching
+        the question it was built around, and only a person can say which did.
+        Nothing is executed — the test is prose describing an observation, and
+        this records that one was made.
+        """
+        return self._hypothesis_evidence_request(
+            "research_hypothesis_test_evidence",
+            "Record evidence addressing the hypothesis test",
+            hypothesis_id,
+            evidence_ids,
+        )
+
+    def hypothesis_history(self, hypothesis_id: str) -> BrainResponse:
+        """Read one hypothesis's standing and withdrawn statements.
+
+        A read, and only a read: it records nothing, decides nothing, and the
+        controls that change a hypothesis stay where they were.
+        """
+        normalized = hypothesis_id.strip()
+        if not normalized:
+            raise ValueError("A hypothesis ID cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="Read hypothesis history",
+                source="desktop",
+                metadata={
+                    "intent": "research_hypothesis_history",
+                    "hypothesis_id": normalized,
+                },
+            )
+        )
+
+    def retract_hypothesis_evidence_relation(
+        self,
+        hypothesis_id: str,
+        evidence_id: str,
+        relation: str,
+    ) -> BrainResponse:
+        """Take back one authored statement about evidence and a hypothesis.
+
+        One operation for all three relations, taking identifiers and a named
+        relation. It withdraws a statement; it does not delete the evidence, the
+        hypothesis, or anything else, and it decides nothing about which way the
+        evidence cuts.
+        """
+        normalized_hypothesis = hypothesis_id.strip()
+        normalized_evidence = evidence_id.strip()
+        normalized_relation = relation.strip()
+        if not normalized_hypothesis:
+            raise ValueError("A hypothesis ID cannot be empty.")
+        if not normalized_evidence:
+            raise ValueError("An evidence ID cannot be empty.")
+        if not normalized_relation:
+            raise ValueError("A relation cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="Retract hypothesis evidence relation",
+                source="desktop",
+                metadata={
+                    "intent": "research_hypothesis_retract_relation",
+                    "hypothesis_id": normalized_hypothesis,
+                    "evidence_id": normalized_evidence,
+                    "relation": normalized_relation,
+                },
+            )
+        )
+
+    def oppose_hypothesis(
+        self,
+        hypothesis_id: str,
+        evidence_ids: str,
+    ) -> BrainResponse:
+        """Attach already-recorded evidence to the opposing side."""
+        return self._hypothesis_evidence_request(
+            "research_hypothesis_oppose",
+            "Oppose research hypothesis",
+            hypothesis_id,
+            evidence_ids,
+        )
+
+    def withdraw_hypothesis(self, hypothesis_id: str) -> BrainResponse:
+        """Stop working on one hypothesis without deleting what it recorded."""
+        normalized_id = hypothesis_id.strip()
+        if not normalized_id:
+            raise ValueError("A hypothesis ID cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="Withdraw research hypothesis",
+                source="desktop",
+                metadata={
+                    "intent": "research_hypothesis_withdraw",
+                    "hypothesis_id": normalized_id,
+                },
+            )
+        )
+
+    def list_hypotheses(self) -> BrainResponse:
+        """Report every hypothesis with the standing derived from its evidence."""
+        return self._brain.process(
+            BrainRequest(
+                message="List research hypotheses",
+                source="desktop",
+                metadata={"intent": "research_hypothesis_list"},
+            )
+        )
+
+    def preview_failure_lessons(self, research_run_id: str) -> BrainResponse:
+        """Show what would be remembered from one run, remembering nothing."""
+        return self._run_only_request(
+            "failure_memory_preview",
+            "Preview failure lessons",
+            research_run_id,
+        )
+
+    def store_failure_lessons(self, research_run_id: str) -> BrainResponse:
+        """Remember the lessons one run's own record supports."""
+        return self._run_only_request(
+            "failure_memory_store",
+            "Remember failure lessons",
+            research_run_id,
+        )
+
+    def remember_hypothesis_outcomes(self, research_run_id: str) -> BrainResponse:
+        """Remember the durable weakened and contradicted hypotheses of one run."""
+        return self._run_only_request(
+            "failure_memory_hypothesis_store",
+            "Remember hypothesis outcomes",
+            research_run_id,
+        )
+
+    def recall_failure_lessons(self, research_question: str) -> BrainResponse:
+        """Ask which remembered lessons overlap a question. Advisory only."""
+        normalized_question = research_question.strip()
+        if not normalized_question:
+            raise ValueError("A research question cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message="Recall failure lessons",
+                source="desktop",
+                metadata={
+                    "intent": "failure_memory_recall",
+                    "research_question": normalized_question,
+                },
+            )
+        )
+
+    def list_failure_lessons(self) -> BrainResponse:
+        """Report everything remembered, deriving nothing new."""
+        return self._brain.process(
+            BrainRequest(
+                message="List failure lessons",
+                source="desktop",
+                metadata={"intent": "failure_memory_list"},
+            )
+        )
+
+    def _hypothesis_evidence_request(
+        self,
+        intent: str,
+        message: str,
+        hypothesis_id: str,
+        evidence_ids: str,
+    ) -> BrainResponse:
+        normalized_id = hypothesis_id.strip()
+        if not normalized_id:
+            raise ValueError("A hypothesis ID cannot be empty.")
+        return self._brain.process(
+            BrainRequest(
+                message=message,
+                source="desktop",
+                metadata={
+                    "intent": intent,
+                    "hypothesis_id": normalized_id,
+                    "evidence_ids": _evidence_id_list(evidence_ids),
+                },
+            )
+        )
+
+    def record_vulnerability_family(
+        self,
+        family_id: str,
+        name: str,
+        summary: str,
+        prevention: str,
+    ) -> BrainResponse:
+        """Record one class of weakness, asserting nothing about any system.
+
+        There is deliberately no argument for a host, a product, a version, or
+        a payload. The domain type has nowhere to put them, and this adapter
+        does not invent a place.
+        """
+        values = {
+            "family_id": family_id.strip(),
+            "family_name": name.strip(),
+            "family_summary": summary.strip(),
+            "family_prevention": prevention.strip(),
+        }
+        if not all(values.values()):
+            raise ValueError(
+                "A weakness class needs an ID, a name, a summary, and a "
+                "prevention note."
+            )
+        return self._brain.process(
+            BrainRequest(
+                message="Record vulnerability family",
+                source="desktop",
+                metadata={"intent": "vulnerability_family_record", **values},
+            )
+        )
+
+    def record_vulnerability_relation(
+        self,
+        from_family_id: str,
+        to_family_id: str,
+        relation_kind: str,
+        rationale: str,
+    ) -> BrainResponse:
+        """Relate two weakness classes, with the reason recorded alongside.
+
+        The rationale is required here rather than optional. An edge nobody
+        explained is the kind a later reader trusts without being able to
+        check it.
+        """
+        values = {
+            "from_family_id": from_family_id.strip(),
+            "to_family_id": to_family_id.strip(),
+            "relation_kind": relation_kind.strip(),
+            "relation_rationale": rationale.strip(),
+        }
+        if not all(values.values()):
+            raise ValueError(
+                "A relation needs both weakness classes, a kind, and a reason."
+            )
+        return self._brain.process(
+            BrainRequest(
+                message="Record vulnerability relation",
+                source="desktop",
+                metadata={"intent": "vulnerability_relation_record", **values},
+            )
+        )
+
+    def vulnerability_neighbourhood(
+        self,
+        family_id: str,
+        max_depth: int = 1,
+    ) -> BrainResponse:
+        """Ask what else is worth reading about near one weakness class."""
+        normalized_id = family_id.strip()
+        if not normalized_id:
+            raise ValueError("A weakness class ID cannot be empty.")
+        if isinstance(max_depth, bool) or not isinstance(max_depth, int):
+            raise ValueError("Traversal depth must be a whole number.")
+        return self._brain.process(
+            BrainRequest(
+                message="Report vulnerability neighbourhood",
+                source="desktop",
+                metadata={
+                    "intent": "vulnerability_family_neighbourhood",
+                    "family_id": normalized_id,
+                    "max_depth": max_depth,
+                },
+            )
+        )
+
+    def list_vulnerability_families(self) -> BrainResponse:
+        """List every recorded weakness class without traversing anything."""
+        return self._brain.process(
+            BrainRequest(
+                message="List vulnerability families",
+                source="desktop",
+                metadata={"intent": "vulnerability_family_list"},
+            )
+        )
+
+    def audit_learned_memory(self) -> BrainResponse:
+        """Request the read-only learned-memory health report without writing."""
+        return self._brain.process(
+            BrainRequest(
+                message="Audit learned memory",
+                source="desktop",
+                metadata={"intent": "learned_memory_audit"},
             )
         )
 
@@ -278,6 +1842,7 @@ class DesktopController:
     def discover_research_sources(
         self,
         research_run_id: str,
+        provider: str = "",
         *,
         cancellation_token: CancellationToken | None = None,
     ) -> BrainResponse:
@@ -285,14 +1850,25 @@ class DesktopController:
         normalized_run_id = research_run_id.strip()
         if not normalized_run_id:
             raise ValueError("A research run ID cannot be empty.")
+        metadata: dict[str, object] = {
+            "intent": "research_source_discover",
+            "research_run_id": normalized_run_id,
+        }
+        # Resolved here so a name that is not a provider never reaches the
+        # request at all. Anything outside the closed vocabulary is refused
+        # rather than passed along to be interpreted somewhere else.
+        if provider.strip():
+            try:
+                metadata["research_discovery_provider"] = ResearchDiscoveryProviderName(
+                    provider.strip()
+                ).value
+            except ValueError as error:
+                raise ValueError("Research discovery provider is unknown.") from error
         return self._brain.process(
             BrainRequest(
                 message="Discover candidate research sources",
                 source="desktop",
-                metadata={
-                    "intent": "research_source_discover",
-                    "research_run_id": normalized_run_id,
-                },
+                metadata=metadata,
                 cancellation_token=cancellation_token,
             )
         )
@@ -723,6 +2299,10 @@ class DesktopController:
         assessment_text: str,
         supersedes_assessment_id: str = "",
         information_trust: str = ResearchInformationTrust.UNASSESSED.value,
+        usefulness: str = ResearchSourceUsefulness.UNKNOWN.value,
+        applicability: str = ResearchSourceApplicability.UNKNOWN.value,
+        independence: str = ResearchSourceIndependence.UNKNOWN.value,
+        publication_status: str = ResearchSourcePublicationStatus.UNKNOWN.value,
     ) -> BrainResponse:
         """Preview an authored assessment with explicit evidence references."""
         metadata = self._research_source_assessment_write_metadata(
@@ -732,6 +2312,10 @@ class DesktopController:
             assessment_text,
             supersedes_assessment_id,
             information_trust,
+            usefulness,
+            applicability,
+            independence,
+            publication_status,
         )
         return self._brain.process(
             BrainRequest(
@@ -752,6 +2336,10 @@ class DesktopController:
         assessment_text: str,
         supersedes_assessment_id: str = "",
         information_trust: str = ResearchInformationTrust.UNASSESSED.value,
+        usefulness: str = ResearchSourceUsefulness.UNKNOWN.value,
+        applicability: str = ResearchSourceApplicability.UNKNOWN.value,
+        independence: str = ResearchSourceIndependence.UNKNOWN.value,
+        publication_status: str = ResearchSourcePublicationStatus.UNKNOWN.value,
     ) -> BrainResponse:
         """Submit one assessment only after the desktop confirmation step."""
         metadata = self._research_source_assessment_write_metadata(
@@ -761,6 +2349,10 @@ class DesktopController:
             assessment_text,
             supersedes_assessment_id,
             information_trust,
+            usefulness,
+            applicability,
+            independence,
+            publication_status,
         )
         return self._brain.process(
             BrainRequest(
@@ -781,6 +2373,10 @@ class DesktopController:
         assessment_text: str,
         supersedes_assessment_id: str = "",
         information_trust: str = ResearchInformationTrust.UNASSESSED.value,
+        usefulness: str = ResearchSourceUsefulness.UNKNOWN.value,
+        applicability: str = ResearchSourceApplicability.UNKNOWN.value,
+        independence: str = ResearchSourceIndependence.UNKNOWN.value,
+        publication_status: str = ResearchSourcePublicationStatus.UNKNOWN.value,
     ) -> dict[str, object]:
         normalized_run_id = research_run_id.strip()
         normalized_document_id = source_document_id.strip()
@@ -792,6 +2388,23 @@ class DesktopController:
             )
         except (AttributeError, ValueError) as error:
             raise ValueError("Research source information trust is invalid.") from error
+        try:
+            normalized_judgement = {
+                "research_source_usefulness": ResearchSourceUsefulness(
+                    usefulness.strip()
+                ).value,
+                "research_source_applicability": ResearchSourceApplicability(
+                    applicability.strip()
+                ).value,
+                "research_source_independence": ResearchSourceIndependence(
+                    independence.strip()
+                ).value,
+                "research_source_publication_status": ResearchSourcePublicationStatus(
+                    publication_status.strip()
+                ).value,
+            }
+        except (AttributeError, ValueError) as error:
+            raise ValueError("Research source judgement is invalid.") from error
         normalized_evidence_ids = [
             value.strip() for value in evidence_ids.split(",") if value.strip()
         ]
@@ -811,6 +2424,7 @@ class DesktopController:
             "research_assessment_evidence_ids": normalized_evidence_ids,
             "research_assessment_text": normalized_text,
             "research_information_trust": normalized_information_trust.value,
+            **normalized_judgement,
         }
         if normalized_superseded_id:
             metadata["research_assessment_supersedes_id"] = normalized_superseded_id

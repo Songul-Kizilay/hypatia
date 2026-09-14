@@ -21,17 +21,24 @@ from research.ResearchFailureRecord import ResearchFailureRecord
 from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRun import ResearchRun
 from research.ResearchRunStatus import ResearchRunStatus
+from research.ResearchSourceApplicability import ResearchSourceApplicability
 from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
 from research.ResearchSourceCandidate import ResearchSourceCandidate
 from research.ResearchSourceComparisonNoteRecord import (
     ResearchSourceComparisonNoteRecord,
 )
 from research.ResearchSourceDiscoveryRecord import ResearchSourceDiscoveryRecord
+from research.ResearchSourceIndependence import ResearchSourceIndependence
+from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
 from research.ResearchSourceRecord import (
     EXTERNAL_SOURCE_INSTRUCTION_AUTHORITY,
     EXTERNAL_SOURCE_TAINT_LABEL,
     ResearchSourceRecord,
 )
+from research.ResearchSourceUsefulness import ResearchSourceUsefulness
+from research.ResearchVulnerabilityMetric import ResearchVulnerabilityMetric
+from research.ResearchVulnerabilityRecord import ResearchVulnerabilityRecord
+from research.ResearchVulnerabilityReference import ResearchVulnerabilityReference
 
 MAX_RESEARCH_RUN_STORE_BYTES = 64 * 1024 * 1024
 MAX_RESEARCH_RUN_STORE_COLLECTION_ITEMS = 20_000
@@ -80,8 +87,8 @@ class _CollectionBudget:
 class JsonFileResearchRunStore:
     """Load and atomically replace a strict versioned research-run document."""
 
-    _SCHEMA_VERSION = 9
-    _SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5, 6, 7, 8, 9}
+    _SCHEMA_VERSION = 13
+    _SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13}
     _DOCUMENT_FIELDS = {"schema_version", "runs"}
     _RUN_FIELDS_V1 = {
         "run_id",
@@ -112,7 +119,8 @@ class JsonFileResearchRunStore:
         "taint_label",
         "instruction_authority",
     }
-    _FAILURE_FIELDS = {"stage", "reason", "occurred_at"}
+    _FAILURE_FIELDS_V1_V12 = {"stage", "reason", "occurred_at"}
+    _FAILURE_FIELDS_V13 = _FAILURE_FIELDS_V1_V12 | {"provider"}
     _EVIDENCE_FIELDS = {
         "evidence_id",
         "source_document_id",
@@ -131,7 +139,31 @@ class JsonFileResearchRunStore:
         "candidates",
         "discovered_at",
     }
-    _CANDIDATE_FIELDS = {"url", "title", "snippet"}
+    _CANDIDATE_FIELDS_V1 = {"url", "title", "snippet"}
+    #: Version 10 keeps the venue and year the provider already received. A
+    #: version 9 record decodes without them, which is what it truthfully has:
+    #: they were discarded before it was written, and inventing a year for an
+    #: old record is exactly the failure this field exists to prevent.
+    _CANDIDATE_FIELDS_V10 = _CANDIDATE_FIELDS_V1 | {"container", "published_year"}
+    #: Version 12 carries the structured vulnerability record a security
+    #: provider returns. A scholarly candidate stores `null` there and a record
+    #: written before version 12 decodes with none, which is what it has: no
+    #: provider had ever returned one.
+    _CANDIDATE_FIELDS_V12 = _CANDIDATE_FIELDS_V10 | {"vulnerability"}
+    _VULNERABILITY_FIELDS = {
+        "cve_id",
+        "status",
+        "source_identifier",
+        "last_modified",
+        "weaknesses",
+        "metrics",
+        "references",
+        "reference_total",
+        "known_exploited_at",
+        "known_exploited_name",
+    }
+    _VULNERABILITY_METRIC_FIELDS = {"version", "source", "score", "severity"}
+    _VULNERABILITY_REFERENCE_FIELDS = {"url", "source", "tags"}
     _ASSESSMENT_FIELDS_V4 = {
         "assessment_id",
         "source_document_id",
@@ -141,6 +173,15 @@ class JsonFileResearchRunStore:
     }
     _ASSESSMENT_FIELDS_V5 = _ASSESSMENT_FIELDS_V4 | {"supersedes_assessment_id"}
     _ASSESSMENT_FIELDS_V7 = _ASSESSMENT_FIELDS_V5 | {"information_trust"}
+    #: Version 11 records what the operator concluded about the source itself.
+    #: Anything written before it decodes as `unknown` on all four, which is
+    #: what those records truthfully hold: nobody was ever asked.
+    _ASSESSMENT_FIELDS_V11 = _ASSESSMENT_FIELDS_V7 | {
+        "usefulness",
+        "applicability",
+        "independence",
+        "publication_status",
+    }
     _CLAIM_FIELDS = {
         "claim_id",
         "text",
@@ -267,6 +308,15 @@ class JsonFileResearchRunStore:
             7: self._RUN_FIELDS_V7,
             8: self._RUN_FIELDS_V8,
             9: self._RUN_FIELDS_V9,
+            # Version 10 changed the shape of a candidate, not the shape of a
+            # run, so a version 10 run record is a version 9 run record. Version
+            # 11 changed the shape of an assessment, for the same reason.
+            10: self._RUN_FIELDS_V9,
+            11: self._RUN_FIELDS_V9,
+            # Version 12 changed the shape of a candidate again, not the run.
+            12: self._RUN_FIELDS_V9,
+            # Version 13 added optional provider provenance to failures.
+            13: self._RUN_FIELDS_V9,
         }[schema_version]
         if not isinstance(value, dict) or set(value) != expected_fields:
             raise ResearchError("Research run store contains an invalid run record.")
@@ -315,7 +365,9 @@ class JsonFileResearchRunStore:
             sources=tuple(
                 self._parse_source(item, schema_version) for item in sources_data
             ),
-            failures=tuple(self._parse_failure(item) for item in failures_data),
+            failures=tuple(
+                self._parse_failure(item, schema_version) for item in failures_data
+            ),
             created_at=self._parse_datetime(value["created_at"], "created_at"),
             updated_at=self._parse_datetime(value["updated_at"], "updated_at"),
             evidence=tuple(self._parse_evidence(item) for item in evidence_data),
@@ -366,8 +418,13 @@ class JsonFileResearchRunStore:
             ),
         )
 
-    def _parse_failure(self, value: Any) -> ResearchFailureRecord:
-        if not isinstance(value, dict) or set(value) != self._FAILURE_FIELDS:
+    def _parse_failure(self, value: Any, schema_version: int) -> ResearchFailureRecord:
+        expected_fields = (
+            self._FAILURE_FIELDS_V13
+            if schema_version >= 13
+            else self._FAILURE_FIELDS_V1_V12
+        )
+        if not isinstance(value, dict) or set(value) != expected_fields:
             raise ResearchError(
                 "Research run store contains an invalid failure record."
             )
@@ -375,6 +432,7 @@ class JsonFileResearchRunStore:
             stage=value["stage"],
             reason=value["reason"],
             occurred_at=self._parse_datetime(value["occurred_at"], "occurred_at"),
+            provider=value["provider"] if schema_version >= 13 else None,
         )
 
     def _parse_evidence(self, value: Any) -> ResearchEvidenceRecord:
@@ -422,10 +480,21 @@ class JsonFileResearchRunStore:
 
     @staticmethod
     def _parse_candidate(value: Any) -> ResearchSourceCandidate:
-        if (
-            not isinstance(value, dict)
-            or set(value) != JsonFileResearchRunStore._CANDIDATE_FIELDS
+        if not isinstance(value, dict) or set(value) not in (
+            JsonFileResearchRunStore._CANDIDATE_FIELDS_V1,
+            JsonFileResearchRunStore._CANDIDATE_FIELDS_V10,
+            JsonFileResearchRunStore._CANDIDATE_FIELDS_V12,
         ):
+            raise ResearchError(
+                "Research run store contains an invalid source candidate."
+            )
+        year = value.get("published_year")
+        if year is not None and (isinstance(year, bool) or not isinstance(year, int)):
+            raise ResearchError(
+                "Research run store contains an invalid source candidate."
+            )
+        container = value.get("container", "")
+        if not isinstance(container, str):
             raise ResearchError(
                 "Research run store contains an invalid source candidate."
             )
@@ -433,6 +502,9 @@ class JsonFileResearchRunStore:
             url=value["url"],
             title=value["title"],
             snippet=value["snippet"],
+            container=container,
+            published_year=year,
+            vulnerability=_parse_vulnerability(value.get("vulnerability")),
         )
 
     def _parse_assessment(
@@ -445,8 +517,10 @@ class JsonFileResearchRunStore:
             expected_fields = self._ASSESSMENT_FIELDS_V4
         elif schema_version < 7:
             expected_fields = self._ASSESSMENT_FIELDS_V5
-        else:
+        elif schema_version < 11:
             expected_fields = self._ASSESSMENT_FIELDS_V7
+        else:
+            expected_fields = self._ASSESSMENT_FIELDS_V11
         if not isinstance(value, dict) or set(value) != expected_fields:
             raise ResearchError(
                 "Research run store contains an invalid assessment record."
@@ -471,7 +545,45 @@ class JsonFileResearchRunStore:
                 if schema_version < 7
                 else self._parse_information_trust(value["information_trust"])
             ),
+            usefulness=self._parse_judgement(
+                value, schema_version, "usefulness", ResearchSourceUsefulness
+            ),
+            applicability=self._parse_judgement(
+                value, schema_version, "applicability", ResearchSourceApplicability
+            ),
+            independence=self._parse_judgement(
+                value, schema_version, "independence", ResearchSourceIndependence
+            ),
+            publication_status=self._parse_judgement(
+                value,
+                schema_version,
+                "publication_status",
+                ResearchSourcePublicationStatus,
+            ),
         )
+
+    @staticmethod
+    def _parse_judgement(
+        value: dict[str, Any],
+        schema_version: int,
+        field: str,
+        vocabulary: type[Any],
+    ) -> Any:
+        """Return one structured judgement, or `unknown` for a record without one.
+
+        An unrecognised stored value fails the load rather than degrading to
+        `unknown`. A judgement this build cannot read is a judgement somebody
+        made, and quietly showing it as never made would be worse than refusing
+        to open the file.
+        """
+        if schema_version < 11:
+            return vocabulary("unknown")
+        try:
+            return vocabulary(value[field])
+        except (KeyError, TypeError, ValueError) as error:
+            raise ResearchError(
+                "Research run store contains an invalid source judgement."
+            ) from error
 
     @staticmethod
     def _parse_information_trust(value: Any) -> ResearchInformationTrust:
@@ -626,6 +738,7 @@ class JsonFileResearchRunStore:
                     "stage": failure.stage,
                     "reason": failure.reason,
                     "occurred_at": failure.occurred_at.isoformat(),
+                    "provider": failure.provider,
                 }
                 for failure in run.failures
             ],
@@ -653,6 +766,11 @@ class JsonFileResearchRunStore:
                             "url": candidate.url,
                             "title": candidate.title,
                             "snippet": candidate.snippet,
+                            "container": candidate.container,
+                            "published_year": candidate.published_year,
+                            "vulnerability": _encoded_vulnerability(
+                                candidate.vulnerability
+                            ),
                         }
                         for candidate in discovery.candidates
                     ],
@@ -669,6 +787,10 @@ class JsonFileResearchRunStore:
                     "recorded_at": assessment.recorded_at.isoformat(),
                     "supersedes_assessment_id": (assessment.supersedes_assessment_id),
                     "information_trust": assessment.information_trust.value,
+                    "usefulness": assessment.usefulness.value,
+                    "applicability": assessment.applicability.value,
+                    "independence": assessment.independence.value,
+                    "publication_status": assessment.publication_status.value,
                 }
                 for assessment in run.assessments
             ],
@@ -778,3 +900,140 @@ class JsonFileResearchRunStore:
             path.unlink(missing_ok=True)
         except OSError:
             pass
+
+
+def _encoded_vulnerability(
+    record: ResearchVulnerabilityRecord | None,
+) -> dict[str, Any] | None:
+    """Render one vulnerability record as bounded fields, never as raw JSON.
+
+    Only the values the domain already validated are written. Keeping the
+    provider's original document instead would mean storing an unbounded blob
+    whose shape nothing in this system controls, and re-reading structure out of
+    it later would be trusting a response we never checked.
+    """
+    if record is None:
+        return None
+    return {
+        "cve_id": record.cve_id,
+        "status": record.status,
+        "source_identifier": record.source_identifier,
+        "last_modified": (
+            None if record.last_modified is None else record.last_modified.isoformat()
+        ),
+        "weaknesses": list(record.weaknesses),
+        "metrics": [
+            {
+                "version": metric.version,
+                "source": metric.source,
+                "score": metric.score,
+                "severity": metric.severity,
+            }
+            for metric in record.metrics
+        ],
+        "references": [
+            {
+                "url": reference.url,
+                "source": reference.source,
+                "tags": list(reference.tags),
+            }
+            for reference in record.references
+        ],
+        "reference_total": record.reference_total,
+        "known_exploited_at": record.known_exploited_at,
+        "known_exploited_name": record.known_exploited_name,
+    }
+
+
+def _parse_vulnerability(value: Any) -> ResearchVulnerabilityRecord | None:
+    """Decode one stored vulnerability record, or refuse the document.
+
+    Absent means absent — a Crossref candidate never had one. A present but
+    unreadable one fails the load rather than degrading to `None`, because a
+    record this build cannot decode is one somebody discovered, and showing it
+    as never found would be worse than refusing to open the file.
+    """
+    if value is None:
+        return None
+    if (
+        not isinstance(value, dict)
+        or set(value) != JsonFileResearchRunStore._VULNERABILITY_FIELDS
+    ):
+        raise ResearchError(
+            "Research run store contains an invalid vulnerability record."
+        )
+    try:
+        return ResearchVulnerabilityRecord(
+            cve_id=value["cve_id"],
+            status=value["status"],
+            source_identifier=value["source_identifier"],
+            last_modified=_parse_vulnerability_time(value["last_modified"]),
+            weaknesses=tuple(value["weaknesses"]),
+            metrics=tuple(
+                _parse_vulnerability_metric(item) for item in value["metrics"]
+            ),
+            references=tuple(
+                _parse_vulnerability_reference(item) for item in value["references"]
+            ),
+            reference_total=value["reference_total"],
+            known_exploited_at=value["known_exploited_at"],
+            known_exploited_name=value["known_exploited_name"],
+        )
+    except (TypeError, KeyError) as error:
+        raise ResearchError(
+            "Research run store contains an invalid vulnerability record."
+        ) from error
+
+
+def _parse_vulnerability_time(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ResearchError(
+            "Research run store vulnerability time must be ISO-8601 text."
+        )
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError as error:
+        raise ResearchError(
+            "Research run store vulnerability time is invalid."
+        ) from error
+    if parsed.tzinfo is None:
+        raise ResearchError(
+            "Research run store vulnerability time must carry an offset."
+        )
+    return parsed
+
+
+def _parse_vulnerability_metric(value: Any) -> ResearchVulnerabilityMetric:
+    if (
+        not isinstance(value, dict)
+        or set(value) != JsonFileResearchRunStore._VULNERABILITY_METRIC_FIELDS
+    ):
+        raise ResearchError(
+            "Research run store contains an invalid vulnerability metric."
+        )
+    return ResearchVulnerabilityMetric(
+        version=value["version"],
+        source=value["source"],
+        score=value["score"],
+        severity=value["severity"],
+    )
+
+
+def _parse_vulnerability_reference(value: Any) -> ResearchVulnerabilityReference:
+    if (
+        not isinstance(value, dict)
+        or set(value) != JsonFileResearchRunStore._VULNERABILITY_REFERENCE_FIELDS
+    ):
+        raise ResearchError(
+            "Research run store contains an invalid vulnerability reference."
+        )
+    tags = value["tags"]
+    if not isinstance(tags, list):
+        raise ResearchError(
+            "Research run store contains an invalid vulnerability reference."
+        )
+    return ResearchVulnerabilityReference(
+        url=value["url"], source=value["source"], tags=tuple(tags)
+    )

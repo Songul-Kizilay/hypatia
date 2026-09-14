@@ -116,6 +116,15 @@ To create the world's most capable personal AI research companion.
   scholarly-metadata provider used only after an explicit action. Its fixed
   endpoint and redirects use the same public-address-pinned, hostname-verified
   TLS transport as explicit page loading
+- Explicit Crossref and NVD discovery can be placed in one approved two-step
+  plan for the same run question. Each provider still costs one network
+  operation and requires its own Advance action. Read-only provider-quality,
+  side-by-side result, and same-question paired-quality views remain
+  descriptive: they choose no provider and alter no routing or ranking.
+- New discovery failures retain the selected provider beside the same generic
+  safe reason. This lets comparison and Failure Memory distinguish an attempted
+  failed side from a pending side without storing raw provider errors; legacy
+  records remain explicitly unattributed.
 - A separate, versioned and atomically replaced accepted-source content store
   with exact UTF-8 byte count/SHA-256 validation, duplicate and storage bounds.
   Physical reads use the opened file descriptor and stop at 40,000,001 bytes;
@@ -606,7 +615,7 @@ HYPATIA_LLM_TIMEOUT_SECONDS=<positive finite seconds>
 
 If `HYPATIA_LLM_SYSTEM_PROMPT` is absent, Hypatia uses its default system prompt.
 If `HYPATIA_LLM_HISTORY_MAX_TURNS` is absent, the default is 8 conversation turns.
-If `HYPATIA_LLM_TIMEOUT_SECONDS` is absent, chat requests use 120 seconds for an
+If `HYPATIA_LLM_TIMEOUT_SECONDS` is absent, chat requests use 300 seconds for an
 explicit loopback endpoint such as local Ollama and 30 seconds for a non-local
 endpoint. A configured positive finite value overrides either default.
 A positive history limit sends only the most recent N structured turns from the
@@ -629,26 +638,851 @@ runtime is configured and this exact process-environment value is set:
 HYPATIA_LEARNING_ENABLED=true
 ```
 
+When the configured provider exposes the optional `generate_json(...)`
+capability, extraction requests one bounded structured response: a trusted
+system instruction, a 512-token bound, and an exact JSON response schema that
+mirrors the learned-memory parser. Providers exposing only `generate` keep their
+previous plain call. The parser remains the final authority in both cases, so a
+declared schema never bypasses validation; reasoning preambles and
+Markdown-fenced payloads are still rejected.
+
+When extraction fails, Hypatia emits one bounded
+`brain.learned_memory.extraction_failed` event carrying only the request ID and
+the cause class name. It never carries the user message, source text, candidate
+values, or the raw model response. Ordinary chat still succeeds and the
+conversation record is still persisted. No event is emitted for successful or
+no-op extraction.
+
+---
+
+## Research execution persistence
+
+Research-plan execution state is ephemeral by default. To persist it, set:
+
+```text
+HYPATIA_RESEARCH_EXECUTION_PERSISTENCE_ENABLED=true
+```
+
+The value must be exactly lowercase `true`. With the setting absent or any other
+value, execution state stays in memory and is lost when Hypatia exits, exactly as
+before.
+
+When enabled, execution snapshots are written to `research_executions.json`
+beside the research-run store, in a separate versioned document. `ResearchRun`
+and its schema are untouched, so existing snapshots stay valid and no migration
+runs. Deleting the execution file returns the runtime to ephemeral behavior.
+
+Only execution bookkeeping is persisted: step identity, declared capability,
+status, operation identity, the work flag, bounded detail, the plan question, and
+the bound run identity. Authored step instructions, fetched page bodies, source
+excerpts, notes, and claim text are never written, because those already live in
+the research run.
+
+On restart, an execution is restored for inspection, never resumed. A step
+recorded as running when the process ended becomes `interrupted`, since what its
+operation actually did is unknown; completed steps stay completed and pending
+steps stay pending. Authorizations are not persisted, so a restored execution
+cannot be advanced and nothing is replayed. A corrupt store raises at startup
+rather than being replaced by an empty one.
+
+---
+
+## Background research scheduling
+
+Background research is disabled by default. To persist scheduled tasks, set:
+
+```text
+HYPATIA_BACKGROUND_RESEARCH_ENABLED=true
+```
+
+The value must be exactly lowercase `true`. Tasks are written to
+`research_background_tasks.json` beside the research-run store, in a separate
+versioned document; `ResearchRun` and the execution store are untouched.
+
+A task is scheduling bookkeeping around an execution a human already approved.
+Running one drives the existing autonomy service, which drives the existing
+execution service, so a task cannot invent a capability, weaken a budget, accept
+a source, or promote a claim. Only identifiers, status, the declared budget,
+retry counters, a bounded outcome category, and timestamps are stored.
+
+Work is demand-driven: one explicit worker cycle runs a bounded number of
+runnable tasks and returns. There is no thread, no polling, and no busy loop.
+
+Retries are typed, not guessed. Only budget exhaustion is retryable, because it
+means the task did not fail — it ran out of allowance and more work remains. A
+blocked, failed, interrupted, or cancelled run is never retried automatically.
+
+On restart, a task recorded as running becomes `interrupted`, since what it
+achieved is unknown, and it is not replayed. `interrupted`, `paused`, and
+`blocked` remain three different things.
+
+---
+
+## Curiosity
+
+Durable curiosity proposals are disabled by default. To persist them, set:
+
+```text
+HYPATIA_CURIOSITY_ENABLED=true
+```
+
+The value must be exactly lowercase `true`. Proposals are written to
+`research_curiosity_questions.json` beside the research-run store, in a separate
+versioned document.
+
+Curiosity reads a research run and reports where our own record is thin:
+a contradicted claim, an unresolved claim, a claim resting on a single source,
+a multi-source claim without confirmed independent corroboration, a hypothesis
+whose multi-source support is not confirmed independent, an untested hypothesis,
+a question with no accepted sources, a failed source acquisition, a low-trust
+source, narrow provider coverage, an unassessed source, or an accepted source
+nothing cites. A gap says what is missing from the record, never what is true.
+
+Each gap becomes exactly one question, generated from a fixed template rather
+than by a model, so a proposal can only ask about a claim or source the system
+already recorded. Ranking is a stated formula: gap severity dominates, recorded
+claim confidence breaks ties.
+
+With it set, the desktop's **Review** tab gains the curiosity commands: find
+gaps, draft and keep ranked questions, list them, and rule on one. A failed
+durable write is reported rather than announced as a stored proposal or a
+recorded ruling.
+
+Detecting, storing, listing, accepting, and dismissing a question all leave the
+run untouched. Accepting records only that a human thinks the question worth
+pursuing. A separate proposal preview deterministically authors a local-first
+plan: search existing local knowledge with the exact question, then discover
+outside source candidates. Previewing performs none of those steps.
+
+Authorization, foreground start, and execution remain separate explicit
+decisions. Authorization binds the exact plan digest; start consumes it but
+performs zero steps; each Advance performs at most one step. The local search
+uses no network or model budget. Discovery retains its ordinary provider cost,
+and the plan never silently fetches or accepts a source, creates evidence,
+judges a claim, retries work, or queues a background task.
+
+---
+
+## Reflection
+
+Durable reflection history is disabled by default. To keep it, set:
+
+```text
+HYPATIA_REFLECTION_ENABLED=true
+```
+
+The value must be exactly lowercase `true`. Reports are written to
+`research_reflections.json` beside the research-run store, in a separate
+versioned document.
+
+With it set, the desktop's **Review** tab gains reflection: report how a run
+went, optionally keeping the account, and list what was kept. If the durable
+write fails, the response says so instead of reporting a stored reflection.
+
+Reflection reports how a run went, in this order: what failed, what contradicted
+what, which beliefs were revised, what rests on thin evidence, what stayed
+uncertain, what effort went unused, what worked, and what to ask next. Problems
+come before successes deliberately — a reflection that opens with what went well
+is one nobody learns from.
+
+When Reflection counts discovery candidates that never became accepted sources,
+it uses the same conservative canonical resource identity as the rest of the
+research system. Host case, `www.`, a default HTTPS port, a trailing slash, or a
+fragment cannot make accepted work look unused; query strings and path case stay
+distinct.
+
+When a canonical failure record names its provider, Reflection keeps that
+provider in the failure subject and explanation. Older providerless records stay
+under their recorded stage; provider identity is never reconstructed from order
+or error wording.
+
+Every finding detail is normalized to one display line before it can be stored
+or rendered. A line break in an authored or persisted failure reason therefore
+cannot manufacture a second, forged-looking reflection entry; its wording stays
+visible inside the one real finding. The 300-character bound is applied after
+that normalization, so collapsed whitespace does not hide later useful wording;
+a genuinely shortened visible detail ends with `...`.
+
+When one source assessment explicitly supersedes another, Reflection compares
+the canonical records and names only what changed: information trust,
+usefulness, applicability, independence, publication status, or linked
+evidence. An independence-only revision is not called a trust change. A
+wording-only replacement says that no structured source judgement changed, and
+parallel assessments are not presented as revisions because neither replaced
+the other.
+
+Claim revisions follow the same rule. Reflection compares the explicitly
+superseded canonical claim and names only changed epistemic state, authored
+confidence, linked sources, linked evidence, or authored wording. A wording-only
+or identical replacement is still visible as a record change but is not called
+a change in belief.
+
+Every finding describes the process, never the subject. "This claim rests on one
+source" is a fact about our record; "this claim is false" would be a research
+conclusion, and reflection cannot reach one. Producing or storing a report
+performs no operation, mutates no run, establishes no evidence, and promotes
+nothing.
+
+Where reflection and curiosity ask the same question, reflection reuses
+curiosity rather than duplicating it: the thin-record findings come from the gap
+detector, and the "what next" section is curiosity's proposals, reported but
+never stored. When durable hypotheses are available, reflection reads only those
+belonging to the selected run and gives them to the same two components. An
+unanswered discriminating test or multi-source support whose independence is not
+confirmed therefore stays visible as weak evidence and as the same deterministic
+next question. This is still inspection only: no hypothesis, evidence relation,
+assessment, status, or confidence is changed. If hypothesis state is unavailable,
+the run-side reflection remains available without inventing the missing half.
+
+There is no recursive reflection. Only a research run can be reflected on; a
+stored report is not a run, and no intent accepts one. A system that reflects on
+its reflections produces endless commentary and no new knowledge.
+
+---
+
+## Failure memory
+
+Remembered lessons are disabled by default. To keep them, set:
+
+```text
+HYPATIA_FAILURE_MEMORY_ENABLED=true
+```
+
+The value must be exactly lowercase `true`. Lessons are written to
+`research_failure_lessons.json` beside the research-run store, in a separate
+versioned document.
+
+With it set, the desktop's **Learning** tab gains the lesson half: preview what
+a run's record would support, remember it, recall what overlaps a question, and
+review everything kept. Without it that half is absent rather than disabled.
+
+A lesson collapses its statement and context to a single line when it is
+created. Lessons are listed one per line, and a failure reason is free text, so
+a line break inside one would otherwise arrive in the report as an extra entry
+carrying a lesson kind of its own choosing. The rule lives on the record rather
+than in each renderer, because a rendering convention every composer has to
+remember is one a composer eventually forgets.
+
+If that durable write fails, the store request returns `success=false` and says
+that the lessons exist only in the current process and may be lost on restart.
+The lessons are not erased from memory. Repeating the explicit store request
+retries the pending write; there is no background or unbounded retry loop.
+
+Eight kinds of lesson are derived from what a run recorded: a claim named in a
+contradiction, a hypothesis we stopped holding, another kind of claim we
+revised, a trust or independence assessment we explicitly corrected, a source
+we accepted and then judged weak, a confidence that moved, a search that
+returned candidates and accepted none, and a stage that failed. If trust and
+independence change in the same supersession they remain one assessment lesson;
+parallel judgements and wording-only revisions are not misreported as
+corrections. Only an authored `hypothesis` becomes a failed-hypothesis lesson;
+superseded facts, likely claims, speculation, unknowns, and other claim states
+are recorded as revised claims.
+
+Every lesson names the persisted records it came from, and one without
+provenance is refused at construction and again on load. That rule is the whole
+point of the store: an opinion with no provenance outlives the reasoning behind
+it and quietly hardens into a belief nobody can audit.
+
+The templates are careful about what they assert. A superseded hypothesis is
+recorded as abandoned, not disproved, while another superseded epistemic state
+is recorded as a revised claim rather than being mislabeled as a failed
+hypothesis. A barren search is a result about that query, not a verdict on the
+provider. A lesson records that something did not work here, never that it
+cannot work.
+
+An explicit `failure_memory_hypothesis_store` request can also remember the
+current appraisal of hypotheses that are already in the durable hypothesis
+store for one research run. `weakened` produces a `disproving_evidence` lesson
+and `contradicted` produces a `failed_hypothesis` lesson; `open`, `supported`,
+and `withdrawn` produce none. This is not an event listener or background
+write. Repeating the request is idempotent, and a weakened hypothesis that is
+later contradicted can retain both distinct, provenance-backed lessons without
+either lesson claiming that the hypothesis is true or false.
+
+That same explicit request can remember a source trust or independence
+correction tied to a hypothesis, but only when the supporting-evidence relation
+has its own recorded authoring time and was already standing when an explicitly
+superseding assessment changed that source judgement. A revision changing both
+dimensions remains one `invalid_assumption` lesson, naming the hypothesis,
+evidence, source document, and both assessment records. A missing structured
+judgement is not a failure; parallel assessments are not a correction; legacy
+untimed support, support added after the correction, unrelated sources, and
+withdrawn hypotheses do not produce this lesson. Nothing is inferred from
+wording or record order, and no event or background path stores it
+automatically.
+
+Each such lesson quotes the hypothesis in the wording it was written in. An
+outcome recorded only as a record ID is unreadable by the time anyone needs it,
+and recall matches on shared words, so a lesson made entirely of fixed phrasing
+would match every later question containing a word like "evidence". The
+quotation is collapsed to one line and shortened before the sentence around it,
+so a long or multi-line hypothesis can neither forge report lines nor push the
+truth-neutrality disclaimer off the end.
+
+Recall is advisory and stays advisory. Creating a research run surfaces the
+remembered lessons whose wording overlaps the new question, and asking for them
+directly returns the same thing ranked, bounded, and clearly labelled — it
+blocks no plan, refuses no capability, downgrades no claim, and edits no run.
+The run is persisted before recall is consulted and advice cannot fail it: a
+recall that turned a saved run into a reported failure would be worse than no
+recall at all. Relevance needs at least two shared words, because every lesson
+shares some vocabulary simply by being a lesson, and advice nobody trusts is
+worse than no advice — it teaches people to skip the part worth reading. A system that
+stops trying things because something similar failed once has swapped research
+for superstition. Matching is deliberately dumb word overlap rather than a model
+deciding which past failures apply, because that judgement would be confident
+and unauditable in exactly the way this project avoids.
+
+---
+
+## Claim calibration
+
+Calibration compares what a claim asserts against the evidence structure behind
+it. It needs no flag, because it writes nothing: the report is derived from
+canonical state on every request, so there is no second copy to drift from the
+record or be believed by mistake.
+
+It is reachable from the desktop's **Review** tab, and needing no flag is why
+that tab exists wherever runs do: reflection and curiosity add their sections
+when kept, and calibration is there either way.
+
+The ceilings are stated rules rather than a hidden score:
+
+| Evidence structure | Supports at most |
+| --- | --- |
+| Contradicted | contradicted, unassessed |
+| One source, not assessed | hypothesis, low |
+| One source, assessed high | likely, medium |
+| Two or more sources, not all assessed or not all explicitly independent | likely, medium |
+| Two or more sources, all assessed medium or better and explicitly independent | strong evidence, high |
+
+Nothing supports `fact`. No configuration of sources in our own record has ever
+been enough to make a claim a fact, so calibration will not pretend otherwise.
+
+Distinct pages are not automatically independent witnesses. The strong-evidence
+ceiling requires an explicit `independent` judgement for every corroborating
+resource. `unknown`, `derivative`, a likely duplicate, or conflicting active
+judgements keep the ceiling at `likely, medium`. Missing independence does not
+raise a warning by itself; it simply cannot supply evidence that was never
+recorded.
+
+Assessment-aware warnings use that same canonical resource boundary. If one
+page was accepted under equivalent URLs more than once, one underlying concern
+produces one warning rather than one warning per stored document; the derived
+warning still carries every linked evidence ID and exact assessment provenance.
+
+A ceiling is not a verdict on truth. Meeting it does not make a claim true and
+exceeding it does not make one false — it describes what our record can bear the
+weight of. And the asymmetry is deliberate: claiming more than the record can
+carry is reported, claiming less is not. Being careful is not an error, and
+calibration has no business talking anyone into more confidence.
+
+Calibration never edits a claim. An epistemic state is someone's judgement about
+what they are willing to assert, and quietly downgrading it would be overruling
+that judgement while presenting the change as bookkeeping.
+
+---
+
+## Source reputation
+
+Reputation aggregates our own assessments by origin, across every run. Like
+calibration it needs no flag and writes nothing: it is recomputed from the
+assessments on every request, so revising one assessment revises the reputation
+and a reputation can never outlive the judgements behind it.
+
+Only authored assessments count. Nothing reads a model's opinion of a source or
+infers quality from a URL, and acceptance is not approval — a source is accepted
+because someone chose to read it, which says nothing about whether it was any
+good.
+
+Equivalent records of one canonical resource count as one assessed sample. If
+their active authored trust labels differ, the least-trusting label represents
+that resource regardless of run order; an earlier high label cannot hide a
+still-active low one.
+
+There is no score. A single number would compress "we assessed three pages from
+this host, two low and one high" into something that looks precise, travels
+easily, and cannot be argued with. The counts stay separate so the reader can
+see the sample they are being asked to generalise from.
+
+Below three assessments the standing is `provisional` and says so. Two bad
+experiences is a coincidence, and calling it a reputation would let one unlucky
+pair of pages permanently colour how everything from that host is read.
+
+Nothing a reputation says gates anything. A low standing refuses no fetch,
+discounts no evidence, pre-assesses no new source, and changes no existing
+assessment. Whether a source is worth reading stays a judgement someone makes
+while looking at it. Reputation events deliberately carry no origin name, because
+a log line pairing a host with a low standing is exactly the artefact that gets
+quoted later without its sample size.
+
+---
+
+## Research plan approval
+
+Recording approvals is disabled by default. To keep them, set:
+
+```text
+HYPATIA_PLAN_AUTHORIZATION_ENABLED=true
+```
+
+The value must be exactly lowercase `true`. Approvals are written to
+`research_plan_authorizations.json` beside the research-run store, in a separate
+versioned document bounded to 500 records.
+
+With it set, the Research (Advanced) plan area gains an approval section that
+uses the plan already on screen. Preview shows exactly what confirming would
+record and writes nothing; confirming records that exact approval; listing
+reports what has been approved and whether each is still valid.
+
+An approval names the plan by content rather than by identifier. `plan_id` is
+the preview someone is looking at and changes every time; `plan_digest` is the
+question, the ordered steps, and everything each step declares. Both are shown
+together, because approving one plan while believing you approved another is the
+failure this whole boundary exists to prevent. Edit the plan after previewing
+and confirmation refuses it rather than silently covering the change.
+
+Confirming records permission. It does not exercise it: nothing is fetched, no
+model is called, and nothing is queued. Starting is a separate, explicit act.
+
+Starting one foreground execution spends one approval, permanently. The approval
+is checked against the exact plan, run, capabilities, budget and disclosure at
+the moment of starting, and is then written as used before any execution exists.
+An attempt that fails, blocks, is cancelled, or dies still spent it — the
+approval was for the attempt, not for its success — and nothing refunds or
+renews one. An expired or spent approval stays listed for audit and can never
+cover anything again.
+
+A started execution can then be watched, stepped, and stopped. Refresh reports
+its canonical state, what the next step would use, and how much of the approved
+budget remains. Advance attempts exactly one step and stops; the next step needs
+another press. Cancel is final and returns neither the approval nor the budget
+already spent.
+
+Every advance is checked against the approved budget before anything is
+attempted, and charged at the attempt boundary, so a step nobody can afford runs
+nothing and a step that failed is not refunded. Time is counted inside attempts
+rather than since the execution began, because an execution stepped by a person
+is idle between presses and idle entirely while Hypatia is closed.
+
+Nothing advances unless you ask. There is no loop, nothing schedules, repeats,
+or follows up, no background work is queued, and one execution cannot start
+another.
+
+The model-disclosure decision is recorded on every approval and defaults to
+`none`. Being allowed to read something locally is not being allowed to send it
+to a model endpoint. Nothing reads that decision yet: it is not wired into LLM
+transport.
+
+---
+
+## Hypotheses
+
+Hypotheses are disabled by default. To keep them, set:
+
+```text
+HYPATIA_HYPOTHESIS_ENABLED=true
+```
+
+The value must be exactly lowercase `true`. They are written to
+`research_hypotheses.json` beside the research-run store, in a separate
+versioned document.
+
+With it set, the desktop's **Learning** tab gains the hypothesis half: propose
+one with its defeater, enter recorded evidence on either side, withdraw, and
+review derived standing. The two opt-ins are independent, so a build keeping
+one shows only the half it can honour. Remembering hypothesis outcomes into
+failure memory needs both, and is offered only where both are kept.
+
+If a proposal, evidence entry, or withdrawal cannot be written durably, the
+response returns `success=false`, keeps the updated appraisal in the current
+process, and warns that restart may lose the change. Store paths and native
+errors are never included in the response.
+
+Every hypothesis must name what would count against it, before any evidence
+exists, while it is still cheap to be honest about what would change your mind.
+A conjecture that names nothing capable of counting against it is refused: it is
+a belief with better manners, and it will survive any amount of evidence because
+nothing was ever allowed to threaten it.
+
+Supporting and opposing evidence go in separate lists and are never netted. A
+count of three-for and two-against is a real situation someone has to read; a
+score of "+1" is that situation destroyed. The same evidence cannot be entered
+on both sides, and all evidence must already be recorded in the run.
+
+The status rules are asymmetric on purpose:
+
+| Evidence | Status |
+| --- | --- |
+| None, or one supporting source | open |
+| Two or more supporting sources, but any is unassessed, low trust, or not explicitly independent | open |
+| Two or more supporting sources, all actively assessed medium/high and explicitly independent, none opposing | supported |
+| Opposing only | contradicted |
+| Both | weakened |
+| Withdrawn | withdrawn |
+
+Any opposing evidence at all moves a hypothesis off the supported track, while
+positive support needs more than one independent source and an active authored
+trust assessment of at least `medium` for every supporting source. The appraisal
+shows trust and explicit-independence coverage on each side, plus the lowest
+active trust. `unknown`, derivative, likely-duplicate, or conflicting active
+independence judgements keep positive support `open`; superseded assessments do
+not count. That asymmetry is the whole reason a discriminating test is required
+— softening it would make disconfirmation just another input to be outvoted.
+
+The appraisal renders the authored statement and discriminating test as one
+bounded line under their own labels. Embedded line breaks therefore cannot
+manufacture a second status or evidence-total line, while the canonical
+hypothesis still keeps the admitted authored wording unchanged.
+
+Hypothesis History applies the same line-integrity rule to the operator's
+evidence notes. A note is collapsed before its 80-character display bound and
+the final renderer repeats that defence, so note text cannot masquerade as a
+second relation, standing, or withdrawal entry. This changes only the derived
+view; the evidence record is not rewritten.
+
+There is no confirm intent and no status meaning true. Propose, support, oppose,
+withdraw, and list are the entire vocabulary. `supported` means corroborated
+positive evidence passed the explicit authored-trust boundary and none opposes
+it, which is still where most abandoned theories stood right up until the
+observation that undid them. A system that could mark something confirmed would
+be asked to, and once something is filed as confirmed nobody goes looking for
+what would have undone it.
+
+Status is never stored, only derived, so it cannot disagree with the evidence
+sitting beside it.
+
+---
+
+## Vulnerability family graph
+
+The weakness taxonomy is disabled by default. To keep it, set:
+
+```text
+HYPATIA_VULNERABILITY_GRAPH_ENABLED=true
+```
+
+The value must be exactly lowercase `true`. It is written to
+`vulnerability_families.json` beside the research-run store, in a separate
+versioned document.
+
+With it set, the desktop grows a **Security** tab: record a class, relate two
+classes with a required reason, and ask what lies around one. Without it the tab
+is absent rather than disabled, on the same rule the Tools tab follows — a form
+that accepted weakness classes and forgot them at the next restart would be
+worse than no form, because the work would look saved. For the same reason a
+failed durable write is reported as a failure and the entry is kept for the
+session, rather than being announced as recorded.
+
+The graph answers one defensive question: given a class of weakness, what else
+is worth thinking about? The usual mistake in security work is treating one
+finding as one problem and missing the four siblings that come from the same
+design decision.
+
+Everything it holds is conceptual. A family is a class of weakness — "improper
+access control", "server-side request forgery" — never a system. The record has
+no field for a target, a host, an affected version, a payload, or a proof of
+concept, so none of those can be carried even by someone who wanted to. A schema
+that offers nowhere to put an exploit is a better guarantee than a rule asking
+people not to, and the tests assert that shape directly.
+
+Edges are authored and must say why they hold. Nothing infers a relationship
+from similar names or co-occurrence: a graph that grows itself fills with
+plausible connections nobody checked and then gets trusted anyway. An
+unexplained edge is one nobody can evaluate or argue with later, so the
+reasoning is required at the cheapest moment to demand it.
+
+`specializes` builds the taxonomy and is kept acyclic. `enables` is directional
+and is only ever followed forwards, because reading it backwards silently turns
+"this can lead to that" into a different and often wrong claim.
+`shares_root_cause`, `shares_mitigation`, and `related_to` are symmetric.
+
+Traversal is bounded in depth and count. An unbounded neighbourhood query on a
+well-connected taxonomy returns everything and means nothing.
+
+---
+
+## The security agent
+
+The security agent audits Hypatia, and only Hypatia. It needs no flag because it
+writes nothing: the report is derived from persisted state on every request.
+
+There is no scan intent, no probe intent, no target parameter, and no field
+anywhere in the component for someone else's system. An agent that reached
+outward would need authorisation this software has no way to establish, so it
+does not have the vocabulary to try. The audit opens no socket, and a test
+asserts that by making every socket call raise.
+
+The checks cover what the domain types do *not* already guarantee. `ResearchRun`
+refuses evidence citing a missing source and claims citing missing evidence at
+construction, so re-checking those here would be theatre that inflates the count
+of things audited. What no type checks is the shape of a persisted source URL,
+its content type, whether its timestamps are ordered, or whether the same page
+was accepted twice:
+
+| Check | Severity |
+| --- | --- |
+| Source claims instruction authority | high |
+| Source lost its untrusted-data label | high |
+| Source names a loopback or private address | high |
+| Source URL carries embedded credentials | high |
+| Source not obtained over HTTPS | medium |
+| The same URL accepted more than once | medium |
+| Stored content type the fetch boundary rejects | low |
+| Fetched after it was added | low |
+
+The duplicate-URL check matters more than it looks. Calibration and hypothesis
+appraisal now collapse near-certain equivalent URLs to one resource before
+counting corroboration, but the duplicate persisted records remain visible to
+the audit because they still signal ingestion quality and provenance debt.
+
+The address check is deliberately literal rather than resolved. Re-resolving a
+hostname at audit time would be a network call the audit has no authorisation to
+make, and a DNS answer today says nothing about the answer when the source was
+fetched — the resolution that mattered already happened at the fetch boundary,
+where it was pinned.
+
+Every report states what it examined alongside what it found, because "no
+findings" over nothing examined and "no findings" over four hundred sources are
+very different sentences. A clean report says explicitly that these specific
+properties held in the data just now, not that the system is safe.
+
+Nothing is repaired automatically. A finding says what is wrong; deciding what to
+do about a source already accepted, cited, and reasoned from is a judgement with
+consequences the auditor cannot see.
+
+---
+
+## Ordinary chat never performs research
+
+Hypatia can chat, and Hypatia can research. They are different subsystems, and
+ordinary chat is not allowed to sound like the other one.
+
+When a plain chat message explicitly asks for something only research can
+supply — the day's news, current events, recent papers, academic sources,
+"search the internet", or "cite your sources" — the message does not reach the
+language model at all. Hypatia answers deterministically instead: live research
+was not performed, no network was reached, no candidate was discovered, no
+source was accepted, no evidence was recorded, and here are the canonical
+counts. It then points at the explicit research workflow, where each step is
+authored and authorized separately.
+
+The detector is a fixed phrase table, not a model and not a score. It grants
+nothing: it cannot create a plan, authorize a capability, accept a source, or
+spend a network operation. Its only possible effect is to make Hypatia describe
+what it did not do, so an over-eager match costs a disclaimer rather than an
+action.
+
+Asking what evidence Hypatia collected is answered from persisted research state
+and nothing else. Runs, discovered candidates, accepted sources, evidence
+records, assessments, claims, and contradictions are reported as separate
+counts, because a discovery is not an acceptance, an acceptance is not evidence,
+and evidence is not a verified claim.
+
+A system prompt cannot make a model honest, so a second, deterministic guard
+runs after generation. If a reply claims research in the first person — "I
+researched", "my sources show", "arastirdim" — it is annotated with a bounded
+correction naming the canonical counts and stating that anything it called a
+source is model output. The model text is never deleted: you should see both the
+claim and the correction.
+
+---
+
+## Choosing a local model
+
+Hypatia depends on no particular provider or model. Anything speaking the
+OpenAI-compatible chat API works, and the model is configuration, never
+architecture.
+
+For local development the practical constraint is latency, not quality. On a
+mid-range machine a 4B reasoning model can take around twenty seconds for a
+trivial arithmetic question, and a full Hypatia turn — which also builds memory
+context and runs extraction — noticeably longer.
+
+A fast development profile:
+
+```text
+HYPATIA_LLM_MODEL=qwen3:1.7b
+```
+
+An even lighter fallback when that is still slow:
+
+```text
+HYPATIA_LLM_MODEL=gemma3:1b
+```
+
+A higher-quality profile for real work:
+
+```text
+HYPATIA_LLM_MODEL=qwen3:8b
+```
+
+Set the model deliberately; Hypatia does not change a configured model on your
+behalf. Smaller models mix languages, over-explain, and drift from the newest
+message more often. That is a model limitation, not something the runtime can
+promise away — the guarantees Hypatia does make, about never claiming research
+it did not perform, hold regardless of which model is configured.
+
+Conversation history is bounded by default, at twelve turns. With a small
+context window an unbounded transcript pushes the newest message toward the
+truncation edge, which is how a model ends up answering the previous question.
+To change it:
+
+```text
+HYPATIA_LLM_HISTORY_MAX_TURNS=24
+```
+
+The literal `unbounded` restores unlimited history.
+
+---
+
+## What a research fetch identifies as
+
+Research fetches send a descriptive agent string naming the product and version
+and nothing else — no browser markers, no tracking, no machine or user identity.
+
+Some sites refuse non-browser clients that do not name a contact, and that
+refusal is legitimate. The operator can append their own:
+
+```text
+HYPATIA_RESEARCH_USER_AGENT_CONTACT=https://example.org/your-project
+```
+
+Hypatia will not invent a contact on your behalf, and the override cannot
+impersonate a browser: a value containing a browser marker is refused, as are
+overlong values and anything carrying a line break. A 403 stays a 403. Dressing
+up as Chrome to get past one is bypassing an anti-bot control, and the answer to
+a site saying no is to identify honestly or accept the no.
+
+### DOIs and publisher redirects
+
+Crossref discovery works and returns real candidates. Loading one as a source
+often does not, and that is usually correct behaviour rather than a bug: DOI
+resolution redirects to a publisher, and those redirects frequently land on plain
+HTTP or on a PDF, both of which the fetch boundary refuses.
+
+Crossref metadata does carry a `link` field, and it was checked against the live
+API rather than assumed. The links returned are plain-HTTP PDF URLs, so exposing
+that field would not make DOI loading work under the current safety policy — it
+would add surface for no benefit. The honest result stands: the candidate was
+discovered, and its content could not be fetched safely.
+
+A direct public HTTPS page travels the whole path. A live run against
+`https://portswigger.net/web-security/web-cache-deception` fetched, indexed,
+attached to the run, and recorded evidence, ending at one accepted source.
+
+---
+
+## Manual diagnostics
+
+Two developer-only checks live under `tools/diagnostics/`. Neither is part of
+the runtime, neither adds a dependency, and both default to temporary data.
+
+### Durable memory
+
+```bash
+python tools/diagnostics/durable_memory_check.py
+```
+
+Runs three stages that do not prove the same thing. The first teaches a fact.
+The second restarts the runtime and asks again in the same session — a weak
+observation, because that session's transcript still contains the teaching turn
+and the model can read the answer straight out of it. The third asks in a
+session created empty, where the transcript is provably zero messages, so
+persisted learned memory is the only channel left. Only the third result is
+evidence of durable memory, and the report labels them accordingly.
+
+Pass `--real` to use the actual desktop memory file instead of a temporary one.
+
+### Research pipeline
+
+```bash
+python tools/diagnostics/research_pipeline_check.py "your question"
+```
+
+Walks the real pipeline and reports each stage separately, because each is a
+different claim: a network request is not a discovery, a discovery is not an
+acceptance, an acceptance is not evidence, and evidence is not a verified claim.
+
+Nothing is promoted automatically. With no flags nothing touches the network.
+`--discover` performs one real discovery request. `--accept N` selects that
+candidate, or `--url` names a source directly. `--evidence` records one evidence
+record from the accepted source. Assessments and claims are never produced by
+the diagnostic at all; they require authored steps.
+
+Two things worth knowing before running it against real sources. Crossref
+candidates are DOI URLs, and publisher redirects are frequently plain HTTP, so
+the fetch is refused at the HTTPS boundary — that refusal is the boundary
+working, not a failure of the run. And some sites, Wikipedia among them, reject
+Hypatia's user agent with HTTP 403; the fetch fails honestly rather than
+retrying under a disguise.
+
 The following optional settings control which learned memories are supplied to
 the LLM as additional context:
 
 ```text
 HYPATIA_LEARNED_MEMORY_CONTEXT_LIMIT=<non-negative integer>
-HYPATIA_LEARNED_MEMORY_SELECTOR=keyword|ranked
+HYPATIA_LEARNED_MEMORY_SELECTOR=keyword|ranked|none
 HYPATIA_RANKED_LEARNED_MEMORY_SELECTOR_LIMIT=<non-negative integer>
 ```
 
 `HYPATIA_LEARNED_MEMORY_CONTEXT_LIMIT` limits the final learned-memory context.
-With no selector configured, Hypatia keeps its existing current-memory order.
+
+With no selector configured, Hypatia defaults to the deterministic `ranked`
+selector bounded to 8 learned memories. Ordinary chat therefore supplies only
+memories whose keys or values share a token with the current user message, and
+never more than 8 of them. `HYPATIA_RANKED_LEARNED_MEMORY_SELECTOR_LIMIT`
+overrides that bound in the default case as well.
+
 `keyword` selects matching memories deterministically; `ranked` orders relevant
 memories by deterministic keyword relevance. The ranked selector limit is
 applied first, then the final context limit is applied. A ranked limit of `0`
-therefore selects no learned memories. The ranked selector limit is ignored
-unless `HYPATIA_LEARNED_MEMORY_SELECTOR=ranked`.
+therefore selects no learned memories. The ranked selector limit is ignored when
+`HYPATIA_LEARNED_MEMORY_SELECTOR=keyword`.
+
+`none` disables request-specific selection and restores the earlier behavior of
+supplying every current learned memory in its existing order. That path is
+unbounded unless `HYPATIA_LEARNED_MEMORY_CONTEXT_LIMIT` is also set, so it is no
+longer the default.
+
+---
+
+## Semantic memory in ordinary chat
+
+Semantic retrieval during ordinary conversation is opt-in and off by default:
+
+```text
+HYPATIA_CHAT_SEMANTIC_MEMORY_ENABLED=true
+```
+
+It has no effect unless the semantic-memory runtime is also enabled through
+`HYPATIA_SEMANTIC_MEMORY_ENABLED=true`. With the flag absent, ordinary chat is
+byte-for-byte the deterministic bounded ranked-keyword path described above and
+issues no embedding call.
+
+When enabled, one user turn performs at most one semantic query against the
+already built index. Hypatia does not build a second index, store, or cache, and
+never starts an index rebuild from the conversation path. Candidates are fused
+with the deterministic keyword selection through the existing
+`HybridSemanticMemoryRanker`, deduplicated by learned-memory identity, and
+bounded by `HYPATIA_LEARNED_MEMORY_CONTEXT_LIMIT` or 8 when that is unset.
+
+Only the current value for a learned-memory key can enter the context. A
+semantic hit on a superseded record is rejected, so a correction is never
+resurrected.
+
+If the semantic runtime is absent, rebuilding, stopped, or its embedding
+provider fails, Hypatia falls back to the deterministic bounded path and the
+conversation still succeeds. A failed query emits one bounded
+`brain.chat_semantic_memory.query_failed` event carrying only the request ID and
+the cause class name. Explicit lexical recall and explicit semantic recall are
+unchanged.
 
 All numeric learned-memory limits must be non-negative integers. Invalid values
-or a selector value other than the exact lowercase `keyword` or `ranked` cause
-startup configuration to fail clearly instead of silently changing context.
+or a selector value other than the exact lowercase `keyword`, `ranked`, or
+`none` cause startup configuration to fail clearly instead of silently changing
+context.
 
 The semantic-memory index is currently a tested, in-memory building block. An
 explicit Ollama `/api/embed` adapter is available for a local Ollama service,

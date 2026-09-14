@@ -2,18 +2,167 @@
 
 ## Runtime Version
 
-`v0.3.117 (Genesis)`
+`v0.3.347 (Genesis)`
 
-This is the version reported by the runtime and package metadata. It captures
-the semantic-memory, ranked learned-memory, LLM transport-safety, explicit
-local-RAG, local knowledge-graph, and quality-gate work merged after `v0.2.0`.
+This is the current source/package version. The milestone ledger is CHANGELOG.md;
+the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.347 persists the bounded outcome of the already-authorized third
+source investigation after a tentative semantic conflict. The record contains
+only canonical identities, fingerprints and a typed `unresolved` or
+`structurally_clarified` result; it does not select a truth, promote a claim,
+close a run, or declare a goal satisfied. v0.3.346 makes the existing public
+execution-start refusal reason visible at the goal boundary, including a safe
+durable-snapshot failure. Neither release adds a lifecycle transition,
+scheduler behavior, new authority, persistence store or automatic run closure.
+
+### 2026-09-08 checklist reconciliation
+
+The new user-supplied master checklist sets the product priorities. Its checked
+and unchecked boxes are not implementation evidence. In particular, research
+execution, bounded continuation, execution persistence and NVD provider code
+already exist; they must be assessed and reused before introducing duplicate
+AgentRun stores or a second executor.
+
+See [the current priority assessment](docs/Roadmap/Master_Checklist_Reconciliation.md)
+for source/test pointers, unresolved requirements, and the next acceptance
+scenario. The full natural-language autonomous research/report journey remains
+unproven. Autonomous target exploitation is not a development deliverable.
+
+Version v0.3.320 passed Linux and Windows CI and
+fixes the default-scope Kali timeout mismatch. Local validation completed:
+5,787 tests OK with 3 platform skips, plus Ruff, Black, MyPy and diff checks.
+Version v0.3.321 adds a question-to-opening-plan preview (local search followed
+by explicitly selected provider discovery). The full autonomous research journey
+remains open. Version v0.3.322 adds explicit desktop transfer into the existing
+approval/start interface, preserving the exact typed opening and digest.
+Local validation for v0.3.321 completed: 5,795 tests OK with 3 platform skips,
+plus Ruff, Black, MyPy and diff checks. Remote CI must be checked against the
+exact release commit; local results do not establish remote success.
+Windows and Linux CI for v0.3.321 both completed successfully. Local validation
+for v0.3.322 completed: 5,803 tests OK with 3 platform skips; Black, Ruff and
+MyPy passed. Windows and Linux CI for v0.3.322 subsequently both passed.
+Version v0.3.323 adds a bounded transient fetched-text result to ordinary advance
+and foreground continuation. It is not yet a desktop reader or evidence extractor.
+Local validation for v0.3.323 completed on 2026-09-10: 5,813 tests OK with
+3 platform skips; 62 focused tests, Black, Ruff, MyPy and diff checks passed.
+Remote CI must be checked against the exact release commit before claiming success.
+Windows and Linux CI for v0.3.323 both subsequently passed at `abf06d0`.
+Version v0.3.324 adds the desktop Source previews reader. Local validation:
+5,822 tests OK with 3 platform skips; 203 focused desktop tests, Black, Ruff and
+MyPy passed. Real Tk widget and execution-to-reader checks passed without target
+traffic. Remote CI must be verified against this release's exact commit.
+Windows and Linux CI for v0.3.324 both passed at `e43179c`.
+Version v0.3.325 adds the no-write recorded-candidate acquisition-batch preview
+through Brain and the desktop controller. Visual selection/handoff remains open;
+this is not yet a complete point-and-click acquisition workflow. Local validation:
+5,829 tests OK with 3 platform skips; 24 focused tests, Black, Ruff, MyPy and
+diff checks passed. Remote CI requires the exact release commit's result.
+Windows and Linux CI for v0.3.325 both passed at `1474e62`.
+Version v0.3.326 connects a desktop candidate basket to exact typed acquisition
+draft review and the existing approval/start controls. The controller rechecks
+current discovery membership and plan digest before approval preview, confirmation
+and start. Local validation completed: 5,836 tests OK with 3 platform skips;
+47 focused tests, Black, Ruff, MyPy and a real Tk selection smoke passed.
+Remote CI must be checked against this release's exact commit.
+Windows and Linux CI for v0.3.326 passed at `5db183a`.
+Version v0.3.327 introduces transient local keyword passage proposals with exact
+quotations and source ranges. This is not semantic evidence extraction or source
+acceptance. Local validation completed: 5,844 tests OK with 3 platform skips;
+49 focused tests, Black, Ruff, MyPy and real Tk passage/cleanup checks passed.
+Remote CI must be checked against the exact release commit.
+
+Windows and Linux CI for v0.3.327 passed at `8222100`.
+Version v0.3.328 adds an unconnected structured semantic evidence adapter with
+exact quotation/provenance validation. It is not a live model UI feature.
+Local validation completed: 5,863 tests OK with 3 platform skips; 44 focused
+tests, Black, Ruff, MyPy and an existing-provider/fake-transport smoke passed.
+No model network request was made. Explicit question/source-bound disclosure
+and budget enforcement must precede runtime integration. Remote CI must be
+checked against the exact release commit.
 
 ## Delivery Terminology
 
+Windows and Linux CI for v0.3.328 passed at `0fea620`.
+Version v0.3.329 adds immutable reviewable semantic inputs and adapter-side
+changed-fingerprint rejection, not disclosure authorization or a live UI action.
+Local validation completed: 5,870 tests OK with 3 platform skips; 51 focused
+tests, Black, Ruff, MyPy and diff checks passed. No live model call was made.
+Remote CI must be checked against the exact release commit.
+
+Windows and Linux CI for v0.3.329 passed at `f7a74c2`.
+Version v0.3.330 preserves approved disclosure in live execution contexts through
+Start and Advance/Continue. Restored contexts default to NONE; no new model
+operation or disclosure recovery is enabled. Local validation completed:
+5,878 tests OK with 3 platform skips; 61 focused tests, Black, Ruff, MyPy and
+diff checks passed. Remote CI requires this release's exact commit.
+
+Windows and Linux CI for v0.3.330 passed at `be2dc87`.
+Version v0.3.331 makes an exact input/model-bound semantic proposal step executable
+through the existing approval, Start and Advance/Continue chain. Model/network
+attempts are budgeted before dispatch; validated proposals remain transient and
+unaccepted. Local validation completed: 5,899 tests OK with 3 platform skips;
+59 focused tests, Black, Ruff, MyPy and diff checks passed. The default runtime
+and desktop are not yet connected to this operation. No live model call was made.
+Remote CI must be checked against this release's exact commit.
+
+Windows and Linux CI for v0.3.331 passed at `9f6176d`.
+Version v0.3.332 connects one explicit goal/scope/budget action to the existing
+opening planner, canonical approval and autonomous execution. Local search and
+selected-provider discovery run without further Continue clicks. It remains an
+opening only: the response says research is incomplete, not that the question
+has been answered. See [the autonomous connection assessment](docs/Roadmap/Autonomous_Research_Connection_Assessment.md).
+Local validation: 5,917 tests OK with 3 platform skips; 111 final focused tests,
+Black, Ruff, MyPy (512 source files), diff checks and a real Tk layout smoke
+passed. No live model or external discovery was tested. Remote CI requires
+verification against the exact new commit.
+
+Windows and Linux CI for v0.3.332 passed at `d9ed83b`.
+Version v0.3.333 connects a single confirmed reference mission through one
+automatically selected/fetched/accepted source and one grounded evidence record.
+All five steps reuse the same consumed approval and cumulative execution
+allowance. Evidence is lexically selected and source-validated, not a verified
+claim. Comparison, contradictions, follow-up planning, completion evaluation and
+a cited final answer remain beyond the automatic boundary. See the updated
+autonomous connection assessment for exact bounds and validation status.
+Local v0.3.333 gates: 5,938 tests OK with 3 existing platform skips, 146 focused
+tests, Black/Ruff/MyPy (514 source files), diff checks and real Tk layout smoke.
+Deterministic external providers only; live research/model calls were not tested.
+The original approval, five-step cumulative budget and refusal-without-retry
+boundaries passed. Remote CI must be checked against the release commit.
+
+Windows and Linux CI for v0.3.333 passed at `695b8bb`.
+Version v0.3.334 extends the one-confirmation path to two reference evidence
+chains and one cited lexical comparison, including grounding-only assessments.
+All eleven advances share the original approval and allowance (five network
+reservations, zero model calls), with 16 KiB cumulative inspected text. The new
+desktop action requires adequate initial limits; it never raises them silently.
+This is not semantic comparison, independent corroboration or contradiction
+investigation. Those operations, follow-up/adaptive planning, completion
+evaluation and a cited final answer remain beyond the automatic boundary.
+Local v0.3.334 release gates: 5,955 tests OK with 3 existing platform skips;
+149 focused tests, Black (847 files), Ruff, MyPy (514 source files), whitespace
+checks and real hidden-Tk layout smoke passed. External discovery/fetch were
+deterministic fakes; no live research/model calls. Remote CI must be verified
+against the exact release commit.
+
+Windows and Linux CI for v0.3.334 passed at `93a6ab7`.
+Version v0.3.335 adds a backend-only, exact-quotation semantic-comparison adapter.
+It reuses the structured model interface and produces tentative interpretations
+over two recorded excerpts without writing research facts. It is not connected
+to automatic missions: initial disclosure/destination/budget integration and
+current-evidence checks at that execution boundary remain the next work.
+The desktop's current two-source comparison is still lexical, with zero model
+calls. Fake-response tests establish contracts, not live model accuracy.
+Local v0.3.335 release checks: 5,974 tests OK with 3 existing platform skips;
+82 focused tests including 19 new checks; Black (852 files), Ruff, MyPy (517
+source files) and diff checks passed. No live model or research traffic.
+Remote Windows/Linux CI must be verified against the exact release commit.
+
 The repository has three intentionally separate naming systems:
 
-- **Runtime release `v0.3.117`** is the current executable package and GitHub
-  release line.
+- **Runtime release `v0.3.335`** is the current source/package release line.
+  GitHub commit checks become authoritative after this working tree is pushed.
 - **Sprint 4.16.50** is a completed historical engineering increment. Its
   semantic-memory runtime work is included in the history leading to the
   current main branch; it is not an unmerged or later release.
@@ -32,6 +181,400 @@ with optional OpenAI-compatible LLM conversation support.
 ### Implemented
 
 - Application bootstrap, configuration, logging, and dependency injection.
+- The security agent audits Hypatia's own persisted state against eight bounded
+  properties the domain types do not already guarantee, including the same URL
+  accepted twice, which would read as independent corroboration. It has no scan
+  or probe intent, no target parameter, and opens no socket; it repairs nothing,
+  and every report states its scope so a clean result stays interpretable.
+- A vulnerability family graph records classes of weakness and authored,
+  explained edges between them, answering what else shares a root cause or
+  prevention. Behind `HYPATIA_VULNERABILITY_GRAPH_ENABLED`, default off. The
+  safety property is structural: no domain type or stored document has a field
+  for a target, host, payload, or proof of concept, so the taxonomy cannot
+  become a list of things to attack.
+- The hypothesis engine requires every conjecture to name what would count
+  against it, keeps supporting and opposing evidence in separate never-netted
+  lists, and offers no way to confirm one: there is no confirm intent and no
+  status meaning true. Behind `HYPATIA_HYPOTHESIS_ENABLED`, default off. Status
+  is derived rather than stored. Positive support now requires more than one
+  explicitly independent source plus an active authored trust assessment of at
+  least `medium` for every supporting source; unknown, derivative,
+  likely-duplicate, or conflicting active independence judgements keep the
+  hypothesis open. The appraisal reports trust and independence coverage on
+  both sides. Any opposing evidence still moves a hypothesis off the supported
+  track. Authored statement and discriminating-test text is rendered as one
+  bounded line per label, so embedded line breaks cannot resemble forged status
+  or evidence totals. Hypothesis History also normalizes and visibly bounds each
+  operator-authored evidence note before placing it beside a relation, with the
+  same protection at the final renderer. Canonical authored wording and evidence
+  remain unchanged. If a hypothesis write fails, the response is explicitly
+  unsuccessful, retains the in-process appraisal, and warns that restart may
+  lose the change.
+- Source reputation aggregates authored assessments by origin across runs and
+  reports counts with a bounded standing, never a score. It is derived on every
+  request with no store, so revising an assessment revises the reputation.
+  Equivalent records of one canonical resource count as one assessed sample and
+  retain the least-trusting active authored label regardless of run order. Below
+  three assessments the standing is provisional, and no standing gates anything:
+  no fetch refused, no evidence discounted, no source pre-assessed.
+- Claim calibration compares each authored claim against the evidence structure
+  behind it and reports overstatement, using stated ceiling rules rather than a
+  hidden score. Strong evidence now requires every corroborating resource to be
+  explicitly judged independent as well as assessed at medium trust or better;
+  unknown, derivative, likely-duplicate, or conflicting active independence
+  judgements cannot inflate the ceiling. Nothing supports `fact`. It is derived
+  on every request with no store and no write path, it never edits a claim, and
+  understatement is not treated as a problem.
+- Failure memory derives eight bounded kinds of lesson from what a run
+  recorded, each naming the persisted records it came from; a lesson without
+  provenance is refused. Behind `HYPATIA_FAILURE_MEMORY_ENABLED`, default off.
+  A lesson records that something did not work here, never that it cannot work,
+  and recall is advisory: it blocks no plan, refuses no capability, downgrades
+  no claim, and edits no run. A failed lesson-store write is reported as
+  unsuccessful while keeping the lessons in memory; repeating the explicit
+  store request retries the pending durable write. Only a superseded authored
+  `hypothesis` is classified as a failed hypothesis; every other superseded
+  epistemic state is a revised claim, not a disguised hypothesis failure.
+  Explicitly superseded source assessments now produce one `invalid_assumption`
+  lesson when trust, independence, or both changed; wording-only changes and
+  parallel authored judgements do not pretend that a correction occurred.
+  A separate explicit `failure_memory_hypothesis_store` command reads only
+  durable hypotheses for the selected run: `weakened` derives a
+  `disproving_evidence` lesson, `contradicted` derives a `failed_hypothesis`
+  lesson, and `open`, `supported`, or `withdrawn` derives none. No event handler
+  or background task creates these lessons automatically. The same command can
+  additionally remember a source trust or independence correction only when a
+  timed, currently standing support relation demonstrably predates the
+  explicitly superseding assessment. A revision that changes both dimensions
+  stays one lesson. Missing structured judgement, parallel judgements,
+  unrelated sources, post-correction support, withdrawn hypotheses, and legacy
+  untimed support derive no such lesson. Each lesson quotes the hypothesis in
+  its own wording on a single bounded line, and the per-run limit keeps
+  contradictions and weakened outcomes ahead of support-correction lessons
+  while reporting any overflow.
+- Looking back at a run is reachable from the desktop. A Review tab reports
+  claim calibration, reflection, and curiosity gaps and questions, each kept
+  surface gated on its own opt-in. Calibration needs none because it stores
+  nothing. Nothing on the tab adjusts a claim, a confidence, or a run.
+- The learning loop is reachable from the desktop. A Learning tab drives
+  hypotheses and failure lessons, each half gated on its own opt-in, with the
+  hypothesis-outcome command offered only where both stores exist. Listing
+  hypotheses names each one in its own bounded wording rather than by record ID.
+- The weakness taxonomy is reachable from the desktop when
+  `HYPATIA_VULNERABILITY_GRAPH_ENABLED=true`. A Security tab records classes,
+  relates them with a required reason, and reports a bounded neighbourhood. The
+  tab is absent rather than disabled without a durable store, nothing on it can
+  name a system, and a failed durable write is reported instead of swallowed.
+- Creating a research run surfaces remembered lessons whose wording overlaps the
+  new question. That path is read-only, consults no model, requires at least two
+  shared words, and cannot fail the run it accompanies: the run is persisted
+  before recall is consulted, and an advisory failure returns no lessons rather
+  than an error about work that succeeded.
+- Bounded reflection reports how a run went — what failed, what contradicted
+  what, which beliefs were revised, what rests on thin evidence, what stayed
+  uncertain, what effort went unused, what worked, and what to ask next — with
+  problems ordered before successes. Behind `HYPATIA_REFLECTION_ENABLED`,
+  default off. It now composes durable hypotheses for the selected run through
+  the same gap detector and Curiosity generator, so unconfirmed source
+  independence and unanswered discriminating tests remain visible as weak
+  evidence and deterministic next questions. Source-assessment revisions name
+  only the dimensions that changed; independence-only and wording-only updates
+  no longer fabricate a trust change, and parallel judgements are not revisions.
+  Claim revisions likewise name only changed epistemic state, authored
+  confidence, linked sources, linked evidence, or wording; wording-only and
+  identical replacements do not fabricate a belief change. Discovery effort is
+  matched to accepted sources through the shared canonical resource identity,
+  so harmless URL spelling differences do not fabricate unused work. Recorded
+  provider attribution is retained on failure findings; legacy providerless
+  failures stay providerless rather than being guessed. Every finding detail is
+  normalized to one line at the shared record boundary, so embedded line breaks
+  cannot masquerade as additional report entries. The visible one-line text is
+  bounded after normalization, preserving useful wording that fits and marking
+  genuine truncation with an ellipsis.
+  Every finding describes the process and never the subject; no hypothesis is
+  written or changed, and there is no recursive reflection: only a run can be
+  reflected on.
+- Live validation now covers the research pipeline end to end against real
+  network sources, not only deterministic doubles: a real discovery request, a
+  real HTTPS fetch, acceptance, and an evidence record, with assessment and
+  claim correctly unperformed. Two manual diagnostics under `tools/diagnostics/`
+  report each stage separately and distinguish same-session recall from durable
+  learned-memory recall.
+- Ordinary chat cannot narrate research it did not perform. A request that
+  explicitly needs live web information never reaches the language model;
+  Hypatia states deterministically that live research was not performed and
+  reports canonical counts instead. Evidence questions are answered only from
+  persisted research state, and a post-generation guard annotates any reply that
+  claims research the canonical record does not support.
+- Bounded curiosity detects eleven kinds of knowledge gap in a persisted
+  research run, turns each into one deterministically templated and ranked
+  question. Behind `HYPATIA_CURIOSITY_ENABLED`, default off. Accepting a
+  question records intent only; a separate inert preview authors an exact
+  local-first plan that searches existing knowledge with the canonical question
+  before any outside source discovery. Authorization, zero-step foreground
+  start, and every one-step Advance remain separate operator actions. The local
+  step costs no network or model budget, discovery keeps its declared provider
+  cost, and the proposal never fetches, accepts, judges, retries, or queues work.
+  Gaps describe what our record is missing rather than what is true. A settled
+  multi-source claim now remains visibly thin until every corroborating
+  resource has an explicit active independent judgement; parallel conflicting
+  assessments fail closed, while superseded claims and assessments are
+  excluded.
+- Background research scheduling queues approved executions behind
+  `HYPATIA_BACKGROUND_RESEARCH_ENABLED`, default off. The scheduler owns
+  queueing, pausing, retrying, and crash recovery only; every cycle drives the
+  existing autonomy service, so it cannot invent a capability, weaken a budget,
+  accept a source, or promote a claim. Work is demand-driven with no thread,
+  polling, or busy loop, and task selection is oldest-first. Retries are typed
+  from the autonomy stop reason: only budget exhaustion is retryable, and
+  blocked, failed, interrupted, and cancelled runs are never retried. A cancelled
+  task never restarts, a completed task is never re-run, and on restart a running
+  task becomes interrupted rather than replayed.
+- Bounded autonomous research loops over the existing execution service rather
+  than adding a second engine. It runs only steps a human already authored and
+  authorized, so it cannot invent a capability, infer one from instruction text,
+  rewrite a plan, accept a source, or promote a claim. Network and model costs
+  come from an exhaustive declared capability-cost table rather than from
+  operation names, and budgets for step advances, network operations, model
+  operations, and wall-clock time are enforced before each advance. Attempted
+  advances are counted rather than successes, time uses an injected clock, and
+  stopping within budget is reported as a normal outcome with a specific
+  step-level reason where one applies.
+- Research-execution persistence is wired behind
+  `HYPATIA_RESEARCH_EXECUTION_PERSISTENCE_ENABLED`, default off. Bootstrap creates
+  the store beside the research-run store and the execution service owns loading,
+  restoring, and writing; `CognitiveEngine` only forwards the dependency.
+  Restoring is inspection, never resumption: a step recorded as running becomes
+  interrupted, completed stays completed, pending stays pending, authorizations
+  are not persisted so a restored execution cannot be advanced, and no completed
+  operation is replayed. A corrupt store raises at startup rather than being
+  replaced by an empty one, and a failed write leaves live state intact while
+  reporting a bounded failure event.
+- Execution snapshots have a dedicated versioned store,
+  `JsonFileResearchExecutionStore`, kept separate from the research-run store so
+  `ResearchRun` and its schema are untouched and no migration is required. Writes
+  use a bounded temporary file, fsync, and atomic replace, so a failed write
+  leaves the previous document byte-identical with no temporary file behind. An
+  absent file means no persisted executions; a malformed file raises rather than
+  being treated as empty. Unknown schema versions, invalid documents, oversized
+  files, execution-count limits, and duplicate identifiers are refused on both
+  load and save, and the stored document carries execution bookkeeping only.
+  Nothing is wired into the runtime yet.
+- Research-execution persistence begins with a pure codec. A durable
+  `ResearchPlanExecutionSnapshot` records step identity, declared capability,
+  status, operation identity, work flag, bounded detail, the plan question, and
+  the bound run identity, and nothing that already lives in the research run.
+  Restoring marks a step recorded as running as interrupted rather than
+  completed, so mid-flight work is never fabricated as finished; completed steps
+  stay completed, pending steps stay pending, and terminal executions stay
+  terminal. `INTERRUPTED` is deliberately distinct from `BLOCKED`. No file access
+  or runtime wiring exists yet.
+- Research-plan execution publishes bounded events for start, step start, step
+  completion, step failure, step block, and cancellation from one focused
+  emitter. Observability is visibility only: an absent event bus makes every call
+  a no-op, and a test proves an observed and an unobserved engine produce
+  identical execution snapshots. Payloads carry safe identifiers, capability and
+  operation names, counts, and booleans; authored instructions, authorized URLs,
+  research questions, and source bodies never appear, a bound run is reported as
+  a boolean rather than an identifier, and a failure reports its exception class
+  name rather than its message.
+- One end-to-end scenario drives the whole explicit research chain through the
+  real composition path, from question to closed run, using deterministic doubles
+  only for the discovery provider and source fetcher. It asserts the boundaries
+  hold together rather than merely that each step passes, and the closed run
+  retains its unresolved hypotheses and its contradiction. Research-execution
+  persistence remains deliberately unimplemented; a staged additive design
+  proposal is documented in
+  `docs/Architecture/ResearchExecutionPersistence_Proposal_v0.1.md` and awaits
+  review because it involves persisted-schema decisions.
+- The twelfth connected capability, `RESEARCH_RUN_COMPLETION`, closes a run
+  through the existing lifecycle path and defines no completion rule of its own.
+  Reaching the last execution step never closes a run: execution completing, the
+  run completing, evidence being sufficient, claims being verified, and
+  uncertainty being resolved remain five separate things. A refused transition is
+  reported as performed work that did not succeed with the run left open, and a
+  closed run retains its unresolved claims, contradictions, and failures, which
+  are counted in the reported detail.
+- The tenth and eleventh connected capabilities, `CLAIM_CONTRADICTION` and
+  `SOURCE_COMPARISON`, record through the existing contradiction and comparison
+  paths. A proposal is never a contradiction: previewing persists nothing, and a
+  suggestion stays a proposal until a human authorizes it. Recording a
+  contradiction leaves both claims byte-identical and decides neither true.
+  Comparison is a description, not a verdict: no winner, no ranking, no trust
+  promotion, no claim verification, and the existing 2-to-5 source bound is
+  preserved. Both authorizations arrive as named draft fields rather than new
+  positional elements.
+- The ninth connected capability, `CLAIM_CREATION`, records one authored claim
+  through the existing claim path. Epistemic state and confidence are authored,
+  never inferred, and completing the operation promotes nothing: every one of the
+  seven epistemic states is stored verbatim, and a high-trust assessment does not
+  raise a hypothesis. The existing domain rule requiring at least one evidence
+  reference for every claim, including hypothesis and speculation, is preserved
+  rather than replaced. Evidence must belong to the bound run, supersession
+  history is preserved, and existing contradiction state is untouched. The
+  complete chain from acceptance through evidence and assessment to claim is
+  covered by composition tests.
+- Authored plan-step drafts normalize through the named immutable
+  `ResearchPlanStepDraftInput` instead of a widening positional tuple, while
+  legacy tuples remain accepted unchanged. The eighth connected capability,
+  `SOURCE_ASSESSMENT`, records one authored assessment through the existing
+  assessment path. Assessment text and information trust are authored and never
+  derived from a successful fetch, acceptance, or completed operation, and no
+  language model participates. At least one evidence reference is required, so an
+  assessment is always grounded in recorded evidence; the source must already be
+  accepted on the bound run; supersession history is preserved; and information
+  trust never grants source text instruction authority.
+- The seventh connected research capability, `EVIDENCE_RECORDING`, records one
+  evidence entry through the existing evidence path. Evidence text is never
+  supplied by a caller: the operation resolves a real chunk by exact document ID
+  and chunk index, and the existing domain computes the excerpt, chunk identity,
+  and hash from it, so evidence cannot be fabricated and no language model is
+  involved. A fetched-but-unaccepted source cannot produce evidence, and unknown
+  chunks are refused rather than guessed. Recording establishes evidence only: no
+  assessment, no claim, no epistemic elevation, and no statement of source trust.
+  The full production chain from source acceptance to evidence recording is
+  covered by composition tests.
+- The canonical source-acceptance transaction lives in one place. Extracted
+  behavior-preservingly from the source-load route into
+  `ResearchSourceAcceptanceService`, it is shared by that route and by the sixth
+  connected capability, `SOURCE_ACCEPT`; `CognitiveEngine` shrank and now
+  delegates. Acceptance requires an explicitly authorized URL, so discovery
+  metadata alone never authorizes it and instruction text stays inert. A
+  transaction that runs without accepting is recorded as performed work on a
+  failed step rather than rendered as success. Rollback guarantees are unchanged
+  and directly tested, no second content channel exists, and accepted means
+  accepted into the run's source set only.
+- The fifth connected research capability, `SOURCE_FETCH`, reuses the canonical
+  source-fetch pipeline with every existing protection intact and adds no second
+  HTTP path. A step may acquire only the one URL it explicitly authorizes through
+  `authorized_source_url`; the URL is never inferred from instruction text nor
+  taken from a discovery result. The operation is acquisition-only: nothing is
+  indexed, accepted, stored as content, or turned into evidence, an assessment,
+  or a claim, so cancellation after bytes arrive leaves no partial state.
+  Fetched content stays untrusted, carries no instruction authority, is never
+  sent to a language model here, and never appears in user-facing detail.
+- The fourth connected research capability, `SOURCE_DISCOVERY`, reuses the
+  existing discovery provider abstraction and run audit path rather than adding a
+  second discovery engine. One step performs exactly one bounded query with no
+  retry, crawling, or link following, and cooperative cancellation is checked
+  before the query and again before the audit write. Provider results are
+  validated for type and count, failures are recorded in the run audit and
+  re-raised, and no substitute provider is ever used. Candidates persist only as
+  an unaccepted provenance-preserving record: nothing is accepted, fetched, or
+  turned into evidence or a claim, and zero candidates is a performed discovery
+  rather than a failure.
+- The third connected research capability, `EVIDENCE_INTEGRITY_CHECK`, runs the
+  existing `ResearchEvidenceIntegrityAuditor` against the bound run. It is local,
+  read-only, and deterministic, with no network, LLM, mutation, or event. A
+  completed check proves only that the integrity operation ran and returned its
+  result; every detail states that it does not establish truth, verify a claim,
+  or make a source trustworthy. Zero evidence records still complete the audit,
+  an unavailable audit reports no fabricated counts, and unknown or unbound runs
+  fail safely without claiming work.
+- Research-plan execution passes one small explicit `ResearchPlanExecutionContext`
+  through the application-service boundary. Collaborators stay
+  constructor-injected at composition time, so an operation never reaches a
+  global, locator, container, `CognitiveEngine`, or unrelated store. The second
+  connected capability, `ACCEPTED_SOURCE_LISTING`, reads accepted sources from
+  canonical `ResearchRunManager` state without network, LLM, or mutation. Zero
+  accepted sources is a performed listing rather than a failure; the detail states
+  that no source content was read and no evidence was established; reported
+  identifiers are capped; and unknown or unbound runs fail safely without claiming
+  work. Every registered capability is covered by a composition-level test proving
+  it is reachable through the real `CognitiveEngine` wiring.
+- Research-plan execution selects operations through explicit typed capability
+  registration. A step declares a `ResearchPlanStepCapability` separately from its
+  authored instruction text, and `ResearchPlanOperationRegistry` binds each
+  executable capability to exactly one operation. Instruction wording never
+  selects a capability, an undeclared or unregistered capability blocks the step
+  with a bounded reason instead of falling back, and the step state records which
+  operation ran. Recorded work requires a recorded operation name. A completed
+  operation means only that the operation ran; it is neither evidence nor a
+  verified claim, and evidence, assessment, and claims remain in the existing
+  research pipeline.
+- Research-plan execution connects its first real capability in stage three. A
+  `ResearchPlanStepOperation` boundary runs one bounded operation per advance
+  request, and `LocalKnowledgeSearchStepOperation` performs the existing
+  deterministic local knowledge search for an authored step instruction. Only an
+  operation that actually executed can mark a step as backed by real work; with
+  no operation connected, or one reporting that it performed nothing, the step is
+  blocked with a bounded reason rather than reported as completed research. A
+  failing operation fails the step and plan without claiming work, and a
+  zero-result search is reported honestly as a search that matched nothing.
+  Source discovery, fetching, evidence, assessment, and claims remain
+  unconnected, and no network, LLM, or persistence path is used.
+- Research-plan execution has an ephemeral coordination layer as its second
+  stage. `ResearchPlanExecutionApplicationService` owns per-process execution
+  state behind exact structured start, status, and cancel Brain intents;
+  `CognitiveEngine` only routes. No research work runs in this stage: starting a
+  plan records that execution began and advances no step, and source discovery,
+  fetching, evidence, assessment, and claims are not performed. A step records
+  whether a real operation backed it, so a bare state-machine advance is reported
+  as zero research operations rather than as completed research. State is
+  in-memory only, every status message says it is lost when Hypatia exits, and an
+  unknown plan is reported as absent rather than as a resumable run. Duplicate
+  starts are rejected deterministically, active executions are capped at 20,
+  terminal executions reject further transitions, and cancellation preserves
+  completed-step history.
+- Research-plan execution has a pure immutable state machine as its first stage.
+  `ResearchPlanExecutionStatus` and `ResearchPlanStepStatus` follow the existing
+  `ResearchRunStatus` convention with an explicit terminal property, and
+  `ResearchPlanExecutionState` exposes prepare, start, start_step, complete_step,
+  fail_step, block_step, and cancel. Steps run in exact authored order, only one
+  step may run at a time, and a plan reaches completed only when every step
+  completed, so partial or failed work can never present itself as finished.
+  Failure and cancellation preserve already-completed steps. This stage is
+  domain-only: no network, LLM, provider, persistence, event-bus, `ResearchRun`,
+  Brain, or desktop integration, and no user-reachable route can start execution.
+- A read-only learned-memory audit reports deterministic bounded health metrics
+  through the exact structured `learned_memory_audit` Brain intent: active and
+  superseded counts, superseded share, distinct identities, identities with
+  history, maximum versions for one identity, conflicting-history identities, and
+  duplicate value candidates, with samples capped at 10 entries each. It never
+  deletes, merges, compacts, rewrites, or normalizes stored memories, issues no
+  LLM, semantic, or network call, reports kinds and keys without any stored
+  value, and never runs on an ordinary chat turn. Duplicate candidates come only
+  from exact value equality between active identities and are never treated as
+  proof of equivalent meaning.
+- Learned-memory context selection for one conversation turn is owned by
+  `LearnedMemoryContextService`. `CognitiveEngine` delegates instead of branching
+  inline over selector and limit combinations.
+- Optional semantic relevance in ordinary chat is available behind
+  `HYPATIA_CHAT_SEMANTIC_MEMORY_ENABLED=true`. It is off by default and inert
+  unless the semantic-memory runtime is also enabled. With the flag absent,
+  ordinary chat delegates to the existing deterministic loaders unchanged and
+  issues no embedding call. When enabled, one turn performs at most one semantic
+  query against the already built index, never starts a rebuild from the
+  conversation path, and creates no second index, store, or cache. Candidates are
+  fused with the deterministic keyword selection through the existing
+  `HybridSemanticMemoryRanker`, deduplicated by learned-memory identity, and
+  bounded. A semantic hit on a superseded record is rejected, so corrections are
+  never resurrected. Absent, rebuilding, stopped, or failing semantic retrieval
+  falls back to the deterministic bounded path, the conversation still succeeds,
+  and one bounded `brain.chat_semantic_memory.query_failed` event reports the
+  cause class name only. Retrieval performs no memory write, and explicit lexical
+  and semantic recall are unchanged.
+- Ordinary chat defaults to bounded, request-relevant learned memory. With
+  `HYPATIA_LEARNED_MEMORY_SELECTOR` absent, Bootstrap builds the existing
+  deterministic ranked keyword selector bounded to 8 memories, so only learned
+  memories sharing a token with the current user message reach the prompt.
+  `HYPATIA_RANKED_LEARNED_MEMORY_SELECTOR_LIMIT` overrides that bound, and the
+  explicit `none` value restores the earlier unbounded no-selector behavior.
+  Only the composition default changed; `CognitiveEngine` keeps its
+  explicit-injection contract, and correction, supersession, explicit recall, and
+  semantic recall are unchanged.
+- Learned-memory candidate extraction detects providers exposing the optional
+  `generate_json(...)` capability through a local runtime-checkable Protocol and
+  then requests one bounded structured response with a trusted system
+  instruction, a 512-token bound, and an exact JSON response schema mirroring the
+  existing parser. Providers exposing only `generate` keep their previous plain
+  call. The parser stays the final authority, so reasoning preambles and
+  Markdown-fenced payloads remain rejected. Extraction failure now emits one
+  bounded `brain.learned_memory.extraction_failed` event carrying only the
+  request ID and cause class name; ordinary chat still succeeds and no event is
+  emitted for successful or no-op extraction. The persisted memory schema, the
+  global `LLMProvider` Protocol, and the learned-memory retrieval defaults are
+  unchanged.
 - An initial local Tkinter desktop shell for text conversation, explicit
   session selection, a refreshable read-only session overview, and
   semantic-runtime status. It also provides selected-session details, recent
@@ -564,7 +1107,7 @@ with optional OpenAI-compatible LLM conversation support.
   mode; every non-local endpoint still requires an API key and HTTPS.
 - Chat-completion timeout is configurable through
   `HYPATIA_LLM_TIMEOUT_SECONDS`. Without an override, explicitly loopback
-  endpoints such as local Ollama receive 120 seconds while non-local endpoints
+  endpoints such as local Ollama receive 300 seconds while non-local endpoints
   retain the 30-second default.
 - An explicit `ask knowledge <query>` local-RAG flow. It sends only up to three
   cited chunks to an enabled local LLM runtime, bounds each source chunk in the
@@ -620,6 +1163,63 @@ with optional OpenAI-compatible LLM conversation support.
   API key is not sent over a remote unencrypted connection. Authenticated
   completion requests also reject redirects so a bearer token cannot cross to
   a different endpoint.
+- A bounded `FilesystemContentPayload` contract fixes the local-file
+  content boundary at 64 KiB per invocation with strict UTF-8/BOM byte
+  accounting, canonical relative provenance, timezone-aware file/read times,
+  explicit truncation, untrusted/no-instruction labels, and a local-only
+  disclosure class. `ToolResult` carries it only through a separate success-only
+  field, while `ToolExecutionService` requires an explicit
+  `READS_FILESYSTEM_CONTENT` grant and matching descriptor. `FILESYSTEM_READ`
+  and its effect are registered only by supported Windows desktop composition
+  with the same bounded root. No model, memory, research, persistence, export,
+  clipboard, remote, or generic telemetry content path exists.
+- Every detailed Tool Layer outcome now carries the same code-owned request
+  identifier used by its lifecycle events. The central service validates one
+  bounded ASCII token before telemetry and carries it through success, refusal,
+  cancellation, and failure. The identifier is absent from `ToolInvocation`,
+  `ToolResult`, and `FilesystemContentPayload`, so neither a tool nor returned
+  content can author its own provenance. The desktop projects that identity
+  beside the payload without placing it inside file-authored data.
+- The Windows rooted-open production boundary is implemented as the exact Tool
+  Layer foundation. `WindowsRootedOpen` lazily binds fixed Windows system APIs,
+  opens one component at a time relative to held parent handles, refuses every
+  reparse point, supports only the proven local NTFS boundary, verifies root and
+  final identities plus handle-derived containment, and closes every handle in
+  reverse order. Its original opaque acquisition context still exposes no
+  handle, path, or content.
+- The first sensitive local-file name floor is implemented without content
+  access. `FilesystemSensitivePathPolicy` classifies environment files, private
+  keys, direct `.ssh` material, cloud/VCS/package credentials, browser/OS stores,
+  and CI secrets using bounded categories. `WindowsRootedOpen` applies it to
+  canonical admitted components before native acquisition and repeats it from
+  final handle-derived components after containment but before identity proof.
+  Windows trailing dots/spaces and case cannot disguise a class. This remains
+  a floor, not complete secret detection; no override exists.
+- The first Windows content-range boundary is the bounded platform primitive
+  behind explicit desktop composition. `read_range` acquires the final file in
+  the same rooted
+  walk with data-read rights and read-only sharing, issues one synchronous
+  `ReadFile` at an explicit 64-bit `OVERLAPPED` offset, caps native capacity at
+  `max_bytes + 1`, and compares identity, size, and raw last-write time before
+  and after the read. It returns an immutable raw observation only after every
+  handle closes. No model, memory, research, evidence, persistence, Linux/POSIX,
+  or generic content-telemetry path exists.
+- The platform-neutral `FilesystemReadTool` is registered only when supported
+  Windows desktop composition supplies the same root and rooted reader. It
+  accepts one injected bounded range,
+  requires the separate invocation-scoped content effect, refuses NUL/binary
+  and invalid or split UTF-8, strips an exact UTF-8 BOM only at offset zero,
+  maps platform failures to bounded Tool outcomes, and constructs the typed
+  local-only/untrusted payload on success. It performs no path open, retry,
+  continuation, persistence, telemetry-content, or downstream integration.
+- The operator-facing content-preview contract is implemented in the existing
+  Tool Console. Three required typed fields define one relative path and byte
+  range; a second dialog repeats the exact scope, effect and arguments before
+  one authorization. `FilesystemContentPreview` binds the central request ID
+  beside provenance, while a dedicated read-only panel inserts text literally
+  and labels it local-only, untrusted, and without instruction authority. The
+  existing single-flight worker discards results after cancel or close, and old
+  content is cleared before every new or non-success terminal state.
 
 ### Intentionally Not Implemented
 
@@ -632,6 +1232,10 @@ with optional OpenAI-compatible LLM conversation support.
   cross-document semantic relation extraction.
 - Agent execution, tool gateway, browser/OS control, voice, vision, robotics,
   and smart-home integrations.
+- Any path that sends local-file content to a model, memory, research, evidence,
+  persistence, export, clipboard, remote endpoint, or generic telemetry; any
+  automatic continuation, multi-file read, sensitive override, or Linux/POSIX
+  content reader.
 - Encryption at rest, cloud synchronization, multi-process storage locking,
   and automated repair or unattended migration tooling.
 
@@ -649,9 +1253,16 @@ stronger hardware to scale the same provider boundaries.
 
 Last verified in the local development environment:
 
-- 1,568 automated tests pass through package-aware discovery.
+- 3,659 automated tests pass through package-aware discovery.
 - Black and Ruff pass for `src` and `tests`.
-- MyPy passes for `src` and `tests`.
+- MyPy passes for all `src` files and the focused sensitive-path/rooted-open
+  security tests. A full `src` + `tests` MyPy sweep still has separately
+  recorded pre-existing test typing debt, so repository-wide test typing is not
+  claimed as a passing gate.
+- The local PyInstaller Windows onedir package builds successfully. The most
+  recently generated `v0.3.180` executable's startup smoke is unverified
+  because Windows Application Control blocked that new unsigned artifact
+  before process start. No Windows security control was disabled or bypassed.
 - Whitespace validation (`git diff --check`) passes.
 
 These checks describe the local working tree and do not create a GitHub
@@ -684,9 +1295,156 @@ changed.
 
 ## Next Milestone
 
-Define one bounded local Research-plan snapshot store behind the immutable plan
-domain. The store should use a versioned schema, exact UTF-8 bounds, deterministic
-ordering, and atomic replacement with rollback-safe failure behavior. Keep this
-increment free of Brain, desktop, `ResearchRun`, provider, network, LLM,
-event-bus, confirmation, automatic source selection, and execution integration
-until direct persistence tests establish the boundary.
+One human-approved foreground execution is enforceable. Starting a research plan
+requires one exact valid approval for that plan and run and spends it
+permanently; capabilities, budget, and disclosure are enforced as upper bounds;
+and an authorization problem is reported as not reached rather than as a failed
+execution. The approval-to-execution handoff is not atomic and is not claimed to
+be: a crash can leave an approval spent with no execution, and cannot leave an
+execution running on an approval still available to spend again.
+
+Autonomy is not enabled. Ten of the eleven autonomy intents remain unreachable,
+the autonomy loop and the scheduler cannot reach an approval, and no background
+task carries one.
+
+A started execution is now answerable: the operator can read its canonical
+state and remaining budget, advance it exactly one step at a time, and cancel
+it. The approved budget is enforced arithmetic — checked before each attempt,
+charged at the attempt boundary, and never refunded when an attempt fails.
+
+Discovery results are now ranked before a person chooses among them.
+Deterministic relevance ranking compares the words of the question against the
+words of the record — weighted so an identifier counts for more than a common
+word — and keeps the parts and reason codes that produced each score. There is
+no model in the path, no network call, and no budget cost, so the same inputs
+give the same order on any machine. Relevance stays separate from truth: a score
+says the question's words are in the title, and never that the source is
+reliable or correct.
+
+Two limitations are recorded rather than left to be discovered. Matching is
+lexical, so a paper about the same attack under another name does not score for
+the name it does not use. And a title matching the one distinctive token of a
+question while being about something else still ranks high; the evaluation set
+contains that case and the test records the disagreement instead of reweighting
+until it disappears.
+
+A person can now record what they concluded about a source after reading it.
+Four structured answers — usefulness, applicability to the question,
+independence, and publication status — sit on the assessment record that already
+existed, each defaulting to `unknown` because most sources are never appraised.
+A retraction is expressible and deletes nothing: the source, its evidence, and
+every claim that rested on it stay exactly as they were, and the assessment says
+what happened.
+
+The separation is the load-bearing part. A judgement moves no relevance score,
+no rank, no reputation, no evidence, no claim, no confidence, and no acceptance,
+and the panel shows all four dimensions as separate labelled lines so that
+`Relevance: strong` cannot be read as a verdict on the source. Two limits are
+stated rather than left to be found: an appraisal names the evidence it was made
+about, so it follows acceptance rather than preceding it, and an assessment
+written by an approved plan step carries `unknown` on all four dimensions
+because a plan authorization names text and trust and nothing more.
+
+Calibration now reads those judgements. A claim resting on a source the operator
+marked retracted, withdrawn, corrected, not useful, unrelated, background-only
+or not independent is reported as such, with the source and the assessment
+named, and a separate claim-level warning is raised when apparent corroboration
+rests on sources somebody said repeat each other. Equivalent stored records of
+one canonical resource produce one warning per concern, with all claim-linked
+evidence retained and no inflated warning count.
+
+Those independence judgements now also bound the structural support ceiling.
+Several distinct resources reach `strong evidence / high confidence` only when
+every one has an explicit active `independent` judgement and medium-or-better
+trust. Unknown or conflicting independence stays silent as a warning, but it
+cannot be counted as proof of independence.
+
+Curiosity applies the same boundary to hypotheses. When supporting evidence
+comes from several canonical sources but their independence is unknown,
+derivative, likely duplicated, or actively disputed, Hypatia reports a separate
+hypothesis-independence gap and asks which independent source could corroborate
+the hypothesis. The question can enter the existing local-first proposal flow,
+but noticing or previewing it changes no hypothesis and starts no research.
+
+It corrects nothing. No confidence is lowered, no claim withdrawn, no evidence
+removed, no source rejected, no reputation moved, no relevance rank touched —
+and the report says so in its own words. Silence stays silence: unknown
+dimensions, unassessed sources and records predating these fields warn about
+nothing, and a claim with no warnings is never shown as verified. Only the
+structured fields speak, so a note worrying that a paper might be retracted
+produces nothing, and neither does a source whose own title says it was.
+
+Research can now reach vulnerability records. The NVD CVE API 2.0 is a second
+discovery provider, verified against the live service rather than from
+documentation: an exact CVE lookup returns the vulnerability itself, and
+anything else becomes one bounded keyword search. Structured metadata comes with
+it — record status, CWE identifiers, every CVSS metric kept with its own scorer
+rather than collapsed into a maximum, bounded references, and the CISA
+known-exploited fields when they are actually there.
+
+The provider is part of what an approval covers. A plan aimed at Crossref and
+the same plan aimed at NVD digest differently, so an approval for one cannot be
+spent on the other, and the digest schema moved to v2 so that approvals recorded
+before provider binding fail closed rather than quietly matching a plan whose
+meaning changed. Both previews name the provider in words. One approved
+discovery makes one request: no pagination, no retry, no sleep, and no silent
+fallback to the other provider. References are stored and never fetched.
+
+Provider experience can now be described. For each provider and question
+category the report shows the funnel — discovery operations, candidates,
+accepted sources, sources with evidence, assessed sources — and then what the
+operator concluded across usefulness, applicability, independence and
+publication status. The join runs through canonical resource identity, the same
+one the panel uses to decide whether a discovered candidate was accepted, and a
+resource both providers returned is credited to neither.
+
+There is no provider score, no winner, and no recommendation. Every ratio shows
+its numerator and denominator, every profile carries a sample band whose largest
+value is still only `descriptive`, and an empty history says so instead of
+showing 0%. Silence is never a negative vote: an unassessed source is missing
+data and an `unknown` answer is an unanswered question. The report states in its
+own text that these figures are observational and selection-biased, because the
+operator chose the provider, the candidate, the acceptance and the appraisal.
+
+The operator can now put one question to both providers. A comparison turned out
+to be two ordinary discovery steps in one plan: the question already belongs to
+the run rather than to a step, so both sides ask the same thing by construction;
+the provider was already digest-bound; a discovery step already cost one network
+operation; and one advance already attempted one step. No comparison execution
+engine exists because none was needed.
+
+The pair is covered by one digest, costs two network operations, and takes two
+separate presses of Advance. The Compare button reaches a preview and never a
+provider. The two result sets are shown side by side, each ranked within its own
+provider and never merged, with provider rank travelling alongside relevance
+rank. A side nobody advanced reads as pending rather than as an empty result.
+
+One limitation is stated rather than hidden: a failed discovery is recorded
+without naming the provider that failed, so an attempted-and-errored side is
+indistinguishable from an unadvanced one. Both read as pending and the run's
+failure count is reported separately.
+
+Next, measure the paired comparisons that were actually run. The provider-quality
+report describes each provider over whatever questions it happened to be asked,
+and pairing finally removes that cause — when both providers answer one question,
+the two samples line up and the operator's appraisals of each side become
+directly comparable. Nothing reads them that way yet: the one genuinely
+comparable slice of the data is still averaged in with everything else.
+
+The accepted design keeps execution, autonomy, and scheduling unreachable from
+the desktop, adds no filesystem, shell, or tool authority to research, keeps the
+default model-operation budget at zero, and treats remote-model disclosure as a
+permission separate from local readability. An unreachable dangerous capability
+is preferable to a prematurely reachable one, and the unreachable-intent count
+is not a number to improve for its own sake.
+
+The restart-bound desktop workspace-selection design remains accepted and
+unimplemented. Its staged implementation, beginning with the bounded strict
+preference record and immutable types only, follows this milestone rather than
+being mixed into it.
+
+Do not wire content into model context, memory, research, evidence,
+persistence, exports, clipboard, remote disclosure, automatic continuation,
+generic telemetry content, or an operator override. POSIX/Linux rooted-open
+remains a later platform milestone rather than being mixed into the workspace
+selection boundary.

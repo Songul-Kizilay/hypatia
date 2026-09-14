@@ -33,6 +33,7 @@ class HypatiaApplication:
         knowledge_relation_path: Path | None = None,
         research_run_path: Path | None = None,
         research_source_content_path: Path | None = None,
+        research_program_scope_revision_path: Path | None = None,
     ) -> HypatiaApplication:
         """Create an application with optional caller-owned local data paths."""
         if (
@@ -41,6 +42,7 @@ class HypatiaApplication:
             and knowledge_relation_path is None
             and research_run_path is None
             and research_source_content_path is None
+            and research_program_scope_revision_path is None
         ):
             bootstrap = Bootstrap.from_process_environment()
         else:
@@ -50,6 +52,9 @@ class HypatiaApplication:
                 knowledge_relation_path=knowledge_relation_path,
                 research_run_path=research_run_path,
                 research_source_content_path=research_source_content_path,
+                research_program_scope_revision_path=(
+                    research_program_scope_revision_path
+                ),
             )
         return cls(bootstrap=bootstrap)
 

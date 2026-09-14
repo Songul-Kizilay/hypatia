@@ -5,23 +5,60 @@ from __future__ import annotations
 import tkinter as tk
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from enum import StrEnum
+from functools import partial
+from math import ceil
 from time import monotonic
-from tkinter import filedialog, messagebox, scrolledtext, ttk
-from typing import Protocol
+from tkinter import filedialog, font, messagebox, scrolledtext, ttk
+from typing import Literal, Protocol, TypedDict
 
 from brain.BrainResponse import BrainResponse
 from brain.SessionSummary import SessionSummary
 from core.CancellationSignal import CancellationSignal
-from desktop.DesktopController import DesktopController
+from core.Exceptions import HypatiaError, ResearchError
+from desktop.AcquisitionResearchDraft import AcquisitionResearchDraft
+from desktop.DesktopController import (
+    ADVISORY_RESTRICTION_LABEL,
+    DesktopController,
+)
 from desktop.DesktopRequestRunner import DesktopRequestRunner
+from desktop.FilesystemContentPreview import FilesystemContentPreview
+from desktop.KaliOperationPanel import KaliOperationPanel
+from desktop.MarkdownTextSegments import (
+    MarkdownStyle,
+    markdown_segments,
+)
+from desktop.QuestionResearchDraft import QuestionResearchDraft
+from desktop.ResearchSourcePreviewPanel import ResearchSourcePreviewPanel
+from desktop.ResearchStateRefreshSignal import ResearchStateRefreshSignal
 from desktop.ResearchWorkspaceReadModel import (
     ResearchRunSort,
     ResearchRunStatusFacet,
     ResearchSourceCoverageFacet,
     ResearchWorkspaceReadModel,
 )
+from desktop.SimpleResearchActivity import SimpleResearchActivity
+from desktop.SimpleResearchPhrasebook import phrase as simple_phrase
+from desktop.SimpleResearchReadModel import SimpleResearchReadModel
+from desktop.SimpleSourceCard import SimpleSourceCard
+from desktop.TargetResearchDraft import TargetResearchDraft
+from desktop.TargetResearchDraftDialog import (
+    ProgramScopeEnrollmentProcessor,
+    TargetResearchDraftDialog,
+)
+from desktop.ToolConsoleController import ToolConsoleController
+from desktop.ToolConsoleEntry import ToolConsoleEntry
+from desktop.ToolRunView import ToolRunView
+from eventbus.EventBus import EventBus
 from knowledge.KnowledgeCitation import KnowledgeCitation
+from research.HypothesisEvidenceRelation import HypothesisEvidenceRelation
+from research.RankedResearchSourceDiscovery import ranked_candidates
+from research.ResearchAttemptRecoveryDecision import (
+    ResearchAttemptRecoveryDecision,
+)
+from research.ResearchAttemptResolution import ResearchAttemptResolution
+from research.ResearchAuthorizationBudgetChoice import budget_from
 from research.ResearchClaimConfidence import ResearchClaimConfidence
 from research.ResearchClaimContradictionCandidate import (
     ResearchClaimContradictionCandidate,
@@ -33,14 +70,20 @@ from research.ResearchClaimRecord import (
     MAX_RESEARCH_CLAIM_EVIDENCE,
     ResearchClaimRecord,
 )
+from research.ResearchDisclosure import ResearchDisclosure
+from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchInformationTrust import ResearchInformationTrust
+from research.ResearchPlanBudgetRequirement import ResearchPlanBudgetFit
+from research.ResearchPlanDigest import plan_digest
+from research.ResearchPlanRestriction import ResearchPlanRestriction
 from research.ResearchRun import ResearchRun
 from research.ResearchRunMarkdownExportPreview import (
     ResearchRunMarkdownExportPreview,
 )
 from research.ResearchRunStatus import ResearchRunStatus
+from research.ResearchSourceApplicability import ResearchSourceApplicability
 from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
 from research.ResearchSourceCandidate import ResearchSourceCandidate
 from research.ResearchSourceComparisonNoteRecord import (
@@ -48,7 +91,191 @@ from research.ResearchSourceComparisonNoteRecord import (
     MAX_COMPARISON_NOTE_EVIDENCE,
     ResearchSourceComparisonNoteRecord,
 )
+from research.ResearchSourceIndependence import ResearchSourceIndependence
+from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
 from research.ResearchSourceRecord import ResearchSourceRecord
+from research.ResearchSourceUsefulness import ResearchSourceUsefulness
+from research.SourceIdentity import identity_of
+from research.SourceLoadStage import SourceLoadStage
+from research.SourceOrigin import origin_of
+from research.SourceReputationLedger import SourceReputationLedger
+from response.ResponseLanguage import ResponseLanguage, detect_response_language
+from security.VulnerabilityFamilyGraph import MAX_TRAVERSAL_DEPTH
+from security.VulnerabilityRelationKind import VulnerabilityRelationKind
+
+_WEAKNESS_PANEL_NOTE = (
+    "A weakness class is a concept, never a finding. There is nowhere here to "
+    "name a host, a product, a version, or a payload, and nothing on this tab "
+    "scans, probes, or reaches any system."
+)
+_WEAKNESS_IDLE_STATUS = "Nothing has been recorded or looked up yet."
+_LEARNING_IDLE_STATUS = "Nothing has been proposed, remembered, or recalled yet."
+_LEARNING_PANEL_NOTE = (
+    "Hypotheses record what you expect and what would change your mind. "
+    "Lessons record what did not work. Nothing on this tab decides that "
+    "anything is true, and no status here means confirmed."
+)
+_HYPOTHESIS_DEFEATER_NOTE = (
+    "Required. A conjecture that names nothing capable of counting against it "
+    "will survive any amount of evidence, because nothing was ever allowed to "
+    "threaten it."
+)
+_HYPOTHESIS_EVIDENCE_NOTE = (
+    "Evidence must already be recorded in the run. Separate several IDs with "
+    "commas or spaces. The same record cannot be entered on both sides."
+)
+_RECOVERY_PANEL_NOTE = (
+    "This step is blocked because the operation may have run and Hypatia never "
+    "saw its result. The attempt has already been charged. Anything you record "
+    "here is kept as your account, not as something the provider returned, and "
+    "supplying it does not mark the step completed. Abandoning it stops this "
+    "step without claiming it succeeded or failed."
+)
+_INTERRUPTED_PANEL_NOTE = (
+    "Previous attempt was interrupted. The external operation may have "
+    "occurred. Its final result is unknown. The attempt has already been "
+    "charged. Recording what you know runs nothing and retries nothing."
+)
+
+
+def _granted_authority_lines(budget, fit=None) -> list[str]:
+    """Render the authority a confirmation is about to grant.
+
+    Shared by both approval surfaces so the two cannot drift into describing
+    the same thing differently. The budget passed in is always the one that
+    will actually be recorded; where a fit is known it is shown beside it, and
+    where none is known nothing is invented to fill the gap.
+    """
+    lines = [
+        "This is the authority you are about to grant:",
+        f"  step advances: {budget.max_step_advances}",
+        f"  network operations: {budget.max_network_operations}",
+        f"  seconds: {budget.max_seconds}",
+    ]
+    if fit is not None:
+        lines.append("")
+        lines.extend(f"  {line}" for line in fit.lines())
+    return lines
+
+
+_SCHEDULER_QUEUE_NOTE = (
+    "Queueing a task is not approving one. A task names an execution that was "
+    "already approved and already started, and asks the scheduler to consider "
+    "it; the budget below bounds one scheduler run and never raises what the "
+    "execution was actually granted. Creating, pausing, resuming and cancelling "
+    "run no research at all — only pressing Run scheduler cycle does. Cancelling "
+    "a task stops the scheduler choosing it; the execution itself is untouched "
+    "and is stopped separately above."
+)
+_SCHEDULER_CYCLE_NOTE = (
+    "One cycle, then it stops. The scheduler decides which approved task is "
+    "runnable and how much work one turn covers; nothing here grants authority, "
+    "widens a budget or approves anything. It does not repeat, and it never "
+    "starts on its own — every cycle is a press of this button."
+)
+_BACKGROUND_CONTINUATION_NOTE = (
+    "Running in the background means off this window's thread, not unattended. "
+    "It spends only the budget this execution was already granted, grants no "
+    "new authority, retries nothing, and stops on failure, blocking, "
+    "interruption, cancellation or budget exhaustion. Closing Hypatia stops it; "
+    "the execution stays durable and can be resumed and continued again."
+)
+_CURIOSITY_BUDGET_NOTE = (
+    "This is the authority you are granting to this exact Hypatia-proposed "
+    "plan. Hypatia did not choose it for itself. Leave a box blank to grant the "
+    "standing default; Prepare shows what the plan needs beside what you are "
+    "granting, and an approval too small to cover one attempt at every authored "
+    "step is refused rather than granted."
+)
+_AUTHORIZATION_BUDGET_NOTE = (
+    "This is the authority you are granting, not what Hypatia decided it may "
+    "use. Leave a box blank to grant the standing default. Preview shows what "
+    "the plan needs beside what you are granting; an approval that cannot cover "
+    "one attempt at every authored step is refused rather than granted."
+)
+_PLAN_CONSTRAINT_NOTE = (
+    "A constraint is part of what you approve and is bound into the plan's "
+    "digest, so changing one invalidates an approval made for the old wording. "
+    "It is not a step: it is never executed, never advanced, and spends no "
+    "budget. Which lines are steps and which are constraints is your choice "
+    "alone; nothing here classifies them for you. "
+    "The wording is never read to decide what is enforced. Left advisory, a "
+    "constraint explains your intent and blocks nothing. Choosing "
+    "'no_external_source_access' refuses any plan whose steps declare a "
+    "capability that costs a network call — source discovery, fetch or "
+    "accept — and it only ever refuses: it adds no capability, budget or "
+    "provider, and never quietly drops a step or substitutes a local one."
+)
+_EXECUTION_PANEL_NOTE = (
+    "An execution that has already been started. Refresh shows its canonical "
+    "state and what remains of the approved budget. Advance attempts exactly "
+    "one step and then stops; it never continues to the next step by itself. "
+    "Cancelling is final, and returns neither the approval nor the budget "
+    "already spent."
+)
+_APPROVAL_IDLE_STATUS = "Nothing has been approved yet."
+_APPROVAL_PANEL_NOTE = (
+    "Approving records that you permitted this exact plan. It starts no "
+    "research on its own. The approval names the plan by content, so editing "
+    "the plan afterwards makes the approval refuse it rather than silently "
+    "covering the change.\n"
+    "Starting is a separate, explicit act. It uses up one approval to begin "
+    "one execution, which then does nothing further until you advance it. "
+    "Nothing is scheduled, nothing repeats, and one execution cannot start "
+    "another."
+)
+_REVIEW_IDLE_STATUS = "Nothing has been reviewed yet."
+_REVIEW_PANEL_NOTE = (
+    "Three ways of looking back at a run: how far each claim outruns its "
+    "evidence, how the run went, and what was never asked. None of them "
+    "changes a run, a claim, or a confidence."
+)
+_PROVIDER_COMPARISON_NOTE = (
+    "Provider comparison shows the two result sets for this run's question side "
+    "by side, each ranked within its own provider. It contacts nobody, merges "
+    "no ranking, and names no winner: asking both providers takes one approved "
+    "plan and two separate presses of Advance."
+)
+_PROVIDER_QUALITY_NOTE = (
+    "Provider quality describes sources you chose to ask for, accept and "
+    "assess. It selects no provider, changes no default, alters no ranking and "
+    "updates no reputation, and it shows every denominator so a percentage over "
+    "three sources cannot be mistaken for a measurement."
+)
+_CALIBRATION_NOTE = (
+    "Calibration reports a mismatch and never adjusts one. What you are "
+    "willing to assert is your judgement; a system that quietly downgraded it "
+    "would be overruling you and calling it bookkeeping. It also reports where "
+    "a claim rests on a source you yourself marked retracted, unrelated, "
+    "useless or derivative, and it changes nothing about those either. A claim "
+    "with no warnings has not been checked and found sound; it may simply rest "
+    "on sources nobody has assessed."
+)
+_CURIOSITY_RULING_NOTE = (
+    "A ruling records what you think is worth pursuing. It starts no research "
+    "and reaches no source."
+)
+_LESSON_ADVISORY_NOTE = (
+    "Recall is advisory. It blocks no plan, refuses no capability, and "
+    "downgrades no claim. Something failing once is not a reason not to try it."
+)
+_WEAKNESS_RELATION_NOTE = (
+    "Every relation is authored with a reason. Nothing here infers an edge "
+    "from similar names, so the graph only ever holds connections a person "
+    "was willing to explain."
+)
+
+_TOOL_IDLE_STATUS = "Nothing has been run yet."
+_TOOL_NO_SELECTION = "Choose a capability first."
+_TOOL_NO_ARGUMENTS = "This capability takes no arguments."
+_TOOL_GRANT_NOTE = (
+    "These effects are granted for this one run only. Nothing is remembered "
+    "between runs or across restarts."
+)
+_FILESYSTEM_READ_CAPABILITY = "filesystem_read"
+_CONTENT_PREVIEW_BANNER = (
+    "LOCAL FILE PREVIEW - UNTRUSTED DATA - NO INSTRUCTION AUTHORITY"
+)
 
 _DEFAULT_FONT_SIZE = 12
 _MINIMUM_FONT_SIZE = 10
@@ -72,6 +299,10 @@ _RESEARCH_ANALYSIS_TAB_TITLES = (
     "Claims & contradictions",
     "Plan draft",
 )
+
+
+class _OpeningPlanOptions(TypedDict, total=False):
+    opening_draft: QuestionResearchDraft | AcquisitionResearchDraft
 
 
 @dataclass(frozen=True, slots=True)
@@ -224,19 +455,89 @@ class SessionRenameProcessor(Protocol):
 class TkinterDesktopWindow:
     """Render conversation, session selection, and semantic status locally."""
 
+    #: Set for every constructed window. Declared at class level because
+    #: focused unit tests build bare instances through ``object.__new__`` to
+    #: exercise one method, and the polling loop must stay safe for those
+    #: rather than requiring every such test to know about this subsystem.
+    _research_refresh_signal: ResearchStateRefreshSignal | None = None
+
+    #: Simple mode state, declared here for the same reason: focused tests build
+    #: bare instances to exercise one method, and a Simple-mode handler must not
+    #: require the whole window to have been constructed.
+    _simple_run_id: str = ""
+    _simple_run: ResearchRun | None = None
+    _simple_discovery_id: str = ""
+    _simple_cards: tuple[SimpleSourceCard, ...] = ()
+    _simple_activity: SimpleResearchActivity = SimpleResearchActivity.IDLE
+    _simple_last_stage: SourceLoadStage | None = None
+    _simple_language: ResponseLanguage = ResponseLanguage.ENGLISH
+    _pending_research_question: str = ""
+
+    #: Present only when an operator-facing tool console was composed for
+    #: this window. None means the Tools tab is absent, not disabled: a
+    #: panel that could not run anything should not offer to.
+    _tool_console: ToolConsoleController | None = None
+    _tool_entries: tuple[ToolConsoleEntry, ...] = ()
+
+    #: True only when this installation keeps a durable weakness taxonomy. The
+    #: Security tab follows the same rule as the Tools tab: absent rather than
+    #: present-and-forgetful, because a panel that records classes into a store
+    #: that does not exist would lose them at the next restart without saying so.
+    _weakness_graph_enabled: bool = False
+
+    #: The learning surfaces follow the same rule, and separately. Each is a
+    #: distinct opt-in with its own store, so one being kept says nothing about
+    #: the other, and a section for an absent store would collect work that
+    #: never survives a restart.
+    _hypothesis_enabled: bool = False
+    _failure_memory_enabled: bool = False
+
+    #: Reflection and curiosity keep history, so each follows the same rule.
+    #: Calibration keeps nothing — it derives its report from the run on every
+    #: request — so it needs no opt-in and is always offered where runs exist.
+    _reflection_enabled: bool = False
+    _curiosity_enabled: bool = False
+
+    #: Recording an approval starts nothing, but it is the first durable step
+    #: toward work that would. Absent unless the runtime keeps approvals, on
+    #: the same rule every other durable engine here follows.
+    _plan_authorization_enabled: bool = False
+
     def __init__(
         self,
         controller: DesktopController,
         root: tk.Tk | None = None,
+        event_bus: EventBus | None = None,
+        tool_console: ToolConsoleController | None = None,
+        weakness_graph_enabled: bool = False,
+        hypothesis_enabled: bool = False,
+        failure_memory_enabled: bool = False,
+        reflection_enabled: bool = False,
+        curiosity_enabled: bool = False,
+        plan_authorization_enabled: bool = False,
+        program_scope_enrollment_service: ProgramScopeEnrollmentProcessor | None = None,
     ) -> None:
         self._controller = controller
+        self._tool_console = tool_console
+        self._weakness_graph_enabled = weakness_graph_enabled
+        self._hypothesis_enabled = hypothesis_enabled
+        self._failure_memory_enabled = failure_memory_enabled
+        self._reflection_enabled = reflection_enabled
+        self._curiosity_enabled = curiosity_enabled
+        self._plan_authorization_enabled = plan_authorization_enabled
+        self._program_scope_enrollment_service = program_scope_enrollment_service
         self._root = root or tk.Tk()
+        self._research_refresh_signal = ResearchStateRefreshSignal(event_bus)
         self._request_runner = DesktopRequestRunner()
-        self._request_completion_handler: Callable[[BrainResponse], None] | None = None
+        #: Controls that stop work rather than start it. They stay usable while
+        #: the one worker is busy; everything else is disabled until it frees.
+        self._control_plane_controls: list[ttk.Button] = []
+        self._request_completion_handler: Callable[[object], None] | None = None
         self._request_controls: list[ttk.Button] = []
         self._request_label: str | None = None
         self._request_started_at: float | None = None
         self._closing = False
+        self._one_shot_after_id: str | None = None
         self._status = tk.StringVar(value="Ready")
         self._session_id = tk.StringVar()
         self._session_rename_target = tk.StringVar()
@@ -326,6 +627,22 @@ class TkinterDesktopWindow:
         self._research_information_trust = tk.StringVar(
             value=ResearchInformationTrust.UNASSESSED.value
         )
+        self._research_source_usefulness = tk.StringVar(
+            value=ResearchSourceUsefulness.UNKNOWN.value
+        )
+        self._research_source_applicability = tk.StringVar(
+            value=ResearchSourceApplicability.UNKNOWN.value
+        )
+        self._research_source_independence = tk.StringVar(
+            value=ResearchSourceIndependence.UNKNOWN.value
+        )
+        self._research_source_publication_status = tk.StringVar(
+            value=ResearchSourcePublicationStatus.UNKNOWN.value
+        )
+        self._research_source_dimensions = tk.StringVar(value="")
+        self._research_discovery_provider = tk.StringVar(
+            value=ResearchDiscoveryProviderName.CROSSREF.value
+        )
         self._research_claim_evidence_ids = tk.StringVar()
         self._research_claim_text = tk.StringVar()
         self._research_claim_epistemic_state = tk.StringVar(
@@ -343,6 +660,7 @@ class TkinterDesktopWindow:
         self._relation_target_id = tk.StringVar()
         self._session_summaries: list[SessionSummary] = []
         self._research_candidates: tuple[ResearchSourceCandidate, ...] = ()
+        self._research_candidate_discovery_ids: tuple[str, ...] = ()
         self._research_runs: tuple[ResearchRun, ...] = ()
         self._visible_research_runs: tuple[ResearchRun, ...] = ()
         self._research_source_catalog: tuple[ResearchSourceRecord, ...] = ()
@@ -370,6 +688,7 @@ class TkinterDesktopWindow:
         ] = ()
         self._research_persisted_comparison_note_run_id = ""
         self._research_candidate_run_id = ""
+        self._research_candidate_snapshot: ResearchRun | None = None
         self._research_candidate_discovery_id = ""
         self._research_claim_contradiction_proposal_run_id = ""
         self._research_claim_contradiction_proposals: tuple[
@@ -378,6 +697,17 @@ class TkinterDesktopWindow:
         self._research_markdown_export_preview: (
             ResearchRunMarkdownExportPreview | None
         ) = None
+        # Simple mode keeps its own run context so an ordinary user is never
+        # told to go to another tab and select something. It is a separate
+        # field from the Advanced selector on purpose: sharing one would let a
+        # click in Advanced silently redirect where a Simple load attaches.
+        self._simple_run_id = ""
+        self._simple_run: ResearchRun | None = None
+        self._simple_discovery_id = ""
+        self._simple_cards: tuple[SimpleSourceCard, ...] = ()
+        self._simple_activity = SimpleResearchActivity.IDLE
+        self._simple_last_stage: SourceLoadStage | None = None
+        self._simple_language = ResponseLanguage.ENGLISH
         self._font_size = _DEFAULT_FONT_SIZE
         self._font_size_label = tk.StringVar()
         self._theme_mode = tk.StringVar(value=DesktopTheme.EYE_COMFORT.value)
@@ -402,6 +732,7 @@ class TkinterDesktopWindow:
         self._build_layout()
         self._apply_accessibility_preferences()
         self._root.protocol("WM_DELETE_WINDOW", self._close)
+        self._arm_one_shot_deferred_execution()
         self._root.after(_REQUEST_POLL_INTERVAL_MS, self._poll_requests)
 
     def run(self) -> None:
@@ -415,37 +746,90 @@ class TkinterDesktopWindow:
         label: str,
         *,
         cancellation_signal: CancellationSignal | None = None,
+        preserve_cancelled_result: bool = False,
     ) -> None:
         """Start one long action without blocking or queueing the Tk event loop."""
+
+        def present(value: object) -> None:
+            if not isinstance(value, BrainResponse):
+                raise TypeError("A Brain request returned the wrong result type.")
+            on_success(value)
+
+        self._start_bounded_action(
+            action,
+            present,
+            label,
+            cancellation_signal=cancellation_signal,
+            preserve_cancelled_result=preserve_cancelled_result,
+        )
+
+    def _start_tool_request(
+        self,
+        action: Callable[[], ToolRunView],
+        on_success: Callable[[ToolRunView], None],
+        label: str,
+    ) -> None:
+        """Run one local Tool action through the shared single-flight worker."""
+
+        def present(value: object) -> None:
+            if not isinstance(value, ToolRunView):
+                raise TypeError("A Tool request returned the wrong result type.")
+            on_success(value)
+
+        result = self._start_bounded_action(action, present, label)
+        if result == "busy":
+            self._tool_status.set("Hypatia is already processing a request.")
+        elif result == "stopped":
+            self._tool_status.set("Hypatia is closing.")
+        elif result == "failed":
+            self._tool_status.set("Local file read could not be started.")
+
+    def _start_bounded_action(
+        self,
+        action: Callable[[], object],
+        on_success: Callable[[object], None],
+        label: str,
+        *,
+        cancellation_signal: CancellationSignal | None = None,
+        preserve_cancelled_result: bool = False,
+    ) -> Literal["started", "busy", "stopped", "failed"]:
+        """Reserve the one desktop worker for one bounded local action."""
         if self._closing:
             self._status.set("Hypatia is closing.")
-            return
-        start_result = self._request_runner.start(
-            action,
-            cancel_callback=(
-                cancellation_signal.cancel if cancellation_signal is not None else None
-            ),
+            return "stopped"
+        cancel_callback = (
+            cancellation_signal.cancel if cancellation_signal is not None else None
         )
+        if preserve_cancelled_result:
+            start_result = self._request_runner.start(
+                action, cancel_callback=cancel_callback, preserve_cancelled_result=True
+            )
+        else:
+            start_result = self._request_runner.start(
+                action, cancel_callback=cancel_callback
+            )
         if start_result == "started":
             self._request_completion_handler = on_success
             self._request_label = label
             self._request_started_at = monotonic()
             self._set_request_controls_busy(True)
             self._status.set(f"{label}: working (0s elapsed)")
-            return
+            return "started"
         if start_result == "busy":
             self._status.set("Hypatia is already processing a request.")
-            return
+            return "busy"
         if start_result == "stopped":
             self._status.set("Hypatia is closing.")
-            return
+            return "stopped"
         self._status.set("Desktop request could not be started.")
+        return "failed"
 
     def _poll_requests(self) -> None:
         """Consume worker results and touch widgets only from the Tk event loop."""
         if self._closing:
             return
-        for completion in self._request_runner.drain():
+        completions = self._request_runner.drain()
+        for completion in completions:
             handler = self._request_completion_handler
             self._request_completion_handler = None
             self._set_request_controls_busy(False)
@@ -455,24 +839,94 @@ class TkinterDesktopWindow:
                 self._status.set(
                     "Request cancelled after the active operation finished."
                 )
-                continue
+                if not (
+                    handler is not None
+                    and isinstance(completion.value, BrainResponse)
+                    and completion.value.intent == "research_goal_start"
+                ):
+                    continue
             if completion.error is not None:
                 if isinstance(completion.error, ValueError):
                     self._status.set(str(completion.error))
                 else:
                     self._status.set("Desktop request failed.")
                 continue
-            if handler is None or not isinstance(completion.value, BrainResponse):
+            if handler is None:
                 self._status.set("Desktop request failed.")
                 continue
             try:
                 handler(completion.value)
             except Exception:
                 self._status.set("Desktop request failed.")
+        if completions:
+            self._arm_one_shot_deferred_execution()
+        self._apply_pending_research_refresh()
         if self._request_runner.is_running():
             self._update_request_progress()
         if not self._closing:
             self._root.after(_REQUEST_POLL_INTERVAL_MS, self._poll_requests)
+
+    def _apply_pending_research_refresh(self) -> None:
+        """Re-read runs the event bus reported as canonically changed.
+
+        The event supplies only the identifier. Every number shown is read back
+        from the store, so a payload can never put a count on screen that the
+        store does not hold.
+        """
+        if self._research_refresh_signal is None:
+            return
+        changed = self._research_refresh_signal.drain()
+        if not changed:
+            return
+        try:
+            response = self._controller.list_research_runs()
+        except Exception:
+            self._status.set("Research state could not be refreshed.")
+            return
+        if not response.success or not response.research_runs:
+            return
+        self._refresh_research_run_presentations(tuple(response.research_runs))
+
+    def _refresh_research_run_presentations(
+        self,
+        runs: tuple[ResearchRun, ...],
+    ) -> None:
+        """Redraw only the research presentations, keeping the selection.
+
+        The selected run is looked up in the freshly read catalogue rather than
+        reused, so the counts on screen and the run they describe come from the
+        same read.
+        """
+        selected_run_id = self._research_run_id.get().strip()
+        self._research_runs = runs
+        visible = self._sort_research_runs(runs, self._current_research_run_sort())
+        self._visible_research_runs = visible
+        self._research_run_selector.configure(
+            values=tuple(self._research_run_label(run) for run in visible)
+        )
+        self._research_run_catalog_summary.set(
+            self._research_run_catalog_summary_text(runs)
+        )
+        if not selected_run_id:
+            return
+        selected = next(
+            (run for run in visible if run.run_id == selected_run_id),
+            None,
+        )
+        if selected is None:
+            return
+        self._render_research_source_selector(selected)
+        self._render_research_claim_selector(selected)
+        self._render_research_persisted_contradiction_selector(selected)
+        self._render_research_persisted_comparison_note_selector(selected)
+        read_view = ResearchWorkspaceReadModel.run_view(selected)
+        self._research_run_summary.set(read_view.summary)
+        self._research_run_context.set(read_view.context)
+        self._research_run_progress.set(read_view.progress)
+        self._research_workflow_snapshot.set(read_view.workflow_snapshot)
+        self._research_evidence_coverage.set(read_view.evidence_coverage)
+        self._research_assessment_coverage.set(read_view.assessment_coverage)
+        self._research_run_metadata.set(read_view.metadata)
 
     def _update_request_progress(self) -> None:
         """Show elapsed time without inventing a provider completion percentage."""
@@ -490,6 +944,7 @@ class TkinterDesktopWindow:
             return
         result = self._request_runner.request_cancel()
         if result in {"requested", "already_requested"}:
+            self._clear_tool_content()
             cancel_button = getattr(self, "_cancel_button", None)
             if cancel_button is not None:
                 cancel_button.state(("disabled",))
@@ -518,6 +973,17 @@ class TkinterDesktopWindow:
         if self._closing:
             return
         self._closing = True
+        one_shot_after_id = getattr(self, "_one_shot_after_id", None)
+        if one_shot_after_id is not None:
+            try:
+                self._root.after_cancel(one_shot_after_id)
+            except tk.TclError:
+                pass
+            self._one_shot_after_id = None
+        self._clear_tool_content()
+        source_reader = getattr(self, "_source_preview_panel", None)
+        if source_reader is not None:
+            source_reader.clear()
         self._request_completion_handler = None
         self._request_runner.stop()
         self._root.destroy()
@@ -531,6 +997,27 @@ class TkinterDesktopWindow:
         """Create one control disabled while a long desktop request is active."""
         button = ttk.Button(parent, text=text, command=command)
         self._request_controls.append(button)
+        return button
+
+    def _control_plane_button(
+        self,
+        parent: tk.Misc,
+        text: str,
+        command: Callable[[], None],
+    ) -> ttk.Button:
+        """Create one control that stays usable while a request is running.
+
+        Reserved for actions that stop work rather than start it. Everything
+        else is disabled while the worker is busy, because a second request
+        would have nowhere to run; an action whose entire purpose is to end the
+        first one is useless if it is only available once that has happened.
+
+        Nothing here makes such an action concurrent with the worker in any
+        deeper sense. It still runs on this thread and still goes through the
+        ordinary application boundary; it is simply not greyed out.
+        """
+        button = ttk.Button(parent, text=text, command=command)
+        self._control_plane_controls.append(button)
         return button
 
     def _collect_request_controls(self, parent: tk.Misc) -> list[ttk.Button]:
@@ -554,14 +1041,74 @@ class TkinterDesktopWindow:
         self._workspace_tabs.grid(row=0, column=0, sticky="nsew")
         chat_tab = ttk.Frame(self._workspace_tabs, padding=10)
         knowledge_tab = ttk.Frame(self._workspace_tabs, padding=10)
+        simple_research_tab = ttk.Frame(self._workspace_tabs, padding=10)
         research_tab = ttk.Frame(self._workspace_tabs, padding=10)
         appearance_tab = ttk.Frame(self._workspace_tabs, padding=10)
         self._workspace_tabs.add(chat_tab, text="Chat")
         self._workspace_tabs.add(knowledge_tab, text="Knowledge")
-        self._workspace_tabs.add(research_tab, text="Research")
+        # Simple comes first and keeps the plain name. The detailed workflow is
+        # not reduced, only relabelled: it is where identifiers, assessments,
+        # claims, and failure stages stay, and nothing was removed from it.
+        self._workspace_tabs.add(simple_research_tab, text="Research")
+        self._workspace_tabs.add(research_tab, text="Research (Advanced)")
+        source_preview_tab = ttk.Frame(self._workspace_tabs, padding=10)
+        self._workspace_tabs.add(source_preview_tab, text="Source previews")
+        self._source_preview_panel = ResearchSourcePreviewPanel(source_preview_tab)
+        tabs = [
+            chat_tab,
+            knowledge_tab,
+            simple_research_tab,
+            research_tab,
+            source_preview_tab,
+        ]
+        if self._program_scope_enrollment_service is not None:
+            kali_tab = ttk.Frame(self._workspace_tabs, padding=10)
+            self._workspace_tabs.add(kali_tab, text="Kali")
+            tabs.append(kali_tab)
+            self._kali_panel = KaliOperationPanel(
+                kali_tab,
+                self._controller,
+                self._program_scope_enrollment_service.revisions,
+                self._start_request,
+            )
+        # The Tools tab appears only when a console was composed. An empty
+        # panel offering to run nothing would read as a feature that is broken
+        # rather than a capability this installation was not given.
+        if self._tool_console is not None:
+            tools_tab = ttk.Frame(self._workspace_tabs, padding=10)
+            self._workspace_tabs.add(tools_tab, text="Tools")
+            tabs.append(tools_tab)
+        # Same rule, different capability. Without a durable taxonomy the panel
+        # would accept weakness classes and forget them at the next restart.
+        if self._weakness_graph_enabled:
+            security_tab = ttk.Frame(self._workspace_tabs, padding=10)
+            self._workspace_tabs.add(security_tab, text="Security")
+            tabs.append(security_tab)
+        # Either opt-in earns the tab; each section still checks its own. The
+        # two stores are independent, so a build that keeps hypotheses but not
+        # lessons should show exactly the half it can honour.
+        if self._learning_visible:
+            learning_tab = ttk.Frame(self._workspace_tabs, padding=10)
+            self._workspace_tabs.add(learning_tab, text="Learning")
+            tabs.append(learning_tab)
+        # Calibration alone earns this tab, because it stores nothing and is
+        # available wherever runs are. Reflection and curiosity each add their
+        # own section when kept.
+        review_tab = ttk.Frame(self._workspace_tabs, padding=10)
+        self._workspace_tabs.add(review_tab, text="Review")
+        tabs.append(review_tab)
         self._workspace_tabs.add(appearance_tab, text="Appearance")
-        for tab in (chat_tab, knowledge_tab, research_tab, appearance_tab):
+        tabs.append(appearance_tab)
+        for tab in tabs:
             tab.columnconfigure(0, weight=1)
+        self._build_simple_research_tab(simple_research_tab)
+        if self._tool_console is not None:
+            self._build_tool_console_tab(tools_tab)
+        if self._weakness_graph_enabled:
+            self._build_security_tab(security_tab)
+        if self._learning_visible:
+            self._build_learning_tab(learning_tab)
+        self._build_review_tab(review_tab)
         chat_tab.rowconfigure(3, weight=1)
 
         accessibility_frame = ttk.LabelFrame(
@@ -1342,7 +1889,7 @@ class TkinterDesktopWindow:
         ).grid(row=2, column=0, columnspan=2, sticky="ew", pady=(4, 8))
         instruction_frame = ttk.LabelFrame(
             research_plan_frame,
-            text="Ordered instructions — one step per line",
+            text="Research steps — one executable step per line",
             padding=6,
         )
         instruction_frame.grid(row=3, column=0, sticky="nsew", padx=(0, 4))
@@ -1368,13 +1915,124 @@ class TkinterDesktopWindow:
             wrap=tk.WORD,
         )
         self._research_plan_source_ids.grid(row=0, column=0, sticky="nsew")
-        ttk.Button(
+        #: Constraints are authored here, never sorted out of the step list.
+        #: A line belongs in this box because a person put it here: the runtime
+        #: reads no wording to decide, and no model is asked.
+        constraint_frame = ttk.LabelFrame(
             research_plan_frame,
+            text=("Plan constraints — one per line; approved, but never executed"),
+            padding=6,
+        )
+        constraint_frame.grid(row=4, column=0, columnspan=2, sticky="nsew", pady=(8, 0))
+        constraint_frame.columnconfigure(0, weight=1)
+        constraint_frame.rowconfigure(0, weight=1)
+        self._research_plan_constraints = scrolledtext.ScrolledText(
+            constraint_frame,
+            height=3,
+            wrap=tk.WORD,
+        )
+        self._research_plan_constraints.grid(row=0, column=0, sticky="nsew")
+        #: One explicit selection. Nothing reads the text above to decide it,
+        #: and leaving it advisory is what keeps every existing plan behaving
+        #: exactly as it did.
+        self._plan_restriction = tk.StringVar(value=ADVISORY_RESTRICTION_LABEL)
+        enforcement = ttk.Frame(constraint_frame)
+        enforcement.grid(row=1, column=0, sticky="w", pady=(6, 0))
+        ttk.Label(enforcement, text="Constraint enforcement").grid(
+            row=0, column=0, sticky="w"
+        )
+        ttk.Combobox(
+            enforcement,
+            textvariable=self._plan_restriction,
+            state="readonly",
+            width=32,
+            values=(
+                ADVISORY_RESTRICTION_LABEL,
+                ResearchPlanRestriction.NO_EXTERNAL_SOURCE_ACCESS.value,
+            ),
+        ).grid(row=0, column=1, sticky="w", padx=(8, 0))
+        ttk.Label(
+            constraint_frame,
+            text=_PLAN_CONSTRAINT_NOTE,
+            wraplength=680,
+        ).grid(row=2, column=0, sticky="w", pady=(6, 0))
+        self._target_plan_draft: TargetResearchDraft | None = None
+        self._question_plan_draft: (
+            QuestionResearchDraft | AcquisitionResearchDraft | None
+        ) = None
+        self._question_plan_previous_text: tuple[str, str] | None = None
+        self._reference_plan_text: tuple[str, str] | None = None
+        self._target_plan_status = tk.StringVar(
+            value="Reference plan mode — no bug-bounty target selected"
+        )
+        target_bar = ttk.LabelFrame(
+            research_plan_frame,
+            text="Bug-bounty target scope",
+            padding=6,
+        )
+        target_bar.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(8, 0))
+        target_bar.columnconfigure(0, weight=1)
+        ttk.Label(target_bar, textvariable=self._target_plan_status).grid(
+            row=0, column=0, sticky="w"
+        )
+        ttk.Button(
+            target_bar,
+            text="Edit target program…",
+            command=self._open_target_plan_editor,
+        ).grid(row=0, column=1, padx=(8, 4))
+        ttk.Button(
+            target_bar,
+            text="Use reference plan",
+            command=self._clear_target_plan_draft,
+        ).grid(row=0, column=2)
+        plan_actions = ttk.Frame(research_plan_frame)
+        plan_actions.grid(row=6, column=0, columnspan=2, sticky="ew", pady=(8, 8))
+        plan_actions.columnconfigure(1, weight=1)
+        # Reaches the same preview as the button above and nothing else. There
+        # is no shortcut here: approving the plan and pressing Advance twice is
+        # still what turns this into two requests.
+        ttk.Button(
+            plan_actions,
+            text="Compare Crossref + NVD — preview only",
+            command=self._preview_provider_comparison_plan,
+        ).grid(row=0, column=0, sticky="w")
+        ttk.Button(
+            plan_actions,
             text="Preview plan — no write",
             command=self._preview_research_plan_draft,
-        ).grid(row=4, column=1, sticky="e", pady=(8, 8))
+        ).grid(row=0, column=2, sticky="e")
+        ttk.Button(
+            plan_actions,
+            text="Sorudan başlangıç planı hazırla",
+            command=self._preview_question_plan,
+        ).grid(row=1, column=0, columnspan=3, sticky="w", pady=4)
+        ttk.Button(
+            plan_actions,
+            text="Başlangıç planını onay alanına aktar",
+            command=self._select_question_plan,
+        ).grid(row=2, column=0, columnspan=2, sticky="w")
+        ttk.Button(
+            plan_actions,
+            text="Önceki taslağa dön",
+            command=self._clear_question_plan,
+        ).grid(row=2, column=2, sticky="e")
+        ttk.Button(
+            plan_actions,
+            text="Research through evidence automatically",
+            command=self._start_research_goal,
+        ).grid(row=3, column=0, columnspan=3, sticky="w", pady=4)
+        ttk.Button(
+            plan_actions,
+            text="Research and compare two sources automatically",
+            command=self._start_research_comparison,
+        ).grid(row=4, column=0, columnspan=3, sticky="w", pady=4)
+        ttk.Button(
+            plan_actions,
+            text="Research, learn and explain — preview permission",
+            command=self._start_learning_research,
+        ).grid(row=5, column=0, columnspan=3, sticky="w", pady=4)
         ttk.Label(research_plan_frame, text="Complete preview or rejection").grid(
-            row=5,
+            row=7,
             column=0,
             columnspan=2,
             sticky="w",
@@ -1385,7 +2043,7 @@ class TkinterDesktopWindow:
             wrap=tk.WORD,
         )
         self._research_plan_preview.grid(
-            row=6,
+            row=8,
             column=0,
             columnspan=2,
             sticky="nsew",
@@ -1396,6 +2054,9 @@ class TkinterDesktopWindow:
             "No plan preview yet. Enter the authored draft and choose Preview plan.",
         )
         self._research_plan_preview.configure(state=tk.DISABLED)
+        if self._plan_authorization_enabled:
+            self._build_plan_approval_section(research_plan_frame)
+            self._build_execution_control_section(research_plan_frame)
         authored_claim_frame = ttk.LabelFrame(
             research_saved_records_frame,
             text="Recorded claims and contradictions",
@@ -1524,6 +2185,18 @@ class TkinterDesktopWindow:
             sticky="w",
             pady=(8, 0),
         )
+        # The choice is the operator's and it is made before the search, not
+        # inferred from the question afterwards. Nothing queries both providers
+        # and nothing falls back from one to the other: a provider that refuses
+        # is reported as refusing, because a silent second search answers a
+        # question the person did not ask.
+        ttk.Combobox(
+            research_sources_frame,
+            textvariable=self._research_discovery_provider,
+            values=tuple(provider.value for provider in ResearchDiscoveryProviderName),
+            state="readonly",
+            width=10,
+        ).grid(row=3, column=2, sticky="ew", padx=(8, 0), pady=(8, 0))
         self._request_button(
             research_sources_frame,
             text="Find sources",
@@ -1535,18 +2208,39 @@ class TkinterDesktopWindow:
             sticky="w",
             pady=(8, 0),
         )
+        candidate_area = ttk.Frame(research_sources_frame)
+        candidate_area.grid(row=4, column=1, sticky="ew", padx=8, pady=(8, 0))
+        candidate_area.columnconfigure(0, weight=1)
         self._research_candidate_selector = ttk.Combobox(
-            research_sources_frame,
+            candidate_area,
             textvariable=self._research_candidate,
             values=(),
             state="readonly",
         )
         self._research_candidate_selector.grid(
-            row=4,
-            column=1,
+            row=0,
+            column=0,
             sticky="ew",
             padx=(8, 8),
             pady=(8, 0),
+        )
+        batch_bar = ttk.Frame(candidate_area)
+        batch_bar.grid(row=1, column=0, sticky="ew", pady=(6, 0))
+        self._batch_selection_status = tk.StringVar(
+            value="No fetch candidates selected"
+        )
+        for column, (label, command) in enumerate(
+            (
+                ("Add to fetch batch", self._add_acquisition_candidate),
+                ("Clear batch", self._clear_acquisition_batch),
+                ("Review fetch batch", self._select_acquisition_batch),
+            )
+        ):
+            self._request_button(batch_bar, label, command).grid(
+                row=0, column=column, padx=(0, 6)
+            )
+        ttk.Label(batch_bar, textvariable=self._batch_selection_status).grid(
+            row=1, column=0, columnspan=3, sticky="w"
         )
         ttk.Button(
             research_sources_frame,
@@ -1772,6 +2466,69 @@ class TkinterDesktopWindow:
             values=tuple(value.value for value in ResearchInformationTrust),
             state="readonly",
         ).grid(row=2, column=1, columnspan=3, sticky="ew", padx=(8, 0), pady=(8, 0))
+        # Four separate answers rather than one quality score. A single number
+        # would let "useful to me" and "methodologically sound" and "still
+        # published" collapse into each other, and the whole point of asking is
+        # that they are different questions with different answers.
+        for offset, (label, variable, vocabulary) in enumerate(
+            (
+                (
+                    "Usefulness (operator judgement)",
+                    self._research_source_usefulness,
+                    ResearchSourceUsefulness,
+                ),
+                (
+                    "Applicability to this question (operator judgement)",
+                    self._research_source_applicability,
+                    ResearchSourceApplicability,
+                ),
+                (
+                    "Independence (operator judgement)",
+                    self._research_source_independence,
+                    ResearchSourceIndependence,
+                ),
+                (
+                    "Publication status (operator judgement)",
+                    self._research_source_publication_status,
+                    ResearchSourcePublicationStatus,
+                ),
+            )
+        ):
+            row = 3 + offset
+            ttk.Label(research_assessment_frame, text=label).grid(
+                row=row,
+                column=0,
+                sticky="w",
+                pady=(8, 0),
+            )
+            ttk.Combobox(
+                research_assessment_frame,
+                textvariable=variable,
+                values=tuple(value.value for value in vocabulary),
+                state="readonly",
+            ).grid(
+                row=row,
+                column=1,
+                columnspan=3,
+                sticky="ew",
+                padx=(8, 0),
+                pady=(8, 0),
+            )
+        # The separation, written out where a person reads it. Each dimension is
+        # named with what produced it, because the failure this guards against
+        # is somebody reading "Relevance: strong" as "this source is sound".
+        ttk.Label(
+            research_assessment_frame,
+            textvariable=self._research_source_dimensions,
+            justify="left",
+        ).grid(
+            row=7,
+            column=0,
+            columnspan=4,
+            sticky="w",
+            padx=(8, 8),
+            pady=(8, 0),
+        )
         ttk.Label(
             research_assessment_frame,
             text="Supersedes assessment ID (optional)",
@@ -2042,6 +2799,7 @@ class TkinterDesktopWindow:
             height=18,
         )
         self._transcript.grid(row=0, column=0, sticky="nsew")
+        self._configure_transcript_styles()
         self._transcript.insert(
             "1.0",
             (
@@ -2066,12 +2824,21 @@ class TkinterDesktopWindow:
             text="Send",
             command=self._send_message,
         ).grid(row=0, column=1, sticky="ns")
+        # Offered only after chat has said it did not research something, and
+        # it starts nothing: it carries the question to the Research panel as a
+        # draft the user still has to start.
+        self._research_this_button = ttk.Button(
+            composer_frame,
+            text=simple_phrase("research_this", ResponseLanguage.ENGLISH),
+            command=self._research_this,
+        )
         self._composer.bind("<Control-Return>", self._send_with_keyboard)
         self._composer.focus_set()
+        control_plane = set(map(id, self._control_plane_controls))
         self._request_controls = [
             button
             for button in self._collect_request_controls(container)
-            if button is not self._cancel_button
+            if button is not self._cancel_button and id(button) not in control_plane
         ]
 
     def _change_font_size(self, adjustment: int) -> None:
@@ -2249,6 +3016,9 @@ class TkinterDesktopWindow:
             font=font,
         )
         text_widgets = [self._transcript, self._composer]
+        source_reader = getattr(self, "_source_preview_panel", None)
+        if source_reader is not None:
+            text_widgets.extend(source_reader.text_widgets)
         text_widgets.extend(
             widget
             for widget in (
@@ -2285,6 +3055,29 @@ class TkinterDesktopWindow:
         self._append_exchange("You", message, response)
         if self._composer.get("1.0", "end-1c") == message:
             self._composer.delete("1.0", tk.END)
+        self._offer_research_this(message, response)
+
+    def _offer_research_this(self, message: str, response: BrainResponse) -> None:
+        """Show a research offer when chat has just said it researched nothing.
+
+        Only an offer. Ordinary chat stays non-networked, and this button does
+        not change that: pressing it fills in the Research panel and stops.
+        """
+        kind = response.live_information_request
+        wanted = kind is not None and kind.requires_live_research
+        self._pending_research_question = message.strip() if wanted else ""
+        if not hasattr(self, "_research_this_button"):
+            return
+        if wanted:
+            self._research_this_button.grid(row=1, column=1, sticky="ew", pady=(6, 0))
+        else:
+            self._research_this_button.grid_remove()
+
+    def _research_this(self) -> None:
+        """Carry the last unresearched question into the Research panel."""
+        if not self._pending_research_question:
+            return
+        self._offer_simple_research_handoff(self._pending_research_question)
 
     def _select_session(self) -> None:
         try:
@@ -2369,9 +3162,33 @@ class TkinterDesktopWindow:
         )
 
     def _complete_research_source_load(self, response: BrainResponse) -> None:
-        """Present an accepted network source only on the Tkinter event thread."""
+        """Present an accepted network source only on the Tkinter event thread.
+
+        The canonical re-read below reselects the run, and reselecting a run
+        writes its own status line — "no action started" — which is precisely
+        wrong after a load that was started and refused. The refused fetch was
+        therefore reported for one instant and then relabelled as nothing having
+        happened, leaving an operator watching an unchanged source count with no
+        indication that their confirmation had been acted on at all.
+
+        The outcome of this attempt is therefore restated last, after every
+        refresh that could overwrite it. The refresh itself is kept: a refused
+        load records a failure on the run, and that is a real change the
+        operator should see counted.
+        """
         self._append_response(response)
+        try:
+            canonical_response = self._controller.list_research_runs()
+        except ValueError:
+            canonical_response = None
+        if canonical_response is not None and canonical_response.success:
+            self._render_research_run_selector(tuple(canonical_response.research_runs))
         self._capture_accepted_research_source(response)
+        self._status.set(
+            "research candidate load: source attached"
+            if response.success
+            else "research candidate load: failed; no source was attached"
+        )
 
     def _create_research_run(self) -> None:
         """Create a persistent run and select its returned identifier."""
@@ -2386,26 +3203,350 @@ class TkinterDesktopWindow:
         if response.success and response.research_runs:
             self._render_research_run_selector(response.research_runs)
 
+    def _preview_provider_comparison_plan(self) -> None:
+        """Draft the two-step comparison plan. Contact no provider.
+
+        The comparison is two ordinary discovery steps in one plan, so it goes
+        through the same preview, the same approval and the same two explicit
+        advances as anything else. Pressing this reaches a preview.
+        """
+        if getattr(self, "_target_plan_draft", None) is not None:
+            self._status.set(
+                "Switch to reference plan mode before comparing reference providers."
+            )
+            return
+        self._start_request(
+            lambda: self._controller.preview_provider_comparison_plan(
+                self._research_question.get()
+            ),
+            self._complete_research_plan_draft_preview,
+            "provider comparison plan preview",
+        )
+
     def _preview_research_plan_draft(self) -> None:
         """Send only the explicit no-write plan-preview request."""
         question = self._research_question.get()
         instruction_lines = self._research_plan_instructions.get("1.0", "end-1c")
         source_id_lines = self._research_plan_source_ids.get("1.0", "end-1c")
+        constraint_lines = self._research_plan_constraints.get("1.0", "end-1c")
+        target_options = self._target_plan_options()
         self._start_request(
             lambda: self._controller.preview_research_plan_draft(
                 question,
                 instruction_lines,
                 source_id_lines,
+                constraint_lines,
+                self._plan_restriction.get(),
+                **self._opening_plan_options(),
+                **target_options,
             ),
             self._complete_research_plan_draft_preview,
             "research plan preview",
         )
+
+    def _start_learning_research(self) -> None:
+        """Preview exact configured destination, then one explicit confirmation."""
+        if getattr(self, "_authorization_seconds", None) is None:
+            self._status.set("Enable research plan authorization before starting.")
+            return
+        if (
+            getattr(self, "_target_plan_draft", None) is not None
+            or self._research_plan_constraints.get("1.0", "end-1c").strip()
+            or self._plan_restriction.get() != ADVISORY_RESTRICTION_LABEL
+        ):
+            self._status.set("Mission cannot discard target scope or constraints.")
+            return
+        question = self._research_question.get().strip()
+        provider = self._research_discovery_provider.get()
+        if not question:
+            self._status.set("Enter a research question first.")
+            return
+        try:
+            budget = budget_from(
+                {
+                    "max_step_advances": 18,
+                    "max_network_operations": 9,
+                    "max_llm_operations": 2,
+                    "max_seconds": self._authorization_seconds.get(),
+                }
+            )
+        except (ResearchError, ValueError) as error:
+            self._status.set(str(error))
+            return
+
+        def confirmed(response: BrainResponse) -> None:
+            preview = response.research_plan_draft_preview
+            if not response.success or preview is None or preview.plan is None:
+                self._append_response(response)
+                return
+            scope = preview.plan.mission_scope
+            if scope is None or scope.semantic_policy is None:
+                self._status.set(
+                    "Semantic mission policy unavailable; nothing started."
+                )
+                return
+            if not messagebox.askyesno(
+                "Approve bounded learning research?", response.message
+            ):
+                return
+            signal = CancellationSignal()
+            self._start_request(
+                lambda: self._controller.start_learning_research(
+                    question,
+                    provider,
+                    budget,
+                    scope.semantic_policy,
+                    cancellation_token=signal,
+                ),
+                self._append_response,
+                "bounded learning research",
+                cancellation_signal=signal,
+                preserve_cancelled_result=True,
+            )
+
+        self._start_request(
+            lambda: self._controller.preview_learning_research(
+                question, provider, budget
+            ),
+            confirmed,
+            "learning research permission preview",
+        )
+
+    def _start_research_comparison(self) -> None:
+        """Use the same single-confirmation worker for the comparison scope."""
+        TkinterDesktopWindow._start_research_goal(self, compare_sources=True)
+
+    def _start_research_goal(self, *, compare_sources: bool = False) -> None:
+        """Approve reference research through evidence once, then use the worker."""
+        if (
+            getattr(self, "_target_plan_draft", None) is not None
+            or self._research_plan_constraints.get("1.0", "end-1c").strip()
+            or self._plan_restriction.get() != ADVISORY_RESTRICTION_LABEL
+        ):
+            self._status.set("Mission cannot discard target scope or constraints.")
+            return
+        question = self._research_question.get().strip()
+        provider = self._research_discovery_provider.get()
+        if not question:
+            self._status.set("Enter a research question first.")
+            return
+        try:
+            budget = budget_from(
+                {
+                    "max_step_advances": self._authorization_advances.get(),
+                    "max_network_operations": self._authorization_network.get(),
+                    "max_seconds": self._authorization_seconds.get(),
+                }
+            )
+        except ResearchError as error:
+            self._status.set(str(error))
+            return
+        if compare_sources and (
+            budget.max_step_advances < 11 or budget.max_network_operations < 5
+        ):
+            self._status.set(
+                "Comparison needs at least 11 steps and 5 network reservations. "
+                "Set initial mission limits first; they are never raised silently."
+            )
+            return
+        scope_description = (
+            "This authorizes local search, one query to the selected provider, "
+            "automatic selection of two distinct public HTTPS references, fetching, "
+            "inspection, acceptance, one grounded evidence record per source, "
+            "grounding-only assessments (trust remains unassessed), and one "
+            "lexical comparison citing both records. All eleven steps share the "
+            "same budget and a cumulative 16 KiB inspected-text limit. Different "
+            "URLs do not prove independence. Acceptance reuses fetched text but "
+            "reserves one network attempt per source. No target testing, model "
+            "calls, semantic contradiction analysis or replanning is authorized. "
+            if compare_sources
+            else "This authorizes local search, one query to the selected provider, "
+            "automatic selection of one relevant public HTTPS reference, fetching, "
+            "inspection, source acceptance and one source-grounded evidence record. "
+            "The inspected text is limited to 16 KiB. Acceptance reuses fetched text "
+            "but conservatively reserves one network attempt. All five steps share "
+            "the same budget. No target testing, model calls or replanning "
+            "is authorized. "
+        )
+        if not messagebox.askyesno(
+            "Start bounded research through evidence?",
+            f"Question: {question}\nProvider: {provider}\n"
+            f"Limits: {budget.max_step_advances} steps, "
+            f"{budget.max_network_operations} network attempts, "
+            f"{budget.max_seconds:g} seconds, 0 model calls.\n\n"
+            + scope_description
+            + "The result will be an incomplete research report, not a final answer.",
+        ):
+            return
+        signal = CancellationSignal()
+        self._start_request(
+            lambda: self._controller.start_research_goal(
+                question,
+                provider,
+                budget,
+                cancellation_token=signal,
+                record_evidence=True,
+                compare_sources=compare_sources,
+            ),
+            self._append_response,
+            "autonomous reference evidence",
+            cancellation_signal=signal,
+        )
+
+    def _preview_question_plan(self) -> None:
+        """Show a separate opening proposal while preserving the authored editor."""
+        question = self._research_question.get()
+        provider = self._research_discovery_provider.get()
+        self._start_request(
+            lambda: self._controller.preview_question_plan(question, provider),
+            self._complete_question_plan_preview,
+            "research opening preview",
+        )
+
+    def _complete_question_plan_preview(self, response: BrainResponse) -> None:
+        self._complete_research_plan_draft_preview(response)
+        preview = response.research_plan_draft_preview
+        if response.success and preview is not None and preview.allowed:
+            self._previewed_question_opening = preview.plan
+
+    def _select_question_plan(self) -> None:
+        """Select exactly the visible opening; approval and start stay separate."""
+        plan = getattr(self, "_previewed_question_opening", None)
+        if plan is None:
+            self._status.set("Önce sorudan bir başlangıç planı hazırlayın.")
+            return
+        if (
+            getattr(self, "_target_plan_draft", None) is not None
+            or self._text_value(self._research_plan_constraints).strip()
+            or self._plan_restriction.get() not in ("", "advisory")
+        ):
+            self._status.set("Hedef veya kısıtları olan taslak değiştirilemez.")
+            return
+        if self._research_question.get().strip() != plan.question:
+            self._status.set("Soru değişti; yeni bir başlangıç planı hazırlayın.")
+            return
+        draft = QuestionResearchDraft(plan)
+        if getattr(self, "_question_plan_draft", None) is None:
+            self._question_plan_previous_text = (
+                self._text_value(self._research_plan_instructions),
+                self._text_value(self._research_plan_source_ids),
+            )
+        self._question_plan_draft = draft
+        self._replace_plan_text(
+            self._research_plan_instructions, draft.instruction_text, disabled=True
+        )
+        self._replace_plan_text(self._research_plan_source_ids, "", disabled=True)
+        self._invalidate_plan_approval_preview()
+        self._status.set(
+            "Başlangıç planı seçildi. Preview approval ile inceleyin; henüz onay yok."
+        )
+
+    def _clear_question_plan(self) -> None:
+        if getattr(self, "_question_plan_draft", None) is None:
+            return
+        instructions, sources = self._question_plan_previous_text or ("", "")
+        self._question_plan_draft = None
+        self._question_plan_previous_text = None
+        self._replace_plan_text(self._research_plan_instructions, instructions)
+        self._replace_plan_text(self._research_plan_source_ids, sources)
+        self._invalidate_plan_approval_preview()
+        self._status.set("Önceki taslak geri yüklendi; hiçbir araştırma başlatılmadı.")
+
+    def _open_target_plan_editor(self) -> None:
+        """Edit an inert target-bound plan draft; perform no network access."""
+        if getattr(self, "_question_plan_draft", None) is not None:
+            self._status.set("Hedef planı için önce önceki taslağa dönün.")
+            return
+        palette = _accessibility_palette(self._theme_mode.get())
+        TargetResearchDraftDialog(
+            self._root,
+            getattr(self, "_target_plan_draft", None),
+            self._apply_target_plan_draft,
+            scope_enrollment_service=getattr(
+                self, "_program_scope_enrollment_service", None
+            ),
+            background=palette.background,
+            field_background=palette.field_background,
+            foreground=palette.foreground,
+        )
+
+    def _apply_target_plan_draft(self, draft: TargetResearchDraft) -> None:
+        if getattr(self, "_question_plan_draft", None) is not None:
+            raise ValueError("Return to the previous draft before selecting a target.")
+        if not isinstance(draft, TargetResearchDraft):
+            raise ValueError("Target plan requires a validated target draft.")
+        if getattr(self, "_target_plan_draft", None) is None:
+            self._reference_plan_text = (
+                self._text_value(self._research_plan_instructions),
+                self._text_value(self._research_plan_source_ids),
+            )
+        self._target_plan_draft = draft
+        step_lines = "\n".join(
+            f"{step.capability}: {step.authorized_source_url}" for step in draft.steps
+        )
+        self._replace_plan_text(
+            self._research_plan_instructions, step_lines, disabled=True
+        )
+        self._replace_plan_text(self._research_plan_source_ids, "", disabled=True)
+        self._target_plan_status.set(
+            f"Target program: {draft.binding.program_id} · "
+            f"{len(draft.steps)} exact page(s)"
+        )
+        self._invalidate_plan_approval_preview()
+
+    def _clear_target_plan_draft(self) -> None:
+        if getattr(self, "_target_plan_draft", None) is None:
+            self._target_plan_status.set(
+                "Reference plan mode — no bug-bounty target selected"
+            )
+            return
+        if not messagebox.askyesno(
+            "Use reference plan mode?",
+            "This clears only the current target draft. It does not revoke or "
+            "change any execution already started.",
+            parent=self._root,
+        ):
+            return
+        instructions, sources = self._reference_plan_text or ("", "")
+        self._target_plan_draft = None
+        self._reference_plan_text = None
+        self._replace_plan_text(self._research_plan_instructions, instructions)
+        self._replace_plan_text(self._research_plan_source_ids, sources)
+        self._target_plan_status.set(
+            "Reference plan mode — no bug-bounty target selected"
+        )
+        self._invalidate_plan_approval_preview()
+
+    @staticmethod
+    def _replace_plan_text(
+        widget: tk.Text, value: str, *, disabled: bool = False
+    ) -> None:
+        widget.configure(state=tk.NORMAL)
+        widget.delete("1.0", tk.END)
+        widget.insert(tk.END, value)
+        widget.configure(state=tk.DISABLED if disabled else tk.NORMAL)
+
+    def _target_plan_options(self) -> dict[str, TargetResearchDraft]:
+        draft = getattr(self, "_target_plan_draft", None)
+        return {} if draft is None else {"target_draft": draft}
+
+    def _opening_plan_options(self) -> _OpeningPlanOptions:
+        draft = getattr(self, "_question_plan_draft", None)
+        return {} if draft is None else {"opening_draft": draft}
+
+    def _invalidate_plan_approval_preview(self) -> None:
+        self._previewed_authority = None
+        self._previewed_fit = None
+        approval_id = getattr(self, "_plan_approval_id", None)
+        if approval_id is not None:
+            approval_id.set("")
 
     def _complete_research_plan_draft_preview(
         self,
         response: BrainResponse,
     ) -> None:
         """Show the complete ready or rejected runtime preview without confirmation."""
+        self._previewed_question_opening = None
         self._research_plan_preview.configure(state=tk.NORMAL)
         self._research_plan_preview.delete("1.0", tk.END)
         self._research_plan_preview.insert(tk.END, response.message)
@@ -2751,6 +3892,7 @@ class TkinterDesktopWindow:
         self._research_run_id.set(selected_run.run_id)
         if previous_run_id != selected_run.run_id:
             self._clear_research_run_dependent_presentations()
+        self._show_research_run_candidates(selected_run)
         self._render_research_source_selector(selected_run)
         self._render_research_claim_selector(selected_run)
         self._render_research_persisted_contradiction_selector(selected_run)
@@ -3464,6 +4606,7 @@ class TkinterDesktopWindow:
             for record in records
         )
         self._research_assessment_selector.configure(values=labels)
+        self._render_research_source_dimensions(run, source)
         if not records:
             self._research_assessment_choice.set("")
             return
@@ -3477,6 +4620,91 @@ class TkinterDesktopWindow:
         )
         self._research_assessment_selector.current(selected_index)
 
+    def _render_research_source_dimensions(
+        self,
+        run: ResearchRun,
+        source: ResearchSourceRecord,
+    ) -> None:
+        """Show relevance, judgement, reputation and acceptance as separate answers.
+
+        They are rendered together and never combined. Each line names where it
+        came from, because the failure worth preventing is somebody reading
+        `Relevance: strong` as a statement that the source is sound — the ranker
+        compared words in a title and has no opinion about soundness at all.
+        """
+        identity = identity_of(source.url)
+        relevance = "not among the latest discovered candidates"
+        provider = "unknown"
+        if run.discoveries:
+            latest = run.discoveries[-1]
+            provider = latest.provider
+            for entry in ranked_candidates(latest):
+                if identity_of(entry.candidate.url) == identity:
+                    relevance = (
+                        f"{entry.relevance.category.value} "
+                        f"({entry.relevance.score}), rank {entry.relevance_rank}, "
+                        f"provider rank {entry.provider_rank}"
+                    )
+                    break
+        current = self._current_research_assessment(run, source)
+        if current is None:
+            judgement = "none recorded"
+        else:
+            judgement = (
+                f"usefulness={current.usefulness.value}, "
+                f"applicability={current.applicability.value}, "
+                f"independence={current.independence.value}, "
+                f"publication={current.publication_status.value}, "
+                f"information trust={current.information_trust.value}"
+            )
+        reputation = SourceReputationLedger().for_origin(origin_of(source.url), [run])
+        reputation_text = (
+            "unknown"
+            if reputation is None
+            else (
+                f"{reputation.assessed_count} assessed at this origin "
+                f"(high {reputation.high_count}, medium {reputation.medium_count}, "
+                f"low {reputation.low_count})"
+            )
+        )
+        evidence_count = sum(
+            1
+            for record in run.evidence
+            if record.source_document_id == source.document_id
+        )
+        self._research_source_dimensions.set(
+            "\n".join(
+                (
+                    f"Relevance: {relevance} (deterministic lexical ranking, "
+                    f"provider {provider})",
+                    f"Operator assessment: {judgement} (human judgement)",
+                    f"Source reputation: {reputation_text} (our own past "
+                    "assessments, counted)",
+                    f"Evidence status: accepted, {evidence_count} evidence "
+                    "record(s) (separate from every line above)",
+                )
+            )
+        )
+
+    @staticmethod
+    def _current_research_assessment(
+        run: ResearchRun,
+        source: ResearchSourceRecord,
+    ) -> ResearchSourceAssessmentRecord | None:
+        """Return the assessment nothing has superseded, or nothing at all."""
+        superseded = {
+            record.supersedes_assessment_id
+            for record in run.assessments
+            if record.supersedes_assessment_id is not None
+        }
+        for record in reversed(run.assessments):
+            if (
+                record.source_document_id == source.document_id
+                and record.assessment_id not in superseded
+            ):
+                return record
+        return None
+
     @staticmethod
     def _research_assessment_label(
         record: ResearchSourceAssessmentRecord,
@@ -3488,7 +4716,18 @@ class TkinterDesktopWindow:
         if len(text) > 100:
             text = f"{text[:97]}..."
         state = "current" if is_current else "superseded"
-        return f"[{state}] {text} — {record.assessment_id}"
+        judged = ", ".join(
+            f"{name}={value}"
+            for name, value in (
+                ("usefulness", record.usefulness.value),
+                ("applicability", record.applicability.value),
+                ("independence", record.independence.value),
+                ("publication", record.publication_status.value),
+            )
+            if value != "unknown"
+        )
+        judged = f" [{judged}]" if judged else ""
+        return f"[{state}]{judged} {text} — {record.assessment_id}"
 
     def _selected_research_assessment(
         self,
@@ -3843,6 +5082,2695 @@ class TkinterDesktopWindow:
             return
         self._append_response(response)
 
+    # ------------------------------------------------------------------
+    # Tool console
+    #
+    # An operator control plane, not a reasoning feature. Nothing here asks a
+    # model anything: the capability list comes from the production registry,
+    # the descriptions are each tool's own declared summary, and the result is
+    # read from the execution outcome rather than from the fact that a button
+    # was pressed. It works with the LLM switched off, and a test says so.
+    #
+    # The window holds no tool-layer types. It passes plain strings to the
+    # console controller and renders plain data back, so this file cannot name
+    # an effect or build an invocation even by mistake.
+    # ------------------------------------------------------------------
+
+    def _build_plan_approval_section(self, parent: ttk.Frame) -> None:
+        """Record a human approval of the exact plan above. Run nothing.
+
+        Deliberately placed under the plan draft and using its fields, so the
+        plan being approved is the plan on screen rather than a second copy
+        someone typed twice.
+        """
+        self._plan_approval_run_id = tk.StringVar()
+        self._plan_approval_id = tk.StringVar()
+        self._plan_approval_disclosure = tk.StringVar(
+            value=ResearchDisclosure.NONE.value
+        )
+        self._plan_approval_status = tk.StringVar(value=_APPROVAL_IDLE_STATUS)
+
+        section = ttk.LabelFrame(parent, text="Plan approval", padding=8)
+        section.grid(row=7, column=0, columnspan=2, sticky="ew", pady=(10, 0))
+        section.columnconfigure(1, weight=1)
+        ttk.Label(section, text=_APPROVAL_PANEL_NOTE, wraplength=680).grid(
+            row=0, column=0, columnspan=2, sticky="w"
+        )
+        ttk.Label(section, text="Research run ID").grid(
+            row=1, column=0, sticky="w", pady=(6, 0)
+        )
+        ttk.Entry(section, textvariable=self._plan_approval_run_id).grid(
+            row=1, column=1, sticky="ew", padx=(8, 0), pady=(6, 0)
+        )
+        ttk.Label(section, text="Model disclosure").grid(
+            row=2, column=0, sticky="w", pady=(6, 0)
+        )
+        ttk.Combobox(
+            section,
+            textvariable=self._plan_approval_disclosure,
+            state="readonly",
+            values=tuple(member.value for member in ResearchDisclosure),
+        ).grid(row=2, column=1, sticky="ew", padx=(8, 0), pady=(6, 0))
+        ttk.Label(section, text="Previewed approval ID").grid(
+            row=3, column=0, sticky="w", pady=(6, 0)
+        )
+        ttk.Entry(section, textvariable=self._plan_approval_id).grid(
+            row=3, column=1, sticky="ew", padx=(8, 0), pady=(6, 0)
+        )
+        #: The authority being granted, typed by the operator. Blank means
+        #: "leave this bound alone", never zero and never "whatever it needs".
+        self._authorization_advances = tk.StringVar()
+        self._authorization_network = tk.StringVar()
+        self._authorization_seconds = tk.StringVar()
+        ttk.Label(section, text=_AUTHORIZATION_BUDGET_NOTE, wraplength=680).grid(
+            row=10, column=0, columnspan=2, sticky="w", pady=(10, 0)
+        )
+        for offset, (label, variable) in enumerate(
+            (
+                ("Grant step advances (blank = default)", self._authorization_advances),
+                (
+                    "Grant network operations (blank = default)",
+                    self._authorization_network,
+                ),
+                ("Grant seconds (blank = default)", self._authorization_seconds),
+            )
+        ):
+            ttk.Label(section, text=label).grid(
+                row=11 + offset, column=0, sticky="w", pady=(6, 0)
+            )
+            ttk.Entry(section, textvariable=variable).grid(
+                row=11 + offset, column=1, sticky="ew", padx=(8, 0), pady=(6, 0)
+            )
+
+        buttons = ttk.Frame(section)
+        buttons.grid(row=4, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
+        for column, (label, command) in enumerate(
+            (
+                ("Preview approval — no write", self._preview_plan_authorization),
+                ("Confirm approval", self._confirm_plan_authorization),
+                ("List approvals", self._list_plan_authorizations),
+                ("Use approval to start once", self._start_authorized_execution),
+            )
+        ):
+            self._request_button(buttons, label, command).grid(
+                row=0, column=column, sticky="w", padx=(0 if column == 0 else 8, 0)
+            )
+        ttk.Label(
+            section,
+            textvariable=self._plan_approval_status,
+            wraplength=680,
+        ).grid(row=5, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        self._plan_approval_output = tk.Text(section, height=10, wrap="word")
+        self._plan_approval_output.grid(
+            row=6, column=0, columnspan=2, sticky="ew", pady=(6, 0)
+        )
+        self._plan_approval_output.configure(state=tk.DISABLED)
+
+    def _build_execution_control_section(self, parent: ttk.Frame) -> None:
+        """Watch, step, and stop one already-authorized execution.
+
+        Placed beside the approval it was started with, because the two are one
+        story: the approval was spent to begin this, and everything below stays
+        inside what it approved.
+        """
+        self._execution_id = tk.StringVar()
+
+        section = ttk.LabelFrame(parent, text="Started execution", padding=8)
+        section.grid(row=8, column=0, columnspan=2, sticky="ew", pady=(10, 0))
+        section.columnconfigure(1, weight=1)
+        ttk.Label(section, text=_EXECUTION_PANEL_NOTE, wraplength=680).grid(
+            row=0, column=0, columnspan=2, sticky="w"
+        )
+        ttk.Label(section, text="Execution ID").grid(
+            row=1, column=0, sticky="w", pady=(6, 0)
+        )
+        ttk.Entry(section, textvariable=self._execution_id).grid(
+            row=1, column=1, sticky="ew", padx=(8, 0), pady=(6, 0)
+        )
+        #: Named separately from the execution because a ruling is about one
+        #: exact attempt, and "the interrupted one" is not an identity.
+        self._interrupted_step_id = tk.StringVar()
+        self._interrupted_resolution = tk.StringVar(
+            value=ResearchAttemptResolution.REMAINS_UNKNOWN.value
+        )
+        ttk.Label(section, text=_INTERRUPTED_PANEL_NOTE, wraplength=680).grid(
+            row=3, column=0, columnspan=2, sticky="w", pady=(8, 0)
+        )
+        ttk.Label(section, text="Interrupted step ID").grid(
+            row=4, column=0, sticky="w", pady=(6, 0)
+        )
+        ttk.Entry(section, textvariable=self._interrupted_step_id).grid(
+            row=4, column=1, sticky="ew", padx=(8, 0), pady=(6, 0)
+        )
+        ttk.Label(section, text="What actually happened").grid(
+            row=5, column=0, sticky="w", pady=(6, 0)
+        )
+        ttk.Combobox(
+            section,
+            textvariable=self._interrupted_resolution,
+            state="readonly",
+            values=tuple(
+                member.value
+                for member in ResearchAttemptResolution
+                if member is not ResearchAttemptResolution.NONE
+            ),
+        ).grid(row=5, column=1, sticky="ew", padx=(8, 0), pady=(6, 0))
+        self._request_button(
+            section,
+            "Record ruling",
+            self._resolve_interrupted_attempt,
+        ).grid(row=6, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
+
+        self._recovery_summary = tk.StringVar()
+        self._recovery_claimed_operation = tk.StringVar()
+        ttk.Label(section, text=_RECOVERY_PANEL_NOTE, wraplength=680).grid(
+            row=7, column=0, columnspan=2, sticky="w", pady=(10, 0)
+        )
+        ttk.Label(section, text="What you found (your account)").grid(
+            row=8, column=0, sticky="w", pady=(6, 0)
+        )
+        ttk.Entry(section, textvariable=self._recovery_summary).grid(
+            row=8, column=1, sticky="ew", padx=(8, 0), pady=(6, 0)
+        )
+        ttk.Label(section, text="Operation you say produced it").grid(
+            row=9, column=0, sticky="w", pady=(6, 0)
+        )
+        ttk.Entry(section, textvariable=self._recovery_claimed_operation).grid(
+            row=9, column=1, sticky="ew", padx=(8, 0), pady=(6, 0)
+        )
+        recovery_buttons = ttk.Frame(section)
+        recovery_buttons.grid(row=10, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
+        for column, (label, command) in enumerate(
+            (
+                ("Record recovered information", self._record_recovered_information),
+                ("Abandon step", self._abandon_step),
+            )
+        ):
+            self._request_button(recovery_buttons, label, command).grid(
+                row=0, column=column, sticky="w", padx=(0 if column == 0 else 8, 0)
+            )
+
+        #: A bound the operator types, never defaulted to "as many as it takes".
+        self._continuation_steps = tk.StringVar(value="1")
+        ttk.Label(section, text="Continue at most (steps)").grid(
+            row=11, column=0, sticky="w", pady=(10, 0)
+        )
+        ttk.Entry(section, textvariable=self._continuation_steps).grid(
+            row=11, column=1, sticky="ew", padx=(8, 0), pady=(10, 0)
+        )
+        controls = ttk.Frame(section)
+        controls.grid(row=12, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
+        for column, (label, command) in enumerate(
+            (
+                ("Continue bounded", self._continue_execution_bounded),
+                ("Continue in background", self._continue_execution_in_background),
+            )
+        ):
+            self._request_button(controls, label, command).grid(
+                row=0, column=column, sticky="w", padx=(0 if column == 0 else 8, 0)
+            )
+        ttk.Label(section, text=_BACKGROUND_CONTINUATION_NOTE, wraplength=680).grid(
+            row=13, column=0, columnspan=2, sticky="w", pady=(8, 0)
+        )
+        ttk.Label(section, text=_SCHEDULER_CYCLE_NOTE, wraplength=680).grid(
+            row=14, column=0, columnspan=2, sticky="w", pady=(10, 0)
+        )
+        #: The scheduler record, kept apart from the execution field above.
+        #: Pausing a task and cancelling an execution are different acts on
+        #: different identities, and one box for both would invite the mistake.
+        self._scheduler_task_id = tk.StringVar()
+        ttk.Label(section, text=_SCHEDULER_QUEUE_NOTE, wraplength=680).grid(
+            row=15, column=0, columnspan=2, sticky="w", pady=(10, 0)
+        )
+        ttk.Label(section, text="Background task ID").grid(
+            row=16, column=0, sticky="w", pady=(6, 0)
+        )
+        ttk.Entry(section, textvariable=self._scheduler_task_id).grid(
+            row=16, column=1, sticky="ew", padx=(8, 0), pady=(6, 0)
+        )
+        queue_buttons = ttk.Frame(section)
+        queue_buttons.grid(row=17, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
+        for column, (label, command) in enumerate(
+            (
+                ("Queue this execution", self._create_background_task),
+                ("Refresh tasks", self._list_background_tasks),
+                ("Pause task", self._pause_background_task),
+                ("Resume task", self._resume_background_task),
+                ("Cancel task", self._cancel_background_task),
+            )
+        ):
+            self._request_button(queue_buttons, label, command).grid(
+                row=0, column=column, sticky="w", padx=(0 if column == 0 else 8, 0)
+            )
+        self._deferred_execution_status = tk.StringVar(
+            value="Deferred status: manual only. No timer exists."
+        )
+        if getattr(self._controller, "deferred_execution_control_available", False):
+            deferred_buttons = ttk.Frame(section)
+            deferred_buttons.grid(
+                row=18, column=1, sticky="w", padx=(8, 0), pady=(8, 0)
+            )
+            for column, (label, command) in enumerate(
+                (
+                    ("Allow deferred execution", self._allow_deferred_execution),
+                    ("Revoke deferred execution", self._revoke_deferred_execution),
+                    ("Refresh deferred status", self._refresh_deferred_execution),
+                )
+            ):
+                self._request_button(deferred_buttons, label, command).grid(
+                    row=0,
+                    column=column,
+                    sticky="w",
+                    padx=(0 if column == 0 else 8, 0),
+                )
+            ttk.Label(
+                section,
+                textvariable=self._deferred_execution_status,
+                wraplength=680,
+            ).grid(row=19, column=0, columnspan=2, sticky="w", pady=(4, 0))
+        self._one_shot_run_at = tk.StringVar()
+        self._one_shot_deferred_status = tk.StringVar(
+            value="No one-shot deferred run is scheduled."
+        )
+        if getattr(self._controller, "one_shot_deferred_execution_available", False):
+            ttk.Label(section, text="Run once at (local time: YYYY-MM-DD HH:MM)").grid(
+                row=20, column=0, sticky="w", pady=(8, 0)
+            )
+            ttk.Entry(section, textvariable=self._one_shot_run_at).grid(
+                row=20, column=1, sticky="ew", padx=(8, 0), pady=(8, 0)
+            )
+            one_shot_buttons = ttk.Frame(section)
+            one_shot_buttons.grid(
+                row=21, column=1, sticky="w", padx=(8, 0), pady=(8, 0)
+            )
+            for column, (label, command) in enumerate(
+                (
+                    ("Schedule one run", self._schedule_one_shot_deferred_execution),
+                    ("Cancel scheduled run", self._cancel_one_shot_deferred_execution),
+                    (
+                        "Refresh scheduled run",
+                        self._refresh_one_shot_deferred_execution,
+                    ),
+                )
+            ):
+                self._request_button(one_shot_buttons, label, command).grid(
+                    row=0,
+                    column=column,
+                    sticky="w",
+                    padx=(0 if column == 0 else 8, 0),
+                )
+            ttk.Label(
+                section,
+                textvariable=self._one_shot_deferred_status,
+                wraplength=680,
+            ).grid(row=22, column=0, columnspan=2, sticky="w", pady=(4, 0))
+        self._request_button(
+            section,
+            "Run scheduler cycle",
+            self._run_scheduler_cycle,
+        ).grid(row=23, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
+
+        buttons = ttk.Frame(section)
+        buttons.grid(row=2, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
+        commands: list[tuple[str, Callable[[], None]]] = [
+            ("Refresh status", self._refresh_execution_status),
+            ("Advance one step", self._advance_execution_one_step),
+        ]
+        if self._curiosity_enabled:
+            # Only offered where the question it needs can be named. Resuming
+            # asks which question the execution came from, and that field
+            # exists on the curiosity surface.
+            commands.insert(1, ("Resume after restart", self._resume_execution))
+        for column, (label, command) in enumerate(commands):
+            self._request_button(buttons, label, command).grid(
+                row=0, column=column, sticky="w", padx=(0 if column == 0 else 8, 0)
+            )
+        # Deliberately not one of the buttons above. Cancelling is how an
+        # operator stops a continuation that is already running, so it is the
+        # one execution control that must not be greyed out while one is.
+        self._control_plane_button(
+            buttons, "Cancel execution", self._cancel_execution
+        ).grid(row=0, column=len(commands), sticky="w", padx=(8, 0))
+
+    def _refresh_execution_status(self) -> None:
+        self._approval_request(
+            lambda: self._controller.research_execution_status(self._execution_id.get())
+        )
+
+    def _advance_execution_one_step(self) -> None:
+        """Attempt one step, after showing what that step would cost."""
+        execution_id = self._execution_id.get().strip()
+        if not execution_id:
+            self._plan_approval_status.set("An execution ID is required.")
+            return
+        if not messagebox.askyesno(
+            "Advance one step?",
+            (
+                f"Execution: {execution_id}\n\n"
+                "This attempts exactly one step and then stops. It does not "
+                "continue to the next step on its own.\n\n"
+                "The attempt is charged against the approved budget whether or "
+                "not it succeeds. Choose Refresh status first to see what "
+                "remains and what the next step would use."
+            ),
+            parent=self._root,
+        ):
+            self._plan_approval_status.set("Not advanced. Nothing was attempted.")
+            return
+        self._approval_request(
+            lambda: self._controller.advance_research_execution(execution_id)
+        )
+
+    def _resume_execution(self) -> None:
+        """Recover one named durable execution so it can be advanced again.
+
+        Reads both identifiers when pressed, so it follows what the operator
+        has selected rather than resuming whatever ran last. It performs no
+        step: advancing stays a separate, explicit decision afterwards.
+        """
+        execution_id = self._execution_id.get().strip()
+        question_id = self._curiosity_question_id.get().strip()
+        if not execution_id or not question_id:
+            self._plan_approval_status.set(
+                "A question ID and an execution ID are both required."
+            )
+            return
+        if not messagebox.askyesno(
+            "Resume this execution?",
+            (
+                f"Execution: {execution_id}\n"
+                f"Question: {question_id}\n\n"
+                "This recovers an execution that was already approved and "
+                "already started, so that it can be advanced again. It creates "
+                "no new approval and gives back no spent budget.\n\n"
+                "No step runs. Steps that finished before the restart stay "
+                "finished and are not repeated."
+            ),
+            parent=self._root,
+        ):
+            self._plan_approval_status.set("Not resumed. Nothing was recovered.")
+            return
+        self._approval_request(
+            lambda: self._controller.resume_research_execution(
+                question_id,
+                execution_id,
+            )
+        )
+
+    def _resolve_interrupted_attempt(self) -> None:
+        """Record one human ruling about an attempt nobody saw the end of.
+
+        The dialog states what is and is not known before asking, because the
+        whole reason this control exists is that the system cannot tell the
+        operator what happened. It runs nothing and retries nothing.
+        """
+        execution_id = self._execution_id.get().strip()
+        step_id = self._interrupted_step_id.get().strip()
+        resolution = self._interrupted_resolution.get().strip()
+        if not execution_id or not step_id:
+            self._plan_approval_status.set(
+                "An execution ID and the interrupted step ID are both required."
+            )
+            return
+        if not messagebox.askyesno(
+            "Record this ruling?",
+            (
+                f"Execution: {execution_id}\n"
+                f"Step: {step_id}\n"
+                f"Ruling: {resolution}\n\n"
+                "Previous attempt was interrupted. The external operation may "
+                "have occurred. Its final result is unknown. The attempt has "
+                "already been charged.\n\n"
+                "This records what you know and nothing else. No operation "
+                "runs, nothing is retried, and the charge already made is "
+                "neither refunded nor repeated."
+            ),
+            parent=self._root,
+        ):
+            self._plan_approval_status.set("No ruling recorded.")
+            return
+        self._approval_request(
+            lambda: self._controller.resolve_interrupted_attempt(
+                execution_id,
+                step_id,
+                resolution,
+            )
+        )
+
+    def _record_recovered_information(self) -> None:
+        """Keep the operator's own account of an outcome Hypatia never saw."""
+        self._recover(
+            ResearchAttemptRecoveryDecision.OPERATOR_SUPPLIED_RESULT,
+            (
+                "This records what YOU found. It is stored as your account, "
+                "never as a provider result, and the step stays blocked rather "
+                "than being marked completed.\n\n"
+                "No operation runs, nothing is retried, and the charge already "
+                "made is neither refunded nor repeated."
+            ),
+        )
+
+    def _abandon_step(self) -> None:
+        """Stop pursuing one step without claiming it succeeded or failed."""
+        self._recover(
+            ResearchAttemptRecoveryDecision.ABANDONED,
+            (
+                "This step will not be pursued. It is not marked succeeded and "
+                "not marked failed, and the record still shows the operation "
+                "may have run.\n\n"
+                "Nothing is retried and the charge already made stays spent. "
+                "Later steps become available to advance explicitly."
+            ),
+        )
+
+    def _recover(
+        self,
+        decision: ResearchAttemptRecoveryDecision,
+        warning: str,
+    ) -> None:
+        """Ask once, plainly, then record one explicit operator decision."""
+        execution_id = self._execution_id.get().strip()
+        step_id = self._interrupted_step_id.get().strip()
+        if not execution_id or not step_id:
+            self._plan_approval_status.set(
+                "An execution ID and the blocked step ID are both required."
+            )
+            return
+        if not messagebox.askyesno(
+            "Record this decision?",
+            (
+                f"Execution: {execution_id}\n"
+                f"Step: {step_id}\n"
+                f"Decision: {decision.value}\n\n" + warning
+            ),
+            parent=self._root,
+        ):
+            self._plan_approval_status.set("No decision recorded.")
+            return
+        self._approval_request(
+            lambda: self._controller.recover_interrupted_attempt(
+                execution_id,
+                step_id,
+                decision.value,
+                self._recovery_summary.get(),
+                self._recovery_claimed_operation.get(),
+            )
+        )
+
+    def _continue_execution_bounded(self) -> None:
+        """Run at most the number of steps the operator typed, then stop.
+
+        The dialog names the bound and says what ends the run early, because
+        "continue" is the word most likely to be read as "finish this for me".
+        """
+        execution_id = self._execution_id.get().strip()
+        steps = self._continuation_steps.get().strip()
+        if not execution_id or not steps:
+            self._plan_approval_status.set(
+                "An execution ID and a step count are both required."
+            )
+            return
+        if not messagebox.askyesno(
+            "Continue within this bound?",
+            (
+                f"Execution: {execution_id}\n\n"
+                f"Run at most {steps} foreground research steps. Each step uses "
+                "the existing budget and capability checks, exactly as pressing "
+                "Advance once does.\n\n"
+                "Execution stops early on failure, block, interruption, "
+                "cancellation or budget limit. Nothing runs in the background "
+                "and nothing continues after this returns."
+            ),
+            parent=self._root,
+        ):
+            self._plan_approval_status.set("Not continued. Nothing was attempted.")
+            return
+        self._approval_request(
+            lambda: self._controller.continue_research_execution(
+                execution_id,
+                steps,
+            )
+        )
+
+    def _continue_execution_in_background(self) -> None:
+        """Run the same bounded continuation away from the Tk event loop.
+
+        Deliberately not a new worker. It hands the existing bounded
+        continuation to the one desktop worker this window already owns, so the
+        step loop, the budget checks, the durable checkpoint and the refusals
+        are the ones an ordinary press gets — the only difference is which
+        thread waits for them.
+
+        That worker is single-flight, which is also the guard against two
+        clicks racing over one execution: the second is told Hypatia is already
+        busy rather than starting a second run.
+        """
+        execution_id = self._execution_id.get().strip()
+        steps = self._continuation_steps.get().strip()
+        if not execution_id or not steps:
+            self._plan_approval_status.set(
+                "An execution ID and a step count are both required."
+            )
+            return
+        if not messagebox.askyesno(
+            "Continue this execution in the background?",
+            (
+                f"Execution: {execution_id}\n\n"
+                f"Run at most {steps} research steps away from this window, so "
+                "it stays usable while they run.\n\n" + _BACKGROUND_CONTINUATION_NOTE
+            ),
+            parent=self._root,
+        ):
+            self._plan_approval_status.set("Not continued. Nothing was attempted.")
+            return
+        cancellation_signal = CancellationSignal()
+        started = self._start_bounded_action(
+            lambda: self._controller.continue_research_execution(
+                execution_id,
+                steps,
+            ),
+            self._complete_background_continuation,
+            "background research continuation",
+            cancellation_signal=cancellation_signal,
+        )
+        if started == "started":
+            self._plan_approval_status.set(
+                f"Continuing {execution_id} in the background, at most {steps} "
+                "steps. Nothing new was authorized."
+            )
+
+    def _create_background_task(self) -> None:
+        """Queue the named execution for the scheduler, running nothing.
+
+        The execution comes from the field above, because a task is always
+        about one exact execution somebody already approved and started. This
+        neither approves nor starts anything, and it does not run a cycle.
+        """
+        execution_id = self._execution_id.get().strip()
+        if not execution_id:
+            self._plan_approval_status.set(
+                "An execution ID is required to queue a background task."
+            )
+            return
+        if not messagebox.askyesno(
+            "Queue this execution?",
+            (
+                f"Execution: {execution_id}\n\n" + _SCHEDULER_QUEUE_NOTE + "\n\n"
+                "Nothing runs now. The task waits until you press Run scheduler "
+                "cycle."
+            ),
+            parent=self._root,
+        ):
+            self._plan_approval_status.set("Nothing was queued.")
+            return
+        response = self._approval_request(
+            lambda: self._controller.create_background_task(execution_id)
+        )
+        # Captured from the canonical record so pausing acts on the identity
+        # the scheduler actually made, not one read back out of the text.
+        task = getattr(response, "background_research_task", None)
+        self._scheduler_task_id.set(task.task_id if task else "")
+
+    def _list_background_tasks(self) -> None:
+        """Read the durable queue. Chooses nothing and runs nothing."""
+        self._approval_request(self._controller.list_background_tasks)
+
+    def _pause_background_task(self) -> None:
+        self._background_task_action(
+            self._controller.pause_background_task,
+            "Pause this background task?",
+            "The scheduler will stop choosing it until you resume it. The "
+            "execution it names is not stopped and not changed.",
+        )
+
+    def _resume_background_task(self) -> None:
+        self._background_task_action(
+            self._controller.resume_background_task,
+            "Resume this background task?",
+            "The scheduler may choose it again. Nothing runs now: that still "
+            "takes a press of Run scheduler cycle.",
+        )
+
+    def _cancel_background_task(self) -> None:
+        self._background_task_action(
+            self._controller.cancel_background_task,
+            "Cancel this background task?",
+            "The scheduler will never choose it again. This is the queue entry "
+            "only — the research execution it names keeps the state it has, and "
+            "stopping that is the separate Cancel execution control above.",
+        )
+
+    def _background_task_action(
+        self,
+        action: Callable[[str], BrainResponse],
+        question: str,
+        detail: str,
+    ) -> None:
+        """Send one exact task identity to one scheduler control, after asking."""
+        task_id = self._scheduler_task_id.get().strip()
+        if not task_id:
+            self._plan_approval_status.set("A background task ID is required.")
+            return
+        if not messagebox.askyesno(
+            question,
+            f"Background task: {task_id}\n\n{detail}",
+            parent=self._root,
+        ):
+            self._plan_approval_status.set("The queue was left as it was.")
+            return
+        self._approval_request(lambda: action(task_id))
+
+    def _refresh_deferred_execution(self) -> None:
+        task_id = self._scheduler_task_id.get().strip()
+        if not task_id:
+            self._deferred_execution_status.set("A background task ID is required.")
+            return
+        try:
+            view = self._controller.deferred_execution_status(task_id)
+        except (HypatiaError, ValueError, RuntimeError) as error:
+            self._deferred_execution_status.set(str(error))
+            return
+        state = "allowed" if view.decision.allowed else view.decision.reason
+        self._deferred_execution_status.set(
+            f"Deferred status for {view.task_id}: {state}. "
+            f"Approved restrictions: {view.approved_restrictions_text}. "
+            "No timer exists."
+        )
+
+    def _allow_deferred_execution(self) -> None:
+        task_id = self._scheduler_task_id.get().strip()
+        if not task_id:
+            self._deferred_execution_status.set("A background task ID is required.")
+            return
+        try:
+            preview = self._controller.deferred_execution_status(task_id)
+        except (HypatiaError, ValueError, RuntimeError) as error:
+            self._deferred_execution_status.set(str(error))
+            return
+        if not messagebox.askyesno(
+            "Allow deferred execution?",
+            preview.confirmation_text(),
+            parent=self._root,
+        ):
+            self._deferred_execution_status.set("Deferred execution remains unchanged.")
+            return
+        try:
+            view = self._controller.allow_deferred_execution(task_id)
+        except (HypatiaError, ValueError, RuntimeError) as error:
+            self._deferred_execution_status.set(str(error))
+            return
+        self._deferred_execution_status.set(
+            f"Deferred execution allowed for {view.task_id}. No timer exists."
+        )
+
+    def _revoke_deferred_execution(self) -> None:
+        task_id = self._scheduler_task_id.get().strip()
+        if not task_id:
+            self._deferred_execution_status.set("A background task ID is required.")
+            return
+        if not messagebox.askyesno(
+            "Revoke deferred execution?",
+            (
+                f"Task: {task_id}\n\nFuture automatic eligibility will be "
+                "removed. The task and execution are not cancelled, no budget "
+                "is refunded, and nothing runs now."
+            ),
+            parent=self._root,
+        ):
+            self._deferred_execution_status.set("Deferred execution remains unchanged.")
+            return
+        try:
+            view = self._controller.revoke_deferred_execution(task_id)
+        except (HypatiaError, ValueError, RuntimeError) as error:
+            self._deferred_execution_status.set(str(error))
+            return
+        self._deferred_execution_status.set(
+            f"Deferred execution revoked for {view.task_id}. Manual cycle is unchanged."
+        )
+
+    def _schedule_one_shot_deferred_execution(self) -> None:
+        task_id = self._scheduler_task_id.get().strip()
+        if not task_id:
+            self._one_shot_deferred_status.set("A background task ID is required.")
+            return
+        try:
+            run_at = self._one_shot_run_time()
+            preview = self._controller.preview_one_shot_deferred_execution(
+                task_id, run_at
+            )
+        except (HypatiaError, ValueError, RuntimeError) as error:
+            self._one_shot_deferred_status.set(str(error))
+            return
+        if not messagebox.askyesno(
+            "Schedule one deferred run?",
+            preview.confirmation_text(),
+            parent=self._root,
+        ):
+            self._one_shot_deferred_status.set("No one-shot run was scheduled.")
+            return
+        try:
+            view = self._controller.schedule_one_shot_deferred_execution(
+                task_id, run_at
+            )
+        except (HypatiaError, ValueError, RuntimeError) as error:
+            self._one_shot_deferred_status.set(str(error))
+            return
+        self._one_shot_deferred_status.set(
+            f"One run scheduled for {view.run_at.astimezone():%Y-%m-%d %H:%M %Z}. "
+            "It will not repeat."
+        )
+        self._arm_one_shot_deferred_execution()
+
+    def _cancel_one_shot_deferred_execution(self) -> None:
+        task_id = self._scheduler_task_id.get().strip()
+        if not task_id:
+            self._one_shot_deferred_status.set("A background task ID is required.")
+            return
+        if not messagebox.askyesno(
+            "Cancel the scheduled run?",
+            (
+                f"Task: {task_id}\n\nOnly the pending one-shot wake-up is "
+                "cancelled. The deferred grant, task, execution, budget and "
+                "manual cycle remain unchanged."
+            ),
+            parent=self._root,
+        ):
+            self._one_shot_deferred_status.set("The scheduled run was left unchanged.")
+            return
+        try:
+            schedule = self._controller.cancel_one_shot_deferred_execution(task_id)
+        except (HypatiaError, ValueError, RuntimeError) as error:
+            self._one_shot_deferred_status.set(str(error))
+            return
+        self._one_shot_deferred_status.set(
+            f"Scheduled run {schedule.schedule_id} cancelled. Nothing ran."
+        )
+        self._arm_one_shot_deferred_execution()
+
+    def _refresh_one_shot_deferred_execution(self) -> None:
+        task_id = self._scheduler_task_id.get().strip()
+        if not task_id:
+            self._one_shot_deferred_status.set("A background task ID is required.")
+            return
+        try:
+            view = self._controller.one_shot_deferred_execution_status(task_id)
+        except (HypatiaError, ValueError, RuntimeError) as error:
+            self._one_shot_deferred_status.set(str(error))
+            return
+        if view is None:
+            self._one_shot_deferred_status.set("No one-shot run exists for this task.")
+            return
+        schedule = view.schedule
+        if schedule is None:
+            self._one_shot_deferred_status.set(
+                "Stored one-shot schedule details are unavailable."
+            )
+            return
+        self._one_shot_deferred_status.set(
+            f"One-shot {schedule.schedule_id}: {schedule.status.value}; "
+            f"{schedule.run_at.astimezone():%Y-%m-%d %H:%M %Z}.\n"
+            f"Deferred grant: {view.grant_id}; "
+            f"Approved restrictions: {view.approved_restrictions_text}."
+        )
+
+    def _one_shot_run_time(self) -> datetime:
+        value = self._one_shot_run_at.get().strip()
+        if not value:
+            raise ValueError("A local one-shot run time is required.")
+        try:
+            local_time = datetime.strptime(value, "%Y-%m-%d %H:%M").astimezone()
+        except ValueError as error:
+            raise ValueError("Use local time in YYYY-MM-DD HH:MM format.") from error
+        return local_time.astimezone(UTC)
+
+    def _arm_one_shot_deferred_execution(self) -> None:
+        """Arm only the next durable Tk wake-up; never poll or repeat."""
+        controller = getattr(self, "_controller", None)
+        if self._closing or not getattr(
+            controller, "one_shot_deferred_execution_available", False
+        ):
+            return
+        if self._one_shot_after_id is not None:
+            try:
+                self._root.after_cancel(self._one_shot_after_id)
+            except tk.TclError:
+                pass
+            self._one_shot_after_id = None
+        try:
+            schedule = self._controller.next_one_shot_deferred_execution()
+        except (HypatiaError, ValueError, RuntimeError) as error:
+            self._one_shot_deferred_status.set(str(error))
+            return
+        if schedule is None:
+            return
+        delay_ms = max(
+            0, ceil((schedule.run_at - datetime.now(UTC)).total_seconds() * 1000)
+        )
+        self._one_shot_after_id = self._root.after(
+            delay_ms,
+            partial(self._fire_one_shot_deferred_execution, schedule.schedule_id),
+        )
+
+    def _fire_one_shot_deferred_execution(self, schedule_id: str) -> None:
+        self._one_shot_after_id = None
+        cancellation_signal = CancellationSignal()
+        started = self._start_bounded_action(
+            lambda: self._controller.fire_one_shot_deferred_execution(
+                schedule_id, cancellation_signal
+            ),
+            self._complete_one_shot_deferred_execution,
+            "one-shot deferred execution",
+            cancellation_signal=cancellation_signal,
+        )
+        if started == "started":
+            self._one_shot_deferred_status.set(
+                f"One-shot {schedule_id} is attempting its exact task once."
+            )
+            return
+        if started == "busy":
+            try:
+                skipped = self._controller.skip_busy_one_shot_deferred_execution(
+                    schedule_id
+                )
+            except (HypatiaError, ValueError, RuntimeError) as error:
+                self._one_shot_deferred_status.set(str(error))
+                return
+            self._one_shot_deferred_status.set(
+                f"One-shot {skipped.schedule_id} was skipped because the desktop "
+                "worker was busy. It will not retry."
+            )
+            self._arm_one_shot_deferred_execution()
+            return
+        self._one_shot_deferred_status.set(
+            "The one-shot worker could not start. The pending record was not consumed."
+        )
+
+    def _complete_one_shot_deferred_execution(self, value: object) -> None:
+        schedule_id = getattr(value, "schedule_id", "unknown")
+        status = getattr(getattr(value, "status", None), "value", "failed")
+        self._one_shot_deferred_status.set(
+            f"One-shot {schedule_id} finished with status: {status}. "
+            "It will not repeat."
+        )
+
+    def _run_scheduler_cycle(self) -> None:
+        """Ask the scheduler to take exactly one turn, off the Tk thread.
+
+        Deliberately thin. The desktop chooses nothing and advances nothing:
+        it reserves the one worker this window owns and hands the decision to
+        the service that already makes it.
+        """
+        if not messagebox.askyesno(
+            "Run one scheduler cycle?",
+            (
+                "This runs one bounded background research cycle and then "
+                "stops.\n\n" + _SCHEDULER_CYCLE_NOTE + "\n\n"
+                "Work runs under the budget and approval the task already has. "
+                "Nothing is approved, enlarged or retried here."
+            ),
+            parent=self._root,
+        ):
+            self._plan_approval_status.set("No scheduler cycle was run.")
+            return
+        started = self._start_bounded_action(
+            self._controller.run_background_scheduler_cycle,
+            self._complete_scheduler_cycle,
+            "background research scheduler cycle",
+        )
+        if started == "started":
+            self._plan_approval_status.set(
+                "Running one scheduler cycle. It will not repeat."
+            )
+
+    def _complete_scheduler_cycle(self, response: object) -> None:
+        """Show exactly what the scheduler reported, and nothing more."""
+        if not isinstance(response, BrainResponse):
+            self._plan_approval_status.set("The scheduler cycle failed.")
+            return
+        output = self._plan_approval_output
+        output.configure(state=tk.NORMAL)
+        output.delete("1.0", tk.END)
+        output.insert(tk.END, response.message)
+        output.configure(state=tk.DISABLED)
+        self._append_response(response)
+        self._plan_approval_status.set(
+            "Scheduler cycle finished. Another one needs another press."
+        )
+
+    def _complete_background_continuation(self, response: object) -> None:
+        """Report what the background run did, from its canonical result."""
+        if not isinstance(response, BrainResponse):
+            self._plan_approval_status.set("Background continuation failed.")
+            return
+        output = self._plan_approval_output
+        output.configure(state=tk.NORMAL)
+        output.delete("1.0", tk.END)
+        output.insert(tk.END, response.message)
+        output.configure(state=tk.DISABLED)
+        self._append_response(response)
+        continuation = response.research_execution_continuation
+        if continuation is None:
+            self._plan_approval_status.set(
+                "Done." if response.success else "That request did not complete."
+            )
+            return
+        self._plan_approval_status.set(
+            f"Background continuation finished: "
+            f"{continuation.attempted_steps} of "
+            f"{continuation.requested_max_steps} steps attempted, stopped "
+            f"because {continuation.stop_reason.value}."
+        )
+
+    def _cancel_execution(self) -> None:
+        execution_id = self._execution_id.get().strip()
+        if not execution_id:
+            self._plan_approval_status.set("An execution ID is required.")
+            return
+        if not messagebox.askyesno(
+            "Cancel this execution?",
+            (
+                f"Execution: {execution_id}\n\n"
+                "Cancelling stops this execution for good. The approval it "
+                "used stays used and the budget already spent stays spent; "
+                "neither comes back."
+            ),
+            parent=self._root,
+        ):
+            self._plan_approval_status.set("Not cancelled.")
+            return
+        self._approval_request(
+            lambda: self._controller.cancel_research_execution(execution_id)
+        )
+
+    def _approval_request(
+        self,
+        call: Callable[[], BrainResponse],
+    ) -> BrainResponse | None:
+        """Run one approval request into the approval panel's result area.
+
+        The response comes back so a caller can read structured state out of
+        it — the exact approval a preview built, say — instead of reading it
+        out of the rendered text.
+        """
+        return self._panel_request(
+            self._plan_approval_status,
+            self._plan_approval_output,
+            call,
+        )
+
+    def _preview_plan_authorization(self) -> None:
+        """Show what confirming would record, and remember the exact terms.
+
+        The approval the runtime built is captured here rather than re-derived
+        later, because that object is the one confirming records. Editing the
+        budget fields afterwards changes nothing until this is pressed again,
+        and the confirmation says so.
+        """
+        target_options = self._target_plan_options()
+        response = self._approval_request(
+            lambda: self._controller.preview_plan_authorization(
+                self._research_question.get(),
+                self._text_value(self._research_plan_instructions),
+                self._text_value(self._research_plan_source_ids),
+                self._plan_approval_run_id.get(),
+                self._plan_approval_disclosure.get(),
+                self._authorization_advances.get(),
+                self._authorization_network.get(),
+                self._authorization_seconds.get(),
+                # Sent with the plan so the approval binds the constraints the
+                # operator can see, not a constraint-free version of it.
+                self._text_value(self._research_plan_constraints),
+                self._plan_restriction.get(),
+                **self._opening_plan_options(),
+                **target_options,
+            )
+        )
+        authorization = getattr(response, "research_plan_authorization", None)
+        self._previewed_authority = (
+            authorization.budget if authorization is not None else None
+        )
+        self._previewed_fit = getattr(response, "research_plan_budget_fit", None)
+
+    def _confirm_plan_authorization(self) -> None:
+        """Record the previewed approval, after showing its exact terms.
+
+        Confirming records the approval built when Preview ran, so the budget
+        shown here is that one and not whatever the fields say now. Anybody who
+        has edited them since is told plainly that this is not what they typed,
+        which is more use than quietly recording the older figure.
+        """
+        previewed = getattr(self, "_previewed_authority", None)
+        if previewed is None:
+            self._plan_approval_status.set(
+                "Preview an approval first; confirming approves the plan it "
+                "described."
+            )
+            return
+        try:
+            current = budget_from(
+                {
+                    "max_step_advances": self._authorization_advances.get(),
+                    "max_network_operations": self._authorization_network.get(),
+                    "max_seconds": self._authorization_seconds.get(),
+                }
+            )
+        except ResearchError as error:
+            # Nothing valid is substituted for something unusable, least of all
+            # the older figure that happened to parse.
+            self._plan_approval_status.set(f"Not confirmed. {error}")
+            return
+        # The requirement comes from the previewed plan, which a budget cannot
+        # change, so it is still the right figure to compare against.
+        previewed_fit = getattr(self, "_previewed_fit", None)
+        fit = (
+            ResearchPlanBudgetFit(
+                required=previewed_fit.required,
+                required_advances=previewed_fit.required_advances,
+                budget=current,
+            )
+            if previewed_fit is not None
+            else None
+        )
+        if fit is not None and not fit.sufficient:
+            self._plan_approval_status.set(
+                "Not confirmed. " + " ".join(fit.lines()[1:])
+            )
+            return
+        if not messagebox.askyesno(
+            "Record this approval?",
+            (
+                f"Approval: {self._plan_approval_id.get().strip()}\n\n"
+                + "\n".join(_granted_authority_lines(current, fit))
+                + "\n\nThe plan is the one Preview settled and is unchanged; "
+                "the budget above is what the boxes say now, and is what will "
+                "be recorded.\n\n"
+                "Nothing runs. Beginning the work is a separate action."
+            ),
+            parent=self._root,
+        ):
+            self._plan_approval_status.set("Not confirmed. Nothing was recorded.")
+            return
+        target_options = self._target_plan_options()
+        self._approval_request(
+            lambda: self._controller.confirm_plan_authorization(
+                self._plan_approval_id.get(),
+                self._research_question.get(),
+                self._text_value(self._research_plan_instructions),
+                self._text_value(self._research_plan_source_ids),
+                self._plan_approval_run_id.get(),
+                self._authorization_advances.get(),
+                self._authorization_network.get(),
+                self._authorization_seconds.get(),
+                self._text_value(self._research_plan_constraints),
+                self._plan_restriction.get(),
+                **self._opening_plan_options(),
+                **target_options,
+            )
+        )
+
+    def _start_authorized_execution(self) -> None:
+        """Spend one approval on one foreground start, after saying so plainly.
+
+        The dialog names the approval and states both halves of what happens:
+        the approval is used up, and one execution begins. An operator who
+        expects only one of those has been told the wrong thing.
+        """
+        authorization_id = self._plan_approval_id.get().strip()
+        if not authorization_id:
+            self._plan_approval_status.set("A recorded approval ID is required.")
+            return
+        if not messagebox.askyesno(
+            "Use this approval?",
+            (
+                f"Approval: {authorization_id}\n\n"
+                "This will use up this approval and start one foreground "
+                "execution of the plan above.\n\n"
+                "The approval cannot be used again, even if the execution "
+                "fails, blocks, or is cancelled. Nothing is scheduled and "
+                "nothing continues on its own."
+            ),
+            parent=self._root,
+        ):
+            self._plan_approval_status.set("Not started. The approval is unused.")
+            return
+        target_options = self._target_plan_options()
+        self._approval_request(
+            lambda: self._controller.start_authorized_execution(
+                authorization_id,
+                self._research_question.get(),
+                self._text_value(self._research_plan_instructions),
+                self._text_value(self._research_plan_source_ids),
+                self._plan_approval_run_id.get(),
+                self._text_value(self._research_plan_constraints),
+                self._plan_restriction.get(),
+                **self._opening_plan_options(),
+                **target_options,
+            )
+        )
+
+    def _list_plan_authorizations(self) -> None:
+        self._approval_request(self._controller.list_plan_authorizations)
+
+    def _build_review_tab(self, parent: ttk.Frame) -> None:
+        """Lay out the three ways of looking back at a run that is under way.
+
+        Calibration asks how far each claim outruns its evidence, reflection
+        asks how the run went, and curiosity asks what was never asked. None of
+        them changes a run, a claim, or a confidence: they report, and the
+        judgement stays where it was.
+        """
+        self._review_run_id = tk.StringVar()
+        self._review_claim_id = tk.StringVar()
+        self._review_status = tk.StringVar(value=_REVIEW_IDLE_STATUS)
+        parent.rowconfigure(4, weight=1)
+        ttk.Label(parent, text=_REVIEW_PANEL_NOTE, wraplength=720).grid(
+            row=0, column=0, sticky="w"
+        )
+
+        run = ttk.LabelFrame(parent, text="Research run", padding=12)
+        run.grid(row=1, column=0, sticky="ew", pady=(10, 0))
+        run.columnconfigure(1, weight=1)
+        ttk.Label(run, text="Run ID").grid(row=0, column=0, sticky="w")
+        ttk.Entry(run, textvariable=self._review_run_id).grid(
+            row=0, column=1, sticky="ew", padx=(8, 0)
+        )
+        ttk.Label(run, text=_CALIBRATION_NOTE, wraplength=680).grid(
+            row=1, column=1, sticky="w", padx=(8, 0), pady=(6, 0)
+        )
+        ttk.Label(run, text="Claim ID for review").grid(
+            row=2, column=0, sticky="w", pady=(6, 0)
+        )
+        ttk.Entry(run, textvariable=self._review_claim_id).grid(
+            row=2, column=1, sticky="ew", padx=(8, 0), pady=(6, 0)
+        )
+        ttk.Label(run, text=_PROVIDER_QUALITY_NOTE, wraplength=680).grid(
+            row=4, column=1, sticky="w", padx=(8, 0), pady=(6, 0)
+        )
+        ttk.Label(run, text=_PROVIDER_COMPARISON_NOTE, wraplength=680).grid(
+            row=5, column=1, sticky="w", padx=(8, 0), pady=(6, 0)
+        )
+        commands: list[tuple[str, Callable[[], None]]] = [
+            ("Calibrate claims", self._report_claim_calibration),
+            ("Prepare claim review", self._prepare_claim_revision_review),
+            # Not run-scoped like the others: provider experience accumulates
+            # across every run, and one run is never a sample.
+            ("Provider quality", self._report_provider_quality),
+            ("Paired quality", self._report_paired_provider_quality),
+            ("Provider comparison", self._report_provider_comparison),
+        ]
+        if self._reflection_enabled:
+            commands.append(("Reflect", self._preview_reflection))
+            commands.append(("Reflect and keep", self._store_reflection))
+        if self._curiosity_enabled:
+            commands.append(("Find gaps", self._detect_curiosity_gaps))
+            commands.append(("Draft questions", self._preview_curiosity_questions))
+            commands.append(("Draft and keep", self._store_curiosity_questions))
+        buttons = ttk.Frame(run)
+        buttons.grid(row=3, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
+        for index, (label, command) in enumerate(commands):
+            self._request_button(buttons, label, command).grid(
+                row=index // 3,
+                column=index % 3,
+                sticky="w",
+                padx=(0 if index % 3 == 0 else 8, 0),
+                pady=(0 if index < 3 else 6, 0),
+            )
+
+        if self._curiosity_enabled:
+            self._build_curiosity_ruling_section(parent)
+        if self._reflection_enabled or self._curiosity_enabled:
+            self._build_review_history_section(parent)
+
+        results = ttk.LabelFrame(parent, text="Result", padding=12)
+        results.grid(row=4, column=0, sticky="nsew", pady=(10, 0))
+        results.columnconfigure(0, weight=1)
+        results.rowconfigure(1, weight=1)
+        ttk.Label(results, textvariable=self._review_status, wraplength=720).grid(
+            row=0, column=0, sticky="w"
+        )
+        self._review_output = tk.Text(results, height=14, wrap="word")
+        self._review_output.grid(row=1, column=0, sticky="nsew", pady=(6, 0))
+        self._review_output.configure(state=tk.DISABLED)
+
+    def _build_curiosity_ruling_section(self, parent: ttk.Frame) -> None:
+        """One question, one human ruling. Neither ruling starts any research."""
+        self._curiosity_question_id = tk.StringVar()
+        #: The digest the operator was shown. Carried so approving names the
+        #: exact plan that was read rather than whatever the system would draft
+        #: at the moment the button is pressed.
+        self._curiosity_plan_digest = tk.StringVar()
+        #: The durable approval returned by the authorization response. A
+        #: start names it exactly; there is no "latest approval" lookup.
+        self._curiosity_authorization_id = tk.StringVar()
+        section = ttk.LabelFrame(parent, text="Rule on a question", padding=12)
+        section.grid(row=2, column=0, sticky="ew", pady=(10, 0))
+        section.columnconfigure(1, weight=1)
+        ttk.Label(section, text="Question ID").grid(row=0, column=0, sticky="w")
+        ttk.Entry(section, textvariable=self._curiosity_question_id).grid(
+            row=0, column=1, sticky="ew", padx=(8, 0)
+        )
+        ttk.Label(section, text=_CURIOSITY_RULING_NOTE, wraplength=680).grid(
+            row=1, column=1, sticky="w", padx=(8, 0), pady=(6, 0)
+        )
+        buttons = ttk.Frame(section)
+        buttons.grid(row=2, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
+        self._request_button(
+            buttons, "Worth pursuing", self._accept_curiosity_question
+        ).grid(row=0, column=0, sticky="w")
+        self._request_button(
+            buttons, "Not worth pursuing", self._dismiss_curiosity_question
+        ).grid(row=0, column=1, sticky="w", padx=(8, 0))
+        self._request_button(
+            buttons,
+            "Prepare research proposal",
+            self._prepare_curiosity_research_proposal,
+        ).grid(row=0, column=2, sticky="w", padx=(8, 0))
+        self._request_button(
+            buttons,
+            "Authorize this proposal",
+            self._authorize_curiosity_research_proposal,
+        ).grid(row=0, column=3, sticky="w", padx=(8, 0))
+        self._request_button(
+            buttons,
+            "Start authorized proposal",
+            self._start_authorized_curiosity_research_proposal,
+        ).grid(row=0, column=4, sticky="w", padx=(8, 0))
+        ttk.Label(section, text="Plan digest").grid(
+            row=3, column=0, sticky="w", pady=(6, 0)
+        )
+        ttk.Entry(
+            section, textvariable=self._curiosity_plan_digest, state="readonly"
+        ).grid(row=3, column=1, sticky="ew", padx=(8, 0), pady=(6, 0))
+        #: The authority granted to a plan Hypatia proposed. Blank keeps the
+        #: standing default; nothing here is filled in from what the plan needs.
+        self._curiosity_advances = tk.StringVar()
+        self._curiosity_network = tk.StringVar()
+        self._curiosity_seconds = tk.StringVar()
+        ttk.Label(section, text=_CURIOSITY_BUDGET_NOTE, wraplength=680).grid(
+            row=6, column=0, columnspan=2, sticky="w", pady=(10, 0)
+        )
+        for offset, (label, variable) in enumerate(
+            (
+                ("Grant step advances (blank = default)", self._curiosity_advances),
+                (
+                    "Grant network operations (blank = default)",
+                    self._curiosity_network,
+                ),
+                ("Grant seconds (blank = default)", self._curiosity_seconds),
+            )
+        ):
+            ttk.Label(section, text=label).grid(
+                row=7 + offset, column=0, sticky="w", pady=(6, 0)
+            )
+            ttk.Entry(section, textvariable=variable).grid(
+                row=7 + offset, column=1, sticky="ew", padx=(8, 0), pady=(6, 0)
+            )
+        ttk.Label(section, text="Approval ID").grid(
+            row=4, column=0, sticky="w", pady=(6, 0)
+        )
+        ttk.Entry(
+            section,
+            textvariable=self._curiosity_authorization_id,
+            state="readonly",
+        ).grid(row=4, column=1, sticky="ew", padx=(8, 0), pady=(6, 0))
+
+    def _build_review_history_section(self, parent: ttk.Frame) -> None:
+        """Read back what was kept, producing nothing new."""
+        section = ttk.LabelFrame(parent, text="Kept", padding=12)
+        section.grid(row=3, column=0, sticky="ew", pady=(10, 0))
+        section.columnconfigure(0, weight=1)
+        buttons = ttk.Frame(section)
+        buttons.grid(row=0, column=0, sticky="w")
+        column = 0
+        if self._reflection_enabled:
+            self._request_button(
+                buttons, "List reflections", self._list_reflections
+            ).grid(row=0, column=column, sticky="w")
+            column += 1
+        if self._curiosity_enabled:
+            self._request_button(
+                buttons, "List questions", self._list_curiosity_questions
+            ).grid(row=0, column=column, sticky="w", padx=(0 if column == 0 else 8, 0))
+
+    def _review_request(
+        self,
+        call: Callable[[], BrainResponse],
+    ) -> BrainResponse | None:
+        """Run one review request into the Review panel's result area."""
+        return self._panel_request(self._review_status, self._review_output, call)
+
+    def _report_provider_comparison(self) -> None:
+        """Show one run's two provider result sets. Contact no provider."""
+        self._review_request(
+            lambda: self._controller.report_provider_comparison(
+                self._review_run_id.get()
+            )
+        )
+
+    def _report_provider_quality(self) -> None:
+        """Describe provider samples. Change no provider, default, or ranking."""
+        self._review_request(self._controller.report_provider_quality)
+
+    def _report_paired_provider_quality(self) -> None:
+        """Describe aligned provider samples. Select and change nothing."""
+        self._review_request(self._controller.report_paired_provider_quality)
+
+    def _report_claim_calibration(self) -> None:
+        self._review_request(
+            lambda: self._controller.report_claim_calibration(self._review_run_id.get())
+        )
+
+    def _prepare_claim_revision_review(self) -> None:
+        """Show exact current context; draft and record no replacement."""
+        self._review_request(
+            lambda: self._controller.prepare_claim_revision_review(
+                self._review_run_id.get(),
+                self._review_claim_id.get(),
+            )
+        )
+
+    def _preview_reflection(self) -> None:
+        self._review_request(
+            lambda: self._controller.preview_reflection(self._review_run_id.get())
+        )
+
+    def _store_reflection(self) -> None:
+        self._review_request(
+            lambda: self._controller.store_reflection(self._review_run_id.get())
+        )
+
+    def _list_reflections(self) -> None:
+        self._review_request(self._controller.list_reflections)
+
+    def _detect_curiosity_gaps(self) -> None:
+        self._review_request(
+            lambda: self._controller.detect_curiosity_gaps(self._review_run_id.get())
+        )
+
+    def _preview_curiosity_questions(self) -> None:
+        self._review_request(
+            lambda: self._controller.preview_curiosity_questions(
+                self._review_run_id.get()
+            )
+        )
+
+    def _store_curiosity_questions(self) -> None:
+        self._review_request(
+            lambda: self._controller.store_curiosity_questions(
+                self._review_run_id.get()
+            )
+        )
+
+    def _list_curiosity_questions(self) -> None:
+        self._review_request(self._controller.list_curiosity_questions)
+
+    def _accept_curiosity_question(self) -> None:
+        self._review_request(
+            lambda: self._controller.accept_curiosity_question(
+                self._curiosity_question_id.get()
+            )
+        )
+
+    def _authorize_curiosity_research_proposal(self) -> None:
+        """Approve exactly the proposal on screen, after asking.
+
+        The digest is shown in the confirmation rather than only in the panel,
+        because the digest is what the approval is bound to and an operator
+        approving one plan while reading another is the failure this exists to
+        prevent. Answering No records nothing at all.
+        """
+        question_id = self._curiosity_question_id.get().strip()
+        digest = self._curiosity_plan_digest.get().strip()
+        if not question_id or not digest:
+            self._review_status.set(
+                "Prepare a research proposal first; approving needs its digest."
+            )
+            return
+        # Read the budget boxes as they stand now, not as they stood when
+        # Preview last ran. Approving parses these same values, so a dialog
+        # describing anything else would describe the wrong grant.
+        current = self._review_request(
+            lambda: self._controller.prepare_curiosity_research_proposal(
+                question_id,
+                self._curiosity_advances.get(),
+                self._curiosity_network.get(),
+                self._curiosity_seconds.get(),
+            )
+        )
+        proposal = getattr(current, "curiosity_proposal", None)
+        fit = getattr(current, "research_plan_budget_fit", None)
+        if current is None or proposal is None:
+            reason = current.message.splitlines()[0] if current is not None else ""
+            self._review_status.set(
+                ("curiosity proposal: not authorized. " + reason).strip()
+            )
+            return
+        if proposal.digest != digest:
+            self._review_status.set(
+                "curiosity proposal: not authorized. The proposal changed since "
+                "you read it; prepare it again before approving."
+            )
+            return
+        if fit is not None and not fit.sufficient:
+            self._review_status.set(
+                "curiosity proposal: not authorized. " + " ".join(fit.lines()[1:])
+            )
+            return
+        if not messagebox.askyesno(
+            "Authorize this research proposal?",
+            (
+                f"Curiosity question: {question_id}\n"
+                f"Plan digest: {digest}\n\n"
+                + (
+                    "\n".join(_granted_authority_lines(fit.budget, fit)) + "\n\n"
+                    if fit is not None
+                    else ""
+                )
+                + "This records that you approve exactly this plan, with the "
+                "budget you entered as the authority you are granting it. It "
+                "starts nothing: no provider is contacted and no step runs. "
+                "Beginning the work is a separate action.\n\n"
+                "If the proposal has changed since you previewed it, the "
+                "approval is refused rather than moved to the new plan."
+            ),
+            parent=self._root,
+        ):
+            self._review_status.set("curiosity proposal: not authorized")
+            return
+        response = self._review_request(
+            lambda: self._controller.authorize_curiosity_research_proposal(
+                question_id,
+                digest,
+                self._curiosity_advances.get(),
+                self._curiosity_network.get(),
+                self._curiosity_seconds.get(),
+            )
+        )
+        authorization = getattr(response, "research_plan_authorization", None)
+        self._curiosity_authorization_id.set(
+            authorization.authorization_id if authorization else ""
+        )
+
+    def _start_authorized_curiosity_research_proposal(self) -> None:
+        """Spend the displayed approval on a zero-step foreground start."""
+        question_id = self._curiosity_question_id.get().strip()
+        digest = self._curiosity_plan_digest.get().strip()
+        authorization_id = self._curiosity_authorization_id.get().strip()
+        if not question_id or not digest or not authorization_id:
+            self._review_status.set(
+                "Prepare and authorize a proposal before starting it."
+            )
+            return
+        if not messagebox.askyesno(
+            "Start this authorized proposal?",
+            (
+                f"Curiosity question: {question_id}\n"
+                f"Plan digest: {digest}\n"
+                f"Approval ID: {authorization_id}\n\n"
+                "This uses up the approval and creates one foreground "
+                "execution in Running state. No provider is contacted and no "
+                "research step runs now. The first step still requires a "
+                "separate Advance action."
+            ),
+            parent=self._root,
+        ):
+            self._review_status.set(
+                "curiosity proposal: not started; approval remains unused"
+            )
+            return
+        response = self._review_request(
+            lambda: self._controller.start_authorized_curiosity_research_proposal(
+                question_id,
+                digest,
+                authorization_id,
+            )
+        )
+        # The started execution's own identity, taken from the canonical
+        # response rather than typed again, so Advance and Cancel act on
+        # exactly what was started. A refusal carries no execution and clears
+        # the field, because a stale identity here would point the next advance
+        # at whatever was started before.
+        execution = getattr(response, "research_plan_execution", None)
+        self._execution_id.set(execution.plan_id if execution else "")
+
+    def _prepare_curiosity_research_proposal(self) -> None:
+        """Preview what the selected accepted question would research.
+
+        Reads the identifier when the control is pressed, so it follows the
+        operator's current selection rather than whichever question was newest.
+        Nothing is accepted, authorized, or started here; an ineligible question
+        comes back as an explicit refusal rather than being quietly accepted
+        first.
+        """
+        response = self._review_request(
+            lambda: self._controller.prepare_curiosity_research_proposal(
+                self._curiosity_question_id.get(),
+                self._curiosity_advances.get(),
+                self._curiosity_network.get(),
+                self._curiosity_seconds.get(),
+            )
+        )
+        # Captured from the canonical response rather than parsed out of the
+        # rendered text, so approving cannot bind to a digest scraped from
+        # prose. A refusal carries no proposal and clears the field.
+        proposal = getattr(response, "curiosity_proposal", None)
+        self._curiosity_plan_digest.set(proposal.digest if proposal else "")
+        self._curiosity_authorization_id.set("")
+
+    def _dismiss_curiosity_question(self) -> None:
+        self._review_request(
+            lambda: self._controller.dismiss_curiosity_question(
+                self._curiosity_question_id.get()
+            )
+        )
+
+    @property
+    def _learning_visible(self) -> bool:
+        """Return whether either learning surface has somewhere durable to go."""
+        return self._hypothesis_enabled or self._failure_memory_enabled
+
+    def _build_learning_tab(self, parent: ttk.Frame) -> None:
+        """Lay out the two halves of learning: what we expect, and what failed.
+
+        These have existed in the runtime for some time with no way to reach
+        them, which made the loop real and unusable at once. Hypotheses feed
+        failure memory, failure memory surfaces itself when a new run begins,
+        and neither half could be driven by the person the loop is for.
+        """
+        self._learning_status = tk.StringVar(value=_LEARNING_IDLE_STATUS)
+        parent.rowconfigure(3, weight=1)
+        ttk.Label(parent, text=_LEARNING_PANEL_NOTE, wraplength=720).grid(
+            row=0, column=0, sticky="w"
+        )
+        if self._hypothesis_enabled:
+            self._build_hypothesis_section(parent)
+        if self._failure_memory_enabled:
+            self._build_lesson_section(parent)
+
+        results = ttk.LabelFrame(parent, text="Result", padding=12)
+        results.grid(row=3, column=0, sticky="nsew", pady=(10, 0))
+        results.columnconfigure(0, weight=1)
+        results.rowconfigure(1, weight=1)
+        ttk.Label(results, textvariable=self._learning_status, wraplength=720).grid(
+            row=0, column=0, sticky="w"
+        )
+        self._learning_output = tk.Text(results, height=12, wrap="word")
+        self._learning_output.grid(row=1, column=0, sticky="nsew", pady=(6, 0))
+        self._learning_output.configure(state=tk.DISABLED)
+
+    def _build_hypothesis_section(self, parent: ttk.Frame) -> None:
+        """Propose, take evidence on either side, withdraw, and review."""
+        self._hypothesis_run_id = tk.StringVar()
+        self._hypothesis_id = tk.StringVar()
+        self._hypothesis_evidence_ids = tk.StringVar()
+
+        self._hypothesis_relation = tk.StringVar(
+            value=HypothesisEvidenceRelation.SUPPORTS.value
+        )
+
+        section = ttk.LabelFrame(parent, text="Hypotheses", padding=12)
+        section.grid(row=1, column=0, sticky="ew", pady=(10, 0))
+        section.columnconfigure(1, weight=1)
+        ttk.Label(section, text="Research run ID").grid(row=0, column=0, sticky="w")
+        ttk.Entry(section, textvariable=self._hypothesis_run_id).grid(
+            row=0, column=1, sticky="ew", padx=(8, 0)
+        )
+        ttk.Label(section, text="Statement").grid(
+            row=1, column=0, sticky="nw", pady=(6, 0)
+        )
+        self._hypothesis_statement_text = tk.Text(section, height=3, wrap="word")
+        self._hypothesis_statement_text.grid(
+            row=1, column=1, sticky="ew", padx=(8, 0), pady=(6, 0)
+        )
+        ttk.Label(section, text="What would count against it").grid(
+            row=2, column=0, sticky="nw", pady=(6, 0)
+        )
+        self._hypothesis_test_text = tk.Text(section, height=3, wrap="word")
+        self._hypothesis_test_text.grid(
+            row=2, column=1, sticky="ew", padx=(8, 0), pady=(6, 0)
+        )
+        ttk.Label(section, text=_HYPOTHESIS_DEFEATER_NOTE, wraplength=680).grid(
+            row=3, column=1, sticky="w", padx=(8, 0), pady=(6, 0)
+        )
+        self._request_button(section, "Propose", self._propose_hypothesis).grid(
+            row=4, column=1, sticky="w", padx=(8, 0), pady=(8, 0)
+        )
+
+        ttk.Separator(section).grid(
+            row=5, column=0, columnspan=2, sticky="ew", pady=(12, 8)
+        )
+        ttk.Label(section, text="Hypothesis ID").grid(row=6, column=0, sticky="w")
+        ttk.Entry(section, textvariable=self._hypothesis_id).grid(
+            row=6, column=1, sticky="ew", padx=(8, 0)
+        )
+        ttk.Label(section, text="Evidence IDs").grid(
+            row=7, column=0, sticky="w", pady=(6, 0)
+        )
+        ttk.Entry(section, textvariable=self._hypothesis_evidence_ids).grid(
+            row=7, column=1, sticky="ew", padx=(8, 0), pady=(6, 0)
+        )
+        ttk.Label(section, text=_HYPOTHESIS_EVIDENCE_NOTE, wraplength=680).grid(
+            row=8, column=1, sticky="w", padx=(8, 0), pady=(6, 0)
+        )
+        ttk.Label(section, text="Relation to retract").grid(
+            row=9, column=0, sticky="w", pady=(6, 0)
+        )
+        ttk.Combobox(
+            section,
+            textvariable=self._hypothesis_relation,
+            values=tuple(relation.value for relation in HypothesisEvidenceRelation),
+            state="readonly",
+        ).grid(row=9, column=1, sticky="ew", padx=(8, 0), pady=(6, 0))
+        buttons = ttk.Frame(section)
+        buttons.grid(row=10, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
+        for column, (label, command) in enumerate(
+            (
+                ("Support", self._support_hypothesis),
+                ("Oppose", self._oppose_hypothesis),
+                ("Addresses test", self._associate_hypothesis_test_evidence),
+                ("Retract relation", self._retract_hypothesis_relation),
+                ("View history", self._view_hypothesis_history),
+                ("Withdraw", self._withdraw_hypothesis),
+                ("List hypotheses", self._list_hypotheses),
+            )
+        ):
+            self._request_button(buttons, label, command).grid(
+                row=0, column=column, sticky="w", padx=(0 if column == 0 else 8, 0)
+            )
+
+    def _build_lesson_section(self, parent: ttk.Frame) -> None:
+        """Preview, remember, recall, and review what did not work."""
+        self._lesson_run_id = tk.StringVar()
+        self._lesson_question = tk.StringVar()
+
+        section = ttk.LabelFrame(parent, text="Failure lessons", padding=12)
+        section.grid(row=2, column=0, sticky="ew", pady=(10, 0))
+        section.columnconfigure(1, weight=1)
+        ttk.Label(section, text="Research run ID").grid(row=0, column=0, sticky="w")
+        ttk.Entry(section, textvariable=self._lesson_run_id).grid(
+            row=0, column=1, sticky="ew", padx=(8, 0)
+        )
+        run_buttons = ttk.Frame(section)
+        run_buttons.grid(row=1, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
+        commands: list[tuple[str, Callable[[], None]]] = [
+            ("Preview", self._preview_failure_lessons),
+            ("Remember", self._store_failure_lessons),
+        ]
+        # Remembering hypothesis outcomes reads the durable hypothesis store, so
+        # it is offered only where that store exists. Without it the command
+        # would refuse every time, which reads as breakage rather than as a
+        # capability this build was not given.
+        if self._hypothesis_enabled:
+            commands.append(
+                ("Remember hypothesis outcomes", self._remember_hypothesis_outcomes)
+            )
+        for column, (label, command) in enumerate(commands):
+            self._request_button(run_buttons, label, command).grid(
+                row=0, column=column, sticky="w", padx=(0 if column == 0 else 8, 0)
+            )
+
+        ttk.Separator(section).grid(
+            row=2, column=0, columnspan=2, sticky="ew", pady=(12, 8)
+        )
+        ttk.Label(section, text="Question").grid(row=3, column=0, sticky="w")
+        ttk.Entry(section, textvariable=self._lesson_question).grid(
+            row=3, column=1, sticky="ew", padx=(8, 0)
+        )
+        ttk.Label(section, text=_LESSON_ADVISORY_NOTE, wraplength=680).grid(
+            row=4, column=1, sticky="w", padx=(8, 0), pady=(6, 0)
+        )
+        recall_buttons = ttk.Frame(section)
+        recall_buttons.grid(row=5, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
+        self._request_button(
+            recall_buttons, "Recall relevant", self._recall_failure_lessons
+        ).grid(row=0, column=0, sticky="w")
+        self._request_button(
+            recall_buttons, "List lessons", self._list_failure_lessons
+        ).grid(row=0, column=1, sticky="w", padx=(8, 0))
+
+    def _learning_request(self, call: Callable[[], BrainResponse]) -> None:
+        """Run one learning request into the Learning panel's result area."""
+        self._panel_request(self._learning_status, self._learning_output, call)
+
+    def _propose_hypothesis(self) -> None:
+        self._learning_request(
+            lambda: self._controller.propose_hypothesis(
+                self._hypothesis_run_id.get(),
+                self._text_value(self._hypothesis_statement_text),
+                self._text_value(self._hypothesis_test_text),
+            )
+        )
+
+    def _support_hypothesis(self) -> None:
+        self._learning_request(
+            lambda: self._controller.support_hypothesis(
+                self._hypothesis_id.get(),
+                self._hypothesis_evidence_ids.get(),
+            )
+        )
+
+    def _oppose_hypothesis(self) -> None:
+        self._learning_request(
+            lambda: self._controller.oppose_hypothesis(
+                self._hypothesis_id.get(),
+                self._hypothesis_evidence_ids.get(),
+            )
+        )
+
+    def _associate_hypothesis_test_evidence(self) -> None:
+        self._learning_request(
+            lambda: self._controller.associate_hypothesis_test_evidence(
+                self._hypothesis_id.get(),
+                self._hypothesis_evidence_ids.get(),
+            )
+        )
+
+    def _view_hypothesis_history(self) -> None:
+        """Read the currently selected hypothesis's history and show it.
+
+        Reads the identifier when the control is pressed rather than when the
+        panel was built, so it follows the operator's selection, and asks the
+        controller afresh each time so a correction made a moment ago is in it.
+        """
+        self._learning_request(
+            lambda: self._controller.hypothesis_history(self._hypothesis_id.get())
+        )
+
+    def _retract_hypothesis_relation(self) -> None:
+        """Show exactly what will be taken back, then record only that.
+
+        The evidence field accepts several identifiers for the authoring
+        controls beside this one, but a retraction is about a single statement,
+        so this asks for exactly one rather than quietly withdrawing several at
+        once from a field that looks the same.
+        """
+        hypothesis_id = self._hypothesis_id.get().strip()
+        evidence_ids = [
+            value.strip()
+            for value in self._hypothesis_evidence_ids.get().split(",")
+            if value.strip()
+        ]
+        relation = self._hypothesis_relation.get().strip()
+        if not hypothesis_id or len(evidence_ids) != 1 or not relation:
+            self._learning_status.set(
+                "Retracting needs one hypothesis, exactly one evidence ID, "
+                "and a relation."
+            )
+            return
+        if not messagebox.askyesno(
+            "Retract this relationship?",
+            (
+                f"Hypothesis: {hypothesis_id}\n"
+                f"Evidence: {evidence_ids[0]}\n"
+                f"Relationship: {relation}\n"
+                "Action: RETRACT\n\n"
+                "This records that the statement no longer stands. The evidence "
+                "and the hypothesis are both kept, nothing moves to another "
+                "relationship, and the retraction stays visible in this "
+                "hypothesis's history."
+            ),
+            parent=self._root,
+        ):
+            self._learning_status.set("hypothesis relation: not retracted")
+            return
+        self._learning_request(
+            lambda: self._controller.retract_hypothesis_evidence_relation(
+                hypothesis_id,
+                evidence_ids[0],
+                relation,
+            )
+        )
+
+    def _withdraw_hypothesis(self) -> None:
+        self._learning_request(
+            lambda: self._controller.withdraw_hypothesis(self._hypothesis_id.get())
+        )
+
+    def _list_hypotheses(self) -> None:
+        self._learning_request(self._controller.list_hypotheses)
+
+    def _preview_failure_lessons(self) -> None:
+        self._learning_request(
+            lambda: self._controller.preview_failure_lessons(self._lesson_run_id.get())
+        )
+
+    def _store_failure_lessons(self) -> None:
+        self._learning_request(
+            lambda: self._controller.store_failure_lessons(self._lesson_run_id.get())
+        )
+
+    def _remember_hypothesis_outcomes(self) -> None:
+        self._learning_request(
+            lambda: self._controller.remember_hypothesis_outcomes(
+                self._lesson_run_id.get()
+            )
+        )
+
+    def _recall_failure_lessons(self) -> None:
+        self._learning_request(
+            lambda: self._controller.recall_failure_lessons(self._lesson_question.get())
+        )
+
+    def _list_failure_lessons(self) -> None:
+        self._learning_request(self._controller.list_failure_lessons)
+
+    def _build_security_tab(self, parent: ttk.Frame) -> None:
+        """Lay out the weakness taxonomy: record, relate, and look around.
+
+        The point of the graph is the third one. Recording a class is filing;
+        asking what shares its root cause or is prevented by the same control
+        is the part that catches the four siblings of a finding someone would
+        otherwise have treated as one problem.
+        """
+        self._weakness_family_id = tk.StringVar()
+        self._weakness_family_name = tk.StringVar()
+        self._weakness_relation_from = tk.StringVar()
+        self._weakness_relation_to = tk.StringVar()
+        self._weakness_relation_kind = tk.StringVar(
+            value=VulnerabilityRelationKind.SHARES_ROOT_CAUSE.value
+        )
+        self._weakness_lookup_id = tk.StringVar()
+        self._weakness_depth = tk.IntVar(value=1)
+        self._weakness_status = tk.StringVar(value=_WEAKNESS_IDLE_STATUS)
+
+        parent.rowconfigure(3, weight=1)
+        ttk.Label(parent, text=_WEAKNESS_PANEL_NOTE, wraplength=720).grid(
+            row=0, column=0, sticky="w"
+        )
+
+        record = ttk.LabelFrame(parent, text="Record a weakness class", padding=12)
+        record.grid(row=1, column=0, sticky="ew", pady=(10, 0))
+        record.columnconfigure(1, weight=1)
+        ttk.Label(record, text="ID").grid(row=0, column=0, sticky="w")
+        ttk.Entry(record, textvariable=self._weakness_family_id).grid(
+            row=0, column=1, sticky="ew", padx=(8, 0)
+        )
+        ttk.Label(record, text="Name").grid(row=1, column=0, sticky="w", pady=(6, 0))
+        ttk.Entry(record, textvariable=self._weakness_family_name).grid(
+            row=1, column=1, sticky="ew", padx=(8, 0), pady=(6, 0)
+        )
+        ttk.Label(record, text="Weakness").grid(
+            row=2, column=0, sticky="nw", pady=(6, 0)
+        )
+        self._weakness_summary_text = tk.Text(record, height=3, wrap="word")
+        self._weakness_summary_text.grid(
+            row=2, column=1, sticky="ew", padx=(8, 0), pady=(6, 0)
+        )
+        ttk.Label(record, text="Generally prevented by").grid(
+            row=3, column=0, sticky="nw", pady=(6, 0)
+        )
+        self._weakness_prevention_text = tk.Text(record, height=3, wrap="word")
+        self._weakness_prevention_text.grid(
+            row=3, column=1, sticky="ew", padx=(8, 0), pady=(6, 0)
+        )
+        self._request_button(record, "Record class", self._record_weakness_family).grid(
+            row=4, column=1, sticky="w", pady=(8, 0)
+        )
+
+        relate = ttk.LabelFrame(parent, text="Relate two classes", padding=12)
+        relate.grid(row=2, column=0, sticky="ew", pady=(10, 0))
+        relate.columnconfigure(1, weight=1)
+        ttk.Label(relate, text="From ID").grid(row=0, column=0, sticky="w")
+        ttk.Entry(relate, textvariable=self._weakness_relation_from).grid(
+            row=0, column=1, sticky="ew", padx=(8, 0)
+        )
+        ttk.Label(relate, text="To ID").grid(row=1, column=0, sticky="w", pady=(6, 0))
+        ttk.Entry(relate, textvariable=self._weakness_relation_to).grid(
+            row=1, column=1, sticky="ew", padx=(8, 0), pady=(6, 0)
+        )
+        ttk.Label(relate, text="Relation").grid(
+            row=2, column=0, sticky="w", pady=(6, 0)
+        )
+        ttk.Combobox(
+            relate,
+            textvariable=self._weakness_relation_kind,
+            state="readonly",
+            values=tuple(kind.value for kind in VulnerabilityRelationKind),
+        ).grid(row=2, column=1, sticky="ew", padx=(8, 0), pady=(6, 0))
+        ttk.Label(relate, text="Because").grid(
+            row=3, column=0, sticky="nw", pady=(6, 0)
+        )
+        self._weakness_rationale_text = tk.Text(relate, height=3, wrap="word")
+        self._weakness_rationale_text.grid(
+            row=3, column=1, sticky="ew", padx=(8, 0), pady=(6, 0)
+        )
+        ttk.Label(relate, text=_WEAKNESS_RELATION_NOTE, wraplength=680).grid(
+            row=4, column=1, sticky="w", padx=(8, 0), pady=(6, 0)
+        )
+        self._request_button(
+            relate, "Record relation", self._record_weakness_relation
+        ).grid(row=5, column=1, sticky="w", pady=(8, 0))
+
+        lookup = ttk.LabelFrame(parent, text="Look around a class", padding=12)
+        lookup.grid(row=3, column=0, sticky="nsew", pady=(10, 0))
+        lookup.columnconfigure(1, weight=1)
+        lookup.rowconfigure(3, weight=1)
+        ttk.Label(lookup, text="Class ID").grid(row=0, column=0, sticky="w")
+        ttk.Entry(lookup, textvariable=self._weakness_lookup_id).grid(
+            row=0, column=1, sticky="ew", padx=(8, 0)
+        )
+        ttk.Label(lookup, text="Depth").grid(row=1, column=0, sticky="w", pady=(6, 0))
+        ttk.Spinbox(
+            lookup,
+            from_=1,
+            to=MAX_TRAVERSAL_DEPTH,
+            textvariable=self._weakness_depth,
+            state="readonly",
+            width=5,
+        ).grid(row=1, column=1, sticky="w", padx=(8, 0), pady=(6, 0))
+        buttons = ttk.Frame(lookup)
+        buttons.grid(row=2, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
+        self._request_button(
+            buttons, "Show neighbourhood", self._show_weakness_neighbourhood
+        ).grid(row=0, column=0, sticky="w")
+        self._request_button(
+            buttons, "List recorded classes", self._list_weakness_families
+        ).grid(row=0, column=1, sticky="w", padx=(8, 0))
+        ttk.Label(lookup, textvariable=self._weakness_status, wraplength=720).grid(
+            row=3, column=0, columnspan=2, sticky="w", pady=(8, 0)
+        )
+        self._weakness_output = tk.Text(lookup, height=10, wrap="word")
+        self._weakness_output.grid(
+            row=4, column=0, columnspan=2, sticky="nsew", pady=(6, 0)
+        )
+        self._weakness_output.configure(state=tk.DISABLED)
+
+    def _record_weakness_family(self) -> None:
+        """Send one authored weakness class through the Brain boundary."""
+        self._weakness_request(
+            lambda: self._controller.record_vulnerability_family(
+                self._weakness_family_id.get(),
+                self._weakness_family_name.get(),
+                self._text_value(self._weakness_summary_text),
+                self._text_value(self._weakness_prevention_text),
+            )
+        )
+
+    def _record_weakness_relation(self) -> None:
+        """Send one authored, explained edge through the Brain boundary."""
+        self._weakness_request(
+            lambda: self._controller.record_vulnerability_relation(
+                self._weakness_relation_from.get(),
+                self._weakness_relation_to.get(),
+                self._weakness_relation_kind.get(),
+                self._text_value(self._weakness_rationale_text),
+            )
+        )
+
+    def _show_weakness_neighbourhood(self) -> None:
+        """Ask what else is worth reading near one weakness class."""
+        self._weakness_request(
+            lambda: self._controller.vulnerability_neighbourhood(
+                self._weakness_lookup_id.get(),
+                self._weakness_depth.get(),
+            )
+        )
+
+    def _list_weakness_families(self) -> None:
+        """Show every recorded class, traversing nothing."""
+        self._weakness_request(self._controller.list_vulnerability_families)
+
+    def _weakness_request(self, call: Callable[[], BrainResponse]) -> None:
+        """Run one taxonomy request into the Security panel's own result area."""
+        self._panel_request(self._weakness_status, self._weakness_output, call)
+
+    def _panel_request(
+        self,
+        status: tk.StringVar,
+        output: tk.Text,
+        call: Callable[[], BrainResponse],
+    ) -> BrainResponse | None:
+        """Run one request, reporting a refusal as plainly as a result.
+
+        A rejected request is shown in the panel rather than only in the status
+        line. An unsuccessful response — a durable-write failure, a refusal —
+        is displayed unchanged: these surfaces repeat the runtime's answer and
+        never improve on it.
+        """
+        try:
+            response = call()
+        except ValueError as error:
+            status.set(str(error))
+            return None
+        status.set("Done." if response.success else "That request did not complete.")
+        output.configure(state=tk.NORMAL)
+        output.delete("1.0", tk.END)
+        output.insert(tk.END, response.message)
+        output.configure(state=tk.DISABLED)
+        self._append_response(response)
+        # Returned so a caller can read canonical fields off the response
+        # rather than parsing the text it just rendered. Callers that ignore it
+        # are unaffected.
+        return response
+
+    @staticmethod
+    def _text_value(widget: tk.Text) -> str:
+        """Read one multi-line field as a single trimmed value."""
+        return widget.get("1.0", tk.END).strip()
+
+    def _build_tool_console_tab(self, parent: ttk.Frame) -> None:
+        """Lay out the operator surface for the capabilities actually present."""
+        if self._tool_console is None:
+            return
+        self._tool_entries = self._tool_console.catalogue()
+        self._tool_choice = tk.StringVar()
+        self._tool_effects = tk.StringVar(value="")
+        self._tool_safety = tk.StringVar(value="")
+        self._tool_scope = tk.StringVar(value="")
+        self._tool_description = tk.StringVar(value="")
+        self._tool_status = tk.StringVar(value=_TOOL_IDLE_STATUS)
+        self._tool_argument_values: dict[str, tk.StringVar] = {}
+        self._tool_argument_texts: dict[str, tk.Text] = {}
+
+        parent.rowconfigure(3, weight=1)
+
+        chooser = ttk.LabelFrame(parent, text="Capability", padding=12)
+        chooser.grid(row=0, column=0, sticky="ew")
+        chooser.columnconfigure(0, weight=1)
+        self._tool_selector = ttk.Combobox(
+            chooser,
+            textvariable=self._tool_choice,
+            state="readonly",
+            values=tuple(entry.capability for entry in self._tool_entries),
+        )
+        self._tool_selector.grid(row=0, column=0, sticky="ew")
+        self._tool_selector.bind(
+            "<<ComboboxSelected>>",
+            lambda _event: self._tool_selected(),
+        )
+        ttk.Label(chooser, textvariable=self._tool_description, wraplength=720).grid(
+            row=1, column=0, sticky="w", pady=(6, 0)
+        )
+        ttk.Label(chooser, textvariable=self._tool_safety).grid(
+            row=2, column=0, sticky="w"
+        )
+        ttk.Label(chooser, textvariable=self._tool_scope).grid(
+            row=3, column=0, sticky="w"
+        )
+
+        self._tool_arguments_frame = ttk.LabelFrame(
+            parent, text="Arguments", padding=12
+        )
+        self._tool_arguments_frame.grid(row=1, column=0, sticky="ew", pady=(10, 0))
+        self._tool_arguments_frame.columnconfigure(1, weight=1)
+
+        authorize = ttk.LabelFrame(parent, text="Authorization", padding=12)
+        authorize.grid(row=2, column=0, sticky="ew", pady=(10, 0))
+        authorize.columnconfigure(0, weight=1)
+        ttk.Label(authorize, textvariable=self._tool_effects, wraplength=720).grid(
+            row=0, column=0, sticky="w"
+        )
+        ttk.Label(authorize, text=_TOOL_GRANT_NOTE, wraplength=720).grid(
+            row=1, column=0, sticky="w", pady=(4, 8)
+        )
+        self._request_button(
+            authorize,
+            "Authorize and run once",
+            self._run_selected_tool,
+        ).grid(row=2, column=0, sticky="w")
+
+        results = ttk.LabelFrame(parent, text="Result", padding=12)
+        results.grid(row=3, column=0, sticky="nsew", pady=(10, 0))
+        results.columnconfigure(0, weight=1)
+        results.rowconfigure(2, weight=1)
+        ttk.Label(results, textvariable=self._tool_status, wraplength=720).grid(
+            row=0, column=0, sticky="w"
+        )
+        self._tool_output = tk.Text(results, height=7, wrap="word")
+        self._tool_output.grid(row=1, column=0, sticky="nsew", pady=(6, 0))
+        self._tool_output.configure(state=tk.DISABLED)
+        self._tool_content_metadata = tk.StringVar(value="")
+        content = ttk.LabelFrame(
+            results,
+            text=_CONTENT_PREVIEW_BANNER,
+            padding=8,
+        )
+        content.grid(row=2, column=0, sticky="nsew", pady=(10, 0))
+        content.columnconfigure(0, weight=1)
+        content.rowconfigure(1, weight=1)
+        ttk.Label(
+            content,
+            textvariable=self._tool_content_metadata,
+            wraplength=960,
+            justify=tk.LEFT,
+        ).grid(row=0, column=0, sticky="w")
+        self._tool_content_output = tk.Text(content, height=9, wrap="word")
+        self._tool_content_output.grid(row=1, column=0, sticky="nsew", pady=(6, 0))
+        for sequence in ("<<Copy>>", "<Control-c>", "<Control-C>", "<Command-c>"):
+            self._tool_content_output.bind(sequence, lambda _event: "break")
+        self._tool_content_output.configure(state=tk.DISABLED)
+        if self._tool_entries:
+            self._tool_selector.current(0)
+            self._tool_selected()
+
+    def _tool_selected(self) -> None:
+        """Show what the chosen capability declares, before anything runs."""
+        entry = self._selected_tool_entry()
+        if entry is None:
+            return
+        self._tool_description.set(entry.description)
+        self._tool_safety.set(entry.safety_note)
+        self._tool_scope.set(entry.scope_label)
+        self._tool_effects.set(entry.authorization_prompt)
+        self._tool_status.set(_TOOL_IDLE_STATUS)
+        self._clear_tool_content()
+        self._render_tool_arguments(entry)
+
+    def _render_tool_arguments(self, entry: ToolConsoleEntry) -> None:
+        """Build one typed control per declared argument, and nothing else.
+
+        There is no free-form field. An operator can fill in what the capability
+        declares and cannot express anything it did not, which is what stops the
+        panel becoming a place to type whatever the layer happens to accept.
+        """
+        for child in self._tool_arguments_frame.winfo_children():
+            child.destroy()
+        self._tool_argument_values = {}
+        self._tool_argument_texts = {}
+        if not entry.arguments:
+            ttk.Label(self._tool_arguments_frame, text=_TOOL_NO_ARGUMENTS).grid(
+                row=0, column=0, columnspan=2, sticky="w"
+            )
+            return
+        for row, spec in enumerate(entry.arguments):
+            suffix = " *" if spec.required else ""
+            ttk.Label(self._tool_arguments_frame, text=spec.label + suffix).grid(
+                row=row * 2, column=0, sticky="nw", padx=(0, 8)
+            )
+            if spec.kind.multiline:
+                widget = tk.Text(self._tool_arguments_frame, height=4, wrap="word")
+                widget.grid(row=row * 2, column=1, sticky="ew")
+                self._tool_argument_texts[spec.name] = widget
+            else:
+                value = tk.StringVar()
+                ttk.Entry(self._tool_arguments_frame, textvariable=value).grid(
+                    row=row * 2, column=1, sticky="ew"
+                )
+                self._tool_argument_values[spec.name] = value
+            if spec.hint:
+                ttk.Label(self._tool_arguments_frame, text=spec.hint).grid(
+                    row=row * 2 + 1, column=1, sticky="w", pady=(0, 6)
+                )
+
+    def _selected_tool_entry(self) -> ToolConsoleEntry | None:
+        """Return the chosen catalogue entry, matched by exact capability."""
+        chosen = self._tool_choice.get().strip()
+        for entry in self._tool_entries:
+            if entry.capability == chosen:
+                return entry
+        return None
+
+    def _collect_tool_arguments(
+        self,
+        entry: ToolConsoleEntry,
+    ) -> tuple[tuple[str, str], ...]:
+        """Read the form, naming only arguments this capability declared."""
+        collected: list[tuple[str, str]] = []
+        for spec in entry.arguments:
+            if spec.name in self._tool_argument_texts:
+                value = self._tool_argument_texts[spec.name].get("1.0", "end-1c")
+            elif spec.name in self._tool_argument_values:
+                value = self._tool_argument_values[spec.name].get()
+            else:
+                continue
+            collected.append((spec.name, value))
+        return tuple(collected)
+
+    def _run_selected_tool(self) -> None:
+        """Authorize exactly the declared effects, for exactly this one run.
+
+        The authorization is this method call and nothing else. It is not
+        stored, not reused for the next run, and not widened: the controller
+        grants the resolved tool's own declared effects and forgets them again.
+        """
+        if self._tool_console is None:
+            return
+        entry = self._selected_tool_entry()
+        if entry is None:
+            self._tool_status.set(_TOOL_NO_SELECTION)
+            return
+        arguments = self._collect_tool_arguments(entry)
+        problem = self._tool_console.validation_problem(entry.capability, arguments)
+        if problem is not None:
+            self._clear_tool_content()
+            self._tool_status.set(problem)
+            return
+        if entry.capability == _FILESYSTEM_READ_CAPABILITY:
+            self._run_confirmed_filesystem_read(entry, arguments)
+            return
+        view = self._tool_console.run(entry.capability, arguments, authorized=True)
+        self._present_tool_run(view)
+
+    def _run_confirmed_filesystem_read(
+        self,
+        entry: ToolConsoleEntry,
+        arguments: tuple[tuple[str, str], ...],
+    ) -> None:
+        """Confirm one exact local path/range before starting its bounded read."""
+        supplied = dict(arguments)
+        confirmation = (
+            "Read local file content once?\n\n"
+            f"Capability: {entry.capability}\n"
+            f"Requires: {', '.join(entry.effects)}\n"
+            f"{entry.scope_label}\n"
+            f"Entry: {supplied['path']}\n"
+            f"Offset: {supplied['offset']}\n"
+            f"Maximum: {supplied['max_bytes']} bytes\n\n"
+            "The result stays in this Tool Console as untrusted local data.\n"
+            "It is not sent to a model, memory, research, evidence, or an export.\n"
+            "This authorizes one bounded read only."
+        )
+        if not messagebox.askyesno(
+            "Authorize one local file read",
+            confirmation,
+            parent=self._root,
+        ):
+            self._clear_tool_content()
+            self._tool_status.set("File-content read cancelled before execution.")
+            return
+        self._clear_tool_content()
+        console = self._tool_console
+        if console is None:
+            return
+        capability = entry.capability
+        exact_arguments = tuple(arguments)
+        self._tool_status.set("Reading one bounded local range...")
+        self._start_tool_request(
+            lambda: console.run(
+                capability,
+                exact_arguments,
+                authorized=True,
+            ),
+            self._present_tool_run,
+            "Local file read",
+        )
+
+    def _present_tool_run(self, view: ToolRunView) -> None:
+        """Render generic audit separately from optional literal file content."""
+        self._tool_status.set(view.headline + " " + view.detail)
+        lines = list(view.lines())
+        if lines:
+            lines.append("")
+        lines.append("Audit")
+        lines.extend(view.audit_lines())
+        self._tool_output.configure(state=tk.NORMAL)
+        self._tool_output.delete("1.0", tk.END)
+        self._tool_output.insert(tk.END, chr(10).join(lines))
+        self._tool_output.configure(state=tk.DISABLED)
+        self._clear_tool_content()
+        if view.content_preview is not None:
+            self._present_filesystem_content(view.content_preview)
+
+    def _present_filesystem_content(
+        self,
+        preview: FilesystemContentPreview,
+    ) -> None:
+        """Insert untrusted text literally, with no parser or action binding."""
+        metadata = getattr(self, "_tool_content_metadata", None)
+        output = getattr(self, "_tool_content_output", None)
+        if metadata is None or output is None:
+            return
+        metadata.set(chr(10).join(preview.provenance_lines()))
+        output.configure(state=tk.NORMAL)
+        output.delete("1.0", tk.END)
+        output.insert(tk.END, preview.text)
+        output.configure(state=tk.DISABLED)
+
+    def _clear_tool_content(self) -> None:
+        """Make stale content disappear before every new terminal state."""
+        metadata = getattr(self, "_tool_content_metadata", None)
+        if metadata is not None:
+            metadata.set("")
+        output = getattr(self, "_tool_content_output", None)
+        if output is None:
+            return
+        try:
+            output.configure(state=tk.NORMAL)
+            output.delete("1.0", tk.END)
+            output.configure(state=tk.DISABLED)
+        except tk.TclError:
+            # Close may race only with widget destruction; content remains gone.
+            pass
+
+    # ------------------------------------------------------------------
+    # Simple research mode
+    #
+    # A presentation layer over the same canonical services the Advanced tab
+    # uses. There is no second research engine here: every state change goes
+    # through the existing controller methods, the existing guarded loader, and
+    # the existing confirmation, and every displayed fact is re-read from
+    # persisted state afterwards rather than inferred from what was returned.
+    # ------------------------------------------------------------------
+
+    def _build_simple_research_tab(self, parent: ttk.Frame) -> None:
+        """Lay out the guided research panel an ordinary user starts from."""
+        self._simple_question = tk.StringVar()
+        self._simple_status = tk.StringVar(value=self._simple_say("no_question_yet"))
+        self._simple_ladder = tk.StringVar(value="")
+        self._simple_stage = tk.StringVar(value="")
+        self._simple_evidence = tk.StringVar(value="")
+        self._simple_advanced_visible = False
+
+        parent.rowconfigure(2, weight=1)
+
+        ask = ttk.LabelFrame(
+            parent,
+            text=self._simple_say("panel_title"),
+            padding=12,
+        )
+        ask.grid(row=0, column=0, sticky="ew")
+        ask.columnconfigure(0, weight=1)
+        ttk.Label(ask, text=self._simple_say("question_prompt")).grid(
+            row=0, column=0, columnspan=2, sticky="w"
+        )
+        question_entry = ttk.Entry(ask, textvariable=self._simple_question)
+        question_entry.grid(row=1, column=0, sticky="ew", pady=(4, 8))
+        self._simple_question_entry = question_entry
+        self._request_button(
+            ask,
+            self._simple_say("start_research"),
+            self._simple_start_research,
+        ).grid(row=1, column=1, sticky="w", padx=(8, 0), pady=(4, 8))
+
+        status = ttk.LabelFrame(
+            parent,
+            text=self._simple_say("status_heading"),
+            padding=12,
+        )
+        status.grid(row=1, column=0, sticky="ew", pady=(10, 0))
+        status.columnconfigure(0, weight=1)
+        ttk.Label(
+            status,
+            textvariable=self._simple_status,
+            wraplength=720,
+        ).grid(row=0, column=0, sticky="w")
+        ttk.Label(status, textvariable=self._simple_ladder, wraplength=720).grid(
+            row=1, column=0, sticky="w", pady=(4, 0)
+        )
+        ttk.Label(status, textvariable=self._simple_stage, wraplength=720).grid(
+            row=2, column=0, sticky="w", pady=(4, 0)
+        )
+        ttk.Label(status, textvariable=self._simple_evidence, wraplength=720).grid(
+            row=3, column=0, sticky="w", pady=(4, 0)
+        )
+        self._request_button(
+            status,
+            self._simple_say("find_sources"),
+            self._simple_find_sources,
+        ).grid(row=4, column=0, sticky="w", pady=(8, 0))
+
+        sources = ttk.LabelFrame(
+            parent,
+            text=self._simple_say("sources_heading"),
+            padding=12,
+        )
+        sources.grid(row=2, column=0, sticky="nsew", pady=(10, 0))
+        sources.columnconfigure(0, weight=1)
+        self._simple_cards_frame = ttk.Frame(sources)
+        self._simple_cards_frame.grid(row=0, column=0, sticky="nsew")
+        self._simple_cards_frame.columnconfigure(0, weight=1)
+
+        advanced = ttk.Frame(parent)
+        advanced.grid(row=3, column=0, sticky="ew", pady=(10, 0))
+        advanced.columnconfigure(0, weight=1)
+        ttk.Button(
+            advanced,
+            text=self._simple_say("advanced_details"),
+            command=self._simple_toggle_advanced,
+        ).grid(row=0, column=0, sticky="w")
+        self._simple_advanced_text = tk.Text(advanced, height=8, wrap="word")
+        self._simple_advanced_text.configure(state=tk.DISABLED)
+        self._simple_advanced_frame = advanced
+        self._simple_render()
+
+    def _simple_say(self, key: str) -> str:
+        """Look up one fixed Simple-mode string in the active language."""
+        return simple_phrase(key, self._simple_language)
+
+    def _simple_model(self) -> SimpleResearchReadModel:
+        """Build the projection from the canonical snapshot Simple mode holds."""
+        return SimpleResearchReadModel(
+            run=self._simple_run,
+            language=self._simple_language,
+            activity=self._simple_activity,
+            last_stage=self._simple_last_stage,
+        )
+
+    def _simple_render(self) -> None:
+        """Push the projection into the widgets, if the tab was ever built.
+
+        Focused tests build bare windows to exercise one handler, so this stays
+        safe when no widget exists. Everything it renders comes from the read
+        model, so there is no path here that can display a fact the projection
+        did not derive from canonical state.
+        """
+        if not hasattr(self, "_simple_status"):
+            return
+        model = self._simple_model()
+        self._simple_status.set(model.status_text())
+        self._simple_ladder.set(
+            "  ".join(
+                f"{'●' if reached else '○'} {label}"
+                for label, reached in model.ladder()
+            )
+        )
+        self._simple_stage.set(model.stage_text())
+        self._simple_evidence.set(model.evidence_text())
+        self._simple_cards = model.candidate_cards()
+        self._simple_render_cards()
+        self._simple_render_advanced(model)
+
+    def _simple_render_cards(self) -> None:
+        """Replace the card list with the current projection, one row each."""
+        if not hasattr(self, "_simple_cards_frame"):
+            return
+        for child in self._simple_cards_frame.winfo_children():
+            child.destroy()
+        if not self._simple_cards:
+            ttk.Label(
+                self._simple_cards_frame,
+                text=self._simple_say("no_sources_yet"),
+                wraplength=700,
+            ).grid(row=0, column=0, sticky="w")
+            return
+        for index, card in enumerate(self._simple_cards):
+            row = ttk.Frame(self._simple_cards_frame, padding=(0, 6))
+            row.grid(row=index, column=0, sticky="ew")
+            row.columnconfigure(0, weight=1)
+            ttk.Label(row, text=card.heading, wraplength=620).grid(
+                row=0, column=0, sticky="w"
+            )
+            ttk.Label(row, text=card.subheading).grid(row=1, column=0, sticky="w")
+            ttk.Label(row, text=card.status_text, wraplength=620).grid(
+                row=2, column=0, sticky="w"
+            )
+            if not card.accepted:
+                self._request_button(
+                    row,
+                    self._simple_say("use_this_source"),
+                    self._simple_card_command(index),
+                ).grid(row=0, column=1, rowspan=3, sticky="e", padx=(8, 0))
+
+    def _simple_card_command(self, position: int) -> Callable[[], None]:
+        """Bind one card's position, so every row acts on its own source.
+
+        A closure over the loop variable would give every button the last
+        index, and each one would then load a source the user did not press.
+        """
+
+        def use() -> None:
+            self._simple_use_source(position)
+
+        return use
+
+    def _simple_render_advanced(self, model: SimpleResearchReadModel) -> None:
+        """Write every hidden identifier out unchanged, when asked for."""
+        if not hasattr(self, "_simple_advanced_text"):
+            return
+        lines = [self._simple_say("advanced_hidden_note"), ""]
+        lines.extend(f"{label}: {value}" for label, value in model.advanced_details())
+        self._simple_advanced_text.configure(state=tk.NORMAL)
+        self._simple_advanced_text.delete("1.0", tk.END)
+        self._simple_advanced_text.insert(tk.END, "\n".join(lines))
+        self._simple_advanced_text.configure(state=tk.DISABLED)
+
+    def _simple_toggle_advanced(self) -> None:
+        """Show or hide the identifiers, which are moved rather than removed."""
+        if not hasattr(self, "_simple_advanced_text"):
+            return
+        self._simple_advanced_visible = not self._simple_advanced_visible
+        if self._simple_advanced_visible:
+            self._simple_advanced_text.grid(row=1, column=0, sticky="ew", pady=(6, 0))
+        else:
+            self._simple_advanced_text.grid_remove()
+
+    def _simple_start_research(self) -> None:
+        """Create one run for the typed question and keep it as the context.
+
+        The run is created and then held here, so a person is never told that
+        no research run is selected. It is never inherited from the Advanced
+        selector: attaching a source to a run the user did not create in this
+        workflow is the one mistake this whole panel exists to prevent.
+        """
+        question = self._simple_question.get().strip()
+        if not question:
+            self._status.set(self._simple_say("question_required"))
+            return
+        self._simple_language = detect_response_language(question)
+        try:
+            response = self._controller.create_research_run(question)
+        except ValueError as error:
+            self._status.set(str(error))
+            return
+        self._append_response(response)
+        if not response.success or not response.research_runs:
+            return
+        created = response.research_runs[-1]
+        self._simple_run_id = created.run_id
+        self._simple_run = created
+        self._simple_discovery_id = ""
+        self._simple_last_stage = None
+        self._simple_render()
+        self._simple_find_sources()
+
+    def _simple_find_sources(self) -> None:
+        """Ask the existing discovery service for candidates for this run."""
+        if not self._simple_run_id:
+            self._status.set(self._simple_say("question_required"))
+            return
+        run_id = self._simple_run_id
+        cancellation_signal = CancellationSignal()
+        self._simple_activity = SimpleResearchActivity.FINDING_SOURCES
+        self._simple_render()
+        self._start_request(
+            lambda: self._controller.discover_research_sources(
+                run_id,
+                cancellation_token=cancellation_signal,
+            ),
+            self._complete_simple_discovery,
+            "simple research discovery",
+            cancellation_signal=cancellation_signal,
+        )
+
+    def _complete_simple_discovery(self, response: BrainResponse) -> None:
+        """Adopt the discovered candidates from canonical run state only."""
+        self._append_response(response)
+        self._simple_activity = SimpleResearchActivity.IDLE
+        self._simple_adopt_canonical(response)
+        self._simple_render()
+
+    def _simple_use_source(self, position: int) -> None:
+        """Preview, confirm, then load one card through the guarded path.
+
+        This is one button for the user and the same three boundaries
+        underneath. The preview still runs, the confirmation is still shown,
+        and the fetch still goes through the loader that validates the URL.
+        Nothing is skipped because the surface got smaller.
+        """
+        if not 0 <= position < len(self._simple_cards):
+            self._status.set(self._simple_say("select_source_first"))
+            return
+        card = self._simple_cards[position]
+        if not self._simple_run_id or not self._simple_discovery_id:
+            self._status.set(self._simple_say("select_source_first"))
+            return
+        run_id = self._simple_run_id
+        discovery_id = self._simple_discovery_id
+        try:
+            preview_response = (
+                self._controller.preview_research_source_candidate_acceptance(
+                    run_id,
+                    discovery_id,
+                    card.url,
+                )
+            )
+        except ValueError as error:
+            self._status.set(str(error))
+            return
+        self._append_response(preview_response)
+        preview = preview_response.research_source_candidate_acceptance_preview
+        if not preview_response.success or preview is None or not preview.allowed:
+            return
+        if not messagebox.askyesno(
+            self._simple_say("confirm_title"),
+            f"{card.heading}\n{card.subheading}\n\n"
+            f"{self._simple_say('confirm_body')}",
+            parent=self._root,
+        ):
+            self._status.set(self._simple_say("cancelled_by_user"))
+            return
+        cancellation_signal = CancellationSignal()
+        self._simple_activity = SimpleResearchActivity.LOADING_SOURCE
+        self._simple_render()
+        self._start_request(
+            lambda: self._controller.accept_research_source_candidate(
+                run_id,
+                discovery_id,
+                card.url,
+                cancellation_token=cancellation_signal,
+            ),
+            self._complete_simple_source_load,
+            "simple research source load",
+            cancellation_signal=cancellation_signal,
+        )
+
+    def _complete_simple_source_load(self, response: BrainResponse) -> None:
+        """Report the stage the loader reached, then re-read canonical state.
+
+        The stage is taken from the loader because it is a fact about what
+        happened. Everything else is re-read, because a response saying a
+        source was accepted and a run holding that source are different claims,
+        and only the second one is the one this panel is allowed to show.
+        """
+        self._append_response(response)
+        self._simple_activity = SimpleResearchActivity.IDLE
+        self._simple_last_stage = response.source_load_stage
+        self._simple_refresh_canonical()
+        self._simple_render()
+
+    def _simple_refresh_canonical(self) -> None:
+        """Re-read the persisted run rather than trusting an earlier result."""
+        if not self._simple_run_id:
+            return
+        try:
+            response = self._controller.list_research_runs()
+        except ValueError:
+            return
+        self._simple_adopt_canonical(response)
+
+    def _simple_adopt_canonical(self, response: BrainResponse) -> None:
+        """Take the run matching the Simple context, and nothing else.
+
+        Matching by ID matters. A response carrying several runs must never
+        move this panel onto a different one, because the source the user is
+        about to load would then attach somewhere they never chose.
+        """
+        if not response.success or not self._simple_run_id:
+            return
+        for run in response.research_runs:
+            if run.run_id != self._simple_run_id:
+                continue
+            self._simple_run = run
+            if run.discoveries:
+                self._simple_discovery_id = run.discoveries[-1].discovery_id
+            return
+
+    def _offer_simple_research_handoff(self, question: str) -> None:
+        """Carry a chat question into Simple mode as a draft, not as an action.
+
+        This creates nothing and fetches nothing. It fills the question box and
+        moves the user to the panel, so starting the research stays an explicit
+        press. Text that arrived in a conversation must not become authority to
+        run anything, however clearly it reads as a request.
+        """
+        if not hasattr(self, "_simple_question"):
+            return
+        self._simple_question.set(question.strip())
+        self._simple_language = detect_response_language(question)
+        if hasattr(self, "_workspace_tabs"):
+            self._workspace_tabs.select(2)
+        self._status.set(self._simple_say("start_research"))
+
     def _discover_research_sources(self) -> None:
         """Discover and display metadata candidates for the selected run."""
         run_id = self._research_run_id.get()
@@ -3850,6 +7778,7 @@ class TkinterDesktopWindow:
         self._start_request(
             lambda: self._controller.discover_research_sources(
                 run_id,
+                self._research_discovery_provider.get(),
                 cancellation_token=cancellation_signal,
             ),
             self._complete_research_source_discovery,
@@ -3863,7 +7792,7 @@ class TkinterDesktopWindow:
         self._render_research_candidates(response)
 
     def _render_research_candidates(self, response: BrainResponse) -> None:
-        """Replace stale candidate choices with the latest successful discovery."""
+        """Replace stale candidate choices with this run's recorded discoveries."""
         self._clear_research_candidates()
         if not response.success:
             return
@@ -3871,26 +7800,163 @@ class TkinterDesktopWindow:
         selected_runs = [
             run for run in response.research_runs if run.run_id == selected_run_id
         ]
-        if not selected_runs or not selected_runs[0].discoveries:
+        if not selected_runs:
             return
-        self._research_candidate_run_id = selected_run_id
-        discovery = selected_runs[0].discoveries[-1]
-        self._research_candidate_discovery_id = discovery.discovery_id
-        self._research_candidates = discovery.candidates
-        labels = tuple(
-            f"{index}. {candidate.title} — {candidate.url}"
-            for index, candidate in enumerate(self._research_candidates, start=1)
-        )
-        self._research_candidate_selector.configure(values=labels)
+        self._show_research_run_candidates(selected_runs[0])
+
+    def _show_research_run_candidates(self, run: ResearchRun) -> None:
+        """Offer every recorded discovery's candidates, not only the newest one.
+
+        A paired comparison records one discovery per provider, so listing only
+        the most recent left the other provider's candidates readable in the
+        comparison report and impossible to accept. A paired run could then only
+        ever be assessed on one half, which is exactly the half of the data the
+        measurement was for.
+
+        Each discovery is still ranked on its own. The lists are shown together
+        because they are one run's work, not because they are one ranking:
+        every row names the provider it came from and keeps that provider's own
+        position, and no row is ranked against a row from the other side.
+        """
+        self._clear_research_candidates()
+        if not run.discoveries:
+            return
+        self._research_candidate_run_id = run.run_id
+        self._research_candidate_snapshot = run
+        candidates: list[ResearchSourceCandidate] = []
+        discovery_ids: list[str] = []
+        labels: list[str] = []
+        for discovery in run.discoveries:
+            # Relevance order is the default, and the provider's own position
+            # travels with each row. The audit view shows the exact codes rather
+            # than a phrase: a person reading this panel is the person who needs
+            # to know that `technical_identifier_missing` is why something sank.
+            for entry in ranked_candidates(discovery):
+                candidates.append(entry.candidate)
+                discovery_ids.append(discovery.discovery_id)
+                labels.append(
+                    f"{discovery.provider} {entry.relevance_rank}. "
+                    f"[{entry.relevance.category.value} {entry.relevance.score}] "
+                    f"(provider #{entry.provider_rank}"
+                    + (
+                        f", duplicate of #{entry.duplicate_of_rank}"
+                        if entry.duplicate_of_rank is not None
+                        else ""
+                    )
+                    + f") {entry.candidate.title} — {entry.candidate.url}"
+                    + _vulnerability_label(entry.candidate)
+                    + (
+                        " ["
+                        + ", ".join(reason.value for reason in entry.relevance.reasons)
+                        + "]"
+                        if entry.relevance.reasons
+                        else ""
+                    )
+                )
+        self._research_candidates = tuple(candidates)
+        self._research_candidate_discovery_ids = tuple(discovery_ids)
+        self._research_candidate_selector.configure(values=tuple(labels))
         if labels:
             self._research_candidate_selector.current(0)
+            self._research_candidate_discovery_id = discovery_ids[0]
 
     def _clear_research_candidates(self) -> None:
+        self._research_candidate_snapshot = None
+        self._clear_acquisition_batch()
         self._research_candidates = ()
+        self._research_candidate_discovery_ids = ()
         self._research_candidate_run_id = ""
         self._research_candidate_discovery_id = ""
         self._research_candidate.set("")
         self._research_candidate_selector.configure(values=())
+
+    def _clear_acquisition_batch(self) -> None:
+        self._batch_source_urls: tuple[str, ...] = ()
+        self._batch_discovery_id = ""
+        status = getattr(self, "_batch_selection_status", None)
+        if status is not None:
+            status.set("No fetch candidates selected")
+
+    def _add_acquisition_candidate(self) -> None:
+        selected = self._selected_research_candidate()
+        if selected is None:
+            self._status.set("Select a recorded candidate first.")
+            return
+        _, discovery_id, candidate = selected
+        urls = getattr(self, "_batch_source_urls", ())
+        if urls and discovery_id != self._batch_discovery_id:
+            self._status.set(
+                "Use one discovery per batch; clear the batch to change it."
+            )
+            return
+        if len(urls) >= 10 or any(
+            identity_of(url) == identity_of(candidate.url) for url in urls
+        ):
+            self._status.set("Select at most ten distinct source resources.")
+            return
+        self._batch_discovery_id = discovery_id
+        self._batch_source_urls = (*urls, candidate.url)
+        self._batch_selection_status.set(
+            f"{len(self._batch_source_urls)} source(s) selected; nothing fetched"
+        )
+
+    def _select_acquisition_batch(self) -> None:
+        run = getattr(self, "_research_candidate_snapshot", None)
+        urls = getattr(self, "_batch_source_urls", ())
+        if run is None or not urls or run.run_id != self._research_run_id.get().strip():
+            self._status.set("Select candidates from the current research run first.")
+            return
+        if (
+            getattr(self, "_target_plan_draft", None) is not None
+            or self._text_value(self._research_plan_constraints).strip()
+            or self._plan_restriction.get() not in ("", "advisory")
+            or self._research_question.get().strip() != run.question
+        ):
+            self._status.set(
+                "Batch selection cannot replace a different question, "
+                "target or constraints."
+            )
+            return
+        response = self._controller.preview_acquisition_batch(
+            run.run_id, self._batch_discovery_id, urls
+        )
+        self._append_response(response)
+        preview = response.research_plan_draft_preview
+        if not response.success or preview is None or preview.plan is None:
+            return
+        try:
+            draft = AcquisitionResearchDraft(
+                run, self._batch_discovery_id, urls, preview.plan
+            )
+        except ValueError as error:
+            self._status.set(str(error))
+            return
+        if not messagebox.askyesno(
+            "Select this exact fetch batch?",
+            f"Run: {run.run_id}\nDiscovery: {draft.discovery_id}\n\n"
+            + "\n".join(urls)
+            + f"\n\nPlan digest: {plan_digest(draft.plan)}\n\n"
+            "This selects a draft only. Preview approval, confirm and start "
+            "remain separate. "
+            "Fetched text will be temporary, not accepted evidence.",
+            parent=self._root,
+        ):
+            return
+        if getattr(self, "_question_plan_draft", None) is None:
+            self._question_plan_previous_text = (
+                self._text_value(self._research_plan_instructions),
+                self._text_value(self._research_plan_source_ids),
+            )
+        self._question_plan_draft = draft
+        self._replace_plan_text(
+            self._research_plan_instructions, draft.instruction_text, disabled=True
+        )
+        self._replace_plan_text(self._research_plan_source_ids, "", disabled=True)
+        self._invalidate_plan_approval_preview()
+        self._status.set(
+            "Fetch batch selected. Use Preview approval; "
+            "nothing is approved or fetched."
+        )
 
     def _use_selected_research_candidate(self) -> None:
         """Copy one explicitly selected candidate URL without fetching it."""
@@ -3915,9 +7981,12 @@ class TkinterDesktopWindow:
             or not 0 <= selected_index < len(self._research_candidates)
         ):
             return None
+        # The discovery is read per candidate. One list can hold both sides of
+        # a paired run, and accepting a Crossref candidate against the NVD
+        # discovery would file it under a search that never returned it.
         return (
             run_id,
-            self._research_candidate_discovery_id,
+            self._research_candidate_discovery_ids[selected_index],
             self._research_candidates[selected_index],
         )
 
@@ -3947,8 +8016,8 @@ class TkinterDesktopWindow:
             "Load research source?",
             (
                 f"{preview_response.message}\n\n"
-                "This fetches the selected HTTPS source, indexes it locally, "
-                "and attaches it to the research run. Continue?"
+                "This performs one bounded network request, indexes the result "
+                "locally, and attaches it to the research run. Continue?"
             ),
             parent=self._root,
         ):
@@ -4047,6 +8116,10 @@ class TkinterDesktopWindow:
             self._research_assessment_text.get(),
             self._research_assessment_supersedes_id.get(),
             self._research_information_trust.get(),
+            self._research_source_usefulness.get(),
+            self._research_source_applicability.get(),
+            self._research_source_independence.get(),
+            self._research_source_publication_status.get(),
         )
         try:
             preview_response = (
@@ -4491,13 +8564,43 @@ class TkinterDesktopWindow:
     def _append_response(self, response: BrainResponse) -> None:
         outcome = "completed" if response.success else "failed"
         self._status.set(f"{response.intent}: {outcome}")
+        source_reader = getattr(self, "_source_preview_panel", None)
+        if source_reader is not None and source_reader.accept_response(response):
+            self._status.set(
+                f"{response.intent}: {outcome}. Open Source previews to read."
+            )
         citation_text = _format_citations(response.knowledge_citations)
         citations = f"\nSources:\n{citation_text}" if citation_text else ""
         self._append_to_transcript(f"Hypatia: {response.message}{citations}\n")
 
+    def _configure_transcript_styles(self) -> None:
+        """Prepare styling tags, tolerating a font the platform cannot derive.
+
+        Styling is presentation only. If a derived font is unavailable the tags
+        simply do nothing and the transcript reads exactly as before.
+        """
+        try:
+            base = font.nametofont(self._transcript.cget("font"))
+            bold = base.copy()
+            bold.configure(weight="bold")
+            italic = base.copy()
+            italic.configure(slant="italic")
+            self._transcript.tag_configure(MarkdownStyle.BOLD.value, font=bold)
+            self._transcript.tag_configure(MarkdownStyle.ITALIC.value, font=italic)
+            self._transcript.tag_configure(
+                MarkdownStyle.CODE.value,
+                font=font.nametofont("TkFixedFont"),
+            )
+        except tk.TclError:
+            return
+
     def _append_to_transcript(self, value: str) -> None:
         self._transcript.configure(state=tk.NORMAL)
-        self._transcript.insert(tk.END, value)
+        for segment in markdown_segments(value):
+            if segment.style is MarkdownStyle.PLAIN:
+                self._transcript.insert(tk.END, segment.text)
+            else:
+                self._transcript.insert(tk.END, segment.text, segment.style.value)
         self._transcript.see(tk.END)
         self._transcript.configure(state=tk.DISABLED)
 
@@ -4563,3 +8666,33 @@ def _preview_and_confirm_session_rename(
     if not preview.success or not confirm(preview):
         return preview, None
     return preview, controller.rename_session(source_session_id, target_session_id)
+
+
+def _vulnerability_label(candidate: ResearchSourceCandidate) -> str:
+    """Render the structured vulnerability facts a candidate carries, if any.
+
+    Bounded fields, never the provider's raw document. Severity and known
+    exploitation are shown because a person deciding what to read wants them,
+    and they are shown as what they are: each metric attributed to whoever
+    scored it, and neither one folded into the relevance score sitting next to
+    them on the same line.
+    """
+    record = candidate.vulnerability
+    if record is None:
+        return ""
+    parts = [record.cve_id]
+    if record.status:
+        parts.append(f"status {record.status}")
+    if record.weaknesses:
+        parts.append(",".join(record.weaknesses))
+    if record.metrics:
+        parts.append(
+            "severity " + " / ".join(metric.summary() for metric in record.metrics)
+        )
+    if record.known_exploited:
+        parts.append("CISA known-exploited")
+    parts.append(
+        f"{len(record.references)}/{record.reference_total} reference(s), "
+        "none fetched"
+    )
+    return " {" + "; ".join(parts) + "}"

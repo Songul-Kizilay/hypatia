@@ -16,7 +16,7 @@ from cognition.CognitiveEngine import CognitiveEngine
 from cognition.LLMConversationHistoryBuilder import (
     build_llm_conversation_history,
 )
-from core.Bootstrap import Bootstrap
+from core.Bootstrap import DEFAULT_LEARNED_MEMORY_SELECTOR_LIMIT, Bootstrap
 from llm.HypatiaSystemPrompt import HYPATIA_DEFAULT_SYSTEM_PROMPT
 from llm.LLMConversationMessage import LLMConversationMessage
 from llm.LLMProvider import LLMProvider
@@ -110,7 +110,8 @@ class BootstrapLLMProviderTests(unittest.TestCase):
         ranked_selector = RecordingLearnedMemorySelector()
 
         for raw_selector, expected_selector in (
-            (None, None),
+            (None, ranked_selector),
+            ("none", None),
             ("keyword", keyword_selector),
             ("ranked", ranked_selector),
         ):
@@ -150,10 +151,14 @@ class BootstrapLLMProviderTests(unittest.TestCase):
                 )
                 self.assertEqual(
                     construct_ranked_selector.call_count,
-                    int(raw_selector == "ranked"),
+                    int(raw_selector in (None, "ranked")),
                 )
                 if raw_selector == "ranked":
                     construct_ranked_selector.assert_called_once_with(limit=None)
+                if raw_selector is None:
+                    construct_ranked_selector.assert_called_once_with(
+                        limit=DEFAULT_LEARNED_MEMORY_SELECTOR_LIMIT
+                    )
 
         self.assertEqual(keyword_selector.calls, [])
         self.assertEqual(ranked_selector.calls, [])
@@ -241,7 +246,7 @@ class BootstrapLLMProviderTests(unittest.TestCase):
 
     def test_invalid_process_selectors_fail_before_provider_activity(self) -> None:
         expected_message = (
-            "HYPATIA_LEARNED_MEMORY_SELECTOR must be 'keyword' or 'ranked'."
+            "HYPATIA_LEARNED_MEMORY_SELECTOR must be 'keyword', 'ranked', or 'none'."
         )
 
         for raw_selector in ("", "noop", "RANKED"):
@@ -704,6 +709,7 @@ class BootstrapLLMProviderTests(unittest.TestCase):
                 {
                     "HYPATIA_LEARNING_ENABLED": "true",
                     "HYPATIA_LEARNED_MEMORY_CONTEXT_LIMIT": "2",
+                    "HYPATIA_LEARNED_MEMORY_SELECTOR": "none",
                 },
                 clear=True,
             ),
@@ -748,7 +754,7 @@ class BootstrapLLMProviderTests(unittest.TestCase):
         self.assertEqual(len(conversation_records), 1)
         self.assertEqual(conversation_records[0].metadata["user_message"], message)
 
-    def test_absent_process_context_limit_keeps_unbounded_context_exact(self) -> None:
+    def test_explicit_none_selector_keeps_unbounded_context_exact(self) -> None:
         message = "What should I use?"
         provider = RecordingLLMProvider(["Use Rust."])
         memories = (
@@ -769,7 +775,11 @@ class BootstrapLLMProviderTests(unittest.TestCase):
 
         with (
             tempfile.TemporaryDirectory() as temporary_directory,
-            patch.dict(os.environ, {}, clear=True),
+            patch.dict(
+                os.environ,
+                {"HYPATIA_LEARNED_MEMORY_SELECTOR": "none"},
+                clear=True,
+            ),
             patch(
                 "core.Bootstrap.CrossrefResearchSourceDiscoveryProvider",
                 return_value=Mock(),

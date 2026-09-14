@@ -109,12 +109,18 @@ class ResearchSourceContentRestorer:
             raise ResearchError(
                 "Persisted research source content does not match its provenance."
             )
+        # Rebuilt with its acquisition provenance, not without it. The document
+        # identity derives from the URL alone, so a restoration that dropped
+        # these came back matching, indexing cleanly, and describing an accepted
+        # CVE as an ordinary read of the page that cannot serve it.
         source = ResearchSource(
             url=record.url,
             title=record.title,
             content=record.content,
             content_type=record.content_type,
             fetched_at=record.fetched_at,
+            content_resource=record.content_resource,
+            acquisition=record.acquisition,
         )
         if source.content != record.content:
             raise ResearchError("Persisted research source content is not canonical.")

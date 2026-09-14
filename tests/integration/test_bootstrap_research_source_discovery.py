@@ -34,7 +34,7 @@ class BootstrapResearchSourceDiscoveryTests(unittest.TestCase):
                 CrossrefResearchSourceDiscoveryProvider
             )
 
-        self.assertEqual(provider.provider_name, "crossref-rest-v1")
+        self.assertEqual(provider.provider_name, "crossref")
 
     def test_process_environment_can_disable_network_discovery(self) -> None:
         with (
@@ -65,9 +65,35 @@ class BootstrapResearchSourceDiscoveryTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(
                 ValueError,
-                "must be 'crossref' or 'disabled'",
+                "HYPATIA_RESEARCH_SOURCE_DISCOVERY_PROVIDER must be",
             ):
                 Bootstrap.from_process_environment()
+
+    def test_a_named_provider_must_come_from_the_closed_vocabulary(self) -> None:
+        """The list grew by one. What may not grow is what a name can be.
+
+        `nvd` joined `crossref` and `disabled` because a provider was added, and
+        the refusal above still stands for everything else. A provider name is
+        never a URL and never free text: the name decides which host an approved
+        step contacts.
+        """
+        for name in ("crossref", "nvd", "disabled"):
+            with self.subTest(accepted=name):
+                with patch.dict(
+                    os.environ,
+                    {"HYPATIA_RESEARCH_SOURCE_DISCOVERY_PROVIDER": name},
+                    clear=True,
+                ):
+                    Bootstrap.from_process_environment()
+        for name in ("https://attacker.example", "NVD ", "", "crossref,nvd"):
+            with self.subTest(refused=name):
+                with patch.dict(
+                    os.environ,
+                    {"HYPATIA_RESEARCH_SOURCE_DISCOVERY_PROVIDER": name},
+                    clear=True,
+                ):
+                    with self.assertRaises(ValueError):
+                        Bootstrap.from_process_environment()
 
 
 if __name__ == "__main__":

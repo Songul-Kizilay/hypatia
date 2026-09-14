@@ -6,7 +6,8 @@ Partially implemented: explicit public-HTTPS source acquisition, local
 knowledge indexing, persistent research-run audit records, and a replaceable
 source-discovery provider contract are available. User-selected evidence and
 bounded candidate metadata are persistent. The packaged process-environment
-runtime includes an explicit Crossref scholarly-metadata provider. An exact
+runtime includes explicit Crossref scholarly-metadata and NVD vulnerability-
+record providers. An exact
 persisted candidate can be previewed, confirmed, revalidated, and loaded through
 the existing guarded HTTPS boundary. An accepted source also has a read-only
 manual-assessment view and an append-only user-authored assessment record based
@@ -16,6 +17,11 @@ explicit evidence and current-assessment references. Automatic evidence
 extraction, multi-source synthesis, evidence ranking, and contradiction
 detection remain planned. Explicit evidence-linked authored claims now persist
 epistemic states, categorical confidence, and append-only correction history.
+The operator can approve both providers for one canonical question as two
+ordinary discovery steps and review derived provider-quality reports. The
+same-question paired report includes only runs whose two recorded queries
+exactly match the run question, keeps both assessment funnels separate, and
+produces no winner or routing policy.
 
 ## Purpose
 
@@ -186,7 +192,7 @@ Help collect, assess, summarize, and connect sources while distinguishing eviden
   SHA-256 values with an exact match flag. A mismatch does not import or repair
   the file. Unexpected input is bounded to 64 MiB, while an authentic larger
   run export remains eligible up to its exact expected length.
-- The research-run JSON snapshot keeps schema v8 and legacy v1-v7 loading while
+- The research-run JSON snapshot keeps schema v13 and legacy v1-v12 loading while
   limiting the complete UTF-8 file to 64 MiB and all nested list entries to an
   aggregate 20,000 items. Reads stop before oversized JSON decoding; writes
   count exact UTF-8 bytes in a temporary file and publish only a complete

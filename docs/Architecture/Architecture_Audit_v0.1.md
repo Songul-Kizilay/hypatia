@@ -400,7 +400,7 @@ endpoints continue to require an API key and HTTPS.
 
 Chat requests use a validated, non-secret timeout setting. An explicit
 `HYPATIA_LLM_TIMEOUT_SECONDS` override must be a positive finite number;
-otherwise loopback endpoints receive 120 seconds while non-local endpoints
+otherwise loopback endpoints receive 300 seconds while non-local endpoints
 retain a 30-second default.
 
 Standalone English and Turkish greetings remain deterministic. A substantive

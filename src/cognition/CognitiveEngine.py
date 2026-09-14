@@ -4,23 +4,108 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
 from brain.BrainContext import BrainContext
 from brain.BrainRequest import BrainRequest
 from brain.BrainResponse import BrainResponse
 from brain.BrainRouter import BrainRouter
+from cognition.BackgroundResearchSchedulerApplicationService import (
+    BackgroundResearchSchedulerApplicationService,
+)
+from cognition.CalibrationApplicationService import (
+    CalibrationApplicationService,
+)
+from cognition.ConversationResearchClaimGuard import (
+    ConversationResearchClaimGuard,
+)
+from cognition.CuriosityApplicationService import (
+    CuriosityApplicationService,
+)
+from cognition.FailureMemoryApplicationService import (
+    FailureMemoryApplicationService,
+)
+from cognition.HypothesisApplicationService import (
+    HypothesisApplicationService,
+)
+from cognition.KaliOperationAuthorizationApplicationService import (
+    KaliOperationAuthorizationApplicationService,
+)
+from cognition.KaliOperationFakeRunnerApplicationService import (
+    KaliOperationFakeRunnerApplicationService,
+)
+from cognition.KaliOperationPreviewApplicationService import (
+    KaliOperationPreviewApplicationService,
+)
+from cognition.KaliOperationRunApplicationService import (
+    KaliOperationRunApplicationService,
+)
+from cognition.KaliRuntimeReadinessApplicationService import (
+    KaliRuntimeReadinessApplicationService,
+)
+from cognition.KnowledgeReconciliationApplicationService import (
+    KnowledgeReconciliationApplicationService,
+)
+from cognition.LearnedMemoryAuditApplicationService import (
+    LearnedMemoryAuditApplicationService,
+)
+from cognition.LearnedMemoryContextService import LearnedMemoryContextService
 from cognition.LLMConversationHistoryBuilder import (
     build_llm_conversation_history,
+)
+from cognition.PairedProviderQualityApplicationService import (
+    PairedProviderQualityApplicationService,
+)
+from cognition.ProviderComparisonApplicationService import (
+    ProviderComparisonApplicationService,
+)
+from cognition.ProviderQualityApplicationService import (
+    ProviderQualityApplicationService,
+)
+from cognition.ReflectionApplicationService import (
+    ReflectionApplicationService,
 )
 from cognition.ResearchAuthoredHistoryApplicationService import (
     ResearchAuthoredHistoryApplicationService,
 )
+from cognition.ResearchAutonomyApplicationService import (
+    ResearchAutonomyApplicationService,
+)
+from cognition.ResearchGoalStartApplicationService import (
+    ResearchGoalStartApplicationService,
+)
+from cognition.ResearchHonestyApplicationService import (
+    ResearchHonestyApplicationService,
+)
 from cognition.ResearchOverviewApplicationService import (
     ResearchOverviewApplicationService,
+)
+from cognition.ResearchPlanAuthorizationApplicationService import (
+    ResearchPlanAuthorizationApplicationService,
+)
+from cognition.ResearchPlanExecutionApplicationService import (
+    ResearchPlanExecutionApplicationService,
 )
 from cognition.ResearchPlanPreviewApplicationService import (
     ResearchPlanPreviewApplicationService,
 )
+from cognition.ResearchSourceAcceptanceService import (
+    ResearchSourceAcceptanceService,
+)
+from cognition.SecurityAgentApplicationService import (
+    SecurityAgentApplicationService,
+)
+from cognition.SourceIngestionEvents import (
+    IngestionFailureKind,
+    SourceIngestionEvents,
+)
+from cognition.SourceReputationApplicationService import (
+    SourceReputationApplicationService,
+)
+from cognition.VulnerabilityGraphApplicationService import (
+    VulnerabilityGraphApplicationService,
+)
+from core.CancellationSignal import CancellationToken
 from core.Exceptions import (
     KnowledgeError,
     MemoryError,
@@ -47,10 +132,6 @@ from memory.LearnedMemoryCandidatePersistence import (
 )
 from memory.LearnedMemoryContext import (
     build_learned_memory_augmented_prompt,
-    load_bounded_learned_memory_context,
-    load_current_selected_bounded_learned_memory_context,
-    load_current_selected_learned_memory_context,
-    load_learned_memory_context,
 )
 from memory.LearnedMemorySelector import LearnedMemorySelector
 from memory.MemoryManager import MemoryManager
@@ -61,6 +142,32 @@ from memory.NoOpLearnedMemoryCandidateExtractor import (
 from memory.SemanticMemoryIndexRuntime import SemanticMemoryIndexRuntime
 from memory.SemanticMemoryMatch import SemanticMemoryMatch
 from memory.SessionMemoryPolicy import SessionMemoryPolicy
+from research.AcceptedSourceListingStepOperation import (
+    AcceptedSourceListingStepOperation,
+)
+from research.BackgroundResearchTask import BackgroundResearchTask
+from research.BackgroundTaskStore import BackgroundTaskStore
+from research.ClaimContradictionStepOperation import (
+    ClaimContradictionStepOperation,
+)
+from research.ClaimCreationStepOperation import ClaimCreationStepOperation
+from research.CuriosityQuestionStore import CuriosityQuestionStore
+from research.DeferredExecutionGrantStore import (
+    DeferredExecutionGrantReader,
+    DeferredExecutionGrantStore,
+)
+from research.EvidenceIntegrityCheckStepOperation import (
+    EvidenceIntegrityCheckStepOperation,
+)
+from research.EvidenceRecordingStepOperation import (
+    EvidenceRecordingStepOperation,
+)
+from research.FailureLessonStore import FailureLessonStore
+from research.HypothesisStore import HypothesisStore
+from research.LocalKnowledgeSearchStepOperation import (
+    LocalKnowledgeSearchStepOperation,
+)
+from research.ReflectionReportStore import ReflectionReportStore
 from research.ResearchClaimContradictionCandidate import (
     ResearchClaimContradictionCandidate,
 )
@@ -72,20 +179,57 @@ from research.ResearchClaimContradictionProposalProvider import (
     ResearchClaimContradictionProposalProvider,
 )
 from research.ResearchClaimRecord import ResearchClaimRecord
+from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchEvidenceIntegrityAuditor import ResearchEvidenceIntegrityAuditor
+from research.ResearchExecutionAllowance import ResearchExecutionAllowance
+from research.ResearchExecutionStore import ResearchExecutionStore
+from research.ResearchFailureLesson import ResearchFailureLesson
+from research.ResearchKaliOperationAuthorizationStore import (
+    ResearchKaliOperationAuthorizationStore,
+)
+from research.ResearchKaliOperationExecution import (
+    ResearchKaliOperationProcessAdapter,
+)
+from research.ResearchKaliRuntimeEnvironment import ResearchKaliRuntimeProbe
+from research.ResearchMissionStepResolver import ResearchMissionStepResolver
+from research.ResearchPlan import ResearchPlan
+from research.ResearchPlanAuthorizationStore import (
+    ResearchPlanAuthorizationStore,
+)
 from research.ResearchPlanDraftService import ResearchPlanDraftService
+from research.ResearchPlanExecutionState import ResearchPlanExecutionState
+from research.ResearchPlanOperationRegistry import (
+    ResearchPlanOperationRegistry,
+)
+from research.ResearchPlanStepCapability import ResearchPlanStepCapability
+from research.ResearchProgramScopeRevisionStore import ResearchProgramScopeRevisionStore
 from research.ResearchRun import ResearchRun
+from research.ResearchRunCompletionStepOperation import (
+    ResearchRunCompletionStepOperation,
+)
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSourceCandidate import ResearchSourceCandidate
-from research.ResearchSourceContentRecord import ResearchSourceContentRecord
 from research.ResearchSourceContentRestorationStatus import (
     ResearchSourceContentRestorationStatus,
 )
 from research.ResearchSourceContentStore import ResearchSourceContentStore
 from research.ResearchSourceDiscoveryProvider import ResearchSourceDiscoveryProvider
 from research.ResearchSourceFetcher import ResearchSourceFetcher
+from research.SemanticComparisonStepOperation import SemanticComparisonStepOperation
+from research.SourceAcceptStepOperation import SourceAcceptStepOperation
+from research.SourceAssessmentStepOperation import (
+    SourceAssessmentStepOperation,
+)
+from research.SourceComparisonStepOperation import (
+    SourceComparisonStepOperation,
+)
+from research.SourceDiscoveryStepOperation import SourceDiscoveryStepOperation
+from research.SourceFetchStepOperation import SourceFetchStepOperation
+from research.SourceIdentity import identity_of
+from research.SourceLoadStage import SourceLoadStage
 from response.ResponseComposer import ResponseComposer
+from security.VulnerabilityGraphStore import VulnerabilityGraphStore
 from session.SessionCreateService import SessionCreateService
 from session.SessionDeletePreviewService import SessionDeletePreviewService
 from session.SessionDeleteService import SessionDeleteService
@@ -107,6 +251,37 @@ RESEARCH_CLAIM_CONTRADICTION_PROPOSAL_MAX_CLAIMS = 50
 class CognitiveEngine:
     """Coordinates the first knowledge-backed cognitive request flow."""
 
+    def background_research_task(self, task_id: str) -> BackgroundResearchTask | None:
+        """Read one scheduler task for trusted control-plane composition."""
+        return self._background_research_scheduler.task(task_id)
+
+    def live_research_execution(
+        self, execution_id: str
+    ) -> ResearchPlanExecutionState | None:
+        """Read exact live state; this grants no transition authority."""
+        return self._research_plan_execution_service.live_execution(execution_id)
+
+    def live_research_plan(self, execution_id: str) -> ResearchPlan | None:
+        """Read the exact plan bound to one live execution."""
+        return self._research_plan_execution_service.live_plan(execution_id)
+
+    def research_execution_allowance(
+        self, execution_id: str
+    ) -> ResearchExecutionAllowance | None:
+        """Read remaining existing authority without changing it."""
+        return self._research_plan_execution_service.allowance(execution_id)
+
+    def run_exact_deferred_background_task(
+        self,
+        task_id: str,
+        cancellation_token: CancellationToken | None = None,
+    ) -> BackgroundResearchTask | None:
+        """Run one exact task only when live deferred eligibility still holds."""
+        return self._background_research_scheduler.run_exact_deferred_task(
+            task_id,
+            cancellation_token,
+        )
+
     def __init__(
         self,
         knowledge_engine: KnowledgeEngine,
@@ -124,10 +299,31 @@ class CognitiveEngine:
         learned_memory_context_limit: int | None = None,
         learned_memory_selector: LearnedMemorySelector | None = None,
         semantic_memory_index_runtime: SemanticMemoryIndexRuntime | None = None,
+        chat_semantic_memory_enabled: bool = False,
         research_source_fetcher: ResearchSourceFetcher | None = None,
         research_run_manager: ResearchRunManager | None = None,
+        research_execution_store: ResearchExecutionStore | None = None,
+        background_task_store: BackgroundTaskStore | None = None,
+        deferred_execution_grant_store: DeferredExecutionGrantStore | None = None,
+        curiosity_question_store: CuriosityQuestionStore | None = None,
+        reflection_report_store: ReflectionReportStore | None = None,
+        failure_lesson_store: FailureLessonStore | None = None,
+        hypothesis_store: HypothesisStore | None = None,
+        plan_authorization_store: ResearchPlanAuthorizationStore | None = None,
+        kali_operation_authorization_store: (
+            ResearchKaliOperationAuthorizationStore | None
+        ) = None,
+        kali_runtime_probe: ResearchKaliRuntimeProbe | None = None,
+        kali_operation_process_adapter: (
+            ResearchKaliOperationProcessAdapter | None
+        ) = None,
+        program_scope_revision_store: ResearchProgramScopeRevisionStore | None = None,
+        vulnerability_graph_store: VulnerabilityGraphStore | None = None,
         research_source_discovery_provider: (
             ResearchSourceDiscoveryProvider | None
+        ) = None,
+        research_source_discovery_providers: (
+            dict[ResearchDiscoveryProviderName, ResearchSourceDiscoveryProvider] | None
         ) = None,
         research_claim_contradiction_proposal_provider: (
             ResearchClaimContradictionProposalProvider | None
@@ -140,6 +336,7 @@ class CognitiveEngine:
             ResearchEvidenceIntegrityAuditor | None
         ) = None,
         research_plan_draft_service: ResearchPlanDraftService | None = None,
+        semantic_comparison_operation: SemanticComparisonStepOperation | None = None,
     ) -> None:
         if llm_history_max_turns is not None and (
             isinstance(llm_history_max_turns, bool) or llm_history_max_turns <= 0
@@ -178,9 +375,19 @@ class CognitiveEngine:
         self._learned_memory_context_limit = learned_memory_context_limit
         self._learned_memory_selector = learned_memory_selector
         self._semantic_memory_index_runtime = semantic_memory_index_runtime
+        self._chat_semantic_memory_enabled = chat_semantic_memory_enabled
         self._research_source_fetcher = research_source_fetcher
+        self._research_source_acceptance_service = ResearchSourceAcceptanceService(
+            knowledge_engine,
+            research_run_manager,
+            research_source_content_store,
+            event_bus=event_bus,
+        )
         self._research_run_manager = research_run_manager
         self._research_source_discovery_provider = research_source_discovery_provider
+        self._research_source_discovery_providers = (
+            research_source_discovery_providers or {}
+        )
         self._research_claim_contradiction_proposal_provider = (
             research_claim_contradiction_proposal_provider
         )
@@ -197,15 +404,346 @@ class CognitiveEngine:
                 research_run_manager,
             )
         )
+        self._learned_memory_audit_service = LearnedMemoryAuditApplicationService(
+            memory_manager,
+            response_composer,
+        )
+        operation_registry = ResearchPlanOperationRegistry(
+            {
+                ResearchPlanStepCapability.LOCAL_KNOWLEDGE_SEARCH: (
+                    LocalKnowledgeSearchStepOperation(knowledge_engine)
+                ),
+            }
+        )
+        if research_run_manager is not None:
+            operation_registry.register(
+                ResearchPlanStepCapability.ACCEPTED_SOURCE_LISTING,
+                AcceptedSourceListingStepOperation(research_run_manager),
+            )
+            if semantic_comparison_operation is not None:
+                operation_registry.register(
+                    ResearchPlanStepCapability.SEMANTIC_EVIDENCE_COMPARISON,
+                    semantic_comparison_operation,
+                )
+            operation_registry.register(
+                ResearchPlanStepCapability.EVIDENCE_RECORDING,
+                EvidenceRecordingStepOperation(
+                    knowledge_engine,
+                    research_run_manager,
+                ),
+            )
+            operation_registry.register(
+                ResearchPlanStepCapability.SOURCE_ASSESSMENT,
+                SourceAssessmentStepOperation(research_run_manager),
+            )
+            operation_registry.register(
+                ResearchPlanStepCapability.CLAIM_CREATION,
+                ClaimCreationStepOperation(research_run_manager),
+            )
+            operation_registry.register(
+                ResearchPlanStepCapability.CLAIM_CONTRADICTION,
+                ClaimContradictionStepOperation(research_run_manager),
+            )
+            operation_registry.register(
+                ResearchPlanStepCapability.SOURCE_COMPARISON,
+                SourceComparisonStepOperation(research_run_manager),
+            )
+            operation_registry.register(
+                ResearchPlanStepCapability.RESEARCH_RUN_COMPLETION,
+                ResearchRunCompletionStepOperation(research_run_manager),
+            )
+            if research_evidence_integrity_auditor is not None:
+                operation_registry.register(
+                    ResearchPlanStepCapability.EVIDENCE_INTEGRITY_CHECK,
+                    EvidenceIntegrityCheckStepOperation(
+                        research_evidence_integrity_auditor,
+                        research_run_manager,
+                    ),
+                )
+            if research_source_discovery_provider is not None:
+                operation_registry.register(
+                    ResearchPlanStepCapability.SOURCE_DISCOVERY,
+                    SourceDiscoveryStepOperation(
+                        research_source_discovery_provider,
+                        research_run_manager,
+                        providers=research_source_discovery_providers,
+                    ),
+                )
+            if research_source_fetcher is not None:
+                operation_registry.register(
+                    ResearchPlanStepCapability.SOURCE_FETCH,
+                    SourceFetchStepOperation(
+                        research_source_fetcher,
+                        research_run_manager,
+                    ),
+                )
+                operation_registry.register(
+                    ResearchPlanStepCapability.SOURCE_ACCEPT,
+                    SourceAcceptStepOperation(
+                        research_source_fetcher,
+                        self._research_source_acceptance_service,
+                        research_run_manager,
+                    ),
+                )
+        # Built before execution so it can be handed over as the narrow
+        # consumption port. Approval still imports no execution or scheduling
+        # service: the dependency runs one way, from execution to approval.
+        self._plan_authorization_service: (
+            ResearchPlanAuthorizationApplicationService | None
+        ) = None
+        if research_run_manager is not None:
+            self._plan_authorization_service = (
+                ResearchPlanAuthorizationApplicationService(
+                    research_run_manager,
+                    response_composer,
+                    authorization_store=plan_authorization_store,
+                    event_bus=event_bus,
+                    program_scope_revision_store=program_scope_revision_store,
+                )
+            )
+
+        self._research_plan_execution_service = ResearchPlanExecutionApplicationService(
+            response_composer,
+            mission_resolver=(
+                ResearchMissionStepResolver(
+                    research_run_manager,
+                    knowledge_engine,
+                    {
+                        name: provider.provider_name
+                        for name, provider in (
+                            self._research_source_discovery_providers.items()
+                        )
+                    },
+                )
+                if research_run_manager is not None
+                else None
+            ),
+            operation_registry=operation_registry,
+            event_bus=event_bus,
+            execution_store=research_execution_store,
+            # Attached wherever approvals are kept, which is the same condition
+            # under which any start control exists. With approvals kept, a plan
+            # can only start by spending one.
+            authorization_consumer=(
+                self._plan_authorization_service
+                if plan_authorization_store is not None
+                else None
+            ),
+            program_scope_revision_store=program_scope_revision_store,
+        )
+        self._research_autonomy_service = ResearchAutonomyApplicationService(
+            self._research_plan_execution_service,
+            response_composer,
+            event_bus=event_bus,
+        )
+        self._failure_memory_service: FailureMemoryApplicationService | None = None
+        if research_run_manager is not None:
+            self._failure_memory_service = FailureMemoryApplicationService(
+                research_run_manager,
+                response_composer,
+                lesson_store=failure_lesson_store,
+                hypothesis_store=hypothesis_store,
+                event_bus=event_bus,
+            )
+        self._research_goal_start_service = ResearchGoalStartApplicationService(
+            self._research_plan_execution_service,
+            self._research_autonomy_service,
+            research_run_manager=research_run_manager,
+            authorizations=(
+                self._plan_authorization_service
+                if plan_authorization_store is not None
+                else None
+            ),
+            discovery_providers=frozenset(self._research_source_discovery_providers),
+            evidence_available=research_source_fetcher is not None,
+            failure_memory=(
+                self._failure_memory_service
+                if failure_lesson_store is not None
+                else None
+            ),
+            semantic_destination=(
+                semantic_comparison_operation.destination
+                if semantic_comparison_operation is not None
+                else None
+            ),
+        )
+        self._research_goal_start_service.resume_restored_learning_missions()
+        self._background_research_scheduler = (
+            BackgroundResearchSchedulerApplicationService(
+                self._research_autonomy_service,
+                response_composer,
+                executions=self._research_plan_execution_service,
+                task_store=background_task_store,
+                event_bus=event_bus,
+                deferred_grants=(
+                    DeferredExecutionGrantReader(deferred_execution_grant_store)
+                    if deferred_execution_grant_store is not None
+                    else None
+                ),
+            )
+        )
+        self._research_honesty_service = ResearchHonestyApplicationService(
+            response_composer,
+            run_manager=research_run_manager,
+        )
+        self._conversation_research_claim_guard = ConversationResearchClaimGuard()
+        self._curiosity_service: CuriosityApplicationService | None = None
+        if research_run_manager is not None:
+            self._curiosity_service = CuriosityApplicationService(
+                research_run_manager,
+                response_composer,
+                question_store=curiosity_question_store,
+                hypothesis_store=hypothesis_store,
+                authorization_service=self._plan_authorization_service,
+                execution_starter=self._research_plan_execution_service,
+                event_bus=event_bus,
+            )
+        self._reflection_service: ReflectionApplicationService | None = None
+        if research_run_manager is not None:
+            self._reflection_service = ReflectionApplicationService(
+                research_run_manager,
+                response_composer,
+                report_store=reflection_report_store,
+                hypothesis_store=hypothesis_store,
+                event_bus=event_bus,
+            )
+        self._calibration_service: CalibrationApplicationService | None = None
+        if research_run_manager is not None:
+            self._calibration_service = CalibrationApplicationService(
+                research_run_manager,
+                response_composer,
+                event_bus=event_bus,
+            )
+        self._source_reputation_service: SourceReputationApplicationService | None = (
+            None
+        )
+        self._provider_quality_service: ProviderQualityApplicationService | None = None
+        self._paired_provider_quality_service: (
+            PairedProviderQualityApplicationService | None
+        ) = None
+        self._provider_comparison_service: (
+            ProviderComparisonApplicationService | None
+        ) = None
+        if research_run_manager is not None:
+            self._source_reputation_service = SourceReputationApplicationService(
+                research_run_manager,
+                response_composer,
+                event_bus=event_bus,
+            )
+            self._provider_quality_service = ProviderQualityApplicationService(
+                research_run_manager,
+                response_composer,
+                event_bus=event_bus,
+            )
+            self._paired_provider_quality_service = (
+                PairedProviderQualityApplicationService(
+                    research_run_manager,
+                    response_composer,
+                    event_bus=event_bus,
+                )
+            )
+            self._provider_comparison_service = ProviderComparisonApplicationService(
+                research_run_manager,
+                response_composer,
+                event_bus=event_bus,
+            )
+        self._hypothesis_service: HypothesisApplicationService | None = None
+        if research_run_manager is not None:
+            self._hypothesis_service = HypothesisApplicationService(
+                research_run_manager,
+                response_composer,
+                hypothesis_store=hypothesis_store,
+                event_bus=event_bus,
+            )
+        self._vulnerability_graph_service = VulnerabilityGraphApplicationService(
+            response_composer,
+            graph_store=vulnerability_graph_store,
+            event_bus=event_bus,
+        )
+        self._security_agent_service: SecurityAgentApplicationService | None = None
+        if research_run_manager is not None:
+            self._security_agent_service = SecurityAgentApplicationService(
+                research_run_manager,
+                response_composer,
+                event_bus=event_bus,
+            )
         self._research_plan_preview_service = ResearchPlanPreviewApplicationService(
             response_composer,
             research_plan_draft_service,
+            (
+                self._failure_memory_service.advice
+                if self._failure_memory_service is not None
+                else None
+            ),
+            research_run_manager=research_run_manager,
+        )
+        self._kali_operation_preview_service: (
+            KaliOperationPreviewApplicationService | None
+        ) = None
+        self._kali_operation_authorization_service: (
+            KaliOperationAuthorizationApplicationService | None
+        ) = None
+        self._kali_operation_fake_runner_service: (
+            KaliOperationFakeRunnerApplicationService | None
+        ) = None
+        self._kali_operation_run_service: KaliOperationRunApplicationService | None = (
+            None
+        )
+        self._kali_runtime_readiness_service = KaliRuntimeReadinessApplicationService(
+            response_composer,
+            probe=kali_runtime_probe,
+        )
+        if program_scope_revision_store is not None:
+            self._kali_operation_preview_service = (
+                KaliOperationPreviewApplicationService(
+                    response_composer,
+                    program_scope_revision_store,
+                )
+            )
+            self._kali_operation_authorization_service = (
+                KaliOperationAuthorizationApplicationService(
+                    response_composer,
+                    self._kali_operation_preview_service,
+                    authorization_store=kali_operation_authorization_store,
+                )
+            )
+            if kali_operation_authorization_store is not None:
+                self._kali_operation_fake_runner_service = (
+                    KaliOperationFakeRunnerApplicationService(
+                        response_composer,
+                        self._kali_operation_preview_service,
+                        kali_operation_authorization_store,
+                    )
+                )
+                if (
+                    kali_runtime_probe is not None
+                    and kali_operation_process_adapter is not None
+                ):
+                    self._kali_operation_run_service = (
+                        KaliOperationRunApplicationService(
+                            response_composer,
+                            self._kali_operation_preview_service,
+                            kali_operation_authorization_store,
+                            kali_runtime_probe,
+                            kali_operation_process_adapter,
+                        )
+                    )
+        self._source_ingestion_events = SourceIngestionEvents(event_bus)
+        self._knowledge_reconciliation_service = (
+            KnowledgeReconciliationApplicationService(
+                knowledge_engine,
+                response_composer,
+                run_manager=research_run_manager,
+                event_bus=event_bus,
+            )
         )
         self._hybrid_semantic_memory_ranker = HybridSemanticMemoryRanker()
         self._router = BrainRouter()
 
     def process(self, request: BrainRequest) -> BrainResponse:
         """Process a request using the currently supported cognitive intent."""
+        if self._is_undeclared_live_information_request(request):
+            return self._process_conversation(request)
         intent = self._router.detect_intent(request)
         if intent == "conversation_search":
             return self._process_conversation_search(request)
@@ -241,8 +779,137 @@ class CognitiveEngine:
         if self._research_overview_service.is_run_list_request(request):
             return self._research_overview_service.process_run_list(request)
 
+        if self._learned_memory_audit_service.is_audit_request(request):
+            return self._learned_memory_audit_service.process_audit(request)
+
         if self._research_plan_preview_service.is_draft_preview_request(request):
             return self._research_plan_preview_service.process_draft_preview(request)
+
+        if KaliOperationPreviewApplicationService.is_preview_request(request):
+            if self._kali_operation_preview_service is None:
+                return self._response_composer.kali_operation_preview_failure(
+                    request,
+                    "Program scope revisions are unavailable in this runtime.",
+                )
+            return self._kali_operation_preview_service.process_preview(request)
+
+        if KaliOperationAuthorizationApplicationService.is_authorization_request(
+            request
+        ):
+            if self._kali_operation_authorization_service is None:
+                return self._response_composer.kali_operation_authorization_failure(
+                    request,
+                    "Program scope revisions are unavailable in this runtime.",
+                )
+            return self._kali_operation_authorization_service.process_authorization(
+                request
+            )
+
+        if KaliOperationFakeRunnerApplicationService.is_fake_run_request(request):
+            if self._kali_operation_fake_runner_service is None:
+                return self._response_composer.kali_operation_fake_run_failure(
+                    request,
+                    "Kali operation authorizations are unavailable in this runtime.",
+                )
+            return self._kali_operation_fake_runner_service.process_fake_run(request)
+
+        if KaliRuntimeReadinessApplicationService.is_readiness_request(request):
+            return self._kali_runtime_readiness_service.process_readiness(request)
+
+        if KaliOperationRunApplicationService.is_run_request(request):
+            if self._kali_operation_run_service is None:
+                return self._response_composer.kali_operation_run_failure(
+                    request,
+                    "Kali operation runner is unavailable in this runtime.",
+                )
+            return self._kali_operation_run_service.process_run(request)
+
+        if self._research_plan_execution_service.is_start_request(request):
+            return self._research_plan_execution_service.process_start(request)
+
+        if self._research_plan_execution_service.is_status_request(request):
+            return self._research_plan_execution_service.process_status(request)
+
+        if self._research_plan_execution_service.is_cancel_request(request):
+            return self._research_plan_execution_service.process_cancel(request)
+
+        if self._research_plan_execution_service.is_continue_request(request):
+            return self._research_plan_execution_service.process_continue(request)
+        if self._research_plan_execution_service.is_recover_request(request):
+            return self._research_plan_execution_service.process_recover(request)
+        if self._research_plan_execution_service.is_resolve_request(request):
+            return self._research_plan_execution_service.process_resolve(request)
+        if self._research_plan_execution_service.is_advance_request(request):
+            return self._research_plan_execution_service.process_advance(request)
+
+        if self._research_goal_start_service.is_goal_request(request):
+            return self._research_goal_start_service.process_goal(request)
+        if self._research_autonomy_service.is_run_request(request):
+            return self._research_autonomy_service.process_run(request)
+
+        scheduler = self._background_research_scheduler
+        if scheduler.is_create_request(request):
+            return scheduler.process_create(request)
+
+        if scheduler.is_pause_request(request):
+            return scheduler.process_pause(request)
+
+        if scheduler.is_resume_request(request):
+            return scheduler.process_resume(request)
+
+        if scheduler.is_cancel_request(request):
+            return scheduler.process_cancel(request)
+
+        if scheduler.is_list_request(request):
+            return scheduler.process_list(request)
+
+        if scheduler.is_worker_cycle_request(request):
+            return scheduler.process_worker_cycle(request)
+
+        if self._is_curiosity_request(request):
+            return self._process_curiosity(request)
+
+        if self._is_reflection_request(request):
+            return self._process_reflection(request)
+
+        if self._is_failure_memory_request(request):
+            return self._process_failure_memory(request)
+
+        if self._is_plan_authorization_request(request):
+            return self._process_plan_authorization(request)
+
+        if CalibrationApplicationService.is_request(request):
+            return self._process_calibration(request)
+
+        if SourceReputationApplicationService.is_report_request(request):
+            return self._process_source_reputation(request)
+        if (
+            self._provider_quality_service is not None
+            and self._provider_quality_service.is_report_request(request)
+        ):
+            return self._provider_quality_service.process_report(request)
+        if (
+            self._paired_provider_quality_service is not None
+            and self._paired_provider_quality_service.is_report_request(request)
+        ):
+            return self._paired_provider_quality_service.process_report(request)
+        if (
+            self._provider_comparison_service is not None
+            and self._provider_comparison_service.is_report_request(request)
+        ):
+            return self._provider_comparison_service.process_report(request)
+
+        if self._is_hypothesis_request(request):
+            return self._process_hypothesis(request)
+
+        if self._is_vulnerability_graph_request(request):
+            return self._process_vulnerability_graph(request)
+
+        if self._is_knowledge_reconciliation_request(request):
+            return self._process_knowledge_reconciliation(request)
+
+        if SecurityAgentApplicationService.is_audit_request(request):
+            return self._process_security_posture(request)
 
         if self._is_research_run_markdown_export_verify_request(request):
             return self._process_research_run_markdown_export_verify(request)
@@ -447,6 +1114,19 @@ class CognitiveEngine:
 
         return self._process_conversation(request)
 
+    def _is_undeclared_live_information_request(self, request: BrainRequest) -> bool:
+        """Return whether plain chat asked for information only research provides.
+
+        Gated on the absence of a declared intent, so every explicit structured
+        request keeps its existing route. The check runs before the message
+        prefixes because "search the internet" is a request for the live web,
+        not a command to search the local knowledge base, and answering it from
+        local chunks would be its own quiet misdirection.
+        """
+        if request.metadata.get("intent") is not None:
+            return False
+        return self._research_honesty_service.detect(request).detected
+
     @staticmethod
     def _is_search_request(request: BrainRequest) -> bool:
         declared_intent = request.metadata.get("intent")
@@ -626,7 +1306,30 @@ class CognitiveEngine:
                 request,
                 "Research run could not be created.",
             )
-        return self._response_composer.research_run_create_success(request, run)
+        return self._response_composer.research_run_create_success(
+            request,
+            run,
+            self._prior_lessons(question),
+        )
+
+    def _prior_lessons(self, question: str) -> tuple[ResearchFailureLesson, ...]:
+        """Offer what previously went wrong on a similar question, if anything.
+
+        Deliberately unable to fail its caller. The run is already persisted by
+        the time this is asked, so an advisory read that raised would report a
+        failure for work that actually succeeded — the misleading-success class
+        this layer keeps closing. Advice is worth having; it is not worth
+        lying about a saved run to get it.
+        """
+        service = self._failure_memory_service
+        if service is None:
+            return ()
+        try:
+            return service.advice(question)
+        except Exception:
+            # Broad on purpose. Any narrower clause is a bet about which
+            # failures advice can have, and losing that bet costs a saved run.
+            return ()
 
     def _process_research_run_markdown_export_preview(
         self,
@@ -1316,10 +2019,40 @@ class CognitiveEngine:
             run,
         )
 
+    def _selected_discovery_provider(
+        self,
+        request: BrainRequest,
+    ) -> ResearchSourceDiscoveryProvider:
+        """Return the provider this request explicitly named, or the default.
+
+        The name is resolved through a closed vocabulary and nothing else. A
+        provider is a network destination, so a request naming one this build
+        cannot reach fails rather than falling back: silently searching
+        somewhere the operator did not choose is worse than not searching.
+
+        There is no automatic second attempt against the other provider either.
+        If NVD refuses, that is reported as NVD refusing — hiding it behind a
+        Crossref result would answer a question nobody asked.
+        """
+        requested = request.metadata.get("research_discovery_provider")
+        if requested is None:
+            assert self._research_source_discovery_provider is not None
+            return self._research_source_discovery_provider
+        if not isinstance(requested, str):
+            raise ResearchError("Research discovery provider must be text.")
+        try:
+            name = ResearchDiscoveryProviderName(requested)
+        except ValueError as error:
+            raise ResearchError("Research discovery provider is unknown.") from error
+        provider = self._research_source_discovery_providers.get(name)
+        if provider is None:
+            raise ResearchError("Research discovery provider is not available.")
+        return provider
+
     @staticmethod
     def _research_source_assessment_write_values(
         request: BrainRequest,
-    ) -> tuple[str, str, list[str], str, str | None, str] | None:
+    ) -> tuple[str, str, list[str], str, str | None, str, str, str, str, str] | None:
         run_id = request.metadata.get("research_run_id")
         document_id = request.metadata.get("research_source_document_id")
         evidence_ids = request.metadata.get("research_assessment_evidence_ids")
@@ -1331,6 +2064,17 @@ class CognitiveEngine:
             "research_information_trust",
             "unassessed",
         )
+        # Absent means the operator did not answer, which is `unknown`. It is
+        # never read as a favourable default: a request that says nothing about
+        # usefulness must not produce a record claiming the source was useful.
+        judgement = tuple(
+            request.metadata.get(f"research_source_{name}", "unknown")
+            for name in ("usefulness", "applicability", "independence")
+        ) + (
+            request.metadata.get("research_source_publication_status", "unknown"),
+        )
+        if not all(isinstance(value, str) and value.strip() for value in judgement):
+            return None
         if (
             not isinstance(run_id, str)
             or not run_id.strip()
@@ -1362,6 +2106,7 @@ class CognitiveEngine:
             text,
             supersedes_assessment_id,
             information_trust,
+            *judgement,
         )
 
     def _process_research_run_status_preview(
@@ -1480,7 +2225,13 @@ class CognitiveEngine:
                 "Research run is closed and cannot discover new sources.",
             )
 
-        provider = self._research_source_discovery_provider
+        try:
+            provider = self._selected_discovery_provider(request)
+        except ResearchError:
+            return self._response_composer.research_source_discovery_failure(
+                request,
+                "Research source discovery provider is unavailable.",
+            )
         if self._request_cancelled(request):
             return self._response_composer.research_source_discovery_failure(
                 request,
@@ -1520,6 +2271,7 @@ class CognitiveEngine:
                     normalized_run_id,
                     "source_discovery",
                     "Research source discovery failed.",
+                    provider=provider.provider_name,
                 )
             except ResearchError:
                 return self._response_composer.research_source_discovery_failure(
@@ -1643,15 +2395,33 @@ class CognitiveEngine:
         *,
         response_intent: str = "research_source_load",
     ) -> BrainResponse:
-        """Acquire and index one explicit source without LLM or memory side effects."""
+        """Acquire and index one explicit source without LLM or memory side effects.
+
+        Each real transition is announced on the event bus. The identifier ties
+        one attempt's events together, so a subscriber can follow a single load
+        without inferring which events belong to it.
+        """
+        attempt_id = str(uuid4())
+        events = self._source_ingestion_events.for_attempt(attempt_id)
+        events.validation_started()
         url = request.metadata.get("research_url")
         if not isinstance(url, str) or not url.strip():
+            events.failed(
+                SourceLoadStage.NOT_ATTEMPTED,
+                IngestionFailureKind.VALIDATION_REFUSED,
+            )
             return self._response_composer.research_source_load_failure(
                 request,
                 "A research source URL is required.",
                 intent=response_intent,
             )
+        resource = identity_of(url)
         if self._research_source_fetcher is None:
+            events.failed(
+                SourceLoadStage.NOT_ATTEMPTED,
+                IngestionFailureKind.VALIDATION_REFUSED,
+                resource_identity=resource,
+            )
             return self._response_composer.research_source_load_failure(
                 request,
                 "Internet research source loading is unavailable.",
@@ -1660,12 +2430,23 @@ class CognitiveEngine:
         run_id_value = request.metadata.get("research_run_id")
         run_id = run_id_value.strip() if isinstance(run_id_value, str) else ""
         if run_id_value is not None and not run_id:
+            events.failed(
+                SourceLoadStage.NOT_ATTEMPTED,
+                IngestionFailureKind.VALIDATION_REFUSED,
+                resource_identity=resource,
+            )
             return self._response_composer.research_source_load_failure(
                 request,
                 "A valid research run ID is required.",
                 intent=response_intent,
             )
         if run_id and self._research_run_manager is None:
+            events.failed(
+                SourceLoadStage.NOT_ATTEMPTED,
+                IngestionFailureKind.RUN_UNAVAILABLE,
+                resource_identity=resource,
+                run_id=run_id,
+            )
             return self._response_composer.research_source_load_failure(
                 request,
                 "Research run persistence is unavailable.",
@@ -1676,49 +2457,62 @@ class CognitiveEngine:
             try:
                 selected_run = self._research_run_manager.get(run_id)
             except ResearchError:
+                events.failed(
+                    SourceLoadStage.NOT_ATTEMPTED,
+                    IngestionFailureKind.RUN_UNAVAILABLE,
+                    resource_identity=resource,
+                    run_id=run_id,
+                )
                 return self._response_composer.research_source_load_failure(
                     request,
                     "Research run was not found.",
                     intent=response_intent,
                 )
             if selected_run.status.terminal:
+                events.failed(
+                    SourceLoadStage.NOT_ATTEMPTED,
+                    IngestionFailureKind.RUN_UNAVAILABLE,
+                    resource_identity=resource,
+                    run_id=run_id,
+                )
                 return self._response_composer.research_source_load_failure(
                     request,
                     "Research run is closed and cannot accept new sources.",
                     intent=response_intent,
                 )
         if self._request_cancelled(request):
+            events.cancelled(resource_identity=resource, run_id=run_id)
             return self._response_composer.research_source_load_failure(
                 request,
                 "Research source loading was cancelled.",
                 intent=response_intent,
             )
+        events.validation_completed(resource, run_id=run_id)
         try:
+            events.fetch_started(resource, run_id=run_id)
             source = self._research_source_fetcher.fetch(url.strip())
+            events.fetch_completed(resource, run_id=run_id)
             if self._request_cancelled(request):
+                events.cancelled(resource_identity=resource, run_id=run_id)
                 return self._response_composer.research_source_load_failure(
                     request,
                     "Research source loading was cancelled.",
                     intent=response_intent,
                 )
-            source_document = source.to_document()
-            if self._request_cancelled(request):
-                return self._response_composer.research_source_load_failure(
-                    request,
-                    "Research source loading was cancelled.",
-                    intent=response_intent,
-                )
-            document = self._knowledge_engine.add_document(
-                source_document,
-                stable_chunk_ids=bool(run_id),
+            result = self._research_source_acceptance_service.accept(
+                source,
+                run_id,
+                attempt_id=attempt_id,
             )
         except (ResearchError, KnowledgeError) as error:
             if isinstance(error, ResearchError) and self._request_cancelled(request):
+                events.cancelled(resource_identity=resource, run_id=run_id)
                 return self._response_composer.research_source_load_failure(
                     request,
                     "Research source loading was cancelled.",
                     intent=response_intent,
                 )
+            fetch_refused = isinstance(error, ResearchError)
             if run_id and self._research_run_manager is not None:
                 audit_reason = (
                     "Research source acquisition failed."
@@ -1732,6 +2526,21 @@ class CognitiveEngine:
                         audit_reason,
                     )
                 except ResearchError:
+                    events.failed(
+                        (
+                            SourceLoadStage.FETCH_REFUSED
+                            if fetch_refused
+                            else SourceLoadStage.INDEX_FAILED
+                        ),
+                        (
+                            IngestionFailureKind.FETCH_REFUSED
+                            if fetch_refused
+                            else IngestionFailureKind.INDEX_FAILED
+                        ),
+                        resource_identity=resource,
+                        run_id=run_id,
+                        safe_failure_recorded=False,
+                    )
                     return self._response_composer.research_source_load_failure(
                         request,
                         (
@@ -1740,105 +2549,38 @@ class CognitiveEngine:
                         ),
                         intent=response_intent,
                     )
+                safe_failure_recorded = True
+            else:
+                safe_failure_recorded = False
+            if fetch_refused:
+                events.failed(
+                    SourceLoadStage.FETCH_REFUSED,
+                    IngestionFailureKind.FETCH_REFUSED,
+                    resource_identity=resource,
+                    run_id=run_id,
+                    safe_failure_recorded=safe_failure_recorded,
+                )
             return self._response_composer.research_source_load_failure(
                 request,
                 f"Research source could not be loaded: {error}",
                 intent=response_intent,
             )
-        run = None
-        if run_id and self._research_run_manager is not None:
-            content_snapshot: list[ResearchSourceContentRecord] | None = None
-            if self._research_source_content_store is not None:
-                try:
-                    content_snapshot = self._research_source_content_store.load()
-                    content_record = ResearchSourceContentRecord.from_source(
-                        source,
-                        document.document_id,
-                        datetime.now(UTC),
-                    )
-                    self._research_source_content_store.save(
-                        [*content_snapshot, content_record]
-                    )
-                except ResearchError:
-                    try:
-                        self._knowledge_engine.remove_document(document.document_id)
-                    except KnowledgeError:
-                        return self._response_composer.research_source_load_failure(
-                            request,
-                            (
-                                "Research source content failed and knowledge "
-                                "rollback failed."
-                            ),
-                            intent=response_intent,
-                        )
-                    return self._response_composer.research_source_load_failure(
-                        request,
-                        (
-                            "Research source content could not be saved; "
-                            "knowledge was rolled back."
-                        ),
-                        intent=response_intent,
-                    )
-            try:
-                run = self._research_run_manager.add_source(
-                    run_id,
-                    source,
-                    document.document_id,
-                )
-            except ResearchError:
-                content_rollback_failed = False
-                if (
-                    content_snapshot is not None
-                    and self._research_source_content_store is not None
-                ):
-                    try:
-                        self._research_source_content_store.save(content_snapshot)
-                    except ResearchError:
-                        content_rollback_failed = True
-                knowledge_rollback_failed = False
-                try:
-                    self._knowledge_engine.remove_document(document.document_id)
-                except KnowledgeError:
-                    knowledge_rollback_failed = True
-                if content_rollback_failed and knowledge_rollback_failed:
-                    message = (
-                        "Research source audit, content rollback, and knowledge "
-                        "rollback failed."
-                    )
-                elif content_rollback_failed:
-                    message = (
-                        "Research source audit failed and content rollback failed; "
-                        "knowledge was rolled back."
-                    )
-                elif knowledge_rollback_failed:
-                    message = (
-                        "Research source audit failed and knowledge rollback failed; "
-                        "content was rolled back."
-                    )
-                elif content_snapshot is not None:
-                    message = (
-                        "Research source audit could not be saved; content and "
-                        "knowledge were rolled back."
-                    )
-                else:
-                    message = (
-                        "Research source audit could not be saved; "
-                        "knowledge was rolled back."
-                    )
-                return self._response_composer.research_source_load_failure(
-                    request,
-                    message,
-                    intent=response_intent,
-                )
+        if not result.accepted:
+            return self._response_composer.research_source_load_failure(
+                request,
+                result.failure_reason,
+                intent=response_intent,
+            )
         loaded_document = next(
             reference
             for reference in self._knowledge_engine.documents()
-            if reference.document_id == document.document_id
+            if reference.document_id == result.document_id
         )
         return self._response_composer.research_source_load_success(
             request,
             loaded_document,
-            run=run,
+            run=result.run,
+            stage=result.stage,
             intent=response_intent,
         )
 
@@ -2489,48 +3231,34 @@ class CognitiveEngine:
             source="brain",
         )
 
-        if context.intent == "message" and self._llm_provider is not None:
+        live_information_kind = self._research_honesty_service.detect(request)
+        if live_information_kind.detected:
+            response = self._research_honesty_service.process(
+                request,
+                live_information_kind,
+            )
+        elif context.intent == "message" and self._llm_provider is not None:
             try:
                 history = build_llm_conversation_history(
                     tuple(self._memory_manager.all()),
                     session_id,
                     max_turns=self._llm_history_max_turns,
                 )
-                if self._learned_memory_selector is not None:
-                    if self._learned_memory_context_limit is None:
-                        learned_memory_context = (
-                            load_current_selected_learned_memory_context(
-                                memory_manager=self._memory_manager,
-                                source_text=request.message,
-                                selector=self._learned_memory_selector,
-                            )
-                        )
-                    else:
-                        learned_memory_context = (
-                            load_current_selected_bounded_learned_memory_context(
-                                memory_manager=self._memory_manager,
-                                source_text=request.message,
-                                selector=self._learned_memory_selector,
-                                limit=self._learned_memory_context_limit,
-                            )
-                        )
-                elif self._learned_memory_context_limit is None:
-                    learned_memory_context = load_learned_memory_context(
-                        self._memory_manager
-                    )
-                else:
-                    learned_memory_context = load_bounded_learned_memory_context(
-                        self._memory_manager,
-                        self._learned_memory_context_limit,
-                    )
+                learned_memory_context = self._learned_memory_context_service(
+                    request
+                ).build(self._memory_manager, request.message)
                 provider_prompt = build_learned_memory_augmented_prompt(
                     user_message=request.message,
                     learned_memory_context=learned_memory_context,
                 )
+                generated = self._llm_provider.generate(
+                    provider_prompt,
+                    history=history,
+                )
                 response = BrainResponse(
-                    message=self._llm_provider.generate(
-                        provider_prompt,
-                        history=history,
+                    message=self._conversation_research_claim_guard.annotate(
+                        generated,
+                        self._research_honesty_service.summary(),
                     ),
                     request_id=request.request_id,
                     intent="message",
@@ -2540,8 +3268,9 @@ class CognitiveEngine:
                     batch = self._learned_memory_candidate_extractor.extract(
                         request.message
                     )
-                except LearnedMemoryCandidateExtractionError:
+                except LearnedMemoryCandidateExtractionError as error:
                     batch = None
+                    self._emit_learned_memory_extraction_failure(request, error)
                 if batch is not None:
                     persist_learned_memory_candidate_batch(
                         self._memory_manager,
@@ -2585,6 +3314,53 @@ class CognitiveEngine:
             source="brain",
         )
         return response
+
+    def _learned_memory_context_service(
+        self,
+        request: BrainRequest,
+    ) -> LearnedMemoryContextService:
+        """Build the per-turn context service for the current configuration."""
+        semantic_runtime = (
+            self._semantic_memory_index_runtime
+            if self._chat_semantic_memory_enabled
+            else None
+        )
+        return LearnedMemoryContextService(
+            selector=self._learned_memory_selector,
+            context_limit=self._learned_memory_context_limit,
+            semantic_runtime=semantic_runtime,
+            on_semantic_failure=(
+                lambda cause: self._emit_chat_semantic_memory_failure(request, cause)
+            ),
+        )
+
+    def _emit_chat_semantic_memory_failure(
+        self,
+        request: BrainRequest,
+        cause: str,
+    ) -> None:
+        """Report a bounded semantic-query failure without exposing content."""
+        self._event_bus.emit(
+            "brain.chat_semantic_memory.query_failed",
+            {"request_id": request.request_id, "cause": cause},
+            source="brain",
+        )
+
+    def _emit_learned_memory_extraction_failure(
+        self,
+        request: BrainRequest,
+        error: LearnedMemoryCandidateExtractionError,
+    ) -> None:
+        """Report a bounded extraction failure without exposing any content."""
+        cause = error.__cause__
+        self._event_bus.emit(
+            "brain.learned_memory.extraction_failed",
+            {
+                "request_id": request.request_id,
+                "cause": type(cause).__name__ if cause is not None else "unknown",
+            },
+            source="brain",
+        )
 
     def _resolve_session_id(self, request: BrainRequest) -> str:
         value = request.metadata.get("session_id")
@@ -2897,6 +3673,295 @@ class CognitiveEngine:
             recent_records,
             session,
         )
+
+    def _process_source_reputation(self, request: BrainRequest) -> BrainResponse:
+        """Route the reputation intent, which reads and gates nothing."""
+        service = self._source_reputation_service
+        if service is None:
+            return self._response_composer.source_reputation_rejected(
+                request,
+                "Research run persistence is unavailable.",
+            )
+        try:
+            return service.process_report(request)
+        except ResearchError as error:
+            return self._response_composer.source_reputation_rejected(
+                request,
+                str(error),
+            )
+
+    @staticmethod
+    def _is_hypothesis_request(request: BrainRequest) -> bool:
+        """Return whether this request addresses the hypothesis engine."""
+        service = HypothesisApplicationService
+        return (
+            service.is_propose_request(request)
+            or service.is_support_request(request)
+            or service.is_oppose_request(request)
+            or service.is_test_evidence_request(request)
+            or service.is_retract_relation_request(request)
+            or service.is_history_request(request)
+            or service.is_withdraw_request(request)
+            or service.is_list_request(request)
+        )
+
+    def _process_hypothesis(self, request: BrainRequest) -> BrainResponse:
+        """Route one hypothesis intent. There is deliberately no confirm."""
+        service = self._hypothesis_service
+        if service is None:
+            return self._response_composer.hypothesis_rejected(
+                request,
+                "Research run persistence is unavailable.",
+            )
+        try:
+            if service.is_propose_request(request):
+                return service.process_propose(request)
+            if service.is_support_request(request):
+                return service.process_support(request)
+            if service.is_oppose_request(request):
+                return service.process_oppose(request)
+            if service.is_test_evidence_request(request):
+                return service.process_test_evidence(request)
+            if service.is_retract_relation_request(request):
+                return service.process_retract_relation(request)
+            if service.is_history_request(request):
+                return service.process_history(request)
+            if service.is_withdraw_request(request):
+                return service.process_withdraw(request)
+            return service.process_list(request)
+        except ResearchError as error:
+            return self._response_composer.hypothesis_rejected(request, str(error))
+
+    @staticmethod
+    def _is_vulnerability_graph_request(request: BrainRequest) -> bool:
+        """Return whether this request addresses the weakness taxonomy."""
+        service = VulnerabilityGraphApplicationService
+        return (
+            service.is_family_record_request(request)
+            or service.is_relation_record_request(request)
+            or service.is_neighbourhood_request(request)
+            or service.is_family_list_request(request)
+        )
+
+    def _process_vulnerability_graph(self, request: BrainRequest) -> BrainResponse:
+        """Route one taxonomy intent. Nothing here targets a system."""
+        service = self._vulnerability_graph_service
+        try:
+            if service.is_family_record_request(request):
+                return service.process_family_record(request)
+            if service.is_relation_record_request(request):
+                return service.process_relation_record(request)
+            if service.is_neighbourhood_request(request):
+                return service.process_neighbourhood(request)
+            return service.process_family_list(request)
+        except ResearchError as error:
+            return self._response_composer.vulnerability_graph_rejected(
+                request,
+                str(error),
+            )
+
+    def _process_security_posture(self, request: BrainRequest) -> BrainResponse:
+        """Route the audit intent, which reads and contacts nothing."""
+        service = self._security_agent_service
+        if service is None:
+            return self._response_composer.security_posture_rejected(
+                request,
+                "Research run persistence is unavailable.",
+            )
+        try:
+            return service.process_audit(request)
+        except ResearchError as error:
+            return self._response_composer.security_posture_rejected(
+                request,
+                str(error),
+            )
+
+    @staticmethod
+    def _is_knowledge_reconciliation_request(request: BrainRequest) -> bool:
+        """Return whether this request addresses knowledge reconciliation."""
+        service = KnowledgeReconciliationApplicationService
+        return service.is_report_request(request) or service.is_knowledge_only_request(
+            request
+        )
+
+    def _process_knowledge_reconciliation(
+        self,
+        request: BrainRequest,
+    ) -> BrainResponse:
+        """Route one reconciliation intent. Both of them only read."""
+        service = self._knowledge_reconciliation_service
+        if service.is_knowledge_only_request(request):
+            return service.process_knowledge_only(request)
+        return service.process_report(request)
+
+    def _process_calibration(self, request: BrainRequest) -> BrainResponse:
+        """Route the calibration intent, which reads and never writes."""
+        service = self._calibration_service
+        preparing_revision = CalibrationApplicationService.is_revision_prepare_request(
+            request
+        )
+        reject = (
+            self._response_composer.research_claim_revision_preparation_rejected
+            if preparing_revision
+            else self._response_composer.research_calibration_rejected
+        )
+        if service is None:
+            return reject(
+                request,
+                "Research run persistence is unavailable.",
+            )
+        try:
+            if preparing_revision:
+                return service.process_revision_prepare(request)
+            return service.process_report(request)
+        except ResearchError as error:
+            return reject(
+                request,
+                str(error),
+            )
+
+    @staticmethod
+    def _is_plan_authorization_request(request: BrainRequest) -> bool:
+        """Return whether this request addresses recording a human approval."""
+        service = ResearchPlanAuthorizationApplicationService
+        return (
+            service.is_preview_request(request)
+            or service.is_confirm_request(request)
+            or service.is_list_request(request)
+        )
+
+    def _process_plan_authorization(self, request: BrainRequest) -> BrainResponse:
+        """Route one approval intent. Nothing here starts research."""
+        service = self._plan_authorization_service
+        if service is None:
+            return self._response_composer.research_plan_authorization_rejected(
+                request,
+                "Research plan approval is unavailable.",
+            )
+        try:
+            if service.is_preview_request(request):
+                return service.process_preview(request)
+            if service.is_confirm_request(request):
+                return service.process_confirm(request)
+            return service.process_list(request)
+        except ResearchError as error:
+            return self._response_composer.research_plan_authorization_rejected(
+                request,
+                str(error),
+            )
+
+    @staticmethod
+    def _is_failure_memory_request(request: BrainRequest) -> bool:
+        """Return whether this request addresses failure memory."""
+        service = FailureMemoryApplicationService
+        return (
+            service.is_preview_request(request)
+            or service.is_store_request(request)
+            or service.is_list_request(request)
+            or service.is_recall_request(request)
+            or service.is_hypothesis_store_request(request)
+        )
+
+    def _process_failure_memory(self, request: BrainRequest) -> BrainResponse:
+        """Route one failure-memory intent, which never performs research."""
+        service = self._failure_memory_service
+        if service is None:
+            return self._response_composer.failure_memory_rejected(
+                request,
+                "Research run persistence is unavailable.",
+            )
+        try:
+            if service.is_preview_request(request):
+                return service.process_preview(request)
+            if service.is_store_request(request):
+                return service.process_store(request)
+            if service.is_hypothesis_store_request(request):
+                return service.process_hypothesis_store(request)
+            if service.is_recall_request(request):
+                return service.process_recall(request)
+            return service.process_list(request)
+        except ResearchError as error:
+            return self._response_composer.failure_memory_rejected(
+                request,
+                str(error),
+            )
+
+    @staticmethod
+    def _is_reflection_request(request: BrainRequest) -> bool:
+        """Return whether this request addresses the reflection engine."""
+        service = ReflectionApplicationService
+        return (
+            service.is_preview_request(request)
+            or service.is_store_request(request)
+            or service.is_list_request(request)
+        )
+
+    def _process_reflection(self, request: BrainRequest) -> BrainResponse:
+        """Route one reflection intent, which never performs research."""
+        service = self._reflection_service
+        if service is None:
+            return self._response_composer.research_reflection_rejected(
+                request,
+                "Research run persistence is unavailable.",
+            )
+        try:
+            if service.is_preview_request(request):
+                return service.process_preview(request)
+            if service.is_store_request(request):
+                return service.process_store(request)
+            return service.process_list(request)
+        except ResearchError as error:
+            return self._response_composer.research_reflection_rejected(
+                request,
+                str(error),
+            )
+
+    @staticmethod
+    def _is_curiosity_request(request: BrainRequest) -> bool:
+        """Return whether this request addresses the curiosity engine."""
+        service = CuriosityApplicationService
+        return (
+            service.is_gap_detect_request(request)
+            or service.is_question_preview_request(request)
+            or service.is_question_store_request(request)
+            or service.is_question_list_request(request)
+            or service.is_question_accept_request(request)
+            or service.is_question_dismiss_request(request)
+            or service.is_prepare_proposal_request(request)
+            or service.is_authorize_proposal_request(request)
+            or service.is_start_authorized_proposal_request(request)
+        )
+
+    def _process_curiosity(self, request: BrainRequest) -> BrainResponse:
+        """Route one curiosity intent, which never performs research."""
+        service = self._curiosity_service
+        if service is None:
+            return self._response_composer.curiosity_rejected(
+                request,
+                "Research run persistence is unavailable.",
+            )
+        try:
+            if service.is_gap_detect_request(request):
+                return service.process_gap_detect(request)
+            if service.is_question_preview_request(request):
+                return service.process_question_preview(request)
+            if service.is_question_store_request(request):
+                return service.process_question_store(request)
+            if service.is_question_list_request(request):
+                return service.process_question_list(request)
+            if service.is_question_accept_request(request):
+                return service.process_question_accept(request)
+            if service.is_prepare_proposal_request(request):
+                return service.process_prepare_proposal(request)
+            if service.is_authorize_proposal_request(request):
+                return service.process_authorize_proposal(request)
+            if service.is_start_authorized_proposal_request(request):
+                return service.process_start_authorized_proposal(request)
+            if service.is_resume_execution_request(request):
+                return service.process_resume_execution(request)
+            return service.process_question_dismiss(request)
+        except ResearchError as error:
+            return self._response_composer.curiosity_rejected(request, str(error))
 
     def _process_conversation_search(self, request: BrainRequest) -> BrainResponse:
         """Find matching normal conversation records in the resolved session."""

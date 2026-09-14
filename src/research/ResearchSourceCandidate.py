@@ -1,4 +1,23 @@
-"""Bounded source metadata proposed by a replaceable discovery provider."""
+"""Bounded source metadata proposed by a replaceable discovery provider.
+
+The venue and the year are kept as themselves rather than only as prose. The
+provider already asks Crossref for both and already receives both; until now
+they were flattened into the snippet, and the only way to get them back was to
+split a display string on a separator and hope. That is guessing at structure,
+and a guessed publication year on a research source is exactly the kind of
+confident detail that is worth nothing and looks like everything.
+
+Both stay optional, because a provider that does not supply them must be able to
+say so. Absent is a truthful answer; a default year is not.
+
+The vulnerability record is optional for the same reason and carries the same
+rule. A scholarly result has none and must not be given an empty one that reads
+like a CVE with nothing in it; a vulnerability result has one, and flattening its
+status, weaknesses and severity metrics into the shared prose fields would mean
+re-deriving them later by reading text, which is guessing. It sits alongside the
+common fields rather than replacing them, so every provider still produces the
+same kind of candidate and the ranker still sees one shape.
+"""
 
 from __future__ import annotations
 
@@ -6,6 +25,7 @@ from dataclasses import dataclass
 from urllib.parse import urlparse
 
 from core.Exceptions import ResearchError
+from research.ResearchVulnerabilityRecord import ResearchVulnerabilityRecord
 
 
 @dataclass(frozen=True, slots=True)
@@ -15,6 +35,9 @@ class ResearchSourceCandidate:
     url: str
     title: str
     snippet: str
+    container: str = ""
+    published_year: int | None = None
+    vulnerability: ResearchVulnerabilityRecord | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.url, str) or not self.url.strip():
@@ -23,8 +46,23 @@ class ResearchSourceCandidate:
             raise ResearchError("Research source candidate title cannot be empty.")
         if not isinstance(self.snippet, str):
             raise ResearchError("Research source candidate snippet must be text.")
+        if not isinstance(self.container, str):
+            raise ResearchError("Research source candidate venue must be text.")
+        if self.published_year is not None and (
+            isinstance(self.published_year, bool)
+            or not isinstance(self.published_year, int)
+            or not 1_000 <= self.published_year <= 9_999
+        ):
+            raise ResearchError("Research source candidate year is implausible.")
+        if self.vulnerability is not None and not isinstance(
+            self.vulnerability, ResearchVulnerabilityRecord
+        ):
+            raise ResearchError("Research source candidate vulnerability is invalid.")
 
         url = self.url.strip()
+        container = " ".join(self.container.split())
+        if len(container) > 700:
+            raise ResearchError("Research source candidate venue is too long.")
         title = " ".join(self.title.split())
         snippet = " ".join(self.snippet.split())
         if len(url) > 2_048:
@@ -55,3 +93,4 @@ class ResearchSourceCandidate:
         object.__setattr__(self, "url", url)
         object.__setattr__(self, "title", title)
         object.__setattr__(self, "snippet", snippet)
+        object.__setattr__(self, "container", container)

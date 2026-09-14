@@ -307,6 +307,8 @@ class DesktopControllerTests(unittest.TestCase):
                     ("Review evidence.", ("document-2", "document-1")),
                     ("Record gaps.", ()),
                 ),
+                "research_plan_constraints": (),
+                "research_plan_restriction": None,
             },
         )
 
@@ -340,6 +342,18 @@ class DesktopControllerTests(unittest.TestCase):
             )
 
         self.assertEqual(self.brain.requests, [])
+
+    def test_audit_learned_memory_uses_a_structured_read_only_request(self) -> None:
+        response = self.controller.audit_learned_memory()
+
+        self.assertIs(response, self.response)
+        self.assertEqual(len(self.brain.requests), 1)
+        request = self.brain.requests[0]
+        self.assertIsInstance(request, BrainRequest)
+        assert isinstance(request, BrainRequest)
+        self.assertEqual(request.message, "Audit learned memory")
+        self.assertEqual(request.source, "desktop")
+        self.assertEqual(request.metadata, {"intent": "learned_memory_audit"})
 
     def test_list_research_runs_uses_a_structured_read_only_request(self) -> None:
         response = self.controller.list_research_runs()
@@ -934,6 +948,13 @@ class DesktopControllerTests(unittest.TestCase):
             "research_assessment_text": "The source supports the claim.",
             "research_assessment_supersedes_id": "assessment-previous",
             "research_information_trust": "high",
+            # An unanswered dimension travels as `unknown`, never as a
+            # favourable default. A request that says nothing about usefulness
+            # must not arrive claiming the source was useful.
+            "research_source_usefulness": "unknown",
+            "research_source_applicability": "unknown",
+            "research_source_independence": "unknown",
+            "research_source_publication_status": "unknown",
         }
         self.assertEqual(
             preview_request.metadata,

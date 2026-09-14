@@ -18,11 +18,19 @@ from research.PublicHttpsUrlValidator import (
     PublicHttpsUrlValidator,
     ValidatedPublicHttpsDestination,
 )
+from research.ResearchDiscoveryProviderName import (
+    ResearchDiscoveryProviderName,
+)
 from research.ResearchSourceCandidate import ResearchSourceCandidate
 
 CROSSREF_API_ORIGIN = "https://api.crossref.org"
 CROSSREF_WORKS_ENDPOINT = f"{CROSSREF_API_ORIGIN}/v1/works"
-CROSSREF_PROVIDER_NAME = "crossref-rest-v1"
+#: Derived from the closed vocabulary rather than written out, exactly as the
+#: NVD provider does. When these were two independent strings the discovery
+#: record said `crossref-rest-v1` while the comparison and paired-quality
+#: reports looked for `crossref`, so a Crossref search that genuinely ran
+#: was reported as never having happened.
+CROSSREF_PROVIDER_NAME = ResearchDiscoveryProviderName.CROSSREF.value
 CROSSREF_USER_AGENT = f"Hypatia/{VERSION.short} research-source-discovery"
 _CROSSREF_HOST = "api.crossref.org"
 _DEFAULT_TIMEOUT_SECONDS = 10.0
@@ -244,23 +252,36 @@ def _candidate_from_item(value: Any) -> ResearchSourceCandidate | None:
     if not title:
         return None
     url = f"https://doi.org/{quote(doi.strip(), safe='/():._-;')}"
-    snippet = _bibliographic_snippet(value)
+    container = _container_title(value)
+    year = _published_year(value.get("published"))
     try:
-        return ResearchSourceCandidate(url=url, title=title, snippet=snippet)
+        return ResearchSourceCandidate(
+            url=url,
+            title=title,
+            snippet=_bibliographic_snippet(container, year),
+            container=container,
+            published_year=year,
+        )
     except ResearchError:
         return None
 
 
-def _bibliographic_snippet(value: dict[str, Any]) -> str:
-    parts: list[str] = []
+def _container_title(value: dict[str, Any]) -> str:
     containers = value.get("container-title")
     if isinstance(containers, list) and containers and isinstance(containers[0], str):
-        container = _normalized_bounded_text(containers[0], 700)
-        if container:
-            parts.append(container)
-    year = _published_year(value.get("published"))
-    if year is not None:
-        parts.append(str(year))
+        return _normalized_bounded_text(containers[0], 700)
+    return ""
+
+
+def _bibliographic_snippet(container: str, year: int | None) -> str:
+    """Render the venue and year for display, from the values already parsed.
+
+    The snippet stays a display string and nothing reads structure back out of
+    it. Whatever needs the venue or the year takes them from the fields that now
+    carry them.
+    """
+    rendered_year = str(year) if year is not None else ""
+    parts = [part for part in (container, rendered_year) if part]
     return _normalized_bounded_text(" · ".join(parts), 1_000)
 
 
@@ -278,7 +299,7 @@ def _published_year(value: Any) -> int | None:
     year = date_parts[0][0]
     if isinstance(year, bool) or not isinstance(year, int) or not 1000 <= year <= 9999:
         return None
-    return year
+    return int(year)
 
 
 def _normalized_bounded_text(value: str, limit: int) -> str:

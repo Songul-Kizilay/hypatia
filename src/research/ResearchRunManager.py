@@ -56,6 +56,7 @@ from research.ResearchRunStatusTransitionPreview import (
 )
 from research.ResearchRunStore import ResearchRunStore
 from research.ResearchSource import ResearchSource
+from research.ResearchSourceApplicability import ResearchSourceApplicability
 from research.ResearchSourceAssessmentPreview import ResearchSourceAssessmentPreview
 from research.ResearchSourceAssessmentRecord import (
     MAX_SOURCE_ASSESSMENT_CHARACTERS,
@@ -89,7 +90,10 @@ from research.ResearchSourceComparisonPreview import (
     ResearchSourceComparisonPreview,
 )
 from research.ResearchSourceDiscoveryRecord import ResearchSourceDiscoveryRecord
+from research.ResearchSourceIndependence import ResearchSourceIndependence
+from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
 from research.ResearchSourceRecord import ResearchSourceRecord
+from research.ResearchSourceUsefulness import ResearchSourceUsefulness
 
 
 class ResearchRunManager:
@@ -372,7 +376,14 @@ class ResearchRunManager:
             self._runs = candidate_tuple
         return updated
 
-    def record_failure(self, run_id: str, stage: str, reason: str) -> ResearchRun:
+    def record_failure(
+        self,
+        run_id: str,
+        stage: str,
+        reason: str,
+        *,
+        provider: str | None = None,
+    ) -> ResearchRun:
         """Persist a safe bounded failure without retaining rejected URL input."""
         normalized_id = self._normalize_run_id(run_id)
         with self._lock:
@@ -386,7 +397,7 @@ class ResearchRunManager:
                 sources=run.sources,
                 failures=(
                     *run.failures,
-                    ResearchFailureRecord(stage, reason, now),
+                    ResearchFailureRecord(stage, reason, now, provider),
                 ),
                 created_at=run.created_at,
                 updated_at=now,
@@ -562,7 +573,7 @@ class ResearchRunManager:
                 discovery.discovery_id,
                 candidate,
                 True,
-                "Research source candidate can be loaded and attached to this run.",
+                _acceptance_disclosure(candidate),
             )
 
     def preview_source_assessment(
@@ -717,6 +728,16 @@ class ResearchRunManager:
         information_trust: ResearchInformationTrust | str = (
             ResearchInformationTrust.UNASSESSED
         ),
+        usefulness: ResearchSourceUsefulness | str = ResearchSourceUsefulness.UNKNOWN,
+        applicability: ResearchSourceApplicability | str = (
+            ResearchSourceApplicability.UNKNOWN
+        ),
+        independence: ResearchSourceIndependence | str = (
+            ResearchSourceIndependence.UNKNOWN
+        ),
+        publication_status: ResearchSourcePublicationStatus | str = (
+            ResearchSourcePublicationStatus.UNKNOWN
+        ),
     ) -> ResearchSourceAssessmentWritePreview:
         """Validate one authored assessment without mutating persisted state."""
         normalized_run_id = self._normalize_run_id(run_id)
@@ -728,6 +749,12 @@ class ResearchRunManager:
         )
         normalized_information_trust = self._normalize_information_trust(
             information_trust
+        )
+        normalized_judgement = self._normalize_source_judgement(
+            usefulness,
+            applicability,
+            independence,
+            publication_status,
         )
         with self._lock:
             _, run = self._find_with_index(normalized_run_id)
@@ -765,6 +792,10 @@ class ResearchRunManager:
                 reason=reason,
                 supersedes_assessment=superseded_assessment,
                 information_trust=normalized_information_trust,
+                usefulness=normalized_judgement[0],
+                applicability=normalized_judgement[1],
+                independence=normalized_judgement[2],
+                publication_status=normalized_judgement[3],
             )
 
     def preview_claim_write(
@@ -982,6 +1013,16 @@ class ResearchRunManager:
         information_trust: ResearchInformationTrust | str = (
             ResearchInformationTrust.UNASSESSED
         ),
+        usefulness: ResearchSourceUsefulness | str = ResearchSourceUsefulness.UNKNOWN,
+        applicability: ResearchSourceApplicability | str = (
+            ResearchSourceApplicability.UNKNOWN
+        ),
+        independence: ResearchSourceIndependence | str = (
+            ResearchSourceIndependence.UNKNOWN
+        ),
+        publication_status: ResearchSourcePublicationStatus | str = (
+            ResearchSourcePublicationStatus.UNKNOWN
+        ),
     ) -> ResearchRun:
         """Revalidate and atomically append one user-authored assessment."""
         normalized_run_id = self._normalize_run_id(run_id)
@@ -993,6 +1034,12 @@ class ResearchRunManager:
         )
         normalized_information_trust = self._normalize_information_trust(
             information_trust
+        )
+        normalized_judgement = self._normalize_source_judgement(
+            usefulness,
+            applicability,
+            independence,
+            publication_status,
         )
         with self._lock:
             index, run = self._find_with_index(normalized_run_id)
@@ -1020,6 +1067,10 @@ class ResearchRunManager:
                     else superseded_assessment.assessment_id
                 ),
                 information_trust=normalized_information_trust,
+                usefulness=normalized_judgement[0],
+                applicability=normalized_judgement[1],
+                independence=normalized_judgement[2],
+                publication_status=normalized_judgement[3],
             )
             updated = ResearchRun(
                 run_id=run.run_id,
@@ -1852,6 +1903,34 @@ class ResearchRunManager:
         return ResearchRunManager._normalize_assessment_id(assessment_id)
 
     @staticmethod
+    def _normalize_source_judgement(
+        usefulness: ResearchSourceUsefulness | str,
+        applicability: ResearchSourceApplicability | str,
+        independence: ResearchSourceIndependence | str,
+        publication_status: ResearchSourcePublicationStatus | str,
+    ) -> tuple[
+        ResearchSourceUsefulness,
+        ResearchSourceApplicability,
+        ResearchSourceIndependence,
+        ResearchSourcePublicationStatus,
+    ]:
+        """Return the four structured judgements, refusing anything unlisted.
+
+        An unrecognised value is refused rather than folded into `unknown`. A
+        typo that silently became `unknown` would read as an appraisal somebody
+        declined to make, when in fact one was made and lost.
+        """
+        try:
+            return (
+                ResearchSourceUsefulness(usefulness),
+                ResearchSourceApplicability(applicability),
+                ResearchSourceIndependence(independence),
+                ResearchSourcePublicationStatus(publication_status),
+            )
+        except (TypeError, ValueError) as error:
+            raise ResearchError("Research source judgement is invalid.") from error
+
+    @staticmethod
     def _normalize_information_trust(
         value: ResearchInformationTrust | str,
     ) -> ResearchInformationTrust:
@@ -1990,3 +2069,22 @@ class ResearchRunManager:
         if not isinstance(candidate_url, str) or not candidate_url.strip():
             raise ResearchError("Research source candidate URL cannot be empty.")
         return candidate_url.strip()
+
+
+def _acceptance_disclosure(candidate: ResearchSourceCandidate) -> str:
+    """Say what loading this candidate will actually do, before it is confirmed.
+
+    A vulnerability candidate is named by a page that does not contain it, and
+    its record is read from the API instead. Telling an operator that Hypatia
+    will load the page they can see would describe something that never happens
+    and, worse, would misdescribe where the content they end up citing came
+    from. The confirmation is only meaningful if it names the real operation.
+    """
+    if candidate.vulnerability is not None:
+        return (
+            "Research source candidate can be loaded and attached to this run. "
+            "Its record will be retrieved from the NVD CVE API 2.0 — the "
+            "linked page is an application shell and is not read — and the "
+            "references it lists will be stored as text without being fetched."
+        )
+    return "Research source candidate can be loaded and attached to this run."

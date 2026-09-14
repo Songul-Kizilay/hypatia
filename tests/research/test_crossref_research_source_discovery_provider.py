@@ -102,7 +102,7 @@ class CrossrefResearchSourceDiscoveryProviderTests(unittest.TestCase):
 
         candidates = provider.discover("  local AI safety  ", limit=2)
 
-        self.assertEqual(provider.provider_name, "crossref-rest-v1")
+        self.assertEqual(provider.provider_name, "crossref")
         self.assertEqual(
             [candidate.url for candidate in candidates],
             [
@@ -113,6 +113,14 @@ class CrossrefResearchSourceDiscoveryProviderTests(unittest.TestCase):
         self.assertEqual(candidates[0].title, "First research paper")
         self.assertEqual(candidates[0].snippet, "Journal of Local AI · 2025")
         self.assertEqual(candidates[1].snippet, "2024")
+        # The venue and the year are kept as themselves, not only rendered into
+        # the snippet. Crossref is already asked for both; discarding them and
+        # then recovering them by splitting a display string on a separator is
+        # how a publication year becomes a guess.
+        self.assertEqual(candidates[0].container, "Journal of Local AI")
+        self.assertEqual(candidates[0].published_year, 2025)
+        self.assertEqual(candidates[1].container, "")
+        self.assertEqual(candidates[1].published_year, 2024)
         self.assertEqual(response.read_limits, [4_097])
         request, timeout = opener.calls[0]
         self.assertEqual(timeout, 3.5)

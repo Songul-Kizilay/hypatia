@@ -21,6 +21,40 @@ from desktop.TkinterDesktopWindow import TkinterDesktopWindow
 
 
 class DesktopRequestRunnerTests(unittest.TestCase):
+    def test_cancelled_learning_report_remains_visible_without_restarting_work(self):
+        runner = DesktopRequestRunner()
+        window = self._window_with(runner)
+        signal = CancellationSignal()
+        entered, release = Event(), Event()
+        results = []
+        response = BrainResponse(
+            message="Cancelled: partial cited report",
+            request_id="research",
+            intent="research_goal_start",
+            memory_count=0,
+        )
+
+        def action():
+            entered.set()
+            release.wait(timeout=1)
+            return response
+
+        window._start_request(
+            action,
+            results.append,
+            "bounded learning research",
+            cancellation_signal=signal,
+            preserve_cancelled_result=True,
+        )
+        self.assertTrue(entered.wait(timeout=1))
+        runner.request_cancel()
+        self.assertTrue(signal.is_cancelled())
+        release.set()
+        self._wait_until_idle(runner)
+        window._poll_requests()
+        self.assertEqual(results, [response])
+        self.assertFalse(runner.is_running())
+
     def test_one_request_runs_in_background_and_a_second_is_not_queued(self) -> None:
         runner = DesktopRequestRunner()
         entered = Event()

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
 from datetime import UTC, datetime
 from pathlib import Path
@@ -22,8 +23,14 @@ from eventbus.EventBus import EventBus
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from memory.MemoryManager import MemoryManager
 from planner.Planner import Planner
+from research.FailureLessonKind import FailureLessonKind
+from research.JsonFileFailureLessonStore import JsonFileFailureLessonStore
+from research.JsonFileResearchRunStore import JsonFileResearchRunStore
+from research.ResearchFailureLesson import ResearchFailureLesson
 from research.ResearchPlanDraftPreview import ResearchPlanDraftPreview
 from research.ResearchPlanDraftService import ResearchPlanDraftService
+from research.ResearchPlanFailureLessonTrace import ResearchPlanFailureLessonTracer
+from research.ResearchRunManager import ResearchRunManager
 from response.ResponseComposer import ResponseComposer
 from session.SessionManager import SessionManager
 from session.SessionRenameTransactionService import SessionRenameTransactionService
@@ -68,8 +75,115 @@ class ResearchPlanPreviewApplicationServiceTests(unittest.TestCase):
         result = service.process_draft_preview(request)
 
         self.assertIs(result, response)
-        draft_service.preview.assert_called_once_with(question, steps)
-        composer.research_plan_draft_preview.assert_called_once_with(request, preview)
+        draft_service.preview.assert_called_once_with(
+            question, steps, (), None, target_binding=None
+        )
+        composer.research_plan_draft_preview.assert_called_once_with(
+            request,
+            preview,
+            (),
+            None,
+        )
+
+    def test_valid_preview_receives_advice_for_its_canonical_question(self) -> None:
+        composer = Mock(spec=ResponseComposer)
+        lesson_advisor = Mock(return_value=())
+        service = ResearchPlanPreviewApplicationService(
+            composer,
+            ResearchPlanDraftService(
+                clock=lambda: datetime(2026, 8, 22, 18, 0, tzinfo=UTC),
+                id_factory=lambda: "plan-1",
+            ),
+            lesson_advisor,
+        )
+        request = BrainRequest(
+            "ignored",
+            metadata={
+                "research_plan_question": "  Compare findings.  ",
+                "research_plan_steps": (("Review.", ()),),
+            },
+        )
+
+        service.process_draft_preview(request)
+
+        lesson_advisor.assert_called_once_with("Compare findings.")
+
+    def test_rejected_preview_does_not_consult_failure_memory(self) -> None:
+        lesson_advisor = Mock(return_value=())
+        service = ResearchPlanPreviewApplicationService(
+            ResponseComposer(),
+            ResearchPlanDraftService(),
+            lesson_advisor,
+        )
+
+        response = service.process_draft_preview(BrainRequest("ignored"))
+
+        self.assertFalse(response.success)
+        lesson_advisor.assert_not_called()
+
+    def test_broken_advice_cannot_turn_a_valid_preview_into_failure(self) -> None:
+        def explode(question: str) -> tuple[ResearchFailureLesson, ...]:
+            raise RuntimeError(question)
+
+        service = ResearchPlanPreviewApplicationService(
+            ResponseComposer(),
+            ResearchPlanDraftService(
+                clock=lambda: datetime(2026, 8, 22, 18, 0, tzinfo=UTC),
+                id_factory=lambda: "plan-1",
+            ),
+            explode,
+        )
+        request = BrainRequest(
+            "ignored",
+            metadata={
+                "research_plan_question": "Compare findings.",
+                "research_plan_steps": (("Review.", ()),),
+            },
+        )
+
+        response = service.process_draft_preview(request)
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.failure_lessons, ())
+
+    def test_broken_trace_cannot_turn_a_valid_preview_into_failure(self) -> None:
+        remembered = ResearchFailureLesson(
+            lesson_id="lesson-1",
+            kind=FailureLessonKind.FAILED_HYPOTHESIS,
+            run_id="run-old",
+            subject_id="h1",
+            statement="The ring-age hypothesis lacked opposing evidence.",
+            provenance=("h1", "evidence-4"),
+            context="Which observation would change the ring-age hypothesis?",
+            recorded_at=datetime(2026, 8, 21, 18, 0, tzinfo=UTC),
+        )
+        tracer = Mock(spec=ResearchPlanFailureLessonTracer)
+        tracer.trace.side_effect = RuntimeError("trace unavailable")
+        service = ResearchPlanPreviewApplicationService(
+            ResponseComposer(),
+            ResearchPlanDraftService(
+                clock=lambda: datetime(2026, 8, 22, 18, 0, tzinfo=UTC),
+                id_factory=lambda: "plan-1",
+            ),
+            Mock(return_value=(remembered,)),
+            tracer,
+        )
+        request = BrainRequest(
+            "ignored",
+            metadata={
+                "research_plan_question": (
+                    "Which observation would settle the ring-age debate?"
+                ),
+                "research_plan_steps": (("Review opposing ring-age evidence.", ()),),
+            },
+        )
+
+        response = service.process_draft_preview(request)
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.failure_lessons, (remembered,))
+        self.assertIsNone(response.research_plan_failure_lesson_trace)
+        self.assertIn("wording overlap: unavailable", response.message)
 
     def test_missing_metadata_is_delegated_to_bounded_validation(self) -> None:
         service = ResearchPlanPreviewApplicationService(
@@ -149,6 +263,94 @@ class ResearchPlanPreviewCognitiveRoutingTests(unittest.TestCase):
         self.assertEqual(memory_manager.count(), memory_count)
         self.assertEqual(knowledge_engine.documents(), documents_before)
         self.assertEqual(events, [])
+
+    def test_preview_surfaces_durable_related_lessons_without_starting_work(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            lesson_store = JsonFileFailureLessonStore(root / "lessons.json")
+            lesson_store.save(
+                [
+                    ResearchFailureLesson(
+                        lesson_id="lesson:run-old:failed_hypothesis:h1",
+                        kind=FailureLessonKind.FAILED_HYPOTHESIS,
+                        run_id="run-old",
+                        subject_id="h1",
+                        statement=(
+                            "The earlier ring-age hypothesis lacked opposing "
+                            "evidence."
+                        ),
+                        provenance=("h1", "evidence-4"),
+                        context=(
+                            "Which observation would change the ring-age " "hypothesis?"
+                        ),
+                        recorded_at=datetime(2026, 8, 21, 18, 0, tzinfo=UTC),
+                    )
+                ]
+            )
+            lessons_before = (root / "lessons.json").read_bytes()
+            run_manager = ResearchRunManager(
+                JsonFileResearchRunStore(root / "runs.json")
+            )
+            run_manager.load()
+            event_bus = EventBus()
+            memory_manager = MemoryManager(event_bus)
+            session_manager = SessionManager(event_bus)
+            knowledge_engine = KnowledgeEngine()
+            events: list[str] = []
+            event_bus.subscribe("*", lambda event: events.append(event.name))
+            engine = CognitiveEngine(
+                knowledge_engine,
+                memory_manager,
+                Planner(),
+                event_bus,
+                ResponseComposer(),
+                session_manager,
+                SessionRenameTransactionService(
+                    session_manager=session_manager,
+                    memory_manager=memory_manager,
+                    event_bus=event_bus,
+                ),
+                research_run_manager=run_manager,
+                failure_lesson_store=lesson_store,
+                research_plan_draft_service=ResearchPlanDraftService(
+                    clock=lambda: datetime(2026, 8, 22, 18, 0, tzinfo=UTC),
+                    id_factory=lambda: "plan-1",
+                ),
+            )
+
+            response = engine.process(
+                BrainRequest(
+                    "Preview explicit authored research plan",
+                    metadata={
+                        "intent": "research_plan_draft_preview",
+                        "research_plan_question": (
+                            "Which observation would settle the ring-age debate?"
+                        ),
+                        "research_plan_steps": (
+                            ("Review opposing ring-age evidence.", ()),
+                        ),
+                    },
+                )
+            )
+
+            self.assertTrue(response.success)
+            self.assertEqual(len(response.failure_lessons), 1)
+            self.assertIn("Possibly relevant prior lessons: 1", response.message)
+            trace = response.research_plan_failure_lesson_trace
+            self.assertIsNotNone(trace)
+            assert trace is not None
+            self.assertEqual(trace.plan_id, "plan-1")
+            self.assertEqual(len(trace.references), 1)
+            self.assertEqual(trace.references[0].step_id, "step-1")
+            self.assertEqual(
+                trace.references[0].shared_terms,
+                ("evidence", "opposing", "ring-age"),
+            )
+            self.assertEqual(run_manager.list(), [])
+            self.assertEqual((root / "lessons.json").read_bytes(), lessons_before)
+            self.assertEqual(events, ["failure_memory.lessons_recalled"])
 
 
 if __name__ == "__main__":

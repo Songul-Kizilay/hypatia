@@ -14,7 +14,6 @@ from llm.LLMRuntimeActivator import activate_llm
 from llm.LLMRuntimeConfig import LLMRuntimeConfig
 from llm.UrllibChatCompletionTransport import (
     DEFAULT_TIMEOUT_SECONDS,
-    LOCAL_DEFAULT_TIMEOUT_SECONDS,
 )
 
 
@@ -84,7 +83,9 @@ class LLMRuntimeActivatorTests(unittest.TestCase):
         )
         sentinel_provider.generate.assert_not_called()
 
-    def test_enabled_loopback_config_allows_no_api_key(self) -> None:
+    def test_enabled_loopback_config_allows_no_api_key_and_slow_generation(
+        self,
+    ) -> None:
         config = LLMRuntimeConfig(
             enabled=True,
             base_url="http://localhost:11434/v1/chat/completions",
@@ -104,7 +105,7 @@ class LLMRuntimeActivatorTests(unittest.TestCase):
             api_key=None,
             model="local-model",
             system_prompt=None,
-            timeout_seconds=LOCAL_DEFAULT_TIMEOUT_SECONDS,
+            timeout_seconds=300.0,
         )
 
     def test_enabled_config_uses_an_explicit_timeout_over_the_endpoint_default(

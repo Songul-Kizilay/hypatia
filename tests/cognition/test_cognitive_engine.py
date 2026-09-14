@@ -697,11 +697,11 @@ class CognitiveEngineTests(unittest.TestCase):
 
         with (
             patch(
-                "cognition.CognitiveEngine.load_learned_memory_context",
+                "cognition.LearnedMemoryContextService.load_learned_memory_context",
                 wraps=load_learned_memory_context,
             ) as load_context,
             patch(
-                "cognition.CognitiveEngine.load_bounded_learned_memory_context",
+                "cognition.LearnedMemoryContextService.load_bounded_learned_memory_context",
                 wraps=load_bounded_learned_memory_context,
             ) as load_bounded_context,
             patch(
@@ -756,10 +756,10 @@ class CognitiveEngineTests(unittest.TestCase):
 
         with (
             patch(
-                "cognition.CognitiveEngine.load_learned_memory_context",
+                "cognition.LearnedMemoryContextService.load_learned_memory_context",
             ) as load_context,
             patch(
-                "cognition.CognitiveEngine.load_bounded_learned_memory_context",
+                "cognition.LearnedMemoryContextService.load_bounded_learned_memory_context",
                 return_value=bounded_context,
             ) as load_bounded_context,
             patch(
@@ -810,17 +810,17 @@ class CognitiveEngineTests(unittest.TestCase):
 
         with (
             patch(
-                "cognition.CognitiveEngine.load_learned_memory_context",
+                "cognition.LearnedMemoryContextService.load_learned_memory_context",
             ) as load_context,
             patch(
-                "cognition.CognitiveEngine.load_bounded_learned_memory_context",
+                "cognition.LearnedMemoryContextService.load_bounded_learned_memory_context",
             ) as load_bounded_context,
             patch(
-                "cognition.CognitiveEngine.load_current_selected_learned_memory_context",
+                "cognition.LearnedMemoryContextService.load_current_selected_learned_memory_context",
                 return_value=selected_context,
             ) as load_selected_context,
             patch(
-                "cognition.CognitiveEngine."
+                "cognition.LearnedMemoryContextService."
                 "load_current_selected_bounded_learned_memory_context",
             ) as load_selected_bounded_context,
             patch(
@@ -874,16 +874,16 @@ class CognitiveEngineTests(unittest.TestCase):
 
         with (
             patch(
-                "cognition.CognitiveEngine.load_learned_memory_context",
+                "cognition.LearnedMemoryContextService.load_learned_memory_context",
             ) as load_context,
             patch(
-                "cognition.CognitiveEngine.load_bounded_learned_memory_context",
+                "cognition.LearnedMemoryContextService.load_bounded_learned_memory_context",
             ) as load_bounded_context,
             patch(
-                "cognition.CognitiveEngine.load_current_selected_learned_memory_context",
+                "cognition.LearnedMemoryContextService.load_current_selected_learned_memory_context",
             ) as load_selected_context,
             patch(
-                "cognition.CognitiveEngine."
+                "cognition.LearnedMemoryContextService."
                 "load_current_selected_bounded_learned_memory_context",
                 return_value=selected_context,
             ) as load_selected_bounded_context,
@@ -929,10 +929,10 @@ class CognitiveEngineTests(unittest.TestCase):
 
         with (
             patch(
-                "cognition.CognitiveEngine.load_learned_memory_context",
+                "cognition.LearnedMemoryContextService.load_learned_memory_context",
             ) as load_context,
             patch(
-                "cognition.CognitiveEngine.load_bounded_learned_memory_context",
+                "cognition.LearnedMemoryContextService.load_bounded_learned_memory_context",
                 return_value="",
             ) as load_bounded_context,
         ):
@@ -961,10 +961,10 @@ class CognitiveEngineTests(unittest.TestCase):
 
         with (
             patch(
-                "cognition.CognitiveEngine.load_learned_memory_context",
+                "cognition.LearnedMemoryContextService.load_learned_memory_context",
             ) as load_context,
             patch(
-                "cognition.CognitiveEngine.load_bounded_learned_memory_context",
+                "cognition.LearnedMemoryContextService.load_bounded_learned_memory_context",
                 side_effect=ValueError("Learned memory limit must be non-negative."),
             ) as load_bounded_context,
             self.assertRaisesRegex(
@@ -1094,6 +1094,145 @@ class CognitiveEngineTests(unittest.TestCase):
             ],
         )
         self.assertEqual(load_learned_memories(self.memory_manager), ())
+
+    def test_learning_failure_emits_one_bounded_diagnostic_event(self) -> None:
+        llm_provider = RecordingLLMProvider("The conversation succeeded.")
+        cause = LLMError("provider unavailable")
+        extraction_error = LearnedMemoryCandidateExtractionError(
+            "Learned memory candidate extraction failed."
+        )
+        extraction_error.__cause__ = cause
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+            learned_memory_candidate_extractor=FailingCandidateExtractor(
+                extraction_error
+            ),
+        )
+        failures: list[Event] = []
+        self.event_bus.subscribe(
+            "brain.learned_memory.extraction_failed",
+            failures.append,
+        )
+        message = "  My favorite planet is Saturn.  "
+
+        response = engine.process(
+            BrainRequest(message=message, request_id="request-987")
+        )
+
+        self.assertTrue(response.success)
+        self.assertEqual(response.message, "The conversation succeeded.")
+        self.assertEqual(len(failures), 1)
+        event = failures[0]
+        self.assertEqual(event.source, "brain")
+        self.assertEqual(
+            event.payload,
+            {"request_id": "request-987", "cause": "LLMError"},
+        )
+        encoded_payload = repr(event.payload)
+        self.assertNotIn(message, encoded_payload)
+        self.assertNotIn("Saturn", encoded_payload)
+        self.assertNotIn("provider unavailable", encoded_payload)
+
+    def test_learning_failure_without_cause_reports_unknown_category(self) -> None:
+        llm_provider = RecordingLLMProvider("The conversation succeeded.")
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+            learned_memory_candidate_extractor=FailingCandidateExtractor(
+                LearnedMemoryCandidateExtractionError("failed")
+            ),
+        )
+        failures: list[Event] = []
+        self.event_bus.subscribe(
+            "brain.learned_memory.extraction_failed",
+            failures.append,
+        )
+
+        response = engine.process(
+            BrainRequest(message="exact message", request_id="request-654")
+        )
+
+        self.assertTrue(response.success)
+        self.assertEqual(len(failures), 1)
+        self.assertEqual(
+            failures[0].payload,
+            {"request_id": "request-654", "cause": "unknown"},
+        )
+
+    def test_successful_extraction_emits_no_failure_event(self) -> None:
+        llm_provider = RecordingLLMProvider("I will remember that.")
+        batch = LearnedMemoryCandidateBatch(
+            source_text="My favorite planet is Saturn.",
+            candidates=(
+                LearnedMemoryCandidate(
+                    memory=LearnedMemory(
+                        kind="preference",
+                        key="favorite_planet",
+                        value="Saturn",
+                    ),
+                    source_text="My favorite planet is Saturn.",
+                ),
+            ),
+        )
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+            learned_memory_candidate_extractor=RecordingCandidateExtractor(batch),
+        )
+        events: list[str] = []
+        self.event_bus.subscribe("*", lambda event: events.append(event.name))
+
+        response = engine.process(BrainRequest(message="My favorite planet is Saturn."))
+
+        self.assertTrue(response.success)
+        self.assertNotIn("brain.learned_memory.extraction_failed", events)
+
+    def test_no_op_extraction_emits_no_failure_event(self) -> None:
+        llm_provider = RecordingLLMProvider("The conversation succeeded.")
+        engine = ProductionCognitiveEngine(
+            self.knowledge_engine,
+            self.memory_manager,
+            self.planner,
+            self.event_bus,
+            self.response_composer,
+            self.session_manager,
+            self.session_rename_service,
+            llm_provider=llm_provider,
+        )
+        events: list[str] = []
+        self.event_bus.subscribe("*", lambda event: events.append(event.name))
+
+        response = engine.process(BrainRequest(message="exact message"))
+
+        self.assertTrue(response.success)
+        self.assertEqual(
+            events,
+            [
+                "brain.request.received",
+                "brain.intent.detected",
+                "memory.record.added",
+                "brain.response.ready",
+            ],
+        )
 
     def test_unrelated_extraction_error_escapes_unchanged(self) -> None:
         llm_provider = RecordingLLMProvider("The conversation succeeded.")
@@ -5962,6 +6101,7 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(updated.discoveries, ())
         self.assertEqual(len(updated.failures), 1)
         self.assertEqual(updated.failures[0].stage, "source_discovery")
+        self.assertEqual(updated.failures[0].provider, provider.provider_name)
         self.assertNotIn(secret, repr(updated))
 
     def test_discovery_rejects_provider_contract_overflow_as_audited_failure(
@@ -6135,7 +6275,12 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(llm_provider.calls, [])
         self.assertEqual(extractor.calls, [])
         self.assertEqual(self.memory_manager.count(), memory_count)
-        self.assertEqual(events, [])
+        # The guarantee is that a structured source load has no conversation,
+        # memory, or model side effects -- not that it is silent. Observability
+        # events for the ingestion itself are the point of that subsystem, so
+        # this asserts the absence of brain events rather than of all events.
+        self.assertEqual([name for name in events if name.startswith("brain.")], [])
+        self.assertTrue(all(name.startswith("source_ingestion.") for name in events))
         self.assertEqual(len(response.knowledge_documents), 1)
         document = response.knowledge_documents[0]
         self.assertEqual(document.source, source.url)
@@ -6387,7 +6532,11 @@ class CognitiveEngineTests(unittest.TestCase):
         self.assertEqual(self.memory_manager.count(), memory_count)
         self.assertEqual(llm_provider.calls, [])
         self.assertEqual(extractor.calls, [])
-        self.assertEqual(events, [])
+        # Creating a run consults failure memory for advice, which is a read and
+        # says so. Naming the one permitted event is a stronger claim than an
+        # empty list: a derive, a store or a run mutation would still fail here.
+        self.assertEqual(events, ["failure_memory.lessons_recalled"])
+        self.assertEqual(created.failure_lessons, ())
 
     def test_terminal_research_markdown_preview_is_read_only_and_local(self) -> None:
         store = ToggleResearchRunStore()
