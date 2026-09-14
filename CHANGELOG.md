@@ -2,6 +2,22 @@
 
 All notable project changes are recorded here.
 
+## [0.3.344] - 2026-09-14
+
+### Added
+
+- A bounded semantic mission now retains its caller request ID alongside the
+  existing durable execution snapshot. After restart, replaying that same
+  already-recorded request is refused before another run, approval, source, or
+  model operation is created.
+
+### Boundaries
+
+- This is idempotency for a start that reached the existing durable execution
+  snapshot boundary. It adds no new store or transaction and does not claim to
+  recover a process crash before that snapshot was written. Legacy snapshots
+  remain readable without a fabricated request ID or new duplicate protection.
+
 ## [0.3.343] - 2026-09-14
 
 ### Added

@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.343
+## Current bounded text journey: v0.3.344
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -89,6 +89,20 @@ call was replayed.
 This does not make restart recovery general. It adds no persistence field,
 automatic repair, provider/model fallback, new approval, new budget, scheduler
 behavior, or desktop control.
+
+### Durable mission-start idempotency: v0.3.344
+
+Once a bounded semantic mission has reached the existing durable execution
+snapshot boundary, that snapshot now retains the caller request ID. A new
+process restores those IDs into the goal-start duplicate guard, so replaying
+the same request is refused before it can create another run, approval,
+provider call, or model call. The ID is bookkeeping rather than authority and
+never widens the original digest-bound scope, destination, disclosure, or
+cumulative allowance.
+
+This is deliberately not a new transactional start store. A crash before the
+execution snapshot exists remains outside this guarantee, and legacy snapshots
+without a request ID remain readable without fabricated duplicate protection.
 
 ### Authority, accounting and durable output
 

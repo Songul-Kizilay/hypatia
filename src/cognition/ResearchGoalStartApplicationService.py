@@ -68,7 +68,9 @@ class ResearchGoalStartApplicationService:
         self._semantic_destination = semantic_destination
         self._failure_memory = failure_memory
         self._goal_lock = Lock()
-        self._goal_request_ids: set[str] = set()
+        self._goal_request_ids = set(
+            self._execution_service.restored_mission_request_ids()
+        )
 
     @staticmethod
     def is_goal_request(request: BrainRequest) -> bool:
@@ -418,7 +420,10 @@ class ResearchGoalStartApplicationService:
                 "Approval was not saved; no research operation started."
             )
         state = self._execution_service.start_for_plan(
-            plan, run.run_id, approval.authorization_id
+            plan,
+            run.run_id,
+            approval.authorization_id,
+            mission_request_id=request.request_id,
         )
         if isinstance(state, ResearchPlanExecutionStartRefusal):
             raise ResearchError(

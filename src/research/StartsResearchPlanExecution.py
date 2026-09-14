@@ -42,6 +42,8 @@ class StartsResearchPlanExecution(Protocol):
         plan: ResearchPlan,
         research_run_id: str,
         authorization_id: str,
+        *,
+        mission_request_id: str | None = None,
     ) -> ResearchPlanExecutionState | ResearchPlanExecutionStartRefusal:
         """Return the started state, or the reason nothing was started."""
 

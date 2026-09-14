@@ -123,6 +123,22 @@ class LearningResearchJourneyTests(unittest.TestCase):
         return {"choices": [{"message": {"content": json.dumps(body)}}]}
 
     def start(self, **kwargs):
+        request_id = kwargs.pop("request_id", None)
+        if request_id is not None:
+            return self.engine.process(
+                BrainRequest(
+                    message=self.question,
+                    source="integration",
+                    request_id=request_id,
+                    metadata={
+                        "intent": "research_goal_start",
+                        "research_goal_scope": "bounded_semantic_learning_research",
+                        "discovery_provider": "crossref",
+                        "research_autonomy_budget": self.budget,
+                        "semantic_mission_policy": kwargs.pop("policy", self.policy),
+                    },
+                )
+            )
         return self.controller.start_learning_research(
             self.question,
             "crossref",
@@ -191,6 +207,46 @@ class LearningResearchJourneyTests(unittest.TestCase):
         self.assertEqual(self.provider.discover.call_count, 1)
         self.assertEqual(self.fetcher.fetch.call_count, 1)
         self.transport.assert_not_called()
+
+    def test_restart_refuses_the_same_durably_started_mission_request(self):
+        """A stored mission request key prevents a restart replay, not a new call."""
+        request_id = "durable-mission-request-1"
+        initial = self.start(request_id=request_id)
+        self.assertTrue(initial.success, initial.message)
+        snapshot = self.execution._execution_store.load()[0]
+        self.assertEqual(snapshot.mission_request_id, request_id)
+        calls = (
+            self.provider.discover.call_count,
+            self.fetcher.fetch.call_count,
+            self.transport.call_count,
+        )
+
+        engine = self.restart()
+        replay = engine.process(
+            BrainRequest(
+                message=self.question,
+                source="integration",
+                request_id=request_id,
+                metadata={
+                    "intent": "research_goal_start",
+                    "research_goal_scope": "bounded_semantic_learning_research",
+                    "discovery_provider": "crossref",
+                    "research_autonomy_budget": self.budget,
+                    "semantic_mission_policy": self.policy,
+                },
+            )
+        )
+
+        self.assertFalse(replay.success)
+        self.assertIn("Duplicate goal request", replay.message)
+        self.assertEqual(
+            (
+                self.provider.discover.call_count,
+                self.fetcher.fetch.call_count,
+                self.transport.call_count,
+            ),
+            calls,
+        )
 
     def test_one_approval_conflict_followup_then_cited_report(self):
         with (

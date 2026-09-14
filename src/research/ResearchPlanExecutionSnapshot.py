@@ -37,6 +37,7 @@ from research.ResearchPlanStepStatus import ResearchPlanStepStatus
 MAX_SNAPSHOT_STEPS = 20
 MAX_SNAPSHOT_DETAIL_CHARACTERS = 500
 MAX_SNAPSHOT_QUESTION_CHARACTERS = 2_000
+MAX_MISSION_REQUEST_ID_CHARACTERS = 200
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,6 +101,9 @@ class ResearchPlanExecutionSnapshot:
     mission_scope: ResearchMissionScope | None = None
     mission_disclosure: ResearchDisclosure = ResearchDisclosure.NONE
     mission_checkpoint: ResearchMissionRecoveryCheckpoint | None = None
+    #: A caller-supplied idempotency key for a durably started mission.  It is
+    #: not authority and is absent for legacy snapshots.
+    mission_request_id: str | None = None
 
     def __post_init__(self) -> None:
         if self.target_plan_digest is not None and self.mission_plan_digest is not None:
@@ -114,6 +118,8 @@ class ResearchPlanExecutionSnapshot:
                 or self.mission_checkpoint is not None
             ):
                 raise ResearchError("Execution snapshot mission recovery is invalid.")
+            if self.mission_request_id is not None and self.mission_plan_digest is None:
+                raise ResearchError("Execution snapshot mission request ID is invalid.")
         elif (
             self.mission_plan_digest is None
             or self.mission_scope.semantic_policy is None
@@ -131,6 +137,12 @@ class ResearchPlanExecutionSnapshot:
             self.mission_plan_digest
         ):
             raise ResearchError("Execution snapshot mission digest is invalid.")
+        if self.mission_request_id is not None and (
+            not isinstance(self.mission_request_id, str)
+            or not self.mission_request_id.strip()
+            or len(self.mission_request_id.strip()) > MAX_MISSION_REQUEST_ID_CHARACTERS
+        ):
+            raise ResearchError("Execution snapshot mission request ID is invalid.")
         if self.target_plan_digest is not None and not is_plan_digest(
             self.target_plan_digest
         ):
@@ -175,6 +187,10 @@ class ResearchPlanExecutionSnapshot:
         object.__setattr__(self, "detail", self.detail.strip())
         if run_id is not None:
             object.__setattr__(self, "research_run_id", run_id.strip())
+        if self.mission_request_id is not None:
+            object.__setattr__(
+                self, "mission_request_id", self.mission_request_id.strip()
+            )
 
     @classmethod
     def capture(
@@ -190,6 +206,7 @@ class ResearchPlanExecutionSnapshot:
         mission_scope: ResearchMissionScope | None = None,
         mission_disclosure: ResearchDisclosure = ResearchDisclosure.NONE,
         mission_checkpoint: ResearchMissionRecoveryCheckpoint | None = None,
+        mission_request_id: str | None = None,
     ) -> ResearchPlanExecutionSnapshot:
         """Capture the current state, pairing each step with its capability."""
         capabilities = {step.step_id: step.capability for step in steps}
@@ -205,6 +222,7 @@ class ResearchPlanExecutionSnapshot:
             mission_scope=mission_scope,
             mission_disclosure=mission_disclosure,
             mission_checkpoint=mission_checkpoint,
+            mission_request_id=mission_request_id,
             recorded_at=recorded_at,
             steps=tuple(
                 ResearchPlanExecutionStepSnapshot(

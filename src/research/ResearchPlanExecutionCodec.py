@@ -73,6 +73,12 @@ _EXECUTION_FIELDS_WITH_MISSION_RECOVERY = _EXECUTION_FIELDS_WITH_MISSION | {
     "mission_disclosure",
     "mission_checkpoint",
 }
+_EXECUTION_FIELDS_WITH_MISSION_REQUEST = _EXECUTION_FIELDS_WITH_MISSION_RECOVERY | {
+    "mission_request_id"
+}
+_EXECUTION_FIELDS_WITH_MISSION_REQUEST_ONLY = _EXECUTION_FIELDS_WITH_MISSION | {
+    "mission_request_id"
+}
 _MISSION_CHECKPOINT_FIELDS_V1 = frozenset(
     {
         "discovery_id",
@@ -164,6 +170,8 @@ def encode_execution_snapshot(
         document["mission_checkpoint"] = _encode_mission_checkpoint(
             snapshot.mission_checkpoint
         )
+    if snapshot.mission_request_id is not None:
+        document["mission_request_id"] = snapshot.mission_request_id
     return document
 
 
@@ -175,6 +183,8 @@ def decode_execution_snapshot(document: object) -> ResearchPlanExecutionSnapshot
         _EXECUTION_FIELDS_WITH_TARGET,
         _EXECUTION_FIELDS_WITH_MISSION,
         _EXECUTION_FIELDS_WITH_MISSION_RECOVERY,
+        _EXECUTION_FIELDS_WITH_MISSION_REQUEST,
+        _EXECUTION_FIELDS_WITH_MISSION_REQUEST_ONLY,
     ):
         raise ResearchError("Execution snapshot document is invalid.")
     if "mission_plan_digest" in document and not is_plan_digest(
@@ -226,6 +236,7 @@ def decode_execution_snapshot(document: object) -> ResearchPlanExecutionSnapshot
             if "mission_checkpoint" in document
             else None
         ),
+        mission_request_id=document.get("mission_request_id"),
         steps=tuple(_decode_step(value) for value in steps_value),
     )
 

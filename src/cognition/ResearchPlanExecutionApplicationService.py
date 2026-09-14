@@ -99,6 +99,7 @@ from research.ResearchPlanDraftService import (
 )
 from research.ResearchPlanExecutionContext import ResearchPlanExecutionContext
 from research.ResearchPlanExecutionSnapshot import (
+    MAX_MISSION_REQUEST_ID_CHARACTERS,
     ResearchPlanExecutionSnapshot,
 )
 from research.ResearchPlanExecutionState import ResearchPlanExecutionState
@@ -177,6 +178,7 @@ class ResearchPlanExecutionApplicationService:
         self._allowances: dict[str, ResearchExecutionAllowance] = {}
         self._mission_resolver = mission_resolver
         self._mission_digests: dict[str, str] = {}
+        self._mission_request_ids: dict[str, str] = {}
         self._mission_recovery_refusals: dict[str, str] = {}
         self._clock = clock or (lambda: datetime.now(UTC))
         self._restored: dict[str, ResearchPlanExecutionSnapshot] = {}
@@ -305,6 +307,8 @@ class ResearchPlanExecutionApplicationService:
         plan: ResearchPlan,
         research_run_id: str,
         authorization_id: str,
+        *,
+        mission_request_id: str | None = None,
     ) -> ResearchPlanExecutionState | ResearchPlanExecutionStartRefusal:
         """Begin one already-derived plan, spending exactly one approval.
 
@@ -333,6 +337,10 @@ class ResearchPlanExecutionApplicationService:
             return ResearchPlanExecutionStartRefusal(
                 "Research plan execution capacity is full in this process."
             )
+        try:
+            normalized_mission_request_id = self._mission_request_id(mission_request_id)
+        except ResearchError as error:
+            return ResearchPlanExecutionStartRefusal(str(error))
         if scope_refusal := self._target_scope_refusal(plan):
             return ResearchPlanExecutionStartRefusal(scope_refusal)
         try:
@@ -371,6 +379,10 @@ class ResearchPlanExecutionApplicationService:
             self._contexts[plan.plan_id] = context
             if plan.mission_scope is not None:
                 self._mission_digests[plan.plan_id] = plan_digest(plan)
+                if normalized_mission_request_id is not None:
+                    self._mission_request_ids[plan.plan_id] = (
+                        normalized_mission_request_id
+                    )
         self._events.started(state, context.has_research_run)
         self._persist(plan.plan_id)
         return state
@@ -511,6 +523,8 @@ class ResearchPlanExecutionApplicationService:
         if mission:
             assert snapshot.mission_plan_digest is not None
             self._mission_digests[execution_id] = snapshot.mission_plan_digest
+            if snapshot.mission_request_id is not None:
+                self._mission_request_ids[execution_id] = snapshot.mission_request_id
         self._restored.pop(execution_id, None)
         return state
 
@@ -583,6 +597,14 @@ class ResearchPlanExecutionApplicationService:
             snapshot
             for snapshot in self._restored.values()
             if snapshot.mission_scope is not None
+        )
+
+    def restored_mission_request_ids(self) -> frozenset[str]:
+        """Return durable mission request IDs without treating them as authority."""
+        return frozenset(
+            snapshot.mission_request_id
+            for snapshot in self._restored.values()
+            if snapshot.mission_request_id is not None
         )
 
     def record_mission_recovery_refusal(self, plan_id: str, reason: str) -> None:
@@ -1402,6 +1424,7 @@ class ResearchPlanExecutionApplicationService:
                     mission_scope=mission_scope,
                     mission_disclosure=mission_disclosure,
                     mission_checkpoint=mission_checkpoint,
+                    mission_request_id=self._mission_request_ids.get(plan_id),
                 )
             )
         snapshots.extend(
@@ -1440,6 +1463,18 @@ class ResearchPlanExecutionApplicationService:
         if not isinstance(value, str):
             raise ResearchError("Research execution run ID must be text.")
         return value
+
+    @staticmethod
+    def _mission_request_id(value: str | None) -> str | None:
+        if value is None:
+            return None
+        if (
+            not isinstance(value, str)
+            or not value.strip()
+            or len(value.strip()) > MAX_MISSION_REQUEST_ID_CHARACTERS
+        ):
+            raise ResearchError("Mission request ID is invalid.")
+        return value.strip()
 
     @staticmethod
     def _normalized_plan_id(request: BrainRequest) -> str:
