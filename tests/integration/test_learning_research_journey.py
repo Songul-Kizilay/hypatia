@@ -24,6 +24,12 @@ from research.ResearchAutonomyBudget import ResearchAutonomyBudget
 from research.ResearchCapabilityCost import cost_for
 from research.ResearchDisclosure import ResearchDisclosure
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
+from research.ResearchExecutionAllowance import ResearchExecutionAllowance
+from research.ResearchExecutionSpend import ResearchExecutionSpend
+from research.ResearchMissionFollowupDecision import (
+    ResearchMissionFollowupDecisionStatus,
+)
+from research.ResearchPlanDigest import plan_digest
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability as Cap
 from research.ResearchSource import ResearchSource
 from research.ResearchSourceCandidate import ResearchSourceCandidate
@@ -344,6 +350,87 @@ class LearningResearchJourneyTests(unittest.TestCase):
         self.assertEqual(response.research_runs[0].claims, ())
         self.assertFalse(response.research_runs[0].status.terminal)
         self.assertIn("goal satisfaction: not declared", response.message.lower())
+
+    def test_conflict_derives_the_existing_typed_followup_slot_once(self):
+        decisions = []
+
+        def capture(plan_id):
+            plan = self.execution.live_plan(plan_id)
+            self.assertIsNotNone(plan)
+            decisions.append(
+                (
+                    self.execution._mission_resolver.followup_decision(
+                        plan,
+                        plan.steps[12].step_id,
+                        self.execution.allowance(plan_id),
+                    ),
+                    plan_digest(plan),
+                )
+            )
+
+        with self.before_followup(capture):
+            self.start()
+
+        self.assertEqual(len(decisions), 1)
+        decision, digest = decisions[0]
+        self.assertEqual(
+            decision.status, ResearchMissionFollowupDecisionStatus.PROPOSED
+        )
+        self.assertEqual(decision.capability, Cap.SOURCE_FETCH)
+        self.assertEqual(decision.plan_digest, digest)
+        self.assertEqual(decision.semantic_relation, "possible_conflict")
+        self.assertEqual(self.fetcher.fetch.call_count, 3)
+
+    def test_no_followup_decision_does_not_create_an_attempt(self):
+        self.relation = "possible_agreement"
+        response = self.start()
+        plan = self.execution.live_plan(response.research_plan_execution.plan_id)
+        self.assertIsNotNone(plan)
+
+        decision = self.execution._mission_resolver.followup_decision(
+            plan,
+            plan.steps[12].step_id,
+            self.execution.allowance(plan.plan_id),
+        )
+
+        self.assertEqual(
+            decision.status, ResearchMissionFollowupDecisionStatus.NOT_NEEDED
+        )
+        self.assertEqual(self.fetcher.fetch.call_count, 2)
+
+    def test_prior_cumulative_spending_blocks_followup_before_fetch(self):
+        decisions = []
+
+        def exhaust_network(plan_id):
+            allowance = self.execution.allowance(plan_id)
+            self.assertIsNotNone(allowance)
+            self.execution._allowances[plan_id] = ResearchExecutionAllowance(
+                allowance.budget,
+                ResearchExecutionSpend(
+                    step_advances=allowance.spend.step_advances,
+                    network_operations=allowance.budget.max_network_operations,
+                    llm_operations=allowance.spend.llm_operations,
+                    active_seconds=allowance.spend.active_seconds,
+                ),
+            )
+            plan = self.execution.live_plan(plan_id)
+            self.assertIsNotNone(plan)
+            decisions.append(
+                self.execution._mission_resolver.followup_decision(
+                    plan,
+                    plan.steps[12].step_id,
+                    self.execution.allowance(plan_id),
+                )
+            )
+
+        with self.before_followup(exhaust_network):
+            response = self.start()
+
+        self.assertEqual(
+            decisions[0].status, ResearchMissionFollowupDecisionStatus.BUDGET_LIMITED
+        )
+        self.assertEqual(self.fetcher.fetch.call_count, 2)
+        self.assertEqual(response.research_plan_execution.completed_steps, 12)
 
     def test_restart_after_durable_followup_never_replays_it(self):
         response = self.start()
@@ -878,6 +965,18 @@ class LearningResearchJourneyTests(unittest.TestCase):
             plan_id = request.metadata["research_plan_id"]
             state = self.execution.live_execution(plan_id)
             if state.completed_steps == 10:
+                callback(plan_id)
+            return real(request)
+
+        return patch.object(self.execution, "process_advance", side_effect=advance)
+
+    def before_followup(self, callback):
+        real = self.execution.process_advance
+
+        def advance(request):
+            plan_id = request.metadata["research_plan_id"]
+            state = self.execution.live_execution(plan_id)
+            if state.completed_steps == 12:
                 callback(plan_id)
             return real(request)
 

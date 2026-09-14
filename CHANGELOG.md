@@ -2,6 +2,30 @@
 
 All notable project changes are recorded here.
 
+## [0.3.348] - 2026-09-14
+
+### Added
+
+- The existing bounded semantic mission now derives a typed decision for its
+  one already-authorized third-source follow-up slot. The decision is limited
+  to `proposed`, `not_needed`, `blocked_predecessor`, `budget_limited`,
+  `already_attempted`, or `completed` and binds only the original plan digest,
+  existing slot, canonical semantic-note identity and fingerprint.
+
+### Boundaries
+
+- This is a deterministic projection inside the existing mission resolver, not
+  a new planner, plan, store, provider, destination, capability, budget or
+  branch. It cannot select a URL, invent authority, spend a budget unit,
+  promote a claim, close a run, declare goal satisfaction, or interpret a
+  tentative semantic relation as truth.
+- The canonical executor consults the decision before the existing third-source
+  attempt boundary. Exhausted cumulative allowance or inspected-text budget
+  therefore refuses without a new fetch or charge; completed/attempted state
+  cannot cause a duplicate follow-up. The decision is reconstructed from the
+  existing checkpointed canonical observations, so legacy checkpoints do not
+  acquire one.
+
 ## [0.3.347] - 2026-09-14
 
 ### Added

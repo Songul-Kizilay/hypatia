@@ -78,6 +78,9 @@ from research.ResearchExecutionContinuation import (
     ResearchExecutionContinuation,
 )
 from research.ResearchExecutionStore import ResearchExecutionStore
+from research.ResearchMissionFollowupDecision import (
+    ResearchMissionFollowupDecisionStatus,
+)
 from research.ResearchMissionStepResolver import ResearchMissionStepResolver
 from research.ResearchPlan import ResearchPlan
 from research.ResearchPlanAuthorizationConsumer import (
@@ -1079,6 +1082,36 @@ class ResearchPlanExecutionApplicationService:
 
         allowance = self._allowances.get(plan_id)
         cost = cost_for(step.capability)
+        if plan.mission_scope is not None:
+            assert self._mission_resolver is not None
+            followup = self._mission_resolver.followup_decision(
+                plan, step_id, allowance
+            )
+            if followup.status is ResearchMissionFollowupDecisionStatus.BUDGET_LIMITED:
+                if allowance is not None and not allowance.affords(cost):
+                    self._events.budget_refused(plan_id, step_id, step.capability.value)
+                    return (
+                        self._response_composer.research_plan_execution_budget_refused(
+                            request,
+                            plan_id,
+                            step.capability.value,
+                            allowance,
+                        )
+                    )
+                return self._response_composer.research_plan_execution_rejected(
+                    request,
+                    "Bounded follow-up source-text allowance is exhausted; "
+                    "no attempt or charge occurred.",
+                )
+            if followup.status in {
+                ResearchMissionFollowupDecisionStatus.BLOCKED_PREDECESSOR,
+                ResearchMissionFollowupDecisionStatus.ALREADY_ATTEMPTED,
+                ResearchMissionFollowupDecisionStatus.COMPLETED,
+            }:
+                return self._response_composer.research_plan_execution_rejected(
+                    request,
+                    self._mission_resolver.followup_refusal(followup.status),
+                )
         if cost.llm_operations and allowance is None:
             return self._response_composer.research_plan_execution_rejected(
                 request, "Model steps require an explicit approved execution budget."

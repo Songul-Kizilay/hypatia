@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.347
+## Current bounded text journey: v0.3.348
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -152,6 +152,29 @@ checkpoints without the new outcome remain readable and never fabricate one.
 The original digest-bound scope, destination, disclosure and cumulative
 allowance remain the only authority/accounting mechanisms; no second source
 selection, retry, planner, store or agent loop is introduced.
+
+### Typed decision for the existing fixed follow-up slot: v0.3.348
+
+The semantic mission's one conditional third-source slot now has a small typed
+decision projection in the existing mission resolver. It can state only that
+the already-authorized `SOURCE_FETCH` slot is `proposed`, `not_needed`,
+`blocked_predecessor`, `budget_limited`, `already_attempted`, or `completed`.
+The projection carries the original plan digest plus existing canonical semantic
+note/fingerprint binding; it does not contain a URL or a future provider/model
+choice.
+
+The executor reads that decision before its normal attempt boundary. Existing
+cumulative allowance and inspected-text limits therefore block the third source
+without a new fetch or charge. A retained outcome or attempted source cannot be
+replayed. The decision is derived again from the existing restored mission
+checkpoint rather than stored independently, so legacy checkpoints never gain
+new routing state or authority.
+
+This remains a bounded routing aid, not a general structured-gap planner. It
+does not generate a new plan, select an arbitrary follow-up, change scope or
+destination, promote a claim, close the run, declare the goal satisfied, or
+treat a semantic label as truth. Broader follow-up planning and the separate
+evidence-grounded goal-satisfaction contract remain future work.
 
 ### Authority, accounting and durable output
 

@@ -13,11 +13,17 @@ from urllib.parse import urlsplit
 from core.Exceptions import ResearchError
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from research.ResearchAssessmentAuthorization import ResearchAssessmentAuthorization
+from research.ResearchCapabilityCost import cost_for
 from research.ResearchComparisonAuthorization import ResearchComparisonAuthorization
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchEvidenceAuthorization import ResearchEvidenceAuthorization
 from research.ResearchEvidenceIntegrityAuditor import ResearchEvidenceIntegrityAuditor
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
+from research.ResearchExecutionAllowance import ResearchExecutionAllowance
+from research.ResearchMissionFollowupDecision import (
+    ResearchMissionFollowupDecision,
+    ResearchMissionFollowupDecisionStatus,
+)
 from research.ResearchMissionRecoveryCheckpoint import ResearchMissionRecoveryCheckpoint
 from research.ResearchPlan import ResearchPlan
 from research.ResearchPlanDigest import plan_digest
@@ -172,8 +178,13 @@ class ResearchMissionStepResolver:
                 context,
             )
         if step.capability is Cap.SOURCE_FETCH:
-            if self.followup_unnecessary(plan, step.step_id):
-                raise ResearchError("Follow-up is unnecessary; no further source call.")
+            decision = self.followup_decision(plan, step.step_id)
+            if (
+                decision.status
+                is not ResearchMissionFollowupDecisionStatus.NOT_APPLICABLE
+                and not decision.proposed
+            ):
+                raise ResearchError(self.followup_refusal(decision.status))
             if (
                 observed.selected_url
                 or len(observed.attempted_urls) >= scope.max_sources
@@ -543,24 +554,126 @@ class ResearchMissionStepResolver:
             )
 
     def followup_unnecessary(self, plan: ResearchPlan, step_id: str | None) -> bool:
+        """Say whether the existing slot is truthfully unnecessary.
+
+        This retains the existing delivery stop behavior while making the
+        decision itself available as a typed, digest-bound projection.
+        """
+        return (
+            self.followup_decision(plan, step_id).status
+            is ResearchMissionFollowupDecisionStatus.NOT_NEEDED
+        )
+
+    def followup_decision(
+        self,
+        plan: ResearchPlan,
+        step_id: str | None,
+        allowance: ResearchExecutionAllowance | None = None,
+    ) -> ResearchMissionFollowupDecision:
+        """Project the one existing third-source slot without creating work.
+
+        The plan already contains this conditional slot and its original digest
+        remains the only authority. This method neither picks a future source
+        nor consumes allowance; it only reports whether the executor may reach
+        the normal resolver path for that one slot.
+        """
         scope = plan.mission_scope
         if (
             scope is None
             or scope.semantic_policy is None
+            or len(plan.steps) <= 12
             or step_id != plan.steps[12].step_id
+            or plan.steps[12].capability is not Cap.SOURCE_FETCH
         ):
-            return False
+            return ResearchMissionFollowupDecision(
+                ResearchMissionFollowupDecisionStatus.NOT_APPLICABLE
+            )
         observed = self._observed.get(plan.plan_id)
         if (
             observed is None
             or observed.digest != plan_digest(plan)
+            or not observed.semantic_note_id
+            or not observed.semantic_input_fingerprint
             or not observed.semantic_relation
         ):
-            return False
-        return observed.semantic_relation in {
-            "possible_agreement",
-            "not_comparable",
-        }
+            return self._followup_decision(
+                plan,
+                step_id,
+                ResearchMissionFollowupDecisionStatus.BLOCKED_PREDECESSOR,
+            )
+        if observed.contradiction_outcome:
+            return self._followup_decision(
+                plan,
+                step_id,
+                ResearchMissionFollowupDecisionStatus.COMPLETED,
+                observed,
+            )
+        if observed.semantic_relation in {"possible_agreement", "not_comparable"}:
+            return self._followup_decision(
+                plan,
+                step_id,
+                ResearchMissionFollowupDecisionStatus.NOT_NEEDED,
+                observed,
+            )
+        if len(observed.attempted_urls) >= scope.max_sources:
+            return self._followup_decision(
+                plan,
+                step_id,
+                ResearchMissionFollowupDecisionStatus.ALREADY_ATTEMPTED,
+                observed,
+            )
+        if observed.inspected_bytes >= scope.max_source_bytes or (
+            allowance is not None and not allowance.affords(cost_for(Cap.SOURCE_FETCH))
+        ):
+            return self._followup_decision(
+                plan,
+                step_id,
+                ResearchMissionFollowupDecisionStatus.BUDGET_LIMITED,
+                observed,
+            )
+        return self._followup_decision(
+            plan, step_id, ResearchMissionFollowupDecisionStatus.PROPOSED, observed
+        )
+
+    @staticmethod
+    def _followup_decision(
+        plan: ResearchPlan,
+        step_id: str,
+        status: ResearchMissionFollowupDecisionStatus,
+        observed: _Observations | None = None,
+    ) -> ResearchMissionFollowupDecision:
+        return ResearchMissionFollowupDecision(
+            status=status,
+            plan_digest=plan_digest(plan),
+            step_id=step_id,
+            capability=Cap.SOURCE_FETCH,
+            semantic_note_id=observed.semantic_note_id if observed else "",
+            semantic_input_fingerprint=(
+                observed.semantic_input_fingerprint if observed else ""
+            ),
+            semantic_relation=observed.semantic_relation if observed else "",
+        )
+
+    @staticmethod
+    def followup_refusal(status: ResearchMissionFollowupDecisionStatus) -> str:
+        """Return bounded refusal text for a non-proposed existing slot."""
+        return {
+            ResearchMissionFollowupDecisionStatus.NOT_NEEDED: (
+                "Follow-up is unnecessary; no further source call."
+            ),
+            ResearchMissionFollowupDecisionStatus.BLOCKED_PREDECESSOR: (
+                "Follow-up predecessor state is unavailable; no source call."
+            ),
+            ResearchMissionFollowupDecisionStatus.BUDGET_LIMITED: (
+                "Follow-up is outside the remaining bounded budget; no source call."
+            ),
+            ResearchMissionFollowupDecisionStatus.ALREADY_ATTEMPTED: (
+                "Follow-up source was already attempted; no retry is permitted."
+            ),
+            ResearchMissionFollowupDecisionStatus.COMPLETED: (
+                "Follow-up outcome is already recorded; no duplicate source call."
+            ),
+        }.get(status, "Follow-up slot is not available; no source call.")
 
     def _observe_semantic_note(
         self,

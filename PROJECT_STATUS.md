@@ -2,19 +2,23 @@
 
 ## Runtime Version
 
-`v0.3.347 (Genesis)`
+`v0.3.348 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.347 persists the bounded outcome of the already-authorized third
-source investigation after a tentative semantic conflict. The record contains
-only canonical identities, fingerprints and a typed `unresolved` or
-`structurally_clarified` result; it does not select a truth, promote a claim,
-close a run, or declare a goal satisfied. v0.3.346 makes the existing public
-execution-start refusal reason visible at the goal boundary, including a safe
-durable-snapshot failure. Neither release adds a lifecycle transition,
-scheduler behavior, new authority, persistence store or automatic run closure.
+Version v0.3.348 makes the existing fixed third-source mission slot visible as
+a typed deterministic decision derived from the original digest, canonical
+semantic note and remaining cumulative allowance. It cannot select a new URL,
+provider, destination or capability and is not a second planner or store.
+Budget-limited or duplicate outcomes refuse before the attempt boundary without
+a new fetch or charge. v0.3.347 persists the bounded outcome of the already-
+authorized third-source investigation after a tentative semantic conflict. The
+record contains only canonical identities, fingerprints and a typed
+`unresolved` or `structurally_clarified` result; it does not select a truth,
+promote a claim, close a run, or declare a goal satisfied. Neither release adds
+a lifecycle transition, scheduler behavior, new authority, persistence store or
+automatic run closure.
 
 ### 2026-09-08 checklist reconciliation
 
