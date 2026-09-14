@@ -23,6 +23,12 @@ sources, evidence, disclosure and input identity before the branch runs. It
 cannot authorize a new query, provider, model destination, disclosure, capability
 or budget, and it never upgrades a tentative relation into a verified fact.
 
+Before reporting, Hypatia may derive an evidence-only readiness assessment from
+the canonical mission record: coverage, structured limits, incomplete execution
+or an already-recorded contradiction. That assessment helps it explain whether
+the bounded report is useful; it does not close a mission, make a claim true, or
+substitute a tentative model interpretation for a verified finding.
+
 This principle does not permit unrestricted internet exploration, target testing,
 tool execution, provider substitution or fact promotion. It guides the product
 toward useful end-to-end learning while preserving explicit scope, privacy,

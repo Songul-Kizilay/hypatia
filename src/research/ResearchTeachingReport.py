@@ -1,9 +1,20 @@
 """Deterministic teaching report from canonical evidence; no invented citations."""
 
+from research.ResearchEvidenceCompletionEvaluation import (
+    ResearchEvidenceCompletionEvaluation,
+    evaluate_evidence_completion,
+)
 from research.ResearchRun import ResearchRun
 
 
-def teaching_report(run: ResearchRun, stop: str, spend: str) -> str:
+def teaching_report(
+    run: ResearchRun,
+    stop: str,
+    spend: str,
+    evaluation: ResearchEvidenceCompletionEvaluation | None = None,
+) -> str:
+    """Render canonical evidence and its non-mutating readiness evaluation."""
+    evaluation = evaluation or evaluate_evidence_completion(run, stop)
     sources = {s.document_id: s for s in run.sources}
     lines = [
         "Bounded research report",
@@ -49,6 +60,30 @@ def teaching_report(run: ResearchRun, stop: str, spend: str) -> str:
             "No validated comparison was retained; there is insufficient support "
             "for a combined answer."
         )
+    limitations = (
+        ", ".join(value.value.replace("_", " ") for value in evaluation.limitations)
+        or "none recorded"
+    )
+    lines.extend(
+        [
+            "Evidence-only completion evaluation:",
+            f"Status: {evaluation.summary()}.",
+            (
+                "Coverage: "
+                f"{evaluation.source_count} accepted source(s), "
+                f"{evaluation.evidence_count} evidence record(s) from "
+                f"{evaluation.evidence_source_count} source(s), "
+                f"{evaluation.assessed_source_count} assessed source(s), and "
+                f"{evaluation.comparison_note_count} retained comparison note(s)."
+            ),
+            f"Recorded limitations: {limitations}.",
+            (
+                "This is a derived evidence-readiness assessment. It does not close "
+                "the research run, promote a tentative comparison into fact, or "
+                "declare the question universally resolved."
+            ),
+        ]
+    )
     lines.extend(
         [
             "How to interpret this: an exact quotation establishes what an excerpt "

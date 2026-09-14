@@ -2,18 +2,18 @@
 
 ## Runtime Version
 
-`v0.3.340 (Genesis)`
+`v0.3.341 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.340 adds a second narrow autonomous-mission recovery slice. After a
-validated semantic result has been retained as a tentative canonical note, a
-restart can use its exact persisted note ID, input fingerprint and bounded
-relation outcome to take only the original plan's one conditional follow-up
-branch. The original digest, scope, disclosure and cumulative allowance remain
-authoritative; completed work is not replayed. A transient model result,
-legacy checkpoint or changed note remains safely stopped and reportable.
+Version v0.3.341 adds an evidence-only completion evaluation to the bounded
+teaching report. It derives a report-readiness status only from canonical run
+records and the recorded autonomous stop reason: sufficient bounded support,
+partial/materially unresolved support, source/budget limits, incomplete work, or
+an already-recorded claim conflict. It neither closes the collecting run nor
+promotes a tentative comparison, claim confidence, or model output into fact.
+The earlier v0.3.340 recovery checkpoint behavior remains unchanged.
 
 ### 2026-09-08 checklist reconciliation
 

@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.340
+## Current bounded text journey: v0.3.341
 
 ### Connected user journey
 
@@ -39,6 +39,23 @@ it does not rewrite the authority or issue a new search query. The report is a
 deterministic evidence/interpretation explanation, not a model-written verified
 answer. A different URL does not establish source independence. Source relevance
 and evidence selection remain lexical; semantic quality is unmeasured.
+
+### Evidence-only completion evaluation: v0.3.341
+
+The teaching report now derives an explicit readiness evaluation from canonical
+research-run records and the autonomous stop reason. It reports bounded support,
+partial or materially unresolved evidence, source/budget limits, incomplete
+execution, or an already-recorded claim contradiction. It also exposes only
+coverage facts: accepted sources, evidence-bearing sources, grounded sources and
+retained comparison notes.
+
+This is not a lifecycle transition or a truth engine. The evaluation does not
+close the collecting run, spend a budget unit, create a claim, interpret model
+prose, or upgrade a tentative semantic comparison into a contradiction. A
+recorded claim contradiction remains an explicit canonical record; the evaluator
+does not infer one from a note. A “sufficiently supported” result means only
+that the existing cited material can support this bounded teaching report, not
+that the question is universally answered or independently corroborated.
 
 ### Authority, accounting and durable output
 
@@ -135,9 +152,9 @@ or any provenance mismatch remain restored and visibly blocked without spending
 or replaying a fetch/model operation.
 
 This does not establish general adaptive replanning or autonomous contradiction
-investigation. The next boundary is a separately bounded completion evaluation:
-it must decide whether the original question has sufficient cited support without
-promoting tentative semantic interpretations to verified truth.
+investigation. Evidence-only completion evaluation now informs the report, but
+mission-level completion semantics remain separate: an execution may finish or
+deliver a bounded report without the research goal being declared satisfied.
 
 ### v0.3.340 verification
 

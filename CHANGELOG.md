@@ -2,6 +2,26 @@
 
 All notable project changes are recorded here.
 
+## [0.3.341] - 2026-09-14
+
+### Added
+
+- The bounded teaching report now includes a deterministic evidence-only
+  completion evaluation over canonical run records. It distinguishes sufficient
+  bounded support, partial/materially unresolved support, source limits, budget
+  limits, incomplete execution, and explicitly recorded claim conflict.
+- The evaluation reports source/evidence/assessment/comparison coverage and
+  structured limitations. It reads a recorded claim contradiction only from its
+  canonical contradiction record; it never parses tentative model-note prose as
+  a contradiction.
+
+### Boundaries
+
+- Evaluation is derived output only. It does not close a `ResearchRun`, alter
+  an execution, create authority, charge budget, promote a claim, or establish
+  the research question as universally resolved. Semantic interpretations remain
+  tentative and model confidence remains distinct from evidence.
+
 ## [0.3.340] - 2026-09-14
 
 ### Added
