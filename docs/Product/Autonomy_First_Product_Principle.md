@@ -29,6 +29,12 @@ or an already-recorded contradiction. That assessment helps it explain whether
 the bounded report is useful; it does not close a mission, make a claim true, or
 substitute a tentative model interpretation for a verified finding.
 
+Hypatia must also show execution outcome and mission-goal satisfaction as
+separate facts. A bounded task may be delivered while its research goal remains
+undeclared; a completed operation list never silently becomes a completed truth
+claim. Future goal-satisfaction semantics need their own evidence-grounded,
+scope-specific contract.
+
 This principle does not permit unrestricted internet exploration, target testing,
 tool execution, provider substitution or fact promotion. It guides the product
 toward useful end-to-end learning while preserving explicit scope, privacy,

@@ -2,18 +2,17 @@
 
 ## Runtime Version
 
-`v0.3.341 (Genesis)`
+`v0.3.342 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.341 adds an evidence-only completion evaluation to the bounded
-teaching report. It derives a report-readiness status only from canonical run
-records and the recorded autonomous stop reason: sufficient bounded support,
-partial/materially unresolved support, source/budget limits, incomplete work, or
-an already-recorded claim conflict. It neither closes the collecting run nor
-promotes a tentative comparison, claim confidence, or model output into fact.
-The earlier v0.3.340 recovery checkpoint behavior remains unchanged.
+Version v0.3.342 adds a derived mission-outcome view. It reuses the existing
+execution outcome and evidence-only readiness evaluation, then explicitly states
+that mission-goal satisfaction is not declared. A delivered execution is not a
+goal-satisfaction claim; budget exhaustion, block, failure and cancellation also
+remain distinct execution facts. It adds no lifecycle transition, scheduler
+behavior, authority, persistence or automatic run closure.
 
 ### 2026-09-08 checklist reconciliation
 

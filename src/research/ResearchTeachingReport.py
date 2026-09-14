@@ -4,6 +4,7 @@ from research.ResearchEvidenceCompletionEvaluation import (
     ResearchEvidenceCompletionEvaluation,
     evaluate_evidence_completion,
 )
+from research.ResearchMissionOutcome import mission_outcome_for
 from research.ResearchRun import ResearchRun
 
 
@@ -15,6 +16,7 @@ def teaching_report(
 ) -> str:
     """Render canonical evidence and its non-mutating readiness evaluation."""
     evaluation = evaluation or evaluate_evidence_completion(run, stop)
+    mission_outcome = mission_outcome_for(run, stop)
     sources = {s.document_id: s for s in run.sources}
     lines = [
         "Bounded research report",
@@ -82,6 +84,7 @@ def teaching_report(
                 "the research run, promote a tentative comparison into fact, or "
                 "declare the question universally resolved."
             ),
+            mission_outcome.summary(),
         ]
     )
     lines.extend(

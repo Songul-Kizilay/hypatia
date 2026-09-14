@@ -2,6 +2,22 @@
 
 All notable project changes are recorded here.
 
+## [0.3.342] - 2026-09-14
+
+### Added
+
+- A read-only mission-outcome projection now combines the existing autonomy
+  execution outcome with the evidence-only completion evaluation. Teaching
+  reports explicitly distinguish a completed bounded execution from mission-goal
+  satisfaction, which remains not declared by this runtime.
+
+### Boundaries
+
+- This introduces no new lifecycle enum or transition: existing execution and
+  background outcomes remain canonical. The projection cannot close a run,
+  schedule work, retry a refusal, spend budget, create authority, or declare a
+  question answered.
+
 ## [0.3.341] - 2026-09-14
 
 ### Added

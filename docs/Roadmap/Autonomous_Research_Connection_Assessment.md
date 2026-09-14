@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.341
+## Current bounded text journey: v0.3.342
 
 ### Connected user journey
 
@@ -56,6 +56,20 @@ recorded claim contradiction remains an explicit canonical record; the evaluator
 does not infer one from a note. A “sufficiently supported” result means only
 that the existing cited material can support this bounded teaching report, not
 that the question is universally answered or independently corroborated.
+
+### Mission outcome semantics: v0.3.342
+
+The report now shows a read-only mission outcome that composes the existing
+background/execution outcome with evidence readiness. It makes a key distinction
+visible: a bounded execution can be delivered or completed while mission-goal
+satisfaction remains **not declared**. Budget exhaustion, block, failure and
+cancellation remain their existing execution outcomes rather than being relabelled
+as evidence truth or mission success.
+
+No new lifecycle, run transition, scheduler behavior or automatic closure exists
+here. The separate future boundary is an evidence-grounded, scope-specific goal
+satisfaction contract; it cannot be inferred from a completed step list or a
+teaching report.
 
 ### Authority, accounting and durable output
 
