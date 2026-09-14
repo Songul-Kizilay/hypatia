@@ -490,7 +490,18 @@ class ResearchGoalStartApplicationService:
                 research_plan_execution=self._execution_service.live_execution(
                     state.plan_id
                 ),
-                message=teaching_report(updated, stop, spend) + "\n\n" + memory_text,
+                message=(
+                    teaching_report(
+                        updated,
+                        stop,
+                        spend,
+                        checkpoint=self._execution_service.mission_checkpoint(
+                            state.plan_id
+                        ),
+                    )
+                    + "\n\n"
+                    + memory_text
+                ),
             )
         count = sum(len(record.candidates) for record in updated.discoveries)
         if evidence_mission:

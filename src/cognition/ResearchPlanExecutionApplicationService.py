@@ -81,6 +81,7 @@ from research.ResearchExecutionStore import ResearchExecutionStore
 from research.ResearchMissionFollowupDecision import (
     ResearchMissionFollowupDecisionStatus,
 )
+from research.ResearchMissionRecoveryCheckpoint import ResearchMissionRecoveryCheckpoint
 from research.ResearchMissionStepResolver import ResearchMissionStepResolver
 from research.ResearchPlan import ResearchPlan
 from research.ResearchPlanAuthorizationConsumer import (
@@ -606,6 +607,15 @@ class ResearchPlanExecutionApplicationService:
     def live_plan(self, plan_id: str) -> ResearchPlan | None:
         """Return the authored plan behind a live execution, if any."""
         return self._plans.get(plan_id)
+
+    def mission_checkpoint(
+        self, plan_id: str
+    ) -> ResearchMissionRecoveryCheckpoint | None:
+        """Return one mission's existing non-content checkpoint, read-only."""
+        plan = self._plans.get(plan_id)
+        if plan is None or plan.mission_scope is None or self._mission_resolver is None:
+            return None
+        return self._mission_resolver.checkpoint(plan)
 
     def restored_execution(
         self,

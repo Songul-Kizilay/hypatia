@@ -11,6 +11,11 @@ from research.ResearchEvidenceCompletionEvaluation import (
     ResearchEvidenceCompletionEvaluation,
     evaluate_evidence_completion,
 )
+from research.ResearchMissionGoalSatisfaction import (
+    ResearchMissionGoalSatisfaction,
+    evaluate_mission_goal_satisfaction,
+)
+from research.ResearchMissionRecoveryCheckpoint import ResearchMissionRecoveryCheckpoint
 from research.ResearchRun import ResearchRun
 
 
@@ -18,15 +23,14 @@ from research.ResearchRun import ResearchRun
 class ResearchMissionOutcome:
     """Read-only summary of a bounded execution and its evidence readiness.
 
-    ``execution_outcome`` can be complete while ``goal_satisfied`` is false.
-    No current bounded evaluator declares a research question satisfied, so the
-    latter is deliberately always false until a separately authorized,
-    evidence-grounded goal-satisfaction contract exists.
+    ``execution_outcome`` can be complete while the bounded mission goal is
+    still unresolved.  ``goal_satisfaction`` is an evidence-only assessment,
+    not a lifecycle transition or universal truth claim.
     """
 
     execution_outcome: BackgroundTaskOutcome
     evidence_evaluation: ResearchEvidenceCompletionEvaluation
-    goal_satisfied: bool = False
+    goal_satisfaction: ResearchMissionGoalSatisfaction
 
     def __post_init__(self) -> None:
         if not isinstance(self.execution_outcome, BackgroundTaskOutcome):
@@ -35,23 +39,27 @@ class ResearchMissionOutcome:
             self.evidence_evaluation, ResearchEvidenceCompletionEvaluation
         ):
             raise ResearchError("Research mission evidence evaluation is invalid.")
-        if self.goal_satisfied:
-            raise ResearchError(
-                "Research mission goal satisfaction is not available in this runtime."
-            )
+        if not isinstance(self.goal_satisfaction, ResearchMissionGoalSatisfaction):
+            raise ResearchError("Research mission goal satisfaction is invalid.")
+
+    @property
+    def goal_satisfied(self) -> bool:
+        """Keep the boolean convenience view, scoped to the bounded mission."""
+        return self.goal_satisfaction.satisfied
 
     def summary(self) -> str:
         """State the distinction without interpreting evidence as truth."""
         return (
             f"Execution outcome: {self.execution_outcome.value}. "
             f"Evidence readiness: {self.evidence_evaluation.summary()}. "
-            "Mission goal satisfaction: not declared."
+            f"Mission goal satisfaction: {self.goal_satisfaction.summary()}."
         )
 
 
 def mission_outcome_for(
     run: ResearchRun,
     stop_reason: AutonomyStopReason | str,
+    checkpoint: ResearchMissionRecoveryCheckpoint | None = None,
 ) -> ResearchMissionOutcome:
     """Project existing canonical facts into one non-mutating mission outcome."""
     if not isinstance(run, ResearchRun):
@@ -67,7 +75,14 @@ def mission_outcome_for(
             ) from error
     else:
         raise ResearchError("Research mission outcome stop reason is invalid.")
+    execution_outcome = outcome_for(normalized_stop)
+    evidence_evaluation = evaluate_evidence_completion(run, normalized_stop)
     return ResearchMissionOutcome(
-        execution_outcome=outcome_for(normalized_stop),
-        evidence_evaluation=evaluate_evidence_completion(run, normalized_stop),
+        execution_outcome=execution_outcome,
+        evidence_evaluation=evidence_evaluation,
+        goal_satisfaction=evaluate_mission_goal_satisfaction(
+            execution_outcome,
+            evidence_evaluation,
+            checkpoint,
+        ),
     )

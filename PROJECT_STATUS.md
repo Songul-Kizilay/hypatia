@@ -2,12 +2,18 @@
 
 ## Runtime Version
 
-`v0.3.348 (Genesis)`
+`v0.3.349 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.348 makes the existing fixed third-source mission slot visible as
+Version v0.3.349 adds a derived, evidence-grounded assessment of how well a
+bounded mission met its own deliverable. It composes the existing execution
+outcome, canonical evidence readiness and, where available, the durable
+contradiction-investigation checkpoint into `satisfied`, `partially_satisfied`,
+`unresolved`, `blocked`, `budget_limited`, `failed` or `cancelled`. It does not
+close the run, create work, select truth or turn a report into a universal
+answer. Version v0.3.348 makes the existing fixed third-source mission slot visible as
 a typed deterministic decision derived from the original digest, canonical
 semantic note and remaining cumulative allowance. It cannot select a new URL,
 provider, destination or capability and is not a second planner or store.

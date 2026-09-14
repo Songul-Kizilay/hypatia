@@ -226,6 +226,10 @@ class ResearchEvidenceCompletionEvaluationTests(unittest.TestCase):
 
         self.assertIn("Evidence-only completion evaluation:", report)
         self.assertIn("Sufficiently supported for a bounded teaching answer.", report)
+        self.assertIn(
+            "Mission goal satisfaction: Satisfied within the current bounded evidence.",
+            report,
+        )
         self.assertIn("does not close the research run", report)
         self.assertIs(subject.status, ResearchRunStatus.COLLECTING)
 

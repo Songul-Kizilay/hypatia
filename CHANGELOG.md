@@ -2,6 +2,27 @@
 
 All notable project changes are recorded here.
 
+## [0.3.349] - 2026-09-14
+
+### Added
+
+- A read-only mission goal-satisfaction projection now combines the existing
+  execution outcome, canonical evidence-completion evaluation and, when
+  available, the existing durable semantic-contradiction checkpoint. It reports
+  bounded `satisfied`, `partially_satisfied`, `unresolved`, `blocked`,
+  `budget_limited`, `failed` or `cancelled` outcomes through the teaching report.
+
+### Boundaries
+
+- `satisfied` means only that the current bounded mission completed with
+  sufficiently supported canonical evidence. It is not a universal truth claim,
+  source-winner decision or claim promotion. A pending or durable unresolved
+  tentative conflict prevents full satisfaction; a structurally clarified
+  conflict is still not treated as truth.
+- The projection has no lifecycle, authority, budget, provider, model, planner,
+  store, retry or follow-up effect. It neither closes a ResearchRun nor changes
+  any canonical evidence, claim, comparison or checkpoint record.
+
 ## [0.3.348] - 2026-09-14
 
 ### Added

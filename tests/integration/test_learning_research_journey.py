@@ -336,7 +336,7 @@ class LearningResearchJourneyTests(unittest.TestCase):
         self.assertEqual(checkpoint.contradiction_outcome, "unresolved")
         self.assertEqual(response.research_runs[0].claims, ())
         self.assertFalse(response.research_runs[0].status.terminal)
-        self.assertIn("goal satisfaction: not declared", response.message.lower())
+        self.assertIn("mission goal satisfaction: unresolved", response.message.lower())
 
     def test_agreeing_followup_is_only_structurally_clarified(self):
         self.relations = ["possible_conflict", "possible_agreement"]
@@ -349,7 +349,10 @@ class LearningResearchJourneyTests(unittest.TestCase):
         self.assertEqual(checkpoint.contradiction_outcome, "structurally_clarified")
         self.assertEqual(response.research_runs[0].claims, ())
         self.assertFalse(response.research_runs[0].status.terminal)
-        self.assertIn("goal satisfaction: not declared", response.message.lower())
+        self.assertIn(
+            "mission goal satisfaction: satisfied within the current bounded evidence",
+            response.message.lower(),
+        )
 
     def test_conflict_derives_the_existing_typed_followup_slot_once(self):
         decisions = []

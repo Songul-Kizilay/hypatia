@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.348
+## Current bounded text journey: v0.3.349
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -75,6 +75,27 @@ No new lifecycle, run transition, scheduler behavior or automatic closure exists
 here. The separate future boundary is an evidence-grounded, scope-specific goal
 satisfaction contract; it cannot be inferred from a completed step list or a
 teaching report.
+
+### Evidence-grounded goal satisfaction: v0.3.349
+
+The teaching report now adds a read-only, bounded goal-satisfaction projection.
+It composes the existing execution outcome, evidence-only completion evaluator
+and the already persisted semantic contradiction-investigation outcome when the
+mission has one. The result is one of `satisfied`, `partially_satisfied`,
+`unresolved`, `blocked`, `budget_limited`, `failed` or `cancelled`.
+
+`satisfied` is deliberately narrow: the existing bounded execution must have
+completed and its canonical evidence must be sufficiently supported. It means
+only that the mission deliverable is supported within the retained evidence; it
+does not establish a universal answer, select a source winner or promote a
+claim. A pending tentative conflict or a durable `unresolved` follow-up outcome
+prevents full satisfaction. `structurally_clarified` changes no truth status.
+
+This is not a lifecycle or planning feature. It creates no new authority,
+budget, store, provider/model call, retry, follow-up or scheduler behavior; it
+does not close the research run or mutate canonical evidence. The next Phase 2
+decision remains whether to generalize bounded replanning safely, rather than
+mistaking this evaluation for permission to create new work.
 
 ### Visible fail-closed restart refusals: v0.3.343
 
