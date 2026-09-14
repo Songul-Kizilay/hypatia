@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.346
+## Current bounded text journey: v0.3.347
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -127,6 +127,31 @@ can therefore distinguish an initial durable-snapshot refusal from other safe
 start refusals without receiving storage exception details. This is response
 clarity only: it neither retries, reverses a consumed authorization, exposes a
 provider/model fallback nor changes the recovery contract.
+
+### Durable contradiction-investigation outcome: v0.3.347
+
+When the first canonical semantic comparison is tentatively labelled
+`possible_conflict`, the already-authorized third-source branch remains the
+only possible follow-up. Once that branch has retained its canonical evidence,
+assessment and comparison note, the existing mission checkpoint persists a
+bounded investigation projection: the initial comparison-note/evidence/source/
+assessment identities and fingerprint, the exact follow-up identities and
+fingerprint, and either `unresolved` or `structurally_clarified`.
+
+`structurally_clarified` is intentionally not a verdict. It records only that
+the third source changed the bounded structure of the tentative comparison; it
+does not identify a true source, reject another source, verify a claim, close
+the run or declare the research goal satisfied. The projection carries no model
+prose, source body, free-form rationale or additional authority.
+
+Checkpoint decoding remains strict: a partially specified, contradictory or
+tampered investigation record is rejected. Recovery rechecks both retained
+notes, input fingerprints, evidence, source and assessment identities against
+the canonical run before an interrupted mission can continue. Existing legacy
+checkpoints without the new outcome remain readable and never fabricate one.
+The original digest-bound scope, destination, disclosure and cumulative
+allowance remain the only authority/accounting mechanisms; no second source
+selection, retry, planner, store or agent loop is introduced.
 
 ### Authority, accounting and durable output
 

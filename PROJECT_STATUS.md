@@ -2,17 +2,19 @@
 
 ## Runtime Version
 
-`v0.3.346 (Genesis)`
+`v0.3.347 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.346 makes the existing public execution-start refusal reason
-visible at the goal boundary, including a safe durable-snapshot failure. It
-does not expose storage diagnostics. v0.3.345 fails closed before autonomous
-work if the initial mission snapshot cannot land. Neither release adds a
-lifecycle transition, scheduler behavior, new authority, persistence store or
-automatic run closure.
+Version v0.3.347 persists the bounded outcome of the already-authorized third
+source investigation after a tentative semantic conflict. The record contains
+only canonical identities, fingerprints and a typed `unresolved` or
+`structurally_clarified` result; it does not select a truth, promote a claim,
+close a run, or declare a goal satisfied. v0.3.346 makes the existing public
+execution-start refusal reason visible at the goal boundary, including a safe
+durable-snapshot failure. Neither release adds a lifecycle transition,
+scheduler behavior, new authority, persistence store or automatic run closure.
 
 ### 2026-09-08 checklist reconciliation
 

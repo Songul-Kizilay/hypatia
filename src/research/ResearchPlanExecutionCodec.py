@@ -94,6 +94,21 @@ _MISSION_CHECKPOINT_FIELDS = _MISSION_CHECKPOINT_FIELDS_V1 | {
     "semantic_input_fingerprint",
     "semantic_relation",
 }
+_MISSION_CHECKPOINT_FIELDS_WITH_CONTRADICTION_OUTCOME = _MISSION_CHECKPOINT_FIELDS | {
+    "contradiction_initial_note_id",
+    "contradiction_initial_evidence_ids",
+    "contradiction_initial_source_document_ids",
+    "contradiction_initial_assessment_ids",
+    "contradiction_initial_input_fingerprint",
+    "contradiction_initial_relation",
+    "contradiction_followup_note_id",
+    "contradiction_followup_evidence_id",
+    "contradiction_followup_source_document_id",
+    "contradiction_followup_assessment_id",
+    "contradiction_followup_input_fingerprint",
+    "contradiction_followup_relation",
+    "contradiction_outcome",
+}
 _ALLOWANCE_FIELDS = frozenset({"budget", "spend"})
 _BUDGET_FIELDS = frozenset(
     {
@@ -326,6 +341,35 @@ def _encode_mission_checkpoint(
         "semantic_note_id": checkpoint.semantic_note_id,
         "semantic_input_fingerprint": checkpoint.semantic_input_fingerprint,
         "semantic_relation": checkpoint.semantic_relation,
+        "contradiction_initial_note_id": checkpoint.contradiction_initial_note_id,
+        "contradiction_initial_evidence_ids": list(
+            checkpoint.contradiction_initial_evidence_ids
+        ),
+        "contradiction_initial_source_document_ids": list(
+            checkpoint.contradiction_initial_source_document_ids
+        ),
+        "contradiction_initial_assessment_ids": list(
+            checkpoint.contradiction_initial_assessment_ids
+        ),
+        "contradiction_initial_input_fingerprint": (
+            checkpoint.contradiction_initial_input_fingerprint
+        ),
+        "contradiction_initial_relation": checkpoint.contradiction_initial_relation,
+        "contradiction_followup_note_id": checkpoint.contradiction_followup_note_id,
+        "contradiction_followup_evidence_id": (
+            checkpoint.contradiction_followup_evidence_id
+        ),
+        "contradiction_followup_source_document_id": (
+            checkpoint.contradiction_followup_source_document_id
+        ),
+        "contradiction_followup_assessment_id": (
+            checkpoint.contradiction_followup_assessment_id
+        ),
+        "contradiction_followup_input_fingerprint": (
+            checkpoint.contradiction_followup_input_fingerprint
+        ),
+        "contradiction_followup_relation": checkpoint.contradiction_followup_relation,
+        "contradiction_outcome": checkpoint.contradiction_outcome,
     }
 
 
@@ -337,10 +381,25 @@ def _decode_mission_checkpoint(
     if not isinstance(value, dict) or set(value) not in (
         _MISSION_CHECKPOINT_FIELDS_V1,
         _MISSION_CHECKPOINT_FIELDS,
+        _MISSION_CHECKPOINT_FIELDS_WITH_CONTRADICTION_OUTCOME,
     ):
         raise ResearchError("Execution snapshot mission checkpoint is invalid.")
-    sequences = ("acquired_urls", "body_hashes", "evidence_ids", "assessment_ids")
+    sequences = (
+        "acquired_urls",
+        "body_hashes",
+        "evidence_ids",
+        "assessment_ids",
+    )
     if any(not isinstance(value[name], list) for name in sequences):
+        raise ResearchError("Execution snapshot mission checkpoint is invalid.")
+    contradiction_sequences = (
+        "contradiction_initial_evidence_ids",
+        "contradiction_initial_source_document_ids",
+        "contradiction_initial_assessment_ids",
+    )
+    if set(value) == _MISSION_CHECKPOINT_FIELDS_WITH_CONTRADICTION_OUTCOME and any(
+        not isinstance(value[name], list) for name in contradiction_sequences
+    ):
         raise ResearchError("Execution snapshot mission checkpoint is invalid.")
     try:
         return ResearchMissionRecoveryCheckpoint(
@@ -353,6 +412,43 @@ def _decode_mission_checkpoint(
             semantic_note_id=value.get("semantic_note_id", ""),
             semantic_input_fingerprint=value.get("semantic_input_fingerprint", ""),
             semantic_relation=value.get("semantic_relation", ""),
+            contradiction_initial_note_id=value.get(
+                "contradiction_initial_note_id", ""
+            ),
+            contradiction_initial_evidence_ids=tuple(
+                value.get("contradiction_initial_evidence_ids", [])
+            ),
+            contradiction_initial_source_document_ids=tuple(
+                value.get("contradiction_initial_source_document_ids", [])
+            ),
+            contradiction_initial_assessment_ids=tuple(
+                value.get("contradiction_initial_assessment_ids", [])
+            ),
+            contradiction_initial_input_fingerprint=value.get(
+                "contradiction_initial_input_fingerprint", ""
+            ),
+            contradiction_initial_relation=value.get(
+                "contradiction_initial_relation", ""
+            ),
+            contradiction_followup_note_id=value.get(
+                "contradiction_followup_note_id", ""
+            ),
+            contradiction_followup_evidence_id=value.get(
+                "contradiction_followup_evidence_id", ""
+            ),
+            contradiction_followup_source_document_id=value.get(
+                "contradiction_followup_source_document_id", ""
+            ),
+            contradiction_followup_assessment_id=value.get(
+                "contradiction_followup_assessment_id", ""
+            ),
+            contradiction_followup_input_fingerprint=value.get(
+                "contradiction_followup_input_fingerprint", ""
+            ),
+            contradiction_followup_relation=value.get(
+                "contradiction_followup_relation", ""
+            ),
+            contradiction_outcome=value.get("contradiction_outcome", ""),
         )
     except ResearchError as error:
         raise ResearchError(

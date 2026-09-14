@@ -56,6 +56,19 @@ class _Observations:
     semantic_note_id: str = ""
     semantic_input_fingerprint: str = ""
     semantic_relation: str = ""
+    contradiction_initial_note_id: str = ""
+    contradiction_initial_evidence_ids: tuple[str, ...] = ()
+    contradiction_initial_source_document_ids: tuple[str, ...] = ()
+    contradiction_initial_assessment_ids: tuple[str, ...] = ()
+    contradiction_initial_input_fingerprint: str = ""
+    contradiction_initial_relation: str = ""
+    contradiction_followup_note_id: str = ""
+    contradiction_followup_evidence_id: str = ""
+    contradiction_followup_source_document_id: str = ""
+    contradiction_followup_assessment_id: str = ""
+    contradiction_followup_input_fingerprint: str = ""
+    contradiction_followup_relation: str = ""
+    contradiction_outcome: str = ""
 
 
 class ResearchMissionStepResolver:
@@ -261,6 +274,35 @@ class ResearchMissionStepResolver:
             semantic_note_id=observed.semantic_note_id,
             semantic_input_fingerprint=observed.semantic_input_fingerprint,
             semantic_relation=observed.semantic_relation,
+            contradiction_initial_note_id=observed.contradiction_initial_note_id,
+            contradiction_initial_evidence_ids=(
+                observed.contradiction_initial_evidence_ids
+            ),
+            contradiction_initial_source_document_ids=(
+                observed.contradiction_initial_source_document_ids
+            ),
+            contradiction_initial_assessment_ids=(
+                observed.contradiction_initial_assessment_ids
+            ),
+            contradiction_initial_input_fingerprint=(
+                observed.contradiction_initial_input_fingerprint
+            ),
+            contradiction_initial_relation=observed.contradiction_initial_relation,
+            contradiction_followup_note_id=observed.contradiction_followup_note_id,
+            contradiction_followup_evidence_id=(
+                observed.contradiction_followup_evidence_id
+            ),
+            contradiction_followup_source_document_id=(
+                observed.contradiction_followup_source_document_id
+            ),
+            contradiction_followup_assessment_id=(
+                observed.contradiction_followup_assessment_id
+            ),
+            contradiction_followup_input_fingerprint=(
+                observed.contradiction_followup_input_fingerprint
+            ),
+            contradiction_followup_relation=(observed.contradiction_followup_relation),
+            contradiction_outcome=observed.contradiction_outcome,
         )
 
     def restore(
@@ -357,6 +399,9 @@ class ResearchMissionStepResolver:
         )
         self._validate_recorded_evidence(observed, run)
         self._restore_semantic_adaptation(plan, by_id, checkpoint, observed, run)
+        self._restore_contradiction_investigation(
+            plan, by_id, checkpoint, observed, run
+        )
         self._observed[plan.plan_id] = observed
 
     @staticmethod
@@ -489,10 +534,7 @@ class ResearchMissionStepResolver:
                 raise ResearchError("Mission semantic result was lost or changed.")
             observed.comparison = value
         elif (
-            step.capability is Cap.SOURCE_COMPARISON
-            and plan.mission_scope is not None
-            and len(plan.steps) > 11
-            and step.step_id == plan.steps[11].step_id
+            step.capability is Cap.SOURCE_COMPARISON and plan.mission_scope is not None
         ):
             if plan.mission_scope.semantic_policy is None:
                 return
@@ -552,9 +594,73 @@ class ResearchMissionStepResolver:
             if result.candidates
             else "no_supported_comparison"
         )
-        observed.semantic_note_id = note.note_id
-        observed.semantic_input_fingerprint = result.request.content_fingerprint
-        observed.semantic_relation = relation
+        if len(observed.evidence) == 2:
+            if observed.semantic_note_id or observed.contradiction_initial_note_id:
+                raise ResearchError("Initial contradiction note cannot be repeated.")
+            observed.semantic_note_id = note.note_id
+            observed.semantic_input_fingerprint = result.request.content_fingerprint
+            observed.semantic_relation = relation
+            if relation == "possible_conflict":
+                observed.contradiction_initial_note_id = note.note_id
+                observed.contradiction_initial_evidence_ids = note.evidence_ids
+                observed.contradiction_initial_source_document_ids = (
+                    note.source_document_ids
+                )
+                observed.contradiction_initial_assessment_ids = note.assessment_ids
+                observed.contradiction_initial_input_fingerprint = (
+                    result.request.content_fingerprint
+                )
+                observed.contradiction_initial_relation = relation
+            return
+        if len(observed.evidence) != 3:
+            raise ResearchError("Mission contradiction follow-up lacks three sources.")
+        if (
+            observed.contradiction_initial_relation != "possible_conflict"
+            or not observed.contradiction_initial_note_id
+            or observed.contradiction_outcome
+        ):
+            raise ResearchError("Mission contradiction follow-up is not authorized.")
+        followup_evidence = observed.evidence[-1]
+        followup_assessment = next(
+            (
+                value
+                for value in observed.assessments
+                if value.evidence_ids == (followup_evidence.evidence_id,)
+            ),
+            None,
+        )
+        if (
+            followup_assessment is None
+            or note.evidence_ids
+            != (
+                observed.contradiction_initial_evidence_ids[0],
+                followup_evidence.evidence_id,
+            )
+            or note.source_document_ids
+            != (
+                observed.contradiction_initial_source_document_ids[0],
+                followup_evidence.source_document_id,
+            )
+            or followup_assessment.assessment_id not in note.assessment_ids
+        ):
+            raise ResearchError("Mission contradiction follow-up provenance changed.")
+        observed.contradiction_followup_note_id = note.note_id
+        observed.contradiction_followup_evidence_id = followup_evidence.evidence_id
+        observed.contradiction_followup_source_document_id = (
+            followup_evidence.source_document_id
+        )
+        observed.contradiction_followup_assessment_id = (
+            followup_assessment.assessment_id
+        )
+        observed.contradiction_followup_input_fingerprint = (
+            result.request.content_fingerprint
+        )
+        observed.contradiction_followup_relation = relation
+        observed.contradiction_outcome = (
+            "structurally_clarified"
+            if relation == "possible_agreement"
+            else "unresolved"
+        )
 
     def _restore_semantic_adaptation(
         self,
@@ -635,6 +741,178 @@ class ResearchMissionStepResolver:
         observed.semantic_note_id = checkpoint.semantic_note_id
         observed.semantic_input_fingerprint = checkpoint.semantic_input_fingerprint
         observed.semantic_relation = checkpoint.semantic_relation
+
+    def _restore_contradiction_investigation(
+        self,
+        plan: ResearchPlan,
+        steps: dict[str, ResearchPlanExecutionStepSnapshot],
+        checkpoint: ResearchMissionRecoveryCheckpoint,
+        observed: _Observations,
+        run: ResearchRun,
+    ) -> None:
+        """Restore a completed bounded follow-up without reinterpreting it.
+
+        The outcome is only an accounting projection over canonical records.  It
+        never recreates model output, selects a winner, or treats a tentative
+        relation as a truth claim.
+        """
+        if not checkpoint.contradiction_initial_note_id:
+            return
+        initial_evidence = tuple(value.evidence_id for value in observed.evidence[:2])
+        initial_documents = tuple(
+            value.source_document_id for value in observed.evidence[:2]
+        )
+        initial_assessments = tuple(
+            value.assessment_id for value in observed.assessments[:2]
+        )
+        if (
+            checkpoint.contradiction_initial_note_id != checkpoint.semantic_note_id
+            or checkpoint.contradiction_initial_evidence_ids != initial_evidence
+            or checkpoint.contradiction_initial_source_document_ids != initial_documents
+            or checkpoint.contradiction_initial_assessment_ids != initial_assessments
+            or checkpoint.contradiction_initial_input_fingerprint
+            != checkpoint.semantic_input_fingerprint
+            or checkpoint.contradiction_initial_relation != "possible_conflict"
+            or checkpoint.semantic_relation != "possible_conflict"
+        ):
+            raise ResearchError("Mission contradiction checkpoint no longer matches.")
+        initial_note = next(
+            (
+                value
+                for value in run.comparison_notes
+                if value.note_id == checkpoint.contradiction_initial_note_id
+            ),
+            None,
+        )
+        if (
+            initial_note is None
+            or initial_note.evidence_ids != initial_evidence
+            or initial_note.source_document_ids != initial_documents
+            or initial_note.assessment_ids != initial_assessments
+        ):
+            raise ResearchError("Mission contradiction note no longer matches.")
+        observed.contradiction_initial_note_id = (
+            checkpoint.contradiction_initial_note_id
+        )
+        observed.contradiction_initial_evidence_ids = initial_evidence
+        observed.contradiction_initial_source_document_ids = initial_documents
+        observed.contradiction_initial_assessment_ids = initial_assessments
+        observed.contradiction_initial_input_fingerprint = (
+            checkpoint.contradiction_initial_input_fingerprint
+        )
+        observed.contradiction_initial_relation = (
+            checkpoint.contradiction_initial_relation
+        )
+        if not checkpoint.contradiction_followup_note_id:
+            return
+        followup_note_step = self._followup_note_step(plan, steps)
+        if followup_note_step is None:
+            raise ResearchError(
+                "Mission contradiction follow-up was not durably retained."
+            )
+        followup_evidence = observed.evidence[-1]
+        followup_assessment = next(
+            (
+                value
+                for value in observed.assessments
+                if value.evidence_ids == (followup_evidence.evidence_id,)
+            ),
+            None,
+        )
+        followup_note = next(
+            (
+                value
+                for value in run.comparison_notes
+                if value.note_id == checkpoint.contradiction_followup_note_id
+            ),
+            None,
+        )
+        expected_evidence = (initial_evidence[0], followup_evidence.evidence_id)
+        expected_documents = (
+            initial_documents[0],
+            followup_evidence.source_document_id,
+        )
+        expected_assessments = (
+            initial_assessments[0],
+            followup_assessment.assessment_id if followup_assessment else "",
+        )
+        expected_outcome = (
+            "structurally_clarified"
+            if checkpoint.contradiction_followup_relation == "possible_agreement"
+            else "unresolved"
+        )
+        if (
+            followup_assessment is None
+            or followup_note is None
+            or checkpoint.contradiction_followup_evidence_id
+            != followup_evidence.evidence_id
+            or checkpoint.contradiction_followup_source_document_id
+            != followup_evidence.source_document_id
+            or checkpoint.contradiction_followup_assessment_id
+            != followup_assessment.assessment_id
+            or followup_note.evidence_ids != expected_evidence
+            or followup_note.source_document_ids != expected_documents
+            or followup_note.assessment_ids != expected_assessments
+            or "Bounded follow-up compared the first source with one new source."
+            not in followup_note.text
+            or f"Input SHA256 {checkpoint.contradiction_followup_input_fingerprint};"
+            not in followup_note.text
+            or f"mission {plan_digest(plan)}." not in followup_note.text
+            or (
+                checkpoint.contradiction_followup_relation == "no_supported_comparison"
+                and "No supported comparison proposal; evidence gap remains."
+                not in followup_note.text
+            )
+            or (
+                checkpoint.contradiction_followup_relation != "no_supported_comparison"
+                and "Tentative relation: "
+                f"{checkpoint.contradiction_followup_relation}."
+                not in followup_note.text
+            )
+            or checkpoint.contradiction_outcome != expected_outcome
+        ):
+            raise ResearchError(
+                "Mission contradiction follow-up provenance no longer matches."
+            )
+        observed.contradiction_followup_note_id = (
+            checkpoint.contradiction_followup_note_id
+        )
+        observed.contradiction_followup_evidence_id = followup_evidence.evidence_id
+        observed.contradiction_followup_source_document_id = (
+            followup_evidence.source_document_id
+        )
+        observed.contradiction_followup_assessment_id = (
+            followup_assessment.assessment_id
+        )
+        observed.contradiction_followup_input_fingerprint = (
+            checkpoint.contradiction_followup_input_fingerprint
+        )
+        observed.contradiction_followup_relation = (
+            checkpoint.contradiction_followup_relation
+        )
+        observed.contradiction_outcome = checkpoint.contradiction_outcome
+
+    @staticmethod
+    def _followup_note_step(
+        plan: ResearchPlan,
+        steps: dict[str, ResearchPlanExecutionStepSnapshot],
+    ) -> ResearchPlanExecutionStepSnapshot | None:
+        """Return the one completed source-comparison slot after the third source."""
+        semantic_indices = [
+            index
+            for index, value in enumerate(plan.steps)
+            if value.capability is Cap.SEMANTIC_EVIDENCE_COMPARISON
+        ]
+        if len(semantic_indices) != 2:
+            return None
+        note_index = semantic_indices[1] + 1
+        if (
+            note_index >= len(plan.steps)
+            or plan.steps[note_index].capability is not Cap.SOURCE_COMPARISON
+        ):
+            return None
+        state = steps[plan.steps[note_index].step_id]
+        return state if state.status is ResearchPlanStepStatus.COMPLETED else None
 
     def _semantic_note(
         self, step: ResearchPlanStep, observed: _Observations, run: ResearchRun

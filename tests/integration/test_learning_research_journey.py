@@ -68,6 +68,7 @@ class LearningResearchJourneyTests(unittest.TestCase):
             s for s in self.sources if s.url == url
         )
         self.relation = "possible_conflict"
+        self.relations = None
         self.transport = Mock(side_effect=self.answer)
         self.policy = SemanticMissionPolicy(
             "http://127.0.0.1:11434/v1/chat/completions",
@@ -110,10 +111,13 @@ class LearningResearchJourneyTests(unittest.TestCase):
             snapshot.allowance.spend.llm_operations, self.transport.call_count
         )
         self.assertTrue(any(s.status.value == "running" for s in snapshot.steps))
+        relation = (
+            self.relations.pop(0) if self.relations is not None else self.relation
+        )
         body = {
             "comparisons": [
                 {
-                    "relation": self.relation,
+                    "relation": relation,
                     "left_quote": data["evidence"][0]["excerpt"][:60],
                     "right_quote": data["evidence"][1]["excerpt"][:60],
                     "rationale": "Conditions may differ; investigate first.",
@@ -307,6 +311,122 @@ class LearningResearchJourneyTests(unittest.TestCase):
         restored = JsonFileResearchRunStore(self.root / "runs.json").load()
         self.assertEqual(restored[0], run)
 
+    def test_conflict_followup_persists_only_canonical_unresolved_outcome(self):
+        response = self.start()
+        checkpoint = self.execution._execution_store.load()[0].mission_checkpoint
+        self.assertIsNotNone(checkpoint)
+        self.assertEqual(checkpoint.contradiction_initial_relation, "possible_conflict")
+        self.assertEqual(
+            checkpoint.contradiction_initial_note_id, checkpoint.semantic_note_id
+        )
+        self.assertEqual(len(checkpoint.contradiction_initial_evidence_ids), 2)
+        self.assertEqual(len(checkpoint.contradiction_initial_source_document_ids), 2)
+        self.assertEqual(len(checkpoint.contradiction_initial_assessment_ids), 2)
+        self.assertTrue(checkpoint.contradiction_followup_note_id)
+        self.assertEqual(
+            checkpoint.contradiction_followup_evidence_id,
+            response.research_runs[0].evidence[-1].evidence_id,
+        )
+        self.assertEqual(checkpoint.contradiction_outcome, "unresolved")
+        self.assertEqual(response.research_runs[0].claims, ())
+        self.assertFalse(response.research_runs[0].status.terminal)
+        self.assertIn("goal satisfaction: not declared", response.message.lower())
+
+    def test_agreeing_followup_is_only_structurally_clarified(self):
+        self.relations = ["possible_conflict", "possible_agreement"]
+        response = self.start()
+        checkpoint = self.execution._execution_store.load()[0].mission_checkpoint
+        self.assertIsNotNone(checkpoint)
+        self.assertEqual(
+            checkpoint.contradiction_followup_relation, "possible_agreement"
+        )
+        self.assertEqual(checkpoint.contradiction_outcome, "structurally_clarified")
+        self.assertEqual(response.research_runs[0].claims, ())
+        self.assertFalse(response.research_runs[0].status.terminal)
+        self.assertIn("goal satisfaction: not declared", response.message.lower())
+
+    def test_restart_after_durable_followup_never_replays_it(self):
+        response = self.start()
+        snapshot = self.execution._execution_store.load()[0]
+        before = (
+            self.provider.discover.call_count,
+            self.fetcher.fetch.call_count,
+            self.transport.call_count,
+        )
+        engine = self.restart()
+        execution = engine._research_plan_execution_service
+        state = execution.restored_execution(snapshot.plan_id)
+        self.assertIsNotNone(state)
+        self.assertEqual(
+            sum(step.status.value == "completed" for step in state.steps), 18
+        )
+        self.assertEqual(
+            (
+                self.provider.discover.call_count,
+                self.fetcher.fetch.call_count,
+                self.transport.call_count,
+            ),
+            before,
+        )
+        self.assertEqual(
+            state.allowance,
+            self.execution.allowance(response.research_plan_execution.plan_id),
+        )
+
+    def test_changed_followup_fingerprint_refuses_restart_without_replay(self):
+        self.start()
+        snapshot = self.execution._execution_store.load()[0]
+        plan = self.execution.live_plan(snapshot.plan_id)
+        self.assertIsNotNone(plan)
+        path = self.root / "research_executions.json"
+        document = json.loads(path.read_text(encoding="utf-8"))
+        checkpoint = document["executions"][0]["mission_checkpoint"]
+        checkpoint["contradiction_followup_input_fingerprint"] = "0" * 64
+        path.write_text(json.dumps(document), encoding="utf-8")
+
+        engine = self.restart()
+        resolver = engine._research_plan_execution_service._mission_resolver
+        self.assertIsNotNone(resolver)
+        with self.assertRaisesRegex(
+            ResearchError, "contradiction follow-up provenance"
+        ):
+            resolver.restore(
+                plan,
+                engine._research_plan_execution_service._restored[
+                    snapshot.plan_id
+                ].mission_checkpoint,
+                engine._research_plan_execution_service._restored[
+                    snapshot.plan_id
+                ].steps,
+                engine._research_plan_execution_service._restored[
+                    snapshot.plan_id
+                ].research_run_id,
+            )
+        self.assertEqual(self.fetcher.fetch.call_count, 3)
+        self.assertEqual(self.transport.call_count, 2)
+
+    def test_legacy_checkpoint_without_outcome_restores_completed_work_safely(self):
+        self.start()
+        snapshot = self.execution._execution_store.load()[0]
+        path = self.root / "research_executions.json"
+        document = json.loads(path.read_text(encoding="utf-8"))
+        checkpoint = document["executions"][0]["mission_checkpoint"]
+        for key in tuple(checkpoint):
+            if key.startswith("contradiction_"):
+                checkpoint.pop(key)
+        path.write_text(json.dumps(document), encoding="utf-8")
+
+        engine = self.restart()
+        state = engine._research_plan_execution_service.restored_execution(
+            snapshot.plan_id
+        )
+        self.assertIsNotNone(state)
+        self.assertEqual(
+            sum(step.status.value == "completed" for step in state.steps), 18
+        )
+        self.assertEqual(self.fetcher.fetch.call_count, 3)
+        self.assertEqual(self.transport.call_count, 2)
+
     def test_restart_resumes_from_durable_first_source_checkpoint_without_replay(self):
         """A restart continues durable work, never a transient preview/model call."""
         real_advance = self.execution.process_advance
@@ -494,6 +614,19 @@ class LearningResearchJourneyTests(unittest.TestCase):
             "semantic_note_id",
             "semantic_input_fingerprint",
             "semantic_relation",
+            "contradiction_initial_note_id",
+            "contradiction_initial_evidence_ids",
+            "contradiction_initial_source_document_ids",
+            "contradiction_initial_assessment_ids",
+            "contradiction_initial_input_fingerprint",
+            "contradiction_initial_relation",
+            "contradiction_followup_note_id",
+            "contradiction_followup_evidence_id",
+            "contradiction_followup_source_document_id",
+            "contradiction_followup_assessment_id",
+            "contradiction_followup_input_fingerprint",
+            "contradiction_followup_relation",
+            "contradiction_outcome",
         ):
             checkpoint.pop(key)
         path.write_text(json.dumps(document), encoding="utf-8")

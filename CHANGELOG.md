@@ -2,6 +2,28 @@
 
 All notable project changes are recorded here.
 
+## [0.3.347] - 2026-09-14
+
+### Added
+
+- A bounded semantic mission now persists a durable
+  contradiction-investigation outcome after its already-authorized one-source
+  follow-up. It records only canonical comparison-note, evidence, source,
+  assessment and input-fingerprint identities, plus the typed outcome
+  `unresolved` or `structurally_clarified`.
+
+### Boundaries
+
+- `structurally_clarified` means only that the bounded third source narrowed
+  the recorded shape of a tentative disagreement. It never selects a winning
+  source, establishes truth, promotes a claim, closes a research run, or
+  declares the mission goal satisfied.
+- Recovery verifies the initial conflict and completed follow-up bindings
+  against canonical records before restoring an outcome. Legacy checkpoints
+  without the new projection remain readable but never acquire a fabricated
+  outcome. No new authority, provider, budget, retry, planner, store or agent
+  loop was added.
+
 ## [0.3.346] - 2026-09-14
 
 ### Changed
