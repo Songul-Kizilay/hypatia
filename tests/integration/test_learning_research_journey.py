@@ -256,6 +256,7 @@ class LearningResearchJourneyTests(unittest.TestCase):
 
         self.assertFalse(refused.success)
         self.assertIn("Execution start refused", refused.message)
+        self.assertIn("could not be recorded durably", refused.message)
         self.assertEqual(self.execution._execution_store.load(), [])
         self.provider.discover.assert_not_called()
         self.fetcher.fetch.assert_not_called()

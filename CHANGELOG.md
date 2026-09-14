@@ -2,6 +2,20 @@
 
 All notable project changes are recorded here.
 
+## [0.3.346] - 2026-09-14
+
+### Changed
+
+- Goal-start responses now preserve the existing bounded execution-start refusal
+  reason. An initial durable-snapshot failure is therefore visible as a safe
+  refusal rather than an unexplained generic start error.
+
+### Boundaries
+
+- The response exposes only the established public refusal text. It does not
+  expose persistence diagnostics, alter approval/budget semantics, or add a
+  retry, provider, model, or desktop behavior.
+
 ## [0.3.345] - 2026-09-14
 
 ### Changed

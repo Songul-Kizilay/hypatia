@@ -425,9 +425,7 @@ class ResearchGoalStartApplicationService:
             mission_request_id=request.request_id,
         )
         if isinstance(state, ResearchPlanExecutionStartRefusal):
-            raise ResearchError(
-                "Execution start refused; no research operation started."
-            )
+            raise ResearchError("Execution start refused; " + state.reason)
         # The request becomes a duplicate only after its mission execution has
         # crossed the durable snapshot boundary. A failed start must not claim
         # restart-safe idempotency or prevent an operator from retrying it.

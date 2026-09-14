@@ -2,18 +2,17 @@
 
 ## Runtime Version
 
-`v0.3.345 (Genesis)`
+`v0.3.346 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.345 fails closed if a bounded semantic mission's initial execution
-snapshot cannot be written: no live mission remains and no autonomous work can
-start. Its request ID is added to the duplicate guard only after that snapshot
-lands, so an unrecorded start can be retried without a false idempotency claim.
-The consumed approval remains consumed. v0.3.344 retains durable request IDs
-after successful starts. Neither release adds a lifecycle transition, scheduler
-behavior, new authority, persistence store or automatic run closure.
+Version v0.3.346 makes the existing public execution-start refusal reason
+visible at the goal boundary, including a safe durable-snapshot failure. It
+does not expose storage diagnostics. v0.3.345 fails closed before autonomous
+work if the initial mission snapshot cannot land. Neither release adds a
+lifecycle transition, scheduler behavior, new authority, persistence store or
+automatic run closure.
 
 ### 2026-09-08 checklist reconciliation
 

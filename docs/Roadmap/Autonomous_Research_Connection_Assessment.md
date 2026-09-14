@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.345
+## Current bounded text journey: v0.3.346
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -118,6 +118,15 @@ silently reversed. This preserves the existing fail-closed authority rule but
 means the retry derives a new bounded run and approval. There is still no
 cross-store transaction: a crash before the execution snapshot remains an
 explicitly unsupported ambiguity rather than a claim of exactly-once start.
+
+### Visible durable-start refusal: v0.3.346
+
+The goal-start boundary now preserves the already bounded canonical
+`ResearchPlanExecutionStartRefusal` reason in its public response. An operator
+can therefore distinguish an initial durable-snapshot refusal from other safe
+start refusals without receiving storage exception details. This is response
+clarity only: it neither retries, reverses a consumed authorization, exposes a
+provider/model fallback nor changes the recovery contract.
 
 ### Authority, accounting and durable output
 
