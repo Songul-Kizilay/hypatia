@@ -2,11 +2,13 @@
 
 ## Runtime Version
 
-`v0.3.359 (Genesis)`
+`v0.3.360 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
+Version v0.3.360 lets a mission recovered after restart be reviewed for source
+independence by naming its canonical run from the recovered-missions listing.
 Version v0.3.359 shows what deferred startup recovery resumed or refused as soon
 as it finishes, without an extra click. Version v0.3.358 makes deferred startup recovery cancellable through existing
 cooperative cancellation; unstarted missions stay restored and visible, and

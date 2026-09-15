@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.359
+## Current bounded text journey: v0.3.360
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -113,6 +113,15 @@ and model prose cannot alter it. It does not change mission lifecycle,
 authorization, cumulative allowance, plan digest, source slots, provider/model
 selection, retry behavior or run closure. An unchanged recovered state renders
 the same explanation.
+
+### Independence review for recovered missions: v0.3.360
+
+The operator source-independence review only knew the run of a mission started
+in the current session, so a mission resumed after restart could not be
+reviewed from the desktop. The recovered-missions listing now carries each
+mission's canonical run ID, and a single listed mission names its run for the
+existing review. `operator judgement != model truth` still holds: judgements go
+through the unchanged assessment and supersession path.
 
 ### Startup recovery outcome shown on completion: v0.3.359
 

@@ -30,6 +30,9 @@ def listing(*mission_ids: str) -> BrainResponse:
         intent="research_plan_execution_recovered",
         memory_count=0,
         research_recovered_mission_ids=mission_ids,
+        research_recovered_mission_run_ids=tuple(
+            mission_id.replace("plan", "run") for mission_id in mission_ids
+        ),
     )
 
 
@@ -83,6 +86,7 @@ class RecoveredResearchMissionsTests(unittest.TestCase):
             _append_response=Mock(),
             _execution_id=Var("previous"),
             _plan_authorization_enabled=True,
+            _mission_independence_run_id="",
         )
         window._render_recovered_research_missions = (
             lambda value: TkinterDesktopWindow._render_recovered_research_missions(
@@ -145,6 +149,7 @@ class RecoveredResearchMissionsTests(unittest.TestCase):
             window._controller.recovered_research_missions
         )
         self.assertEqual(window._execution_id.get(), "plan-1")
+        self.assertEqual(window._mission_independence_run_id, "run-1")
 
     def test_several_or_no_missions_leave_the_execution_id_unchanged(self):
         for response in (listing("plan-1", "plan-2"), listing(), None):
@@ -154,6 +159,7 @@ class RecoveredResearchMissionsTests(unittest.TestCase):
                 TkinterDesktopWindow._show_recovered_research_missions(window)
 
                 self.assertEqual(window._execution_id.get(), "previous")
+                self.assertEqual(window._mission_independence_run_id, "")
 
 
 if __name__ == "__main__":

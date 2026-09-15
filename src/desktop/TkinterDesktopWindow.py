@@ -5579,6 +5579,11 @@ class TkinterDesktopWindow:
         )
         if len(mission_ids) == 1:
             self._execution_id.set(mission_ids[0])
+            run_ids = response.research_recovered_mission_run_ids if response else ()
+            if len(run_ids) == 1 and run_ids[0]:
+                # A mission recovered after restart can be reviewed for source
+                # independence just like one started in this session.
+                self._mission_independence_run_id = run_ids[0]
 
     def _refresh_execution_status(self) -> None:
         self._approval_request(

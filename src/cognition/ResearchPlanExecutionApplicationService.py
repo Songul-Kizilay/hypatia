@@ -685,9 +685,10 @@ class ResearchPlanExecutionApplicationService:
         show; listing them names the plan IDs an operator cannot otherwise
         discover after restart.  Listing advances, resumes and spends nothing.
         """
-        entries: list[tuple[str, str, str]] = []
+        entries: list[tuple[str, str, str, str]] = []
         for plan_id in sorted(self._mission_recovery_reports):
             plan = self._plans.get(plan_id)
+            context = self._contexts.get(plan_id)
             if plan is not None:
                 entries.append(
                     (
@@ -695,6 +696,7 @@ class ResearchPlanExecutionApplicationService:
                         plan.question,
                         "resumed at startup; its teaching report is in this "
                         "execution's status",
+                        (context.research_run_id if context else None) or "",
                     )
                 )
         for plan_id in sorted(self._mission_recovery_refusals):
@@ -705,6 +707,7 @@ class ResearchPlanExecutionApplicationService:
                         plan_id,
                         snapshot.question,
                         "not resumed: " + self._mission_recovery_refusals[plan_id],
+                        snapshot.research_run_id or "",
                     )
                 )
         return self._response_composer.research_plan_execution_recovered_missions(

@@ -1373,6 +1373,20 @@ class LearningResearchJourneyTests(unittest.TestCase):
             set(listing.research_recovered_mission_ids),
             {refused.plan_id, recovered.plan_id},
         )
+        self.assertEqual(
+            dict(
+                zip(
+                    listing.research_recovered_mission_ids,
+                    listing.research_recovered_mission_run_ids,
+                    strict=True,
+                )
+            ),
+            {
+                refused.plan_id: refused.research_run_id,
+                recovered.plan_id: recovered.research_run_id,
+            },
+        )
+        self.assertIn(f"Run ID: {recovered.research_run_id}", listing.message)
         self.assertIn(
             f"Plan ID: {recovered.plan_id} | Question: {self.question} | resumed",
             listing.message,

@@ -3327,13 +3327,14 @@ class ResponseComposer:
     def research_plan_execution_recovered_missions(
         self,
         request: BrainRequest,
-        entries: tuple[tuple[str, str, str], ...],
+        entries: tuple[tuple[str, str, str, str], ...],
     ) -> BrainResponse:
         """List startup mission-recovery outcomes without performing work."""
         lines = ["Missions recovered at startup (this session):"]
         lines.extend(
             f"- Plan ID: {plan_id} | Question: {question} | {outcome}"
-            for plan_id, question, outcome in entries
+            + (f" | Run ID: {run_id}" if run_id else "")
+            for plan_id, question, outcome, run_id in entries
         )
         if not entries:
             lines.append("No learning mission was resumed or refused at startup.")
@@ -3347,6 +3348,7 @@ class ResponseComposer:
             intent="research_plan_execution_recovered",
             memory_count=0,
             research_recovered_mission_ids=tuple(entry[0] for entry in entries),
+            research_recovered_mission_run_ids=tuple(entry[3] for entry in entries),
         )
 
     def research_plan_execution_missing(

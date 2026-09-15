@@ -2,6 +2,23 @@
 
 All notable project changes are recorded here.
 
+## [0.3.360] - 2026-09-15
+
+### Added
+
+- The missions-recovered-at-startup listing now carries each mission's canonical
+  research run ID (from its execution context or restored snapshot) as typed
+  response data and in its text. When exactly one mission is listed, the desktop
+  also names its run for **Review source independence**, so a mission resumed
+  after restart can be reviewed through the existing operator assessment path
+  just like one started in the same session.
+
+### Boundaries
+
+- Read-only identity exposure. Recording a judgement still goes through the
+  existing preview, confirmation and supersession path; no execution, fetch,
+  provider or model call, spend, authority or persistence change.
+
 ## [0.3.359] - 2026-09-15
 
 ### Changed
