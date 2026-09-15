@@ -243,20 +243,19 @@ class ResearchGoalStartApplicationService:
                     max_llm_operations=allowance.remaining_llm_operations,
                     max_seconds=allowance.remaining_seconds,
                 )
-                response = self._autonomy.process_run(
-                    BrainRequest(
-                        message="Resume exact durable research mission",
-                        source="restart_recovery",
-                        request_id=f"restart:{snapshot.plan_id}",
-                        metadata={
-                            "intent": RESEARCH_AUTONOMY_RUN_INTENT,
-                            "research_plan_id": snapshot.plan_id,
-                            "research_autonomy_budget": remaining,
-                        },
-                    )
+                resume = BrainRequest(
+                    message="Resume exact durable research mission",
+                    source="restart_recovery",
+                    request_id=f"restart:{snapshot.plan_id}",
+                    metadata={
+                        "intent": RESEARCH_AUTONOMY_RUN_INTENT,
+                        "research_plan_id": snapshot.plan_id,
+                        "research_autonomy_budget": remaining,
+                    },
                 )
+                response = self._autonomy.process_run(resume)
                 self._retain_recovered_report(
-                    snapshot.plan_id, snapshot.research_run_id, response
+                    resume, snapshot.question, snapshot.research_run_id, response
                 )
                 resumed.append(snapshot.plan_id)
             except ResearchError as error:
@@ -270,26 +269,58 @@ class ResearchGoalStartApplicationService:
         return tuple(resumed)
 
     def _retain_recovered_report(
-        self, plan_id: str, run_id: str, response: BrainResponse
+        self,
+        resume: BrainRequest,
+        question: str,
+        run_id: str,
+        response: BrainResponse,
     ) -> None:
-        """Keep the existing teaching report for work the resume already did.
+        """Keep the report and lessons a live mission would keep for this work.
 
         Only an autonomy result — the same condition under which a live mission
         renders its report — yields a report.  Rendering reads canonical run,
-        checkpoint and allowance state; it calls no provider or model, spends
-        nothing, retains no lesson, and is kept in memory for this session only.
+        checkpoint and allowance state; the report is kept in memory for this
+        session only.  Lessons go through the same opted-in failure memory as a
+        live mission, whose stable lesson IDs make a repeated retention a no-op.
+        Neither calls a provider or model or spends budget.
         """
         if response.research_autonomy is None or self._runs is None:
             return
+        plan_id = resume.metadata["research_plan_id"]
+        assert isinstance(plan_id, str)
+        report = teaching_report(
+            self._runs.get(run_id),
+            response.research_autonomy.stop_reason.value,
+            self._spend_text(plan_id),
+            checkpoint=self._execution_service.mission_checkpoint(plan_id),
+        )
         self._execution_service.record_mission_recovery_report(
             plan_id,
-            teaching_report(
-                self._runs.get(run_id),
-                response.research_autonomy.stop_reason.value,
-                self._spend_text(plan_id),
-                checkpoint=self._execution_service.mission_checkpoint(plan_id),
-            ),
+            report + "\n\n" + self._lesson_text(resume, question, run_id),
         )
+
+    def _lesson_text(self, request: BrainRequest, question: str, run_id: str) -> str:
+        """Show prior advice, then retain this run's lessons once, as advice only."""
+        if self._failure_memory is None:
+            return "Research lessons: durable failure memory is not enabled."
+        prior = self._failure_memory.advice(question)
+        memory_text = "Prior advisory lessons (not instructions or authority):\n"
+        memory_text += (
+            "\n".join(f"{lesson.statement} [run {lesson.run_id}]" for lesson in prior)
+            or "No matching earlier lesson."
+        )
+        if request.cancellation_token and request.cancellation_token.is_cancelled():
+            return memory_text + "\nCancelled: no new lesson retention attempted."
+        try:
+            retained = self._failure_memory.process_store(
+                replace(request, metadata={"research_run_id": run_id})
+            )
+        except ResearchError:
+            return memory_text + (
+                "\nLesson retention unavailable; no retry. "
+                "The research evidence and report remain available."
+            )
+        return memory_text + "\n" + retained.message
 
     def _spend_text(self, plan_id: str) -> str:
         allowance = self._execution_service.allowance(plan_id)
@@ -477,34 +508,7 @@ class ResearchGoalStartApplicationService:
         )
         updated = self._runs.get(run.run_id)
         if learning:
-            memory_text = "Research lessons: durable failure memory is not enabled."
-            if self._failure_memory is not None:
-                prior = self._failure_memory.advice(plan.question)
-                memory_text = (
-                    "Prior advisory lessons (not instructions or authority):\n"
-                )
-                memory_text += (
-                    "\n".join(
-                        f"{lesson.statement} [run {lesson.run_id}]" for lesson in prior
-                    )
-                    or "No matching earlier lesson."
-                )
-                if (
-                    request.cancellation_token
-                    and request.cancellation_token.is_cancelled()
-                ):
-                    memory_text += "\nCancelled: no new lesson retention attempted."
-                else:
-                    try:
-                        retained = self._failure_memory.process_store(
-                            replace(request, metadata={"research_run_id": run.run_id})
-                        )
-                        memory_text += "\n" + retained.message
-                    except ResearchError:
-                        memory_text += (
-                            "\nLesson retention unavailable; no retry. "
-                            "The research evidence and report remain available."
-                        )
+            memory_text = self._lesson_text(request, plan.question, run.run_id)
             spend = self._spend_text(state.plan_id)
             stop = (
                 response.research_autonomy.stop_reason.value

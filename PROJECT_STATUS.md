@@ -2,12 +2,14 @@
 
 ## Runtime Version
 
-`v0.3.355 (Genesis)`
+`v0.3.356 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.355 lets the desktop list missions startup recovery resumed or
+Version v0.3.356 gives missions resumed after restart the same opted-in
+failure-lesson retention as live missions, through the same failure memory and
+stable lesson IDs. Version v0.3.355 lets the desktop list missions startup recovery resumed or
 refused, so their plan IDs, recovered reports and refusals are reachable after
 restart without any research work. Version v0.3.354 makes the result of a mission that completes after restart
 visible: startup recovery keeps the existing teaching report in memory and the

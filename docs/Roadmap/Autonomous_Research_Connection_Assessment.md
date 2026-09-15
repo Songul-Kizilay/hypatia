@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.355
+## Current bounded text journey: v0.3.356
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -113,6 +113,16 @@ and model prose cannot alter it. It does not change mission lifecycle,
 authorization, cumulative allowance, plan digest, source slots, provider/model
 selection, retry behavior or run closure. An unchanged recovered state renders
 the same explanation.
+
+### Failure-lesson retention for resumed missions: v0.3.356
+
+A live learning mission retains opted-in failure lessons after it reports; a
+mission resumed by startup recovery previously did not. Recovery now uses the
+same lesson-retention helper and failure memory whenever the resumed autonomy
+run returns a result, appending prior advice and the retention result to the
+recovered report. `recovered lesson retention != new execution` and
+`restart != fresh authority`: stable lesson IDs make a repeated retention a
+no-op, and refused recovery retains nothing.
 
 ### Discoverable startup mission recovery: v0.3.355
 

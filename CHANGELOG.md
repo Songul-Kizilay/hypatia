@@ -2,6 +2,24 @@
 
 All notable project changes are recorded here.
 
+## [0.3.356] - 2026-09-15
+
+### Added
+
+- A learning mission resumed by startup recovery now retains failure lessons
+  exactly as an equivalent live mission does: the same opted-in failure memory
+  derives lessons from the canonical run, shows prior advisory lessons, and
+  appends the retention result to the recovered teaching report. The live and
+  recovered paths share one lesson-retention helper.
+
+### Boundaries
+
+- Parity, not new learning authority. Retention happens only when the resumed
+  autonomy run returned a result; refused recovery or a resume without a result
+  retains nothing. Stable lesson IDs make repeated retention after another
+  restart a no-op. No new store, lesson format, provider or model call, spend,
+  lifecycle, plan digest, checkpoint, goal-satisfaction or authority change.
+
 ## [0.3.355] - 2026-09-15
 
 ### Added

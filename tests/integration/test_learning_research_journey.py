@@ -41,6 +41,7 @@ from research.ResearchEvidenceCompletionEvaluation import (
 )
 from research.ResearchExecutionAllowance import ResearchExecutionAllowance
 from research.ResearchExecutionSpend import ResearchExecutionSpend
+from research.ResearchFailureLessonDeriver import ResearchFailureLessonDeriver
 from research.ResearchMissionFollowupDecision import (
     ResearchMissionFollowupDecisionStatus,
 )
@@ -1043,7 +1044,10 @@ class LearningResearchJourneyTests(unittest.TestCase):
         self.assertIn(f"Stop reason: {stop}. {spend}", first.message)
         expected = teaching_report(run, stop, spend, checkpoint=state[1])
         self.assertIn("Recovered mission teaching report", first.message)
-        self.assertTrue(first.message.endswith(expected))
+        self.assertIn(
+            expected + "\n\nPrior advisory lessons (not instructions or authority):",
+            first.message,
+        )
         for section in (
             "Mission goal satisfaction: Unresolved",
             "Goal-satisfaction explanation:",
@@ -1118,6 +1122,101 @@ class LearningResearchJourneyTests(unittest.TestCase):
             self.assertNotIn(record.evidence_id, refused_message)
         for record in runs[refused.research_run_id].evidence:
             self.assertNotIn(record.evidence_id, recovered_message)
+
+    def fail_followup_fetch(self):
+        followup_url = self.sources[2].url
+
+        def fetch(url):
+            if url == followup_url:
+                raise ResearchError("fixture follow-up source unavailable")
+            return next(s for s in self.sources if s.url == url)
+
+        self.fetcher.fetch.side_effect = fetch
+
+    @staticmethod
+    def run_lessons(engine, run_id):
+        return tuple(
+            lesson
+            for lesson in engine._failure_memory_service.lessons()
+            if lesson.run_id == run_id
+        )
+
+    def test_recovered_mission_retains_lessons_through_live_failure_memory(self):
+        snapshot = self.interrupted_start(6)
+        self.assertEqual(self.run_lessons(self.engine, snapshot.research_run_id), ())
+        self.fail_followup_fetch()
+
+        engine = self.restart()
+
+        run = JsonFileResearchRunStore(self.root / "runs.json").load()[0]
+        lessons = self.run_lessons(engine, run.run_id)
+        self.assertTrue(run.failures)
+        self.assertTrue(
+            any(lesson.kind.value == "operation_failure" for lesson in lessons)
+        )
+        self.assertEqual(
+            {lesson.lesson_id for lesson in lessons},
+            {
+                lesson.lesson_id
+                for lesson in ResearchFailureLessonDeriver().derive(
+                    run, datetime.now(UTC)
+                )
+            },
+        )
+        report = self.execution_status(engine, snapshot.plan_id).message
+        self.assertIn("Prior advisory lessons (not instructions or authority)", report)
+        self.assertEqual(self.transport.call_count, 1)
+        allowance = engine._research_plan_execution_service.allowance(snapshot.plan_id)
+        self.assertLessEqual(
+            allowance.spend.llm_operations, self.budget.max_llm_operations
+        )
+        self.assertEqual(
+            plan_digest(
+                engine._research_plan_execution_service.live_plan(snapshot.plan_id)
+            ),
+            snapshot.mission_plan_digest,
+        )
+        self.assertFalse(run.status.terminal)
+        self.assertEqual(run.claims, ())
+
+        calls = self.external_calls()
+        persisted = (self.root / "research_failure_lessons.json").read_text(
+            encoding="utf-8"
+        )
+        again = self.restart()
+
+        self.assertEqual(
+            {lesson.lesson_id for lesson in self.run_lessons(again, run.run_id)},
+            {lesson.lesson_id for lesson in lessons},
+        )
+        self.assertEqual(self.external_calls(), calls)
+        self.assertEqual(
+            (self.root / "research_failure_lessons.json").read_text(encoding="utf-8"),
+            persisted,
+        )
+
+    def test_refused_recovery_retains_no_lesson(self):
+        snapshot = self.interrupted_start(3)
+
+        engine = self.restart()
+
+        self.assertEqual(self.run_lessons(engine, snapshot.research_run_id), ())
+
+    def test_resume_without_autonomy_result_retains_no_lesson(self):
+        snapshot = self.interrupted_start(6)
+        refused = BrainResponse(
+            message="Research autonomy refused.",
+            request_id="restart",
+            intent="research_autonomy_run",
+            memory_count=0,
+            success=False,
+        )
+        with patch.object(
+            ResearchAutonomyApplicationService, "process_run", return_value=refused
+        ):
+            engine = self.restart()
+
+        self.assertEqual(self.run_lessons(engine, snapshot.research_run_id), ())
 
     @staticmethod
     def recovered_listing(engine):
