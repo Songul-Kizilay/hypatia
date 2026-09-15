@@ -2,6 +2,25 @@
 
 All notable project changes are recorded here.
 
+## [0.3.352] - 2026-09-15
+
+### Added
+
+- The evidence-completion evaluation now derives secondary uncertainty caveats
+  from current (non-superseded) source assessments of evidence-bearing accepted
+  sources: `source_independence_unverified` when independence is `unknown` or
+  no assessment exists, and the stronger `source_not_independent` for an
+  explicit derivative or likely-duplicate judgement. The goal explanation and
+  teaching report render them as caveats beneath the primary goal status.
+
+### Boundaries
+
+- Unknown independence is neither proof of independent corroboration nor a
+  mission failure. Caveats never change evidence readiness, goal satisfaction
+  or completion readiness, and are recomputed from canonical state on each
+  report with no persistence, authority, provider, model, budget, source-slot
+  or lifecycle effect.
+
 ## [0.3.351] - 2026-09-14
 
 ### Added

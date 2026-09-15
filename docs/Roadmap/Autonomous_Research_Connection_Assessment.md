@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.351
+## Current bounded text journey: v0.3.352
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -113,6 +113,20 @@ and model prose cannot alter it. It does not change mission lifecycle,
 authorization, cumulative allowance, plan digest, source slots, provider/model
 selection, retry behavior or run closure. An unchanged recovered state renders
 the same explanation.
+
+### Source-independence uncertainty caveat: v0.3.352
+
+The evidence-completion evaluation derives a secondary caveat from current
+source assessments: `source_independence_unverified` when an evidence-bearing
+source's independence is `unknown` or unassessed, and the stronger
+`source_not_independent` for an explicit derivative or likely-duplicate
+judgement. The goal explanation and teaching report show it beneath the goal
+status.
+
+`unknown independence = explicit uncertainty, not proof and not failure`. The
+caveat does not change evidence readiness, goal satisfaction or completion
+readiness, is recomputed from unchanged canonical state after restart, and adds
+no persistence, authority, provider, model, budget or lifecycle effect.
 
 ### Mission completion readiness: v0.3.351
 

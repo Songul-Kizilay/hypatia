@@ -14,6 +14,7 @@ from enum import StrEnum
 from core.Exceptions import ResearchError
 from research.ResearchAutonomyResult import AutonomyStopReason
 from research.ResearchEvidenceCompletionEvaluation import (
+    ResearchEvidenceCompletionCaveat,
     ResearchEvidenceCompletionLimitation,
 )
 from research.ResearchMissionGoalSatisfaction import (
@@ -111,6 +112,17 @@ _REASON_TEXT = {
     ),
 }
 
+_CAVEAT_TEXT = {
+    ResearchEvidenceCompletionCaveat.SOURCE_NOT_INDEPENDENT: (
+        "at least one retained source was recorded as derivative or a likely "
+        "duplicate, so corroboration may not be independent"
+    ),
+    ResearchEvidenceCompletionCaveat.SOURCE_INDEPENDENCE_UNVERIFIED: (
+        "source independence was not established; corroboration independence "
+        "remains unverified"
+    ),
+}
+
 
 @dataclass(frozen=True, slots=True)
 class ResearchMissionGoalExplanation:
@@ -122,6 +134,7 @@ class ResearchMissionGoalExplanation:
     evidence_count: int
     evidence_source_count: int
     reasons: tuple[ResearchMissionGoalExplanationReason, ...]
+    caveats: tuple[ResearchEvidenceCompletionCaveat, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.status, ResearchMissionGoalSatisfactionStatus):
@@ -151,11 +164,22 @@ class ResearchMissionGoalExplanation:
             raise ResearchError(
                 "Research mission goal explanation reasons are invalid."
             )
+        if (
+            not isinstance(self.caveats, tuple)
+            or not all(
+                isinstance(caveat, ResearchEvidenceCompletionCaveat)
+                for caveat in self.caveats
+            )
+            or len(self.caveats) != len(set(self.caveats))
+        ):
+            raise ResearchError(
+                "Research mission goal explanation caveats are invalid."
+            )
 
     def summary(self) -> str:
         """Render bounded wording from typed state, never source/model prose."""
         reasons = "; ".join(_REASON_TEXT[reason] for reason in self.reasons)
-        return (
+        rendered = (
             "Goal-satisfaction explanation: "
             f"Goal status: {self.status.value.replace('_', ' ')}. "
             "Recorded coverage, not factual completeness: "
@@ -163,6 +187,10 @@ class ResearchMissionGoalExplanation:
             f"evidence record(s) from {self.evidence_source_count} source(s). "
             f"Why the mission stopped or remains limited: {reasons}."
         )
+        if self.caveats:
+            caveats = "; ".join(_CAVEAT_TEXT[caveat] for caveat in self.caveats)
+            rendered += f" Caveat (secondary; does not change goal status): {caveats}."
+        return rendered
 
 
 def explain_mission_goal_satisfaction(
@@ -248,4 +276,5 @@ def explain_mission_goal_satisfaction(
         evidence_count=evaluation.evidence_count,
         evidence_source_count=evaluation.evidence_source_count,
         reasons=tuple(dict.fromkeys(reasons)),
+        caveats=evaluation.caveats,
     )

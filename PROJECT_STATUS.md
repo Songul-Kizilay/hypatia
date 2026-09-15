@@ -2,12 +2,15 @@
 
 ## Runtime Version
 
-`v0.3.351 (Genesis)`
+`v0.3.352 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.351 separates a completed execution, a satisfied bounded goal and
+Version v0.3.352 makes unknown source independence visible as a secondary
+caveat in the goal explanation and teaching report. Unknown independence is not
+proof of independent corroboration and does not by itself change goal
+satisfaction or completion readiness. Version v0.3.351 separates a completed execution, a satisfied bounded goal and
 a mission that is ready for user conclusion. Its typed readiness projection is
 read-only: `ready` requires the existing `satisfied` result but never closes a
 run, treats evidence as universal truth or creates follow-up work. Version

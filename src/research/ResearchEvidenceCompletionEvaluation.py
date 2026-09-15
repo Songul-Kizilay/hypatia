@@ -14,6 +14,7 @@ from enum import StrEnum
 from core.Exceptions import ResearchError
 from research.ResearchAutonomyResult import AutonomyStopReason
 from research.ResearchRun import ResearchRun
+from research.ResearchSourceIndependence import ResearchSourceIndependence
 
 
 class ResearchEvidenceCompletionStatus(StrEnum):
@@ -41,6 +42,19 @@ class ResearchEvidenceCompletionLimitation(StrEnum):
     RECORDED_CONFLICT = "recorded_conflict"
 
 
+class ResearchEvidenceCompletionCaveat(StrEnum):
+    """Secondary uncertainty that never changes readiness or goal status.
+
+    ``unknown`` source independence is neither proof of independent
+    corroboration nor a failure of the bounded mission.  An explicit
+    derivative or likely-duplicate judgement is the stronger caveat and is
+    never rendered as merely unverified.
+    """
+
+    SOURCE_NOT_INDEPENDENT = "source_not_independent"
+    SOURCE_INDEPENDENCE_UNVERIFIED = "source_independence_unverified"
+
+
 @dataclass(frozen=True, slots=True)
 class ResearchEvidenceCompletionEvaluation:
     """A derived explanation of report readiness; never a new authority."""
@@ -54,6 +68,7 @@ class ResearchEvidenceCompletionEvaluation:
     comparison_note_count: int
     recorded_claim_contradiction_count: int
     limitations: tuple[ResearchEvidenceCompletionLimitation, ...]
+    caveats: tuple[ResearchEvidenceCompletionCaveat, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.status, ResearchEvidenceCompletionStatus):
@@ -79,6 +94,15 @@ class ResearchEvidenceCompletionEvaluation:
             or len(self.limitations) != len(set(self.limitations))
         ):
             raise ResearchError("Research evidence completion limitations are invalid.")
+        if (
+            not isinstance(self.caveats, tuple)
+            or not all(
+                isinstance(value, ResearchEvidenceCompletionCaveat)
+                for value in self.caveats
+            )
+            or len(self.caveats) != len(set(self.caveats))
+        ):
+            raise ResearchError("Research evidence completion caveats are invalid.")
         if self.status is ResearchEvidenceCompletionStatus.SUFFICIENTLY_SUPPORTED:
             if not self.supports_bounded_teaching or self.limitations:
                 raise ResearchError("Sufficient evidence completion is inconsistent.")
@@ -192,4 +216,54 @@ def evaluate_evidence_completion(
         comparison_note_count=len(run.comparison_notes),
         recorded_claim_contradiction_count=len(run.claim_contradictions),
         limitations=tuple(limitations),
+        caveats=_independence_caveats(run, evidence_source_ids),
     )
+
+
+_NOT_INDEPENDENT = {
+    ResearchSourceIndependence.DERIVATIVE,
+    ResearchSourceIndependence.LIKELY_DUPLICATE,
+}
+
+
+def _independence_caveats(
+    run: ResearchRun,
+    evidence_source_ids: set[str],
+) -> tuple[ResearchEvidenceCompletionCaveat, ...]:
+    """Derive independence uncertainty from current canonical assessments.
+
+    Only accepted sources that contributed evidence are relevant.  Explicitly
+    superseded assessments no longer speak.  A source with no active
+    assessment, or with any ``unknown`` judgement, is unverified: silence is
+    never upgraded into independence.
+    """
+    accepted = {source.document_id for source in run.sources}
+    superseded = {
+        assessment.supersedes_assessment_id
+        for assessment in run.assessments
+        if assessment.supersedes_assessment_id
+    }
+    judgements: dict[str, list[ResearchSourceIndependence]] = {
+        document_id: [] for document_id in evidence_source_ids & accepted
+    }
+    for assessment in run.assessments:
+        if (
+            assessment.assessment_id not in superseded
+            and assessment.source_document_id in judgements
+        ):
+            judgements[assessment.source_document_id].append(assessment.independence)
+    not_independent = False
+    unverified = False
+    for values in judgements.values():
+        if any(value in _NOT_INDEPENDENT for value in values):
+            not_independent = True
+        elif not values or any(
+            value is not ResearchSourceIndependence.INDEPENDENT for value in values
+        ):
+            unverified = True
+    caveats: list[ResearchEvidenceCompletionCaveat] = []
+    if not_independent:
+        caveats.append(ResearchEvidenceCompletionCaveat.SOURCE_NOT_INDEPENDENT)
+    if unverified:
+        caveats.append(ResearchEvidenceCompletionCaveat.SOURCE_INDEPENDENCE_UNVERIFIED)
+    return tuple(caveats)

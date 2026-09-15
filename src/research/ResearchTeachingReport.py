@@ -88,6 +88,17 @@ def teaching_report(
             ),
             f"Recorded limitations: {limitations}.",
             (
+                "Uncertainty caveats: "
+                + (
+                    ", ".join(
+                        value.value.replace("_", " ") for value in evaluation.caveats
+                    )
+                    or "none recorded"
+                )
+                + ". Unknown source independence is not proof of independent "
+                "corroboration and does not by itself change goal status."
+            ),
+            (
                 "This is a derived evidence-readiness assessment. It does not close "
                 "the research run, promote a tentative comparison into fact, or "
                 "declare the question universally resolved."
