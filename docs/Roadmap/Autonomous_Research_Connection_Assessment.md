@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.360
+## Current bounded text journey: v0.3.361
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -113,6 +113,16 @@ and model prose cannot alter it. It does not change mission lifecycle,
 authorization, cumulative allowance, plan digest, source slots, provider/model
 selection, retry behavior or run closure. An unchanged recovered state renders
 the same explanation.
+
+### Clarified tentative conflicts stay visible: v0.3.361
+
+When the follow-up branch compared a third source and did not conflict, the
+durable outcome is `structurally_clarified` and the goal can be satisfied. The
+explanation previously said nothing about the original tentative conflict. It
+now adds a bounded reason from the checkpoint: the follow-up clarifies structure
+only, does not resolve the original disagreement and does not show either source
+wrong. `follow-up performed != contradiction resolved`; satisfaction and
+readiness are unchanged.
 
 ### Independence review for recovered missions: v0.3.360
 

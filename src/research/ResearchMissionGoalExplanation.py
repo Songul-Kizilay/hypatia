@@ -35,6 +35,9 @@ class ResearchMissionGoalExplanationReason(StrEnum):
     COMPARISON_UNAVAILABLE = "comparison_unavailable"
     RECORDED_CLAIM_CONFLICT = "recorded_claim_conflict"
     UNRESOLVED_TENTATIVE_CONTRADICTION = "unresolved_tentative_contradiction"
+    TENTATIVE_CONFLICT_STRUCTURALLY_CLARIFIED = (
+        "tentative_conflict_structurally_clarified"
+    )
     EXECUTION_INCOMPLETE = "execution_incomplete"
     SCOPE_OR_AUTHORITY_BLOCKED = "scope_or_authority_blocked"
     EXECUTOR_REFUSED = "executor_refused"
@@ -92,6 +95,11 @@ _REASON_TEXT = {
     ),
     ResearchMissionGoalExplanationReason.UNRESOLVED_TENTATIVE_CONTRADICTION: (
         "The bounded tentative contradiction remains unresolved"
+    ),
+    ResearchMissionGoalExplanationReason.TENTATIVE_CONFLICT_STRUCTURALLY_CLARIFIED: (
+        "A tentative conflict between the first two sources led to one follow-up "
+        "comparison that did not conflict; this clarifies structure only and does "
+        "not resolve the original disagreement or show either source wrong"
     ),
     ResearchMissionGoalExplanationReason.EXECUTION_INCOMPLETE: (
         "Execution stopped before the bounded work completed"
@@ -249,6 +257,15 @@ def explain_mission_goal_satisfaction(
     ):
         reasons.append(
             ResearchMissionGoalExplanationReason.UNRESOLVED_TENTATIVE_CONTRADICTION
+        )
+    elif checkpoint is not None and (
+        checkpoint.contradiction_initial_relation == "possible_conflict"
+        and checkpoint.contradiction_outcome == "structurally_clarified"
+    ):
+        # A satisfied goal must not read as a resolved disagreement: the
+        # follow-up clarified structure; it did not settle the original pair.
+        reasons.append(
+            ResearchMissionGoalExplanationReason.TENTATIVE_CONFLICT_STRUCTURALLY_CLARIFIED
         )
 
     if satisfaction.status is ResearchMissionGoalSatisfactionStatus.BUDGET_LIMITED:

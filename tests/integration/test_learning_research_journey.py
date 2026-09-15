@@ -380,6 +380,9 @@ class LearningResearchJourneyTests(unittest.TestCase):
             "mission goal satisfaction: satisfied within the current bounded evidence",
             response.message.lower(),
         )
+        self.assertIn("clarifies structure only", response.message)
+        self.assertIn("does not resolve the original disagreement", response.message)
+        self.assertNotIn("contradiction remains unresolved", response.message)
 
     def test_conflict_derives_the_existing_typed_followup_slot_once(self):
         decisions = []

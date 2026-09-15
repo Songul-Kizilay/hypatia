@@ -2,6 +2,24 @@
 
 All notable project changes are recorded here.
 
+## [0.3.361] - 2026-09-15
+
+### Fixed
+
+- A mission whose tentative conflict was followed up and only structurally
+  clarified reported a satisfied goal and ready conclusion with no mention of
+  the conflict, which could read as a resolved disagreement. The goal
+  explanation now adds a bounded `tentative_conflict_structurally_clarified`
+  reason, derived from the durable contradiction checkpoint, stating that the
+  follow-up clarifies structure only and neither resolves the original
+  disagreement nor shows either source wrong.
+
+### Boundaries
+
+- Goal satisfaction and completion readiness are unchanged; the reason is
+  secondary context under the primary goal status. No new state, persistence,
+  authority, budget, provider or model behavior.
+
 ## [0.3.360] - 2026-09-15
 
 ### Added

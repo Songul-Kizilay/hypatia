@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -145,6 +146,43 @@ class ResearchMissionGoalExplanationTests(unittest.TestCase):
 
         self.assertIn(Reason.UNRESOLVED_TENTATIVE_CONTRADICTION, value.reasons)
         self.assertNotIn("true", value.summary().lower())
+
+    def test_clarified_conflict_stays_visible_without_downgrading_satisfaction(self):
+        checkpoint = replace(
+            unresolved_checkpoint(),
+            contradiction_followup_relation="possible_agreement",
+            contradiction_outcome="structurally_clarified",
+        )
+        subject = outcome(contradiction_outcome="structurally_clarified")
+
+        value = explain_mission_goal_satisfaction(
+            subject, AutonomyStopReason.RESEARCH_DELIVERABLE_READY, checkpoint
+        )
+
+        self.assertIs(value.status, GoalStatus.SATISFIED)
+        self.assertEqual(
+            value.reasons,
+            (
+                Reason.SUPPORTED_CURRENT_EVIDENCE,
+                Reason.TENTATIVE_CONFLICT_STRUCTURALLY_CLARIFIED,
+            ),
+        )
+        summary = value.summary()
+        self.assertLess(
+            summary.index("Goal status: satisfied."),
+            summary.index("clarifies structure only"),
+        )
+        self.assertIn("does not resolve the original disagreement", summary)
+        self.assertNotIn("remains unresolved", summary)
+
+    def test_no_conflict_checkpoint_adds_no_clarification_reason(self):
+        value = explain_mission_goal_satisfaction(
+            outcome(), AutonomyStopReason.RESEARCH_DELIVERABLE_READY
+        )
+
+        self.assertNotIn(
+            Reason.TENTATIVE_CONFLICT_STRUCTURALLY_CLARIFIED, value.reasons
+        )
 
     def test_budget_scope_authority_failure_and_cancellation_remain_distinct(self):
         cases = (
