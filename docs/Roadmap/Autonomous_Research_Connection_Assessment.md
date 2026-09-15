@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.354
+## Current bounded text journey: v0.3.355
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -113,6 +113,15 @@ and model prose cannot alter it. It does not change mission lifecycle,
 authorization, cumulative allowance, plan digest, source slots, provider/model
 selection, retry behavior or run closure. An unchanged recovered state renders
 the same explanation.
+
+### Discoverable startup mission recovery: v0.3.355
+
+A recovered report is only useful if the operator can name its mission. The
+desktop execution controls now list this session's startup recovery outcomes —
+resumed with a teaching report, or refused with its reason — through a read-only
+`research_plan_execution_recovered` request. A single listed mission fills the
+execution field for the existing Refresh status. Listing performs no research
+work and grants no authority.
 
 ### Teaching reports for missions resumed after restart: v0.3.354
 

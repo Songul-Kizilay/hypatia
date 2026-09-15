@@ -134,6 +134,7 @@ RESEARCH_PLAN_EXECUTION_RECOVER_INTENT = "research_plan_execution_recover"
 RESEARCH_PLAN_EXECUTION_CONTINUE_INTENT = "research_plan_execution_continue"
 RESEARCH_PLAN_EXECUTION_CANCEL_INTENT = "research_plan_execution_cancel"
 RESEARCH_PLAN_EXECUTION_ADVANCE_INTENT = "research_plan_execution_advance"
+RESEARCH_PLAN_EXECUTION_RECOVERED_INTENT = "research_plan_execution_recovered"
 
 MAX_ACTIVE_RESEARCH_PLAN_EXECUTIONS = 20
 
@@ -669,6 +670,46 @@ class ResearchPlanExecutionApplicationService:
         ):
             return
         self._mission_recovery_reports[plan_id] = report
+
+    @staticmethod
+    def is_recovered_request(request: BrainRequest) -> bool:
+        return (
+            request.metadata.get("intent") == RESEARCH_PLAN_EXECUTION_RECOVERED_INTENT
+        )
+
+    def process_recovered(self, request: BrainRequest) -> BrainResponse:
+        """List this session's startup mission-recovery outcomes, read-only.
+
+        A mission whose resume left a teaching report and a restored mission
+        whose recovery was refused are the two outcomes execution status can
+        show; listing them names the plan IDs an operator cannot otherwise
+        discover after restart.  Listing advances, resumes and spends nothing.
+        """
+        entries: list[tuple[str, str, str]] = []
+        for plan_id in sorted(self._mission_recovery_reports):
+            plan = self._plans.get(plan_id)
+            if plan is not None:
+                entries.append(
+                    (
+                        plan_id,
+                        plan.question,
+                        "resumed at startup; its teaching report is in this "
+                        "execution's status",
+                    )
+                )
+        for plan_id in sorted(self._mission_recovery_refusals):
+            snapshot = self._restored.get(plan_id)
+            if snapshot is not None and plan_id not in self._mission_recovery_reports:
+                entries.append(
+                    (
+                        plan_id,
+                        snapshot.question,
+                        "not resumed: " + self._mission_recovery_refusals[plan_id],
+                    )
+                )
+        return self._response_composer.research_plan_execution_recovered_missions(
+            request, tuple(entries)
+        )
 
     def process_status(self, request: BrainRequest) -> BrainResponse:
         """Report live state, restored durable state, or neither."""

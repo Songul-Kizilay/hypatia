@@ -1119,6 +1119,49 @@ class LearningResearchJourneyTests(unittest.TestCase):
         for record in runs[refused.research_run_id].evidence:
             self.assertNotIn(record.evidence_id, recovered_message)
 
+    @staticmethod
+    def recovered_listing(engine):
+        return engine.process(
+            BrainRequest(
+                message="List missions recovered at startup",
+                metadata={"intent": "research_plan_execution_recovered"},
+            )
+        )
+
+    def test_recovered_missions_listing_names_resumed_and_refused_plans(self):
+        refused = self.interrupted_start(3)
+        recovered = self.interrupted_start(6)
+        engine = self.restart()
+        calls = self.external_calls()
+        state = self.recovered_mission_state(engine, recovered.plan_id)
+
+        listing = self.recovered_listing(engine)
+
+        self.assertTrue(listing.success)
+        self.assertEqual(
+            set(listing.research_recovered_mission_ids),
+            {refused.plan_id, recovered.plan_id},
+        )
+        self.assertIn(
+            f"Plan ID: {recovered.plan_id} | Question: {self.question} | resumed",
+            listing.message,
+        )
+        self.assertIn(f"Plan ID: {refused.plan_id}", listing.message)
+        self.assertIn("not resumed: ", listing.message)
+        self.assertIn("preview was not durably accepted", listing.message)
+        self.assertEqual(self.recovered_listing(engine).message, listing.message)
+        self.assertEqual(self.external_calls(), calls)
+        self.assertEqual(self.recovered_mission_state(engine, recovered.plan_id), state)
+
+    def test_recovered_missions_listing_is_empty_without_startup_recovery(self):
+        self.relation = "possible_agreement"
+        self.start()
+
+        listing = self.recovered_listing(self.engine)
+
+        self.assertEqual(listing.research_recovered_mission_ids, ())
+        self.assertIn("No learning mission was resumed or refused", listing.message)
+
     def mission_state(self, response):
         plan_id = response.research_plan_execution.plan_id
         return (

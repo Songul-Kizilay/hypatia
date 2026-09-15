@@ -3324,6 +3324,31 @@ class ResponseComposer:
             memory_count=0,
         )
 
+    def research_plan_execution_recovered_missions(
+        self,
+        request: BrainRequest,
+        entries: tuple[tuple[str, str, str], ...],
+    ) -> BrainResponse:
+        """List startup mission-recovery outcomes without performing work."""
+        lines = ["Missions recovered at startup (this session):"]
+        lines.extend(
+            f"- Plan ID: {plan_id} | Question: {question} | {outcome}"
+            for plan_id, question, outcome in entries
+        )
+        if not entries:
+            lines.append("No learning mission was resumed or refused at startup.")
+        lines.append(
+            "Listing performs no research work; use execution status with a plan "
+            "ID to read its recovered report or refusal."
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_plan_execution_recovered",
+            memory_count=0,
+            research_recovered_mission_ids=tuple(entry[0] for entry in entries),
+        )
+
     def research_plan_execution_missing(
         self,
         request: BrainRequest,

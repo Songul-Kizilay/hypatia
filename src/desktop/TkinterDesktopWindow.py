@@ -5511,6 +5511,7 @@ class TkinterDesktopWindow:
         buttons.grid(row=2, column=1, sticky="w", padx=(8, 0), pady=(8, 0))
         commands: list[tuple[str, Callable[[], None]]] = [
             ("Refresh status", self._refresh_execution_status),
+            ("Missions recovered at startup", self._show_recovered_research_missions),
             ("Advance one step", self._advance_execution_one_step),
         ]
         if self._curiosity_enabled:
@@ -5528,6 +5529,15 @@ class TkinterDesktopWindow:
         self._control_plane_button(
             buttons, "Cancel execution", self._cancel_execution
         ).grid(row=0, column=len(commands), sticky="w", padx=(8, 0))
+
+    def _show_recovered_research_missions(self) -> None:
+        """List startup recovery outcomes; name the only one for Refresh status."""
+        response = self._approval_request(self._controller.recovered_research_missions)
+        mission_ids = (
+            response.research_recovered_mission_ids if response is not None else ()
+        )
+        if len(mission_ids) == 1:
+            self._execution_id.set(mission_ids[0])
 
     def _refresh_execution_status(self) -> None:
         self._approval_request(

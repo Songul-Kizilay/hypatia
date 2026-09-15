@@ -2,6 +2,24 @@
 
 All notable project changes are recorded here.
 
+## [0.3.355] - 2026-09-15
+
+### Added
+
+- After restart, the desktop execution controls offer **Missions recovered at
+  startup**. It lists, for this session, each learning mission that startup
+  recovery resumed with a teaching report and each restored mission whose
+  recovery was refused, with plan ID, question and outcome. When exactly one is
+  listed its plan ID fills the execution field, so the existing Refresh status
+  shows the recovered report or refusal without the operator needing a plan ID
+  they could not previously discover.
+
+### Boundaries
+
+- Listing is read-only: it resumes, advances, fetches, calls no provider or
+  model, spends nothing and persists nothing. It shows only outcomes execution
+  status already exposes.
+
 ## [0.3.354] - 2026-09-15
 
 ### Added

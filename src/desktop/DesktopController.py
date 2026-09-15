@@ -680,6 +680,16 @@ class DesktopController:
             execution_id,
         )
 
+    def recovered_research_missions(self) -> BrainResponse:
+        """List missions startup recovery resumed or refused. Advances nothing."""
+        return self._brain.process(
+            BrainRequest(
+                message="List missions recovered at startup",
+                source="desktop",
+                metadata={"intent": "research_plan_execution_recovered"},
+            )
+        )
+
     def advance_research_execution(self, execution_id: str) -> BrainResponse:
         """Attempt exactly one step. Never two, and never a loop.
 
