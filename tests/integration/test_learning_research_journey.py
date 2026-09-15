@@ -11,7 +11,11 @@ from unittest.mock import Mock, patch
 
 from brain.Brain import Brain
 from brain.BrainRequest import BrainRequest
+from brain.BrainResponse import BrainResponse
 from cognition.CognitiveEngine import CognitiveEngine
+from cognition.ResearchAutonomyApplicationService import (
+    ResearchAutonomyApplicationService,
+)
 from core.Bootstrap import Bootstrap
 from core.CancellationSignal import CancellationSignal
 from core.Exceptions import ResearchError
@@ -25,6 +29,7 @@ from llm.LLMRuntimeConfig import LLMRuntimeConfig
 from research.JsonFileFailureLessonStore import JsonFileFailureLessonStore
 from research.JsonFileResearchRunStore import JsonFileResearchRunStore
 from research.ResearchAutonomyBudget import ResearchAutonomyBudget
+from research.ResearchAutonomyResult import AutonomyStopReason
 from research.ResearchCapabilityCost import cost_for
 from research.ResearchDisclosure import ResearchDisclosure
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
@@ -127,11 +132,17 @@ class LearningResearchJourneyTests(unittest.TestCase):
         )
         self.assertEqual(data["question"], self.question)
         snapshots = self.execution._execution_store.load()
-        snapshot = snapshots[-1]
+        # The calling mission is the one with a running step; with several
+        # stored missions the newest snapshot need not be it.
+        running = [
+            snapshot
+            for snapshot in snapshots
+            if any(s.status.value == "running" for s in snapshot.steps)
+        ]
+        self.assertEqual(len(running), 1)
         self.assertEqual(
-            snapshot.allowance.spend.llm_operations, self.transport.call_count
+            running[0].allowance.spend.llm_operations, self.transport.call_count
         )
-        self.assertTrue(any(s.status.value == "running" for s in snapshot.steps))
         relation = (
             self.relations.pop(0) if self.relations is not None else self.relation
         )
@@ -975,6 +986,138 @@ class LearningResearchJourneyTests(unittest.TestCase):
         self.assertEqual(self.fetcher.fetch.call_count, 3)
         self.assertIn("evidence gap remains", response.message)
         self.assertEqual(response.research_runs[0].claims, ())
+
+    def interrupted_start(self, completed_steps):
+        real_advance = self.execution.process_advance
+
+        def interrupt(request):
+            state = self.execution.live_execution(request.metadata["research_plan_id"])
+            if state is not None and state.completed_steps == completed_steps:
+                raise RuntimeError("simulated process interruption")
+            return real_advance(request)
+
+        with patch.object(self.execution, "process_advance", side_effect=interrupt):
+            with self.assertRaisesRegex(RuntimeError, "simulated process interruption"):
+                self.start()
+        return self.execution._execution_store.load()[-1]
+
+    @staticmethod
+    def execution_status(engine, plan_id):
+        return engine._research_plan_execution_service.process_status(
+            BrainRequest(
+                message="status",
+                metadata={
+                    "intent": "research_plan_execution_status",
+                    "research_plan_id": plan_id,
+                },
+            )
+        )
+
+    @staticmethod
+    def recovered_mission_state(engine, plan_id):
+        execution = engine._research_plan_execution_service
+        plan = execution.live_plan(plan_id)
+        return (
+            execution.allowance(plan_id),
+            execution.mission_checkpoint(plan_id),
+            plan_digest(plan),
+            plan.mission_scope,
+            execution.live_execution(plan_id),
+        )
+
+    def test_restart_completed_mission_exposes_recovered_teaching_report(self):
+        snapshot = self.interrupted_start(6)
+        engine = self.restart()
+        calls = self.external_calls()
+        state = self.recovered_mission_state(engine, snapshot.plan_id)
+        self.assertEqual(state[4].completed_steps, 18)
+
+        first = self.execution_status(engine, snapshot.plan_id)
+        second = self.execution_status(engine, snapshot.plan_id)
+
+        self.assertEqual(first.message, second.message)
+        run = JsonFileResearchRunStore(self.root / "runs.json").load()[0]
+        stop = first.message.split("Stop reason: ", 1)[1].split(".", 1)[0]
+        self.assertIn(stop, {value.value for value in AutonomyStopReason})
+        spend = "Cumulative spending: 18 advances, 9 network and 2 model operations."
+        self.assertIn(f"Stop reason: {stop}. {spend}", first.message)
+        expected = teaching_report(run, stop, spend, checkpoint=state[1])
+        self.assertIn("Recovered mission teaching report", first.message)
+        self.assertTrue(first.message.endswith(expected))
+        for section in (
+            "Mission goal satisfaction: Unresolved",
+            "Goal-satisfaction explanation:",
+            "Mission completion readiness: Not ready",
+            "Uncertainty caveats: source independence unverified",
+        ):
+            self.assertIn(section, first.message)
+        self.assertEqual(self.external_calls(), calls)
+        self.assertEqual(self.recovered_mission_state(engine, snapshot.plan_id), state)
+        self.assertFalse(run.status.terminal)
+        for path in self.root.rglob("*.json"):
+            self.assertNotIn(
+                "Goal-satisfaction explanation", path.read_text(encoding="utf-8")
+            )
+
+    def test_refused_recovery_keeps_refusal_without_report(self):
+        snapshot = self.interrupted_start(3)
+        engine = self.restart()
+
+        status = self.execution_status(engine, snapshot.plan_id)
+
+        self.assertIn("preview was not durably accepted", status.message)
+        self.assertNotIn("Recovered mission teaching report", status.message)
+        self.assertNotIn("Bounded research report", status.message)
+        self.transport.assert_not_called()
+
+    def test_resume_without_autonomy_result_exposes_no_report(self):
+        snapshot = self.interrupted_start(6)
+        refused = BrainResponse(
+            message="Research autonomy refused.",
+            request_id="restart",
+            intent="research_autonomy_run",
+            memory_count=0,
+            success=False,
+        )
+        with patch.object(
+            ResearchAutonomyApplicationService, "process_run", return_value=refused
+        ):
+            engine = self.restart()
+
+        status = self.execution_status(engine, snapshot.plan_id)
+
+        self.assertIsNotNone(
+            engine._research_plan_execution_service.live_execution(snapshot.plan_id)
+        )
+        self.assertNotIn("Recovered mission teaching report", status.message)
+        self.assertNotIn("Bounded research report", status.message)
+        self.transport.assert_not_called()
+
+    def test_recovered_reports_and_refusals_stay_with_their_missions(self):
+        # The fixture model checks the newest snapshot, so the mission that
+        # makes model calls on resume is started last.
+        refused = self.interrupted_start(3)
+        recovered = self.interrupted_start(6)
+        engine = self.restart()
+        runs = {
+            run.run_id: run
+            for run in JsonFileResearchRunStore(self.root / "runs.json").load()
+        }
+
+        recovered_message = self.execution_status(engine, recovered.plan_id).message
+        refused_message = self.execution_status(engine, refused.plan_id).message
+
+        self.assertIn("preview was not durably accepted", refused_message)
+        self.assertNotIn("Recovered mission teaching report", refused_message)
+        self.assertIn("Recovered mission teaching report", recovered_message)
+        self.assertNotIn("preview was not durably accepted", recovered_message)
+        recovered_evidence = runs[recovered.research_run_id].evidence
+        self.assertTrue(recovered_evidence)
+        for record in recovered_evidence:
+            self.assertIn(record.evidence_id, recovered_message)
+            self.assertNotIn(record.evidence_id, refused_message)
+        for record in runs[refused.research_run_id].evidence:
+            self.assertNotIn(record.evidence_id, recovered_message)
 
     def mission_state(self, response):
         plan_id = response.research_plan_execution.plan_id

@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.353
+## Current bounded text journey: v0.3.354
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -113,6 +113,20 @@ and model prose cannot alter it. It does not change mission lifecycle,
 authorization, cumulative allowance, plan digest, source slots, provider/model
 selection, retry behavior or run closure. An unchanged recovered state renders
 the same explanation.
+
+### Teaching reports for missions resumed after restart: v0.3.354
+
+Startup recovery previously discarded the autonomy result of a resumed learning
+mission, so completed work had no visible cited report. Recovery now renders the
+existing teaching report from the canonical run, durable checkpoint and
+cumulative spend whenever the resumed autonomy run returns a result, and keeps it
+in memory for that session. The mission's execution-status response appends it.
+
+`restart recovery completed work != goal satisfied` and
+`recovered report != new execution`. Refused or failed-closed recovery keeps its
+refusal without a report; no report is persisted; retrieval performs no fetch,
+provider or model call and changes no spend, lifecycle, plan digest, scope,
+checkpoint, authority or run closure.
 
 ### Operator source-independence review: v0.3.353
 

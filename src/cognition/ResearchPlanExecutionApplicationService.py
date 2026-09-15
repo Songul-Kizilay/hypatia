@@ -184,6 +184,7 @@ class ResearchPlanExecutionApplicationService:
         self._mission_digests: dict[str, str] = {}
         self._mission_request_ids: dict[str, str] = {}
         self._mission_recovery_refusals: dict[str, str] = {}
+        self._mission_recovery_reports: dict[str, str] = {}
         self._clock = clock or (lambda: datetime.now(UTC))
         self._restored: dict[str, ResearchPlanExecutionSnapshot] = {}
         self._restore()
@@ -649,6 +650,25 @@ class ResearchPlanExecutionApplicationService:
         ):
             return
         self._mission_recovery_refusals[plan_id] = reason.strip()[:500]
+        self._mission_recovery_reports.pop(plan_id, None)
+
+    def record_mission_recovery_report(self, plan_id: str, report: str) -> None:
+        """Keep one resumed mission's rendered report for this session only.
+
+        Only a mission that startup recovery rebound live (which removes it from
+        the restored set) and ran may carry one.  Nothing is persisted, and
+        retrieving it never advances execution.
+        """
+        plan = self._plans.get(plan_id)
+        if (
+            plan_id not in self._executions
+            or plan is None
+            or plan.mission_scope is None
+            or not isinstance(report, str)
+            or not report.strip()
+        ):
+            return
+        self._mission_recovery_reports[plan_id] = report
 
     def process_status(self, request: BrainRequest) -> BrainResponse:
         """Report live state, restored durable state, or neither."""
@@ -666,11 +686,24 @@ class ResearchPlanExecutionApplicationService:
                 request,
                 plan_id,
             )
-        return self._response_composer.research_plan_execution_status(
+        response = self._response_composer.research_plan_execution_status(
             request,
             state,
             self._allowances.get(plan_id),
             self._next_capability(plan_id, state),
+        )
+        report = self._mission_recovery_reports.get(plan_id)
+        if report is None:
+            return response
+        return replace(
+            response,
+            message=(
+                f"{response.message}\n\n"
+                "Recovered mission teaching report (rendered when startup "
+                "recovery resumed this mission; retrieving it performs no new "
+                "work):\n\n"
+                f"{report}"
+            ),
         )
 
     def _next_capability(

@@ -2,6 +2,26 @@
 
 All notable project changes are recorded here.
 
+## [0.3.354] - 2026-09-15
+
+### Added
+
+- A learning mission that startup recovery resumes now keeps its existing
+  teaching report instead of discarding the resume result. When the resumed
+  autonomy run returns a result, the report is rendered by the existing builder
+  from the canonical run, checkpoint and cumulative spend, and appended to that
+  mission's execution-status response for the current application session.
+
+### Boundaries
+
+- Recovered reports are in memory only; no report persistence or checkpoint
+  schema change was added. A refused or failed-closed recovery keeps its
+  refusal and gets no report, and a resume without an autonomy result exposes
+  none. Retrieval re-runs nothing: no fetch, provider or model call, spend,
+  lifecycle, plan digest, scope, checkpoint, authority, goal-satisfaction or run
+  closure change. Reports are keyed by mission, and a refusal drops only that
+  mission's own report.
+
 ## [0.3.353] - 2026-09-15
 
 ### Added

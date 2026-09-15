@@ -243,7 +243,7 @@ class ResearchGoalStartApplicationService:
                     max_llm_operations=allowance.remaining_llm_operations,
                     max_seconds=allowance.remaining_seconds,
                 )
-                self._autonomy.process_run(
+                response = self._autonomy.process_run(
                     BrainRequest(
                         message="Resume exact durable research mission",
                         source="restart_recovery",
@@ -255,6 +255,9 @@ class ResearchGoalStartApplicationService:
                         },
                     )
                 )
+                self._retain_recovered_report(
+                    snapshot.plan_id, snapshot.research_run_id, response
+                )
                 resumed.append(snapshot.plan_id)
             except ResearchError as error:
                 # The snapshot remains restored and status-reportable. A restart
@@ -265,6 +268,38 @@ class ResearchGoalStartApplicationService:
                 )
                 continue
         return tuple(resumed)
+
+    def _retain_recovered_report(
+        self, plan_id: str, run_id: str, response: BrainResponse
+    ) -> None:
+        """Keep the existing teaching report for work the resume already did.
+
+        Only an autonomy result — the same condition under which a live mission
+        renders its report — yields a report.  Rendering reads canonical run,
+        checkpoint and allowance state; it calls no provider or model, spends
+        nothing, retains no lesson, and is kept in memory for this session only.
+        """
+        if response.research_autonomy is None or self._runs is None:
+            return
+        self._execution_service.record_mission_recovery_report(
+            plan_id,
+            teaching_report(
+                self._runs.get(run_id),
+                response.research_autonomy.stop_reason.value,
+                self._spend_text(plan_id),
+                checkpoint=self._execution_service.mission_checkpoint(plan_id),
+            ),
+        )
+
+    def _spend_text(self, plan_id: str) -> str:
+        allowance = self._execution_service.allowance(plan_id)
+        return (
+            f"Cumulative spending: {allowance.spend.step_advances} advances, "
+            f"{allowance.spend.network_operations} network and "
+            f"{allowance.spend.llm_operations} model operations."
+            if allowance is not None
+            else "Spending unavailable."
+        )
 
     def _recovery_precondition_refusal(self, snapshot: object) -> str | None:
         """Explain a restart refusal before rebuilding or spending anything.
@@ -470,14 +505,7 @@ class ResearchGoalStartApplicationService:
                             "\nLesson retention unavailable; no retry. "
                             "The research evidence and report remain available."
                         )
-            allowance = self._execution_service.allowance(state.plan_id)
-            spend = (
-                f"Cumulative spending: {allowance.spend.step_advances} advances, "
-                f"{allowance.spend.network_operations} network and "
-                f"{allowance.spend.llm_operations} model operations."
-                if allowance is not None
-                else "Spending unavailable."
-            )
+            spend = self._spend_text(state.plan_id)
             stop = (
                 response.research_autonomy.stop_reason.value
                 if response.research_autonomy

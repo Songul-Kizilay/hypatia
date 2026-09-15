@@ -2,12 +2,15 @@
 
 ## Runtime Version
 
-`v0.3.353 (Genesis)`
+`v0.3.354 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.353 makes that caveat actionable: from a learning mission result the
+Version v0.3.354 makes the result of a mission that completes after restart
+visible: startup recovery keeps the existing teaching report in memory and the
+mission's execution status shows it. Retrieval re-runs nothing and the report is
+not persisted. Version v0.3.353 makes that caveat actionable: from a learning mission result the
 operator can review the mission's evidence-bearing sources and record an
 independence judgement through the existing assessment path. The caveat updates
 from canonical state; mission authority, budget and goal status do not change.
