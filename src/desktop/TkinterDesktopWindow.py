@@ -29,6 +29,11 @@ from desktop.MarkdownTextSegments import (
     MarkdownStyle,
     markdown_segments,
 )
+from desktop.MissionSourceIndependenceReview import (
+    independence_assessment_arguments,
+    independence_review_rows,
+    independence_review_text,
+)
 from desktop.QuestionResearchDraft import QuestionResearchDraft
 from desktop.ResearchSourcePreviewPanel import ResearchSourcePreviewPanel
 from desktop.ResearchStateRefreshSignal import ResearchStateRefreshSignal
@@ -640,6 +645,12 @@ class TkinterDesktopWindow:
             value=ResearchSourcePublicationStatus.UNKNOWN.value
         )
         self._research_source_dimensions = tk.StringVar(value="")
+        self._mission_independence_source = tk.StringVar()
+        self._mission_independence_value = tk.StringVar(
+            value=ResearchSourceIndependence.UNKNOWN.value
+        )
+        self._mission_independence_run_id = ""
+        self._mission_independence_run: ResearchRun | None = None
         self._research_discovery_provider = tk.StringVar(
             value=ResearchDiscoveryProviderName.CROSSREF.value
         )
@@ -2031,6 +2042,31 @@ class TkinterDesktopWindow:
             text="Research, learn and explain — preview permission",
             command=self._start_learning_research,
         ).grid(row=5, column=0, columnspan=3, sticky="w", pady=4)
+        ttk.Button(
+            plan_actions,
+            text="Review source independence",
+            command=self._review_mission_source_independence,
+        ).grid(row=6, column=0, sticky="w", pady=4)
+        self._mission_independence_selector = ttk.Combobox(
+            plan_actions,
+            textvariable=self._mission_independence_source,
+            values=(),
+            state="readonly",
+            width=40,
+        )
+        self._mission_independence_selector.grid(row=6, column=1, sticky="w")
+        ttk.Combobox(
+            plan_actions,
+            textvariable=self._mission_independence_value,
+            values=tuple(value.value for value in ResearchSourceIndependence),
+            state="readonly",
+            width=18,
+        ).grid(row=6, column=2, sticky="w")
+        ttk.Button(
+            plan_actions,
+            text="Record independence judgement",
+            command=self._record_mission_source_independence,
+        ).grid(row=7, column=0, columnspan=3, sticky="w")
         ttk.Label(research_plan_frame, text="Complete preview or rejection").grid(
             row=7,
             column=0,
@@ -3298,7 +3334,7 @@ class TkinterDesktopWindow:
                     scope.semantic_policy,
                     cancellation_token=signal,
                 ),
-                self._append_response,
+                self._render_learning_research_result,
                 "bounded learning research",
                 cancellation_signal=signal,
                 preserve_cancelled_result=True,
@@ -3311,6 +3347,87 @@ class TkinterDesktopWindow:
             confirmed,
             "learning research permission preview",
         )
+
+    def _render_learning_research_result(self, response: BrainResponse) -> None:
+        """Show the mission report and remember its run for independence review."""
+        self._append_response(response)
+        if response.research_runs:
+            self._mission_independence_run_id = response.research_runs[0].run_id
+
+    def _review_mission_source_independence(self) -> None:
+        """Load the mission's canonical run and list its evidence-bearing sources."""
+        run_id = getattr(self, "_mission_independence_run_id", "")
+        if not run_id:
+            self._status.set("Run a learning research mission first.")
+            return
+        response = self._controller.list_research_runs()
+        run = next(
+            (value for value in response.research_runs if value.run_id == run_id),
+            None,
+        )
+        if run is None:
+            self._status.set("The mission's research run is unavailable.")
+            return
+        self._render_mission_source_independence(run)
+
+    def _render_mission_source_independence(self, run: ResearchRun) -> None:
+        rows = independence_review_rows(run)
+        self._mission_independence_run = run
+        self._mission_independence_selector.configure(
+            values=tuple(row.label for row in rows)
+        )
+        self._mission_independence_source.set(rows[0].label if rows else "")
+        self._research_plan_preview.configure(state=tk.NORMAL)
+        self._research_plan_preview.delete("1.0", tk.END)
+        self._research_plan_preview.insert(tk.END, independence_review_text(run))
+        self._research_plan_preview.see("1.0")
+        self._research_plan_preview.configure(state=tk.DISABLED)
+        self._status.set("source independence review: canonical state loaded")
+
+    def _record_mission_source_independence(self) -> None:
+        """Record one operator judgement through the existing assessment path."""
+        run = getattr(self, "_mission_independence_run", None)
+        if run is None:
+            self._status.set("Review source independence first.")
+            return
+        label = self._mission_independence_source.get()
+        row = next(
+            (row for row in independence_review_rows(run) if row.label == label),
+            None,
+        )
+        try:
+            if row is None:
+                raise ValueError("Choose an evidence-bearing source from this mission.")
+            values = independence_assessment_arguments(
+                run, row.document_id, self._mission_independence_value.get()
+            )
+            preview_response = (
+                self._controller.preview_research_source_assessment_write(*values)
+            )
+        except ValueError as error:
+            self._status.set(str(error))
+            return
+        self._append_response(preview_response)
+        preview = preview_response.research_source_assessment_write_preview
+        if not preview_response.success or preview is None or not preview.allowed:
+            return
+        if not messagebox.askyesno(
+            "Save source independence judgement?",
+            (
+                f"{preview_response.message}\n\n"
+                "This appends your operator judgement through the existing "
+                "assessment record and supersedes the reviewed current assessment. "
+                "It is not model truth or a verified claim, and it does not change "
+                "mission authority, budget or goal status. Continue?"
+            ),
+            parent=self._root,
+        ):
+            self._status.set("source independence judgement: not saved")
+            return
+        response = self._controller.record_research_source_assessment(*values)
+        self._append_response(response)
+        if response.success and response.research_runs:
+            self._render_mission_source_independence(response.research_runs[0])
 
     def _start_research_comparison(self) -> None:
         """Use the same single-confirmation worker for the comparison scope."""

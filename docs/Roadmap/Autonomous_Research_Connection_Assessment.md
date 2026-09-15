@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.352
+## Current bounded text journey: v0.3.353
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -113,6 +113,21 @@ and model prose cannot alter it. It does not change mission lifecycle,
 authorization, cumulative allowance, plan digest, source slots, provider/model
 selection, retry behavior or run closure. An unchanged recovered state renders
 the same explanation.
+
+### Operator source-independence review: v0.3.353
+
+The desktop mission result now offers **Review source independence**. It loads
+the mission run from canonical state, lists only accepted evidence-bearing
+sources with their current judgement, and records an operator's `independent`,
+`derivative`, `likely_duplicate` or `unknown` judgement through the existing
+assessment preview/confirmation/record path. The reviewed current assessment is
+superseded exactly; a stale review is refused by the existing already-superseded
+check, and other judgement dimensions are carried forward.
+
+`operator judgement != model truth` and `caveat removal != goal upgrade`. The
+review makes no provider/model call and changes no mission authority, plan
+digest, checkpoint, cumulative allowance, source slot, lifecycle, goal
+satisfaction or completion readiness. Restart shows the same current judgement.
 
 ### Source-independence uncertainty caveat: v0.3.352
 

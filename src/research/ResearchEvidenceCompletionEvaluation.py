@@ -216,7 +216,7 @@ def evaluate_evidence_completion(
         comparison_note_count=len(run.comparison_notes),
         recorded_claim_contradiction_count=len(run.claim_contradictions),
         limitations=tuple(limitations),
-        caveats=_independence_caveats(run, evidence_source_ids),
+        caveats=source_independence_caveats(run),
     )
 
 
@@ -226,9 +226,8 @@ _NOT_INDEPENDENT = {
 }
 
 
-def _independence_caveats(
+def source_independence_caveats(
     run: ResearchRun,
-    evidence_source_ids: set[str],
 ) -> tuple[ResearchEvidenceCompletionCaveat, ...]:
     """Derive independence uncertainty from current canonical assessments.
 
@@ -237,6 +236,9 @@ def _independence_caveats(
     assessment, or with any ``unknown`` judgement, is unverified: silence is
     never upgraded into independence.
     """
+    if not isinstance(run, ResearchRun):
+        raise ResearchError("Source independence caveats require a research run.")
+    evidence_source_ids = {record.source_document_id for record in run.evidence}
     accepted = {source.document_id for source in run.sources}
     superseded = {
         assessment.supersedes_assessment_id

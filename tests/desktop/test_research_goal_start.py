@@ -125,6 +125,7 @@ class ResearchGoalStartUiTests(unittest.TestCase):
             _controller=Mock(),
             _start_request=Mock(),
             _append_response=Mock(),
+            _render_learning_research_result=Mock(),
             _status=Mock(),
         )
 

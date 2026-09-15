@@ -17,6 +17,10 @@ from core.CancellationSignal import CancellationSignal
 from core.Exceptions import ResearchError
 from core.ExclusiveStoreOwnership import release_all
 from desktop.DesktopController import DesktopController
+from desktop.MissionSourceIndependenceReview import (
+    independence_assessment_arguments,
+    independence_review_rows,
+)
 from llm.LLMRuntimeConfig import LLMRuntimeConfig
 from research.JsonFileFailureLessonStore import JsonFileFailureLessonStore
 from research.JsonFileResearchRunStore import JsonFileResearchRunStore
@@ -24,15 +28,26 @@ from research.ResearchAutonomyBudget import ResearchAutonomyBudget
 from research.ResearchCapabilityCost import cost_for
 from research.ResearchDisclosure import ResearchDisclosure
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
+from research.ResearchEvidenceCompletionEvaluation import (
+    ResearchEvidenceCompletionCaveat as Caveat,
+)
+from research.ResearchEvidenceCompletionEvaluation import (
+    source_independence_caveats,
+)
 from research.ResearchExecutionAllowance import ResearchExecutionAllowance
 from research.ResearchExecutionSpend import ResearchExecutionSpend
 from research.ResearchMissionFollowupDecision import (
     ResearchMissionFollowupDecisionStatus,
 )
+from research.ResearchMissionGoalSatisfaction import (
+    ResearchMissionGoalSatisfactionStatus as GoalStatus,
+)
+from research.ResearchMissionOutcome import mission_outcome_for
 from research.ResearchPlanDigest import plan_digest
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability as Cap
 from research.ResearchSource import ResearchSource
 from research.ResearchSourceCandidate import ResearchSourceCandidate
+from research.ResearchTeachingReport import teaching_report
 from research.SemanticMissionPolicy import SemanticMissionPolicy
 
 
@@ -960,6 +975,145 @@ class LearningResearchJourneyTests(unittest.TestCase):
         self.assertEqual(self.fetcher.fetch.call_count, 3)
         self.assertIn("evidence gap remains", response.message)
         self.assertEqual(response.research_runs[0].claims, ())
+
+    def mission_state(self, response):
+        plan_id = response.research_plan_execution.plan_id
+        return (
+            self.execution.mission_checkpoint(plan_id),
+            self.execution.allowance(plan_id),
+            plan_digest(self.execution.live_plan(plan_id)),
+            self.execution.live_execution(plan_id),
+        )
+
+    def external_calls(self):
+        return (
+            self.transport.call_count,
+            self.fetcher.fetch.call_count,
+            self.provider.discover.call_count,
+        )
+
+    def judge(self, run, document_id, independence):
+        return self.controller.record_research_source_assessment(
+            *independence_assessment_arguments(run, document_id, independence)
+        )
+
+    def test_independence_judgement_updates_caveat_not_mission_or_goal(self):
+        self.relation = "possible_agreement"
+        response = self.start()
+        stop = response.research_autonomy.stop_reason.value
+        run = response.research_runs[0]
+        state = self.mission_state(response)
+        calls = self.external_calls()
+        before = mission_outcome_for(run, stop, state[0])
+        self.assertIn("source independence unverified", response.message)
+        rows = independence_review_rows(run)
+        self.assertEqual(
+            {row.document_id for row in rows},
+            {record.source_document_id for record in run.evidence},
+        )
+
+        current = run
+        for row in rows:
+            recorded = self.judge(current, row.document_id, "independent")
+            self.assertTrue(recorded.success, recorded.message)
+            current = recorded.research_runs[0]
+
+        self.assertEqual(source_independence_caveats(current), ())
+        self.assertEqual(
+            tuple(
+                record.supersedes_assessment_id
+                for record in current.assessments[len(run.assessments) :]
+            ),
+            tuple(row.current_assessment.assessment_id for row in rows),
+        )
+        after = mission_outcome_for(current, stop, self.mission_state(response)[0])
+        self.assertIs(before.goal_satisfaction.status, GoalStatus.SATISFIED)
+        self.assertEqual(after.goal_satisfaction, before.goal_satisfaction)
+        self.assertEqual(after.completion_readiness, before.completion_readiness)
+        self.assertEqual(self.mission_state(response), state)
+        self.assertEqual(self.external_calls(), calls)
+        self.assertEqual((current.status, current.claims), (run.status, run.claims))
+        report = teaching_report(current, stop, "Spend.", checkpoint=state[0])
+        self.assertIn("Uncertainty caveats: none recorded.", report)
+        self.assertNotIn("source independence unverified", report)
+
+    def test_derivative_judgement_keeps_stronger_caveat_and_goal(self):
+        self.relation = "possible_agreement"
+        response = self.start()
+        stop = response.research_autonomy.stop_reason.value
+        run = response.research_runs[0]
+        checkpoint = self.mission_state(response)[0]
+        first = independence_review_rows(run)[0]
+
+        recorded = self.judge(run, first.document_id, "derivative")
+
+        self.assertTrue(recorded.success, recorded.message)
+        current = recorded.research_runs[0]
+        self.assertEqual(
+            source_independence_caveats(current),
+            (Caveat.SOURCE_NOT_INDEPENDENT, Caveat.SOURCE_INDEPENDENCE_UNVERIFIED),
+        )
+        self.assertEqual(
+            mission_outcome_for(current, stop, checkpoint).goal_satisfaction,
+            mission_outcome_for(run, stop, checkpoint).goal_satisfaction,
+        )
+        self.assertIn(
+            "source not independent",
+            teaching_report(current, stop, "Spend.", checkpoint=checkpoint),
+        )
+
+    def test_stale_independence_review_cannot_overwrite_newer_assessment(self):
+        self.relation = "possible_agreement"
+        run = self.start().research_runs[0]
+        row = independence_review_rows(run)[0]
+
+        first = self.judge(run, row.document_id, "independent")
+        stale = self.judge(run, row.document_id, "likely_duplicate")
+
+        self.assertTrue(first.success, first.message)
+        self.assertFalse(stale.success)
+        saved = JsonFileResearchRunStore(self.root / "runs.json").load()[0]
+        self.assertEqual(len(saved.assessments), len(run.assessments) + 1)
+        self.assertEqual(
+            independence_review_rows(saved)[0].independence.value, "independent"
+        )
+
+    def test_unresolved_goal_is_not_upgraded_by_independence_judgements(self):
+        response = self.start()
+        stop = response.research_autonomy.stop_reason.value
+        run = response.research_runs[0]
+        checkpoint = self.mission_state(response)[0]
+        current = run
+        for row in independence_review_rows(run):
+            current = self.judge(current, row.document_id, "independent").research_runs[
+                0
+            ]
+
+        self.assertEqual(source_independence_caveats(current), ())
+        before = mission_outcome_for(run, stop, checkpoint)
+        after = mission_outcome_for(current, stop, checkpoint)
+        self.assertIs(after.goal_satisfaction.status, GoalStatus.UNRESOLVED)
+        self.assertEqual(after.completion_readiness, before.completion_readiness)
+
+    def test_restart_shows_same_current_independence_without_replay(self):
+        self.relation = "possible_agreement"
+        run = self.start().research_runs[0]
+        current = run
+        for row in independence_review_rows(run):
+            current = self.judge(current, row.document_id, "independent").research_runs[
+                0
+            ]
+        calls = self.external_calls()
+
+        self.restart()
+        restored = JsonFileResearchRunStore(self.root / "runs.json").load()[0]
+
+        self.assertEqual(restored, current)
+        self.assertEqual(source_independence_caveats(restored), ())
+        self.assertEqual(
+            independence_review_rows(restored), independence_review_rows(current)
+        )
+        self.assertEqual(self.external_calls(), calls)
 
     def before_first_comparison(self, callback):
         real = self.execution.process_advance

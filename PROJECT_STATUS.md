@@ -2,11 +2,15 @@
 
 ## Runtime Version
 
-`v0.3.352 (Genesis)`
+`v0.3.353 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
+Version v0.3.353 makes that caveat actionable: from a learning mission result the
+operator can review the mission's evidence-bearing sources and record an
+independence judgement through the existing assessment path. The caveat updates
+from canonical state; mission authority, budget and goal status do not change.
 Version v0.3.352 makes unknown source independence visible as a secondary
 caveat in the goal explanation and teaching report. Unknown independence is not
 proof of independent corroboration and does not by itself change goal

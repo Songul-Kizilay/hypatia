@@ -2,6 +2,28 @@
 
 All notable project changes are recorded here.
 
+## [0.3.353] - 2026-09-15
+
+### Added
+
+- After a learning research mission, the desktop offers **Review source
+  independence**. It lists only the mission run's accepted, evidence-bearing
+  sources with their current canonical independence judgement and the derived
+  caveat. The operator can record `independent`, `derivative`,
+  `likely_duplicate` or `unknown` through the existing assessment preview,
+  confirmation and record path, superseding the reviewed current assessment
+  while carrying its other judgement dimensions forward.
+
+### Boundaries
+
+- An operator judgement is not model truth or a verified claim; independent
+  does not mean true and derivative/duplicate does not mean false. The caveat is
+  re-derived from canonical current assessments by the same function the report
+  uses. A stale review is refused by the existing already-superseded check.
+  Recording a judgement makes no provider/model call and does not change mission
+  authority, plan digest, checkpoint, cumulative allowance, source slots,
+  lifecycle, goal satisfaction or completion readiness.
+
 ## [0.3.352] - 2026-09-15
 
 ### Added
