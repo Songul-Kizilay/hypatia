@@ -2,6 +2,22 @@
 
 All notable project changes are recorded here.
 
+## [0.3.362] - 2026-09-15
+
+### Added
+
+- The learning-research permission preview now shows prior advisory failure
+  lessons that match the question, before the operator approves and spends
+  budget. It uses the same read-only failure-memory recall the teaching report
+  already shows after a mission, and shows nothing when no lesson matches or
+  failure memory is not enabled.
+
+### Boundaries
+
+- Advice only: the preview stays inert. Recall derives, stores and spends
+  nothing, makes no provider or model call, and changes neither the plan nor the
+  permission being previewed.
+
 ## [0.3.361] - 2026-09-15
 
 ### Fixed

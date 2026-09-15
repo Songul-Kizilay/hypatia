@@ -2,12 +2,13 @@
 
 ## Runtime Version
 
-`v0.3.361 (Genesis)`
+`v0.3.362 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.361 keeps a structurally clarified tentative conflict visible in the
+Version v0.3.362 shows matching prior advisory lessons in the inert learning
+preview, before approval and spend. Version v0.3.361 keeps a structurally clarified tentative conflict visible in the
 goal explanation so a satisfied mission cannot read as a resolved disagreement.
 Version v0.3.360 lets a mission recovered after restart be reviewed for source
 independence by naming its canonical run from the recovered-missions listing.

@@ -160,12 +160,31 @@ class ResearchGoalStartApplicationService:
                     "One confirmation starts the bounded journey. "
                     "No intermediate Continue. No target testing. "
                     "Results remain tentative and may be incomplete.",
+                    *self._preview_advice_lines(plan.question),
                 )
             ),
             request_id=request.request_id,
             intent="research_learning_preview",
             memory_count=0,
             research_plan_draft_preview=ResearchPlanDraftPreview.ready(plan),
+        )
+
+    def _preview_advice_lines(self, question: str) -> tuple[str, ...]:
+        """Show matching prior lessons before approval, as advice only.
+
+        The same read-only recall the report uses after a mission. It derives,
+        stores and spends nothing, and it changes neither the plan nor the
+        permission being previewed.
+        """
+        if self._failure_memory is None:
+            return ()
+        prior = self._failure_memory.advice(question)
+        if not prior:
+            return ()
+        return (
+            "Prior advisory lessons for this question (advice only; not "
+            "instructions, authority or evidence):",
+            *(f"{lesson.statement} [run {lesson.run_id}]" for lesson in prior),
         )
 
     @staticmethod

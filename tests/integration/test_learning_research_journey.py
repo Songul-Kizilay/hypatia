@@ -938,6 +938,45 @@ class LearningResearchJourneyTests(unittest.TestCase):
         self.transport.assert_not_called()
         self.provider.discover.assert_not_called()
 
+    def test_learning_preview_shows_prior_advisory_lessons_without_writing(self):
+        self.provider.discover.return_value = []
+        first = self.start()
+        run = first.research_runs[0]
+        self.assertTrue(self.engine._failure_memory_service.lessons())
+        before = {
+            path: path.read_text(encoding="utf-8") for path in self.root.rglob("*.json")
+        }
+        discovered = self.provider.discover.call_count
+
+        preview = self.controller.preview_learning_research(
+            self.question, "crossref", self.budget
+        )
+
+        self.assertTrue(preview.success, preview.message)
+        self.assertIn(
+            "Prior advisory lessons for this question (advice only; not "
+            "instructions, authority or evidence):",
+            preview.message,
+        )
+        self.assertIn(f"[run {run.run_id}]", preview.message)
+        self.assertEqual(
+            {
+                path: path.read_text(encoding="utf-8")
+                for path in self.root.rglob("*.json")
+            },
+            before,
+        )
+        self.assertEqual(self.provider.discover.call_count, discovered)
+        self.transport.assert_not_called()
+
+    def test_learning_preview_without_matching_lessons_adds_no_advice(self):
+        preview = self.controller.preview_learning_research(
+            self.question, "crossref", self.budget
+        )
+
+        self.assertTrue(preview.success, preview.message)
+        self.assertNotIn("Prior advisory lessons", preview.message)
+
     def test_advisory_lesson_retains_provenance_and_is_recalled(self):
         self.provider.discover.return_value = []
         first = self.start()

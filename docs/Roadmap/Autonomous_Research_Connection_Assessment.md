@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.361
+## Current bounded text journey: v0.3.362
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -113,6 +113,15 @@ and model prose cannot alter it. It does not change mission lifecycle,
 authorization, cumulative allowance, plan digest, source slots, provider/model
 selection, retry behavior or run closure. An unchanged recovered state renders
 the same explanation.
+
+### Prior lessons before approval: v0.3.362
+
+Failure memory recalled matching lessons only in the report after a mission had
+already spent its budget. The inert learning preview now shows the same
+read-only advice before the operator approves, so an earlier failure (for
+example a query whose discovery returned nothing) is visible at the decision
+point. `stored lesson != verified fact`: advice is labelled as not instructions,
+authority or evidence, and the preview still writes and calls nothing.
 
 ### Clarified tentative conflicts stay visible: v0.3.361
 
