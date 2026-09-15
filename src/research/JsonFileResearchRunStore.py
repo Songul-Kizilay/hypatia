@@ -15,6 +15,10 @@ from research.ResearchClaimContradictionRecord import (
     ResearchClaimContradictionRecord,
 )
 from research.ResearchClaimRecord import ResearchClaimRecord
+from research.ResearchComparisonReviewRecord import (
+    ResearchComparisonReviewDecision,
+    ResearchComparisonReviewRecord,
+)
 from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchFailureRecord import ResearchFailureRecord
@@ -87,8 +91,8 @@ class _CollectionBudget:
 class JsonFileResearchRunStore:
     """Load and atomically replace a strict versioned research-run document."""
 
-    _SCHEMA_VERSION = 13
-    _SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13}
+    _SCHEMA_VERSION = 14
+    _SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14}
     _DOCUMENT_FIELDS = {"schema_version", "runs"}
     _RUN_FIELDS_V1 = {
         "run_id",
@@ -107,6 +111,10 @@ class JsonFileResearchRunStore:
     _RUN_FIELDS_V7 = _RUN_FIELDS_V6
     _RUN_FIELDS_V8 = _RUN_FIELDS_V7 | {"claims"}
     _RUN_FIELDS_V9 = _RUN_FIELDS_V8 | {"claim_contradictions"}
+    #: Version 14 adds explicit operator comparison reviews. A run written
+    #: before it decodes with none, which is what it holds: no review was
+    #: recorded, so no retained comparison is treated as supported.
+    _RUN_FIELDS_V14 = _RUN_FIELDS_V9 | {"comparison_reviews"}
     _SOURCE_FIELDS_V1_V6 = {
         "document_id",
         "url",
@@ -198,6 +206,15 @@ class JsonFileResearchRunStore:
         "evidence_ids",
         "note",
         "recorded_at",
+    }
+    _COMPARISON_REVIEW_FIELDS = {
+        "review_id",
+        "note_id",
+        "evidence_ids",
+        "decision",
+        "note",
+        "recorded_at",
+        "supersedes_review_id",
     }
     _COMPARISON_NOTE_FIELDS = {
         "note_id",
@@ -317,6 +334,7 @@ class JsonFileResearchRunStore:
             12: self._RUN_FIELDS_V9,
             # Version 13 added optional provider provenance to failures.
             13: self._RUN_FIELDS_V9,
+            14: self._RUN_FIELDS_V14,
         }[schema_version]
         if not isinstance(value, dict) or set(value) != expected_fields:
             raise ResearchError("Research run store contains an invalid run record.")
@@ -336,6 +354,9 @@ class JsonFileResearchRunStore:
         claim_contradictions_data = (
             [] if schema_version < 9 else value["claim_contradictions"]
         )
+        comparison_reviews_data = (
+            [] if schema_version < 14 else value["comparison_reviews"]
+        )
         if (
             not isinstance(sources_data, list)
             or not isinstance(failures_data, list)
@@ -345,6 +366,7 @@ class JsonFileResearchRunStore:
             or not isinstance(comparison_notes_data, list)
             or not isinstance(claims_data, list)
             or not isinstance(claim_contradictions_data, list)
+            or not isinstance(comparison_reviews_data, list)
         ):
             raise ResearchError("Research run store contains invalid run collections.")
         for values in (
@@ -356,6 +378,7 @@ class JsonFileResearchRunStore:
             comparison_notes_data,
             claims_data,
             claim_contradictions_data,
+            comparison_reviews_data,
         ):
             budget.consume(values)
         return ResearchRun(
@@ -386,6 +409,10 @@ class JsonFileResearchRunStore:
             claim_contradictions=tuple(
                 self._parse_claim_contradiction(item, budget)
                 for item in claim_contradictions_data
+            ),
+            comparison_reviews=tuple(
+                self._parse_comparison_review(item, budget)
+                for item in comparison_reviews_data
             ),
         )
 
@@ -679,6 +706,37 @@ class JsonFileResearchRunStore:
             recorded_at=self._parse_datetime(value["recorded_at"], "recorded_at"),
         )
 
+    def _parse_comparison_review(
+        self,
+        value: Any,
+        budget: _CollectionBudget,
+    ) -> ResearchComparisonReviewRecord:
+        if not isinstance(value, dict) or set(value) != self._COMPARISON_REVIEW_FIELDS:
+            raise ResearchError(
+                "Research run store contains an invalid comparison review record."
+            )
+        evidence_ids = value["evidence_ids"]
+        if not isinstance(evidence_ids, list):
+            raise ResearchError(
+                "Research run store comparison review evidence must be a list."
+            )
+        budget.consume(evidence_ids)
+        try:
+            decision = ResearchComparisonReviewDecision(value["decision"])
+        except (TypeError, ValueError) as error:
+            raise ResearchError(
+                "Research run store contains an invalid comparison review decision."
+            ) from error
+        return ResearchComparisonReviewRecord(
+            review_id=value["review_id"],
+            note_id=value["note_id"],
+            evidence_ids=tuple(evidence_ids),
+            decision=decision,
+            note=value["note"],
+            recorded_at=self._parse_datetime(value["recorded_at"], "recorded_at"),
+            supersedes_review_id=value["supersedes_review_id"],
+        )
+
     @staticmethod
     def _parse_epistemic_state(value: Any) -> ResearchEpistemicState:
         try:
@@ -828,6 +886,18 @@ class JsonFileResearchRunStore:
                 }
                 for contradiction in run.claim_contradictions
             ],
+            "comparison_reviews": [
+                {
+                    "review_id": review.review_id,
+                    "note_id": review.note_id,
+                    "evidence_ids": list(review.evidence_ids),
+                    "decision": review.decision.value,
+                    "note": review.note,
+                    "recorded_at": review.recorded_at.isoformat(),
+                    "supersedes_review_id": review.supersedes_review_id,
+                }
+                for review in run.comparison_reviews
+            ],
             "created_at": run.created_at.isoformat(),
             "updated_at": run.updated_at.isoformat(),
         }
@@ -850,8 +920,11 @@ class JsonFileResearchRunStore:
                 run.comparison_notes,
                 run.claims,
                 run.claim_contradictions,
+                run.comparison_reviews,
             ):
                 budget.consume_count(len(values))
+            for review in run.comparison_reviews:
+                budget.consume_count(len(review.evidence_ids))
             for discovery in run.discoveries:
                 budget.consume_count(len(discovery.candidates))
             for assessment in run.assessments:
@@ -890,6 +963,13 @@ class JsonFileResearchRunStore:
         if len(contradiction_ids) != len(set(contradiction_ids)):
             raise ResearchError(
                 "Research run store contains duplicate claim contradiction IDs."
+            )
+        review_ids = [
+            review.review_id for run in runs for review in run.comparison_reviews
+        ]
+        if len(review_ids) != len(set(review_ids)):
+            raise ResearchError(
+                "Research run store contains duplicate comparison review IDs."
             )
 
     @staticmethod

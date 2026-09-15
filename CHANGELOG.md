@@ -2,6 +2,43 @@
 
 All notable project changes are recorded here.
 
+## [0.3.367] - 2026-09-16
+
+### Added
+
+- An explicit, auditable path by which a learning mission's comparison can
+  become supported. A new run-level `ResearchComparisonReviewRecord` is an
+  operator review of one exact retained comparison note: it names the note,
+  copies the note's evidence IDs, and records a typed decision (`supported` or
+  `not_supported`), the operator's reason and the commit time. It is written only
+  through `ResearchRunManager.record_comparison_review` (Brain intent
+  `research_comparison_review_record`, `DesktopController.record_research_comparison_review`),
+  which revalidates the note and requires a new review of a reviewed note to
+  supersede exactly its current review, so support can be withdrawn without
+  deleting history and a stale view is refused.
+- A mission whose first comparison is `possible_agreement` is `satisfied` and
+  ready only when the current review of the checkpoint's `semantic_note_id` is
+  `supported` and still cites that note's exact evidence. The goal explanation
+  distinguishes this from tentative agreement, and the teaching report names the
+  review ID, decision, time and evidence, or states that no review exists and the
+  relation remains tentative. A withdrawn or `not_supported` review recomputes
+  `unresolved`.
+
+### Compatibility
+
+- The research run store is now schema version 14 with a `comparison_reviews`
+  collection. Runs written by earlier versions decode with no reviews, so no
+  retained comparison is treated as supported; checkpoints are unchanged.
+
+### Boundaries
+
+- Support is never created by the model relation, note text, trust or
+  independence labels, claim confidence, source count or mission completion.
+  Reviews do not lift a conflict, clarified conflict, `not_comparable`,
+  `no_supported_comparison` or unrecorded relation. Restart only reloads
+  persisted reviews: no authority, budget, source slot, fetch or model call.
+  Evaluation without a mission checkpoint keeps its evidence-only rule.
+
 ## [0.3.366] - 2026-09-16
 
 ### Fixed

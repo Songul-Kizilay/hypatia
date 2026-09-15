@@ -953,6 +953,8 @@ class CognitiveEngine:
 
         if self._is_research_claim_contradiction_record_request(request):
             return self._process_research_claim_contradiction_record(request)
+        if request.metadata.get("intent") == "research_comparison_review_record":
+            return self._process_research_comparison_review_record(request)
 
         if authored_history.is_source_comparison_preview_request(request):
             return authored_history.process_source_comparison_preview(request)
@@ -1771,6 +1773,46 @@ class CognitiveEngine:
         return self._process_research_claim_contradiction_write(
             request,
             preview_only=True,
+        )
+
+    def _process_research_comparison_review_record(
+        self,
+        request: BrainRequest,
+    ) -> BrainResponse:
+        """Commit one separately confirmed operator review of one comparison note."""
+        failure = self._response_composer.research_comparison_review_record_failure
+        metadata = request.metadata
+        run_id = metadata.get("research_run_id")
+        note_id = metadata.get("research_comparison_note_id")
+        decision = metadata.get("research_comparison_review_decision")
+        note = metadata.get("research_comparison_review_note")
+        supersedes = metadata.get("research_comparison_review_supersedes_id", "")
+        if not all(
+            isinstance(value, str) and value.strip()
+            for value in (run_id, note_id, decision, note)
+        ) or not isinstance(supersedes, str):
+            return failure(
+                request,
+                "A run ID, comparison note ID, review decision and operator review "
+                "note are required.",
+            )
+        if self._research_run_manager is None:
+            return failure(request, "Research run persistence is unavailable.")
+        assert isinstance(run_id, str)
+        assert isinstance(note_id, str)
+        assert isinstance(decision, str)
+        assert isinstance(note, str)
+        try:
+            run = self._research_run_manager.record_comparison_review(
+                run_id, note_id, decision, note, supersedes or None
+            )
+        except ResearchError:
+            return failure(
+                request,
+                "Research comparison review could not be validated or saved.",
+            )
+        return self._response_composer.research_comparison_review_record_success(
+            request, run
         )
 
     def _process_research_claim_contradiction_record(

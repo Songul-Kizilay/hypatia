@@ -43,6 +43,7 @@ class ResearchMissionGoalExplanationReason(StrEnum):
     CONTRADICTION_FOLLOWUP_NO_SUPPORT = "contradiction_followup_no_supported_comparison"
     SOURCES_NOT_COMPARABLE = "sources_not_comparable"
     TENTATIVE_AGREEMENT_UNSUPPORTED = "tentative_agreement_unsupported"
+    AGREEMENT_SUPPORTED_BY_REVIEW = "agreement_supported_by_review"
     COMPARISON_RELATION_UNRECORDED = "comparison_relation_unrecorded"
     NO_SUPPORTED_COMPARISON = "no_supported_comparison"
     NO_SUPPORTED_COMPARISON_AFTER_FOLLOWUP = "no_supported_comparison_after_followup"
@@ -137,6 +138,12 @@ _REASON_TEXT = {
         "The selected sources tentatively agree, but the available evidence does "
         "not establish a sufficiently supported comparison: the agreement is a "
         "tentative model interpretation and no retained record verifies it"
+    ),
+    ResearchMissionGoalExplanationReason.AGREEMENT_SUPPORTED_BY_REVIEW: (
+        "The retained agreement comparison has an explicit operator comparison "
+        "review marked supported, so the bounded comparison objective is met; that "
+        "review is a recorded human judgement, not model output, and was not "
+        "inferred from note text"
     ),
     ResearchMissionGoalExplanationReason.COMPARISON_RELATION_UNRECORDED: (
         "No durable comparison relation is recorded for this mission, so the "
@@ -349,7 +356,10 @@ def explain_mission_goal_satisfaction(
         and not checkpoint.contradiction_initial_relation
     ):
         reasons.append(
-            ResearchMissionGoalExplanationReason.TENTATIVE_AGREEMENT_UNSUPPORTED
+            ResearchMissionGoalExplanationReason.AGREEMENT_SUPPORTED_BY_REVIEW
+            if satisfaction.supported_by_review_id
+            and satisfaction.status is ResearchMissionGoalSatisfactionStatus.SATISFIED
+            else ResearchMissionGoalExplanationReason.TENTATIVE_AGREEMENT_UNSUPPORTED
         )
     elif (
         checkpoint is not None

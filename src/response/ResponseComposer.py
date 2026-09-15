@@ -4389,6 +4389,45 @@ class ResponseComposer:
             research_claim_contradiction_write_preview=preview,
         )
 
+    def research_comparison_review_record_success(
+        self,
+        request: BrainRequest,
+        run: ResearchRun,
+    ) -> BrainResponse:
+        """Render one comparison review only after the audit snapshot commits."""
+        review = run.comparison_reviews[-1]
+        return BrainResponse(
+            message=(
+                "Research comparison review recorded:\n"
+                f"ID: {review.review_id}\n"
+                f"Comparison note ID: {review.note_id}\n"
+                f"Evidence IDs: {', '.join(review.evidence_ids)}\n"
+                f"Decision: {review.decision.value}\n"
+                f"Operator note: {review.note}\n"
+                f"Supersedes review: {review.supersedes_review_id or 'none'}\n"
+                "Status: committed operator judgement about this exact comparison; "
+                "not model output and not a claim or truth decision"
+            ),
+            request_id=request.request_id,
+            intent="research_comparison_review_record",
+            memory_count=0,
+            research_runs=[run],
+        )
+
+    def research_comparison_review_record_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Report invalid or refused comparison review input safely."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="research_comparison_review_record",
+            memory_count=0,
+            success=False,
+        )
+
     def research_claim_contradiction_record_success(
         self,
         request: BrainRequest,

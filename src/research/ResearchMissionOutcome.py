@@ -7,6 +7,11 @@ from dataclasses import dataclass
 from core.Exceptions import ResearchError
 from research.BackgroundTaskOutcome import BackgroundTaskOutcome, outcome_for
 from research.ResearchAutonomyResult import AutonomyStopReason
+from research.ResearchComparisonReviewRecord import (
+    ResearchComparisonReviewDecision,
+    ResearchComparisonReviewRecord,
+    current_comparison_review,
+)
 from research.ResearchEvidenceCompletionEvaluation import (
     ResearchEvidenceCompletionEvaluation,
     evaluate_evidence_completion,
@@ -66,6 +71,53 @@ class ResearchMissionOutcome:
         )
 
 
+def mission_comparison_review(
+    run: ResearchRun,
+    checkpoint: ResearchMissionRecoveryCheckpoint | None,
+) -> ResearchComparisonReviewRecord | None:
+    """Return the current operator review of the mission's retained comparison.
+
+    The note is named by the durable checkpoint, and the review must still
+    cite that note's exact evidence.  Nothing is read from note prose.
+    """
+    if checkpoint is None or not checkpoint.semantic_note_id:
+        return None
+    note = next(
+        (
+            value
+            for value in run.comparison_notes
+            if value.note_id == checkpoint.semantic_note_id
+        ),
+        None,
+    )
+    review = current_comparison_review(
+        run.comparison_reviews, checkpoint.semantic_note_id
+    )
+    if note is None or review is None or review.evidence_ids != note.evidence_ids:
+        return None
+    return review
+
+
+def supporting_comparison_review(
+    run: ResearchRun,
+    checkpoint: ResearchMissionRecoveryCheckpoint | None,
+) -> ResearchComparisonReviewRecord | None:
+    """Return the review that explicitly supports a tentative agreement, if any."""
+    if (
+        checkpoint is None
+        or checkpoint.semantic_relation != "possible_agreement"
+        or checkpoint.contradiction_initial_relation
+    ):
+        return None
+    review = mission_comparison_review(run, checkpoint)
+    if (
+        review is None
+        or review.decision is not ResearchComparisonReviewDecision.SUPPORTED
+    ):
+        return None
+    return review
+
+
 def mission_outcome_for(
     run: ResearchRun,
     stop_reason: AutonomyStopReason | str,
@@ -87,10 +139,12 @@ def mission_outcome_for(
         raise ResearchError("Research mission outcome stop reason is invalid.")
     execution_outcome = outcome_for(normalized_stop)
     evidence_evaluation = evaluate_evidence_completion(run, normalized_stop)
+    support = supporting_comparison_review(run, checkpoint)
     goal_satisfaction = evaluate_mission_goal_satisfaction(
         execution_outcome,
         evidence_evaluation,
         checkpoint,
+        supported_by_review_id=support.review_id if support else "",
     )
     return ResearchMissionOutcome(
         execution_outcome=execution_outcome,

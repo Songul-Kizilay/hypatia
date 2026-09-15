@@ -5,9 +5,33 @@ from research.ResearchEvidenceCompletionEvaluation import (
     evaluate_evidence_completion,
 )
 from research.ResearchMissionGoalExplanation import explain_mission_goal_satisfaction
-from research.ResearchMissionOutcome import mission_outcome_for
+from research.ResearchMissionOutcome import (
+    mission_comparison_review,
+    mission_outcome_for,
+)
 from research.ResearchMissionRecoveryCheckpoint import ResearchMissionRecoveryCheckpoint
 from research.ResearchRun import ResearchRun
+
+
+def _comparison_review_lines(
+    run: ResearchRun, checkpoint: ResearchMissionRecoveryCheckpoint | None
+) -> tuple[str, ...]:
+    """Name the structured review of the mission comparison, or its absence."""
+    if checkpoint is None or not checkpoint.semantic_note_id:
+        return ()
+    review = mission_comparison_review(run, checkpoint)
+    if review is None:
+        return (
+            "Comparison review: none recorded for mission comparison note "
+            f"{checkpoint.semantic_note_id}; its relation remains tentative.",
+        )
+    return (
+        f"Comparison review: operator review {review.review_id} marked note "
+        f"{review.note_id} {review.decision.value.replace('_', ' ')} at "
+        f"{review.recorded_at.isoformat()}, citing evidence "
+        f"{', '.join(review.evidence_ids)}. It is a recorded human judgement from "
+        "the operator review record, not model output or note text.",
+    )
 
 
 def teaching_report(
@@ -105,6 +129,7 @@ def teaching_report(
             ),
             mission_outcome.summary(),
             goal_explanation.summary(),
+            *_comparison_review_lines(run, checkpoint),
             (
                 "The goal-satisfaction explanation is derived only from typed "
                 "execution, evidence and contradiction state. Report or model "

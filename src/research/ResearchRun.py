@@ -10,6 +10,7 @@ from research.ResearchClaimContradictionRecord import (
     ResearchClaimContradictionRecord,
 )
 from research.ResearchClaimRecord import ResearchClaimRecord
+from research.ResearchComparisonReviewRecord import ResearchComparisonReviewRecord
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchFailureRecord import ResearchFailureRecord
 from research.ResearchRunStatus import ResearchRunStatus
@@ -38,6 +39,7 @@ class ResearchRun:
     comparison_notes: tuple[ResearchSourceComparisonNoteRecord, ...] = ()
     claims: tuple[ResearchClaimRecord, ...] = ()
     claim_contradictions: tuple[ResearchClaimContradictionRecord, ...] = ()
+    comparison_reviews: tuple[ResearchComparisonReviewRecord, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.run_id, str) or not self.run_id.strip():
@@ -315,5 +317,67 @@ class ResearchRun:
             raise ResearchError(
                 "Research claim contradiction time must stay within its run lifecycle."
             )
+        self._validate_comparison_reviews()
         object.__setattr__(self, "run_id", self.run_id.strip())
         object.__setattr__(self, "question", self.question.strip())
+
+    def _validate_comparison_reviews(self) -> None:
+        """Bind each operator review to one exact retained comparison note."""
+        if not isinstance(self.comparison_reviews, tuple) or not all(
+            isinstance(record, ResearchComparisonReviewRecord)
+            for record in self.comparison_reviews
+        ):
+            raise ResearchError("Research run contains an invalid comparison review.")
+        notes_by_id = {note.note_id: note for note in self.comparison_notes}
+        reviews_by_id: dict[str, ResearchComparisonReviewRecord] = {}
+        superseded_ids: set[str] = set()
+        for review in self.comparison_reviews:
+            if review.review_id in reviews_by_id:
+                raise ResearchError(
+                    "Research run contains duplicate comparison review IDs."
+                )
+            note = notes_by_id.get(review.note_id)
+            if note is None:
+                raise ResearchError(
+                    "Research comparison reviews must reference a retained note."
+                )
+            if review.evidence_ids != note.evidence_ids:
+                raise ResearchError(
+                    "Research comparison review evidence must match its note."
+                )
+            superseded_id = review.supersedes_review_id
+            if superseded_id is not None:
+                target = reviews_by_id.get(superseded_id)
+                if target is None or target.note_id != review.note_id:
+                    raise ResearchError(
+                        "Research comparison review supersession must reference an "
+                        "earlier review of the same note."
+                    )
+                if superseded_id in superseded_ids:
+                    raise ResearchError(
+                        "A research comparison review cannot have multiple "
+                        "superseding records."
+                    )
+                if review.recorded_at < target.recorded_at:
+                    raise ResearchError(
+                        "A superseding comparison review cannot precede its target."
+                    )
+                superseded_ids.add(superseded_id)
+            if (
+                review.recorded_at < self.created_at
+                or review.recorded_at > self.updated_at
+            ):
+                raise ResearchError(
+                    "Research comparison review time must stay within its run "
+                    "lifecycle."
+                )
+            reviews_by_id[review.review_id] = review
+        current_note_ids = [
+            review.note_id
+            for review in self.comparison_reviews
+            if review.review_id not in superseded_ids
+        ]
+        if len(current_note_ids) != len(set(current_note_ids)):
+            raise ResearchError(
+                "A research comparison note can have only one current review."
+            )

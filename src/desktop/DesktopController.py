@@ -2114,6 +2114,36 @@ class DesktopController:
             )
         )
 
+    def record_research_comparison_review(
+        self,
+        research_run_id: str,
+        note_id: str,
+        decision: str,
+        note: str,
+        supersedes_review_id: str = "",
+    ) -> BrainResponse:
+        """Submit one operator review of one exact comparison note."""
+        if not research_run_id.strip() or not note_id.strip():
+            raise ValueError("A research run ID and comparison note ID are required.")
+        if not note.strip():
+            raise ValueError("An operator review note is required.")
+        return self._brain.process(
+            BrainRequest(
+                message="Record operator research comparison review",
+                source="desktop",
+                metadata={
+                    "intent": "research_comparison_review_record",
+                    "research_run_id": research_run_id.strip(),
+                    "research_comparison_note_id": note_id.strip(),
+                    "research_comparison_review_decision": decision.strip(),
+                    "research_comparison_review_note": note.strip(),
+                    "research_comparison_review_supersedes_id": (
+                        supersedes_review_id.strip()
+                    ),
+                },
+            )
+        )
+
     def record_research_claim_contradiction(
         self,
         research_run_id: str,

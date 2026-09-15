@@ -1095,6 +1095,93 @@ class LearningResearchJourneyTests(unittest.TestCase):
         self.assertEqual(response.research_plan_execution.completed_steps, 12)
         self.assertIn("not_comparable", response.message)
 
+    def review_first_note(self, run, decision="supported", supersedes=""):
+        return self.controller.record_research_comparison_review(
+            run.run_id,
+            run.comparison_notes[0].note_id,
+            decision,
+            "Operator compared both quoted excerpts against the question.",
+            supersedes,
+        )
+
+    def test_operator_review_supports_agreement_and_survives_restart(self):
+        self.relation = "possible_agreement"
+        response = self.start()
+        plan_id = response.research_plan_execution.plan_id
+        stop = response.research_autonomy.stop_reason.value
+        snapshot = self.execution._execution_store.load()[0]
+        checkpoint = snapshot.mission_checkpoint
+        calls = self.external_calls()
+        tentative = teaching_report(
+            response.research_runs[0], stop, "Spend.", checkpoint=checkpoint
+        )
+        self.assertIn("Comparison review: none recorded", tentative)
+        self.assertIn("Mission goal satisfaction: Unresolved", tentative)
+
+        recorded = self.review_first_note(response.research_runs[0])
+
+        self.assertTrue(recorded.success, recorded.message)
+        run = recorded.research_runs[0]
+        review = run.comparison_reviews[-1]
+        self.assertEqual(review.note_id, checkpoint.semantic_note_id)
+        report = teaching_report(run, stop, "Spend.", checkpoint=checkpoint)
+        self.assertIn(
+            "Mission goal satisfaction: Satisfied within the current bounded evidence",
+            report,
+        )
+        self.assertIn("Ready for bounded user conclusion", report)
+        self.assertIn("explicit operator comparison review marked supported", report)
+        self.assertIn(f"Comparison review: operator review {review.review_id}", report)
+        self.assertEqual(self.external_calls(), calls)
+        self.assertEqual(self.spend(self.execution, plan_id), (12, 6, 1))
+        self.assertEqual(
+            plan_digest(self.execution.live_plan(plan_id)), snapshot.mission_plan_digest
+        )
+
+        engine = self.restart()
+
+        execution = engine._research_plan_execution_service
+        status = self.execution_status(engine, plan_id).message
+        self.assertIn("Mission goal satisfaction: Satisfied", status)
+        self.assertIn(review.review_id, status)
+        stored = JsonFileResearchRunStore(self.root / "runs.json").load()[0]
+        self.assertEqual(stored.comparison_reviews, run.comparison_reviews)
+        self.assertEqual(self.external_calls(), calls)
+        self.assertEqual(self.spend(execution, plan_id), (12, 6, 1))
+        self.assertEqual(execution.mission_checkpoint(plan_id), checkpoint)
+
+    def test_withdrawn_review_recomputes_unresolved_and_stale_review_is_refused(self):
+        self.relation = "possible_agreement"
+        response = self.start()
+        stop = response.research_autonomy.stop_reason.value
+        checkpoint = self.execution._execution_store.load()[0].mission_checkpoint
+        first = self.review_first_note(response.research_runs[0])
+        self.assertTrue(first.success, first.message)
+        supported = first.research_runs[0]
+
+        stale = self.review_first_note(supported, "not_supported")
+        withdrawn = self.review_first_note(
+            supported, "not_supported", supported.comparison_reviews[-1].review_id
+        )
+
+        self.assertFalse(stale.success)
+        self.assertTrue(withdrawn.success, withdrawn.message)
+        outcome = mission_outcome_for(withdrawn.research_runs[0], stop, checkpoint)
+        self.assertIs(outcome.goal_satisfaction.status, GoalStatus.UNRESOLVED)
+        self.assertFalse(outcome.completion_readiness.ready)
+
+    def test_review_of_a_conflict_note_cannot_satisfy_the_goal(self):
+        response = self.start()
+        stop = response.research_autonomy.stop_reason.value
+        checkpoint = self.execution._execution_store.load()[0].mission_checkpoint
+
+        recorded = self.review_first_note(response.research_runs[0])
+
+        self.assertTrue(recorded.success, recorded.message)
+        outcome = mission_outcome_for(recorded.research_runs[0], stop, checkpoint)
+        self.assertIs(outcome.goal_satisfaction.status, GoalStatus.UNRESOLVED)
+        self.assertEqual(outcome.goal_satisfaction.supported_by_review_id, "")
+
     def spend(self, execution, plan_id):
         allowance = execution.allowance(plan_id)
         return (

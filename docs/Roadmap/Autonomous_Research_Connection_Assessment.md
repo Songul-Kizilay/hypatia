@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.366
+## Current bounded text journey: v0.3.367
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -113,6 +113,25 @@ and model prose cannot alter it. It does not change mission lifecycle,
 authorization, cumulative allowance, plan digest, source slots, provider/model
 selection, retry behavior or run closure. An unchanged recovered state renders
 the same explanation.
+
+### Operator review as the supported-comparison path: v0.3.367
+
+The run already kept operator-authored, revalidated records, but none named one
+exact comparison: assessments judge a source, claims judge a statement and claim
+contradictions link two claims. v0.3.367 adds the smallest such record: an
+operator comparison review of one retained note, with the note's exact evidence,
+a typed `supported` or `not_supported` decision, the operator's reason and the
+commit time, persisted in the run store (schema 14). A new review of a reviewed
+note supersedes exactly its current review, so support is revocable and stale
+views are refused.
+
+`tentative comparison -> explicit operator review -> supported comparison`. A
+tentative agreement is satisfied and ready only while the current review of the
+checkpoint's note is `supported`; the report names the review. The model
+relation, note text, trust, independence, claim confidence, source count and
+completion never create support, and reviews never lift conflicts, clarified
+conflicts or comparison gaps. Restart reloads reviews without authority, budget
+or calls. Automatic verification remains out of scope.
 
 ### Tentative agreement is not a supported comparison: v0.3.366
 

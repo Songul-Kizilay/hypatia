@@ -39,8 +39,13 @@ class ResearchMissionGoalSatisfaction:
     evidence_status: ResearchEvidenceCompletionStatus
     execution_outcome: BackgroundTaskOutcome
     contradiction_outcome: str = ""
+    #: The current operator comparison review that marked a tentative agreement
+    #: supported, when one exists; empty means no structured support.
+    supported_by_review_id: str = ""
 
     def __post_init__(self) -> None:
+        if not isinstance(self.supported_by_review_id, str):
+            raise ResearchError("Research mission goal support review is invalid.")
         if not isinstance(self.status, ResearchMissionGoalSatisfactionStatus):
             raise ResearchError("Research mission goal satisfaction is invalid.")
         if not isinstance(self.evidence_status, ResearchEvidenceCompletionStatus):
@@ -88,8 +93,14 @@ def evaluate_mission_goal_satisfaction(
     execution_outcome: BackgroundTaskOutcome,
     evidence_evaluation: ResearchEvidenceCompletionEvaluation,
     checkpoint: ResearchMissionRecoveryCheckpoint | None = None,
+    supported_by_review_id: str = "",
 ) -> ResearchMissionGoalSatisfaction:
     """Derive bounded satisfaction without mutating canonical research state.
+
+    ``supported_by_review_id`` names a current operator comparison review that
+    marked the mission's retained agreement note supported.  It is the only
+    input that can lift a tentative agreement; the caller derives it from
+    canonical run records, never from note prose, trust, independence or claims.
 
     A completed execution and a report-ready evidence set are both necessary
     but not by themselves sufficient.  A durable unresolved semantic conflict
@@ -139,11 +150,15 @@ def evaluate_mission_goal_satisfaction(
     # supported agreement state, and neither trust, independence nor claims
     # upgrade it, so it cannot establish the supported comparison a learning
     # mission is asked for.
-    tentative_agreement_only = bool(
+    agreement_relation = bool(
         checkpoint is not None
         and checkpoint.semantic_relation == "possible_agreement"
         and not checkpoint.contradiction_initial_relation
     )
+    if not isinstance(supported_by_review_id, str):
+        raise ResearchError("Research mission goal support review is invalid.")
+    support_review_id = supported_by_review_id.strip() if agreement_relation else ""
+    tentative_agreement_only = agreement_relation and not support_review_id
     # A mission checkpoint written before comparison relations were recorded has
     # retained notes but no typed relation; it must not be read as supported.
     relation_unrecorded = bool(
@@ -194,4 +209,9 @@ def evaluate_mission_goal_satisfaction(
         evidence_status=evidence_evaluation.status,
         execution_outcome=execution_outcome,
         contradiction_outcome=contradiction_outcome,
+        supported_by_review_id=(
+            support_review_id
+            if status is ResearchMissionGoalSatisfactionStatus.SATISFIED
+            else ""
+        ),
     )

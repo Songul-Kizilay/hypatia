@@ -33,6 +33,12 @@ from research.ResearchClaimRecord import (
     ResearchClaimRecord,
 )
 from research.ResearchClaimWritePreview import ResearchClaimWritePreview
+from research.ResearchComparisonReviewRecord import (
+    MAX_COMPARISON_REVIEW_NOTE_CHARACTERS,
+    ResearchComparisonReviewDecision,
+    ResearchComparisonReviewRecord,
+    current_comparison_review,
+)
 from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchFailureRecord import ResearchFailureRecord
@@ -154,6 +160,7 @@ class ResearchRunManager:
                 comparison_notes=(),
                 claims=(),
                 claim_contradictions=(),
+                comparison_reviews=(),
             )
             candidate = (*self._runs, run)
             self._persist(candidate)
@@ -368,6 +375,7 @@ class ResearchRunManager:
                 comparison_notes=run.comparison_notes,
                 claims=run.claims,
                 claim_contradictions=run.claim_contradictions,
+                comparison_reviews=run.comparison_reviews,
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -407,6 +415,7 @@ class ResearchRunManager:
                 comparison_notes=run.comparison_notes,
                 claims=run.claims,
                 claim_contradictions=run.claim_contradictions,
+                comparison_reviews=run.comparison_reviews,
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -451,6 +460,7 @@ class ResearchRunManager:
                 comparison_notes=run.comparison_notes,
                 claims=run.claims,
                 claim_contradictions=run.claim_contradictions,
+                comparison_reviews=run.comparison_reviews,
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -509,6 +519,7 @@ class ResearchRunManager:
                 comparison_notes=run.comparison_notes,
                 claims=run.claims,
                 claim_contradictions=run.claim_contradictions,
+                comparison_reviews=run.comparison_reviews,
             )
             candidate_runs = list(self._runs)
             candidate_runs[index] = updated
@@ -905,6 +916,7 @@ class ResearchRunManager:
                 comparison_notes=run.comparison_notes,
                 claims=(*run.claims, claim),
                 claim_contradictions=run.claim_contradictions,
+                comparison_reviews=run.comparison_reviews,
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -995,6 +1007,7 @@ class ResearchRunManager:
                 comparison_notes=run.comparison_notes,
                 claims=run.claims,
                 claim_contradictions=(*run.claim_contradictions, contradiction),
+                comparison_reviews=run.comparison_reviews,
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -1002,6 +1015,107 @@ class ResearchRunManager:
             self._persist(candidate_tuple)
             self._runs = candidate_tuple
         return updated
+
+    def record_comparison_review(
+        self,
+        run_id: str,
+        note_id: str,
+        decision: ResearchComparisonReviewDecision | str,
+        note: str,
+        supersedes_review_id: str | None = None,
+    ) -> ResearchRun:
+        """Revalidate and append one operator review of one exact comparison note.
+
+        The review copies the note's evidence identities.  A note that already
+        has a current review can only be reviewed again by superseding exactly
+        that review, so a stale operator view cannot overwrite a newer decision
+        and support can be withdrawn without deleting history.
+        """
+        normalized_run_id = self._normalize_run_id(run_id)
+        if not isinstance(note_id, str) or not note_id.strip():
+            raise ResearchError("Research comparison review note ID cannot be empty.")
+        normalized_note_id = note_id.strip()
+        try:
+            normalized_decision = ResearchComparisonReviewDecision(
+                decision.strip() if isinstance(decision, str) else decision
+            )
+        except (TypeError, ValueError) as error:
+            raise ResearchError(
+                "Research comparison review decision is invalid."
+            ) from error
+        if not isinstance(note, str) or not note.strip():
+            raise ResearchError("Research comparison review note cannot be empty.")
+        normalized_note = note.strip()
+        if len(normalized_note) > MAX_COMPARISON_REVIEW_NOTE_CHARACTERS:
+            raise ResearchError("Research comparison review note is too long.")
+        if supersedes_review_id is not None and not isinstance(
+            supersedes_review_id, str
+        ):
+            raise ResearchError("Superseded comparison review ID is invalid.")
+        normalized_superseded = (supersedes_review_id or "").strip() or None
+        with self._lock:
+            index, run = self._find_with_index(normalized_run_id)
+            target = next(
+                (
+                    value
+                    for value in run.comparison_notes
+                    if value.note_id == normalized_note_id
+                ),
+                None,
+            )
+            if target is None:
+                raise ResearchError(
+                    "Research comparison note was not found in this run."
+                )
+            current = current_comparison_review(run.comparison_reviews, target.note_id)
+            if (current.review_id if current else None) != normalized_superseded:
+                raise ResearchError(
+                    "A comparison review must supersede exactly the current review "
+                    "of its note."
+                )
+            self._require_collecting(run)
+            now = self._now()
+            review = ResearchComparisonReviewRecord(
+                review_id=self._new_comparison_review_id(),
+                note_id=target.note_id,
+                evidence_ids=target.evidence_ids,
+                decision=normalized_decision,
+                note=normalized_note,
+                recorded_at=now,
+                supersedes_review_id=normalized_superseded,
+            )
+            updated = ResearchRun(
+                run_id=run.run_id,
+                question=run.question,
+                status=run.status,
+                sources=run.sources,
+                failures=run.failures,
+                created_at=run.created_at,
+                updated_at=now,
+                evidence=run.evidence,
+                discoveries=run.discoveries,
+                assessments=run.assessments,
+                comparison_notes=run.comparison_notes,
+                claims=run.claims,
+                claim_contradictions=run.claim_contradictions,
+                comparison_reviews=(*run.comparison_reviews, review),
+            )
+            candidate = list(self._runs)
+            candidate[index] = updated
+            candidate_tuple = tuple(candidate)
+            self._persist(candidate_tuple)
+            self._runs = candidate_tuple
+        return updated
+
+    def _new_comparison_review_id(self) -> str:
+        review_id = str(uuid4())
+        if any(
+            record.review_id == review_id
+            for run in self._runs
+            for record in run.comparison_reviews
+        ):
+            raise ResearchError("Research comparison review ID already exists.")
+        return review_id
 
     def record_source_assessment(
         self,
@@ -1086,6 +1200,7 @@ class ResearchRunManager:
                 comparison_notes=run.comparison_notes,
                 claims=run.claims,
                 claim_contradictions=run.claim_contradictions,
+                comparison_reviews=run.comparison_reviews,
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -1192,6 +1307,7 @@ class ResearchRunManager:
                 comparison_notes=(*run.comparison_notes, note),
                 claims=run.claims,
                 claim_contradictions=run.claim_contradictions,
+                comparison_reviews=run.comparison_reviews,
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -1229,6 +1345,7 @@ class ResearchRunManager:
                 comparison_notes=run.comparison_notes,
                 claims=run.claims,
                 claim_contradictions=run.claim_contradictions,
+                comparison_reviews=run.comparison_reviews,
             )
             candidate = list(self._runs)
             candidate[index] = updated

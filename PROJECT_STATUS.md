@@ -2,12 +2,15 @@
 
 ## Runtime Version
 
-`v0.3.366 (Genesis)`
+`v0.3.367 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.366 keeps a first comparison that only tentatively agrees
+Version v0.3.367 adds the one explicit path to a supported comparison: a
+persisted operator comparison review of the exact mission note. A current
+`supported` review satisfies a tentative agreement; withdrawing it recomputes
+`unresolved`, and nothing else creates support. Version v0.3.366 keeps a first comparison that only tentatively agrees
 unresolved and not ready: the data model has no supported or verified agreement
 state, so tentative agreement is not a supported comparison. Version v0.3.365
 keeps a structurally clarified tentative conflict unresolved and
