@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.364
+## Current bounded text journey: v0.3.365
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -113,6 +113,18 @@ and model prose cannot alter it. It does not change mission lifecycle,
 authorization, cumulative allowance, plan digest, source slots, provider/model
 selection, retry behavior or run closure. An unchanged recovered state renders
 the same explanation.
+
+### Clarified conflicts are not verified resolutions: v0.3.365
+
+The follow-up branch compares the first source with one new source. When that
+tentatively agreed, the outcome `structurally_clarified` previously satisfied the
+goal and marked the mission ready, although nothing was verified. No mission
+scope defines an objective that identifying the aligned side completes, so any
+recorded tentative conflict now leaves the goal `unresolved` and the mission not
+ready, and the explanation says the structure was clarified without a verified
+resolution. `structural clarification != verified resolution`. Legacy
+checkpoints that record the conflict only in `semantic_relation` fail safe the
+same way; a mission whose initial comparison agreed remains satisfied.
 
 ### Not-comparable sources as an unresolved comparison gap: v0.3.364
 

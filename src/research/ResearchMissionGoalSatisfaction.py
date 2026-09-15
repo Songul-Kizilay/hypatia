@@ -115,6 +115,19 @@ def evaluate_mission_goal_satisfaction(
     # sources were judged not comparable.  Whether or not an authorized
     # follow-up has run (or the checkpoint predates recording it), retained
     # notes cannot make that gap a satisfied comparison deliverable.
+    # Any recorded tentative conflict leaves the original disputed comparison
+    # unresolved.  A follow-up that tentatively agrees with the first source only
+    # clarifies the conflict's structure (``structurally_clarified``); no mission
+    # scope declares an objective that such alignment completes, so it is not a
+    # verified resolution.  Checkpoints written before contradiction fields carry
+    # the conflict only in ``semantic_relation`` and must not read as satisfied.
+    conflict_recorded = bool(
+        checkpoint is not None
+        and (
+            checkpoint.semantic_relation == "possible_conflict"
+            or checkpoint.contradiction_initial_relation == "possible_conflict"
+        )
+    )
     comparison_unsupported = bool(
         checkpoint is not None
         and checkpoint.semantic_relation
@@ -135,6 +148,7 @@ def evaluate_mission_goal_satisfaction(
         status = ResearchMissionGoalSatisfactionStatus.BUDGET_LIMITED
     elif (
         tentative_conflict_without_outcome
+        or conflict_recorded
         or comparison_unsupported
         or contradiction_outcome == "unresolved"
         or (

@@ -2,6 +2,32 @@
 
 All notable project changes are recorded here.
 
+## [0.3.365] - 2026-09-15
+
+### Fixed
+
+- A learning mission whose tentative conflict was followed up by a comparison of
+  the first source with a new source that tentatively agreed
+  (`contradiction_outcome` `structurally_clarified`) reported a satisfied goal
+  and "Ready for bounded user conclusion", although every relation was a
+  tentative model comparison, assessments were unassessed and no claim existed.
+  No mission scope declares an objective that such alignment completes, so the
+  goal is now `unresolved` and readiness is "Not ready: a canonical conflict
+  remains unresolved". The explanation says the follow-up clarifies the conflict
+  structure but does not establish a verified resolution of the original
+  disputed comparison or claim.
+- A checkpoint written before contradiction fields, which records a tentative
+  conflict only in `semantic_relation`, could also yield a satisfied, ready
+  goal; it is now unresolved and not ready, with the unresolved-contradiction
+  reason.
+
+### Boundaries
+
+- A mission whose initial comparison tentatively agreed (no conflict) is still
+  satisfied. No new checkpoint fields, authority, budget, follow-up, source slot,
+  provider or model call; spend and the plan digest are unchanged, and nothing is
+  inferred from note prose.
+
 ## [0.3.364] - 2026-09-15
 
 ### Fixed

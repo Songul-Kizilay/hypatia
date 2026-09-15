@@ -2,12 +2,15 @@
 
 ## Runtime Version
 
-`v0.3.364 (Genesis)`
+`v0.3.365 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.364 treats sources judged `not_comparable` as an unresolved
+Version v0.3.365 keeps a structurally clarified tentative conflict unresolved and
+not ready: clarification of the conflict structure is not a verified resolution.
+Legacy checkpoints recording the conflict only in their semantic relation also no
+longer read as satisfied. Version v0.3.364 treats sources judged `not_comparable` as an unresolved
 comparison gap rather than a satisfied mission, and names the durable follow-up
 relation when a contradiction stays unresolved. Version v0.3.363 fixes the empty-proposal follow-up branch: it now completes and
 records a durable `no_supported_comparison` outcome, and the mission goal is

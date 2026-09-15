@@ -116,10 +116,14 @@ def evaluate_mission_completion_readiness(
         raise ResearchError("Research mission readiness checkpoint is invalid.")
 
     contradiction_outcome = checkpoint.contradiction_outcome if checkpoint else ""
+    # Structural clarification is not a verified resolution, and a legacy
+    # checkpoint may record the conflict only in its semantic relation.
     pending_conflict = bool(
         checkpoint is not None
-        and checkpoint.contradiction_initial_relation == "possible_conflict"
-        and contradiction_outcome != "structurally_clarified"
+        and (
+            checkpoint.contradiction_initial_relation == "possible_conflict"
+            or checkpoint.semantic_relation == "possible_conflict"
+        )
     )
     if goal_status is ResearchMissionGoalSatisfactionStatus.SATISFIED:
         status = ResearchMissionCompletionReadinessStatus.READY

@@ -147,33 +147,36 @@ class ResearchMissionGoalExplanationTests(unittest.TestCase):
         self.assertIn(Reason.UNRESOLVED_TENTATIVE_CONTRADICTION, value.reasons)
         self.assertNotIn("true", value.summary().lower())
 
-    def test_clarified_conflict_stays_visible_without_downgrading_satisfaction(self):
+    def test_clarified_conflict_is_unresolved_and_explained_as_structure_only(self):
         checkpoint = replace(
             unresolved_checkpoint(),
             contradiction_followup_relation="possible_agreement",
             contradiction_outcome="structurally_clarified",
         )
-        subject = outcome(contradiction_outcome="structurally_clarified")
+        subject = outcome(
+            goal_status=GoalStatus.UNRESOLVED,
+            contradiction_outcome="structurally_clarified",
+        )
 
         value = explain_mission_goal_satisfaction(
             subject, AutonomyStopReason.RESEARCH_DELIVERABLE_READY, checkpoint
         )
 
-        self.assertIs(value.status, GoalStatus.SATISFIED)
+        self.assertIs(value.status, GoalStatus.UNRESOLVED)
         self.assertEqual(
-            value.reasons,
-            (
-                Reason.SUPPORTED_CURRENT_EVIDENCE,
-                Reason.TENTATIVE_CONFLICT_STRUCTURALLY_CLARIFIED,
-            ),
+            value.reasons, (Reason.TENTATIVE_CONFLICT_STRUCTURALLY_CLARIFIED,)
         )
         summary = value.summary()
         self.assertLess(
-            summary.index("Goal status: satisfied."),
-            summary.index("clarifies structure only"),
+            summary.index("Goal status: unresolved."),
+            summary.index("clarifies the conflict structure"),
         )
-        self.assertIn("does not resolve the original disagreement", summary)
-        self.assertNotIn("remains unresolved", summary)
+        self.assertIn(
+            "does not establish a verified resolution of the original disputed "
+            "comparison or claim",
+            summary,
+        )
+        self.assertNotIn("supports the bounded teaching deliverable", summary)
 
     def test_no_conflict_checkpoint_adds_no_clarification_reason(self):
         value = explain_mission_goal_satisfaction(

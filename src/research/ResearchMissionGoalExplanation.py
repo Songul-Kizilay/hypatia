@@ -107,8 +107,10 @@ _REASON_TEXT = {
     ),
     ResearchMissionGoalExplanationReason.TENTATIVE_CONFLICT_STRUCTURALLY_CLARIFIED: (
         "A tentative conflict between the first two sources led to one follow-up "
-        "comparison that did not conflict; this clarifies structure only and does "
-        "not resolve the original disagreement or show either source wrong"
+        "comparison of the first source with a new source, which tentatively "
+        "agreed; this clarifies the conflict structure but does not establish a "
+        "verified resolution of the original disputed comparison or claim, and "
+        "does not show either source wrong"
     ),
     ResearchMissionGoalExplanationReason.CONTRADICTION_FOLLOWUP_CONFLICT: (
         "The one authorized follow-up comparison with a new source also returned "
@@ -295,8 +297,15 @@ def explain_mission_goal_satisfaction(
         if reason is not None:
             reasons.append(reason)
     if checkpoint is not None and (
-        checkpoint.contradiction_initial_relation == "possible_conflict"
-        and checkpoint.contradiction_outcome != "structurally_clarified"
+        (
+            checkpoint.contradiction_initial_relation == "possible_conflict"
+            and checkpoint.contradiction_outcome != "structurally_clarified"
+        )
+        or (
+            # A legacy checkpoint records the conflict only here.
+            checkpoint.semantic_relation == "possible_conflict"
+            and not checkpoint.contradiction_initial_relation
+        )
     ):
         reasons.append(
             ResearchMissionGoalExplanationReason.UNRESOLVED_TENTATIVE_CONTRADICTION
@@ -328,8 +337,8 @@ def explain_mission_goal_satisfaction(
         checkpoint.contradiction_initial_relation == "possible_conflict"
         and checkpoint.contradiction_outcome == "structurally_clarified"
     ):
-        # A satisfied goal must not read as a resolved disagreement: the
-        # follow-up clarified structure; it did not settle the original pair.
+        # The goal stays unresolved: the follow-up clarified structure; it did
+        # not verify a resolution of the original pair.
         reasons.append(
             ResearchMissionGoalExplanationReason.TENTATIVE_CONFLICT_STRUCTURALLY_CLARIFIED
         )

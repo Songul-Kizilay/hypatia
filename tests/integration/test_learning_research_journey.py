@@ -376,13 +376,126 @@ class LearningResearchJourneyTests(unittest.TestCase):
         self.assertEqual(checkpoint.contradiction_outcome, "structurally_clarified")
         self.assertEqual(response.research_runs[0].claims, ())
         self.assertFalse(response.research_runs[0].status.terminal)
+        self.assertIn("Mission goal satisfaction: Unresolved", response.message)
         self.assertIn(
-            "mission goal satisfaction: satisfied within the current bounded evidence",
-            response.message.lower(),
+            "Mission completion readiness: Not ready: a canonical conflict remains "
+            "unresolved",
+            response.message,
         )
-        self.assertIn("clarifies structure only", response.message)
-        self.assertIn("does not resolve the original disagreement", response.message)
-        self.assertNotIn("contradiction remains unresolved", response.message)
+        self.assertIn("clarifies the conflict structure", response.message)
+        self.assertIn(
+            "does not establish a verified resolution of the original disputed "
+            "comparison or claim",
+            response.message,
+        )
+        self.assertNotIn(
+            "Satisfied within the current bounded evidence", response.message
+        )
+        self.assertNotIn("Ready for bounded user conclusion", response.message)
+
+    def clarified_conflict(self):
+        self.relations = ["possible_conflict", "possible_agreement"]
+        response = self.start()
+        snapshot = self.execution._execution_store.load()[0]
+        return response, snapshot
+
+    def test_clarified_conflict_spends_nothing_extra_and_stays_tentative(self):
+        response, snapshot = self.clarified_conflict()
+        plan_id = response.research_plan_execution.plan_id
+        checkpoint = snapshot.mission_checkpoint
+        run = response.research_runs[0]
+
+        # The follow-up pairs the first source (side A) with one new source;
+        # the second source (side B) is never a follow-up target by design.
+        note = next(
+            value
+            for value in run.comparison_notes
+            if value.note_id == checkpoint.contradiction_followup_note_id
+        )
+        self.assertEqual(
+            note.evidence_ids[0], checkpoint.contradiction_initial_evidence_ids[0]
+        )
+        self.assertNotIn(
+            checkpoint.contradiction_initial_evidence_ids[1], note.evidence_ids
+        )
+        self.assertIn("Tentative relation: possible_agreement.", note.text)
+        self.assertEqual(
+            checkpoint.contradiction_followup_relation, "possible_agreement"
+        )
+        self.assertEqual((run.claims, run.claim_contradictions), ((), ()))
+        self.assertEqual(
+            {assessment.information_trust.value for assessment in run.assessments},
+            {"unassessed"},
+        )
+        plan = self.execution.live_plan(plan_id)
+        self.assertIs(
+            self.execution._mission_resolver.followup_decision(
+                plan, plan.steps[12].step_id, self.execution.allowance(plan_id)
+            ).status,
+            ResearchMissionFollowupDecisionStatus.COMPLETED,
+        )
+        self.assertEqual(plan_digest(plan), snapshot.mission_plan_digest)
+        self.assertEqual(len(checkpoint.acquired_urls), 3)
+        self.assertEqual(self.spend(self.execution, plan_id), (18, 9, 2))
+        self.assertEqual(
+            (self.fetcher.fetch.call_count, self.transport.call_count), (3, 2)
+        )
+
+    def test_restart_recomputes_the_same_unresolved_clarified_conflict(self):
+        response, snapshot = self.clarified_conflict()
+        plan_id = response.research_plan_execution.plan_id
+        stop = response.research_autonomy.stop_reason.value
+        calls = self.external_calls()
+
+        engine = self.restart()
+
+        restored = engine._research_plan_execution_service.restored_execution(plan_id)
+        self.assertEqual(restored.mission_checkpoint, snapshot.mission_checkpoint)
+        self.assertEqual(restored.mission_plan_digest, snapshot.mission_plan_digest)
+        self.assertEqual(restored.allowance, snapshot.allowance)
+        run = JsonFileResearchRunStore(self.root / "runs.json").load()[0]
+        outcome = mission_outcome_for(run, stop, restored.mission_checkpoint)
+        self.assertIs(outcome.goal_satisfaction.status, GoalStatus.UNRESOLVED)
+        self.assertFalse(outcome.completion_readiness.ready)
+        self.assertEqual(self.external_calls(), calls)
+
+    def test_legacy_clarified_checkpoint_never_becomes_satisfied(self):
+        response, _ = self.clarified_conflict()
+        plan_id = response.research_plan_execution.plan_id
+        stop = response.research_autonomy.stop_reason.value
+        path = self.root / "research_executions.json"
+        document = json.loads(path.read_text(encoding="utf-8"))
+        checkpoint = document["executions"][0]["mission_checkpoint"]
+        for key in tuple(checkpoint):
+            if key.startswith(("contradiction_", "evidence_gap_")):
+                checkpoint.pop(key)
+        path.write_text(json.dumps(document), encoding="utf-8")
+        calls = self.external_calls()
+
+        engine = self.restart()
+
+        legacy = engine._research_plan_execution_service.restored_execution(
+            plan_id
+        ).mission_checkpoint
+        self.assertEqual(legacy.semantic_relation, "possible_conflict")
+        self.assertEqual(legacy.contradiction_outcome, "")
+        run = JsonFileResearchRunStore(self.root / "runs.json").load()[0]
+        outcome = mission_outcome_for(run, stop, legacy)
+        self.assertIs(outcome.goal_satisfaction.status, GoalStatus.UNRESOLVED)
+        self.assertFalse(outcome.completion_readiness.ready)
+        self.assertEqual(self.external_calls(), calls)
+
+    def test_initial_agreement_without_conflict_remains_satisfied(self):
+        self.relation = "possible_agreement"
+
+        response = self.start()
+
+        self.assertIn(
+            "Mission goal satisfaction: Satisfied within the current bounded evidence",
+            response.message,
+        )
+        self.assertIn("Ready for bounded user conclusion", response.message)
+        self.assertNotIn("clarifies the conflict structure", response.message)
 
     def test_conflict_derives_the_existing_typed_followup_slot_once(self):
         decisions = []
