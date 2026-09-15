@@ -2,11 +2,14 @@
 
 ## Runtime Version
 
-`v0.3.362 (Genesis)`
+`v0.3.363 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
+Version v0.3.363 fixes the empty-proposal follow-up branch: it now completes and
+records a durable `no_supported_comparison` outcome, and the mission goal is
+`unresolved` rather than a false execution failure or a false satisfaction.
 Version v0.3.362 shows matching prior advisory lessons in the inert learning
 preview, before approval and spend. Version v0.3.361 keeps a structurally clarified tentative conflict visible in the
 goal explanation so a satisfied mission cannot read as a resolved disagreement.

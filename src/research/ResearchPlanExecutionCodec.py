@@ -109,6 +109,15 @@ _MISSION_CHECKPOINT_FIELDS_WITH_CONTRADICTION_OUTCOME = _MISSION_CHECKPOINT_FIEL
     "contradiction_followup_relation",
     "contradiction_outcome",
 }
+_MISSION_CHECKPOINT_FIELDS_WITH_EVIDENCE_GAP_OUTCOME = (
+    _MISSION_CHECKPOINT_FIELDS_WITH_CONTRADICTION_OUTCOME
+    | {
+        "evidence_gap_followup_note_id",
+        "evidence_gap_followup_input_fingerprint",
+        "evidence_gap_followup_relation",
+        "evidence_gap_outcome",
+    }
+)
 _ALLOWANCE_FIELDS = frozenset({"budget", "spend"})
 _BUDGET_FIELDS = frozenset(
     {
@@ -370,6 +379,12 @@ def _encode_mission_checkpoint(
         ),
         "contradiction_followup_relation": checkpoint.contradiction_followup_relation,
         "contradiction_outcome": checkpoint.contradiction_outcome,
+        "evidence_gap_followup_note_id": checkpoint.evidence_gap_followup_note_id,
+        "evidence_gap_followup_input_fingerprint": (
+            checkpoint.evidence_gap_followup_input_fingerprint
+        ),
+        "evidence_gap_followup_relation": checkpoint.evidence_gap_followup_relation,
+        "evidence_gap_outcome": checkpoint.evidence_gap_outcome,
     }
 
 
@@ -382,6 +397,7 @@ def _decode_mission_checkpoint(
         _MISSION_CHECKPOINT_FIELDS_V1,
         _MISSION_CHECKPOINT_FIELDS,
         _MISSION_CHECKPOINT_FIELDS_WITH_CONTRADICTION_OUTCOME,
+        _MISSION_CHECKPOINT_FIELDS_WITH_EVIDENCE_GAP_OUTCOME,
     ):
         raise ResearchError("Execution snapshot mission checkpoint is invalid.")
     sequences = (
@@ -397,9 +413,10 @@ def _decode_mission_checkpoint(
         "contradiction_initial_source_document_ids",
         "contradiction_initial_assessment_ids",
     )
-    if set(value) == _MISSION_CHECKPOINT_FIELDS_WITH_CONTRADICTION_OUTCOME and any(
-        not isinstance(value[name], list) for name in contradiction_sequences
-    ):
+    if set(value) in (
+        _MISSION_CHECKPOINT_FIELDS_WITH_CONTRADICTION_OUTCOME,
+        _MISSION_CHECKPOINT_FIELDS_WITH_EVIDENCE_GAP_OUTCOME,
+    ) and any(not isinstance(value[name], list) for name in contradiction_sequences):
         raise ResearchError("Execution snapshot mission checkpoint is invalid.")
     try:
         return ResearchMissionRecoveryCheckpoint(
@@ -449,6 +466,18 @@ def _decode_mission_checkpoint(
                 "contradiction_followup_relation", ""
             ),
             contradiction_outcome=value.get("contradiction_outcome", ""),
+            # Absent in legacy checkpoints: decoded as "not recorded", never as
+            # a supported or resolved follow-up.
+            evidence_gap_followup_note_id=value.get(
+                "evidence_gap_followup_note_id", ""
+            ),
+            evidence_gap_followup_input_fingerprint=value.get(
+                "evidence_gap_followup_input_fingerprint", ""
+            ),
+            evidence_gap_followup_relation=value.get(
+                "evidence_gap_followup_relation", ""
+            ),
+            evidence_gap_outcome=value.get("evidence_gap_outcome", ""),
         )
     except ResearchError as error:
         raise ResearchError(

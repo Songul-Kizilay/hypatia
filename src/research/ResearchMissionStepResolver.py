@@ -75,6 +75,10 @@ class _Observations:
     contradiction_followup_input_fingerprint: str = ""
     contradiction_followup_relation: str = ""
     contradiction_outcome: str = ""
+    evidence_gap_followup_note_id: str = ""
+    evidence_gap_followup_input_fingerprint: str = ""
+    evidence_gap_followup_relation: str = ""
+    evidence_gap_outcome: str = ""
 
 
 class ResearchMissionStepResolver:
@@ -314,6 +318,12 @@ class ResearchMissionStepResolver:
             ),
             contradiction_followup_relation=(observed.contradiction_followup_relation),
             contradiction_outcome=observed.contradiction_outcome,
+            evidence_gap_followup_note_id=observed.evidence_gap_followup_note_id,
+            evidence_gap_followup_input_fingerprint=(
+                observed.evidence_gap_followup_input_fingerprint
+            ),
+            evidence_gap_followup_relation=observed.evidence_gap_followup_relation,
+            evidence_gap_outcome=observed.evidence_gap_outcome,
         )
 
     def restore(
@@ -413,6 +423,7 @@ class ResearchMissionStepResolver:
         self._restore_contradiction_investigation(
             plan, by_id, checkpoint, observed, run
         )
+        self._restore_evidence_gap_followup(plan, by_id, checkpoint, observed, run)
         self._observed[plan.plan_id] = observed
 
     @staticmethod
@@ -601,7 +612,7 @@ class ResearchMissionStepResolver:
                 step_id,
                 ResearchMissionFollowupDecisionStatus.BLOCKED_PREDECESSOR,
             )
-        if observed.contradiction_outcome:
+        if observed.contradiction_outcome or observed.evidence_gap_outcome:
             return self._followup_decision(
                 plan,
                 step_id,
@@ -727,6 +738,47 @@ class ResearchMissionStepResolver:
             return
         if len(observed.evidence) != 3:
             raise ResearchError("Mission contradiction follow-up lacks three sources.")
+        if (
+            observed.semantic_relation == "no_supported_comparison"
+            and not observed.contradiction_initial_note_id
+        ):
+            # The same pre-approved third-source slot, reached because the
+            # initial proposal supported nothing.  Record what it retained; a
+            # second empty result is an evidence gap, not an execution failure.
+            if observed.evidence_gap_outcome:
+                raise ResearchError("Mission evidence-gap follow-up cannot repeat.")
+            first_evidence = observed.evidence[0]
+            gap_evidence = observed.evidence[-1]
+            gap_assessment = next(
+                (
+                    value
+                    for value in observed.assessments
+                    if value.evidence_ids == (gap_evidence.evidence_id,)
+                ),
+                None,
+            )
+            if (
+                gap_assessment is None
+                or note.evidence_ids
+                != (first_evidence.evidence_id, gap_evidence.evidence_id)
+                or note.source_document_ids
+                != (first_evidence.source_document_id, gap_evidence.source_document_id)
+                or gap_assessment.assessment_id not in note.assessment_ids
+            ):
+                raise ResearchError(
+                    "Mission evidence-gap follow-up provenance changed."
+                )
+            observed.evidence_gap_followup_note_id = note.note_id
+            observed.evidence_gap_followup_input_fingerprint = (
+                result.request.content_fingerprint
+            )
+            observed.evidence_gap_followup_relation = relation
+            observed.evidence_gap_outcome = (
+                "no_supported_comparison"
+                if relation == "no_supported_comparison"
+                else "followup_comparison_recorded"
+            )
+            return
         if (
             observed.contradiction_initial_relation != "possible_conflict"
             or not observed.contradiction_initial_note_id
@@ -1004,6 +1056,91 @@ class ResearchMissionStepResolver:
             checkpoint.contradiction_followup_relation
         )
         observed.contradiction_outcome = checkpoint.contradiction_outcome
+
+    def _restore_evidence_gap_followup(
+        self,
+        plan: ResearchPlan,
+        steps: dict[str, ResearchPlanExecutionStepSnapshot],
+        checkpoint: ResearchMissionRecoveryCheckpoint,
+        observed: _Observations,
+        run: ResearchRun,
+    ) -> None:
+        """Restore a completed empty-proposal follow-up without reinterpreting it.
+
+        A completed follow-up note with no durable typed outcome refuses rather
+        than being read from note prose or assumed supported.
+        """
+        gap_branch = (
+            checkpoint.semantic_relation == "no_supported_comparison"
+            and not checkpoint.contradiction_initial_note_id
+        )
+        if not checkpoint.evidence_gap_followup_note_id:
+            if gap_branch and self._followup_note_step(plan, steps) is not None:
+                raise ResearchError(
+                    "Mission evidence-gap follow-up outcome is unavailable."
+                )
+            return
+        if (
+            not gap_branch
+            or len(observed.evidence) != 3
+            or self._followup_note_step(plan, steps) is None
+        ):
+            raise ResearchError(
+                "Mission evidence-gap follow-up was not durably retained."
+            )
+        first_evidence = observed.evidence[0]
+        gap_evidence = observed.evidence[-1]
+        gap_assessment = next(
+            (
+                value
+                for value in observed.assessments
+                if value.evidence_ids == (gap_evidence.evidence_id,)
+            ),
+            None,
+        )
+        gap_note = next(
+            (
+                value
+                for value in run.comparison_notes
+                if value.note_id == checkpoint.evidence_gap_followup_note_id
+            ),
+            None,
+        )
+        relation = checkpoint.evidence_gap_followup_relation
+        if (
+            gap_assessment is None
+            or gap_note is None
+            or gap_note.evidence_ids
+            != (first_evidence.evidence_id, gap_evidence.evidence_id)
+            or gap_note.source_document_ids
+            != (first_evidence.source_document_id, gap_evidence.source_document_id)
+            or gap_assessment.assessment_id not in gap_note.assessment_ids
+            or "Bounded follow-up compared the first source with one new source."
+            not in gap_note.text
+            or f"Input SHA256 {checkpoint.evidence_gap_followup_input_fingerprint};"
+            not in gap_note.text
+            or f"mission {plan_digest(plan)}." not in gap_note.text
+            or (
+                relation == "no_supported_comparison"
+                and "No supported comparison proposal; evidence gap remains."
+                not in gap_note.text
+            )
+            or (
+                relation != "no_supported_comparison"
+                and f"Tentative relation: {relation}." not in gap_note.text
+            )
+        ):
+            raise ResearchError(
+                "Mission evidence-gap follow-up provenance no longer matches."
+            )
+        observed.evidence_gap_followup_note_id = (
+            checkpoint.evidence_gap_followup_note_id
+        )
+        observed.evidence_gap_followup_input_fingerprint = (
+            checkpoint.evidence_gap_followup_input_fingerprint
+        )
+        observed.evidence_gap_followup_relation = relation
+        observed.evidence_gap_outcome = checkpoint.evidence_gap_outcome
 
     @staticmethod
     def _followup_note_step(

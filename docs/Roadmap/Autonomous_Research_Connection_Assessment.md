@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.362
+## Current bounded text journey: v0.3.363
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -113,6 +113,21 @@ and model prose cannot alter it. It does not change mission lifecycle,
 authorization, cumulative allowance, plan digest, source slots, provider/model
 selection, retry behavior or run closure. An unchanged recovered state renders
 the same explanation.
+
+### Empty-proposal follow-up as a typed comparison gap: v0.3.363
+
+An empty initial proposal activates the pre-approved third-source branch. Its
+final observation previously only accepted a contradiction follow-up, so the
+authorized branch failed after spending its full budget. The observation now
+records a durable `evidence_gap_outcome` (`no_supported_comparison`, or
+`followup_comparison_recorded` for a tentative relation with the new source) and
+restart validates it against the retained note's canonical provenance.
+
+`follow-up executed != comparison established` and
+`no supported comparison != execution failure`: goal satisfaction is
+`unresolved` whenever the central comparison supported nothing, readiness stays
+not ready, and a legacy checkpoint without the outcome never yields a satisfied
+goal or an inferred result.
 
 ### Prior lessons before approval: v0.3.362
 

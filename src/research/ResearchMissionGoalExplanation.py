@@ -38,6 +38,11 @@ class ResearchMissionGoalExplanationReason(StrEnum):
     TENTATIVE_CONFLICT_STRUCTURALLY_CLARIFIED = (
         "tentative_conflict_structurally_clarified"
     )
+    NO_SUPPORTED_COMPARISON = "no_supported_comparison"
+    NO_SUPPORTED_COMPARISON_AFTER_FOLLOWUP = "no_supported_comparison_after_followup"
+    FOLLOWUP_COMPARISON_WITHOUT_INITIAL_SUPPORT = (
+        "followup_comparison_without_initial_support"
+    )
     EXECUTION_INCOMPLETE = "execution_incomplete"
     SCOPE_OR_AUTHORITY_BLOCKED = "scope_or_authority_blocked"
     EXECUTOR_REFUSED = "executor_refused"
@@ -100,6 +105,21 @@ _REASON_TEXT = {
         "A tentative conflict between the first two sources led to one follow-up "
         "comparison that did not conflict; this clarifies structure only and does "
         "not resolve the original disagreement or show either source wrong"
+    ),
+    ResearchMissionGoalExplanationReason.NO_SUPPORTED_COMPARISON: (
+        "The retained comparison established no supported comparison between "
+        "the sources; the comparison gap remains"
+    ),
+    ResearchMissionGoalExplanationReason.NO_SUPPORTED_COMPARISON_AFTER_FOLLOWUP: (
+        "No supported comparison was established: the initial comparison and the "
+        "one authorized follow-up both returned none. This is a comparison gap, "
+        "not an execution failure or missing evidence, and nothing was resolved "
+        "or verified"
+    ),
+    ResearchMissionGoalExplanationReason.FOLLOWUP_COMPARISON_WITHOUT_INITIAL_SUPPORT: (
+        "The initial comparison returned no supported comparison; the authorized "
+        "follow-up produced a tentative comparison with one new source, but it "
+        "does not establish the original comparison or resolve the original gap"
     ),
     ResearchMissionGoalExplanationReason.EXECUTION_INCOMPLETE: (
         "Execution stopped before the bounded work completed"
@@ -266,6 +286,23 @@ def explain_mission_goal_satisfaction(
         # follow-up clarified structure; it did not settle the original pair.
         reasons.append(
             ResearchMissionGoalExplanationReason.TENTATIVE_CONFLICT_STRUCTURALLY_CLARIFIED
+        )
+    elif checkpoint is not None and (
+        checkpoint.semantic_relation == "no_supported_comparison"
+        and not checkpoint.contradiction_initial_relation
+    ):
+        reasons.append(
+            {
+                "no_supported_comparison": (
+                    ResearchMissionGoalExplanationReason.NO_SUPPORTED_COMPARISON_AFTER_FOLLOWUP
+                ),
+                "followup_comparison_recorded": (
+                    ResearchMissionGoalExplanationReason.FOLLOWUP_COMPARISON_WITHOUT_INITIAL_SUPPORT
+                ),
+            }.get(
+                checkpoint.evidence_gap_outcome,
+                ResearchMissionGoalExplanationReason.NO_SUPPORTED_COMPARISON,
+            )
         )
 
     if satisfaction.status is ResearchMissionGoalSatisfactionStatus.BUDGET_LIMITED:

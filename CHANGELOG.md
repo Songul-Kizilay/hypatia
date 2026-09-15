@@ -2,6 +2,37 @@
 
 All notable project changes are recorded here.
 
+## [0.3.363] - 2026-09-15
+
+### Fixed
+
+- A learning mission whose initial semantic comparison supported nothing ran its
+  pre-approved follow-up branch in full, then failed at the final step with
+  "Mission contradiction follow-up is not authorized", reporting an execution
+  failure after spending its whole approved budget. The final observation now
+  accepts this authorized branch and records a durable typed outcome in the
+  mission checkpoint: `evidence_gap_outcome` of `no_supported_comparison`, or
+  `followup_comparison_recorded` when the follow-up retained a tentative
+  relation with the new source.
+- Goal satisfaction now treats a mission whose central comparison supported
+  nothing as `unresolved` (never `satisfied` or `failed`), whether or not the
+  follow-up has run; completion readiness stays not ready. The goal explanation
+  says no supported comparison was established and that this is a comparison
+  gap, not an execution failure or missing evidence.
+
+### Compatibility
+
+- Checkpoints gain four optional `evidence_gap_*` fields. Legacy checkpoints
+  decode with no outcome and never yield a satisfied goal; a legacy snapshot
+  whose follow-up note completed without a durable outcome refuses restart
+  instead of inferring one from note prose.
+
+### Boundaries
+
+- No new authority, budget, source slot, provider or model call; the approved
+  follow-up branch is unchanged. No claim is verified and no contradiction is
+  resolved.
+
 ## [0.3.362] - 2026-09-15
 
 ### Added

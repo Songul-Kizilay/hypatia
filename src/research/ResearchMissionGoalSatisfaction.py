@@ -111,6 +111,14 @@ def evaluate_mission_goal_satisfaction(
         and checkpoint.contradiction_initial_relation == "possible_conflict"
         and not contradiction_outcome
     )
+    # The mission's central comparison supported nothing.  Whether or not its
+    # authorized follow-up has run (or the checkpoint predates recording it),
+    # retained notes cannot make that gap a satisfied deliverable.
+    comparison_unsupported = bool(
+        checkpoint is not None
+        and checkpoint.semantic_relation == "no_supported_comparison"
+        and not checkpoint.contradiction_initial_relation
+    )
     if execution_outcome is BackgroundTaskOutcome.CANCELLED:
         status = ResearchMissionGoalSatisfactionStatus.CANCELLED
     elif execution_outcome is BackgroundTaskOutcome.FAILED:
@@ -125,6 +133,7 @@ def evaluate_mission_goal_satisfaction(
         status = ResearchMissionGoalSatisfactionStatus.BUDGET_LIMITED
     elif (
         tentative_conflict_without_outcome
+        or comparison_unsupported
         or contradiction_outcome == "unresolved"
         or (
             evidence_evaluation.status

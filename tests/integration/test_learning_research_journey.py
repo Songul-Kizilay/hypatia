@@ -532,7 +532,8 @@ class LearningResearchJourneyTests(unittest.TestCase):
         document = json.loads(path.read_text(encoding="utf-8"))
         checkpoint = document["executions"][0]["mission_checkpoint"]
         for key in tuple(checkpoint):
-            if key.startswith("contradiction_"):
+            # An older checkpoint predates both outcome groups.
+            if key.startswith(("contradiction_", "evidence_gap_")):
                 checkpoint.pop(key)
         path.write_text(json.dumps(document), encoding="utf-8")
 
@@ -747,6 +748,10 @@ class LearningResearchJourneyTests(unittest.TestCase):
             "contradiction_followup_input_fingerprint",
             "contradiction_followup_relation",
             "contradiction_outcome",
+            "evidence_gap_followup_note_id",
+            "evidence_gap_followup_input_fingerprint",
+            "evidence_gap_followup_relation",
+            "evidence_gap_outcome",
         ):
             checkpoint.pop(key)
         path.write_text(json.dumps(document), encoding="utf-8")
@@ -1019,16 +1024,169 @@ class LearningResearchJourneyTests(unittest.TestCase):
         self.assertIn("step_failed", response.message)
         self.assertTrue(self.engine._failure_memory_service.lessons())
 
-    def test_empty_model_proposal_follows_up_once_only(self):
+    def empty_proposals(self):
         self.transport.side_effect = None
         self.transport.return_value = {
             "choices": [{"message": {"content": '{"comparisons": []}'}}]
         }
+
+    def test_empty_model_proposal_follows_up_once_only(self):
+        self.empty_proposals()
         response = self.start()
         self.assertEqual(self.transport.call_count, 2)
         self.assertEqual(self.fetcher.fetch.call_count, 3)
         self.assertIn("evidence gap remains", response.message)
         self.assertEqual(response.research_runs[0].claims, ())
+
+    def test_empty_proposal_followup_completes_as_unresolved_comparison_gap(self):
+        self.empty_proposals()
+
+        response = self.start()
+
+        state = response.research_plan_execution
+        self.assertEqual(state.status.value, "completed")
+        self.assertEqual(state.completed_steps, 18)
+        self.assertNotIn("not authorized", response.message)
+        snapshot = self.execution._execution_store.load()[0]
+        checkpoint = snapshot.mission_checkpoint
+        self.assertEqual(checkpoint.semantic_relation, "no_supported_comparison")
+        self.assertEqual(checkpoint.contradiction_outcome, "")
+        self.assertEqual(checkpoint.evidence_gap_outcome, "no_supported_comparison")
+        self.assertEqual(
+            checkpoint.evidence_gap_followup_note_id,
+            response.research_runs[0].comparison_notes[-1].note_id,
+        )
+        self.assertIn("Mission goal satisfaction: Unresolved", response.message)
+        self.assertIn(
+            "Mission completion readiness: Not ready: canonical evidence remains "
+            "incomplete",
+            response.message,
+        )
+        self.assertIn(
+            "the initial comparison and the one authorized follow-up both returned "
+            "none",
+            response.message,
+        )
+        self.assertNotIn("Execution failed", response.message)
+        run = response.research_runs[0]
+        self.assertEqual((run.claims, run.claim_contradictions), ((), ()))
+        self.assertFalse(run.status.terminal)
+        allowance = self.execution.allowance(state.plan_id)
+        self.assertEqual(
+            (
+                allowance.spend.step_advances,
+                allowance.spend.network_operations,
+                allowance.spend.llm_operations,
+            ),
+            (18, 9, 2),
+        )
+        self.assertEqual(
+            plan_digest(self.execution.live_plan(state.plan_id)),
+            snapshot.mission_plan_digest,
+        )
+        self.assertEqual(len(checkpoint.acquired_urls), 3)
+        self.assertEqual(
+            (self.transport.call_count, self.fetcher.fetch.call_count), (2, 3)
+        )
+
+    def test_restart_derives_the_same_comparison_gap_without_replay(self):
+        self.empty_proposals()
+        response = self.start()
+        stop = response.research_autonomy.stop_reason.value
+        before = self.execution._execution_store.load()[0].mission_checkpoint
+        calls = self.external_calls()
+
+        engine = self.restart()
+
+        snapshot = engine._research_plan_execution_service.restored_execution(
+            response.research_plan_execution.plan_id
+        )
+        self.assertIsNotNone(snapshot)
+        restored = snapshot.mission_checkpoint
+        self.assertEqual(restored, before)
+        run = JsonFileResearchRunStore(self.root / "runs.json").load()[0]
+        self.assertIs(
+            mission_outcome_for(run, stop, restored).goal_satisfaction.status,
+            GoalStatus.UNRESOLVED,
+        )
+        self.assertEqual(self.external_calls(), calls)
+
+    def test_restart_before_gap_followup_resumes_to_the_same_unresolved_gap(self):
+        self.empty_proposals()
+        snapshot = self.interrupted_start(12)
+        self.assertEqual(
+            snapshot.mission_checkpoint.semantic_relation, "no_supported_comparison"
+        )
+        self.assertEqual(
+            (self.transport.call_count, self.fetcher.fetch.call_count), (1, 2)
+        )
+
+        engine = self.restart()
+
+        execution = engine._research_plan_execution_service
+        state = execution.live_execution(snapshot.plan_id)
+        self.assertEqual((state.status.value, state.completed_steps), ("completed", 18))
+        checkpoint = execution.mission_checkpoint(snapshot.plan_id)
+        self.assertEqual(checkpoint.evidence_gap_outcome, "no_supported_comparison")
+        status = self.execution_status(engine, snapshot.plan_id).message
+        self.assertIn("Mission goal satisfaction: Unresolved", status)
+        self.assertIn("both returned none", status)
+        self.assertEqual(
+            (self.transport.call_count, self.fetcher.fetch.call_count), (2, 3)
+        )
+        allowance = execution.allowance(snapshot.plan_id)
+        self.assertEqual(
+            (
+                allowance.spend.step_advances,
+                allowance.spend.network_operations,
+                allowance.spend.llm_operations,
+            ),
+            (18, 9, 2),
+        )
+
+    def test_legacy_gap_checkpoint_without_outcome_never_becomes_satisfied(self):
+        self.empty_proposals()
+        response = self.start()
+        plan_id = response.research_plan_execution.plan_id
+        stop = response.research_autonomy.stop_reason.value
+        store_path = next(
+            path
+            for path in self.root.rglob("*.json")
+            if "evidence_gap_outcome" in path.read_text(encoding="utf-8")
+        )
+        document = json.loads(store_path.read_text(encoding="utf-8"))
+
+        def strip_gap(value):
+            if isinstance(value, dict):
+                return {
+                    key: strip_gap(item)
+                    for key, item in value.items()
+                    if not key.startswith("evidence_gap_")
+                }
+            if isinstance(value, list):
+                return [strip_gap(item) for item in value]
+            return value
+
+        store_path.write_text(json.dumps(strip_gap(document)), encoding="utf-8")
+        calls = self.external_calls()
+
+        engine = self.restart()
+
+        execution = engine._research_plan_execution_service
+        self.assertIsNone(execution.live_execution(plan_id))
+        legacy = execution.restored_execution(plan_id).mission_checkpoint
+        self.assertEqual(legacy.evidence_gap_outcome, "")
+        self.assertEqual(legacy.semantic_relation, "no_supported_comparison")
+        run = JsonFileResearchRunStore(self.root / "runs.json").load()[0]
+        self.assertIs(
+            mission_outcome_for(run, stop, legacy).goal_satisfaction.status,
+            GoalStatus.UNRESOLVED,
+        )
+        self.assertIn(
+            "Automatic mission recovery stopped safely",
+            self.execution_status(engine, plan_id).message,
+        )
+        self.assertEqual(self.external_calls(), calls)
 
     def interrupted_start(self, completed_steps):
         real_advance = self.execution.process_advance
