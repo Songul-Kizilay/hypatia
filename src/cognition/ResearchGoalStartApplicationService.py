@@ -16,6 +16,7 @@ from cognition.ResearchPlanAuthorizationApplicationService import (
 from cognition.ResearchPlanExecutionApplicationService import (
     ResearchPlanExecutionApplicationService,
 )
+from core.CancellationSignal import CancellationToken
 from core.Exceptions import ResearchError
 from llm.LLMEndpointPolicy import is_loopback_llm_endpoint
 from research.ResearchAutonomyBudget import ResearchAutonomyBudget
@@ -206,7 +207,9 @@ class ResearchGoalStartApplicationService:
             raise ResearchError("Mission recovery cannot rebuild its approved plan.")
         return cls._mission_plan(preview.plan, mission_scope)
 
-    def resume_restored_learning_missions(self) -> tuple[str, ...]:
+    def resume_restored_learning_missions(
+        self, cancellation_token: CancellationToken | None = None
+    ) -> tuple[str, ...]:
         """Resume only durable, exact semantic missions after application restart.
 
         This is intentionally not a generic resume path. A legacy snapshot or a
@@ -218,6 +221,15 @@ class ResearchGoalStartApplicationService:
             self._mission_recovery_attempted = True
         resumed: list[str] = []
         for snapshot in self._execution_service.restored_mission_executions():
+            if cancellation_token is not None and cancellation_token.is_cancelled():
+                # Cancelled before this mission: it stays restored and visible,
+                # and the once-per-process pass does not reopen on request.
+                self._execution_service.record_mission_recovery_refusal(
+                    snapshot.plan_id,
+                    "Startup mission recovery was cancelled before this mission; "
+                    "no source or model call was replayed.",
+                )
+                continue
             if refusal := self._recovery_precondition_refusal(snapshot):
                 self._execution_service.record_mission_recovery_refusal(
                     snapshot.plan_id, refusal
@@ -253,6 +265,7 @@ class ResearchGoalStartApplicationService:
                     message="Resume exact durable research mission",
                     source="restart_recovery",
                     request_id=f"restart:{snapshot.plan_id}",
+                    cancellation_token=cancellation_token,
                     metadata={
                         "intent": RESEARCH_AUTONOMY_RUN_INTENT,
                         "research_plan_id": snapshot.plan_id,
@@ -286,7 +299,8 @@ class ResearchGoalStartApplicationService:
         each mission's remaining recorded allowance, and a repeat does nothing.
         """
         already_attempted = self._mission_recovery_attempted
-        resumed = self.resume_restored_learning_missions()
+        token = request.cancellation_token
+        resumed = self.resume_restored_learning_missions(token)
         if already_attempted:
             message = (
                 "Startup mission recovery already ran in this session; nothing "
@@ -298,6 +312,11 @@ class ResearchGoalStartApplicationService:
                 "resumed within their recorded allowance. Use Missions recovered "
                 "at startup to read reports or refusals."
             )
+            if token is not None and token.is_cancelled():
+                message += (
+                    " Recovery was cancelled: spending already recorded is kept "
+                    "and remaining missions stay restored without replay."
+                )
         return BrainResponse(
             message=message,
             request_id=request.request_id,

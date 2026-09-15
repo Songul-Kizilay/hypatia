@@ -3355,10 +3355,15 @@ class TkinterDesktopWindow:
         The runtime performs this pass at most once per process, so a runtime
         that already recovered during initialization answers without work.
         """
+        signal = CancellationSignal()
         self._start_request(
-            self._controller.resume_restored_research_missions,
+            lambda: self._controller.resume_restored_research_missions(
+                cancellation_token=signal
+            ),
             self._append_response,
             "startup mission recovery",
+            cancellation_signal=signal,
+            preserve_cancelled_result=True,
         )
 
     def _render_learning_research_result(self, response: BrainResponse) -> None:

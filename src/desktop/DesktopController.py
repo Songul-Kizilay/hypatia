@@ -680,12 +680,15 @@ class DesktopController:
             execution_id,
         )
 
-    def resume_restored_research_missions(self) -> BrainResponse:
+    def resume_restored_research_missions(
+        self, *, cancellation_token: CancellationToken | None = None
+    ) -> BrainResponse:
         """Run the postponed once-per-process startup mission recovery."""
         return self._brain.process(
             BrainRequest(
                 message="Resume restored research missions",
                 source="desktop",
+                cancellation_token=cancellation_token,
                 metadata={"intent": "research_mission_recovery_start"},
             )
         )

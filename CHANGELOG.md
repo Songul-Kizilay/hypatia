@@ -2,6 +2,23 @@
 
 All notable project changes are recorded here.
 
+## [0.3.358] - 2026-09-15
+
+### Added
+
+- Deferred desktop startup recovery is cancellable through the desktop's
+  existing request cancellation. The cancellation token reaches each resumed
+  mission's existing cooperative autonomy cancellation; missions not yet
+  started stay restored with a visible "cancelled before this mission" reason
+  in execution status and the recovered-missions listing.
+
+### Boundaries
+
+- Cancellation keeps spending already recorded, retains no new lessons for a
+  cancelled resume (the live path's existing rule), replays nothing, and does
+  not reopen the once-per-process recovery pass. No new authority, budget,
+  provider, lifecycle or persistence behavior.
+
 ## [0.3.357] - 2026-09-15
 
 ### Changed

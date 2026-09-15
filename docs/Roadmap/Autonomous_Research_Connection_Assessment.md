@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.357
+## Current bounded text journey: v0.3.358
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -113,6 +113,14 @@ and model prose cannot alter it. It does not change mission lifecycle,
 authorization, cumulative allowance, plan digest, source slots, provider/model
 selection, retry behavior or run closure. An unchanged recovered state renders
 the same explanation.
+
+### Cancellable desktop startup recovery: v0.3.358
+
+The deferred recovery request now carries the desktop's cancellation token into
+each resumed mission's existing cooperative autonomy cancellation. A cancelled
+in-flight mission keeps its recorded charge and retains no new lesson; missions
+not yet started stay restored with a visible cancellation reason. Cancellation
+does not reopen the once-per-process pass and grants no authority.
 
 ### Non-blocking desktop startup recovery: v0.3.357
 

@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 from brain.BrainResponse import BrainResponse
+from core.CancellationSignal import CancellationSignal
 from desktop.DesktopController import DesktopController
 from desktop.TkinterDesktopWindow import TkinterDesktopWindow
 
@@ -44,26 +45,34 @@ class RecoveredResearchMissionsTests(unittest.TestCase):
 
     def test_controller_sends_the_once_per_process_recovery_intent(self):
         brain = Mock()
-        DesktopController(brain).resume_restored_research_missions()
+        signal = CancellationSignal()
+        DesktopController(brain).resume_restored_research_missions(
+            cancellation_token=signal
+        )
 
         request = brain.process.call_args.args[0]
         self.assertEqual(
             request.metadata, {"intent": "research_mission_recovery_start"}
         )
+        self.assertIs(request.cancellation_token, signal)
 
-    def test_window_starts_recovery_on_the_single_desktop_worker(self):
+    def test_window_starts_cancellable_recovery_on_the_single_desktop_worker(self):
         window = SimpleNamespace(
             _controller=Mock(), _start_request=Mock(), _append_response=Mock()
         )
 
         TkinterDesktopWindow._start_deferred_mission_recovery(window)
 
-        window._start_request.assert_called_once_with(
-            window._controller.resume_restored_research_missions,
-            window._append_response,
-            "startup mission recovery",
-        )
+        action, on_success, label = window._start_request.call_args.args
+        kwargs = window._start_request.call_args.kwargs
+        self.assertIs(on_success, window._append_response)
+        self.assertEqual(label, "startup mission recovery")
+        self.assertTrue(kwargs["preserve_cancelled_result"])
         window._controller.resume_restored_research_missions.assert_not_called()
+        action()
+        window._controller.resume_restored_research_missions.assert_called_once_with(
+            cancellation_token=kwargs["cancellation_signal"]
+        )
 
     def window(self, response: BrainResponse | None) -> SimpleNamespace:
         return SimpleNamespace(

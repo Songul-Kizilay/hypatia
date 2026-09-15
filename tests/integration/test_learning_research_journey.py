@@ -1144,13 +1144,60 @@ class LearningResearchJourneyTests(unittest.TestCase):
         return restarted.container.resolve(CognitiveEngine)
 
     @staticmethod
-    def start_mission_recovery(engine):
+    def start_mission_recovery(engine, cancellation_token=None):
         return engine.process(
             BrainRequest(
                 message="Resume restored research missions",
+                cancellation_token=cancellation_token,
                 metadata={"intent": "research_mission_recovery_start"},
             )
         )
+
+    def test_cancelled_deferred_recovery_replays_nothing_and_stays_visible(self):
+        snapshot = self.interrupted_start(6)
+        calls = self.external_calls()
+        engine = self.deferred_restart()
+        signal = CancellationSignal()
+        signal.cancel()
+
+        response = self.start_mission_recovery(engine, signal)
+
+        self.assertIn("finished: 0 mission(s) resumed", response.message)
+        self.assertIn("Recovery was cancelled", response.message)
+        execution = engine._research_plan_execution_service
+        self.assertIsNone(execution.live_execution(snapshot.plan_id))
+        self.assertIn(
+            "cancelled before this mission",
+            self.execution_status(engine, snapshot.plan_id).message,
+        )
+        self.assertIn(snapshot.plan_id, self.recovered_listing(engine).message)
+        self.assertEqual(self.external_calls(), calls)
+        self.assertIn("already ran", self.start_mission_recovery(engine).message)
+        self.assertEqual(self.external_calls(), calls)
+
+    def test_cancellation_during_deferred_recovery_keeps_charge_not_lessons(self):
+        snapshot = self.interrupted_start(6)
+        engine = self.deferred_restart()
+        signal = CancellationSignal()
+        answer = self.transport.side_effect
+
+        def cancel_after_model(*args):
+            result = answer(*args)
+            signal.cancel()
+            return result
+
+        self.transport.side_effect = cancel_after_model
+
+        response = self.start_mission_recovery(engine, signal)
+
+        self.assertIn("Recovery was cancelled", response.message)
+        self.assertEqual(self.transport.call_count, 1)
+        allowance = engine._research_plan_execution_service.allowance(snapshot.plan_id)
+        self.assertEqual(allowance.spend.llm_operations, 1)
+        status = self.execution_status(engine, snapshot.plan_id).message
+        self.assertIn("Stop reason: cancelled", status)
+        self.assertIn("Cancelled: no new lesson retention attempted.", status)
+        self.assertEqual(self.run_lessons(engine, snapshot.research_run_id), ())
 
     def test_deferred_startup_recovery_runs_only_when_requested_and_once(self):
         snapshot = self.interrupted_start(6)
