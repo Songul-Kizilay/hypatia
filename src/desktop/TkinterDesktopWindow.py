@@ -3360,11 +3360,28 @@ class TkinterDesktopWindow:
             lambda: self._controller.resume_restored_research_missions(
                 cancellation_token=signal
             ),
-            self._append_response,
+            self._render_startup_mission_recovery,
             "startup mission recovery",
             cancellation_signal=signal,
             preserve_cancelled_result=True,
         )
+
+    def _render_startup_mission_recovery(self, response: BrainResponse) -> None:
+        """Show recovery's outcome and, when there is one, what it recovered.
+
+        The listing is the same read-only in-memory read the operator's button
+        makes; it is shown only when startup recovery resumed or refused a
+        mission, so a launch with nothing to recover leaves the panel alone.
+        """
+        self._append_response(response)
+        # The execution panel exists only when plan authorization is enabled.
+        if not response.success or not self._plan_authorization_enabled:
+            return
+        listing = self._controller.recovered_research_missions()
+        if listing.research_recovered_mission_ids:
+            self._render_recovered_research_missions(
+                self._approval_request(lambda: listing)
+            )
 
     def _render_learning_research_result(self, response: BrainResponse) -> None:
         """Show the mission report and remember its run for independence review."""
@@ -5550,7 +5567,13 @@ class TkinterDesktopWindow:
 
     def _show_recovered_research_missions(self) -> None:
         """List startup recovery outcomes; name the only one for Refresh status."""
-        response = self._approval_request(self._controller.recovered_research_missions)
+        self._render_recovered_research_missions(
+            self._approval_request(self._controller.recovered_research_missions)
+        )
+
+    def _render_recovered_research_missions(
+        self, response: BrainResponse | None
+    ) -> None:
         mission_ids = (
             response.research_recovered_mission_ids if response is not None else ()
         )

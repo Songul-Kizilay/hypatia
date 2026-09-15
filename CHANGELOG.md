@@ -2,6 +2,22 @@
 
 All notable project changes are recorded here.
 
+## [0.3.359] - 2026-09-15
+
+### Changed
+
+- When deferred startup recovery completes, the desktop shows the
+  missions-recovered-at-startup listing in the execution panel automatically if
+  recovery resumed or refused any mission, and fills the execution field when
+  exactly one is listed. The operator no longer has to press the listing button
+  to learn what recovery did; a launch with nothing to recover leaves the panel
+  unchanged.
+
+### Boundaries
+
+- Presentation only: the same read-only, in-memory listing request. No
+  execution, fetch, provider or model call, spend, authority or persistence.
+
 ## [0.3.358] - 2026-09-15
 
 ### Added
