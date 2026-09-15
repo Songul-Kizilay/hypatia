@@ -2,6 +2,23 @@
 
 All notable project changes are recorded here.
 
+## [0.3.357] - 2026-09-15
+
+### Changed
+
+- Startup recovery of restored learning missions no longer blocks desktop
+  launch. The desktop composes the runtime with `defer_mission_recovery=True`
+  and, once its window exists, runs the same exact-mission resume on its single
+  request worker through a `research_mission_recovery_start` request. Headless
+  and test composition keep recovering during initialization.
+
+### Boundaries
+
+- The deferred pass is the same resume, not a new permission: it runs at most
+  once per process, uses each mission's remaining recorded allowance, keeps
+  refusals fail-closed, and a repeated request does no work. No new authority,
+  budget, provider, lifecycle, persistence or report behavior.
+
 ## [0.3.356] - 2026-09-15
 
 ### Added

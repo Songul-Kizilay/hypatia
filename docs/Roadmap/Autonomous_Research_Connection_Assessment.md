@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.356
+## Current bounded text journey: v0.3.357
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -113,6 +113,16 @@ and model prose cannot alter it. It does not change mission lifecycle,
 authorization, cumulative allowance, plan digest, source slots, provider/model
 selection, retry behavior or run closure. An unchanged recovered state renders
 the same explanation.
+
+### Non-blocking desktop startup recovery: v0.3.357
+
+Startup recovery previously ran inside runtime initialization, before the
+desktop window existed, so a resumed mission's bounded fetch and model calls
+held up launch with no visible window or cancellation surface. The desktop now
+defers that pass and runs it on its single request worker once the window is up.
+`restart != fresh authority`: the deferred pass is the identical exact-mission
+resume, runs at most once per process within recorded allowance, and a repeat
+request does nothing. Headless composition is unchanged.
 
 ### Failure-lesson retention for resumed missions: v0.3.356
 

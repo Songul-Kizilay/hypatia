@@ -745,6 +745,7 @@ class TkinterDesktopWindow:
         self._root.protocol("WM_DELETE_WINDOW", self._close)
         self._arm_one_shot_deferred_execution()
         self._root.after(_REQUEST_POLL_INTERVAL_MS, self._poll_requests)
+        self._root.after(0, self._start_deferred_mission_recovery)
 
     def run(self) -> None:
         """Enter the local desktop event loop."""
@@ -3346,6 +3347,18 @@ class TkinterDesktopWindow:
             ),
             confirmed,
             "learning research permission preview",
+        )
+
+    def _start_deferred_mission_recovery(self) -> None:
+        """Resume restored missions on the single desktop worker after launch.
+
+        The runtime performs this pass at most once per process, so a runtime
+        that already recovered during initialization answers without work.
+        """
+        self._start_request(
+            self._controller.resume_restored_research_missions,
+            self._append_response,
+            "startup mission recovery",
         )
 
     def _render_learning_research_result(self, response: BrainResponse) -> None:

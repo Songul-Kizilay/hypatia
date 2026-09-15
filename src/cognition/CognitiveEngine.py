@@ -335,6 +335,7 @@ class CognitiveEngine:
         research_evidence_integrity_auditor: (
             ResearchEvidenceIntegrityAuditor | None
         ) = None,
+        defer_mission_recovery: bool = False,
         research_plan_draft_service: ResearchPlanDraftService | None = None,
         semantic_comparison_operation: SemanticComparisonStepOperation | None = None,
     ) -> None:
@@ -567,7 +568,8 @@ class CognitiveEngine:
                 else None
             ),
         )
-        self._research_goal_start_service.resume_restored_learning_missions()
+        if not defer_mission_recovery:
+            self._research_goal_start_service.resume_restored_learning_missions()
         self._background_research_scheduler = (
             BackgroundResearchSchedulerApplicationService(
                 self._research_autonomy_service,
@@ -846,6 +848,8 @@ class CognitiveEngine:
 
         if self._research_goal_start_service.is_goal_request(request):
             return self._research_goal_start_service.process_goal(request)
+        if self._research_goal_start_service.is_mission_recovery_request(request):
+            return self._research_goal_start_service.process_mission_recovery(request)
         if self._research_autonomy_service.is_run_request(request):
             return self._research_autonomy_service.process_run(request)
 

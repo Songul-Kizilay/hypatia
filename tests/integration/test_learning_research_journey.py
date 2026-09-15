@@ -1123,6 +1123,91 @@ class LearningResearchJourneyTests(unittest.TestCase):
         for record in runs[refused.research_run_id].evidence:
             self.assertNotIn(record.evidence_id, recovered_message)
 
+    def deferred_restart(self):
+        release_all()
+        restarted = Bootstrap(
+            memory_path=self.root / "memory.json",
+            session_path=self.root / "sessions.json",
+            knowledge_relation_path=self.root / "relations.json",
+            research_run_path=self.root / "runs.json",
+            llm_config=LLMRuntimeConfig(True, self.policy.endpoint, self.policy.model),
+            llm_provider=Mock(),
+            semantic_comparison_transport=self.transport,
+            research_source_fetcher=self.fetcher,
+            research_source_discovery_provider=self.provider,
+            research_source_discovery_providers={
+                ResearchDiscoveryProviderName.CROSSREF: self.provider
+            },
+            defer_mission_recovery=True,
+        )
+        restarted.initialize()
+        return restarted.container.resolve(CognitiveEngine)
+
+    @staticmethod
+    def start_mission_recovery(engine):
+        return engine.process(
+            BrainRequest(
+                message="Resume restored research missions",
+                metadata={"intent": "research_mission_recovery_start"},
+            )
+        )
+
+    def test_deferred_startup_recovery_runs_only_when_requested_and_once(self):
+        snapshot = self.interrupted_start(6)
+        calls = self.external_calls()
+
+        engine = self.deferred_restart()
+
+        execution = engine._research_plan_execution_service
+        self.assertIsNone(execution.live_execution(snapshot.plan_id))
+        self.assertIsNotNone(execution.restored_execution(snapshot.plan_id))
+        self.assertEqual(self.external_calls(), calls)
+
+        first = self.start_mission_recovery(engine)
+
+        self.assertIn("finished: 1 mission(s) resumed", first.message)
+        self.assertEqual(execution.live_execution(snapshot.plan_id).completed_steps, 18)
+        self.assertIn(
+            "Recovered mission teaching report",
+            self.execution_status(engine, snapshot.plan_id).message,
+        )
+        resumed_calls = self.external_calls()
+        allowance = execution.allowance(snapshot.plan_id)
+
+        second = self.start_mission_recovery(engine)
+
+        self.assertIn("already ran", second.message)
+        self.assertEqual(self.external_calls(), resumed_calls)
+        self.assertEqual(execution.allowance(snapshot.plan_id), allowance)
+
+    def test_non_deferred_startup_recovery_is_not_repeated_on_request(self):
+        snapshot = self.interrupted_start(6)
+        engine = self.restart()
+        calls = self.external_calls()
+        allowance = engine._research_plan_execution_service.allowance(snapshot.plan_id)
+
+        response = self.start_mission_recovery(engine)
+
+        self.assertIn("already ran", response.message)
+        self.assertEqual(self.external_calls(), calls)
+        self.assertEqual(
+            engine._research_plan_execution_service.allowance(snapshot.plan_id),
+            allowance,
+        )
+
+    def test_deferred_recovery_refusal_stays_visible_without_work(self):
+        snapshot = self.interrupted_start(3)
+        engine = self.deferred_restart()
+
+        response = self.start_mission_recovery(engine)
+
+        self.assertIn("finished: 0 mission(s) resumed", response.message)
+        self.assertIn(
+            "preview was not durably accepted",
+            self.execution_status(engine, snapshot.plan_id).message,
+        )
+        self.transport.assert_not_called()
+
     def fail_followup_fetch(self):
         followup_url = self.sources[2].url
 

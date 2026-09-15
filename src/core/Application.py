@@ -34,6 +34,7 @@ class HypatiaApplication:
         research_run_path: Path | None = None,
         research_source_content_path: Path | None = None,
         research_program_scope_revision_path: Path | None = None,
+        defer_mission_recovery: bool = False,
     ) -> HypatiaApplication:
         """Create an application with optional caller-owned local data paths."""
         if (
@@ -44,7 +45,9 @@ class HypatiaApplication:
             and research_source_content_path is None
             and research_program_scope_revision_path is None
         ):
-            bootstrap = Bootstrap.from_process_environment()
+            bootstrap = Bootstrap.from_process_environment(
+                defer_mission_recovery=defer_mission_recovery
+            )
         else:
             bootstrap = Bootstrap.from_process_environment(
                 memory_path=memory_path,
@@ -55,6 +58,7 @@ class HypatiaApplication:
                 research_program_scope_revision_path=(
                     research_program_scope_revision_path
                 ),
+                defer_mission_recovery=defer_mission_recovery,
             )
         return cls(bootstrap=bootstrap)
 

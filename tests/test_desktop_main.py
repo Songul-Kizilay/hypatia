@@ -111,6 +111,8 @@ class DesktopMainTests(unittest.TestCase):
             research_program_scope_revision_path=(
                 paths.research_program_scope_revision_path
             ),
+            # The desktop resumes restored missions on its worker after launch.
+            defer_mission_recovery=True,
         )
         application.start.assert_called_once_with()
         # The desktop now also resolves the runtime event bus, so it can

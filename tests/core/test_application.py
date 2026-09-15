@@ -25,7 +25,7 @@ class HypatiaApplicationTests(unittest.TestCase):
         ) as bootstrap_factory:
             application = HypatiaApplication.from_process_environment()
 
-        bootstrap_factory.assert_called_once_with()
+        bootstrap_factory.assert_called_once_with(defer_mission_recovery=False)
         self.assertIs(application.bootstrap, sentinel_bootstrap)
         sentinel_bootstrap.initialize.assert_not_called()
         sentinel_bootstrap.shutdown.assert_not_called()
@@ -76,5 +76,6 @@ class HypatiaApplicationTests(unittest.TestCase):
             research_run_path=research_run_path,
             research_source_content_path=research_source_content_path,
             research_program_scope_revision_path=research_program_scope_revision_path,
+            defer_mission_recovery=False,
         )
         self.assertIs(application.bootstrap, sentinel_bootstrap)

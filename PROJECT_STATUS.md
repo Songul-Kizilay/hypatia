@@ -2,12 +2,15 @@
 
 ## Runtime Version
 
-`v0.3.356 (Genesis)`
+`v0.3.357 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.356 gives missions resumed after restart the same opted-in
+Version v0.3.357 moves desktop startup mission recovery onto the desktop worker
+after the window opens, so resumed provider/model work cannot hold up launch;
+the pass still runs once per process within recorded allowance. Version
+v0.3.356 gives missions resumed after restart the same opted-in
 failure-lesson retention as live missions, through the same failure memory and
 stable lesson IDs. Version v0.3.355 lets the desktop list missions startup recovery resumed or
 refused, so their plan IDs, recovered reports and refusals are reachable after

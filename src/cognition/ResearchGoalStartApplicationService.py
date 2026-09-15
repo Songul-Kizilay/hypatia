@@ -42,6 +42,7 @@ OPENING_SCOPE = "local_search_and_selected_provider_discovery"
 EVIDENCE_SCOPE = "selected_provider_reference_evidence"
 COMPARISON_SCOPE = "selected_provider_reference_comparison"
 LEARNING_SCOPE = "bounded_semantic_learning_research"
+MISSION_RECOVERY_START_INTENT = "research_mission_recovery_start"
 
 
 class ResearchGoalStartApplicationService:
@@ -68,6 +69,7 @@ class ResearchGoalStartApplicationService:
         self._semantic_destination = semantic_destination
         self._failure_memory = failure_memory
         self._goal_lock = Lock()
+        self._mission_recovery_attempted = False
         self._goal_request_ids = set(
             self._execution_service.restored_mission_request_ids()
         )
@@ -210,6 +212,10 @@ class ResearchGoalStartApplicationService:
         This is intentionally not a generic resume path. A legacy snapshot or a
         checkpoint with transient preview/model output stays visible and stopped.
         """
+        with self._goal_lock:
+            if self._mission_recovery_attempted:
+                return ()
+            self._mission_recovery_attempted = True
         resumed: list[str] = []
         for snapshot in self._execution_service.restored_mission_executions():
             if refusal := self._recovery_precondition_refusal(snapshot):
@@ -267,6 +273,37 @@ class ResearchGoalStartApplicationService:
                 )
                 continue
         return tuple(resumed)
+
+    @staticmethod
+    def is_mission_recovery_request(request: BrainRequest) -> bool:
+        return request.metadata.get("intent") == MISSION_RECOVERY_START_INTENT
+
+    def process_mission_recovery(self, request: BrainRequest) -> BrainResponse:
+        """Run the one startup recovery pass a deferring caller postponed.
+
+        This is the same exact-mission resume that initialization would have
+        performed, not a new permission: it runs at most once per process, uses
+        each mission's remaining recorded allowance, and a repeat does nothing.
+        """
+        already_attempted = self._mission_recovery_attempted
+        resumed = self.resume_restored_learning_missions()
+        if already_attempted:
+            message = (
+                "Startup mission recovery already ran in this session; nothing "
+                "was resumed again."
+            )
+        else:
+            message = (
+                f"Startup mission recovery finished: {len(resumed)} mission(s) "
+                "resumed within their recorded allowance. Use Missions recovered "
+                "at startup to read reports or refusals."
+            )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent=MISSION_RECOVERY_START_INTENT,
+            memory_count=0,
+        )
 
     def _retain_recovered_report(
         self,

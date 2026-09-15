@@ -42,6 +42,29 @@ class RecoveredResearchMissionsTests(unittest.TestCase):
             request.metadata, {"intent": "research_plan_execution_recovered"}
         )
 
+    def test_controller_sends_the_once_per_process_recovery_intent(self):
+        brain = Mock()
+        DesktopController(brain).resume_restored_research_missions()
+
+        request = brain.process.call_args.args[0]
+        self.assertEqual(
+            request.metadata, {"intent": "research_mission_recovery_start"}
+        )
+
+    def test_window_starts_recovery_on_the_single_desktop_worker(self):
+        window = SimpleNamespace(
+            _controller=Mock(), _start_request=Mock(), _append_response=Mock()
+        )
+
+        TkinterDesktopWindow._start_deferred_mission_recovery(window)
+
+        window._start_request.assert_called_once_with(
+            window._controller.resume_restored_research_missions,
+            window._append_response,
+            "startup mission recovery",
+        )
+        window._controller.resume_restored_research_missions.assert_not_called()
+
     def window(self, response: BrainResponse | None) -> SimpleNamespace:
         return SimpleNamespace(
             _controller=Mock(),
