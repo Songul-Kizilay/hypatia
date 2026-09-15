@@ -485,17 +485,117 @@ class LearningResearchJourneyTests(unittest.TestCase):
         self.assertFalse(outcome.completion_readiness.ready)
         self.assertEqual(self.external_calls(), calls)
 
-    def test_initial_agreement_without_conflict_remains_satisfied(self):
+    def test_initial_tentative_agreement_is_unresolved_without_extra_work(self):
         self.relation = "possible_agreement"
 
         response = self.start()
 
+        plan_id = response.research_plan_execution.plan_id
+        snapshot = self.execution._execution_store.load()[0]
+        checkpoint = snapshot.mission_checkpoint
+        run = response.research_runs[0]
+        self.assertEqual(checkpoint.semantic_relation, "possible_agreement")
+        self.assertIn("Mission goal satisfaction: Unresolved", response.message)
         self.assertIn(
-            "Mission goal satisfaction: Satisfied within the current bounded evidence",
+            "Mission completion readiness: Not ready: canonical evidence remains "
+            "incomplete",
             response.message,
         )
-        self.assertIn("Ready for bounded user conclusion", response.message)
+        self.assertIn("The selected sources tentatively agree", response.message)
+        self.assertIn(
+            "does not establish a sufficiently supported comparison", response.message
+        )
+        self.assertNotIn(
+            "Satisfied within the current bounded evidence", response.message
+        )
+        self.assertNotIn("Ready for bounded user conclusion", response.message)
         self.assertNotIn("clarifies the conflict structure", response.message)
+        self.assertIn(
+            "Tentative relation: possible_agreement.", run.comparison_notes[0].text
+        )
+        self.assertEqual(run.claims, ())
+        self.assertEqual(
+            {assessment.information_trust.value for assessment in run.assessments},
+            {"unassessed"},
+        )
+        self.assertEqual(
+            {assessment.independence.value for assessment in run.assessments},
+            {"unknown"},
+        )
+        plan = self.execution.live_plan(plan_id)
+        self.assertIs(
+            self.execution._mission_resolver.followup_decision(
+                plan, plan.steps[12].step_id, self.execution.allowance(plan_id)
+            ).status,
+            ResearchMissionFollowupDecisionStatus.NOT_NEEDED,
+        )
+        self.assertEqual(plan_digest(plan), snapshot.mission_plan_digest)
+        self.assertEqual(len(checkpoint.acquired_urls), 2)
+        self.assertEqual(self.spend(self.execution, plan_id), (12, 6, 1))
+        self.assertEqual(
+            (self.fetcher.fetch.call_count, self.transport.call_count), (2, 1)
+        )
+
+    def test_restart_recovers_the_same_unresolved_tentative_agreement(self):
+        self.relation = "possible_agreement"
+        response = self.start()
+        plan_id = response.research_plan_execution.plan_id
+        before = self.execution._execution_store.load()[0]
+        calls = self.external_calls()
+
+        engine = self.restart()
+
+        execution = engine._research_plan_execution_service
+        self.assertEqual(
+            execution.mission_checkpoint(plan_id), before.mission_checkpoint
+        )
+        self.assertEqual(
+            plan_digest(execution.live_plan(plan_id)), before.mission_plan_digest
+        )
+        status = self.execution_status(engine, plan_id).message
+        self.assertIn("Recovered mission teaching report", status)
+        self.assertIn("Mission goal satisfaction: Unresolved", status)
+        self.assertIn("The selected sources tentatively agree", status)
+        self.assertEqual(self.external_calls(), calls)
+        self.assertEqual(self.spend(execution, plan_id), (12, 6, 1))
+
+    def test_legacy_agreement_checkpoints_never_become_satisfied(self):
+        self.relation = "possible_agreement"
+        response = self.start()
+        plan_id = response.research_plan_execution.plan_id
+        stop = response.research_autonomy.stop_reason.value
+        path = self.root / "research_executions.json"
+        cases = (
+            ("before contradiction fields", ("contradiction_", "evidence_gap_")),
+            (
+                "before semantic relation",
+                ("contradiction_", "evidence_gap_", "semantic_"),
+            ),
+        )
+        for label, prefixes in cases:
+            with self.subTest(checkpoint=label):
+                document = json.loads(path.read_text(encoding="utf-8"))
+                checkpoint = document["executions"][0]["mission_checkpoint"]
+                for key in tuple(checkpoint):
+                    if key.startswith(prefixes):
+                        checkpoint.pop(key)
+                path.write_text(json.dumps(document), encoding="utf-8")
+                calls = self.external_calls()
+
+                engine = self.restart()
+
+                execution = engine._research_plan_execution_service
+                restored = execution.restored_execution(plan_id)
+                legacy = (
+                    restored.mission_checkpoint
+                    if restored is not None
+                    else execution.mission_checkpoint(plan_id)
+                )
+                run = JsonFileResearchRunStore(self.root / "runs.json").load()[0]
+                outcome = mission_outcome_for(run, stop, legacy)
+                self.assertIs(outcome.goal_satisfaction.status, GoalStatus.UNRESOLVED)
+                self.assertFalse(outcome.completion_readiness.ready)
+                self.assertEqual(self.external_calls(), calls)
 
     def test_conflict_derives_the_existing_typed_followup_slot_once(self):
         decisions = []
@@ -1882,7 +1982,8 @@ class LearningResearchJourneyTests(unittest.TestCase):
             tuple(row.current_assessment.assessment_id for row in rows),
         )
         after = mission_outcome_for(current, stop, self.mission_state(response)[0])
-        self.assertIs(before.goal_satisfaction.status, GoalStatus.SATISFIED)
+        # Tentative agreement is unresolved; operator judgements never upgrade it.
+        self.assertIs(before.goal_satisfaction.status, GoalStatus.UNRESOLVED)
         self.assertEqual(after.goal_satisfaction, before.goal_satisfaction)
         self.assertEqual(after.completion_readiness, before.completion_readiness)
         self.assertEqual(self.mission_state(response), state)

@@ -42,6 +42,8 @@ class ResearchMissionGoalExplanationReason(StrEnum):
     CONTRADICTION_FOLLOWUP_NOT_COMPARABLE = "contradiction_followup_not_comparable"
     CONTRADICTION_FOLLOWUP_NO_SUPPORT = "contradiction_followup_no_supported_comparison"
     SOURCES_NOT_COMPARABLE = "sources_not_comparable"
+    TENTATIVE_AGREEMENT_UNSUPPORTED = "tentative_agreement_unsupported"
+    COMPARISON_RELATION_UNRECORDED = "comparison_relation_unrecorded"
     NO_SUPPORTED_COMPARISON = "no_supported_comparison"
     NO_SUPPORTED_COMPARISON_AFTER_FOLLOWUP = "no_supported_comparison_after_followup"
     FOLLOWUP_COMPARISON_WITHOUT_INITIAL_SUPPORT = (
@@ -130,6 +132,15 @@ _REASON_TEXT = {
         "The selected sources were judged not comparable, so no supported "
         "comparison was established. That is a valid finding, not a supported "
         "comparison, and it does not satisfy a comparison goal"
+    ),
+    ResearchMissionGoalExplanationReason.TENTATIVE_AGREEMENT_UNSUPPORTED: (
+        "The selected sources tentatively agree, but the available evidence does "
+        "not establish a sufficiently supported comparison: the agreement is a "
+        "tentative model interpretation and no retained record verifies it"
+    ),
+    ResearchMissionGoalExplanationReason.COMPARISON_RELATION_UNRECORDED: (
+        "No durable comparison relation is recorded for this mission, so the "
+        "retained comparison notes cannot establish a supported comparison"
     ),
     ResearchMissionGoalExplanationReason.NO_SUPPORTED_COMPARISON: (
         "The retained comparison established no supported comparison between "
@@ -333,6 +344,21 @@ def explain_mission_goal_satisfaction(
         and not checkpoint.contradiction_initial_relation
     ):
         reasons.append(ResearchMissionGoalExplanationReason.SOURCES_NOT_COMPARABLE)
+    elif checkpoint is not None and (
+        checkpoint.semantic_relation == "possible_agreement"
+        and not checkpoint.contradiction_initial_relation
+    ):
+        reasons.append(
+            ResearchMissionGoalExplanationReason.TENTATIVE_AGREEMENT_UNSUPPORTED
+        )
+    elif (
+        checkpoint is not None
+        and not checkpoint.semantic_relation
+        and evaluation.comparison_note_count > 0
+    ):
+        reasons.append(
+            ResearchMissionGoalExplanationReason.COMPARISON_RELATION_UNRECORDED
+        )
     elif checkpoint is not None and (
         checkpoint.contradiction_initial_relation == "possible_conflict"
         and checkpoint.contradiction_outcome == "structurally_clarified"

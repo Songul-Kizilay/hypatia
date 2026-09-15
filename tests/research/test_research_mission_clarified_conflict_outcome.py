@@ -182,11 +182,12 @@ class ClarifiedConflictOutcomeTests(unittest.TestCase):
             or clarified(),
             semantic_relation="possible_agreement",
         )
+        # v0.3.366: tentative agreement alone is unresolved and not ready.
         self.assertIs(
             outcome_for(agreement, sources=2).goal_satisfaction.status,
-            GoalStatus.SATISFIED,
+            GoalStatus.UNRESOLVED,
         )
-        self.assertTrue(outcome_for(agreement, sources=2).completion_readiness.ready)
+        self.assertFalse(outcome_for(agreement, sources=2).completion_readiness.ready)
         for relation in ("not_comparable", "no_supported_comparison"):
             with self.subTest(relation=relation):
                 gap = replace(agreement, semantic_relation=relation)

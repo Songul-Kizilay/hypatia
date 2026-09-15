@@ -2,12 +2,15 @@
 
 ## Runtime Version
 
-`v0.3.365 (Genesis)`
+`v0.3.366 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.365 keeps a structurally clarified tentative conflict unresolved and
+Version v0.3.366 keeps a first comparison that only tentatively agrees
+unresolved and not ready: the data model has no supported or verified agreement
+state, so tentative agreement is not a supported comparison. Version v0.3.365
+keeps a structurally clarified tentative conflict unresolved and
 not ready: clarification of the conflict structure is not a verified resolution.
 Legacy checkpoints recording the conflict only in their semantic relation also no
 longer read as satisfied. Version v0.3.364 treats sources judged `not_comparable` as an unresolved

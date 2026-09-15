@@ -145,13 +145,16 @@ class NotComparableOutcomeTests(unittest.TestCase):
             outcome_for(decoded).goal_satisfaction.status, GoalStatus.UNRESOLVED
         )
 
-    def test_agreement_without_follow_up_is_still_satisfied(self):
+    def test_agreement_without_follow_up_is_a_distinct_unresolved_outcome(self):
         checkpoint = replace(
             not_comparable_checkpoint(), semantic_relation="possible_agreement"
         )
+        value = outcome_for(checkpoint)
 
-        self.assertIs(
-            outcome_for(checkpoint).goal_satisfaction.status, GoalStatus.SATISFIED
+        self.assertIs(value.goal_satisfaction.status, GoalStatus.UNRESOLVED)
+        self.assertEqual(
+            explain_mission_goal_satisfaction(value, STOP, checkpoint).reasons,
+            (Reason.TENTATIVE_AGREEMENT_UNSUPPORTED,),
         )
 
     def test_conflict_follow_up_relation_is_named_in_the_explanation(self):

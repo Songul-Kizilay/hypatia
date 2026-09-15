@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.365
+## Current bounded text journey: v0.3.366
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -113,6 +113,20 @@ and model prose cannot alter it. It does not change mission lifecycle,
 authorization, cumulative allowance, plan digest, source slots, provider/model
 selection, retry behavior or run closure. An unchanged recovered state renders
 the same explanation.
+
+### Tentative agreement is not a supported comparison: v0.3.366
+
+The last satisfied comparison path was a first comparison whose relation was
+`possible_agreement`. It became satisfied and ready on complete evidence alone,
+although the relation is a tentative model interpretation, trust was unassessed,
+independence unknown and no claim existed. The model has no supported or
+verified agreement state, so learning missions with this relation are now
+`unresolved` and not ready, and the explanation says the sources tentatively
+agree without a sufficiently supported comparison. `tentative agreement !=
+supported comparison`. A mission checkpoint with notes but no recorded relation
+fails safe the same way. No learning mission with a mission checkpoint can
+currently reach `satisfied`; a future supported-agreement contract would need an
+explicit structured state rather than note prose.
 
 ### Clarified conflicts are not verified resolutions: v0.3.365
 

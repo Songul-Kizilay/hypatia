@@ -223,8 +223,9 @@ class EvidenceGapGoalTests(unittest.TestCase):
             semantic_relation="possible_agreement",
         )
 
+        # v0.3.366: a tentative agreement alone is unresolved, not satisfied.
         self.assertIs(
-            outcome_for(agreeing).goal_satisfaction.status, GoalStatus.SATISFIED
+            outcome_for(agreeing).goal_satisfaction.status, GoalStatus.UNRESOLVED
         )
 
 

@@ -134,6 +134,23 @@ def evaluate_mission_goal_satisfaction(
         in {"no_supported_comparison", "not_comparable"}
         and not checkpoint.contradiction_initial_relation
     )
+    # A first comparison whose only relation is ``possible_agreement`` is a
+    # tentative model interpretation.  The current model records no verified or
+    # supported agreement state, and neither trust, independence nor claims
+    # upgrade it, so it cannot establish the supported comparison a learning
+    # mission is asked for.
+    tentative_agreement_only = bool(
+        checkpoint is not None
+        and checkpoint.semantic_relation == "possible_agreement"
+        and not checkpoint.contradiction_initial_relation
+    )
+    # A mission checkpoint written before comparison relations were recorded has
+    # retained notes but no typed relation; it must not be read as supported.
+    relation_unrecorded = bool(
+        checkpoint is not None
+        and not checkpoint.semantic_relation
+        and evidence_evaluation.comparison_note_count > 0
+    )
     if execution_outcome is BackgroundTaskOutcome.CANCELLED:
         status = ResearchMissionGoalSatisfactionStatus.CANCELLED
     elif execution_outcome is BackgroundTaskOutcome.FAILED:
@@ -150,6 +167,8 @@ def evaluate_mission_goal_satisfaction(
         tentative_conflict_without_outcome
         or conflict_recorded
         or comparison_unsupported
+        or tentative_agreement_only
+        or relation_unrecorded
         or contradiction_outcome == "unresolved"
         or (
             evidence_evaluation.status

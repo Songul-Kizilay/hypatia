@@ -2,6 +2,32 @@
 
 All notable project changes are recorded here.
 
+## [0.3.366] - 2026-09-16
+
+### Fixed
+
+- A learning mission whose first two sources tentatively agreed
+  (`semantic_relation` `possible_agreement`) reported a satisfied goal and
+  "Ready for bounded user conclusion" whenever its evidence was complete, with
+  unassessed trust, unknown independence and no claims. The data model records
+  no verified or supported agreement state (a comparison candidate carries only a
+  tentative relation, notes carry no verification flag and claims are not linked
+  to comparisons), so tentative agreement cannot establish the supported
+  comparison the mission asks for. The goal is now `unresolved` and readiness not
+  ready; the explanation says the sources tentatively agree but the available
+  evidence does not establish a sufficiently supported comparison. Operator
+  independence judgements, trust labels and claims do not change this.
+- A mission checkpoint that has retained comparison notes but no recorded
+  comparison relation (written before relations were recorded) now fails safe
+  as `unresolved` instead of being read as supported.
+
+### Boundaries
+
+- A run evaluated without any mission checkpoint keeps its evidence-only
+  behaviour. No new checkpoint fields, authority, budget, follow-up, source slot,
+  provider or model call; spend and the plan digest are unchanged, and nothing is
+  inferred from note prose.
+
 ## [0.3.365] - 2026-09-15
 
 ### Fixed
