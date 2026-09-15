@@ -2,12 +2,14 @@
 
 ## Runtime Version
 
-`v0.3.363 (Genesis)`
+`v0.3.364 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.363 fixes the empty-proposal follow-up branch: it now completes and
+Version v0.3.364 treats sources judged `not_comparable` as an unresolved
+comparison gap rather than a satisfied mission, and names the durable follow-up
+relation when a contradiction stays unresolved. Version v0.3.363 fixes the empty-proposal follow-up branch: it now completes and
 records a durable `no_supported_comparison` outcome, and the mission goal is
 `unresolved` rather than a false execution failure or a false satisfaction.
 Version v0.3.362 shows matching prior advisory lessons in the inert learning

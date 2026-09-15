@@ -111,12 +111,14 @@ def evaluate_mission_goal_satisfaction(
         and checkpoint.contradiction_initial_relation == "possible_conflict"
         and not contradiction_outcome
     )
-    # The mission's central comparison supported nothing.  Whether or not its
-    # authorized follow-up has run (or the checkpoint predates recording it),
-    # retained notes cannot make that gap a satisfied deliverable.
+    # The mission's central comparison supported nothing, or the selected
+    # sources were judged not comparable.  Whether or not an authorized
+    # follow-up has run (or the checkpoint predates recording it), retained
+    # notes cannot make that gap a satisfied comparison deliverable.
     comparison_unsupported = bool(
         checkpoint is not None
-        and checkpoint.semantic_relation == "no_supported_comparison"
+        and checkpoint.semantic_relation
+        in {"no_supported_comparison", "not_comparable"}
         and not checkpoint.contradiction_initial_relation
     )
     if execution_outcome is BackgroundTaskOutcome.CANCELLED:

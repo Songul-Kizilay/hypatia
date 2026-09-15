@@ -882,6 +882,117 @@ class LearningResearchJourneyTests(unittest.TestCase):
         self.assertEqual(response.research_plan_execution.completed_steps, 12)
         self.assertIn("not_comparable", response.message)
 
+    def spend(self, execution, plan_id):
+        allowance = execution.allowance(plan_id)
+        return (
+            allowance.spend.step_advances,
+            allowance.spend.network_operations,
+            allowance.spend.llm_operations,
+        )
+
+    def test_not_comparable_mission_is_unresolved_without_extra_followup(self):
+        self.relation = "not_comparable"
+
+        response = self.start()
+
+        plan_id = response.research_plan_execution.plan_id
+        snapshot = self.execution._execution_store.load()[0]
+        checkpoint = snapshot.mission_checkpoint
+        self.assertEqual(checkpoint.semantic_relation, "not_comparable")
+        self.assertEqual(
+            (checkpoint.contradiction_outcome, checkpoint.evidence_gap_outcome),
+            ("", ""),
+        )
+        self.assertIn("Mission goal satisfaction: Unresolved", response.message)
+        self.assertIn(
+            "Mission completion readiness: Not ready: canonical evidence remains "
+            "incomplete",
+            response.message,
+        )
+        self.assertIn(
+            "The selected sources were judged not comparable", response.message
+        )
+        self.assertIn("no supported comparison was established", response.message)
+        self.assertNotIn("Ready for bounded user conclusion", response.message)
+        plan = self.execution.live_plan(plan_id)
+        self.assertIs(
+            self.execution._mission_resolver.followup_decision(
+                plan, plan.steps[12].step_id, self.execution.allowance(plan_id)
+            ).status,
+            ResearchMissionFollowupDecisionStatus.NOT_NEEDED,
+        )
+        self.assertEqual(plan_digest(plan), snapshot.mission_plan_digest)
+        self.assertEqual(len(checkpoint.acquired_urls), 2)
+        self.assertEqual(self.spend(self.execution, plan_id), (12, 6, 1))
+        self.assertEqual(
+            (self.transport.call_count, self.fetcher.fetch.call_count), (1, 2)
+        )
+        self.assertEqual(response.research_runs[0].claims, ())
+
+    def test_restart_not_comparable_recovers_the_same_unresolved_report(self):
+        self.relation = "not_comparable"
+        response = self.start()
+        plan_id = response.research_plan_execution.plan_id
+        before = self.execution._execution_store.load()[0].mission_checkpoint
+        calls = self.external_calls()
+
+        engine = self.restart()
+
+        execution = engine._research_plan_execution_service
+        self.assertEqual(execution.mission_checkpoint(plan_id), before)
+        status = self.execution_status(engine, plan_id).message
+        self.assertIn("Recovered mission teaching report", status)
+        self.assertIn("Mission goal satisfaction: Unresolved", status)
+        self.assertIn("The selected sources were judged not comparable", status)
+        self.assertEqual(self.external_calls(), calls)
+        self.assertEqual(self.spend(execution, plan_id), (12, 6, 1))
+
+    def test_pre_gap_not_comparable_checkpoint_recovers_as_unresolved(self):
+        self.relation = "not_comparable"
+        response = self.start()
+        plan_id = response.research_plan_execution.plan_id
+        path = self.root / "research_executions.json"
+        document = json.loads(path.read_text(encoding="utf-8"))
+        checkpoint = document["executions"][0]["mission_checkpoint"]
+        for key in tuple(checkpoint):
+            if key.startswith(("contradiction_", "evidence_gap_")):
+                checkpoint.pop(key)
+        path.write_text(json.dumps(document), encoding="utf-8")
+        calls = self.external_calls()
+
+        engine = self.restart()
+
+        execution = engine._research_plan_execution_service
+        restored = execution.mission_checkpoint(plan_id)
+        self.assertEqual(restored.semantic_relation, "not_comparable")
+        status = self.execution_status(engine, plan_id).message
+        self.assertIn("Mission goal satisfaction: Unresolved", status)
+        self.assertNotIn("Satisfied within the current bounded evidence", status)
+        self.assertEqual(self.external_calls(), calls)
+        self.assertEqual(self.spend(execution, plan_id), (12, 6, 1))
+
+    def test_conflict_followup_not_comparable_is_named_in_explanation(self):
+        self.relations = ["possible_conflict", "not_comparable"]
+
+        response = self.start()
+
+        checkpoint = self.execution._execution_store.load()[0].mission_checkpoint
+        self.assertEqual(checkpoint.contradiction_followup_relation, "not_comparable")
+        self.assertEqual(checkpoint.contradiction_outcome, "unresolved")
+        self.assertIn(
+            "The bounded tentative contradiction remains unresolved", response.message
+        )
+        self.assertIn(
+            "follow-up comparison with a new source was judged not comparable, so it "
+            "neither supports nor resolves the tentative contradiction",
+            response.message,
+        )
+        self.assertIn("Mission goal satisfaction: Unresolved", response.message)
+        self.assertEqual(
+            self.spend(self.execution, response.research_plan_execution.plan_id),
+            (18, 9, 2),
+        )
+
     def test_destination_mismatch_refuses_before_research(self):
         response = self.start(policy=replace(self.policy, model="other"))
         self.assertFalse(response.success)

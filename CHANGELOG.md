@@ -2,6 +2,36 @@
 
 All notable project changes are recorded here.
 
+## [0.3.364] - 2026-09-15
+
+### Fixed
+
+- A learning mission whose first two sources were judged `not_comparable`
+  reported a satisfied goal and "Ready for bounded user conclusion". Goal
+  satisfaction now reads the durable checkpoint relation `not_comparable` as an
+  unresolved comparison gap: goal `unresolved`, readiness not ready. The goal
+  explanation states that the selected sources were judged not comparable, so
+  no supported comparison was established; the finding is valid but does not
+  satisfy a comparison goal. The optional third-source follow-up is still
+  skipped for this outcome.
+- When a conflict follow-up is unresolved, the goal explanation now also names
+  the durable follow-up relation (`possible_conflict`, `not_comparable` or
+  `no_supported_comparison`) instead of only saying the tentative contradiction
+  remains unresolved.
+
+### Compatibility
+
+- No new checkpoint fields: the existing typed `semantic_relation` and
+  `contradiction_followup_relation` are used. Checkpoints written before the
+  contradiction or evidence-gap fields still decode, and a recorded
+  `not_comparable` relation never yields a satisfied goal.
+
+### Boundaries
+
+- No new authority, budget, follow-up, source slot, provider or model call; spend
+  accounting and the plan digest are unchanged. Nothing is inferred from note
+  prose.
+
 ## [0.3.363] - 2026-09-15
 
 ### Fixed

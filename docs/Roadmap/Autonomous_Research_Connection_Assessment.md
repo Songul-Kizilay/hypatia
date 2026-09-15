@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.363
+## Current bounded text journey: v0.3.364
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -113,6 +113,17 @@ and model prose cannot alter it. It does not change mission lifecycle,
 authorization, cumulative allowance, plan digest, source slots, provider/model
 selection, retry behavior or run closure. An unchanged recovered state renders
 the same explanation.
+
+### Not-comparable sources as an unresolved comparison gap: v0.3.364
+
+When the first two sources were judged `not_comparable`, the mission skipped the
+optional follow-up and reported a satisfied, ready goal. Goal satisfaction now
+reads that durable relation as an unresolved comparison gap and the explanation
+says no supported comparison was established. `not comparable != successful
+comparison`: the finding is valid evidence but does not satisfy a comparison
+goal. The follow-up remains skipped, so authority, spend and the plan digest are
+unchanged. An unresolved conflict follow-up's explanation now also names its
+durable follow-up relation.
 
 ### Empty-proposal follow-up as a typed comparison gap: v0.3.363
 

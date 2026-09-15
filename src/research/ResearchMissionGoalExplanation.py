@@ -38,6 +38,10 @@ class ResearchMissionGoalExplanationReason(StrEnum):
     TENTATIVE_CONFLICT_STRUCTURALLY_CLARIFIED = (
         "tentative_conflict_structurally_clarified"
     )
+    CONTRADICTION_FOLLOWUP_CONFLICT = "contradiction_followup_conflict"
+    CONTRADICTION_FOLLOWUP_NOT_COMPARABLE = "contradiction_followup_not_comparable"
+    CONTRADICTION_FOLLOWUP_NO_SUPPORT = "contradiction_followup_no_supported_comparison"
+    SOURCES_NOT_COMPARABLE = "sources_not_comparable"
     NO_SUPPORTED_COMPARISON = "no_supported_comparison"
     NO_SUPPORTED_COMPARISON_AFTER_FOLLOWUP = "no_supported_comparison_after_followup"
     FOLLOWUP_COMPARISON_WITHOUT_INITIAL_SUPPORT = (
@@ -105,6 +109,25 @@ _REASON_TEXT = {
         "A tentative conflict between the first two sources led to one follow-up "
         "comparison that did not conflict; this clarifies structure only and does "
         "not resolve the original disagreement or show either source wrong"
+    ),
+    ResearchMissionGoalExplanationReason.CONTRADICTION_FOLLOWUP_CONFLICT: (
+        "The one authorized follow-up comparison with a new source also returned "
+        "a tentative conflict; this neither resolves the contradiction nor shows "
+        "either source wrong"
+    ),
+    ResearchMissionGoalExplanationReason.CONTRADICTION_FOLLOWUP_NOT_COMPARABLE: (
+        "The one authorized follow-up comparison with a new source was judged not "
+        "comparable, so it neither supports nor resolves the tentative "
+        "contradiction"
+    ),
+    ResearchMissionGoalExplanationReason.CONTRADICTION_FOLLOWUP_NO_SUPPORT: (
+        "The one authorized follow-up comparison with a new source returned no "
+        "supported comparison, so the tentative contradiction is not resolved"
+    ),
+    ResearchMissionGoalExplanationReason.SOURCES_NOT_COMPARABLE: (
+        "The selected sources were judged not comparable, so no supported "
+        "comparison was established. That is a valid finding, not a supported "
+        "comparison, and it does not satisfy a comparison goal"
     ),
     ResearchMissionGoalExplanationReason.NO_SUPPORTED_COMPARISON: (
         "The retained comparison established no supported comparison between "
@@ -278,6 +301,29 @@ def explain_mission_goal_satisfaction(
         reasons.append(
             ResearchMissionGoalExplanationReason.UNRESOLVED_TENTATIVE_CONTRADICTION
         )
+        # Name what the durable follow-up relation actually was, so an
+        # unresolved contradiction is not read as a repeated conflict alone.
+        followup_reason = {
+            "possible_conflict": (
+                ResearchMissionGoalExplanationReason.CONTRADICTION_FOLLOWUP_CONFLICT
+            ),
+            "not_comparable": (
+                ResearchMissionGoalExplanationReason.CONTRADICTION_FOLLOWUP_NOT_COMPARABLE
+            ),
+            "no_supported_comparison": (
+                ResearchMissionGoalExplanationReason.CONTRADICTION_FOLLOWUP_NO_SUPPORT
+            ),
+        }.get(checkpoint.contradiction_followup_relation)
+        if (
+            checkpoint.contradiction_outcome == "unresolved"
+            and followup_reason is not None
+        ):
+            reasons.append(followup_reason)
+    elif checkpoint is not None and (
+        checkpoint.semantic_relation == "not_comparable"
+        and not checkpoint.contradiction_initial_relation
+    ):
+        reasons.append(ResearchMissionGoalExplanationReason.SOURCES_NOT_COMPARABLE)
     elif checkpoint is not None and (
         checkpoint.contradiction_initial_relation == "possible_conflict"
         and checkpoint.contradiction_outcome == "structurally_clarified"
