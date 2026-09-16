@@ -199,6 +199,37 @@ class MissionSourceIndependenceWindowTests(unittest.TestCase):
         window._controller.list_research_runs.assert_not_called()
         self.assertIn("mission first", window._status.set.call_args.args[0])
 
+    def test_named_recovered_mission_reviews_its_reported_run(self):
+        window = self.window(mission_run())
+        window._execution_id = Var()
+        window._execution_id.set("plan-2")
+        TkinterDesktopWindow._render_recovered_research_missions(
+            window,
+            BrainResponse(
+                message="Missions recovered at startup (this session):",
+                request_id="recovered",
+                intent="research_plan_execution_recovered",
+                memory_count=0,
+                research_recovered_mission_ids=("plan-1", "plan-2"),
+                research_recovered_mission_run_ids=("run-other", "run-1"),
+            ),
+        )
+
+        TkinterDesktopWindow._review_mission_source_independence(window)
+
+        self.assertEqual(window._mission_run_ids["plan-2"], "run-1")
+        self.assertEqual(window._mission_independence_run.run_id, "run-1")
+
+    def test_named_execution_without_reported_run_is_refused(self):
+        window = self.window(mission_run())
+        window._execution_id = Var("plan-unknown")
+        window._mission_independence_run_id = "run-1"
+
+        TkinterDesktopWindow._review_mission_source_independence(window)
+
+        window._controller.list_research_runs.assert_not_called()
+        self.assertIn("No research run is known", window._status.set.call_args.args[0])
+
     def test_review_lists_only_mission_sources_from_canonical_state(self):
         window, _ = self.reviewed()
 

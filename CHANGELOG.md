@@ -2,6 +2,21 @@
 
 All notable project changes are recorded here.
 
+## [0.3.372] - 2026-09-16
+
+### Changed
+
+- "Review source independence" now reviews the research run the runtime
+  reported for the execution named in the execution panel (from live results
+  or the recovered listing), so each of several recovered missions can be
+  reviewed. An empty panel falls back to the last live mission; a named
+  execution with no reported run is refused rather than guessed.
+
+### Boundaries
+
+- Desktop binding only; the canonical run lookup and existing assessment
+  record path, including supersession and stale refusal, are unchanged.
+
 ## [0.3.371] - 2026-09-16
 
 ### Changed

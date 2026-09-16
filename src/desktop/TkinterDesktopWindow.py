@@ -664,6 +664,9 @@ class TkinterDesktopWindow:
         self._mission_review_run: ResearchRun | None = None
         self._mission_review_note_id = ""
         self._mission_review_plan_id = ""
+        #: Research run of each mission this window has seen, by execution ID,
+        #: as reported by the runtime (live results and the recovered listing).
+        self._mission_run_ids: dict[str, str] = {}
         self._mission_independence_run: ResearchRun | None = None
         self._research_discovery_provider = tk.StringVar(
             value=ResearchDiscoveryProviderName.CROSSREF.value
@@ -3459,6 +3462,11 @@ class TkinterDesktopWindow:
         execution = getattr(response, "research_plan_execution", None)
         if execution is not None:
             self._mission_plan_id = execution.plan_id
+            if response.research_runs:
+                self._mission_run_ids = {
+                    **getattr(self, "_mission_run_ids", {}),
+                    execution.plan_id: response.research_runs[0].run_id,
+                }
             execution_field = getattr(self, "_execution_id", None)
             if execution_field is not None:
                 # The execution panel then refers to the mission just shown.
@@ -3549,8 +3557,24 @@ class TkinterDesktopWindow:
         )
 
     def _review_mission_source_independence(self) -> None:
-        """Load the mission's canonical run and list its evidence-bearing sources."""
-        run_id = getattr(self, "_mission_independence_run_id", "")
+        """Load the mission's canonical run and list its evidence-bearing sources.
+
+        The mission is the execution named in the execution panel, whose run the
+        runtime reported, falling back to the last live mission.  An execution
+        with no reported run is refused rather than guessed.
+        """
+        execution_field = getattr(self, "_execution_id", None)
+        named = execution_field.get().strip() if execution_field is not None else ""
+        if named:
+            run_id = getattr(self, "_mission_run_ids", {}).get(named, "")
+            if not run_id:
+                self._status.set(
+                    f"No research run is known for execution {named}; list the "
+                    "missions recovered at startup first."
+                )
+                return
+        else:
+            run_id = getattr(self, "_mission_independence_run_id", "")
         if not run_id:
             self._status.set("Run a learning research mission first.")
             return
@@ -5829,10 +5853,19 @@ class TkinterDesktopWindow:
         mission_ids = (
             response.research_recovered_mission_ids if response is not None else ()
         )
+        run_ids = response.research_recovered_mission_run_ids if response else ()
+        if len(run_ids) == len(mission_ids):
+            self._mission_run_ids = {
+                **getattr(self, "_mission_run_ids", {}),
+                **{
+                    plan_id: run_id
+                    for plan_id, run_id in zip(mission_ids, run_ids, strict=True)
+                    if run_id
+                },
+            }
         if len(mission_ids) == 1:
             self._execution_id.set(mission_ids[0])
             self._mission_plan_id = mission_ids[0]
-            run_ids = response.research_recovered_mission_run_ids if response else ()
             if len(run_ids) == 1 and run_ids[0]:
                 # A mission recovered after restart can be reviewed for source
                 # independence just like one started in this session.

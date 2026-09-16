@@ -2,12 +2,14 @@
 
 ## Runtime Version
 
-`v0.3.371 (Genesis)`
+`v0.3.372 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.371 lets the desktop mission comparison review target any mission
+Version v0.3.372 gives mission source-independence review the same binding:
+it reviews the run the runtime reported for the execution named in the panel,
+and refuses an execution with no reported run. Version v0.3.371 lets the desktop mission comparison review target any mission
 named in the execution panel, so each of several recovered or restored missions
 can be reviewed; the preview and post-record reload stay bound to the mission
 actually loaded. Version v0.3.370 gives a restored, not-resumed mission's execution status the
