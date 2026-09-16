@@ -2,6 +2,27 @@
 
 All notable project changes are recorded here.
 
+## [0.3.379] - 2026-09-16
+
+### Fixed
+
+- A repeated claim step could record an identical first claim twice, and a
+  repeated source-comparison step could record an identical comparison note
+  twice (for example after a crash, a "not performed" ruling and a retry). Both
+  steps now refuse when the run already holds the exact same record, name it,
+  and fail without claiming performed work.
+
+### Added
+
+- Characterization: replayed superseding claims remain refused by the run
+  manager. Claim contradictions (duplicate pair refused) and comparison reviews
+  (exact supersession required) were confirmed replay-safe without changes.
+
+### Boundaries
+
+- Different text, state, confidence or references are still recorded. Manual
+  writes are unchanged. No schema, authority, budget, goal or readiness change.
+
 ## [0.3.378] - 2026-09-16
 
 ### Fixed

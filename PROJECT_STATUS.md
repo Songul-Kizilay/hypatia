@@ -2,11 +2,15 @@
 
 ## Runtime Version
 
-`v0.3.378 (Genesis)`
+`v0.3.379 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
+Version v0.3.379 extends the replay guard to plan-step claims and comparison
+notes, completing the research-record steps: a repeated step never records an
+identical first claim or comparison note twice. Claim contradictions and
+comparison reviews were characterized as already replay-safe.
 Version v0.3.378 applies the same replay guard to source assessment: a repeated
 first-assessment step fails honestly instead of adding an identical second
 current assessment (superseding writes were already refused on replay). Source

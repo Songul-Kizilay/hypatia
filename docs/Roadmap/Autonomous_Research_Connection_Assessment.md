@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.378
+## Current bounded text journey: v0.3.379
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -113,6 +113,27 @@ and model prose cannot alter it. It does not change mission lifecycle,
 authorization, cumulative allowance, plan digest, source slots, provider/model
 selection, retry behavior or run closure. An unchanged recovered state renders
 the same explanation.
+
+### Replay/idempotency audit — claims, contradictions, notes, reviews: v0.3.379
+
+- **Claim contradictions (safe, unchanged).** The run manager refuses a second
+  contradiction relationship for the same claim pair, so a replay cannot
+  duplicate it.
+- **Comparison reviews (safe, unchanged).** A note with a current review can be
+  reviewed again only by superseding that exact review, so a replay is refused
+  as stale.
+- **Claims (fixed).** A superseding claim was already refused on replay; a first
+  claim was not. The claim step now refuses when the run already holds the exact
+  same first claim (evidence set, text, epistemic state, confidence), naming it.
+- **Comparison notes (fixed).** No note write was guarded. The comparison step
+  now refuses when the run already holds the exact same note (source, evidence
+  and assessment sets, text). Mission semantic notes were already protected by
+  recovery, which refuses a model comparison without its durable note step.
+
+Every guard fails the step without performed work and names the existing
+record; different text, state, confidence or references are still recorded.
+Manual (non-plan) writes are unchanged. No schema, authority, budget, goal or
+readiness change.
 
 ### Replay/idempotency audit — source acceptance and assessment: v0.3.378
 

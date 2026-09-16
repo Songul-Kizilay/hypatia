@@ -54,6 +54,24 @@ class SourceComparisonStepOperation:
             )
         self._raise_if_cancelled(context)
 
+        existing = next(
+            (
+                record
+                for record in run.comparison_notes
+                if set(record.source_document_ids) == set(authorization.document_ids)
+                and set(record.evidence_ids) == set(authorization.evidence_ids)
+                and set(record.assessment_ids) == set(authorization.assessment_ids)
+                and record.text.strip() == authorization.text.strip()
+            ),
+            None,
+        )
+        if existing is not None:
+            # An attempt that saved its note, died before the step was recorded
+            # and was ruled not performed must not record the same note twice.
+            raise ResearchError(
+                f"This exact comparison note is already recorded as "
+                f"{existing.note_id} in this run; it was not recorded again."
+            )
         updated = self._research_run_manager.record_source_comparison_note(
             run_id,
             list(authorization.document_ids),
