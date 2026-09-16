@@ -2,12 +2,21 @@
 
 ## Runtime Version
 
-`v0.3.367 (Genesis)`
+`v0.3.368 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.367 adds the one explicit path to a supported comparison: a
+Version v0.3.368 makes the existing operator comparison-review path reachable
+from the desktop's exact retained-note selector. It shows the current review
+state and requires an explicit confirmation before recording or superseding a
+review; canonical validation still refuses stale note/evidence state. A learning
+mission's own checkpoint comparison note can also be reviewed from its result:
+structured preview, confirmation, canonical record, then a backend-recomputed
+report (satisfied/ready only after a current supported review; unresolved after
+revocation). No
+provider/model call or new mission authority is involved. Version v0.3.367 adds
+the one explicit path to a supported comparison: a
 persisted operator comparison review of the exact mission note. A current
 `supported` review satisfies a tentative agreement; withdrawing it recomputes
 `unresolved`, and nothing else creates support. Version v0.3.366 keeps a first comparison that only tentatively agrees

@@ -29,6 +29,7 @@ from desktop.MarkdownTextSegments import (
     MarkdownStyle,
     markdown_segments,
 )
+from desktop.MissionComparisonReview import mission_comparison_review_preview
 from desktop.MissionSourceIndependenceReview import (
     independence_assessment_arguments,
     independence_review_rows,
@@ -74,6 +75,11 @@ from research.ResearchClaimContradictionRecord import (
 from research.ResearchClaimRecord import (
     MAX_RESEARCH_CLAIM_EVIDENCE,
     ResearchClaimRecord,
+)
+from research.ResearchComparisonReviewRecord import (
+    ResearchComparisonReviewDecision,
+    ResearchComparisonReviewRecord,
+    current_comparison_review,
 )
 from research.ResearchDisclosure import ResearchDisclosure
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
@@ -617,6 +623,10 @@ class TkinterDesktopWindow:
         self._research_persisted_contradiction_choice = tk.StringVar()
         self._research_persisted_comparison_note_choice = tk.StringVar()
         self._research_persisted_comparison_note_references = tk.StringVar()
+        self._research_comparison_review_decision = tk.StringVar(
+            value=ResearchComparisonReviewDecision.NOT_SUPPORTED.value
+        )
+        self._research_comparison_review_note = tk.StringVar()
         self._research_candidate = tk.StringVar()
         self._research_url = tk.StringVar()
         self._research_source_document_id = tk.StringVar()
@@ -650,6 +660,9 @@ class TkinterDesktopWindow:
             value=ResearchSourceIndependence.UNKNOWN.value
         )
         self._mission_independence_run_id = ""
+        self._mission_plan_id = ""
+        self._mission_review_run: ResearchRun | None = None
+        self._mission_review_note_id = ""
         self._mission_independence_run: ResearchRun | None = None
         self._research_discovery_provider = tk.StringVar(
             value=ResearchDiscoveryProviderName.CROSSREF.value
@@ -2068,6 +2081,28 @@ class TkinterDesktopWindow:
             text="Record independence judgement",
             command=self._record_mission_source_independence,
         ).grid(row=7, column=0, columnspan=3, sticky="w")
+        ttk.Button(
+            plan_actions,
+            text="Review mission comparison",
+            command=self._load_mission_comparison_review,
+        ).grid(row=8, column=0, sticky="w", pady=4)
+        ttk.Combobox(
+            plan_actions,
+            textvariable=self._research_comparison_review_decision,
+            values=tuple(value.value for value in ResearchComparisonReviewDecision),
+            state="readonly",
+            width=18,
+        ).grid(row=8, column=1, sticky="w")
+        ttk.Entry(
+            plan_actions,
+            textvariable=self._research_comparison_review_note,
+            width=40,
+        ).grid(row=8, column=2, sticky="w")
+        ttk.Button(
+            plan_actions,
+            text="Preview and record mission comparison review…",
+            command=self._record_mission_comparison_review,
+        ).grid(row=9, column=0, columnspan=3, sticky="w")
         ttk.Label(research_plan_frame, text="Complete preview or rejection").grid(
             row=7,
             column=0,
@@ -2216,6 +2251,38 @@ class TkinterDesktopWindow:
             text="Use assessments",
             command=self._use_selected_persisted_comparison_note_assessments,
         ).grid(row=2, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ttk.Label(
+            comparison_note_frame,
+            text=(
+                "Operator review records a judgement about this exact note and its "
+                "evidence. It does not verify a factual claim or make model output "
+                "true."
+            ),
+            style="Hint.TLabel",
+            wraplength=1000,
+            justify="left",
+        ).grid(row=3, column=0, columnspan=4, sticky="w", pady=(12, 0))
+        ttk.Label(comparison_note_frame, text="Review decision").grid(
+            row=4, column=0, sticky="w", pady=(8, 0)
+        )
+        ttk.Combobox(
+            comparison_note_frame,
+            textvariable=self._research_comparison_review_decision,
+            values=tuple(value.value for value in ResearchComparisonReviewDecision),
+            state="readonly",
+        ).grid(row=4, column=1, sticky="ew", pady=(8, 0))
+        ttk.Label(comparison_note_frame, text="Operator review note").grid(
+            row=4, column=2, sticky="w", padx=(8, 0), pady=(8, 0)
+        )
+        ttk.Entry(
+            comparison_note_frame,
+            textvariable=self._research_comparison_review_note,
+        ).grid(row=4, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ttk.Button(
+            comparison_note_frame,
+            text="Record review…",
+            command=self._record_selected_research_comparison_review,
+        ).grid(row=5, column=3, sticky="ew", pady=(8, 0))
         ttk.Label(research_sources_frame, text="Source discovery").grid(
             row=3,
             column=0,
@@ -3388,6 +3455,78 @@ class TkinterDesktopWindow:
         self._append_response(response)
         if response.research_runs:
             self._mission_independence_run_id = response.research_runs[0].run_id
+        execution = getattr(response, "research_plan_execution", None)
+        if execution is not None:
+            self._mission_plan_id = execution.plan_id
+
+    def _load_mission_comparison_review(self) -> None:
+        """Load the mission's canonical comparison note, review and report."""
+        plan_id = getattr(self, "_mission_plan_id", "")
+        if not plan_id:
+            self._status.set("Run or recover a learning research mission first.")
+            return
+        self._render_mission_comparison_review(
+            self._controller.mission_comparison_review(plan_id)
+        )
+
+    def _render_mission_comparison_review(self, response: BrainResponse) -> None:
+        """Show only what the runtime loaded; the note ID is never chosen here."""
+        if not response.success or not response.research_runs:
+            self._mission_review_run = None
+            self._mission_review_note_id = ""
+            self._status.set(response.message)
+            return
+        self._mission_review_run = response.research_runs[0]
+        self._mission_review_note_id = response.research_mission_comparison_note_id
+        self._research_plan_preview.configure(state=tk.NORMAL)
+        self._research_plan_preview.delete("1.0", tk.END)
+        self._research_plan_preview.insert(tk.END, response.message)
+        self._research_plan_preview.see("1.0")
+        self._research_plan_preview.configure(state=tk.DISABLED)
+        self._status.set(
+            "mission comparison review: canonical result loaded; nothing recorded"
+        )
+
+    def _record_mission_comparison_review(self) -> None:
+        """Preview, confirm, record through the canonical path, then reload."""
+        run = getattr(self, "_mission_review_run", None)
+        if run is None:
+            self._status.set("Load the mission comparison review first.")
+            return
+        try:
+            preview = mission_comparison_review_preview(
+                run,
+                self._mission_plan_id,
+                self._mission_review_note_id,
+                self._research_comparison_review_decision.get(),
+                self._research_comparison_review_note.get(),
+            )
+        except ValueError as error:
+            self._status.set(str(error))
+            return
+        if not messagebox.askyesno(
+            "Record mission comparison review?",
+            f"{preview.text}\n\nContinue?",
+            parent=self._root,
+        ):
+            self._status.set("mission comparison review: not saved")
+            return
+        try:
+            response = self._controller.record_research_comparison_review(
+                *preview.arguments
+            )
+        except ValueError as error:
+            self._status.set(str(error))
+            return
+        self._append_response(response)
+        self._load_mission_comparison_review()
+        if response.success:
+            self._research_comparison_review_note.set("")
+            return
+        self._status.set(
+            "Comparison review was refused: the displayed review may be stale or the "
+            "run closed. The current canonical review has been reloaded."
+        )
 
     def _review_mission_source_independence(self) -> None:
         """Load the mission's canonical run and list its evidence-bearing sources."""
@@ -4296,13 +4435,41 @@ class TkinterDesktopWindow:
     @staticmethod
     def _research_persisted_comparison_note_reference_summary(
         record: ResearchSourceComparisonNoteRecord,
+        review: ResearchComparisonReviewRecord | None = None,
     ) -> str:
         """Expose every persisted exact reference without changing form fields."""
+        review_summary = (
+            "Current operator review: none recorded."
+            if review is None
+            else (
+                "Current operator review: "
+                f"{review.review_id} ({review.decision.value}); "
+                "a new review must explicitly supersede it."
+            )
+        )
         return (
             f"Sources: {', '.join(record.source_document_ids)}\n"
             f"Evidence: {', '.join(record.evidence_ids)}\n"
-            f"Assessments: {', '.join(record.assessment_ids)}"
+            f"Assessments: {', '.join(record.assessment_ids)}\n"
+            f"{review_summary}"
         )
+
+    def _current_research_comparison_review(
+        self,
+        record: ResearchSourceComparisonNoteRecord,
+    ) -> ResearchComparisonReviewRecord | None:
+        """Read one current review only from the loaded exact run snapshot."""
+        run = next(
+            (
+                value
+                for value in getattr(self, "_research_runs", ())
+                if value.run_id == self._research_persisted_comparison_note_run_id
+            ),
+            None,
+        )
+        if run is None:
+            return None
+        return current_comparison_review(run.comparison_reviews, record.note_id)
 
     def _selected_persisted_research_comparison_note(
         self,
@@ -4330,7 +4497,10 @@ class TkinterDesktopWindow:
             self._research_persisted_comparison_note_references.set("")
             return
         self._research_persisted_comparison_note_references.set(
-            self._research_persisted_comparison_note_reference_summary(record)
+            self._research_persisted_comparison_note_reference_summary(
+                record,
+                self._current_research_comparison_review(record),
+            )
         )
 
     def _select_persisted_research_comparison_note(
@@ -4344,11 +4514,73 @@ class TkinterDesktopWindow:
             self._status.set("Select a recorded comparison note first.")
             return
         self._research_persisted_comparison_note_references.set(
-            self._research_persisted_comparison_note_reference_summary(record)
+            self._research_persisted_comparison_note_reference_summary(
+                record,
+                self._current_research_comparison_review(record),
+            )
         )
         self._status.set(
             f"recorded comparison note selected: {record.note_id}; no action started"
         )
+
+    def _record_selected_research_comparison_review(self) -> None:
+        """Confirm one exact-note operator review through the canonical service."""
+        record = self._selected_persisted_research_comparison_note()
+        if record is None:
+            self._status.set("Select a recorded comparison note first.")
+            return
+        decision = self._research_comparison_review_decision.get().strip()
+        note = self._research_comparison_review_note.get().strip()
+        if not note:
+            self._status.set("An operator review note is required.")
+            return
+        try:
+            review_decision = ResearchComparisonReviewDecision(decision)
+        except ValueError:
+            self._status.set("Choose a valid operator review decision.")
+            return
+        current = self._current_research_comparison_review(record)
+        supersedes = current.review_id if current is not None else ""
+        action = (
+            f"supersede current review {supersedes}"
+            if supersedes
+            else "record the first review"
+        )
+        if not messagebox.askyesno(
+            "Record comparison review?",
+            (
+                f"This will {action} for comparison note {record.note_id}.\n\n"
+                f"Evidence IDs: {', '.join(record.evidence_ids)}\n"
+                f"Decision: {review_decision.value}\n\n"
+                "The service will revalidate the selected run, exact note and exact "
+                "evidence before saving. This is an operator judgement about the "
+                "bounded comparison, not a factual-truth decision. Continue?"
+            ),
+            parent=self._root,
+        ):
+            self._status.set("comparison review: not saved")
+            return
+        try:
+            response = self._controller.record_research_comparison_review(
+                self._research_persisted_comparison_note_run_id,
+                record.note_id,
+                review_decision.value,
+                note,
+                supersedes,
+            )
+        except ValueError as error:
+            self._status.set(str(error))
+            return
+        self._append_response(response)
+        if response.success and response.research_runs:
+            updated = response.research_runs[0]
+            existing = tuple(getattr(self, "_research_runs", ()))
+            self._research_runs = tuple(
+                updated if value.run_id == updated.run_id else value
+                for value in existing
+            )
+            self._render_research_persisted_comparison_note_selector(updated)
+            self._research_comparison_review_note.set("")
 
     def _use_selected_persisted_comparison_note_sources(self) -> None:
         """Copy only one recorded note's exact ordered source references."""
@@ -5579,6 +5811,7 @@ class TkinterDesktopWindow:
         )
         if len(mission_ids) == 1:
             self._execution_id.set(mission_ids[0])
+            self._mission_plan_id = mission_ids[0]
             run_ids = response.research_recovered_mission_run_ids if response else ()
             if len(run_ids) == 1 and run_ids[0]:
                 # A mission recovered after restart can be reviewed for source

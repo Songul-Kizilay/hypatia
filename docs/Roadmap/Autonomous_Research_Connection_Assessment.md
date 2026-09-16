@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.367
+## Current bounded text journey: v0.3.368
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -113,6 +113,31 @@ and model prose cannot alter it. It does not change mission lifecycle,
 authorization, cumulative allowance, plan digest, source slots, provider/model
 selection, retry behavior or run closure. An unchanged recovered state renders
 the same explanation.
+
+### Desktop access to comparison review: v0.3.368
+
+The persisted-comparison-note selector now also exposes the one existing
+operator-review action. It shows the selected note's exact source, evidence and
+assessment IDs plus the current review state, then asks for explicit
+confirmation before calling the existing canonical review service. If a current
+review exists, its exact ID is supplied as the supersession target; the service
+remains the enforcement boundary and rejects a stale or cross-run change.
+
+This is not a new review system or automatic support path. It adds no authority,
+budget, source fetch, model/provider call, lifecycle change or recovery replay.
+The same selector works for a canonically reloaded run, so a recovered mission
+does not require the operator to reconstruct comparison identities manually.
+
+For a learning mission the desktop also offers a mission-bound review. A new
+read-only intent, `research_mission_comparison_review`, resolves the plan's
+canonical run and the checkpoint's exact semantic note and re-renders the
+existing teaching report; the window previews plan, run, note, evidence IDs,
+current review, decision and reason before any write, records through the same
+service and reloads so the goal outcome is recomputed, never composed in the UI.
+Reviews of other notes cannot satisfy the mission, conflicts and comparison gaps
+stay unresolved, and a recovered mission binds the same run and note. A restored
+mission not resumed this session has no stop reason to recompute from and is
+refused rather than guessed.
 
 ### Operator review as the supported-comparison path: v0.3.367
 

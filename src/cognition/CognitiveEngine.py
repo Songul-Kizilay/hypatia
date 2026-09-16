@@ -850,6 +850,12 @@ class CognitiveEngine:
             return self._research_goal_start_service.process_goal(request)
         if self._research_goal_start_service.is_mission_recovery_request(request):
             return self._research_goal_start_service.process_mission_recovery(request)
+        if self._research_goal_start_service.is_mission_comparison_review_request(
+            request
+        ):
+            return self._research_goal_start_service.process_mission_comparison_review(
+                request
+            )
         if self._research_autonomy_service.is_run_request(request):
             return self._research_autonomy_service.process_run(request)
 

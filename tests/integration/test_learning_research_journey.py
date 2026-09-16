@@ -21,6 +21,7 @@ from core.CancellationSignal import CancellationSignal
 from core.Exceptions import ResearchError
 from core.ExclusiveStoreOwnership import release_all
 from desktop.DesktopController import DesktopController
+from desktop.MissionComparisonReview import mission_comparison_review_preview
 from desktop.MissionSourceIndependenceReview import (
     independence_assessment_arguments,
     independence_review_rows,
@@ -51,6 +52,8 @@ from research.ResearchMissionGoalSatisfaction import (
 from research.ResearchMissionOutcome import mission_outcome_for
 from research.ResearchPlanDigest import plan_digest
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability as Cap
+from research.ResearchRunManager import ResearchRunManager
+from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSource import ResearchSource
 from research.ResearchSourceCandidate import ResearchSourceCandidate
 from research.ResearchTeachingReport import teaching_report
@@ -205,6 +208,7 @@ class LearningResearchJourneyTests(unittest.TestCase):
             },
         )
         restarted.initialize()
+        self.restarted = restarted
         return restarted.container.resolve(CognitiveEngine)
 
     def test_restart_reports_destination_mismatch_without_replaying_work(self):
@@ -1182,6 +1186,273 @@ class LearningResearchJourneyTests(unittest.TestCase):
         self.assertIs(outcome.goal_satisfaction.status, GoalStatus.UNRESOLVED)
         self.assertEqual(outcome.goal_satisfaction.supported_by_review_id, "")
 
+    def mission_review(self, plan_id, decision, reason="Operator compared quotes."):
+        """Load the mission target, preview, record exactly its args, reload."""
+        target = self.controller.mission_comparison_review(plan_id)
+        self.assertTrue(target.success, target.message)
+        preview = mission_comparison_review_preview(
+            target.research_runs[0],
+            plan_id,
+            target.research_mission_comparison_note_id,
+            decision,
+            reason,
+        )
+        recorded = self.controller.record_research_comparison_review(*preview.arguments)
+        return (
+            target,
+            preview,
+            recorded,
+            self.controller.mission_comparison_review(plan_id),
+        )
+
+    def durable_state(self, plan_id):
+        return (
+            self.external_calls(),
+            self.spend(self.execution, plan_id),
+            self.execution.mission_checkpoint(plan_id),
+            plan_digest(self.execution.live_plan(plan_id)),
+            self.execution.live_plan(plan_id).mission_scope,
+            self.execution.live_execution(plan_id),
+        )
+
+    def test_mission_review_target_binds_checkpoint_note_and_writes_nothing(self):
+        self.relation = "possible_agreement"
+        response = self.start()
+        plan_id = response.research_plan_execution.plan_id
+        checkpoint = self.execution.mission_checkpoint(plan_id)
+        state = self.durable_state(plan_id)
+        runs = (self.root / "runs.json").read_bytes()
+
+        target = self.controller.mission_comparison_review(plan_id)
+        preview = mission_comparison_review_preview(
+            target.research_runs[0],
+            plan_id,
+            target.research_mission_comparison_note_id,
+            "supported",
+            "Both excerpts answer the question.",
+        )
+
+        note = next(
+            value
+            for value in target.research_runs[0].comparison_notes
+            if value.note_id == checkpoint.semantic_note_id
+        )
+        self.assertEqual(
+            target.research_mission_comparison_note_id, checkpoint.semantic_note_id
+        )
+        self.assertEqual(
+            target.research_runs[0].run_id, response.research_runs[0].run_id
+        )
+        self.assertIn("Mission goal satisfaction: Unresolved", target.message)
+        self.assertIn(f"Evidence IDs: {', '.join(note.evidence_ids)}", preview.text)
+        self.assertIn(f"Research run: {response.research_runs[0].run_id}", preview.text)
+        self.assertIn("Current review: none recorded", preview.text)
+        self.assertIn("Proposed decision: supported", preview.text)
+        self.assertEqual(
+            preview.arguments,
+            (
+                response.research_runs[0].run_id,
+                checkpoint.semantic_note_id,
+                "supported",
+                "Both excerpts answer the question.",
+                "",
+            ),
+        )
+        # Loading and previewing write nothing and spend nothing.
+        self.assertEqual((self.root / "runs.json").read_bytes(), runs)
+        self.assertEqual(self.durable_state(plan_id), state)
+
+    def test_mission_review_supports_then_revokes_through_canonical_refresh(self):
+        self.relation = "possible_agreement"
+        response = self.start()
+        plan_id = response.research_plan_execution.plan_id
+        state = self.durable_state(plan_id)
+        run = response.research_runs[0]
+
+        _, _, recorded, refreshed = self.mission_review(plan_id, "supported")
+
+        self.assertTrue(recorded.success, recorded.message)
+        review = refreshed.research_runs[0].comparison_reviews[-1]
+        self.assertIn(
+            "Mission goal satisfaction: Satisfied within the current bounded evidence",
+            refreshed.message,
+        )
+        self.assertIn("Ready for bounded user conclusion", refreshed.message)
+        self.assertIn(f"operator review {review.review_id}", refreshed.message)
+
+        _, preview, revoked, after = self.mission_review(plan_id, "not_supported")
+
+        self.assertTrue(revoked.success, revoked.message)
+        self.assertEqual(preview.arguments[4], review.review_id)
+        self.assertIn(f"Current review: {review.review_id}", preview.text)
+        final = after.research_runs[0]
+        self.assertEqual(
+            final.comparison_reviews[-1].supersedes_review_id, review.review_id
+        )
+        self.assertIn("Mission goal satisfaction: Unresolved", after.message)
+        self.assertIn("Mission completion readiness: Not ready", after.message)
+        self.assertEqual(self.durable_state(plan_id), state)
+        self.assertEqual(
+            (final.status, final.claims, final.evidence, final.assessments),
+            (run.status, run.claims, run.evidence, run.assessments),
+        )
+
+    def test_stale_mission_review_is_refused_and_reload_shows_current(self):
+        self.relation = "possible_agreement"
+        response = self.start()
+        plan_id = response.research_plan_execution.plan_id
+        target = self.controller.mission_comparison_review(plan_id)
+        stale = mission_comparison_review_preview(
+            target.research_runs[0],
+            plan_id,
+            target.research_mission_comparison_note_id,
+            "supported",
+            "Stale view.",
+        )
+        _, _, first, _ = self.mission_review(plan_id, "not_supported")
+        self.assertTrue(first.success, first.message)
+
+        refused = self.controller.record_research_comparison_review(*stale.arguments)
+        reloaded = self.controller.mission_comparison_review(plan_id)
+
+        self.assertFalse(refused.success)
+        reviews = reloaded.research_runs[0].comparison_reviews
+        self.assertEqual(len(reviews), 1)
+        self.assertEqual(reviews[0].decision.value, "not_supported")
+        self.assertIn("Mission goal satisfaction: Unresolved", reloaded.message)
+
+    def test_review_of_non_mission_note_never_satisfies_the_mission(self):
+        response = self.start()
+        plan_id = response.research_plan_execution.plan_id
+        checkpoint = self.execution.mission_checkpoint(plan_id)
+        run = response.research_runs[0]
+        others = [
+            n for n in run.comparison_notes if n.note_id != checkpoint.semantic_note_id
+        ]
+        self.assertTrue(others)
+        target = self.controller.mission_comparison_review(plan_id)
+        self.assertEqual(
+            target.research_mission_comparison_note_id, checkpoint.semantic_note_id
+        )
+        for note in others:
+            recorded = self.controller.record_research_comparison_review(
+                run.run_id, note.note_id, "supported", "Other note.", ""
+            )
+            self.assertTrue(recorded.success, recorded.message)
+        _, _, recorded, refreshed = self.mission_review(plan_id, "supported")
+
+        # The mission's own conflict note is not lifted by any review either.
+        self.assertTrue(recorded.success, recorded.message)
+        self.assertIn("Mission goal satisfaction: Unresolved", refreshed.message)
+        self.assertNotIn("Ready for bounded user conclusion", refreshed.message)
+
+    def test_not_comparable_mission_review_is_not_lifted(self):
+        self.relation = "not_comparable"
+        response = self.start()
+        plan_id = response.research_plan_execution.plan_id
+
+        target, _, recorded, refreshed = self.mission_review(plan_id, "supported")
+
+        if target.research_mission_comparison_note_id:
+            self.assertTrue(recorded.success, recorded.message)
+        self.assertIn("Mission goal satisfaction: Unresolved", refreshed.message)
+        self.assertNotIn("Ready for bounded user conclusion", refreshed.message)
+
+    def test_empty_proposal_gap_review_target_is_not_lifted(self):
+        self.empty_proposals()
+        response = self.start()
+        plan_id = response.research_plan_execution.plan_id
+
+        target = self.controller.mission_comparison_review(plan_id)
+
+        self.assertTrue(target.success, target.message)
+        self.assertIn("Mission goal satisfaction: Unresolved", target.message)
+        if not target.research_mission_comparison_note_id:
+            with self.assertRaisesRegex(ValueError, "no recorded comparison note"):
+                mission_comparison_review_preview(
+                    target.research_runs[0], plan_id, "", "supported", "Reason."
+                )
+
+    def test_closed_run_refuses_mission_review_without_goal_change(self):
+        self.relation = "possible_agreement"
+        response = self.start()
+        plan_id = response.research_plan_execution.plan_id
+        target = self.controller.mission_comparison_review(plan_id)
+        preview = mission_comparison_review_preview(
+            target.research_runs[0],
+            plan_id,
+            target.research_mission_comparison_note_id,
+            "supported",
+            "Reason.",
+        )
+        manager = self.bootstrap.container.resolve(ResearchRunManager)
+        manager.transition_status(
+            target.research_runs[0].run_id, ResearchRunStatus.COMPLETED
+        )
+
+        refused = self.controller.record_research_comparison_review(*preview.arguments)
+        reloaded = self.controller.mission_comparison_review(plan_id)
+
+        self.assertFalse(refused.success)
+        self.assertEqual(reloaded.research_runs[0].comparison_reviews, ())
+        with self.assertRaisesRegex(ValueError, "closed"):
+            mission_comparison_review_preview(
+                reloaded.research_runs[0],
+                plan_id,
+                reloaded.research_mission_comparison_note_id,
+                "supported",
+                "Reason.",
+            )
+
+    def test_unknown_or_restored_unresumed_plan_loads_no_review_target(self):
+        missing = self.controller.mission_comparison_review("plan-missing")
+
+        self.assertFalse(missing.success)
+        self.assertEqual(missing.research_runs, [])
+        self.assertEqual(missing.research_mission_comparison_note_id, "")
+
+    def test_recovered_mission_review_binds_same_run_and_note_after_restart(self):
+        self.relation = "possible_agreement"
+        snapshot = self.interrupted_start(6)
+        engine = self.restart()
+        controller = DesktopController(self.restarted.container.resolve(Brain))
+        calls = self.external_calls()
+        execution = engine._research_plan_execution_service
+        checkpoint = execution.mission_checkpoint(snapshot.plan_id)
+        spend = self.spend(execution, snapshot.plan_id)
+
+        target = controller.mission_comparison_review(snapshot.plan_id)
+
+        self.assertTrue(target.success, target.message)
+        self.assertEqual(target.research_runs[0].run_id, snapshot.research_run_id)
+        self.assertEqual(
+            target.research_mission_comparison_note_id, checkpoint.semantic_note_id
+        )
+        preview = mission_comparison_review_preview(
+            target.research_runs[0],
+            snapshot.plan_id,
+            target.research_mission_comparison_note_id,
+            "supported",
+            "Recovered review.",
+        )
+        recorded = controller.record_research_comparison_review(*preview.arguments)
+        refreshed = controller.mission_comparison_review(snapshot.plan_id)
+
+        self.assertTrue(recorded.success, recorded.message)
+        self.assertIn("Ready for bounded user conclusion", refreshed.message)
+        self.assertEqual(self.external_calls(), calls)
+        self.assertEqual(self.spend(execution, snapshot.plan_id), spend)
+        self.assertEqual(execution.mission_checkpoint(snapshot.plan_id), checkpoint)
+
+        again = self.restart()
+        status = self.execution_status(again, snapshot.plan_id)
+        stored = JsonFileResearchRunStore(self.root / "runs.json").load()[0]
+        self.assertEqual(
+            stored.comparison_reviews, refreshed.research_runs[0].comparison_reviews
+        )
+        self.assertEqual(self.external_calls(), calls)
+        self.assertIsNotNone(status)
+
     def spend(self, execution, plan_id):
         allowance = execution.allowance(plan_id)
         return (
@@ -1752,6 +2023,7 @@ class LearningResearchJourneyTests(unittest.TestCase):
             defer_mission_recovery=True,
         )
         restarted.initialize()
+        self.restarted = restarted
         return restarted.container.resolve(CognitiveEngine)
 
     @staticmethod

@@ -59,6 +59,10 @@ from research.ResearchClaimContradictionWritePreview import (
 from research.ResearchClaimPreview import ResearchClaimPreview
 from research.ResearchClaimRecord import ResearchClaimRecord
 from research.ResearchClaimWritePreview import ResearchClaimWritePreview
+from research.ResearchComparisonReviewRecord import (
+    ResearchComparisonReviewDecision,
+    ResearchComparisonReviewRecord,
+)
 from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchFailureRecord import ResearchFailureRecord
@@ -4730,7 +4734,8 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             window._research_persisted_comparison_note_references.value,
             "Sources: document-1, document-2\n"
             "Evidence: evidence-1, evidence-2\n"
-            "Assessments: assessment-1, assessment-2",
+            "Assessments: assessment-1, assessment-2\n"
+            "Current operator review: none recorded.",
         )
         self.assertEqual(
             window._research_comparison_document_ids.value, "manual-sources"
@@ -4781,7 +4786,8 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
             window._research_persisted_comparison_note_references.value,
             "Sources: document-2, document-3\n"
             "Evidence: evidence-2, evidence-3\n"
-            "Assessments: assessment-2, assessment-3",
+            "Assessments: assessment-2, assessment-3\n"
+            "Current operator review: none recorded.",
         )
         self.assertEqual(
             window._research_comparison_document_ids.value, "manual-sources"
@@ -4847,6 +4853,167 @@ class InternetResearchSourceSelectionTests(unittest.TestCase):
                 "nothing requested or saved",
             ],
         )
+
+    def test_selected_comparison_review_requires_confirmation_and_uses_exact_note(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchSourceLoadController()
+        responses: list[BrainResponse] = []
+        record = _research_comparison_note_record(
+            "note-1",
+            ("document-1", "document-2"),
+            ("evidence-1", "evidence-2"),
+            ("assessment-1", "assessment-2"),
+            "Recorded comparison.",
+        )
+        _configure_selected_persisted_comparison_notes(window, (record,))
+        window._research_runs = ()
+        window._root = object()
+        window._controller = controller
+        window._research_comparison_review_decision = RecordingInput("supported")
+        window._research_comparison_review_note = RecordingInput(
+            "I reviewed both retained excerpts."
+        )
+        window._status = RecordingStatus()
+        window._append_response = responses.append
+
+        with patch(
+            "desktop.TkinterDesktopWindow.messagebox.askyesno",
+            return_value=True,
+        ) as confirm:
+            window._record_selected_research_comparison_review()
+
+        self.assertEqual(
+            controller.comparison_review_records,
+            [
+                (
+                    "run-123",
+                    "note-1",
+                    "supported",
+                    "I reviewed both retained excerpts.",
+                    "",
+                )
+            ],
+        )
+        self.assertEqual(responses, [controller.comparison_review_record_response])
+        self.assertIn("Evidence IDs: evidence-1, evidence-2", confirm.call_args.args[1])
+        self.assertIn("not a factual-truth decision", confirm.call_args.args[1])
+
+    def test_declined_selected_comparison_review_never_reaches_controller(self) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchSourceLoadController()
+        record = _research_comparison_note_record(
+            "note-1",
+            ("document-1", "document-2"),
+            ("evidence-1", "evidence-2"),
+            ("assessment-1", "assessment-2"),
+            "Recorded comparison.",
+        )
+        _configure_selected_persisted_comparison_notes(window, (record,))
+        window._research_runs = ()
+        window._root = object()
+        window._controller = controller
+        window._research_comparison_review_decision = RecordingInput("supported")
+        window._research_comparison_review_note = RecordingInput("I reviewed it.")
+        window._status = RecordingStatus()
+        window._append_response = lambda _response: self.fail("must not append")
+
+        with patch(
+            "desktop.TkinterDesktopWindow.messagebox.askyesno",
+            return_value=False,
+        ):
+            window._record_selected_research_comparison_review()
+
+        self.assertEqual(controller.comparison_review_records, [])
+        self.assertEqual(window._status.values, ["comparison review: not saved"])
+
+    def test_selected_comparison_review_explicitly_supersedes_current_review(
+        self,
+    ) -> None:
+        window: Any = object.__new__(TkinterDesktopWindow)
+        controller = RecordingResearchSourceLoadController()
+        now = datetime(2026, 8, 21, tzinfo=UTC)
+        first_source = ResearchSourceRecord(
+            "document-1", "https://example.test/1", "First", "text/plain", now, now
+        )
+        second_source = ResearchSourceRecord(
+            "document-2", "https://example.test/2", "Second", "text/plain", now, now
+        )
+        first_evidence = _research_evidence_record(
+            "evidence-1", first_source.document_id, "First evidence."
+        )
+        second_evidence = _research_evidence_record(
+            "evidence-2", second_source.document_id, "Second evidence."
+        )
+        first_assessment = _research_assessment_record(
+            "assessment-1",
+            first_source.document_id,
+            first_evidence.evidence_id,
+            "Recorded assessment.",
+        )
+        second_assessment = _research_assessment_record(
+            "assessment-2",
+            second_source.document_id,
+            second_evidence.evidence_id,
+            "Recorded assessment.",
+        )
+        record = _research_comparison_note_record(
+            "note-1",
+            (first_source.document_id, second_source.document_id),
+            (first_evidence.evidence_id, second_evidence.evidence_id),
+            (first_assessment.assessment_id, second_assessment.assessment_id),
+            "Recorded comparison.",
+        )
+        current = ResearchComparisonReviewRecord(
+            "review-1",
+            record.note_id,
+            record.evidence_ids,
+            ResearchComparisonReviewDecision.SUPPORTED,
+            "Original decision.",
+            now,
+        )
+        run = ResearchRun(
+            "run-123",
+            "Review comparison notes",
+            ResearchRunStatus.COLLECTING,
+            (first_source, second_source),
+            (),
+            now,
+            now,
+            evidence=(first_evidence, second_evidence),
+            assessments=(first_assessment, second_assessment),
+            comparison_notes=(record,),
+            comparison_reviews=(current,),
+        )
+        _configure_selected_persisted_comparison_notes(window, (record,))
+        window._research_runs = (run,)
+        window._root = object()
+        window._controller = controller
+        window._research_comparison_review_decision = RecordingInput("not_supported")
+        window._research_comparison_review_note = RecordingInput("Withdraw support.")
+        window._status = RecordingStatus()
+        window._append_response = lambda _response: None
+
+        with patch(
+            "desktop.TkinterDesktopWindow.messagebox.askyesno",
+            return_value=True,
+        ) as confirm:
+            window._record_selected_research_comparison_review()
+
+        self.assertEqual(
+            controller.comparison_review_records,
+            [
+                (
+                    "run-123",
+                    "note-1",
+                    "not_supported",
+                    "Withdraw support.",
+                    "review-1",
+                )
+            ],
+        )
+        self.assertIn("supersede current review review-1", confirm.call_args.args[1])
 
     def test_stale_recorded_comparison_note_cannot_overwrite_manual_fields(
         self,
@@ -6380,6 +6547,7 @@ class RecordingResearchSourceLoadController:
         self.comparison_previews: list[tuple[str, str]] = []
         self.comparison_note_previews: list[tuple[str, str, str, str, str]] = []
         self.comparison_note_records: list[tuple[str, str, str, str, str]] = []
+        self.comparison_review_records: list[tuple[str, str, str, str, str]] = []
         self.assessment_write_previews: list[tuple[str, str, str, str, str, str]] = []
         self.assessment_records: list[tuple[str, str, str, str, str, str]] = []
         self.claim_previews: list[str] = []
@@ -6645,6 +6813,12 @@ class RecordingResearchSourceLoadController:
             message="Comparison note recorded.",
             request_id="comparison-note-record",
             intent="research_source_comparison_note_record",
+            memory_count=0,
+        )
+        self.comparison_review_record_response = BrainResponse(
+            message="Comparison review recorded.",
+            request_id="comparison-review-record",
+            intent="research_comparison_review_record",
             memory_count=0,
         )
         assessment_write_preview = ResearchSourceAssessmentWritePreview(
@@ -7056,6 +7230,19 @@ class RecordingResearchSourceLoadController:
         values = (run_id, document_ids, evidence_ids, assessment_ids, text)
         self.comparison_note_records.append(values)
         return self.comparison_note_record_response
+
+    def record_research_comparison_review(
+        self,
+        run_id: str,
+        note_id: str,
+        decision: str,
+        note: str,
+        supersedes_review_id: str = "",
+    ) -> BrainResponse:
+        self.comparison_review_records.append(
+            (run_id, note_id, decision, note, supersedes_review_id)
+        )
+        return self.comparison_review_record_response
 
     def record_research_source_assessment(
         self,

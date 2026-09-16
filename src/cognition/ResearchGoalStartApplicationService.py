@@ -22,6 +22,7 @@ from llm.LLMEndpointPolicy import is_loopback_llm_endpoint
 from research.ResearchAutonomyBudget import ResearchAutonomyBudget
 from research.ResearchDisclosure import ResearchDisclosure
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
+from research.ResearchExecutionAllowance import ResearchExecutionAllowance
 from research.ResearchMissionScope import (
     COMPARISON_POLICY,
     SEMANTIC_POLICY,
@@ -44,6 +45,7 @@ EVIDENCE_SCOPE = "selected_provider_reference_evidence"
 COMPARISON_SCOPE = "selected_provider_reference_comparison"
 LEARNING_SCOPE = "bounded_semantic_learning_research"
 MISSION_RECOVERY_START_INTENT = "research_mission_recovery_start"
+MISSION_COMPARISON_REVIEW_INTENT = "research_mission_comparison_review"
 
 
 class ResearchGoalStartApplicationService:
@@ -71,6 +73,9 @@ class ResearchGoalStartApplicationService:
         self._failure_memory = failure_memory
         self._goal_lock = Lock()
         self._mission_recovery_attempted = False
+        # The autonomy stop reason of each mission this session ran or resumed,
+        # so its report can be re-rendered from canonical state after a review.
+        self._mission_stop_reasons: dict[str, str] = {}
         self._goal_request_ids = set(
             self._execution_service.restored_mission_request_ids()
         )
@@ -363,6 +368,9 @@ class ResearchGoalStartApplicationService:
             return
         plan_id = resume.metadata["research_plan_id"]
         assert isinstance(plan_id, str)
+        self._mission_stop_reasons[plan_id] = (
+            response.research_autonomy.stop_reason.value
+        )
         report = teaching_report(
             self._runs.get(run_id),
             response.research_autonomy.stop_reason.value,
@@ -397,8 +405,82 @@ class ResearchGoalStartApplicationService:
             )
         return memory_text + "\n" + retained.message
 
+    @staticmethod
+    def is_mission_comparison_review_request(request: BrainRequest) -> bool:
+        return request.metadata.get("intent") == MISSION_COMPARISON_REVIEW_INTENT
+
+    def process_mission_comparison_review(self, request: BrainRequest) -> BrainResponse:
+        """Load one mission's comparison-review target from canonical state only.
+
+        The run, checkpoint note and spend come from the execution service and
+        the run store; the report is re-rendered by the existing teaching report,
+        so a recorded review changes what it shows only through canonical goal,
+        explanation and readiness recomputation.  Nothing is written, fetched,
+        resumed or called.
+        """
+
+        def refusal(message: str) -> BrainResponse:
+            return BrainResponse(
+                message=message,
+                request_id=request.request_id,
+                intent=MISSION_COMPARISON_REVIEW_INTENT,
+                memory_count=0,
+                success=False,
+            )
+
+        plan_id = request.metadata.get("research_plan_id")
+        if not isinstance(plan_id, str) or not plan_id.strip():
+            return refusal("A mission plan ID is required.")
+        plan_id = plan_id.strip()
+        if self._runs is None:
+            return refusal("Research run persistence is unavailable.")
+        execution = self._execution_service
+        checkpoint = execution.mission_checkpoint(plan_id)
+        allowance = execution.allowance(plan_id)
+        stop = self._mission_stop_reasons.get(plan_id, "")
+        restored = execution.restored_execution(plan_id)
+        if restored is not None:
+            # A restored execution was not resumed this session, so no autonomy
+            # stop reason exists to recompute its outcome from; it is refused.
+            checkpoint = restored.mission_checkpoint
+            allowance = restored.allowance
+        run_id = execution.mission_run_id(plan_id)
+        if checkpoint is None or not run_id or not stop:
+            return refusal(
+                "This mission's canonical result is unavailable in this session; "
+                "no comparison review target was loaded."
+            )
+        try:
+            run = self._runs.get(run_id)
+        except ResearchError:
+            return refusal("This mission's research run is unavailable.")
+        note_id = checkpoint.semantic_note_id
+        header = (
+            f"Mission comparison review target: plan {plan_id}, run {run.run_id}, "
+            f"comparison note {note_id or 'none recorded'}. Nothing is recorded "
+            "until an operator review is previewed and confirmed."
+        )
+        return BrainResponse(
+            message=header
+            + "\n\n"
+            + teaching_report(
+                run,
+                stop,
+                self._spend_text_for(allowance),
+                checkpoint=checkpoint,
+            ),
+            request_id=request.request_id,
+            intent=MISSION_COMPARISON_REVIEW_INTENT,
+            memory_count=0,
+            research_runs=[run],
+            research_mission_comparison_note_id=note_id,
+        )
+
     def _spend_text(self, plan_id: str) -> str:
-        allowance = self._execution_service.allowance(plan_id)
+        return self._spend_text_for(self._execution_service.allowance(plan_id))
+
+    @staticmethod
+    def _spend_text_for(allowance: ResearchExecutionAllowance | None) -> str:
         return (
             f"Cumulative spending: {allowance.spend.step_advances} advances, "
             f"{allowance.spend.network_operations} network and "
@@ -590,6 +672,8 @@ class ResearchGoalStartApplicationService:
                 if response.research_autonomy
                 else "unavailable"
             )
+            if response.research_autonomy:
+                self._mission_stop_reasons[state.plan_id] = stop
             return replace(
                 response,
                 intent=RESEARCH_GOAL_START_INTENT,

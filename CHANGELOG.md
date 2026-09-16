@@ -2,6 +2,37 @@
 
 All notable project changes are recorded here.
 
+## [0.3.368] - 2026-09-16
+
+### Added
+
+- The desktop's existing recorded-comparison-note view now exposes the canonical
+  operator-review path. An operator can select the exact retained note, see its
+  source/evidence/assessment identities and current review state, then explicitly
+  record `supported` or `not_supported` with a reason. A new decision carries the
+  current review ID as an exact supersession target; the canonical service still
+  revalidates all identities and refuses stale state.
+- A mission-bound review for learning missions. "Review mission comparison"
+  loads, read-only, the mission's canonical run, the exact comparison note named
+  by its recovery checkpoint and a freshly rendered teaching report; the operator
+  never picks the note. "Preview and record mission comparison review…" shows
+  the plan, run, note, evidence IDs, current review, proposed decision and reason,
+  writes nothing unless confirmed, records through the same canonical service,
+  then reloads so goal satisfaction, explanation, readiness and the report are
+  recomputed by the backend. A refused (stale or closed-run) review shows a
+  bounded message and reloads the current review. Revocation is a
+  `not_supported` review superseding the current one. A mission started this
+  session and one resumed by startup recovery bind the same way; a restored
+  mission that was not resumed has no outcome to recompute and is refused.
+
+### Boundaries
+
+- This is a desktop workflow connection only. It creates no new review model,
+  authority, budget, provider/model call, source slot, lifecycle transition or
+  recovery behavior. The confirmation makes clear that a supported review is a
+  bounded operator judgement, not a factual-truth decision. Recovered runs use
+  the same persisted-note selector and canonical validation path.
+
 ## [0.3.367] - 2026-09-16
 
 ### Added

@@ -619,6 +619,14 @@ class ResearchPlanExecutionApplicationService:
             return None
         return self._mission_resolver.checkpoint(plan)
 
+    def mission_run_id(self, plan_id: str) -> str | None:
+        """Return the canonical research run bound to one execution, read-only."""
+        context = self._contexts.get(plan_id)
+        if context is not None and context.research_run_id:
+            return context.research_run_id
+        restored = self._restored.get(plan_id)
+        return restored.research_run_id if restored is not None else None
+
     def restored_execution(
         self,
         plan_id: str,

@@ -134,6 +134,7 @@ class BrainResponse:
     research_runs: list[ResearchRun] = field(default_factory=list)
     research_recovered_mission_ids: tuple[str, ...] = ()
     research_recovered_mission_run_ids: tuple[str, ...] = ()
+    research_mission_comparison_note_id: str = ""
     research_claim_preview: ResearchClaimPreview | None = None
     research_claim_write_preview: ResearchClaimWritePreview | None = None
     research_claim_contradiction_preview: ResearchClaimContradictionPreview | None = (

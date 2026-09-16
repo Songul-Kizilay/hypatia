@@ -2114,6 +2114,21 @@ class DesktopController:
             )
         )
 
+    def mission_comparison_review(self, plan_id: str) -> BrainResponse:
+        """Load one mission's canonical comparison-review target. Writes nothing."""
+        if not plan_id.strip():
+            raise ValueError("A mission plan ID is required.")
+        return self._brain.process(
+            BrainRequest(
+                message="Load mission comparison review target",
+                source="desktop",
+                metadata={
+                    "intent": "research_mission_comparison_review",
+                    "research_plan_id": plan_id.strip(),
+                },
+            )
+        )
+
     def record_research_comparison_review(
         self,
         research_run_id: str,
