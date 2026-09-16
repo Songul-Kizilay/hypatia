@@ -754,7 +754,14 @@ class ResearchPlanExecutionApplicationService:
                     (
                         plan_id,
                         snapshot.question,
-                        "not resumed: " + self._mission_recovery_refusals[plan_id],
+                        "not resumed: "
+                        + self._mission_recovery_refusals[plan_id]
+                        + (
+                            " Its report, recomputed from the recorded stop, is "
+                            "in this execution's status."
+                            if snapshot.mission_stop_reason is not None
+                            else " No stop was recorded, so no report is available."
+                        ),
                         snapshot.research_run_id or "",
                     )
                 )

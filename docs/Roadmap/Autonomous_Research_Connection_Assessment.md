@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.373
+## Current bounded text journey: v0.3.374
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -113,6 +113,17 @@ and model prose cannot alter it. It does not change mission lifecycle,
 authorization, cumulative allowance, plan digest, source slots, provider/model
 selection, retry behavior or run closure. An unchanged recovered state renders
 the same explanation.
+
+### Listing points to restored reports: v0.3.374
+
+The recovered-missions listing is how an operator finds plan IDs after
+restart. A terminal mission (for example completed or failed) is never
+resumable, so it was listed only as "not resumed" with the rebind refusal, even
+though v0.3.370 made its recomputed report available in execution status. Each
+not-resumed entry now states either that its report, recomputed from the
+recorded stop, is in execution status, or that no stop was recorded and no
+report is available. Listing still reads only in-memory recovery outcomes and
+durable snapshots; it resumes, renders and calls nothing.
 
 ### Export includes recorded judgements: v0.3.373
 

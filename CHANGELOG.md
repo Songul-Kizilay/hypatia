@@ -2,6 +2,20 @@
 
 All notable project changes are recorded here.
 
+## [0.3.374] - 2026-09-16
+
+### Changed
+
+- Missions recovered at startup: each not-resumed entry now says whether its
+  report, recomputed from the recorded stop, is in execution status, or that no
+  stop was recorded so no report is available. Terminal missions that cannot be
+  resumed are no longer listed without a path to their result.
+
+### Boundaries
+
+- Text only, from the durable snapshot; listing resumes, renders and calls
+  nothing.
+
 ## [0.3.373] - 2026-09-16
 
 ### Added

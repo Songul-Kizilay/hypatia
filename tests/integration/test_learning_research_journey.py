@@ -2634,9 +2634,33 @@ class LearningResearchJourneyTests(unittest.TestCase):
         self.assertIn(f"Plan ID: {refused.plan_id}", listing.message)
         self.assertIn("not resumed: ", listing.message)
         self.assertIn("preview was not durably accepted", listing.message)
+        self.assertIn(
+            "No stop was recorded, so no report is available.", listing.message
+        )
         self.assertEqual(self.recovered_listing(engine).message, listing.message)
         self.assertEqual(self.external_calls(), calls)
         self.assertEqual(self.recovered_mission_state(engine, recovered.plan_id), state)
+
+    def test_listing_points_a_terminal_restored_mission_to_its_report(self):
+        self.fetcher.fetch.side_effect = ResearchError("fixture unavailable")
+        response = self.start()
+        plan_id = response.research_plan_execution.plan_id
+        calls = self.external_calls()
+
+        engine = self.restart()
+        listing = self.recovered_listing(engine)
+        status = self.routed_status(engine, plan_id)
+
+        entry = next(line for line in listing.message.splitlines() if plan_id in line)
+        self.assertIn("not resumed: ", entry)
+        self.assertIn(
+            "Its report, recomputed from the recorded stop, is in this "
+            "execution's status.",
+            entry,
+        )
+        self.assertIn("Restored mission teaching report (recomputed", status.message)
+        self.assertIn("Stop reason: step_failed", status.message)
+        self.assertEqual(self.external_calls(), calls)
 
     def test_recovered_missions_listing_is_empty_without_startup_recovery(self):
         self.relation = "possible_agreement"

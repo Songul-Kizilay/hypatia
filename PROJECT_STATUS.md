@@ -2,12 +2,14 @@
 
 ## Runtime Version
 
-`v0.3.373 (Genesis)`
+`v0.3.374 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.373 makes the run Markdown export a complete audit of recorded
+Version v0.3.374 makes the recovered-missions listing say, for each mission
+that was not resumed, whether its recorded report is available in execution
+status or no stop was recorded. Version v0.3.373 makes the run Markdown export a complete audit of recorded
 judgements: operator comparison reviews with decision, supersession and reason,
 and each assessment's usefulness, applicability, independence and publication
 status. Comparison notes are labelled tentative rather than user-authored.
