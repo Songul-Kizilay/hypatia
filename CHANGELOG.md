@@ -2,6 +2,28 @@
 
 All notable project changes are recorded here.
 
+## [0.3.378] - 2026-09-16
+
+### Fixed
+
+- A repeated source-assessment step could add an identical second current
+  assessment (for example after a crash, a "not performed" ruling and a retry).
+  The step now refuses when the run already holds the exact same first
+  assessment (source, evidence IDs, text, trust and unknown judgements), names
+  the existing assessment, and fails without claiming performed work.
+
+### Added
+
+- Characterization: replayed superseding assessments remain refused by the run
+  manager; replayed source acceptance in the same run is refused with rollback.
+
+### Boundaries
+
+- Distinct assessments, including manual ones with other judgements, are still
+  recorded. No schema, authority, budget, goal or readiness change. Known
+  limitation: a URL indexed by one run cannot be accepted into another run,
+  because document identity is URL-derived and knowledge is global.
+
 ## [0.3.377] - 2026-09-16
 
 ### Fixed

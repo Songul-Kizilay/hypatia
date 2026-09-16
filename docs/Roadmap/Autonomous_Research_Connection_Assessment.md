@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.377
+## Current bounded text journey: v0.3.378
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -113,6 +113,31 @@ and model prose cannot alter it. It does not change mission lifecycle,
 authorization, cumulative allowance, plan digest, source slots, provider/model
 selection, retry behavior or run closure. An unchanged recovered state renders
 the same explanation.
+
+### Replay/idempotency audit — source acceptance and assessment: v0.3.378
+
+**Source acceptance (characterized, no code change).** Acceptance indexes the
+document, snapshots its content and attaches it to the run. Replaying it in the
+same run is refused by dd_source ("already attached") with the index and
+content snapshot rolled back; in the same process the knowledge engine also
+refuses to load the document twice. It is duplicate-safe. One limitation was
+recorded for a product decision rather than fixed: document identity is derived
+from the URL alone, and knowledge is global, so a second run cannot accept a URL
+another run already indexed. Reusing the indexed document could attach content
+that run never fetched (for example after the page changed), so resolving it
+needs content-versioned or run-scoped knowledge, not a narrow guard.
+
+**Source assessment (gap found and fixed).** A superseding assessment is already
+refused on replay once its target is superseded. A first assessment had no guard:
+in the same crash window as evidence (write persisted, step interrupted, operator
+ruling "not performed", retry) it added an identical second current assessment,
+and a rebound mission could reach the same path. The assessment operation now
+refuses when the run already holds the exact same first assessment (source,
+evidence IDs, text, trust, and the four judgements this operation writes as
+unknown), naming the existing assessment and failing without performed work.
+A different text, trust or evidence set, or a manual assessment carrying other
+judgements, is still recorded. No schema, authority, budget, goal or readiness
+change; manual assessment entry is unchanged.
 
 ### Replay/idempotency audit — evidence recording: v0.3.377
 

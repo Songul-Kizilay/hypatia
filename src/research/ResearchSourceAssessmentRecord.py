@@ -132,3 +132,35 @@ class ResearchSourceAssessmentRecord:
             "supersedes_assessment_id",
             supersedes_assessment_id,
         )
+
+
+def identical_unjudged_assessment(
+    assessments: tuple[ResearchSourceAssessmentRecord, ...],
+    document_id: str,
+    evidence_ids: tuple[str, ...],
+    text: str,
+    information_trust: ResearchInformationTrust,
+) -> ResearchSourceAssessmentRecord | None:
+    """Return an existing first assessment that is exactly this observation.
+
+    Only a non-superseding record with the same source, evidence set, text and
+    trust, and no structured judgement recorded, matches.  A record carrying any
+    judgement is a different observation.  Read-only; used to refuse a replayed
+    plan assessment rather than record it twice.
+    """
+    return next(
+        (
+            record
+            for record in assessments
+            if record.supersedes_assessment_id is None
+            and record.source_document_id == document_id
+            and set(record.evidence_ids) == set(evidence_ids)
+            and record.text.strip() == text.strip()
+            and record.information_trust is information_trust
+            and record.usefulness is ResearchSourceUsefulness.UNKNOWN
+            and record.applicability is ResearchSourceApplicability.UNKNOWN
+            and record.independence is ResearchSourceIndependence.UNKNOWN
+            and record.publication_status is ResearchSourcePublicationStatus.UNKNOWN
+        ),
+        None,
+    )

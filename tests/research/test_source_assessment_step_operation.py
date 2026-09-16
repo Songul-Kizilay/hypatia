@@ -124,6 +124,96 @@ class SourceAssessmentStepOperationTests(unittest.TestCase):
         self.assertIn("authored trust 'high'", result.detail)
         self.assertIn("not claim verification", result.detail)
 
+    def test_repeating_the_exact_first_assessment_records_nothing_new(self) -> None:
+        run_id = self._run_id()
+        document_id, evidence_id = self._with_evidence(run_id)
+        context = ResearchPlanExecutionContext(research_run_id=run_id)
+        authorization = ResearchAssessmentAuthorization(
+            document_id=document_id,
+            evidence_ids=(evidence_id,),
+            text=TEXT,
+            information_trust=ResearchInformationTrust.MEDIUM,
+        )
+        self.operation.run(step(authorization), context)
+        first = self.manager.get(run_id)
+
+        with self.assertRaisesRegex(
+            ResearchError, f"already recorded as {first.assessments[0].assessment_id}"
+        ):
+            self.operation.run(step(authorization), context)
+
+        self.assertEqual(self.manager.get(run_id), first)
+
+    def test_distinct_assessments_of_the_same_source_are_still_recorded(self) -> None:
+        run_id = self._run_id()
+        document_id, evidence_id = self._with_evidence(run_id)
+        context = ResearchPlanExecutionContext(research_run_id=run_id)
+        base = ResearchAssessmentAuthorization(
+            document_id=document_id, evidence_ids=(evidence_id,), text=TEXT
+        )
+        self.operation.run(step(base), context)
+        self.manager.record_source_assessment(
+            run_id,
+            document_id,
+            [evidence_id],
+            "Manual judgement.",
+            independence="independent",
+        )
+
+        for different in (
+            ResearchAssessmentAuthorization(
+                document_id=document_id,
+                evidence_ids=(evidence_id,),
+                text="A different reading.",
+            ),
+            ResearchAssessmentAuthorization(
+                document_id=document_id,
+                evidence_ids=(evidence_id,),
+                text=TEXT,
+                information_trust=ResearchInformationTrust.LOW,
+            ),
+            ResearchAssessmentAuthorization(
+                document_id=document_id,
+                evidence_ids=(evidence_id,),
+                text="Manual judgement.",
+            ),
+        ):
+            with self.subTest(text=different.text):
+                self.operation.run(step(different), context)
+
+        self.assertEqual(len(self.manager.get(run_id).assessments), 5)
+
+    def test_replayed_superseding_assessment_is_still_refused_by_the_manager(
+        self,
+    ) -> None:
+        run_id = self._run_id()
+        document_id, evidence_id = self._with_evidence(run_id)
+        context = ResearchPlanExecutionContext(research_run_id=run_id)
+        self.operation.run(
+            step(
+                ResearchAssessmentAuthorization(
+                    document_id=document_id, evidence_ids=(evidence_id,), text=TEXT
+                )
+            ),
+            context,
+        )
+        original = self.manager.get(run_id).assessments[0].assessment_id
+        correction = step(
+            ResearchAssessmentAuthorization(
+                document_id=document_id,
+                evidence_ids=(evidence_id,),
+                text="Corrected.",
+                supersedes_assessment_id=original,
+            )
+        )
+        self.operation.run(correction, context)
+        recorded = self.manager.get(run_id)
+
+        with self.assertRaisesRegex(ResearchError, "already been superseded"):
+            self.operation.run(correction, context)
+
+        self.assertEqual(self.manager.get(run_id), recorded)
+
     def test_assessment_creates_no_evidence_or_claim(self) -> None:
         run_id = self._run_id()
         document_id, evidence_id = self._with_evidence(run_id)

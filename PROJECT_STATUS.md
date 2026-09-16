@@ -2,11 +2,16 @@
 
 ## Runtime Version
 
-`v0.3.377 (Genesis)`
+`v0.3.378 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
+Version v0.3.378 applies the same replay guard to source assessment: a repeated
+first-assessment step fails honestly instead of adding an identical second
+current assessment (superseding writes were already refused on replay). Source
+acceptance was characterized as duplicate-safe within a run; cross-run
+acceptance of an already-indexed URL is a recorded design limitation.
 Version v0.3.377 prevents duplicate evidence from a repeated evidence-recording
 step: when the run already holds the exact same observation (source document,
 chunk, content hash and note), the step fails honestly naming the existing
