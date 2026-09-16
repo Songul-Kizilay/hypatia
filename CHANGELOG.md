@@ -2,6 +2,24 @@
 
 All notable project changes are recorded here.
 
+## [0.3.380] - 2026-09-16
+
+### Fixed
+
+- Mission recovery refused any mission that stopped after discovery but before
+  its first recorded evidence ("Mission evidence changed or is missing"). Such a
+  mission now resumes from its discovery provenance and finishes like a live
+  mission. An interrupted first fetch is rebound but stays interrupted and
+  charged, records step_interrupted, and can be retried only through the
+  existing explicit "not performed" operator ruling, which was previously
+  unreachable.
+
+### Boundaries
+
+- A checkpoint without evidence is accepted only if nothing past discovery
+  exists in the checkpoint, the run or the completed steps; otherwise recovery
+  still refuses. No schema, authority, budget, goal or readiness change.
+
 ## [0.3.379] - 2026-09-16
 
 ### Fixed

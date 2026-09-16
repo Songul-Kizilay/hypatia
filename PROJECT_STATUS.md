@@ -2,12 +2,16 @@
 
 ## Runtime Version
 
-`v0.3.379 (Genesis)`
+`v0.3.380 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.379 extends the replay guard to plan-step claims and comparison
+Version v0.3.380 fixes a recovery false refusal: a mission stopped after
+discovery but before its first recorded evidence (for example between steps, or
+inside its first fetch) was refused at restart as "evidence changed or missing".
+It now resumes from its discovery provenance; an interrupted first fetch stays
+charged and unreplayed until an explicit operator ruling. Version v0.3.379 extends the replay guard to plan-step claims and comparison
 notes, completing the research-record steps: a repeated step never records an
 identical first claim or comparison note twice. Claim contradictions and
 comparison reviews were characterized as already replay-safe.

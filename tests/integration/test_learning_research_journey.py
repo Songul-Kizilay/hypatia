@@ -2178,6 +2178,17 @@ class LearningResearchJourneyTests(unittest.TestCase):
         self.assertEqual([s.capability.value for s in running], ["source_fetch"])
         return snapshot
 
+    def advance(self, engine, plan_id):
+        return engine.process(
+            BrainRequest(
+                message="advance",
+                metadata={
+                    "intent": "research_plan_execution_advance",
+                    "research_plan_id": plan_id,
+                },
+            )
+        )
+
     def test_interrupted_fetch_is_never_replayed_after_restart(self):
         self.relation = "possible_agreement"
         snapshot = self.interrupted_fetch_start()
@@ -2188,17 +2199,91 @@ class LearningResearchJourneyTests(unittest.TestCase):
 
         engine = self.restart()
         execution = engine._research_plan_execution_service
-        restored = execution.restored_execution(snapshot.plan_id)
 
         # The attempt may have reached the network; nothing proves otherwise, so
         # recovery keeps it charged and interrupted and never fetches again.
         self.assertEqual(self.fetched_urls(), fetches)
-        self.assertIsNotNone(restored)
-        self.assertEqual(restored.allowance.spend, snapshot.allowance.spend)
-        self.assertIn("interrupted", {step.status.value for step in restored.steps})
-        self.assertIsNone(restored.mission_stop_reason)
-        self.assertIn("not resumed", self.recovered_listing(engine).message)
+        live = execution.live_execution(snapshot.plan_id)
+        self.assertIsNotNone(live)
+        interrupted = next(s for s in live.steps if s.status.value == "interrupted")
+        self.assertEqual(
+            execution.allowance(snapshot.plan_id).spend, snapshot.allowance.spend
+        )
+        self.assertEqual(
+            execution.mission_stop_reason(snapshot.plan_id).value, "step_interrupted"
+        )
+        refused = self.advance(engine, snapshot.plan_id)
+        self.assertFalse(refused.success)
+        self.assertIn("outcome is unknown", refused.message)
         self.assertEqual(self.fetched_urls(), fetches)
+
+        # Recovery now reaches the existing explicit authority: an operator rules
+        # the attempt never happened, and the next advance is an ordinary,
+        # newly charged attempt.
+        ruled = engine.process(
+            BrainRequest(
+                message="resolve",
+                metadata={
+                    "intent": "research_plan_execution_resolve",
+                    "research_plan_id": snapshot.plan_id,
+                    "step_id": interrupted.step_id,
+                    "resolution": "not_performed",
+                },
+            )
+        )
+        self.assertTrue(ruled.success, ruled.message)
+        self.assertEqual(self.fetched_urls(), fetches)
+        retried = self.advance(engine, snapshot.plan_id)
+        self.assertTrue(retried.success, retried.message)
+        self.assertEqual(len(self.fetched_urls()), len(fetches) + 1)
+        self.assertEqual(
+            execution.allowance(snapshot.plan_id).spend.network_operations,
+            snapshot.allowance.spend.network_operations + 1,
+        )
+
+    def test_mission_stopped_after_discovery_resumes_like_a_live_mission(self):
+        self.relation = "possible_agreement"
+        live = self.start()
+        live_fetches = self.fetched_urls()
+        live_spend = self.spend(self.execution, live.research_plan_execution.plan_id)
+
+        self.setUp()
+        self.relation = "possible_agreement"
+        snapshot = self.interrupted_start(2)
+        self.assertEqual(snapshot.mission_checkpoint.evidence_ids, ())
+        self.assertEqual(self.fetched_urls(), [])
+        engine = self.restart()
+
+        execution = engine._research_plan_execution_service
+        self.assertIsNone(execution.restored_execution(snapshot.plan_id))
+        self.assertEqual(self.fetched_urls(), live_fetches)
+        self.assertEqual(self.spend(execution, snapshot.plan_id), live_spend)
+        self.assertEqual(
+            execution.mission_stop_reason(snapshot.plan_id).value,
+            live.research_autonomy.stop_reason.value,
+        )
+
+    def test_checkpoint_without_evidence_but_later_state_is_refused(self):
+        self.relation = "possible_agreement"
+        snapshot = self.interrupted_start(6)
+        path = self.execution_store_path()
+        document = json.loads(path.read_text("utf-8"))
+        for execution in document["executions"]:
+            execution["mission_checkpoint"]["evidence_ids"] = []
+            execution["mission_checkpoint"]["assessment_ids"] = []
+        path.write_text(json.dumps(document), encoding="utf-8")
+        fetches = self.fetched_urls()
+
+        engine = self.restart()
+
+        self.assertEqual(self.fetched_urls(), fetches)
+        self.assertIsNotNone(
+            engine._research_plan_execution_service.restored_execution(snapshot.plan_id)
+        )
+        self.assertIn(
+            "Mission evidence changed or is missing",
+            self.recovered_listing(engine).message,
+        )
 
     def test_same_url_in_a_different_mission_is_a_distinct_authorized_fetch(self):
         self.relation = "possible_agreement"

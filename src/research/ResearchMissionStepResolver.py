@@ -440,7 +440,28 @@ class ResearchMissionStepResolver:
             evidence=evidence,
             assessments=assessments,
         )
-        self._validate_recorded_evidence(observed, run)
+        if checkpoint.evidence_ids:
+            self._validate_recorded_evidence(observed, run)
+        elif (
+            checkpoint.acquired_urls
+            or checkpoint.assessment_ids
+            or checkpoint.semantic_note_id
+            or run.sources
+            or run.evidence
+            or run.assessments
+            or run.comparison_notes
+            or any(
+                step.capability is not Cap.LOCAL_KNOWLEDGE_SEARCH
+                and step.capability is not Cap.SOURCE_DISCOVERY
+                and by_id[step.step_id].status is ResearchPlanStepStatus.COMPLETED
+                for step in plan.steps
+            )
+        ):
+            # Nothing past discovery may have happened without recorded evidence;
+            # anything else means the checkpoint no longer describes the run.
+            raise ResearchError("Mission evidence changed or is missing.")
+        # With no recorded evidence the mission stopped at or before its first
+        # source slot; the discovery provenance above is all it needs to resume.
         self._restore_semantic_adaptation(plan, by_id, checkpoint, observed, run)
         self._restore_contradiction_investigation(
             plan, by_id, checkpoint, observed, run

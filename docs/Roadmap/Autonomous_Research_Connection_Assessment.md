@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.379
+## Current bounded text journey: v0.3.380
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -113,6 +113,31 @@ and model prose cannot alter it. It does not change mission lifecycle,
 authorization, cumulative allowance, plan digest, source slots, provider/model
 selection, retry behavior or run closure. An unchanged recovered state renders
 the same explanation.
+
+### Recovery false refusal before first evidence: v0.3.380
+
+Found during the source-fetch audit (v0.3.376). Mission recovery validated the
+checkpoint's recorded evidence unconditionally, and that validation requires at
+least one evidence record. A mission that stopped after discovery but before
+its first evidence was therefore refused at restart with "Mission evidence
+changed or is missing", even though nothing about it was uncertain.
+
+- **Clean boundary.** A mission stopped between discovery and its first fetch
+  now resumes after restart and finishes exactly as a live mission would (same
+  fetches and spend).
+- **Interrupted first fetch.** It is rebound instead of refused: the step stays
+  interrupted and charged, advance still refuses it, the stop reason
+  step_interrupted is recorded, and the existing operator ruling ("not
+  performed") is now reachable, after which one ordinary, newly charged fetch
+  runs. Previously that ruling was unreachable because the mission never became
+  live again.
+- **Still refused.** A checkpoint with no evidence is accepted only when nothing
+  past discovery exists: no acquired URLs, assessments or semantic note in the
+  checkpoint, no sources, evidence, assessments or comparison notes in the run,
+  and no completed step beyond local search and discovery. Anything else is
+  refused as before.
+
+No schema, authority, budget, goal or readiness change.
 
 ### Replay/idempotency audit — claims, contradictions, notes, reviews: v0.3.379
 
