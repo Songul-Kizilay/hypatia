@@ -28,6 +28,7 @@ from desktop.MissionSourceIndependenceReview import (
 )
 from llm.LLMRuntimeConfig import LLMRuntimeConfig
 from research.JsonFileFailureLessonStore import JsonFileFailureLessonStore
+from research.JsonFileResearchExecutionStore import JsonFileResearchExecutionStore
 from research.JsonFileResearchRunStore import JsonFileResearchRunStore
 from research.ResearchAutonomyBudget import ResearchAutonomyBudget
 from research.ResearchAutonomyResult import AutonomyStopReason
@@ -51,7 +52,12 @@ from research.ResearchMissionGoalSatisfaction import (
 )
 from research.ResearchMissionOutcome import mission_outcome_for
 from research.ResearchPlanDigest import plan_digest
+from research.ResearchPlanExecutionCodec import (
+    decode_execution_snapshot,
+    encode_execution_snapshot,
+)
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability as Cap
+from research.ResearchPlanStepStatus import ResearchPlanStepStatus
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSource import ResearchSource
@@ -1452,6 +1458,275 @@ class LearningResearchJourneyTests(unittest.TestCase):
         )
         self.assertEqual(self.external_calls(), calls)
         self.assertIsNotNone(status)
+
+    def execution_store_path(self):
+        return self.execution._execution_store._path
+
+    def stored_snapshot(self, plan_id):
+        return next(
+            snapshot
+            for snapshot in self.execution._execution_store.load()
+            if snapshot.plan_id == plan_id
+        )
+
+    def durable_files(self):
+        return {
+            path.name: path.read_bytes()
+            for path in self.root.rglob("*.json")
+            if path.is_file()
+        }
+
+    def restored_controller(self, **kwargs):
+        engine = self.restart(**kwargs) if kwargs else self.deferred_restart()
+        return engine, DesktopController(self.restarted.container.resolve(Brain))
+
+    def test_completed_mission_durably_records_its_typed_stop_reason(self):
+        self.relation = "possible_agreement"
+        response = self.start()
+        plan_id = response.research_plan_execution.plan_id
+
+        snapshot = self.stored_snapshot(plan_id)
+
+        self.assertIs(
+            snapshot.mission_stop_reason,
+            AutonomyStopReason(response.research_autonomy.stop_reason.value),
+        )
+        document = json.loads(self.execution_store_path().read_text("utf-8"))
+        self.assertEqual(
+            document["executions"][0]["mission_stop_reason"],
+            response.research_autonomy.stop_reason.value,
+        )
+        # Typed execution metadata only: no rendered report prose is persisted.
+        self.assertNotIn("Mission goal satisfaction", json.dumps(document))
+
+    def test_fresh_restart_without_resume_reconstructs_the_same_report(self):
+        self.relation = "possible_agreement"
+        response = self.start()
+        plan_id = response.research_plan_execution.plan_id
+        before = self.controller.mission_comparison_review(plan_id)
+        snapshot = self.stored_snapshot(plan_id)
+        calls = self.external_calls()
+        files = self.durable_files()
+
+        engine, controller = self.restored_controller()
+        first = controller.mission_comparison_review(plan_id)
+        second = controller.mission_comparison_review(plan_id)
+
+        execution = engine._research_plan_execution_service
+        self.assertTrue(first.success, first.message)
+        self.assertEqual(first.message, before.message)
+        self.assertEqual(second.message, first.message)
+        self.assertEqual(
+            first.research_mission_comparison_note_id,
+            before.research_mission_comparison_note_id,
+        )
+        # Nothing was resumed, executed, spent, called, reviewed or retained.
+        self.assertIsNone(execution.live_execution(plan_id))
+        self.assertEqual(execution.restored_execution(plan_id), snapshot)
+        self.assertEqual(self.external_calls(), calls)
+        self.assertEqual(self.durable_files(), files)
+        self.assertEqual(first.research_runs[0].comparison_reviews, ())
+
+    def test_fresh_restart_enables_mission_review_without_resuming(self):
+        self.relation = "possible_agreement"
+        response = self.start()
+        plan_id = response.research_plan_execution.plan_id
+        snapshot = self.stored_snapshot(plan_id)
+        calls = self.external_calls()
+
+        engine, controller = self.restored_controller()
+        target = controller.mission_comparison_review(plan_id)
+        preview = mission_comparison_review_preview(
+            target.research_runs[0],
+            plan_id,
+            target.research_mission_comparison_note_id,
+            "supported",
+            "Reviewed after restart.",
+        )
+        recorded = controller.record_research_comparison_review(*preview.arguments)
+        refreshed = controller.mission_comparison_review(plan_id)
+        revoked_preview = mission_comparison_review_preview(
+            refreshed.research_runs[0],
+            plan_id,
+            refreshed.research_mission_comparison_note_id,
+            "not_supported",
+            "Withdrawn after restart.",
+        )
+        revoked = controller.record_research_comparison_review(
+            *revoked_preview.arguments
+        )
+        revoked_report = controller.mission_comparison_review(plan_id)
+
+        execution = engine._research_plan_execution_service
+        self.assertTrue(recorded.success, recorded.message)
+        self.assertEqual(
+            target.research_mission_comparison_note_id,
+            snapshot.mission_checkpoint.semantic_note_id,
+        )
+        self.assertIn(
+            "Mission goal satisfaction: Satisfied within the current bounded evidence",
+            refreshed.message,
+        )
+        self.assertIn("Ready for bounded user conclusion", refreshed.message)
+        self.assertTrue(revoked.success, revoked.message)
+        self.assertIn("Mission goal satisfaction: Unresolved", revoked_report.message)
+        self.assertIn("Mission completion readiness: Not ready", revoked_report.message)
+        self.assertEqual(self.external_calls(), calls)
+        self.assertIsNone(execution.live_execution(plan_id))
+        self.assertEqual(execution.restored_execution(plan_id), snapshot)
+        self.assertEqual(self.stored_snapshot(plan_id), snapshot)
+
+    def test_refused_recovery_keeps_durable_stop_and_same_report(self):
+        response = self.start()
+        plan_id = response.research_plan_execution.plan_id
+        before = self.controller.mission_comparison_review(plan_id)
+        calls = self.external_calls()
+
+        engine, controller = self.restored_controller(endpoint="http://127.0.0.1:9/v1")
+        target = controller.mission_comparison_review(plan_id)
+
+        self.assertIsNotNone(
+            engine._research_plan_execution_service.restored_execution(plan_id)
+        )
+        self.assertTrue(target.success, target.message)
+        self.assertEqual(target.message, before.message)
+        self.assertIn("Mission goal satisfaction: Unresolved", target.message)
+        self.assertEqual(self.external_calls(), calls)
+
+    def test_legacy_snapshot_without_stop_reason_refuses_mission_report(self):
+        self.relation = "possible_agreement"
+        response = self.start()
+        plan_id = response.research_plan_execution.plan_id
+        path = self.execution_store_path()
+        document = json.loads(path.read_text("utf-8"))
+        for execution in document["executions"]:
+            execution.pop("mission_stop_reason", None)
+        path.write_text(json.dumps(document), encoding="utf-8")
+        files = self.durable_files()
+
+        engine, controller = self.restored_controller()
+        target = controller.mission_comparison_review(plan_id)
+
+        restored = engine._research_plan_execution_service.restored_execution(plan_id)
+        self.assertIsNone(restored.mission_stop_reason)
+        self.assertFalse(target.success)
+        self.assertEqual(target.research_runs, [])
+        self.assertEqual(self.durable_files(), files)
+
+    def test_unknown_stop_reason_fails_closed_on_load(self):
+        self.relation = "possible_agreement"
+        self.start()
+        path = self.execution_store_path()
+        document = json.loads(path.read_text("utf-8"))
+        document["executions"][0]["mission_stop_reason"] = "goal_satisfied"
+        path.write_text(json.dumps(document), encoding="utf-8")
+
+        with self.assertRaises(ResearchError):
+            JsonFileResearchExecutionStore(path).load()
+
+    def assert_stop_survives_fresh_restart(self, response, stop):
+        plan_id = response.research_plan_execution.plan_id
+        before = self.controller.mission_comparison_review(plan_id)
+        calls = self.external_calls()
+
+        self.assertEqual(response.research_autonomy.stop_reason.value, stop)
+        self.assertEqual(self.stored_snapshot(plan_id).mission_stop_reason.value, stop)
+        _, controller = self.restored_controller()
+        after = controller.mission_comparison_review(plan_id)
+
+        self.assertTrue(after.success, after.message)
+        self.assertEqual(after.message, before.message)
+        self.assertIn(f"Stop reason: {stop}", after.message)
+        self.assertNotIn("Ready for bounded user conclusion", after.message)
+        self.assertEqual(self.external_calls(), calls)
+
+    def test_cancelled_mission_keeps_its_actual_stop_reason(self):
+        signal = CancellationSignal()
+
+        def cancelled(*args):
+            result = self.answer(*args)
+            signal.cancel()
+            return result
+
+        self.transport.side_effect = cancelled
+        response = self.start(cancellation_token=signal)
+
+        self.assert_stop_survives_fresh_restart(response, "cancelled")
+
+    def test_failed_mission_keeps_its_actual_stop_reason(self):
+        self.fetcher.fetch.side_effect = ResearchError("fixture unavailable")
+        response = self.start()
+
+        self.assert_stop_survives_fresh_restart(response, "step_failed")
+
+    def test_stop_reason_codec_is_typed_and_bound_to_mission_state(self):
+        self.relation = "possible_agreement"
+        response = self.start()
+        snapshot = self.stored_snapshot(response.research_plan_execution.plan_id)
+        document = encode_execution_snapshot(snapshot)
+
+        self.assertEqual(decode_execution_snapshot(document), snapshot)
+        legacy = dict(document)
+        legacy.pop("mission_stop_reason")
+        self.assertIsNone(decode_execution_snapshot(legacy).mission_stop_reason)
+        for value in ("", "satisfied", None, 3):
+            with self.subTest(value=value), self.assertRaises(ResearchError):
+                decode_execution_snapshot({**document, "mission_stop_reason": value})
+        non_mission = {
+            key: value
+            for key, value in document.items()
+            if key
+            not in {
+                "mission_scope",
+                "mission_disclosure",
+                "mission_checkpoint",
+                "mission_plan_digest",
+                "mission_request_id",
+            }
+        }
+        with self.assertRaises(ResearchError):
+            decode_execution_snapshot(non_mission)
+        with self.assertRaises(ResearchError):
+            replace(
+                snapshot,
+                mission_scope=None,
+                mission_disclosure=ResearchDisclosure.NONE,
+                mission_checkpoint=None,
+                mission_request_id=None,
+            )
+        with self.assertRaises(ResearchError):
+            replace(snapshot, mission_stop_reason="research_deliverable_ready")
+        running = replace(
+            snapshot,
+            steps=(
+                replace(snapshot.steps[0], status=ResearchPlanStepStatus.RUNNING),
+                *snapshot.steps[1:],
+            ),
+        )
+        self.assertIsNone(running.restored().mission_stop_reason)
+
+    def test_interrupted_mission_records_no_stop_reason(self):
+        snapshot = self.interrupted_start(6)
+
+        self.assertIsNone(snapshot.mission_stop_reason)
+        self.assertIsNone(snapshot.restored().mission_stop_reason)
+
+    def test_resumed_mission_records_the_new_stop_not_the_old_one(self):
+        self.relation = "possible_agreement"
+        snapshot = self.interrupted_start(6)
+        engine = self.restart()
+        execution = engine._research_plan_execution_service
+
+        stop = execution.mission_stop_reason(snapshot.plan_id)
+
+        self.assertIsNotNone(stop)
+        stored = JsonFileResearchExecutionStore(self.execution_store_path()).load()
+        self.assertEqual(
+            next(
+                s for s in stored if s.plan_id == snapshot.plan_id
+            ).mission_stop_reason,
+            stop,
+        )
 
     def spend(self, execution, plan_id):
         allowance = execution.allowance(plan_id)

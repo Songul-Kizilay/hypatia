@@ -67,6 +67,7 @@ from research.ResearchAttemptRecoveryDecision import (
     ResearchAttemptRecoveryDecision,
 )
 from research.ResearchAttemptResolution import ResearchAttemptResolution
+from research.ResearchAutonomyResult import AutonomyStopReason
 from research.ResearchCapabilityCost import cost_for
 from research.ResearchContinuationStopReason import (
     ResearchContinuationStopReason,
@@ -184,6 +185,11 @@ class ResearchPlanExecutionApplicationService:
         self._mission_resolver = mission_resolver
         self._mission_digests: dict[str, str] = {}
         self._mission_request_ids: dict[str, str] = {}
+        #: A mission's last autonomy stop, paired with the exact immutable state
+        #: it described; any later state change makes it no longer apply.
+        self._mission_stops: dict[
+            str, tuple[ResearchPlanExecutionState, AutonomyStopReason]
+        ] = {}
         self._mission_recovery_refusals: dict[str, str] = {}
         self._mission_recovery_reports: dict[str, str] = {}
         self._clock = clock or (lambda: datetime.now(UTC))
@@ -618,6 +624,40 @@ class ResearchPlanExecutionApplicationService:
         if plan is None or plan.mission_scope is None or self._mission_resolver is None:
             return None
         return self._mission_resolver.checkpoint(plan)
+
+    def record_mission_stop_reason(
+        self, plan_id: str, stop_reason: AutonomyStopReason
+    ) -> bool:
+        """Durably record why a live mission's autonomy run stopped.
+
+        The reason is bound to the current execution state, so it describes
+        exactly that state and nothing later.  Recording grants no authority or
+        budget and performs no work; it only lets the existing outcome be
+        recomputed after restart.  Returns whether the write landed.
+        """
+        plan = self._plans.get(plan_id)
+        state = self._executions.get(plan_id)
+        if (
+            plan is None
+            or state is None
+            or plan.mission_scope is None
+            or plan_id not in self._mission_digests
+            or not isinstance(stop_reason, AutonomyStopReason)
+        ):
+            return False
+        self._mission_stops[plan_id] = (state, stop_reason)
+        return self._persist_checkpoint(plan_id)
+
+    def mission_stop_reason(self, plan_id: str) -> AutonomyStopReason | None:
+        """Return the recorded stop that still describes this execution, if any."""
+        state = self._executions.get(plan_id)
+        if state is not None:
+            recorded = self._mission_stops.get(plan_id)
+            return (
+                recorded[1] if recorded is not None and recorded[0] is state else None
+            )
+        restored = self._restored.get(plan_id)
+        return restored.mission_stop_reason if restored is not None else None
 
     def mission_run_id(self, plan_id: str) -> str | None:
         """Return the canonical research run bound to one execution, read-only."""
@@ -1547,6 +1587,7 @@ class ResearchPlanExecutionApplicationService:
             mission_scope = None
             mission_disclosure = ResearchDisclosure.NONE
             mission_checkpoint = None
+            mission_stop_reason = None
             scope = plan.mission_scope
             if (
                 scope is not None
@@ -1557,6 +1598,7 @@ class ResearchPlanExecutionApplicationService:
                 mission_disclosure = context.disclosure
                 if self._mission_resolver is not None:
                     mission_checkpoint = self._mission_resolver.checkpoint(plan)
+                mission_stop_reason = self.mission_stop_reason(plan_id)
             snapshots.append(
                 ResearchPlanExecutionSnapshot.capture(
                     state,
@@ -1573,6 +1615,7 @@ class ResearchPlanExecutionApplicationService:
                     mission_disclosure=mission_disclosure,
                     mission_checkpoint=mission_checkpoint,
                     mission_request_id=self._mission_request_ids.get(plan_id),
+                    mission_stop_reason=mission_stop_reason,
                 )
             )
         snapshots.extend(

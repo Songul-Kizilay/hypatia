@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.368
+## Current bounded text journey: v0.3.369
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -113,6 +113,24 @@ and model prose cannot alter it. It does not change mission lifecycle,
 authorization, cumulative allowance, plan digest, source slots, provider/model
 selection, retry behavior or run closure. An unchanged recovered state renders
 the same explanation.
+
+### Durable mission stop reason: v0.3.369
+
+A mission's outcome, explanation, readiness and teaching report are derived
+from its run, checkpoint, allowance and the typed autonomy stop reason. The
+first three were durable; the stop reason lived only in process memory, so a
+restored mission that was not resumed (completed, failed, cancelled or blocked
+executions are never resumable, and a changed model destination refuses
+recovery) could not show its result or be reviewed from it.
+
+Execution snapshots now carry an optional `mission_stop_reason` using the
+existing `AutonomyStopReason` enum. It is recorded after a live or recovered
+mission's autonomy run and bound to the exact immutable execution state it
+describes: any later state change makes it inapplicable, a snapshot restored
+with a running step drops it, and a rebound (resumed) execution records its own
+new stop. Missing values decode as absent and the mission report is refused;
+unknown values fail the store load closed. No report prose, authority, budget,
+source slot or goal status is persisted, and reading it never resumes work.
 
 ### Desktop access to comparison review: v0.3.368
 

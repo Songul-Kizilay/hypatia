@@ -2,6 +2,26 @@
 
 All notable project changes are recorded here.
 
+## [0.3.369] - 2026-09-16
+
+### Added
+
+- Durable typed mission stop reason. Execution snapshots of learning missions
+  now record the existing `AutonomyStopReason` of the last autonomy run,
+  bound to the exact execution state it describes. After a completely fresh
+  restart, a restored mission that was not resumed reconstructs the same
+  outcome, explanation, readiness and teaching report, and the mission-bound
+  comparison review works for it, with no execution, fetch, model call, spend,
+  review, lesson, authority or budget.
+
+### Boundaries
+
+- Older snapshots without the field load unchanged and refuse the mission
+  report rather than inferring a stop from status, notes, goal state or model
+  output; historical records are not rewritten. An unknown stop value fails the
+  execution store load closed. An interrupted snapshot keeps no stop reason, and
+  a resumed mission records its new stop instead of reusing the old one.
+
 ## [0.3.368] - 2026-09-16
 
 ### Added

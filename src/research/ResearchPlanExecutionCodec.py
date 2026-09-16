@@ -23,6 +23,7 @@ appear to have everything left.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime
 from typing import Any
 
@@ -34,6 +35,7 @@ from research.ResearchAttemptRecoveryDecision import (
 from research.ResearchAttemptResolution import ResearchAttemptResolution
 from research.ResearchAuthorizer import ResearchAuthorizer
 from research.ResearchAutonomyBudget import ResearchAutonomyBudget
+from research.ResearchAutonomyResult import AutonomyStopReason
 from research.ResearchDisclosure import ResearchDisclosure
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchExecutionAllowance import ResearchExecutionAllowance
@@ -196,11 +198,34 @@ def encode_execution_snapshot(
         )
     if snapshot.mission_request_id is not None:
         document["mission_request_id"] = snapshot.mission_request_id
+    if snapshot.mission_stop_reason is not None:
+        document["mission_stop_reason"] = snapshot.mission_stop_reason.value
     return document
 
 
 def decode_execution_snapshot(document: object) -> ResearchPlanExecutionSnapshot:
-    """Return one validated snapshot, or refuse a malformed document."""
+    """Return one validated snapshot, or refuse a malformed document.
+
+    ``mission_stop_reason`` is optional and only valid beside recorded mission
+    recovery state.  Its absence decodes as no recorded stop, never as a guess.
+    """
+    if isinstance(document, dict) and "mission_stop_reason" in document:
+        if set(document) - {"mission_stop_reason"} not in (
+            _EXECUTION_FIELDS_WITH_MISSION_RECOVERY,
+            _EXECUTION_FIELDS_WITH_MISSION_REQUEST,
+        ):
+            raise ResearchError("Execution snapshot document is invalid.")
+        stop_reason = _enum(
+            document["mission_stop_reason"],
+            AutonomyStopReason,
+            "mission stop reason",
+        )
+        base = {
+            key: value
+            for key, value in document.items()
+            if key != "mission_stop_reason"
+        }
+        return replace(decode_execution_snapshot(base), mission_stop_reason=stop_reason)
     if not isinstance(document, dict) or set(document) not in (
         _EXECUTION_FIELDS,
         _EXECUTION_FIELDS_V1,

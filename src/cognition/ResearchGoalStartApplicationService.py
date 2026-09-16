@@ -73,9 +73,6 @@ class ResearchGoalStartApplicationService:
         self._failure_memory = failure_memory
         self._goal_lock = Lock()
         self._mission_recovery_attempted = False
-        # The autonomy stop reason of each mission this session ran or resumed,
-        # so its report can be re-rendered from canonical state after a review.
-        self._mission_stop_reasons: dict[str, str] = {}
         self._goal_request_ids = set(
             self._execution_service.restored_mission_request_ids()
         )
@@ -368,8 +365,8 @@ class ResearchGoalStartApplicationService:
             return
         plan_id = resume.metadata["research_plan_id"]
         assert isinstance(plan_id, str)
-        self._mission_stop_reasons[plan_id] = (
-            response.research_autonomy.stop_reason.value
+        self._execution_service.record_mission_stop_reason(
+            plan_id, response.research_autonomy.stop_reason
         )
         report = teaching_report(
             self._runs.get(run_id),
@@ -437,15 +434,15 @@ class ResearchGoalStartApplicationService:
         execution = self._execution_service
         checkpoint = execution.mission_checkpoint(plan_id)
         allowance = execution.allowance(plan_id)
-        stop = self._mission_stop_reasons.get(plan_id, "")
+        stop_reason = execution.mission_stop_reason(plan_id)
         restored = execution.restored_execution(plan_id)
         if restored is not None:
-            # A restored execution was not resumed this session, so no autonomy
-            # stop reason exists to recompute its outcome from; it is refused.
+            # Not resumed this session: only its durably recorded stop can
+            # recompute the outcome.  A legacy snapshot without one is refused.
             checkpoint = restored.mission_checkpoint
             allowance = restored.allowance
         run_id = execution.mission_run_id(plan_id)
-        if checkpoint is None or not run_id or not stop:
+        if checkpoint is None or not run_id or stop_reason is None:
             return refusal(
                 "This mission's canonical result is unavailable in this session; "
                 "no comparison review target was loaded."
@@ -465,7 +462,7 @@ class ResearchGoalStartApplicationService:
             + "\n\n"
             + teaching_report(
                 run,
-                stop,
+                stop_reason.value,
                 self._spend_text_for(allowance),
                 checkpoint=checkpoint,
             ),
@@ -673,7 +670,9 @@ class ResearchGoalStartApplicationService:
                 else "unavailable"
             )
             if response.research_autonomy:
-                self._mission_stop_reasons[state.plan_id] = stop
+                self._execution_service.record_mission_stop_reason(
+                    state.plan_id, response.research_autonomy.stop_reason
+                )
             return replace(
                 response,
                 intent=RESEARCH_GOAL_START_INTENT,

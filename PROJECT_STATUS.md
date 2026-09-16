@@ -2,12 +2,17 @@
 
 ## Runtime Version
 
-`v0.3.368 (Genesis)`
+`v0.3.369 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.368 makes the existing operator comparison-review path reachable
+Version v0.3.369 durably records each learning mission's typed autonomy stop
+reason beside the exact execution state it describes, so a mission restored
+after restart but not resumed can reconstruct the same outcome and teaching
+report and use the mission-bound comparison review without executing, fetching,
+calling a model or spending. Snapshots without the field are refused, never
+guessed. Version v0.3.368 makes the existing operator comparison-review path reachable
 from the desktop's exact retained-note selector. It shows the current review
 state and requires an explicit confirmation before recording or superseding a
 review; canonical validation still refuses stale note/evidence state. A learning
