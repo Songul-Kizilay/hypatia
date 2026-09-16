@@ -2,12 +2,15 @@
 
 ## Runtime Version
 
-`v0.3.369 (Genesis)`
+`v0.3.370 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.369 durably records each learning mission's typed autonomy stop
+Version v0.3.370 gives a restored, not-resumed mission's execution status the
+same existing teaching report, recomputed on each request from its durable run,
+checkpoint, allowance and recorded stop reason; legacy snapshots state that no
+stop was recorded. Version v0.3.369 durably records each learning mission's typed autonomy stop
 reason beside the exact execution state it describes, so a mission restored
 after restart but not resumed can reconstruct the same outcome and teaching
 report and use the mission-bound comparison review without executing, fetching,

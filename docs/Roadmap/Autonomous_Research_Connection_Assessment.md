@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.369
+## Current bounded text journey: v0.3.370
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -113,6 +113,17 @@ and model prose cannot alter it. It does not change mission lifecycle,
 authorization, cumulative allowance, plan digest, source slots, provider/model
 selection, retry behavior or run closure. An unchanged recovered state renders
 the same explanation.
+
+### Restored mission status report: v0.3.370
+
+Execution status for a mission resumed at startup already showed the report
+its recovery rendered. A restored mission that was not resumed showed only its
+durable step record. Its status now appends the existing teaching report,
+recomputed from the durable run, checkpoint, allowance and recorded stop reason
+on every request, so an operator review recorded after restart is reflected
+immediately. It is not cached or persisted, retains no lesson, resumes nothing
+and calls nothing. A legacy snapshot without a recorded stop says so and shows
+no goal status.
 
 ### Durable mission stop reason: v0.3.369
 

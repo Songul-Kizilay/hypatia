@@ -34,6 +34,7 @@ from research.ResearchPlanDraftPreview import ResearchPlanDraftPreview
 from research.ResearchPlanDraftService import ResearchPlanDraftService
 from research.ResearchPlanStep import ResearchPlanStep
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability as Cap
+from research.ResearchRun import ResearchRun
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchTeachingReport import teaching_report
 from research.SemanticMissionPolicy import SemanticMissionPolicy
@@ -429,8 +430,61 @@ class ResearchGoalStartApplicationService:
         if not isinstance(plan_id, str) or not plan_id.strip():
             return refusal("A mission plan ID is required.")
         plan_id = plan_id.strip()
+        canonical = self._canonical_mission_report(plan_id)
+        if isinstance(canonical, str):
+            return refusal(
+                "No mission comparison review target was loaded: " + canonical
+            )
+        run, note_id, report = canonical
+        header = (
+            f"Mission comparison review target: plan {plan_id}, run {run.run_id}, "
+            f"comparison note {note_id or 'none recorded'}. Nothing is recorded "
+            "until an operator review is previewed and confirmed."
+        )
+        return BrainResponse(
+            message=header + "\n\n" + report,
+            request_id=request.request_id,
+            intent=MISSION_COMPARISON_REVIEW_INTENT,
+            memory_count=0,
+            research_runs=[run],
+            research_mission_comparison_note_id=note_id,
+        )
+
+    def with_restored_mission_report(
+        self, request: BrainRequest, response: BrainResponse
+    ) -> BrainResponse:
+        """Add a restored, not-resumed mission's recomputed report to its status.
+
+        A resumed mission already shows the report its recovery rendered.  A
+        restored one shows the same existing teaching report, recomputed from
+        its durable run, checkpoint, allowance and recorded stop reason each
+        time it is asked for.  Nothing is resumed, cached, retained, fetched or
+        called; a snapshot without a recorded stop says so instead of guessing.
+        """
+        plan_id = request.metadata.get("research_plan_id")
+        if not isinstance(plan_id, str):
+            return response
+        restored = self._execution_service.restored_execution(plan_id.strip())
+        if restored is None or restored.mission_scope is None:
+            return response
+        canonical = self._canonical_mission_report(plan_id.strip())
+        if isinstance(canonical, str):
+            addition = "Restored mission teaching report unavailable: " + canonical
+        else:
+            addition = (
+                "Restored mission teaching report (recomputed from durable run, "
+                "checkpoint, allowance and recorded stop reason; this mission was "
+                "not resumed and retrieving the report performs no work):\n\n"
+                + canonical[2]
+            )
+        return replace(response, message=f"{response.message}\n\n{addition}")
+
+    def _canonical_mission_report(
+        self, plan_id: str
+    ) -> tuple[ResearchRun, str, str] | str:
+        """Render one mission's existing report from canonical state, or say why not."""
         if self._runs is None:
-            return refusal("Research run persistence is unavailable.")
+            return "research run persistence is unavailable."
         execution = self._execution_service
         checkpoint = execution.mission_checkpoint(plan_id)
         allowance = execution.allowance(plan_id)
@@ -443,35 +497,21 @@ class ResearchGoalStartApplicationService:
             allowance = restored.allowance
         run_id = execution.mission_run_id(plan_id)
         if checkpoint is None or not run_id or stop_reason is None:
-            return refusal(
-                "This mission's canonical result is unavailable in this session; "
-                "no comparison review target was loaded."
+            return (
+                "no durable stop reason, checkpoint or run binding describes this "
+                "mission's current state; no outcome was inferred."
             )
         try:
             run = self._runs.get(run_id)
         except ResearchError:
-            return refusal("This mission's research run is unavailable.")
-        note_id = checkpoint.semantic_note_id
-        header = (
-            f"Mission comparison review target: plan {plan_id}, run {run.run_id}, "
-            f"comparison note {note_id or 'none recorded'}. Nothing is recorded "
-            "until an operator review is previewed and confirmed."
+            return "this mission's research run is unavailable."
+        report = teaching_report(
+            run,
+            stop_reason.value,
+            self._spend_text_for(allowance),
+            checkpoint=checkpoint,
         )
-        return BrainResponse(
-            message=header
-            + "\n\n"
-            + teaching_report(
-                run,
-                stop_reason.value,
-                self._spend_text_for(allowance),
-                checkpoint=checkpoint,
-            ),
-            request_id=request.request_id,
-            intent=MISSION_COMPARISON_REVIEW_INTENT,
-            memory_count=0,
-            research_runs=[run],
-            research_mission_comparison_note_id=note_id,
-        )
+        return run, checkpoint.semantic_note_id, report
 
     def _spend_text(self, plan_id: str) -> str:
         return self._spend_text_for(self._execution_service.allowance(plan_id))

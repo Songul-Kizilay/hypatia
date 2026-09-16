@@ -1705,6 +1705,88 @@ class LearningResearchJourneyTests(unittest.TestCase):
         )
         self.assertIsNone(running.restored().mission_stop_reason)
 
+    @staticmethod
+    def routed_status(engine, plan_id):
+        return engine.process(
+            BrainRequest(
+                message="status",
+                metadata={
+                    "intent": "research_plan_execution_status",
+                    "research_plan_id": plan_id,
+                },
+            )
+        )
+
+    def test_restored_mission_status_shows_recomputed_report_without_work(self):
+        self.relation = "possible_agreement"
+        response = self.start()
+        plan_id = response.research_plan_execution.plan_id
+        report = self.controller.mission_comparison_review(plan_id).message.split(
+            "\n\n", 1
+        )[1]
+        calls = self.external_calls()
+        files = self.durable_files()
+
+        engine, controller = self.restored_controller()
+        first = self.routed_status(engine, plan_id)
+        second = self.routed_status(engine, plan_id)
+
+        self.assertIn("Research plan execution (restored):", first.message)
+        self.assertIn("Restored mission teaching report (recomputed", first.message)
+        self.assertTrue(first.message.endswith(report), first.message)
+        self.assertEqual(second.message, first.message)
+        self.assertIn("Mission goal satisfaction: Unresolved", first.message)
+        self.assertEqual(self.external_calls(), calls)
+        self.assertEqual(self.durable_files(), files)
+        self.assertIsNone(
+            engine._research_plan_execution_service.live_execution(plan_id)
+        )
+
+        target = controller.mission_comparison_review(plan_id)
+        recorded = controller.record_research_comparison_review(
+            *mission_comparison_review_preview(
+                target.research_runs[0],
+                plan_id,
+                target.research_mission_comparison_note_id,
+                "supported",
+                "Reviewed from restored status.",
+            ).arguments
+        )
+        self.assertTrue(recorded.success, recorded.message)
+        after = self.routed_status(engine, plan_id)
+        self.assertIn(
+            "Mission goal satisfaction: Satisfied within the current bounded evidence",
+            after.message,
+        )
+        self.assertIn("Ready for bounded user conclusion", after.message)
+
+    def test_legacy_restored_mission_status_names_missing_stop_without_guessing(self):
+        self.relation = "possible_agreement"
+        response = self.start()
+        plan_id = response.research_plan_execution.plan_id
+        path = self.execution_store_path()
+        document = json.loads(path.read_text("utf-8"))
+        for execution in document["executions"]:
+            execution.pop("mission_stop_reason", None)
+        path.write_text(json.dumps(document), encoding="utf-8")
+
+        engine, _ = self.restored_controller()
+        status = self.routed_status(engine, plan_id)
+
+        self.assertIn("Restored mission teaching report unavailable:", status.message)
+        self.assertIn("no outcome was inferred", status.message)
+        self.assertNotIn("Mission goal satisfaction", status.message)
+
+    def test_live_mission_status_does_not_add_restored_report(self):
+        self.relation = "possible_agreement"
+        response = self.start()
+
+        status = self.routed_status(
+            self.engine, response.research_plan_execution.plan_id
+        )
+
+        self.assertNotIn("Restored mission teaching report", status.message)
+
     def test_interrupted_mission_records_no_stop_reason(self):
         snapshot = self.interrupted_start(6)
 

@@ -830,7 +830,10 @@ class CognitiveEngine:
             return self._research_plan_execution_service.process_start(request)
 
         if self._research_plan_execution_service.is_status_request(request):
-            return self._research_plan_execution_service.process_status(request)
+            return self._research_goal_start_service.with_restored_mission_report(
+                request,
+                self._research_plan_execution_service.process_status(request),
+            )
         if self._research_plan_execution_service.is_recovered_request(request):
             return self._research_plan_execution_service.process_recovered(request)
 

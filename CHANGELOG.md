@@ -2,6 +2,21 @@
 
 All notable project changes are recorded here.
 
+## [0.3.370] - 2026-09-16
+
+### Added
+
+- Execution status of a restored mission that was not resumed now includes
+  its existing teaching report, recomputed from durable run, checkpoint,
+  allowance and recorded stop reason on every request. A review recorded after
+  restart is reflected immediately; repeated requests are identical.
+
+### Boundaries
+
+- Nothing is cached, persisted, resumed, fetched, called or retained. Live and
+  startup-resumed missions are unchanged. A snapshot without a recorded stop
+  states that the report is unavailable and shows no inferred goal status.
+
 ## [0.3.369] - 2026-09-16
 
 ### Added
