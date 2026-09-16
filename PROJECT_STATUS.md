@@ -2,12 +2,15 @@
 
 ## Runtime Version
 
-`v0.3.370 (Genesis)`
+`v0.3.371 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.370 gives a restored, not-resumed mission's execution status the
+Version v0.3.371 lets the desktop mission comparison review target any mission
+named in the execution panel, so each of several recovered or restored missions
+can be reviewed; the preview and post-record reload stay bound to the mission
+actually loaded. Version v0.3.370 gives a restored, not-resumed mission's execution status the
 same existing teaching report, recomputed on each request from its durable run,
 checkpoint, allowance and recorded stop reason; legacy snapshots state that no
 stop was recorded. Version v0.3.369 durably records each learning mission's typed autonomy stop

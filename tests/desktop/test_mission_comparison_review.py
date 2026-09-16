@@ -210,6 +210,7 @@ class MissionComparisonReviewWindowTests(unittest.TestCase):
             _mission_independence_run_id="",
             _mission_review_run=None,
             _mission_review_note_id="",
+            _mission_review_plan_id="",
             _execution_id=Var(),
             _research_comparison_review_decision=Var("supported"),
             _research_comparison_review_note=Var("Checked both quotes."),
@@ -283,6 +284,63 @@ class MissionComparisonReviewWindowTests(unittest.TestCase):
         TkinterDesktopWindow._render_recovered_research_missions(window, response)
 
         self.assertEqual(window._mission_plan_id, "plan-recovered")
+
+    def test_execution_panel_names_any_restored_mission_for_review(self):
+        window = self.window()
+        window._mission_plan_id = "plan-last-live"
+        window._execution_id.set(" plan-restored-2 ")
+        window._controller.mission_comparison_review.return_value = target(
+            mission_run()
+        )
+
+        TkinterDesktopWindow._load_mission_comparison_review(window)
+
+        window._controller.mission_comparison_review.assert_called_once_with(
+            "plan-restored-2"
+        )
+        self.assertEqual(window._mission_review_plan_id, "plan-restored-2")
+
+    def test_record_previews_and_reloads_the_loaded_mission_not_a_renamed_one(self):
+        window = self.window()
+        window._execution_id.set("plan-a")
+        window._controller.mission_comparison_review.return_value = target(
+            mission_run()
+        )
+        TkinterDesktopWindow._load_mission_comparison_review(window)
+        window._execution_id.set("plan-b")
+        window._controller.record_research_comparison_review.return_value = target(
+            mission_run(review("review-1", "supported"))
+        )
+
+        with patch(
+            "desktop.TkinterDesktopWindow.messagebox.askyesno", return_value=True
+        ) as confirm:
+            TkinterDesktopWindow._record_mission_comparison_review(window)
+
+        self.assertIn("Mission plan: plan-a", confirm.call_args.args[1])
+        self.assertEqual(
+            [
+                call.args[0]
+                for call in window._controller.mission_comparison_review.call_args_list
+            ],
+            ["plan-a", "plan-a"],
+        )
+
+    def test_live_result_names_its_execution_in_the_panel(self):
+        window = self.window()
+
+        TkinterDesktopWindow._render_learning_research_result(
+            window,
+            BrainResponse(
+                message="report",
+                request_id="start",
+                intent="research_goal_start",
+                memory_count=0,
+                research_plan_execution=SimpleNamespace(plan_id="plan-live"),
+            ),
+        )
+
+        self.assertEqual(window._execution_id.get(), "plan-live")
 
     def test_declined_preview_writes_nothing(self):
         window = self.loaded()

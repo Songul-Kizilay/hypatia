@@ -2,6 +2,22 @@
 
 All notable project changes are recorded here.
 
+## [0.3.371] - 2026-09-16
+
+### Changed
+
+- "Review mission comparison" now reviews the mission named in the execution
+  panel (falling back to the last live mission), so any of several recovered
+  or restored missions can be reviewed. A live learning result fills the panel
+  with its execution. The loaded plan is bound to the loaded run and note: the
+  preview names it and the post-record reload uses it even if the panel changes.
+
+### Boundaries
+
+- Desktop binding only. The backend still resolves run, checkpoint note and
+  report from canonical state and revalidates every review; nothing new is
+  persisted, authorized, executed or called.
+
 ## [0.3.370] - 2026-09-16
 
 ### Added

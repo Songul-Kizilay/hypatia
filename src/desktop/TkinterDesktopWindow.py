@@ -663,6 +663,7 @@ class TkinterDesktopWindow:
         self._mission_plan_id = ""
         self._mission_review_run: ResearchRun | None = None
         self._mission_review_note_id = ""
+        self._mission_review_plan_id = ""
         self._mission_independence_run: ResearchRun | None = None
         self._research_discovery_provider = tk.StringVar(
             value=ResearchDiscoveryProviderName.CROSSREF.value
@@ -3458,24 +3459,39 @@ class TkinterDesktopWindow:
         execution = getattr(response, "research_plan_execution", None)
         if execution is not None:
             self._mission_plan_id = execution.plan_id
+            execution_field = getattr(self, "_execution_id", None)
+            if execution_field is not None:
+                # The execution panel then refers to the mission just shown.
+                execution_field.set(execution.plan_id)
 
     def _load_mission_comparison_review(self) -> None:
-        """Load the mission's canonical comparison note, review and report."""
-        plan_id = getattr(self, "_mission_plan_id", "")
+        """Load the canonical comparison note, review and report of one mission.
+
+        The mission is the execution named in the execution panel, which the
+        recovered listing and a live result fill in, so any restored or
+        recovered mission can be reviewed, not only a single one.
+        """
+        execution_field = getattr(self, "_execution_id", None)
+        named = execution_field.get().strip() if execution_field is not None else ""
+        plan_id = named or getattr(self, "_mission_plan_id", "")
         if not plan_id:
             self._status.set("Run or recover a learning research mission first.")
             return
         self._render_mission_comparison_review(
-            self._controller.mission_comparison_review(plan_id)
+            self._controller.mission_comparison_review(plan_id), plan_id
         )
 
-    def _render_mission_comparison_review(self, response: BrainResponse) -> None:
+    def _render_mission_comparison_review(
+        self, response: BrainResponse, plan_id: str = ""
+    ) -> None:
         """Show only what the runtime loaded; the note ID is never chosen here."""
         if not response.success or not response.research_runs:
             self._mission_review_run = None
             self._mission_review_note_id = ""
+            self._mission_review_plan_id = ""
             self._status.set(response.message)
             return
+        self._mission_review_plan_id = plan_id
         self._mission_review_run = response.research_runs[0]
         self._mission_review_note_id = response.research_mission_comparison_note_id
         self._research_plan_preview.configure(state=tk.NORMAL)
@@ -3496,7 +3512,7 @@ class TkinterDesktopWindow:
         try:
             preview = mission_comparison_review_preview(
                 run,
-                self._mission_plan_id,
+                self._mission_review_plan_id,
                 self._mission_review_note_id,
                 self._research_comparison_review_decision.get(),
                 self._research_comparison_review_note.get(),
@@ -3519,7 +3535,11 @@ class TkinterDesktopWindow:
             self._status.set(str(error))
             return
         self._append_response(response)
-        self._load_mission_comparison_review()
+        # Reload the same mission that was previewed, never a newly named one.
+        plan_id = self._mission_review_plan_id
+        self._render_mission_comparison_review(
+            self._controller.mission_comparison_review(plan_id), plan_id
+        )
         if response.success:
             self._research_comparison_review_note.set("")
             return

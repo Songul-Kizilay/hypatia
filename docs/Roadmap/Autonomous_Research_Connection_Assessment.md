@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.370
+## Current bounded text journey: v0.3.371
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -113,6 +113,18 @@ and model prose cannot alter it. It does not change mission lifecycle,
 authorization, cumulative allowance, plan digest, source slots, provider/model
 selection, retry behavior or run closure. An unchanged recovered state renders
 the same explanation.
+
+### Desktop review of any named mission: v0.3.371
+
+The mission-bound comparison review bound a plan only after a live result or
+when startup recovery listed exactly one mission, so with several restored
+missions only execution status could reach them. The review now targets the
+execution named in the execution panel (filled by the recovered listing, a
+live result, or the operator), falling back to the last live mission. The
+loaded plan is remembered with its run and note, so the preview names it and
+the post-record reload uses it even if the panel is edited in between. The
+backend still resolves the run, checkpoint note and report; no new authority,
+persistence or execution is involved.
 
 ### Restored mission status report: v0.3.370
 
