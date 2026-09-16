@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.372
+## Current bounded text journey: v0.3.373
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -113,6 +113,20 @@ and model prose cannot alter it. It does not change mission lifecycle,
 authorization, cumulative allowance, plan digest, source slots, provider/model
 selection, retry behavior or run closure. An unchanged recovered state renders
 the same explanation.
+
+### Export includes recorded judgements: v0.3.373
+
+The deterministic run Markdown export predated operator comparison reviews and
+the typed assessment judgements, so an exported audit omitted exactly the
+records that can change a mission's goal status or caveats. The export now has
+an "Operator Comparison Reviews" section (review, note, decision, evidence IDs,
+current/superseded state, supersession and operator reason, with a statement
+that a review is a bounded judgement rather than model output or truth) and
+lists each assessment's usefulness, applicability, independence and
+publication status. Comparison notes, which a mission may derive from a model,
+are labelled tentative instead of user-authored. The export remains local,
+read-only and deterministic; an earlier exported file no longer verifies
+against the current rendering, as with any change to the run.
 
 ### Source-independence review of any named mission: v0.3.372
 

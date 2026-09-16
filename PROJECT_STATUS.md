@@ -2,11 +2,15 @@
 
 ## Runtime Version
 
-`v0.3.372 (Genesis)`
+`v0.3.373 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
+Version v0.3.373 makes the run Markdown export a complete audit of recorded
+judgements: operator comparison reviews with decision, supersession and reason,
+and each assessment's usefulness, applicability, independence and publication
+status. Comparison notes are labelled tentative rather than user-authored.
 Version v0.3.372 gives mission source-independence review the same binding:
 it reviews the run the runtime reported for the execution named in the panel,
 and refuses an execution with no reported run. Version v0.3.371 lets the desktop mission comparison review target any mission

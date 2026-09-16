@@ -2,6 +2,25 @@
 
 All notable project changes are recorded here.
 
+## [0.3.373] - 2026-09-16
+
+### Added
+
+- Research run Markdown export now includes operator comparison reviews
+  (review and note IDs, decision, evidence IDs, current/superseded state,
+  supersession and operator reason) and each source assessment's usefulness,
+  applicability, independence and publication status.
+
+### Changed
+
+- Comparison notes are exported as tentative recorded notes rather than as
+  user-authored notes, since mission notes can be model interpretations.
+
+### Boundaries
+
+- Rendering only: deterministic, local, read-only, no provider or model. A
+  file exported by an earlier version will report a mismatch on verification.
+
 ## [0.3.372] - 2026-09-16
 
 ### Changed

@@ -38,6 +38,7 @@ def render_research_run_markdown(run: ResearchRun) -> str:
         f"- **Evidence records:** {len(run.evidence)}",
         f"- **Assessments:** {len(run.assessments)}",
         f"- **Comparison notes:** {len(run.comparison_notes)}",
+        f"- **Comparison reviews:** {len(run.comparison_reviews)}",
         f"- **Claims:** {len(run.claims)}",
         f"- **Claim contradictions:** {len(run.claim_contradictions)}",
         f"- **Failures:** {len(run.failures)}",
@@ -131,6 +132,13 @@ def render_research_run_markdown(run: ResearchRun) -> str:
                         "- **Information trust:** "
                         f"{assessment_record.information_trust.value}"
                     ),
+                    f"- **Usefulness:** {assessment_record.usefulness.value}",
+                    f"- **Applicability:** {assessment_record.applicability.value}",
+                    f"- **Independence:** {assessment_record.independence.value}",
+                    (
+                        "- **Publication status:** "
+                        f"{assessment_record.publication_status.value}"
+                    ),
                     "- **Evidence IDs:** "
                     + ", ".join(
                         _inline(value) for value in assessment_record.evidence_ids
@@ -160,9 +168,49 @@ def render_research_run_markdown(run: ResearchRun) -> str:
                 "- **Assessment IDs:** "
                 + ", ".join(_inline(value) for value in note.assessment_ids),
                 f"- **Recorded:** {note.recorded_at.isoformat()}",
-                "- **User comparison note:**",
+                "- **Recorded comparison note (tentative; not a verified result):**",
                 "",
                 *_quote(note.text),
+                "",
+            )
+        )
+
+    lines.extend(("## Operator Comparison Reviews", ""))
+    superseded_review_ids = {
+        review.supersedes_review_id
+        for review in run.comparison_reviews
+        if review.supersedes_review_id is not None
+    }
+    if not run.comparison_reviews:
+        lines.extend(("_No comparison reviews recorded._", ""))
+    else:
+        lines.extend(
+            (
+                "_An operator review is a bounded judgement about one exact "
+                "comparison note and its evidence, not model output or a "
+                "factual-truth decision._",
+                "",
+            )
+        )
+    for review_index, review in enumerate(run.comparison_reviews, start=1):
+        review_state = (
+            "superseded" if review.review_id in superseded_review_ids else "current"
+        )
+        lines.extend(
+            (
+                f"### Comparison Review {review_index}",
+                "",
+                f"- **Review ID:** {_inline(review.review_id)}",
+                f"- **Audit state:** {review_state}",
+                f"- **Note ID:** {_inline(review.note_id)}",
+                f"- **Decision:** {review.decision.value}",
+                "- **Evidence IDs:** "
+                + ", ".join(_inline(value) for value in review.evidence_ids),
+                f"- **Supersedes:** {_inline(review.supersedes_review_id or 'none')}",
+                f"- **Recorded:** {review.recorded_at.isoformat()}",
+                "- **Operator reason:**",
+                "",
+                *_quote(review.note),
                 "",
             )
         )

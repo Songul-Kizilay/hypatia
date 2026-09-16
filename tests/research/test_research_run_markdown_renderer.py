@@ -10,6 +10,10 @@ from research.ResearchClaimContradictionRecord import (
     ResearchClaimContradictionRecord,
 )
 from research.ResearchClaimRecord import ResearchClaimRecord
+from research.ResearchComparisonReviewRecord import (
+    ResearchComparisonReviewDecision,
+    ResearchComparisonReviewRecord,
+)
 from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchFailureRecord import ResearchFailureRecord
@@ -21,6 +25,7 @@ from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentReco
 from research.ResearchSourceComparisonNoteRecord import (
     ResearchSourceComparisonNoteRecord,
 )
+from research.ResearchSourceIndependence import ResearchSourceIndependence
 from research.ResearchSourceRecord import ResearchSourceRecord
 
 
@@ -62,6 +67,29 @@ class ResearchRunMarkdownRendererTests(unittest.TestCase):
         self.assertNotIn("\u202e", first)
         self.assertIn(r"\<script\>alert\</script\>", first)
         self.assertIn(r"\!\[remote\](https://tracker.example/pixel)", first)
+        self.assertIn("- **Comparison reviews:** 2", first)
+        self.assertIn("## Operator Comparison Reviews", first)
+        self.assertIn("not model output or a factual-truth decision", first)
+        self.assertIn("- **Review ID:** review-1", first)
+        self.assertIn("- **Decision:** supported", first)
+        self.assertIn("- **Decision:** not_supported", first)
+        self.assertIn("- **Supersedes:** review-1", first)
+        self.assertIn("- **Evidence IDs:** evidence-2, evidence-1", first)
+        self.assertIn(r"> \# withdrawn after rereading", first)
+        self.assertLess(
+            first.index("- **Review ID:** review-1"),
+            first.index("- **Review ID:** review-2"),
+        )
+        review_one = first[first.index("- **Review ID:** review-1") :]
+        self.assertTrue(
+            review_one.split("\n", 2)[1].endswith("superseded"), review_one[:200]
+        )
+        self.assertIn("- **Independence:** likely_duplicate", first)
+        self.assertIn("- **Usefulness:** unknown", first)
+        self.assertIn("- **Applicability:** unknown", first)
+        self.assertIn("- **Publication status:** unknown", first)
+        self.assertIn("tentative; not a verified result", first)
+        self.assertNotIn("User comparison note", first)
         self.assertIn("## Recorded Failures", first)
         self.assertIn("No network, provider, or LLM was used.", first)
 
@@ -81,6 +109,8 @@ class ResearchRunMarkdownRendererTests(unittest.TestCase):
 
         self.assertIn("_No accepted sources._", markdown)
         self.assertIn("_No comparison notes recorded._", markdown)
+        self.assertIn("_No comparison reviews recorded._", markdown)
+        self.assertNotIn("factual-truth decision", markdown)
         self.assertIn("_No claims recorded._", markdown)
         self.assertIn("_No claim contradictions recorded._", markdown)
         self.assertIn("_No failures recorded._", markdown)
@@ -153,6 +183,7 @@ class ResearchRunMarkdownRendererTests(unittest.TestCase):
             text="Second assessment",
             recorded_at=started + timedelta(minutes=7),
             information_trust=ResearchInformationTrust.HIGH,
+            independence=ResearchSourceIndependence.LIKELY_DUPLICATE,
         )
         note = ResearchSourceComparisonNoteRecord(
             note_id="note-1",
@@ -206,6 +237,25 @@ class ResearchRunMarkdownRendererTests(unittest.TestCase):
             evidence=(evidence_one, evidence_two),
             assessments=(assessment_one, assessment_correction, assessment_two),
             comparison_notes=(note,),
+            comparison_reviews=(
+                ResearchComparisonReviewRecord(
+                    review_id="review-1",
+                    note_id="note-1",
+                    evidence_ids=("evidence-2", "evidence-1"),
+                    decision=ResearchComparisonReviewDecision.SUPPORTED,
+                    note="Both excerpts address the question.",
+                    recorded_at=started + timedelta(minutes=9),
+                ),
+                ResearchComparisonReviewRecord(
+                    review_id="review-2",
+                    note_id="note-1",
+                    evidence_ids=("evidence-2", "evidence-1"),
+                    decision=ResearchComparisonReviewDecision.NOT_SUPPORTED,
+                    note="# withdrawn after rereading",
+                    recorded_at=started + timedelta(minutes=10),
+                    supersedes_review_id="review-1",
+                ),
+            ),
             claims=claims,
             claim_contradictions=(contradiction,),
         )
