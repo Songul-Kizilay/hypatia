@@ -772,6 +772,14 @@ class JsonFileResearchRunStore:
             )
         return parsed
 
+    @classmethod
+    def encode_run(cls, run: ResearchRun) -> tuple[int, dict[str, object]]:
+        """Return the store schema version and one run's canonical document form.
+
+        Read-only; used by exports that must carry exactly the persisted shape.
+        """
+        return cls._SCHEMA_VERSION, cls._serialize_run(run)
+
     @staticmethod
     def _serialize_run(run: ResearchRun) -> dict[str, object]:
         return {

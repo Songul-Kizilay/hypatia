@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 import re
 import stat
-import tempfile
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from hashlib import sha256
@@ -41,6 +40,7 @@ from research.ResearchComparisonReviewRecord import (
 )
 from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
+from research.ResearchExportPublisher import publish_new_export_file
 from research.ResearchFailureRecord import ResearchFailureRecord
 from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRun import ResearchRun
@@ -1834,31 +1834,7 @@ class ResearchRunManager:
     @staticmethod
     def _publish_new_export(destination: Path, content: bytes) -> None:
         """Publish complete bytes atomically without replacing an existing path."""
-        temporary_path: Path | None = None
-        try:
-            descriptor, raw_temporary_path = tempfile.mkstemp(
-                prefix=f".{destination.name}.",
-                suffix=".tmp",
-                dir=destination.parent,
-            )
-            temporary_path = Path(raw_temporary_path)
-            with os.fdopen(descriptor, "wb") as stream:
-                stream.write(content)
-                stream.flush()
-                os.fsync(stream.fileno())
-            os.link(temporary_path, destination)
-        except FileExistsError as error:
-            raise ResearchError(
-                "Research export destination already exists; no file was replaced."
-            ) from error
-        except OSError as error:
-            raise ResearchError("Research export file could not be saved.") from error
-        finally:
-            if temporary_path is not None:
-                try:
-                    temporary_path.unlink(missing_ok=True)
-                except OSError:
-                    pass
+        publish_new_export_file(destination, content)
 
     @staticmethod
     def _normalize_document_id(document_id: str) -> str:

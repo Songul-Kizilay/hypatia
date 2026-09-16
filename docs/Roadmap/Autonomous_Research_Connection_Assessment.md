@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.374
+## Current bounded text journey: v0.3.375
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -113,6 +113,36 @@ and model prose cannot alter it. It does not change mission lifecycle,
 authorization, cumulative allowance, plan digest, source slots, provider/model
 selection, retry behavior or run closure. An unchanged recovered state renders
 the same explanation.
+
+### Mission audit bundle: v0.3.375
+
+An operator can now answer, from one exported artifact, what a mission did,
+under which recorded approval and allowance, what it spent, which evidence and
+reviews bear on its result, and why its derived status is what it is.
+
+- **Sources.** The durable-form execution snapshot (live missions are captured
+  exactly as persistence would; restored ones are their loaded snapshot), the
+  linked run in its run-store document form, and the approval whose consumption
+  names this execution. Goal satisfaction, explanation, readiness and the
+  teaching report are recomputed by the existing functions and not persisted.
+- **Formats.** mission-audit-<plan>.json (schema hypatia.mission_audit v1,
+  sorted keys, typed enum strings, canonical IDs; the snapshot's write time is
+  excluded so live and restored audits of the same state are byte-identical)
+  and mission-audit-<plan>.md, rendered from the same data with the existing
+  run export nested inside. Nothing parses Markdown.
+- **Workflow.** Preview renders both files and their SHA-256 fingerprints and
+  writes nothing. Saving requires an existing absolute directory, re-renders,
+  refuses if either fingerprint changed, refuses if either file exists, and
+  publishes both with the existing create-new atomic publisher, removing the
+  Markdown file if the JSON file cannot be written.
+- **Conservative gaps.** A missing stop reason, checkpoint, allowance, approval,
+  run or request ID becomes a typed limitation with null values; no evaluation
+  or report is produced without a recorded stop. Recorded URLs with credentials
+  (rejected where URLs enter, but checked again here) make the export fail
+  closed. The bundle never includes API keys or request headers, which are not
+  recorded.
+- **Not included.** Replay, provenance graphs and freshness; traceability only
+  follows recorded IDs and says "unavailable" otherwise.
 
 ### Listing points to restored reports: v0.3.374
 

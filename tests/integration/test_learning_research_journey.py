@@ -44,6 +44,7 @@ from research.ResearchEvidenceCompletionEvaluation import (
 from research.ResearchExecutionAllowance import ResearchExecutionAllowance
 from research.ResearchExecutionSpend import ResearchExecutionSpend
 from research.ResearchFailureLessonDeriver import ResearchFailureLessonDeriver
+from research.ResearchMissionAudit import build_mission_audit, mission_audit_json
 from research.ResearchMissionFollowupDecision import (
     ResearchMissionFollowupDecisionStatus,
 )
@@ -1704,6 +1705,367 @@ class LearningResearchJourneyTests(unittest.TestCase):
             ),
         )
         self.assertIsNone(running.restored().mission_stop_reason)
+
+    def audit_preview(self, controller, plan_id):
+        response = controller.preview_mission_audit_export(plan_id)
+        self.assertTrue(response.success, response.message)
+        return response.research_mission_audit_export_preview
+
+    def audit_documents(self, controller, plan_id):
+        """Save one previewed audit to a fresh directory and load both files."""
+        preview = self.audit_preview(controller, plan_id)
+        directory = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        saved = controller.save_mission_audit_export(preview, str(directory))
+        self.assertTrue(saved.success, saved.message)
+        result = saved.research_mission_audit_export_result
+        markdown = Path(result.markdown_path).read_text("utf-8")
+        document = json.loads(Path(result.json_path).read_text("utf-8"))
+        return preview, markdown, document
+
+    def test_mission_audit_bundle_carries_canonical_mission_state(self):
+        self.relation = "possible_agreement"
+        response = self.start()
+        plan_id = response.research_plan_execution.plan_id
+        run = response.research_runs[0]
+        first = self.review_first_note(run)
+        withdrawn = self.review_first_note(
+            first.research_runs[0],
+            "not_supported",
+            first.research_runs[0].comparison_reviews[-1].review_id,
+        )
+        self.assertTrue(withdrawn.success, withdrawn.message)
+        supported = self.review_first_note(
+            withdrawn.research_runs[0],
+            "supported",
+            withdrawn.research_runs[0].comparison_reviews[-1].review_id,
+        )
+        self.assertTrue(supported.success, supported.message)
+        reviews = supported.research_runs[0].comparison_reviews
+        checkpoint = self.execution.mission_checkpoint(plan_id)
+        allowance = self.execution.allowance(plan_id)
+        authorization = self.approvals.authorization_for_execution(plan_id)
+        calls = self.external_calls()
+        state_files = self.durable_files()
+        mission = self.mission_state(response)
+
+        preview, markdown, document = self.audit_documents(self.controller, plan_id)
+
+        # Identity, plan and authority come from the canonical records.
+        self.assertEqual(document["schema"], "hypatia.mission_audit")
+        self.assertEqual(document["schema_version"], 1)
+        self.assertEqual(document["identity"]["plan_id"], plan_id)
+        self.assertEqual(document["identity"]["research_run_id"], run.run_id)
+        self.assertEqual(
+            document["plan"]["mission_plan_digest"],
+            self.stored_snapshot(plan_id).mission_plan_digest,
+        )
+        self.assertEqual(
+            [step["capability"] for step in document["plan"]["capability_order"]],
+            [step.capability.value for step in self.execution.live_plan(plan_id).steps],
+        )
+        self.assertEqual(
+            document["authority"]["authorization_id"], authorization.authorization_id
+        )
+        self.assertEqual(document["authority"]["consumption"]["execution_id"], plan_id)
+        self.assertEqual(
+            document["budget"]["spent"],
+            {
+                "step_advances": allowance.spend.step_advances,
+                "network_operations": allowance.spend.network_operations,
+                "llm_operations": allowance.spend.llm_operations,
+                "active_seconds": allowance.spend.active_seconds,
+            },
+        )
+        self.assertEqual(
+            document["budget"]["remaining"]["llm_operations"],
+            allowance.remaining_llm_operations,
+        )
+        stop = response.research_autonomy.stop_reason.value
+        self.assertEqual(document["execution"]["stop_reason"], stop)
+        self.assertEqual(
+            document["execution"]["snapshot"]["mission_checkpoint"]["semantic_note_id"],
+            checkpoint.semantic_note_id,
+        )
+        # Evaluation is recomputed by the existing functions, not re-derived.
+        outcome = mission_outcome_for(supported.research_runs[0], stop, checkpoint)
+        evaluation = document["evaluation"]
+        self.assertEqual(
+            evaluation["goal_satisfaction"]["status"],
+            outcome.goal_satisfaction.status.value,
+        )
+        self.assertEqual(evaluation["goal_satisfaction"]["status"], "satisfied")
+        self.assertEqual(
+            evaluation["goal_satisfaction"]["supported_by_review_id"],
+            reviews[-1].review_id,
+        )
+        self.assertEqual(evaluation["completion_readiness"]["status"], "ready")
+        self.assertEqual(
+            document["teaching_report"],
+            teaching_report(
+                supported.research_runs[0],
+                stop,
+                self.controller.mission_comparison_review(plan_id)
+                .message.split("Stop reason: ", 1)[1]
+                .split(". ", 1)[1]
+                .split("\n", 1)[0],
+                checkpoint=checkpoint,
+            ),
+        )
+        # Review history is traceable to exact note, evidence and sources.
+        trace = document["traceability"]
+        self.assertEqual(
+            trace["mission_comparison_note_id"], checkpoint.semantic_note_id
+        )
+        self.assertEqual(trace["mission_comparison_review_id"], reviews[-1].review_id)
+        note = next(
+            n
+            for n in supported.research_runs[0].comparison_notes
+            if n.note_id == checkpoint.semantic_note_id
+        )
+        self.assertEqual(
+            [
+                (
+                    entry["decision"],
+                    entry["current"],
+                    entry["supersedes_review_id"],
+                    entry["note_id"],
+                    entry["evidence_ids"],
+                    entry["source_document_ids"],
+                )
+                for entry in trace["comparison_reviews"]
+            ],
+            [
+                (
+                    "supported",
+                    False,
+                    None,
+                    note.note_id,
+                    list(note.evidence_ids),
+                    list(note.source_document_ids),
+                ),
+                (
+                    "not_supported",
+                    False,
+                    reviews[0].review_id,
+                    note.note_id,
+                    list(note.evidence_ids),
+                    list(note.source_document_ids),
+                ),
+                (
+                    "supported",
+                    True,
+                    reviews[1].review_id,
+                    note.note_id,
+                    list(note.evidence_ids),
+                    list(note.source_document_ids),
+                ),
+            ],
+        )
+        assessment = document["research_run"]["assessments"][0]
+        for key in (
+            "information_trust",
+            "usefulness",
+            "applicability",
+            "independence",
+            "publication_status",
+        ):
+            self.assertIn(key, assessment)
+        # Markdown carries the same state for a human reader.
+        for text in (
+            "# Mission Audit",
+            f"- **Plan ID:** {plan_id}",
+            f"`{document['plan']['mission_plan_digest']}`",
+            f"- **Recorded approval:** {authorization.authorization_id}",
+            "| Model operations |",
+            f"- **Recorded stop reason:** {stop}",
+            "- **Goal satisfaction:** satisfied",
+            "- **Completion readiness:** ready",
+            "## Teaching Report",
+            "## Operator Comparison Reviews",
+            "not model output and not universal truth",
+            "- **Decision:** not_supported",
+            f"- **Supersedes:** {reviews[0].review_id}",
+        ):
+            self.assertIn(text, markdown)
+        self.assertEqual(preview.plan_id, plan_id)
+        # Export is read-only: no calls, spend, mission, approval or store change.
+        self.assertEqual(self.external_calls(), calls)
+        self.assertEqual(self.durable_files(), state_files)
+        self.assertEqual(self.mission_state(response), mission)
+        self.assertEqual(self.execution.allowance(plan_id), allowance)
+        self.assertEqual(
+            self.approvals.authorization_for_execution(plan_id), authorization
+        )
+
+    def test_mission_audit_preview_writes_nothing_and_is_deterministic(self):
+        self.relation = "possible_agreement"
+        response = self.start()
+        plan_id = response.research_plan_execution.plan_id
+        files = self.durable_files()
+
+        first = self.audit_preview(self.controller, plan_id)
+        second = self.audit_preview(self.controller, plan_id)
+
+        self.assertEqual(first, second)
+        self.assertEqual(self.durable_files(), files)
+        self.assertEqual(
+            {path.name for path in self.root.rglob("mission-audit-*")}, set()
+        )
+        self.assertEqual(
+            (first.markdown_filename, first.json_filename),
+            (f"mission-audit-{plan_id}.md", f"mission-audit-{plan_id}.json"),
+        )
+
+    def test_live_and_fresh_restart_audits_are_identical_without_resuming(self):
+        self.relation = "possible_agreement"
+        response = self.start()
+        plan_id = response.research_plan_execution.plan_id
+        live = self.audit_preview(self.controller, plan_id)
+        calls = self.external_calls()
+
+        engine, controller = self.restored_controller()
+        restored = self.audit_preview(controller, plan_id)
+
+        self.assertEqual(restored.json_sha256, live.json_sha256)
+        self.assertEqual(restored.markdown_sha256, live.markdown_sha256)
+        self.assertIsNone(
+            engine._research_plan_execution_service.live_execution(plan_id)
+        )
+        self.assertEqual(self.external_calls(), calls)
+
+    def test_mission_audit_save_refuses_stale_preview_and_existing_files(self):
+        self.relation = "possible_agreement"
+        response = self.start()
+        plan_id = response.research_plan_execution.plan_id
+        run = response.research_runs[0]
+        directory = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        stale = self.audit_preview(self.controller, plan_id)
+        self.assertTrue(self.review_first_note(run).success)
+
+        refused = self.controller.save_mission_audit_export(stale, str(directory))
+
+        self.assertFalse(refused.success)
+        self.assertIn("changed since its preview", refused.message)
+        self.assertEqual(list(directory.iterdir()), [])
+        current = self.audit_preview(self.controller, plan_id)
+        saved = self.controller.save_mission_audit_export(current, str(directory))
+        self.assertTrue(saved.success, saved.message)
+        self.assertEqual(
+            sorted(path.name for path in directory.iterdir()),
+            sorted((current.markdown_filename, current.json_filename)),
+        )
+        again = self.controller.save_mission_audit_export(current, str(directory))
+        self.assertFalse(again.success)
+        self.assertIn("already exists", again.message)
+
+    def test_conflict_audit_keeps_outcome_unresolved_without_truth_promotion(self):
+        response = self.start()
+        plan_id = response.research_plan_execution.plan_id
+        reviewed = self.review_first_note(response.research_runs[0])
+        self.assertTrue(reviewed.success, reviewed.message)
+
+        _, markdown, document = self.audit_documents(self.controller, plan_id)
+
+        goal = document["evaluation"]["goal_satisfaction"]
+        self.assertEqual(goal["status"], "unresolved")
+        self.assertIsNone(goal["supported_by_review_id"])
+        self.assertEqual(
+            document["execution"]["snapshot"]["mission_checkpoint"][
+                "contradiction_initial_relation"
+            ],
+            "possible_conflict",
+        )
+        self.assertNotEqual(
+            document["evaluation"]["completion_readiness"]["status"], "ready"
+        )
+        self.assertIn("none is a verified fact", markdown)
+        self.assertNotIn("Ready for bounded user conclusion:** yes", markdown)
+
+    def test_legacy_mission_audit_marks_missing_stop_without_inference(self):
+        self.relation = "possible_agreement"
+        response = self.start()
+        plan_id = response.research_plan_execution.plan_id
+        path = self.execution_store_path()
+        document = json.loads(path.read_text("utf-8"))
+        for execution in document["executions"]:
+            execution.pop("mission_stop_reason", None)
+        path.write_text(json.dumps(document), encoding="utf-8")
+
+        _, controller = self.restored_controller()
+        _, markdown, audit = self.audit_documents(controller, plan_id)
+
+        self.assertIsNone(audit["execution"]["stop_reason"])
+        self.assertIsNone(audit["evaluation"])
+        self.assertIsNone(audit["teaching_report"])
+        self.assertIn("stop_reason_unrecorded", audit["limitations"])
+        self.assertIn("mission_evaluation_unavailable", audit["limitations"])
+        self.assertIsNotNone(audit["research_run"])
+        self.assertIn("no goal status was inferred", markdown)
+
+    def test_mission_audit_never_mixes_another_missions_run_or_reviews(self):
+        self.relation = "possible_agreement"
+        first = self.start()
+        other_review = self.review_first_note(first.research_runs[0])
+        self.assertTrue(other_review.success, other_review.message)
+        second = self.start()
+        self.assertNotEqual(
+            second.research_runs[0].run_id, first.research_runs[0].run_id
+        )
+
+        _, markdown, document = self.audit_documents(
+            self.controller, second.research_plan_execution.plan_id
+        )
+
+        self.assertEqual(
+            document["research_run"]["run_id"], second.research_runs[0].run_id
+        )
+        self.assertEqual(document["traceability"]["comparison_reviews"], [])
+        other = other_review.research_runs[0]
+        self.assertNotIn(other.run_id, json.dumps(document))
+        self.assertNotIn(other.comparison_reviews[0].review_id, markdown)
+
+    def test_mission_audit_builder_refuses_foreign_records_and_credentialed_urls(self):
+        self.relation = "possible_agreement"
+        first = self.start()
+        second = self.start()
+        plan_id = first.research_plan_execution.plan_id
+        snapshot = self.execution.mission_snapshot(plan_id)
+        run = first.research_runs[0]
+        other_authorization = self.approvals.authorization_for_execution(
+            second.research_plan_execution.plan_id
+        )
+
+        audit = build_mission_audit(
+            snapshot,
+            run,
+            self.approvals.authorization_for_execution(plan_id),
+            hypatia_version="test",
+        )
+        self.assertEqual(mission_audit_json(audit), mission_audit_json(audit))
+        self.assertEqual(json.loads(mission_audit_json(audit)), audit)
+        for wrong_run, authorization in (
+            (second.research_runs[0], None),
+            (run, other_authorization),
+        ):
+            with self.subTest(), self.assertRaises(ResearchError):
+                build_mission_audit(
+                    snapshot, wrong_run, authorization, hypatia_version="test"
+                )
+        leaked = replace(
+            run.sources[0], url="https://user:secret@reference0.example/study"
+        )
+        credentialed = replace(run, sources=(leaked, *run.sources[1:]))
+        with self.assertRaisesRegex(ResearchError, "credentials"):
+            build_mission_audit(snapshot, credentialed, None, hypatia_version="test")
+        rendered = mission_audit_json(audit)
+        for secret_marker in ("api_key", "Authorization", "headers", "password"):
+            self.assertNotIn(secret_marker, rendered)
+
+    def test_unknown_mission_audit_is_refused_without_files(self):
+        response = self.controller.preview_mission_audit_export("plan-missing")
+
+        self.assertFalse(response.success)
+        self.assertIsNone(response.research_mission_audit_export_preview)
 
     @staticmethod
     def routed_status(engine, plan_id):

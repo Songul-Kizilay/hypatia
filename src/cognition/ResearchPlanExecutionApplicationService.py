@@ -1584,47 +1584,66 @@ class ResearchPlanExecutionApplicationService:
             return False
         return True
 
+    def mission_snapshot(self, plan_id: str) -> ResearchPlanExecutionSnapshot | None:
+        """Return one mission's durable-form record, live or restored, read-only.
+
+        A live mission is captured exactly as persistence would capture it; a
+        restored one is its loaded snapshot.  Nothing is written or advanced.
+        """
+        snapshot: ResearchPlanExecutionSnapshot | None = (
+            self._live_snapshot(plan_id, self._clock())
+            if plan_id in self._executions
+            else self._restored.get(plan_id)
+        )
+        if snapshot is None or snapshot.mission_scope is None:
+            return None
+        return snapshot
+
+    def _live_snapshot(
+        self, plan_id: str, recorded_at: datetime
+    ) -> ResearchPlanExecutionSnapshot:
+        state = self._executions[plan_id]
+        plan = self._plans[plan_id]
+        context = self._contexts.get(plan_id, ResearchPlanExecutionContext())
+        mission_scope = None
+        mission_disclosure = ResearchDisclosure.NONE
+        mission_checkpoint = None
+        mission_stop_reason = None
+        scope = plan.mission_scope
+        if (
+            scope is not None
+            and scope.semantic_policy is not None
+            and context.disclosure is scope.semantic_policy.disclosure
+        ):
+            mission_scope = scope
+            mission_disclosure = context.disclosure
+            if self._mission_resolver is not None:
+                mission_checkpoint = self._mission_resolver.checkpoint(plan)
+            mission_stop_reason = self.mission_stop_reason(plan_id)
+        return ResearchPlanExecutionSnapshot.capture(
+            state,
+            plan.question,
+            plan.steps,
+            recorded_at,
+            context.research_run_id,
+            self._allowances.get(plan_id),
+            target_plan_digest=(
+                plan_digest(plan) if plan.target_binding is not None else None
+            ),
+            mission_plan_digest=self._mission_digests.get(plan_id),
+            mission_scope=mission_scope,
+            mission_disclosure=mission_disclosure,
+            mission_checkpoint=mission_checkpoint,
+            mission_request_id=self._mission_request_ids.get(plan_id),
+            mission_stop_reason=mission_stop_reason,
+        )
+
     def _snapshots(self) -> list[ResearchPlanExecutionSnapshot]:
         """Capture live executions, keeping restored history alongside them."""
         recorded_at = self._clock()
-        snapshots: list[ResearchPlanExecutionSnapshot] = []
-        for plan_id, state in self._executions.items():
-            plan = self._plans[plan_id]
-            context = self._contexts.get(plan_id, ResearchPlanExecutionContext())
-            mission_scope = None
-            mission_disclosure = ResearchDisclosure.NONE
-            mission_checkpoint = None
-            mission_stop_reason = None
-            scope = plan.mission_scope
-            if (
-                scope is not None
-                and scope.semantic_policy is not None
-                and context.disclosure is scope.semantic_policy.disclosure
-            ):
-                mission_scope = scope
-                mission_disclosure = context.disclosure
-                if self._mission_resolver is not None:
-                    mission_checkpoint = self._mission_resolver.checkpoint(plan)
-                mission_stop_reason = self.mission_stop_reason(plan_id)
-            snapshots.append(
-                ResearchPlanExecutionSnapshot.capture(
-                    state,
-                    plan.question,
-                    plan.steps,
-                    recorded_at,
-                    context.research_run_id,
-                    self._allowances.get(plan_id),
-                    target_plan_digest=(
-                        plan_digest(plan) if plan.target_binding is not None else None
-                    ),
-                    mission_plan_digest=self._mission_digests.get(plan_id),
-                    mission_scope=mission_scope,
-                    mission_disclosure=mission_disclosure,
-                    mission_checkpoint=mission_checkpoint,
-                    mission_request_id=self._mission_request_ids.get(plan_id),
-                    mission_stop_reason=mission_stop_reason,
-                )
-            )
+        snapshots: list[ResearchPlanExecutionSnapshot] = [
+            self._live_snapshot(plan_id, recorded_at) for plan_id in self._executions
+        ]
         snapshots.extend(
             snapshot
             for plan_id, snapshot in self._restored.items()

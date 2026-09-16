@@ -2,6 +2,36 @@
 
 All notable project changes are recorded here.
 
+## [0.3.375] - 2026-09-16
+
+### Added
+
+- Mission audit bundle export. "Preview mission audit export" renders, for the
+  mission named in the execution panel, a Markdown report and a deterministic
+  JSON document (schema hypatia.mission_audit, version 1) and writes nothing.
+  "Save mission audit export…" asks for a folder, shows both file names and
+  SHA-256 fingerprints, and after confirmation creates
+  mission-audit-<plan>.md and mission-audit-<plan>.json.
+- The bundle covers identity (plan, request, run, approval), plan digest and
+  capability order, mission scope and disclosure, the spent approval record,
+  approved/spent/remaining allowance, the execution snapshot with checkpoint and
+  recorded stop reason, the linked run document (sources, evidence, assessments
+  with trust/usefulness/applicability/independence/publication status, claims,
+  contradictions, comparison notes, review history), recomputed evidence
+  completion, goal satisfaction, explanation and readiness, the recomputed
+  teaching report, review/claim traceability by recorded IDs, and typed
+  limitations.
+- Read-only accessors: the execution service's mission_snapshot and the run
+  store's encode_run. The create-new atomic file publisher is shared.
+
+### Boundaries
+
+- Export executes, resumes, fetches, calls, spends, reviews, approves and closes
+  nothing, and persists no derived goal, readiness or report. Saving revalidates
+  both fingerprints, never replaces files and leaves no partial bundle. Missing
+  newer fields are reported as limitations, never inferred; URLs carrying
+  credentials fail the export closed.
+
 ## [0.3.374] - 2026-09-16
 
 ### Changed

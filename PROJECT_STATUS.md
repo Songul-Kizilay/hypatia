@@ -2,12 +2,19 @@
 
 ## Runtime Version
 
-`v0.3.374 (Genesis)`
+`v0.3.375 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.374 makes the recovered-missions listing say, for each mission
+Version v0.3.375 adds a read-only mission audit bundle: one previewed and
+confirmed export writes a Markdown report and a deterministic, schema-versioned
+JSON document covering mission identity, plan digest and capability order, the
+spent approval, approved/spent/remaining allowance, execution snapshot and
+recorded stop reason, the linked research run with assessments, claims,
+contradictions, comparison notes and review history, recomputed goal,
+explanation and readiness, the recomputed teaching report, review-to-evidence
+traceability and typed limitations. Version v0.3.374 makes the recovered-missions listing say, for each mission
 that was not resumed, whether its recorded report is available in execution
 status or no stop was recorded. Version v0.3.373 makes the run Markdown export a complete audit of recorded
 judgements: operator comparison reviews with decision, supersession and reason,

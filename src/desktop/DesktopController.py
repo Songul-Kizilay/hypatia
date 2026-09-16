@@ -23,6 +23,7 @@ from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchKaliOperationPreview import ResearchKaliOperationPreview
+from research.ResearchMissionAuditExport import ResearchMissionAuditExportPreview
 from research.ResearchPlanDigest import plan_digest
 from research.ResearchPlanRestriction import ResearchPlanRestriction
 from research.ResearchProgramScopeRevision import ResearchProgramScopeRevision
@@ -1807,6 +1808,45 @@ class DesktopController:
                 metadata={
                     "intent": "research_run_markdown_export_preview",
                     "research_run_id": normalized_run_id,
+                },
+            )
+        )
+
+    def preview_mission_audit_export(self, plan_id: str) -> BrainResponse:
+        """Render one mission's audit bundle for preview. Writes nothing."""
+        if not plan_id.strip():
+            raise ValueError("A mission plan ID is required.")
+        return self._brain.process(
+            BrainRequest(
+                message="Preview mission audit export",
+                source="desktop",
+                metadata={
+                    "intent": "research_mission_audit_export_preview",
+                    "research_plan_id": plan_id.strip(),
+                },
+            )
+        )
+
+    def save_mission_audit_export(
+        self,
+        preview: ResearchMissionAuditExportPreview,
+        destination_directory: str,
+    ) -> BrainResponse:
+        """Save exactly the previewed audit bundle as two new files."""
+        if not isinstance(preview, ResearchMissionAuditExportPreview):
+            raise ValueError("A mission audit export preview is required.")
+        if not destination_directory.strip():
+            raise ValueError("A mission audit export directory is required.")
+        return self._brain.process(
+            BrainRequest(
+                message="Save previewed mission audit export",
+                source="desktop",
+                metadata={
+                    "intent": "research_mission_audit_export_save",
+                    "research_plan_id": preview.plan_id,
+                    "destination_directory": destination_directory.strip(),
+                    "expected_markdown_sha256": preview.markdown_sha256,
+                    "expected_json_sha256": preview.json_sha256,
                 },
             )
         )

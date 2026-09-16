@@ -61,6 +61,10 @@ from research.ResearchKaliOperationPreview import (
     ResearchKaliOperationPreview,
 )
 from research.ResearchKaliRuntimeEnvironment import ResearchKaliRuntimeReadiness
+from research.ResearchMissionAuditExport import (
+    ResearchMissionAuditExportPreview,
+    ResearchMissionAuditExportResult,
+)
 from research.ResearchPairedProviderQualityReport import (
     ResearchPairedProviderQualityReport,
 )
@@ -148,6 +152,10 @@ class BrainResponse:
     ) = None
     research_run_markdown_export_preview: ResearchRunMarkdownExportPreview | None = None
     research_run_markdown_export_result: ResearchRunMarkdownExportResult | None = None
+    research_mission_audit_export_preview: ResearchMissionAuditExportPreview | None = (
+        None
+    )
+    research_mission_audit_export_result: ResearchMissionAuditExportResult | None = None
     research_run_markdown_export_verification: (
         ResearchRunMarkdownExportVerification | None
     ) = None

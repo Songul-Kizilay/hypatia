@@ -86,6 +86,7 @@ from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchInformationTrust import ResearchInformationTrust
+from research.ResearchMissionAuditExport import ResearchMissionAuditExportPreview
 from research.ResearchPlanBudgetRequirement import ResearchPlanBudgetFit
 from research.ResearchPlanDigest import plan_digest
 from research.ResearchPlanRestriction import ResearchPlanRestriction
@@ -667,6 +668,7 @@ class TkinterDesktopWindow:
         #: Research run of each mission this window has seen, by execution ID,
         #: as reported by the runtime (live results and the recovered listing).
         self._mission_run_ids: dict[str, str] = {}
+        self._mission_audit_preview: ResearchMissionAuditExportPreview | None = None
         self._mission_independence_run: ResearchRun | None = None
         self._research_discovery_provider = tk.StringVar(
             value=ResearchDiscoveryProviderName.CROSSREF.value
@@ -2107,6 +2109,16 @@ class TkinterDesktopWindow:
             text="Preview and record mission comparison review…",
             command=self._record_mission_comparison_review,
         ).grid(row=9, column=0, columnspan=3, sticky="w")
+        ttk.Button(
+            plan_actions,
+            text="Preview mission audit export",
+            command=self._preview_mission_audit_export,
+        ).grid(row=10, column=0, sticky="w", pady=4)
+        ttk.Button(
+            plan_actions,
+            text="Save mission audit export…",
+            command=self._save_mission_audit_export,
+        ).grid(row=10, column=1, columnspan=2, sticky="w")
         ttk.Label(research_plan_frame, text="Complete preview or rejection").grid(
             row=7,
             column=0,
@@ -3555,6 +3567,72 @@ class TkinterDesktopWindow:
             "Comparison review was refused: the displayed review may be stale or the "
             "run closed. The current canonical review has been reloaded."
         )
+
+    def _audit_plan_id(self) -> str:
+        """The execution named in the panel, else the last live mission."""
+        execution_field = getattr(self, "_execution_id", None)
+        named = execution_field.get().strip() if execution_field is not None else ""
+        return named or getattr(self, "_mission_plan_id", "")
+
+    def _preview_mission_audit_export(self) -> None:
+        """Render the mission audit bundle for review; nothing is written."""
+        self._mission_audit_preview = None
+        plan_id = self._audit_plan_id()
+        if not plan_id:
+            self._status.set("Run or recover a learning research mission first.")
+            return
+        response = self._controller.preview_mission_audit_export(plan_id)
+        preview = response.research_mission_audit_export_preview
+        if not response.success or preview is None:
+            self._status.set(response.message)
+            return
+        self._mission_audit_preview = preview
+        self._research_plan_preview.configure(state=tk.NORMAL)
+        self._research_plan_preview.delete("1.0", tk.END)
+        self._research_plan_preview.insert(
+            tk.END,
+            f"{preview.summary}\n\nFiles: {preview.markdown_filename}, "
+            f"{preview.json_filename}\n\n{preview.markdown_preview}",
+        )
+        self._research_plan_preview.see("1.0")
+        self._research_plan_preview.configure(state=tk.DISABLED)
+        self._status.set("mission audit export: previewed; nothing written")
+
+    def _save_mission_audit_export(self) -> None:
+        """Choose a directory, confirm both new files, then save the preview."""
+        preview = getattr(self, "_mission_audit_preview", None)
+        if preview is None or preview.plan_id != self._audit_plan_id():
+            self._status.set("Preview the mission audit export first.")
+            return
+        directory = filedialog.askdirectory(
+            parent=self._root,
+            title="Choose a folder for the mission audit files",
+            mustexist=True,
+        )
+        if not directory:
+            self._status.set("mission audit export: cancelled")
+            return
+        if not messagebox.askyesno(
+            "Save mission audit export?",
+            (
+                f"Create these two new files in\n{directory}\n\n"
+                f"{preview.markdown_filename}\nSHA-256: {preview.markdown_sha256}\n\n"
+                f"{preview.json_filename}\nSHA-256: {preview.json_sha256}\n\n"
+                "Hypatia will not replace existing files. Exporting executes, "
+                "fetches, calls, spends and changes nothing."
+            ),
+            parent=self._root,
+        ):
+            self._status.set("mission audit export: not saved")
+            return
+        try:
+            response = self._controller.save_mission_audit_export(preview, directory)
+        except ValueError as error:
+            self._status.set(str(error))
+            return
+        self._append_response(response)
+        if not response.success:
+            self._mission_audit_preview = None
 
     def _review_mission_source_independence(self) -> None:
         """Load the mission's canonical run and list its evidence-bearing sources.

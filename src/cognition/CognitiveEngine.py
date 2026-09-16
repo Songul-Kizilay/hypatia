@@ -77,6 +77,9 @@ from cognition.ResearchGoalStartApplicationService import (
 from cognition.ResearchHonestyApplicationService import (
     ResearchHonestyApplicationService,
 )
+from cognition.ResearchMissionAuditApplicationService import (
+    ResearchMissionAuditApplicationService,
+)
 from cognition.ResearchOverviewApplicationService import (
     ResearchOverviewApplicationService,
 )
@@ -114,6 +117,7 @@ from core.Exceptions import (
     SessionDeleteEventError,
     SessionError,
 )
+from core.Version import VERSION
 from eventbus.EventBus import EventBus
 from knowledge.KnowledgeCitation import KnowledgeCitation
 from knowledge.KnowledgeContextPrompt import (
@@ -546,6 +550,16 @@ class CognitiveEngine:
                 hypothesis_store=hypothesis_store,
                 event_bus=event_bus,
             )
+        self._research_mission_audit_service = ResearchMissionAuditApplicationService(
+            self._research_plan_execution_service,
+            research_run_manager,
+            (
+                self._plan_authorization_service
+                if plan_authorization_store is not None
+                else None
+            ),
+            hypatia_version=lambda: VERSION.short,
+        )
         self._research_goal_start_service = ResearchGoalStartApplicationService(
             self._research_plan_execution_service,
             self._research_autonomy_service,
@@ -853,6 +867,8 @@ class CognitiveEngine:
             return self._research_goal_start_service.process_goal(request)
         if self._research_goal_start_service.is_mission_recovery_request(request):
             return self._research_goal_start_service.process_mission_recovery(request)
+        if self._research_mission_audit_service.is_request(request):
+            return self._research_mission_audit_service.process(request)
         if self._research_goal_start_service.is_mission_comparison_review_request(
             request
         ):
