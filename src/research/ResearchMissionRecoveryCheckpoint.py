@@ -45,6 +45,11 @@ class ResearchMissionRecoveryCheckpoint:
     evidence_gap_followup_input_fingerprint: str = ""
     evidence_gap_followup_relation: str = ""
     evidence_gap_outcome: str = ""
+    # The authorized URL each acquired source was requested from, in slot order
+    # beside ``acquired_urls`` (which holds the validated final URL).  A redirect
+    # makes them differ; without the requested identity a restart could select
+    # and fetch the same candidate again.  Empty in legacy checkpoints.
+    requested_urls: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         values = (
@@ -66,6 +71,16 @@ class ResearchMissionRecoveryCheckpoint:
                 for value in values
                 for item in value
             )
+            or not isinstance(self.requested_urls, tuple)
+            or any(
+                not isinstance(item, str) or not item.strip() or item != item.strip()
+                for item in self.requested_urls
+            )
+            or (
+                bool(self.requested_urls)
+                and len(self.requested_urls) != len(self.acquired_urls)
+            )
+            or len(self.requested_urls) != len(set(self.requested_urls))
             or len(self.acquired_urls) != len(self.body_hashes)
             or len(self.acquired_urls) != len(set(self.acquired_urls))
             or len(self.evidence_ids) != len(set(self.evidence_ids))

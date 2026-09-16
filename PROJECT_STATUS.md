@@ -2,12 +2,17 @@
 
 ## Runtime Version
 
-`v0.3.375 (Genesis)`
+`v0.3.376 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.375 adds a read-only mission audit bundle: one previewed and
+Version v0.3.376 makes source fetch replay-safe across restart: mission
+checkpoints now record each acquired source's requested URL beside its final
+URL, so a redirected source is never selected and fetched again after restart;
+legacy checkpoints without it refuse further fetches. Completed, failed and
+interrupted fetches were characterized and are never repeated without explicit
+authority. Version v0.3.375 adds a read-only mission audit bundle: one previewed and
 confirmed export writes a Markdown report and a deterministic, schema-versioned
 JSON document covering mission identity, plan digest and capability order, the
 spent approval, approved/spent/remaining allowance, execution snapshot and

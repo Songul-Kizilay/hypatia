@@ -2,6 +2,33 @@
 
 All notable project changes are recorded here.
 
+## [0.3.376] - 2026-09-16
+
+### Fixed
+
+- A mission source reached through a redirect could be fetched again after
+  restart: checkpoints kept only the final URL, so recovery no longer excluded
+  the requested candidate and a later slot or follow-up could re-select it,
+  spending another network operation. Mission checkpoints now record
+  equested_urls beside cquired_urls, and recovery restores exactly the
+  live exclusion set.
+
+### Added
+
+- Characterization tests for source-fetch replay: a completed fetch is not
+  repeated in process or after restart (fetches, network spend, sources,
+  evidence and the mission audit fingerprint unchanged); a failed fetch is not
+  retried after restart; an interrupted fetch stays charged and is never
+  replayed; the same URL in another mission is still fetched; malformed
+  equested_urls fail the store load closed.
+
+### Boundaries
+
+- Persistence: one optional checkpoint field, encoded in new snapshots. Legacy
+  checkpoints load unchanged, but a mission with acquired sources and a pending
+  fetch slot is refused at recovery rather than risking a duplicate fetch. No
+  authority, budget, cost, URL-security, goal or readiness change.
+
 ## [0.3.375] - 2026-09-16
 
 ### Added

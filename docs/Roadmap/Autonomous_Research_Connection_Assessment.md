@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.375
+## Current bounded text journey: v0.3.376
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -113,6 +113,35 @@ and model prose cannot alter it. It does not change mission lifecycle,
 authorization, cumulative allowance, plan digest, source slots, provider/model
 selection, retry behavior or run closure. An unchanged recovered state renders
 the same explanation.
+
+### Replay/idempotency audit — source fetch: v0.3.376
+
+First capability of the one-at-a-time replay audit. Characterized behaviour:
+
+- **Operation identity.** A fetch is one authored plan step in one execution;
+  the executor only starts the next pending step, so a completed or failed step
+  is never started again. Mission slots take the URL from ranked discovery
+  candidates, excluding every identity already attempted or acquired.
+- **Crash windows.** The running step and its charge are persisted before the
+  network is reachable. After restart a running step is interrupted: it stays
+  charged, advance refuses it, and only an explicit operator ruling that it was
+  not performed returns it to pending for an ordinary, newly charged attempt.
+  A failed fetch fails the execution (not resumable) and keeps its run failure.
+- **Gap found and fixed.** Live missions excluded the *requested* URL of each
+  slot, but checkpoints kept only the validated *final* URL. After a redirect,
+  restart lost the requested identity, so a later slot or follow-up could
+  select the same candidate and fetch it again (charging network spend before
+  the duplicate was detected). Checkpoints now carry equested_urls beside
+  cquired_urls; restore uses them exactly as the live process does. A legacy
+  checkpoint with acquired sources but no requested URLs refuses recovery while
+  a fetch slot is still pending, instead of risking a duplicate fetch.
+- **Unchanged.** URL security and redirect validation, authority, budget and
+  cost, goal and readiness semantics. Another mission fetching the same URL is
+  a distinct authorized operation and is not suppressed.
+- **Found for later audits.** Recovery refuses a mission interrupted before its
+  first evidence record ("Mission evidence changed or is missing"), a fail-closed
+  false refusal; and accepting a source already indexed by another run fails at
+  indexing. Both belong to the false-refusal and source-acceptance audits.
 
 ### Mission audit bundle: v0.3.375
 

@@ -2067,6 +2067,184 @@ class LearningResearchJourneyTests(unittest.TestCase):
         self.assertFalse(response.success)
         self.assertIsNone(response.research_mission_audit_export_preview)
 
+    def redirect_first_source(self):
+        """The first candidate's fetch ends at a different, validated final URL."""
+        requested = self.sources[0]
+        final = replace(requested, url="https://mirror0.example/study")
+        self.fetcher.fetch.side_effect = lambda url: (
+            final
+            if url == requested.url
+            else next(s for s in self.sources if s.url == url)
+        )
+        return requested.url, final.url
+
+    def fetched_urls(self):
+        return [call.args[0] for call in self.fetcher.fetch.call_args_list]
+
+    def test_redirected_source_is_not_refetched_after_restart(self):
+        self.relation = "possible_agreement"
+        requested, final = self.redirect_first_source()
+        live = self.start()
+        live_fetches = self.fetched_urls()
+        self.assertEqual(live_fetches.count(requested), 1, live_fetches)
+        live_sources = [s.url for s in live.research_runs[0].sources]
+
+        self.setUp()
+        self.relation = "possible_agreement"
+        requested, final = self.redirect_first_source()
+        snapshot = self.interrupted_start(6)
+        self.assertEqual(snapshot.mission_checkpoint.acquired_urls, (final,))
+        before = self.fetched_urls()
+        engine = self.restart()
+
+        after = self.fetched_urls()
+        run = JsonFileResearchRunStore(self.root / "runs.json").load()[-1]
+        status = self.execution_status(engine, snapshot.plan_id).message
+        self.assertEqual(after.count(requested), 1, after)
+        self.assertEqual(before, after[: len(before)])
+        self.assertEqual(after, live_fetches, status)
+        self.assertEqual([s.url for s in run.sources], live_sources, status)
+
+    def source_fetch_state(self, execution, plan_id):
+        restored = execution.restored_execution(plan_id)
+        allowance = execution.allowance(plan_id) or (
+            restored.allowance if restored is not None else None
+        )
+        run = JsonFileResearchRunStore(self.root / "runs.json").load()[-1]
+        return (
+            list(self.fetched_urls()),
+            allowance.spend.network_operations if allowance else None,
+            [source.url for source in run.sources],
+            [record.evidence_id for record in run.evidence],
+        )
+
+    def test_completed_fetch_is_never_repeated_in_process_or_after_restart(self):
+        self.relation = "possible_agreement"
+        response = self.start()
+        plan_id = response.research_plan_execution.plan_id
+        state = self.source_fetch_state(self.execution, plan_id)
+        self.assertEqual(len(state[0]), len(set(state[0])))
+        audit = self.audit_preview(self.controller, plan_id)
+
+        again = self.engine.process(
+            BrainRequest(
+                message="advance",
+                metadata={
+                    "intent": "research_plan_execution_advance",
+                    "research_plan_id": plan_id,
+                },
+            )
+        )
+        self.assertFalse(again.success)
+        self.assertEqual(self.source_fetch_state(self.execution, plan_id), state)
+
+        engine = self.restart()
+        controller = DesktopController(self.restarted.container.resolve(Brain))
+        execution = engine._research_plan_execution_service
+        self.assertEqual(self.source_fetch_state(execution, plan_id), state)
+        restored_audit = self.audit_preview(controller, plan_id)
+        self.assertEqual(restored_audit.json_sha256, audit.json_sha256)
+
+    def test_failed_fetch_is_not_retried_after_restart(self):
+        self.fetcher.fetch.side_effect = ResearchError("fixture unavailable")
+        response = self.start()
+        plan_id = response.research_plan_execution.plan_id
+        state = self.source_fetch_state(self.execution, plan_id)
+        self.assertEqual(len(state[0]), 1)
+        failures = JsonFileResearchRunStore(self.root / "runs.json").load()[-1].failures
+
+        engine = self.restart()
+
+        execution = engine._research_plan_execution_service
+        self.assertEqual(self.source_fetch_state(execution, plan_id), state)
+        self.assertEqual(execution.restored_execution(plan_id).status.value, "failed")
+        self.assertEqual(
+            JsonFileResearchRunStore(self.root / "runs.json").load()[-1].failures,
+            failures,
+        )
+        self.transport.assert_not_called()
+
+    def interrupted_fetch_start(self):
+        """Die inside the first network fetch, after the attempt was recorded."""
+
+        def crash(url):
+            raise RuntimeError("simulated process death during fetch")
+
+        self.fetcher.fetch.side_effect = crash
+        with self.assertRaisesRegex(RuntimeError, "simulated process death"):
+            self.start()
+        snapshot = self.execution._execution_store.load()[-1]
+        running = [s for s in snapshot.steps if s.status.value == "running"]
+        self.assertEqual([s.capability.value for s in running], ["source_fetch"])
+        return snapshot
+
+    def test_interrupted_fetch_is_never_replayed_after_restart(self):
+        self.relation = "possible_agreement"
+        snapshot = self.interrupted_fetch_start()
+        self.fetcher.fetch.side_effect = lambda url: next(
+            s for s in self.sources if s.url == url
+        )
+        fetches = self.fetched_urls()
+
+        engine = self.restart()
+        execution = engine._research_plan_execution_service
+        restored = execution.restored_execution(snapshot.plan_id)
+
+        # The attempt may have reached the network; nothing proves otherwise, so
+        # recovery keeps it charged and interrupted and never fetches again.
+        self.assertEqual(self.fetched_urls(), fetches)
+        self.assertIsNotNone(restored)
+        self.assertEqual(restored.allowance.spend, snapshot.allowance.spend)
+        self.assertIn("interrupted", {step.status.value for step in restored.steps})
+        self.assertIsNone(restored.mission_stop_reason)
+        self.assertIn("not resumed", self.recovered_listing(engine).message)
+        self.assertEqual(self.fetched_urls(), fetches)
+
+    def test_same_url_in_a_different_mission_is_a_distinct_authorized_fetch(self):
+        self.relation = "possible_agreement"
+        self.start()
+        first = self.fetched_urls()
+        self.start()
+
+        # Another mission's authorized slot is its own operation: the earlier
+        # fetch of the same URL does not suppress it.
+        second = self.fetched_urls()[len(first) :]
+        self.assertEqual(second[:1], first[:1])
+
+    def test_legacy_checkpoint_without_requested_urls_refuses_further_fetch(self):
+        self.relation = "possible_agreement"
+        snapshot = self.interrupted_start(6)
+        path = self.execution_store_path()
+        document = json.loads(path.read_text("utf-8"))
+        for execution in document["executions"]:
+            execution["mission_checkpoint"].pop("requested_urls")
+        path.write_text(json.dumps(document), encoding="utf-8")
+        fetches = self.fetched_urls()
+
+        engine = self.restart()
+
+        self.assertEqual(self.fetched_urls(), fetches)
+        listing = self.recovered_listing(engine)
+        self.assertIn("lacks requested source identities", listing.message)
+        self.assertIsNotNone(
+            engine._research_plan_execution_service.restored_execution(snapshot.plan_id)
+        )
+
+    def test_malformed_requested_urls_fail_closed_on_load(self):
+        self.relation = "possible_agreement"
+        self.interrupted_start(6)
+        path = self.execution_store_path()
+        original = json.loads(path.read_text("utf-8"))
+        for value in ("https://reference0.example/study", ["a", "b"], [""], [1]):
+            with self.subTest(value=value):
+                document = json.loads(json.dumps(original))
+                document["executions"][0]["mission_checkpoint"][
+                    "requested_urls"
+                ] = value
+                path.write_text(json.dumps(document), encoding="utf-8")
+                with self.assertRaises(ResearchError):
+                    JsonFileResearchExecutionStore(path).load()
+
     @staticmethod
     def routed_status(engine, plan_id):
         return engine.process(

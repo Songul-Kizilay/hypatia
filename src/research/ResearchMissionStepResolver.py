@@ -54,6 +54,8 @@ class _Observations:
     preview: ResearchSourcePreview | None = None
     attempted_urls: tuple[str, ...] = ()
     acquired_urls: tuple[str, ...] = ()
+    # Requested (authorized) URL of each acquired source, beside acquired_urls.
+    requested_urls: tuple[str, ...] = ()
     body_hashes: tuple[str, ...] = ()
     inspected_bytes: int = 0
     evidence: tuple[ResearchEvidenceRecord, ...] = ()
@@ -282,6 +284,7 @@ class ResearchMissionStepResolver:
         return ResearchMissionRecoveryCheckpoint(
             discovery_id=observed.discovery_id,
             acquired_urls=observed.acquired_urls,
+            requested_urls=observed.requested_urls,
             body_hashes=observed.body_hashes,
             inspected_bytes=observed.inspected_bytes,
             evidence_ids=tuple(value.evidence_id for value in observed.evidence),
@@ -407,12 +410,31 @@ class ResearchMissionStepResolver:
             not set(value.evidence_ids).issubset(evidence_ids) for value in assessments
         ):
             raise ResearchError("Mission assessment checkpoint no longer matches.")
+        if (
+            checkpoint.acquired_urls
+            and not checkpoint.requested_urls
+            and any(
+                step.capability is Cap.SOURCE_FETCH
+                and by_id[step.step_id].status is ResearchPlanStepStatus.PENDING
+                for step in plan.steps
+            )
+        ):
+            # A legacy checkpoint kept only final URLs.  After a redirect the
+            # requested candidate is not recognisable, so another fetch could
+            # acquire the same source again; refuse rather than risk it.
+            raise ResearchError(
+                "Mission checkpoint lacks requested source identities; a further "
+                "fetch could repeat an acquired source, so no fetch is replayed."
+            )
         observed = _Observations(
             digest=plan_digest(plan),
             run_id=run_id,
             discovery_id=checkpoint.discovery_id,
-            attempted_urls=checkpoint.acquired_urls,
+            # In a live process attempted URLs are the requested ones, and their
+            # count is the slot count; final URLs stay excluded via acquired.
+            attempted_urls=checkpoint.requested_urls or checkpoint.acquired_urls,
             acquired_urls=checkpoint.acquired_urls,
+            requested_urls=checkpoint.requested_urls,
             body_hashes=checkpoint.body_hashes,
             inspected_bytes=checkpoint.inspected_bytes,
             evidence=evidence,
@@ -513,6 +535,7 @@ class ResearchMissionStepResolver:
                 raise ResearchError("Fetched preview failed mission inspection.")
             observed.preview = preview
             observed.acquired_urls += (preview.source.url,)
+            observed.requested_urls += (observed.selected_url,)
             observed.body_hashes += (preview.content_sha256,)
             observed.inspected_bytes += preview.content_byte_count
         elif step.capability is Cap.EVIDENCE_RECORDING:

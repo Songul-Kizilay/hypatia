@@ -120,6 +120,7 @@ _MISSION_CHECKPOINT_FIELDS_WITH_EVIDENCE_GAP_OUTCOME = (
         "evidence_gap_outcome",
     }
 )
+
 _ALLOWANCE_FIELDS = frozenset({"budget", "spend"})
 _BUDGET_FIELDS = frozenset(
     {
@@ -410,6 +411,7 @@ def _encode_mission_checkpoint(
         ),
         "evidence_gap_followup_relation": checkpoint.evidence_gap_followup_relation,
         "evidence_gap_outcome": checkpoint.evidence_gap_outcome,
+        "requested_urls": list(checkpoint.requested_urls),
     }
 
 
@@ -418,12 +420,16 @@ def _decode_mission_checkpoint(
 ) -> ResearchMissionRecoveryCheckpoint | None:
     if value is None:
         return None
-    if not isinstance(value, dict) or set(value) not in (
+    # ``requested_urls`` is independent of the relation fields, so it may
+    # accompany any recognised checkpoint shape; its absence means unrecorded.
+    if not isinstance(value, dict) or set(value) - {"requested_urls"} not in (
         _MISSION_CHECKPOINT_FIELDS_V1,
         _MISSION_CHECKPOINT_FIELDS,
         _MISSION_CHECKPOINT_FIELDS_WITH_CONTRADICTION_OUTCOME,
         _MISSION_CHECKPOINT_FIELDS_WITH_EVIDENCE_GAP_OUTCOME,
     ):
+        raise ResearchError("Execution snapshot mission checkpoint is invalid.")
+    if "requested_urls" in value and not isinstance(value["requested_urls"], list):
         raise ResearchError("Execution snapshot mission checkpoint is invalid.")
     sequences = (
         "acquired_urls",
@@ -438,7 +444,7 @@ def _decode_mission_checkpoint(
         "contradiction_initial_source_document_ids",
         "contradiction_initial_assessment_ids",
     )
-    if set(value) in (
+    if set(value) - {"requested_urls"} in (
         _MISSION_CHECKPOINT_FIELDS_WITH_CONTRADICTION_OUTCOME,
         _MISSION_CHECKPOINT_FIELDS_WITH_EVIDENCE_GAP_OUTCOME,
     ) and any(not isinstance(value[name], list) for name in contradiction_sequences):
@@ -503,6 +509,9 @@ def _decode_mission_checkpoint(
                 "evidence_gap_followup_relation", ""
             ),
             evidence_gap_outcome=value.get("evidence_gap_outcome", ""),
+            # Absent in legacy checkpoints: decoded as "not recorded".  Recovery
+            # then refuses any further fetch rather than risk refetching a source.
+            requested_urls=tuple(value.get("requested_urls", [])),
         )
     except ResearchError as error:
         raise ResearchError(
