@@ -581,6 +581,37 @@ class PlanExecutionCompositionTests(unittest.TestCase):
         self.assertEqual(final.claims, ())
         self.assertEqual(final.assessments, ())
 
+    def test_repeated_identical_evidence_fails_honestly_without_duplicate(
+        self,
+    ) -> None:
+        run = self.run_manager.create("What evidence supports the claim?")
+        accept_plan = self._start(
+            "source_accept",
+            run_id=run.run_id,
+            authorized_url="https://example.test/chain",
+        )
+        self._advance(accept_plan)
+        document_id = self.run_manager.get(run.run_id).sources[0].document_id
+        authorization = (document_id, 0, "Supports the question under review.")
+        first = self._advance(
+            self._start("evidence_recording", run_id=run.run_id, evidence=authorization)
+        )
+        assert first.research_plan_execution is not None
+        self.assertEqual(first.research_plan_execution.status.value, "completed")
+        recorded = self.run_manager.get(run.run_id)
+
+        again = self._advance(
+            self._start("evidence_recording", run_id=run.run_id, evidence=authorization)
+        )
+
+        state = again.research_plan_execution
+        assert state is not None
+        self.assertEqual(state.status.value, "failed")
+        # Refused before any write: not reported as performed work or success.
+        self.assertFalse(state.steps[0].work_performed)
+        self.assertIn(recorded.evidence[0].evidence_id, state.steps[0].detail)
+        self.assertEqual(self.run_manager.get(run.run_id).evidence, recorded.evidence)
+
     def test_fetched_but_unaccepted_source_cannot_record_evidence(self) -> None:
         run = self.run_manager.create("What evidence supports the claim?")
 

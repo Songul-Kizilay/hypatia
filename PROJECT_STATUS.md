@@ -2,12 +2,15 @@
 
 ## Runtime Version
 
-`v0.3.376 (Genesis)`
+`v0.3.377 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.376 makes source fetch replay-safe across restart: mission
+Version v0.3.377 prevents duplicate evidence from a repeated evidence-recording
+step: when the run already holds the exact same observation (source document,
+chunk, content hash and note), the step fails honestly naming the existing
+evidence instead of recording it twice or claiming it succeeded. Version v0.3.376 makes source fetch replay-safe across restart: mission
 checkpoints now record each acquired source's requested URL beside its final
 URL, so a redirected source is never selected and fetched again after restart;
 legacy checkpoints without it refuse further fetches. Completed, failed and

@@ -2,6 +2,28 @@
 
 All notable project changes are recorded here.
 
+## [0.3.377] - 2026-09-16
+
+### Fixed
+
+- A generic plan's evidence step could record the same observation twice: the
+  evidence is saved before the step's completion, so a crash in between, an
+  operator "not performed" ruling and a retry produced a duplicate record under
+  a new ID. The evidence-recording step now refuses when the run already holds
+  the exact same observation (source document, chunk index, content hash and
+  note), fails without claiming performed work, and names the existing evidence.
+
+### Changed
+
+- A separately started plan authorizing an identical observation in the same run
+  now fails honestly instead of adding a duplicate. Distinct notes or chunks, and
+  identical text in another run, are still recorded.
+
+### Boundaries
+
+- No schema, authority, budget, goal or readiness change. Mission evidence was
+  already replay-safe. Manual evidence entry is unchanged and not deduplicated.
+
 ## [0.3.376] - 2026-09-16
 
 ### Fixed

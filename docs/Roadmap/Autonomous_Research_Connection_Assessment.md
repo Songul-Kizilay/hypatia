@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.376
+## Current bounded text journey: v0.3.377
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -113,6 +113,33 @@ and model prose cannot alter it. It does not change mission lifecycle,
 authorization, cumulative allowance, plan digest, source slots, provider/model
 selection, retry behavior or run closure. An unchanged recovered state renders
 the same explanation.
+
+### Replay/idempotency audit — evidence recording: v0.3.377
+
+Second capability of the one-at-a-time audit. Characterized behaviour:
+
+- **Identity.** Evidence IDs are random per write. A record stores run, source
+  document, chunk ID and index, excerpt, the SHA-256 of the stripped chunk
+  content and the note; it stores no execution or step identity.
+- **Mission path.** Safe already: recovery refuses a mission whose accepted
+  source lacks its durable evidence step, and a mission's notes embed its plan
+  digest and source hash, so separate observations never collide.
+- **Gap found and fixed.** In a generic plan, dd_evidence persists before the
+  step's completion is persisted. A crash between them restores the step as
+  interrupted; an operator ruling of "not performed" returns it to pending, and
+  the next advance recorded the same chunk and note again under a new ID —
+  one observation counted twice. The evidence-recording operation now refuses
+  when the run already holds the exact same observation (document, chunk index,
+  content hash, note), naming the existing evidence ID. The step fails with no
+  performed work; it is neither a duplicate nor a fabricated success.
+- **Deliberate behaviour change.** A second, separately started plan that
+  authorizes the identical observation in the same run now fails the same way
+  instead of creating a duplicate record. A different note, a different chunk,
+  or the same text in another run is still recorded.
+- **Unchanged / remaining.** Manual evidence recording (a direct operator
+  request, not a replayed plan step) is not deduplicated, so a double submit
+  can still create two records. No authority, budget, schema, goal or readiness
+  change.
 
 ### Replay/idempotency audit — source fetch: v0.3.376
 
