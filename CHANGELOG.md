@@ -2,6 +2,36 @@
 
 All notable project changes are recorded here.
 
+## [0.3.381] - 2026-09-17
+
+### Fixed
+
+- A run could not accept its own fetch of a URL that another run had already
+  indexed ("Knowledge document is already loaded"), because document identity
+  was derived from the URL alone. Reusing that document would also have
+  attached content the run never fetched.
+
+### Changed
+
+- Indexed documents are content versions: the document ID derives from the
+  exact representation (URL, title, content type, content origin and content
+  SHA-256), so the same URL serving different text yields separate versions.
+- Each run's source record now stores the content_sha256 it observed (run
+  store schema 15). Identical versions share one indexed document and content
+  record while every run keeps its own observation; a failed attach never
+  removes a shared version.
+- The content store allows several versions of one URL (document IDs remain
+  unique). Restoration validates each run's recorded content fingerprint.
+- Run and mission audit exports show each source's observed content SHA-256.
+
+### Boundaries
+
+- Legacy URL-identity documents restore unchanged and their sources report an
+  unrecorded content version; nothing is migrated or inferred. A run that did
+  not fetch a source still cannot use it, and the same run accepting the same
+  version twice is still refused. No authority, budget, lifecycle, goal or
+  readiness change; no freshness or automatic reuse.
+
 ## [0.3.380] - 2026-09-16
 
 ### Fixed

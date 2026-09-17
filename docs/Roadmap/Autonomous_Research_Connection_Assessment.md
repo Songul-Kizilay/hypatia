@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.380
+## Current bounded text journey: v0.3.381
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -113,6 +113,54 @@ and model prose cannot alter it. It does not change mission lifecycle,
 authorization, cumulative allowance, plan digest, source slots, provider/model
 selection, retry behavior or run closure. An unchanged recovered state renders
 the same explanation.
+
+### Version-safe cross-run source identity: v0.3.381
+
+Product decision: content-versioned documents plus run-scoped observations;
+knowledge is not isolated per run.
+
+**Problem (confirmed by a failing test first).** A knowledge document's identity
+was uuid5(url), the content store refused duplicate URLs, and restoration
+rebuilt the URL identity. A second run accepting its own fetch of a URL another
+run had indexed failed with "Knowledge document is already loaded", and reusing
+that document would have attached content the second run never fetched.
+
+**Model.**
+
+- *Resource*: the URL, unchanged as resource identity (source-identity counting
+  still joins on it).
+- *Content version*: the document ID is now derived from a SHA-256 of the exact
+  representation (URL, title, content type, content resource, acquisition and
+  content SHA-256). The same URL with different text is a different version.
+- *Observation*: each run's ResearchSourceRecord is that run's own fetch and
+  acceptance, with its own etched_at/dded_at and a new content_sha256
+  (run store schema 15).
+- *Evidence* keeps pointing at the chunk of the exact version its run accepted.
+
+**Behaviour.**
+
+- Different content for the same URL: both versions are indexed and stored;
+  each run's evidence resolves to its own text before and after restart.
+- Identical content: the second run reuses the immutable stored version (one
+  indexed document, one content record) and records its own observation. A
+  failed attach never removes the shared version.
+- A run that did not fetch a source still cannot record evidence from it; the
+  same run accepting the same version twice is still refused at indexing.
+- The content store keeps one record per version and no longer requires unique
+  URLs. Restoration groups run records by version, requires each to agree on
+  the version, accepts any recording run's fetch time, and refuses stored text
+  that differs from a run's recorded content_sha256.
+- Run and mission audit exports show each source's observed content SHA-256,
+  or "unrecorded" for sources accepted earlier.
+
+**Old data.** Documents indexed before versioning keep their URL-only IDs and
+restore as legacy documents; their source records load with
+content_sha256 = None and gain no version meaning. Nothing is migrated or
+rewritten from current page contents.
+
+**Not included.** Freshness, revalidation, HTTP caching, automatic reuse of
+another run's content, or a provenance graph. No authority, budget, lifecycle,
+goal or readiness change. The manual-entry double-submit gap remains open.
 
 ### Recovery false refusal before first evidence: v0.3.380
 

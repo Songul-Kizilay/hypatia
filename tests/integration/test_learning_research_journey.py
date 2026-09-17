@@ -26,6 +26,7 @@ from desktop.MissionSourceIndependenceReview import (
     independence_assessment_arguments,
     independence_review_rows,
 )
+from knowledge.KnowledgeEngine import KnowledgeEngine
 from llm.LLMRuntimeConfig import LLMRuntimeConfig
 from research.JsonFileFailureLessonStore import JsonFileFailureLessonStore
 from research.JsonFileResearchExecutionStore import JsonFileResearchExecutionStore
@@ -151,8 +152,15 @@ class LearningResearchJourneyTests(unittest.TestCase):
             if any(s.status.value == "running" for s in snapshot.steps)
         ]
         self.assertEqual(len(running), 1)
+        # Every model call, across every mission in this test, was charged to
+        # the allowance of the mission that made it before it was made.
         self.assertEqual(
-            running[0].allowance.spend.llm_operations, self.transport.call_count
+            sum(
+                snapshot.allowance.spend.llm_operations
+                for snapshot in snapshots
+                if snapshot.allowance is not None
+            ),
+            self.transport.call_count,
         )
         relation = (
             self.relations.pop(0) if self.relations is not None else self.relation
@@ -2285,6 +2293,69 @@ class LearningResearchJourneyTests(unittest.TestCase):
             self.recovered_listing(engine).message,
         )
 
+    def runs_by_id(self):
+        return {
+            run.run_id: run
+            for run in JsonFileResearchRunStore(self.root / "runs.json").load()
+        }
+
+    def test_second_mission_accepts_its_own_changed_fetch_of_an_indexed_url(self):
+        self.relation = "possible_agreement"
+        first = self.start()
+        first_run = first.research_runs[0]
+        self.assertTrue(first_run.evidence)
+        self.sources = [
+            replace(
+                source,
+                content=source.content.replace("in study", "in revised study"),
+            )
+            for source in self.sources
+        ]
+
+        second = self.start()
+
+        second_run = second.research_runs[0]
+        self.assertTrue(second_run.sources, second.message)
+        self.assertTrue(second_run.evidence, second.message)
+        shared_urls = {s.url for s in first_run.sources} & {
+            s.url for s in second_run.sources
+        }
+        self.assertTrue(shared_urls)
+        for url in shared_urls:
+            old = next(s for s in first_run.sources if s.url == url)
+            new = next(s for s in second_run.sources if s.url == url)
+            self.assertNotEqual(old.document_id, new.document_id)
+            self.assertNotEqual(old.content_sha256, new.content_sha256)
+        self.assertTrue(all("revised study" in e.excerpt for e in second_run.evidence))
+        stored = self.runs_by_id()
+        # The first mission's observations and evidence are untouched.
+        self.assertEqual(stored[first_run.run_id].sources, first_run.sources)
+        self.assertEqual(stored[first_run.run_id].evidence, first_run.evidence)
+        self.assertTrue(
+            all("revised" not in e.excerpt for e in stored[first_run.run_id].evidence)
+        )
+
+        calls = self.external_calls()
+        engine, controller = self.restored_controller()
+        _, _, audit = self.audit_documents(
+            controller, second.research_plan_execution.plan_id
+        )
+        self.assertEqual(self.external_calls(), calls)
+        self.assertEqual(
+            {
+                (source["url"], source["content_sha256"])
+                for source in audit["research_run"]["sources"]
+            },
+            {(source.url, source.content_sha256) for source in second_run.sources},
+        )
+        knowledge = self.restarted.container.resolve(KnowledgeEngine)
+        for evidence in second_run.evidence:
+            self.assertIn(
+                "revised study", knowledge.get_chunk(evidence.chunk_id).content
+            )
+        for evidence in first_run.evidence:
+            self.assertNotIn("revised", knowledge.get_chunk(evidence.chunk_id).content)
+
     def test_same_url_in_a_different_mission_is_a_distinct_authorized_fetch(self):
         self.relation = "possible_agreement"
         self.start()
@@ -2295,6 +2366,22 @@ class LearningResearchJourneyTests(unittest.TestCase):
         # fetch of the same URL does not suppress it.
         second = self.fetched_urls()[len(first) :]
         self.assertEqual(second[:1], first[:1])
+        runs = sorted(self.runs_by_id().values(), key=lambda run: run.created_at)
+        first_run, second_run = runs[-2], runs[-1]
+        shared = {s.url for s in first_run.sources} & {
+            s.url for s in second_run.sources
+        }
+        self.assertTrue(shared)
+        for url in shared:
+            old = next(s for s in first_run.sources if s.url == url)
+            new = next(s for s in second_run.sources if s.url == url)
+            # Identical content shares one immutable stored version, but each
+            # mission keeps its own record of accepting its own fetch.
+            self.assertEqual(
+                (old.document_id, old.content_sha256),
+                (new.document_id, new.content_sha256),
+            )
+            self.assertLess(old.added_at, new.added_at)
 
     def test_legacy_checkpoint_without_requested_urls_refuses_further_fetch(self):
         self.relation = "possible_agreement"

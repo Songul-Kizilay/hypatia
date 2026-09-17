@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from hashlib import sha256
 from uuid import NAMESPACE_URL, uuid5
 
 from core.Exceptions import ResearchError
@@ -27,8 +29,10 @@ class ResearchSource:
     read from the CVE API, and recording the API endpoint as the source's
     identity would make every accepted CVE the same resource as every other.
 
-    So identity stays with the URL and origin is recorded beside it. Left empty,
-    the two coincide and the source is exactly what it says it is.
+    So resource identity stays with the URL and origin is recorded beside it.
+    Left empty, the two coincide and the source is exactly what it says it is.
+    The indexed document is a content version of that resource, never the URL
+    itself: the same URL can serve different text at different times.
     """
 
     url: str
@@ -65,12 +69,49 @@ class ResearchSource:
         if not self.acquisition:
             raise ResearchError("Research source acquisition cannot be empty.")
 
-    def to_document(self) -> Document:
-        """Create a stable web document for the existing knowledge pipeline.
+    @property
+    def content_sha256(self) -> str:
+        """SHA-256 of the exact stored text, as persisted content records use."""
+        return sha256(self.content.encode("utf-8")).hexdigest()
 
-        The document identity stays derived from the URL, so the same resource
-        accepted twice is the same document however its bytes were obtained.
+    def content_version_id(self) -> str:
+        """Immutable identity of this exact representation, not of the URL.
+
+        The same URL serving different text is a different content version, so
+        a later fetch can never be resolved to an earlier fetch's document.  The
+        same representation fetched twice yields the same version; that shares
+        immutable storage only, never the observation that fetched it.
         """
+        representation = json.dumps(
+            [
+                self.url,
+                self.title,
+                self.content_type,
+                self.content_resource,
+                self.acquisition,
+                self.content_sha256,
+            ],
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+        digest = sha256(representation.encode("utf-8")).hexdigest()
+        return str(uuid5(NAMESPACE_URL, f"hypatia:source-content-version:{digest}"))
+
+    def legacy_document_id(self) -> str:
+        """The URL-only identity used before content versioning (v0.3.380)."""
+        return str(uuid5(NAMESPACE_URL, self.url))
+
+    def to_document(self, document_id: str | None = None) -> Document:
+        """Create one content-versioned web document for the knowledge pipeline.
+
+        The identity is the content version by default.  Only restoration of
+        content accepted before versioning may pass the legacy URL identity,
+        which it must prove by matching the persisted record exactly.
+        """
+        if document_id is None:
+            document_id = self.content_version_id()
+        elif document_id not in {self.content_version_id(), self.legacy_document_id()}:
+            raise ResearchError("Research source document identity is invalid.")
         metadata = {
             "content_type": self.content_type,
             "fetched_at": self.fetched_at.astimezone(UTC).isoformat(),
@@ -84,7 +125,7 @@ class ResearchSource:
             source=self.url,
             document_type=DocumentType.WEB,
             metadata=metadata,
-            document_id=str(uuid5(NAMESPACE_URL, self.url)),
+            document_id=document_id,
             created_at=self.fetched_at,
             updated_at=self.fetched_at,
         )

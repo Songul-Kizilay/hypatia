@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 from research.ResearchClaimConfidence import ResearchClaimConfidence
@@ -49,6 +50,22 @@ class ResearchRunMarkdownRendererTests(unittest.TestCase):
         self.assertIn("- **Supersedes:** assessment-1", first)
         self.assertIn(r"- **Data taint:** external\_untrusted\_data", first)
         self.assertIn("- **Instruction authority:** none", first)
+        # Sources built without a recorded observation say so, not guess one.
+        self.assertIn(
+            "- **Observed content SHA-256:** unrecorded (accepted before content "
+            "versioning)",
+            first,
+        )
+        versioned = render_research_run_markdown(
+            replace(
+                run,
+                sources=(
+                    replace(run.sources[0], content_sha256="c" * 64),
+                    *run.sources[1:],
+                ),
+            )
+        )
+        self.assertIn(f"- **Observed content SHA-256:** `{'c' * 64}`", versioned)
         self.assertIn("- **Information trust:** low", first)
         self.assertIn("- **Information trust:** high", first)
         self.assertIn("## Evidence-linked Claims", first)

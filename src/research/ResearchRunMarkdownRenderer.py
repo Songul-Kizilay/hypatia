@@ -83,6 +83,12 @@ def render_research_run_markdown(run: ResearchRun) -> str:
                 ),
                 f"- **Fetched:** {source.fetched_at.isoformat()}",
                 f"- **Accepted:** {source.added_at.isoformat()}",
+                (
+                    f"- **Observed content SHA-256:** `{source.content_sha256}`"
+                    if source.content_sha256 is not None
+                    else "- **Observed content SHA-256:** unrecorded (accepted "
+                    "before content versioning)"
+                ),
                 "",
                 "#### Evidence",
                 "",

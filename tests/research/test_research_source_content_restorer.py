@@ -147,7 +147,15 @@ class ResearchSourceContentRestorerTests(unittest.TestCase):
         source = self._source()
         cases: tuple[tuple[list[ResearchRun], str], ...] = (
             ([], "no accepted provenance"),
-            ([self._run(self._source(title="Changed title"))], "does not match"),
+            (
+                [
+                    self._run(
+                        self._source(title="Changed title"),
+                        document_id=source.to_document().document_id,
+                    )
+                ],
+                "does not match",
+            ),
         )
         for runs, expected_message in cases:
             with self.subTest(expected_message=expected_message):

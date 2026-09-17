@@ -24,6 +24,10 @@ class ResearchSourceRecord:
     added_at: datetime
     taint_label: str = EXTERNAL_SOURCE_TAINT_LABEL
     instruction_authority: str = EXTERNAL_SOURCE_INSTRUCTION_AUTHORITY
+    #: SHA-256 of the exact text this run fetched and accepted: the content
+    #: version it observed.  ``None`` for sources accepted before versioning,
+    #: whose observed content was not recorded and is never inferred.
+    content_sha256: str | None = None
 
     def __post_init__(self) -> None:
         for value, field_name in (
@@ -46,6 +50,12 @@ class ResearchSourceRecord:
             raise ResearchError(
                 "External research source instruction authority must be none."
             )
+        if self.content_sha256 is not None and (
+            not isinstance(self.content_sha256, str)
+            or len(self.content_sha256) != 64
+            or any(c not in "0123456789abcdef" for c in self.content_sha256)
+        ):
+            raise ResearchError("Research source content fingerprint is invalid.")
         object.__setattr__(self, "document_id", self.document_id.strip())
         object.__setattr__(self, "url", self.url.strip())
         object.__setattr__(self, "title", self.title.strip())
@@ -68,4 +78,5 @@ class ResearchSourceRecord:
             content_type=source.content_type,
             fetched_at=source.fetched_at,
             added_at=added_at,
+            content_sha256=source.content_sha256,
         )

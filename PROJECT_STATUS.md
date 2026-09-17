@@ -2,12 +2,16 @@
 
 ## Runtime Version
 
-`v0.3.380 (Genesis)`
+`v0.3.381 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.380 fixes a recovery false refusal: a mission stopped after
+Version v0.3.381 makes cross-run source identity version-safe: an indexed
+document is now one immutable content version rather than a URL, each run's
+source record is its own observation carrying the content SHA-256 it fetched,
+identical versions share storage but not provenance, and a run can accept its
+own fetch of a URL another run already indexed. Version v0.3.380 fixes a recovery false refusal: a mission stopped after
 discovery but before its first recorded evidence (for example between steps, or
 inside its first fetch) was refused at restart as "evidence changed or missing".
 It now resumes from its discovery provenance; an interrupted first fetch stays
