@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.383
+## Current bounded text journey: v0.3.384
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -114,6 +114,36 @@ authorization, cumulative allowance, plan digest, source slots, provider/model
 selection, retry behavior or run closure. An unchanged recovered state renders
 the same explanation.
 
+### False-refusal audit — resume after acceptance: v0.3.384
+
+**Boundary.** A slot's fetch and acceptance completed, its evidence step did not
+(step 4, 8 or 14: first slot, second slot, follow-up slot). Recovery refused
+because evidence selection reads the fetched preview, which is transient.
+
+**Why the refusal was false.** Acceptance makes the preview's content durable,
+and since v0.3.381 it is exactly identifiable: the checkpoint records the slot's
+requested URL, final URL and body SHA-256; the run holds this run's own source
+record with the same final URL and content_sha256; and the knowledge index
+holds that content version under its content-derived document ID. Evidence
+selection is a deterministic function of that content.
+
+**Fix.** Recovery rebuilds the preview only when all of these agree: the slot's
+requested URL is recorded, evidence exists for every earlier slot and none for
+this one, the run's source matches the final URL and body hash, the indexed
+document exists, and the rebuilt text hashes to the body hash and to the
+source's document ID. The mission then resumes, records evidence from the same
+chunk a live run would choose, and finishes with the same fetches, model calls,
+spend and stop reason as live. The accepted source is never fetched again.
+
+**Still refused.** A checkpoint without requested URLs (legacy), a mismatched
+body hash, a missing or different source record, or a missing indexed document
+refuses with the original message. Fetch-without-acceptance and
+model-without-note boundaries remain correctly refused.
+
+The earlier test that pinned this refusal now asserts the corrected invariant:
+the accepted URL is fetched exactly once and no source is duplicated. No
+authority, budget, schema, goal or readiness change.
+
 ### False-refusal audit — learning mission restart boundaries: v0.3.383
 
 The 18-step learning mission was stopped cleanly after every step and
@@ -128,7 +158,7 @@ mission's fetches, model calls, discovery calls, spend and stop reason.
 | step 12 → third-source follow-up | follow-up runs exactly once; identical totals | correct |
 | step 3, 7, 13 (fetched, not accepted) | refused: transient preview not durable | correct: accepting needs a refetch |
 | step 11, 17 (model ran, note not saved) | refused: model output not retained | correct: needs a new model call |
-| step 4, 8, 14 (accepted, no evidence yet) | refused: no durable evidence checkpoint | suspected false refusal; next branch |
+| step 4, 8, 14 (accepted, no evidence yet) | refused: no durable evidence checkpoint | **false refusal, fixed in v0.3.384** |
 
 **Fix.** After local search the checkpoint exists but has no discovery ID, and
 recovery refused it. Recovery now resumes such a mission exactly as one with no

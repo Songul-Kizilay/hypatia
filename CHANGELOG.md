@@ -2,6 +2,25 @@
 
 All notable project changes are recorded here.
 
+## [0.3.384] - 2026-09-17
+
+### Fixed
+
+- A learning mission stopped after accepting a source but before recording its
+  evidence (first slot, second slot or third-source follow-up) was refused at
+  restart. Recovery now rebuilds the inspected preview from the durably accepted
+  content version, verified against the checkpoint's requested URL, final URL
+  and body hash, the run's own source record and content_sha256, and the
+  indexed document. The mission resumes and matches a live mission without
+  refetching the accepted source.
+
+### Boundaries
+
+- Legacy checkpoints without requested URLs, mismatched hashes, or missing
+  source or indexed content still refuse. Fetch-without-acceptance and
+  model-without-note boundaries remain refused. No authority, budget, schema,
+  goal or readiness change.
+
 ## [0.3.383] - 2026-09-17
 
 ### Fixed

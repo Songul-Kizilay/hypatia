@@ -1061,8 +1061,13 @@ class LearningResearchJourneyTests(unittest.TestCase):
         self.assertEqual(self.fetcher.fetch.call_count, 1)
         self.transport.assert_not_called()
 
-    def test_restart_refuses_accepted_source_without_evidence_preview(self):
-        """Acceptance persists source text, not the transient evidence selection."""
+    def test_restart_resumes_accepted_source_without_refetching_it(self):
+        """Acceptance persists the exact text; evidence is rebuilt, never refetched.
+
+        Before v0.3.384 this boundary was refused. The evidence selection is a
+        deterministic function of the accepted content version, which the run,
+        checkpoint and knowledge index record exactly.
+        """
         real_advance = self.execution.process_advance
 
         def interrupt_after_acceptance(request):
@@ -1098,10 +1103,13 @@ class LearningResearchJourneyTests(unittest.TestCase):
             CognitiveEngine
         )._research_plan_execution_service
 
-        self.assertIsNone(execution.live_execution(snapshot.plan_id))
-        self.assertIsNotNone(execution.restored_execution(snapshot.plan_id))
-        self.assertEqual(self.fetcher.fetch.call_count, 1)
-        self.transport.assert_not_called()
+        self.assertIsNotNone(execution.live_execution(snapshot.plan_id))
+        self.assertIsNone(execution.restored_execution(snapshot.plan_id))
+        accepted_url = snapshot.mission_checkpoint.requested_urls[0]
+        fetched = [call.args[0] for call in self.fetcher.fetch.call_args_list]
+        self.assertEqual(fetched.count(accepted_url), 1, fetched)
+        run = JsonFileResearchRunStore(self.root / "runs.json").load()[0]
+        self.assertEqual(len({source.url for source in run.sources}), len(run.sources))
 
     def test_not_comparable_stops_without_followup_or_retry(self):
         self.relation = "not_comparable"
@@ -2326,6 +2334,86 @@ class LearningResearchJourneyTests(unittest.TestCase):
                 )
                 release_all()
                 self.setUp()
+
+    def test_mission_stopped_after_acceptance_resumes_from_accepted_content(self):
+        # Step 4, 8 and 14 each end with a source accepted but its evidence not
+        # yet recorded: the first slot, the second slot and the follow-up slot.
+        for relation, boundary in (
+            ("possible_agreement", 4),
+            ("possible_agreement", 8),
+            ("possible_conflict", 14),
+        ):
+            with self.subTest(relation=relation, boundary=boundary):
+                live = self.live_totals(relation)
+                snapshot = self.interrupted_start(boundary)
+                fetched_before = self.fetcher.fetch.call_count
+
+                engine = self.restart()
+
+                execution = engine._research_plan_execution_service
+                resumed = (
+                    self.fetcher.fetch.call_count,
+                    self.transport.call_count,
+                    self.provider.discover.call_count,
+                    self.spend(execution, snapshot.plan_id),
+                    execution.mission_stop_reason(snapshot.plan_id).value,
+                )
+                # The accepted source is never fetched again; everything after it
+                # matches the live mission, with no extra slot, call or spend.
+                self.assertEqual(resumed, live)
+                self.assertGreaterEqual(self.fetcher.fetch.call_count, fetched_before)
+                run = JsonFileResearchRunStore(self.root / "runs.json").load()[-1]
+                self.assertEqual(len(run.sources), live[0])
+                self.assertEqual(
+                    len({e.source_document_id for e in run.evidence}), len(run.sources)
+                )
+                calls = self.external_calls()
+                self.restart()
+                self.assertEqual(self.external_calls(), calls)
+                release_all()
+                self.setUp()
+
+    def test_accepted_source_boundary_without_recorded_identities_is_refused(self):
+        self.relation = "possible_conflict"
+        snapshot = self.interrupted_start(14)
+        path = self.execution_store_path()
+        document = json.loads(path.read_text("utf-8"))
+        for execution in document["executions"]:
+            execution["mission_checkpoint"].pop("requested_urls")
+        path.write_text(json.dumps(document), encoding="utf-8")
+        calls = self.external_calls()
+
+        engine = self.restart()
+
+        self.assertEqual(self.external_calls(), calls)
+        self.assertIsNotNone(
+            engine._research_plan_execution_service.restored_execution(snapshot.plan_id)
+        )
+        self.assertIn(
+            "accepted source lacks its durable evidence checkpoint",
+            self.recovered_listing(engine).message,
+        )
+
+    def test_accepted_source_boundary_with_tampered_body_hash_is_refused(self):
+        self.relation = "possible_agreement"
+        snapshot = self.interrupted_start(8)
+        path = self.execution_store_path()
+        document = json.loads(path.read_text("utf-8"))
+        for execution in document["executions"]:
+            execution["mission_checkpoint"]["body_hashes"][-1] = "0" * 64
+        path.write_text(json.dumps(document), encoding="utf-8")
+        calls = self.external_calls()
+
+        engine = self.restart()
+
+        self.assertEqual(self.external_calls(), calls)
+        self.assertIsNone(
+            engine._research_plan_execution_service.live_execution(snapshot.plan_id)
+        )
+        self.assertIn(
+            "accepted source lacks its durable evidence checkpoint",
+            self.recovered_listing(engine).message,
+        )
 
     def test_checkpoint_without_discovery_but_later_state_is_still_refused(self):
         self.relation = "possible_agreement"

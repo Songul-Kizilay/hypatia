@@ -36,6 +36,7 @@ from research.ResearchPlanStepStatus import ResearchPlanStepStatus
 from research.ResearchQueryTerms import normalized_terms
 from research.ResearchRun import ResearchRun
 from research.ResearchRunManager import ResearchRunManager
+from research.ResearchSource import HTTPS_ACQUISITION, ResearchSource
 from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
 from research.ResearchSourcePreview import ResearchSourcePreview
 from research.ResearchSourceRelevanceRanker import ResearchSourceRelevanceRanker
@@ -358,7 +359,7 @@ class ResearchMissionStepResolver:
             raise ResearchError(
                 "Mission recovery steps do not match the approved plan."
             )
-        self._reject_transient_boundary(plan, by_id)
+        accept_boundary = self._reject_transient_boundary(plan, by_id)
         if checkpoint is None:
             if any(
                 step.status is ResearchPlanStepStatus.COMPLETED
@@ -460,9 +461,18 @@ class ResearchMissionStepResolver:
             evidence=evidence,
             assessments=assessments,
         )
+        # Stopped after accepting the first slot's source, before its evidence:
+        # exactly one acquired and accepted source and nothing else yet.
+        first_slot_accepted = bool(
+            accept_boundary is not None
+            and len(checkpoint.acquired_urls) == 1
+            and len(run.sources) == 1
+            and not (checkpoint.assessment_ids or checkpoint.semantic_note_id)
+            and not (run.evidence or run.assessments or run.comparison_notes)
+        )
         if checkpoint.evidence_ids:
             self._validate_recorded_evidence(observed, run)
-        elif (
+        elif not first_slot_accepted and (
             checkpoint.acquired_urls
             or checkpoint.assessment_ids
             or checkpoint.semantic_note_id
@@ -487,14 +497,100 @@ class ResearchMissionStepResolver:
             plan, by_id, checkpoint, observed, run
         )
         self._restore_evidence_gap_followup(plan, by_id, checkpoint, observed, run)
+        if accept_boundary is not None:
+            observed.preview = self._restored_accepted_preview(
+                plan, accept_boundary, checkpoint, observed, run
+            )
+            observed.selected_url = observed.preview.requested_url
         self._observed[plan.plan_id] = observed
+
+    def _restored_accepted_preview(
+        self,
+        plan: ResearchPlan,
+        accept_index: int,
+        checkpoint: ResearchMissionRecoveryCheckpoint,
+        observed: _Observations,
+        run: ResearchRun,
+    ) -> ResearchSourcePreview:
+        """Rebuild the inspected preview of a source that was durably accepted.
+
+        The fetched text itself is transient, but acceptance persisted it: the
+        run records this run's own source with the content SHA-256 it observed,
+        the knowledge index holds that exact content version, and the checkpoint
+        names the requested URL, final URL and body hash of the slot.  Only when
+        all of these agree is the preview restored; nothing is fetched, and no
+        legacy record lacking the identities is trusted.
+        """
+        refusal = ResearchError(
+            "Mission accepted source lacks its durable evidence checkpoint; "
+            "no inferred preview or replay is permitted."
+        )
+        fetch_step = plan.steps[accept_index - 1] if accept_index > 0 else None
+        if (
+            fetch_step is None
+            or fetch_step.capability is not Cap.SOURCE_FETCH
+            or not checkpoint.acquired_urls
+            or len(checkpoint.requested_urls) != len(checkpoint.acquired_urls)
+            or len(observed.evidence) != len(checkpoint.acquired_urls) - 1
+        ):
+            raise refusal
+        final_url = checkpoint.acquired_urls[-1]
+        body_hash = checkpoint.body_hashes[-1]
+        record = next(
+            (
+                source
+                for source in run.sources
+                if source.url == final_url and source.content_sha256 == body_hash
+            ),
+            None,
+        )
+        document = (
+            self._knowledge.loaded_document(record.document_id)
+            if record is not None
+            else None
+        )
+        if record is None or document is None:
+            raise refusal
+        try:
+            source = ResearchSource(
+                url=record.url,
+                title=record.title,
+                content=document.content,
+                content_type=record.content_type,
+                fetched_at=record.fetched_at,
+                content_resource=str(document.metadata.get("content_resource", "")),
+                acquisition=str(
+                    document.metadata.get("acquisition", HTTPS_ACQUISITION)
+                ),
+            )
+            preview = ResearchSourcePreview(
+                execution_id=plan.plan_id,
+                run_id=run.run_id,
+                step_id=fetch_step.step_id,
+                requested_url=checkpoint.requested_urls[-1],
+                source=source,
+            )
+        except ResearchError as error:
+            raise refusal from error
+        if (
+            preview.content_sha256 != body_hash
+            or source.content_version_id() != record.document_id
+        ):
+            raise refusal
+        return preview
 
     @staticmethod
     def _reject_transient_boundary(
         plan: ResearchPlan,
         steps: dict[str, ResearchPlanExecutionStepSnapshot],
-    ) -> None:
-        """Refuse uncertain previews/model results rather than replaying them."""
+    ) -> int | None:
+        """Refuse uncertain previews/model results rather than replaying them.
+
+        Returns the index of a completed acceptance whose evidence step has not
+        completed.  That preview is durable through acceptance and is rebuilt
+        from recorded state or refused by the caller; it is never refetched.
+        """
+        accept_boundary: int | None = None
         for index, step in enumerate(plan.steps):
             state = steps[step.step_id]
             if step.capability is Cap.SOURCE_FETCH and (
@@ -521,10 +617,7 @@ class ResearchMissionStepResolver:
                     is not ResearchPlanStepStatus.COMPLETED
                 )
             ):
-                raise ResearchError(
-                    "Mission accepted source lacks its durable evidence checkpoint; "
-                    "no inferred preview or replay is permitted."
-                )
+                accept_boundary = index
             if step.capability is Cap.SEMANTIC_EVIDENCE_COMPARISON and (
                 state.status is ResearchPlanStepStatus.COMPLETED
                 and (
@@ -539,6 +632,7 @@ class ResearchMissionStepResolver:
                     "Mission model output was not durably retained; no model replay "
                     "is permitted."
                 )
+        return accept_boundary
 
     def observe(
         self,

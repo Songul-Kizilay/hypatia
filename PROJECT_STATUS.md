@@ -2,12 +2,15 @@
 
 ## Runtime Version
 
-`v0.3.383 (Genesis)`
+`v0.3.384 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.383 starts the false-refusal audit of learning-mission restarts: a
+Version v0.3.384 fixes the second restart false refusal: a mission stopped after
+accepting a source but before recording its evidence (either initial slot or the
+follow-up slot) now resumes from the durably accepted content version without
+refetching it. Version v0.3.383 starts the false-refusal audit of learning-mission restarts: a
 mission stopped after local search but before discovery was refused at restart;
 it now resumes and matches a live mission, including the conflict branch's
 single third-source follow-up. Version v0.3.382 closes the manual-entry double-submit gap: the run manager,
