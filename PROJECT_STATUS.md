@@ -2,12 +2,15 @@
 
 ## Runtime Version
 
-`v0.3.382 (Genesis)`
+`v0.3.383 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.382 closes the manual-entry double-submit gap: the run manager,
+Version v0.3.383 starts the false-refusal audit of learning-mission restarts: a
+mission stopped after local search but before discovery was refused at restart;
+it now resumes and matches a live mission, including the conflict branch's
+single third-source follow-up. Version v0.3.382 closes the manual-entry double-submit gap: the run manager,
 the single write path for manual entry and plan steps, refuses an exact repeat
 of existing evidence, a first assessment, a first claim or a comparison note,
 and write previews say so before confirmation. Version v0.3.381 makes cross-run source identity version-safe: an indexed

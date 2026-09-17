@@ -373,6 +373,26 @@ class ResearchMissionStepResolver:
         if run.question != plan.question or run.status.terminal:
             raise ResearchError("Mission cannot change its original question or run.")
         if not checkpoint.discovery_id:
+            # Stopped after local search and before discovery: nothing external
+            # happened, so resume exactly as a mission with no checkpoint does.
+            # Any recorded observation or completed later step still refuses.
+            if (
+                checkpoint == ResearchMissionRecoveryCheckpoint()
+                and not (
+                    run.discoveries
+                    or run.sources
+                    or run.evidence
+                    or run.assessments
+                    or run.comparison_notes
+                )
+                and not any(
+                    step.capability is not Cap.LOCAL_KNOWLEDGE_SEARCH
+                    and by_id[step.step_id].status is ResearchPlanStepStatus.COMPLETED
+                    for step in plan.steps
+                )
+            ):
+                self._observed[plan.plan_id] = _Observations(plan_digest(plan), run_id)
+                return
             raise ResearchError("Mission discovery checkpoint is unavailable.")
         discovery = next(
             (

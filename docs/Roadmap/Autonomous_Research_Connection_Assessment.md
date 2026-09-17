@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.382
+## Current bounded text journey: v0.3.383
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -113,6 +113,31 @@ and model prose cannot alter it. It does not change mission lifecycle,
 authorization, cumulative allowance, plan digest, source slots, provider/model
 selection, retry behavior or run closure. An unchanged recovered state renders
 the same explanation.
+
+### False-refusal audit — learning mission restart boundaries: v0.3.383
+
+The 18-step learning mission was stopped cleanly after every step and
+restarted, for the agreement branch and the conflict branch (which runs the
+pre-authorized third-source follow-up). Each restart was compared with the live
+mission's fetches, model calls, discovery calls, spend and stop reason.
+
+| Stopped after | Restart | Verdict |
+| --- | --- | --- |
+| step 1 (local search) | refused: discovery checkpoint unavailable | **false refusal, fixed here** |
+| step 2, 5, 6, 9, 10, 12, 15, 16 | resumes; identical to live | correct |
+| step 12 → third-source follow-up | follow-up runs exactly once; identical totals | correct |
+| step 3, 7, 13 (fetched, not accepted) | refused: transient preview not durable | correct: accepting needs a refetch |
+| step 11, 17 (model ran, note not saved) | refused: model output not retained | correct: needs a new model call |
+| step 4, 8, 14 (accepted, no evidence yet) | refused: no durable evidence checkpoint | suspected false refusal; next branch |
+
+**Fix.** After local search the checkpoint exists but has no discovery ID, and
+recovery refused it. Recovery now resumes such a mission exactly as one with no
+checkpoint, but only when the checkpoint is entirely empty, the run holds no
+discovery, source, evidence, assessment or comparison note, and no step other
+than local search completed. A checkpoint that lost its discovery ID while later
+state exists is still refused, and an exhausted network budget still stops the
+resumed mission before any provider call. No authority, budget, schema, goal or
+readiness change.
 
 ### Manual-entry double-submit idempotency: v0.3.382
 

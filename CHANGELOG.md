@@ -2,6 +2,30 @@
 
 All notable project changes are recorded here.
 
+## [0.3.383] - 2026-09-17
+
+### Fixed
+
+- A learning mission stopped after local search but before discovery was
+  refused at restart ("Mission discovery checkpoint is unavailable") although
+  nothing external had happened. It now resumes and finishes exactly like a
+  live mission (same discovery, fetch and model calls, spend and stop reason),
+  including the conflict branch's single third-source follow-up.
+
+### Added
+
+- A restart-boundary characterization of the learning mission (documented in
+  the roadmap): which boundaries resume, which refuse correctly, and which
+  remain suspected false refusals.
+
+### Boundaries
+
+- Only an entirely empty checkpoint with no recorded run state and no completed
+  step beyond local search resumes; a checkpoint missing its discovery while
+  later state exists is still refused, and an exhausted budget still refuses
+  before any provider call. No authority, budget, schema, goal or readiness
+  change.
+
 ## [0.3.382] - 2026-09-17
 
 ### Fixed

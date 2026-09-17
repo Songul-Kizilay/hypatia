@@ -2271,6 +2271,105 @@ class LearningResearchJourneyTests(unittest.TestCase):
             live.research_autonomy.stop_reason.value,
         )
 
+    def live_totals(self, relation):
+        self.relation = relation
+        live = self.start()
+        plan_id = live.research_plan_execution.plan_id
+        totals = (
+            self.fetcher.fetch.call_count,
+            self.transport.call_count,
+            self.provider.discover.call_count,
+            self.spend(self.execution, plan_id),
+            live.research_autonomy.stop_reason.value,
+        )
+        self.setUp()
+        self.relation = relation
+        return totals
+
+    def test_mission_stopped_before_discovery_resumes_like_a_live_mission(self):
+        for relation in ("possible_agreement", "possible_conflict"):
+            with self.subTest(relation=relation):
+                live = self.live_totals(relation)
+                snapshot = self.interrupted_start(1)
+                self.assertEqual(snapshot.mission_checkpoint.discovery_id, "")
+                self.assertEqual(self.provider.discover.call_count, 0)
+
+                engine = self.restart()
+
+                execution = engine._research_plan_execution_service
+                resumed = (
+                    self.fetcher.fetch.call_count,
+                    self.transport.call_count,
+                    self.provider.discover.call_count,
+                    self.spend(execution, snapshot.plan_id),
+                    execution.mission_stop_reason(snapshot.plan_id).value,
+                )
+                # Same work, spend and outcome as live; the conflict branch runs
+                # its pre-authorized third-source follow-up exactly once.
+                self.assertEqual(resumed, live)
+                _, _, audit = self.audit_documents(
+                    DesktopController(self.restarted.container.resolve(Brain)),
+                    snapshot.plan_id,
+                )
+                self.assertEqual(
+                    audit["budget"]["spent"]["network_operations"], live[3][1]
+                )
+
+                calls = self.external_calls()
+                again = self.restart()
+                self.assertEqual(self.external_calls(), calls)
+                self.assertEqual(
+                    again._research_plan_execution_service.mission_stop_reason(
+                        snapshot.plan_id
+                    ).value,
+                    live[4],
+                )
+                release_all()
+                self.setUp()
+
+    def test_checkpoint_without_discovery_but_later_state_is_still_refused(self):
+        self.relation = "possible_agreement"
+        snapshot = self.interrupted_start(2)
+        path = self.execution_store_path()
+        document = json.loads(path.read_text("utf-8"))
+        for execution in document["executions"]:
+            execution["mission_checkpoint"]["discovery_id"] = ""
+        path.write_text(json.dumps(document), encoding="utf-8")
+        calls = self.external_calls()
+
+        engine = self.restart()
+
+        self.assertEqual(self.external_calls(), calls)
+        self.assertIsNotNone(
+            engine._research_plan_execution_service.restored_execution(snapshot.plan_id)
+        )
+        self.assertIn(
+            "Mission discovery checkpoint is unavailable",
+            self.recovered_listing(engine).message,
+        )
+
+    def test_exhausted_budget_before_discovery_refuses_without_provider_call(self):
+        self.relation = "possible_agreement"
+        snapshot = self.interrupted_start(1)
+        path = self.execution_store_path()
+        document = json.loads(path.read_text("utf-8"))
+        for execution in document["executions"]:
+            spend = execution["allowance"]["spend"]
+            spend["network_operations"] = execution["allowance"]["budget"][
+                "max_network_operations"
+            ]
+        path.write_text(json.dumps(document), encoding="utf-8")
+
+        engine = self.restart()
+
+        execution = engine._research_plan_execution_service
+        self.assertEqual(self.provider.discover.call_count, 0)
+        self.assertEqual(self.fetcher.fetch.call_count, 0)
+        self.assertEqual(
+            execution.mission_stop_reason(snapshot.plan_id).value,
+            "network_budget_exhausted",
+        )
+
     def test_checkpoint_without_evidence_but_later_state_is_refused(self):
         self.relation = "possible_agreement"
         snapshot = self.interrupted_start(6)
