@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.385
+## Current bounded text journey: v0.3.386
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -113,6 +113,33 @@ and model prose cannot alter it. It does not change mission lifecycle,
 authorization, cumulative allowance, plan digest, source slots, provider/model
 selection, retry behavior or run closure. An unchanged recovered state renders
 the same explanation.
+
+### Provenance foundation — resolved audit trace: v0.3.386
+
+**Gap.** The mission audit's traceability section stopped at source document
+IDs. A reader could not see, in one place, which exact source observation an
+operator review or claim ultimately rests on, and nothing named the records the
+goal evaluation actually reads.
+
+**Change (audit schema version 2, additive).** Every hop follows a recorded ID:
+
+- *Reviews and claims* list each evidence record with its chunk ID and SHA-256
+  and resolve it to this run's own source observation: document (content
+  version) ID, requested URL, final URL, observed content SHA-256, fetch and
+  acceptance times. Claims are marked current or superseded.
+- *Source observations* lists every source this run accepted, with the same
+  fields; older sources show requested URL and content version as unrecorded.
+- *Recorded basis of the goal evaluation* names the comparison notes the mission
+  checkpoint recorded (initial comparison, contradiction initial and follow-up,
+  evidence-gap follow-up) with their recorded relations and resolved evidence
+  lineage, the contradiction and evidence-gap outcomes, and the operator review
+  that supports the comparison, if any. It matches the evaluation's
+  supported_by_review_id.
+
+A reference that does not resolve (for example a checkpoint note that is not in
+the run) is reported with esolved: false and no evidence; it is never matched
+by URL, text or content hash. Generation stays deterministic and read-only. No
+new persistence, authority, budget, goal or readiness change.
 
 ### Provenance foundation — inventory and requested-URL lineage: v0.3.385
 

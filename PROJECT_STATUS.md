@@ -2,12 +2,17 @@
 
 ## Runtime Version
 
-`v0.3.385 (Genesis)`
+`v0.3.386 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.385 begins the provenance foundation. A read-only inventory found
+Version v0.3.386 turns the mission audit's traceability into a provable "why"
+trace: reviews and claims resolve through each evidence record to this run's
+own source observation (requested URL, final URL, observed content SHA-256),
+and the goal evaluation's recorded basis names the exact comparison notes,
+outcomes and supporting review, with unresolved references reported rather
+than guessed (audit schema version 2). Version v0.3.385 begins the provenance foundation. A read-only inventory found
 within-run references exact and validated on load; the first real gap was the
 root hop: an accepted source kept only its final URL, so after a redirect the
 URL the run requested was lost outside missions. Each run's source record now

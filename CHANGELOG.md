@@ -2,6 +2,25 @@
 
 All notable project changes are recorded here.
 
+## [0.3.386] - 2026-09-17
+
+### Added
+
+- Mission audit trace (schema version 2): reviews and claims resolve through
+  each evidence record to this run's own source observation (requested URL,
+  final URL, observed content SHA-256, fetch and acceptance times); claims show
+  current or superseded; every accepted source observation is listed; and the
+  recorded basis of the goal evaluation names the checkpoint's comparison notes
+  with their relations and evidence lineage, the contradiction and evidence-gap
+  outcomes, and the supporting operator review.
+
+### Boundaries
+
+- Only recorded IDs are followed. Unresolved references are reported as
+  unresolved and never matched by URL, text or hash; older sources show
+  unrecorded fields. Read-only and deterministic; no new persistence, authority,
+  budget, goal or readiness change.
+
 ## [0.3.385] - 2026-09-17
 
 ### Added

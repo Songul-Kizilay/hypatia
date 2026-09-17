@@ -30,6 +30,7 @@ from research.ResearchMissionGoalExplanation import explain_mission_goal_satisfa
 from research.ResearchMissionOutcome import (
     mission_comparison_review,
     mission_outcome_for,
+    supporting_comparison_review,
 )
 from research.ResearchPlanAuthorization import ResearchPlanAuthorization
 from research.ResearchPlanExecutionCodec import encode_execution_snapshot
@@ -43,7 +44,9 @@ from research.ResearchRunMarkdownRenderer import (
 from research.ResearchTeachingReport import teaching_report
 
 MISSION_AUDIT_SCHEMA = "hypatia.mission_audit"
-MISSION_AUDIT_SCHEMA_VERSION = 1
+#: Version 2 resolves traces to evidence and source observations and names the
+#: recorded basis of the goal evaluation.
+MISSION_AUDIT_SCHEMA_VERSION = 2
 
 
 def build_mission_audit(
@@ -424,6 +427,51 @@ def render_mission_audit_markdown(
                     else ""
                 )
             )
+        basis = traceability["goal_basis"]
+        lines.extend(("", "### Recorded Basis of the Goal Evaluation", ""))
+        for note in basis["comparison_notes"]:
+            lines.append(
+                f"- {note['role'].replace('_', ' ').capitalize()}: "
+                f"{_inline(note['note_id'])} (recorded relation "
+                f"{_typed(note['recorded_relation'])}"
+                + ("" if note["resolved"] else "; not found in this run")
+                + ")"
+            )
+            for trace in note["evidence"]:
+                lines.append("  - " + _evidence_trace_line(trace))
+        if not basis["comparison_notes"]:
+            lines.append("- No comparison note was recorded by the mission checkpoint.")
+        lines.extend(
+            (
+                "- **Contradiction outcome:** "
+                + _typed(basis["contradiction_outcome"]),
+                "- **Evidence-gap outcome:** " + _typed(basis["evidence_gap_outcome"]),
+                "- **Supporting operator review:** "
+                + _optional(basis["supporting_review_id"]),
+            )
+        )
+        lines.extend(("", "### Source Observations of This Run", ""))
+        for source in traceability["source_observations"]:
+            lines.append(
+                f"- {_inline(source['document_id'])}: requested "
+                + _optional(source["requested_url"])
+                + " → fetched "
+                + _inline(source["url"])
+                + " at "
+                + source["fetched_at"]
+                + "; observed content SHA-256 "
+                + (
+                    f"`{source['content_sha256']}`"
+                    if source["content_sha256"]
+                    else "unrecorded"
+                )
+            )
+        if not traceability["source_observations"]:
+            lines.append("- No source was accepted into this run.")
+        lines.append(
+            "_Each hop follows a recorded ID. Unrecorded or unresolved links are "
+            "reported as such and never matched by URL, text or hash._"
+        )
         lines.append(
             "_A supported operator review is a bounded judgement about one exact "
             "comparison and its evidence, not model output and not universal "
@@ -540,13 +588,53 @@ def _authorization_document(
 def _traceability(
     run: ResearchRun | None, snapshot: ResearchPlanExecutionSnapshot
 ) -> dict[str, Any] | None:
-    """Link reviews and claims to recorded IDs only; never infer a relation."""
+    """Resolve recorded IDs to exact records; never infer a relation.
+
+    Every hop follows an ID the run or checkpoint recorded: review or claim to
+    evidence, evidence to this run's own source observation (requested URL,
+    final URL and observed content version).  A reference that does not
+    resolve is reported as unresolved, never matched by URL, text or hash.
+    """
     if run is None:
         return None
     notes = {note.note_id: note for note in run.comparison_notes}
-    evidence_ids = {record.evidence_id for record in run.evidence}
+    evidence_by_id = {record.evidence_id: record for record in run.evidence}
+    sources = {source.document_id: source for source in run.sources}
     checkpoint = snapshot.mission_checkpoint
     mission_review = mission_comparison_review(run, checkpoint)
+
+    def observation(document_id: str) -> dict[str, Any] | None:
+        source = sources.get(document_id)
+        if source is None:
+            return None
+        return {
+            "document_id": source.document_id,
+            "requested_url": source.requested_url,
+            "url": source.url,
+            "content_sha256": source.content_sha256,
+            "fetched_at": source.fetched_at.isoformat(),
+            "added_at": source.added_at.isoformat(),
+        }
+
+    def evidence_trace(evidence_ids: tuple[str, ...]) -> list[dict[str, Any]]:
+        traces: list[dict[str, Any]] = []
+        for evidence_id in evidence_ids:
+            record = evidence_by_id.get(evidence_id)
+            if record is None:
+                traces.append({"evidence_id": evidence_id, "resolved": False})
+                continue
+            source = observation(record.source_document_id)
+            traces.append(
+                {
+                    "evidence_id": record.evidence_id,
+                    "resolved": source is not None,
+                    "chunk_id": record.chunk_id,
+                    "chunk_sha256": record.chunk_sha256,
+                    "source": source,
+                }
+            )
+        return traces
+
     reviews = []
     for review in run.comparison_reviews:
         note = notes.get(review.note_id)
@@ -563,20 +651,69 @@ def _traceability(
                 "source_document_ids": (
                     list(note.source_document_ids) if note is not None else []
                 ),
+                "evidence": evidence_trace(review.evidence_ids),
                 "recorded_at": review.recorded_at.isoformat(),
             }
         )
+    superseded_claims = {
+        claim.supersedes_claim_id
+        for claim in run.claims
+        if claim.supersedes_claim_id is not None
+    }
     claims = [
         {
             "claim_id": claim.claim_id,
             "epistemic_state": claim.epistemic_state.value,
+            "current": claim.claim_id not in superseded_claims,
             "supersedes_claim_id": claim.supersedes_claim_id,
             "evidence_ids": list(claim.evidence_ids),
             "source_document_ids": list(claim.source_document_ids),
-            "unrecorded_evidence_ids": sorted(set(claim.evidence_ids) - evidence_ids),
+            "unrecorded_evidence_ids": sorted(
+                set(claim.evidence_ids) - set(evidence_by_id)
+            ),
+            "evidence": evidence_trace(claim.evidence_ids),
         }
         for claim in run.claims
     ]
+    goal_basis: list[dict[str, Any]] = []
+    if checkpoint is not None:
+        for role, note_id, relation in (
+            (
+                "mission_comparison_note",
+                checkpoint.semantic_note_id,
+                checkpoint.semantic_relation,
+            ),
+            (
+                "contradiction_initial_note",
+                checkpoint.contradiction_initial_note_id,
+                checkpoint.contradiction_initial_relation,
+            ),
+            (
+                "contradiction_followup_note",
+                checkpoint.contradiction_followup_note_id,
+                checkpoint.contradiction_followup_relation,
+            ),
+            (
+                "evidence_gap_followup_note",
+                checkpoint.evidence_gap_followup_note_id,
+                checkpoint.evidence_gap_followup_relation,
+            ),
+        ):
+            if not note_id:
+                continue
+            note = notes.get(note_id)
+            goal_basis.append(
+                {
+                    "role": role,
+                    "note_id": note_id,
+                    "recorded_relation": relation or None,
+                    "resolved": note is not None,
+                    "evidence": (
+                        evidence_trace(note.evidence_ids) if note is not None else []
+                    ),
+                }
+            )
+    support = supporting_comparison_review(run, checkpoint)
     return {
         "mission_comparison_note_id": (
             checkpoint.semantic_note_id or None if checkpoint is not None else None
@@ -584,6 +721,23 @@ def _traceability(
         "mission_comparison_review_id": (
             mission_review.review_id if mission_review is not None else None
         ),
+        "goal_basis": {
+            "comparison_notes": goal_basis,
+            "contradiction_outcome": (
+                checkpoint.contradiction_outcome or None
+                if checkpoint is not None
+                else None
+            ),
+            "evidence_gap_outcome": (
+                checkpoint.evidence_gap_outcome or None
+                if checkpoint is not None
+                else None
+            ),
+            "supporting_review_id": support.review_id if support else None,
+        },
+        "source_observations": [
+            observation(source.document_id) for source in run.sources
+        ],
         "comparison_reviews": reviews,
         "claims": claims,
     }
@@ -607,6 +761,20 @@ def _refuse_credentialed_urls(run: ResearchRun) -> None:
                 "A recorded URL includes credentials; the mission audit was not "
                 "generated."
             )
+
+
+def _evidence_trace_line(trace: dict[str, Any]) -> str:
+    if not trace["resolved"] or trace.get("source") is None:
+        return f"evidence {_inline(trace['evidence_id'])}: not resolved in this run"
+    source = trace["source"]
+    content = (
+        f"`{source['content_sha256']}`" if source["content_sha256"] else "unrecorded"
+    )
+    return (
+        f"evidence {_inline(trace['evidence_id'])} → source "
+        f"{_inline(source['document_id'])} ({_inline(source['url'])}; content "
+        f"SHA-256 {content})"
+    )
 
 
 def _typed(value: object) -> str:
