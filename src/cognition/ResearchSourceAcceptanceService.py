@@ -63,6 +63,7 @@ class ResearchSourceAcceptanceService:
         source: ResearchSource,
         run_id: str = "",
         attempt_id: str = "",
+        requested_url: str = "",
     ) -> ResearchSourceAcceptanceResult:
         """Run the canonical acceptance transaction for one fetched source.
 
@@ -181,6 +182,7 @@ class ResearchSourceAcceptanceService:
                 run_id,
                 source,
                 document.document_id,
+                requested_url=requested_url.strip() or None,
             )
         except ResearchError:
             return self._failed(

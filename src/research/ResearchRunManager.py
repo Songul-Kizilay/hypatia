@@ -342,6 +342,7 @@ class ResearchRunManager:
         run_id: str,
         source: ResearchSource,
         document_id: str,
+        requested_url: str | None = None,
     ) -> ResearchRun:
         """Persist source provenance after successful local knowledge indexing."""
         normalized_id = self._normalize_run_id(run_id)
@@ -364,6 +365,7 @@ class ResearchRunManager:
                         source,
                         normalized_document_id,
                         now,
+                        requested_url=requested_url,
                     ),
                 ),
                 failures=run.failures,

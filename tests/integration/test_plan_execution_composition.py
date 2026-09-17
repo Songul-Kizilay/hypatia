@@ -581,6 +581,34 @@ class PlanExecutionCompositionTests(unittest.TestCase):
         self.assertEqual(final.claims, ())
         self.assertEqual(final.assessments, ())
 
+    def test_plan_acceptance_records_the_authorized_requested_url(self) -> None:
+        run = self.run_manager.create("What evidence supports the claim?")
+
+        def redirected(url: str) -> ResearchSource:
+            self.source_fetcher.urls.append(url)
+            return ResearchSource(
+                url="https://example.test/final",
+                title="Authorized source",
+                content="Authorized source body text.",
+                content_type="text/html",
+                fetched_at=datetime(2026, 8, 1, tzinfo=UTC),
+            )
+
+        self.source_fetcher.fetch = redirected  # type: ignore[method-assign]
+        self._advance(
+            self._start(
+                "source_accept",
+                run_id=run.run_id,
+                authorized_url="https://example.test/requested",
+            )
+        )
+
+        source = self.run_manager.get(run.run_id).sources[0]
+        self.assertEqual(
+            (source.requested_url, source.url),
+            ("https://example.test/requested", "https://example.test/final"),
+        )
+
     def test_repeated_identical_evidence_fails_honestly_without_duplicate(
         self,
     ) -> None:

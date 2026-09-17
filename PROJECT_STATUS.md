@@ -2,12 +2,16 @@
 
 ## Runtime Version
 
-`v0.3.384 (Genesis)`
+`v0.3.385 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.384 fixes the second restart false refusal: a mission stopped after
+Version v0.3.385 begins the provenance foundation. A read-only inventory found
+within-run references exact and validated on load; the first real gap was the
+root hop: an accepted source kept only its final URL, so after a redirect the
+URL the run requested was lost outside missions. Each run's source record now
+stores its requested URL (run store schema 16). Version v0.3.384 fixes the second restart false refusal: a mission stopped after
 accepting a source but before recording its evidence (either initial slot or the
 follow-up slot) now resumes from the durably accepted content version without
 refetching it. Version v0.3.383 starts the false-refusal audit of learning-mission restarts: a

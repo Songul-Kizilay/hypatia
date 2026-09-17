@@ -91,8 +91,8 @@ class _CollectionBudget:
 class JsonFileResearchRunStore:
     """Load and atomically replace a strict versioned research-run document."""
 
-    _SCHEMA_VERSION = 15
-    _SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+    _SCHEMA_VERSION = 16
+    _SUPPORTED_SCHEMA_VERSIONS = set(range(1, _SCHEMA_VERSION + 1))
     _DOCUMENT_FIELDS = {"schema_version", "runs"}
     _RUN_FIELDS_V1 = {
         "run_id",
@@ -131,6 +131,9 @@ class JsonFileResearchRunStore:
     #: written before it decode with none: their content version is unrecorded,
     #: never inferred from the URL or from content stored by another run.
     _SOURCE_FIELDS_V15 = _SOURCE_FIELDS_V7 | {"content_sha256"}
+    #: Version 16 records the URL each run requested, beside the final URL.
+    #: Earlier sources decode with none: unrecorded, never copied from ``url``.
+    _SOURCE_FIELDS_V16 = _SOURCE_FIELDS_V15 | {"requested_url"}
     _FAILURE_FIELDS_V1_V12 = {"stage", "reason", "occurred_at"}
     _FAILURE_FIELDS_V13 = _FAILURE_FIELDS_V1_V12 | {"provider"}
     _EVIDENCE_FIELDS = {
@@ -341,6 +344,8 @@ class JsonFileResearchRunStore:
             14: self._RUN_FIELDS_V14,
             # Version 15 changed the shape of a source, not the run.
             15: self._RUN_FIELDS_V14,
+            # Version 16 changed the shape of a source, not the run.
+            16: self._RUN_FIELDS_V14,
         }[schema_version]
         if not isinstance(value, dict) or set(value) != expected_fields:
             raise ResearchError("Research run store contains an invalid run record.")
@@ -428,12 +433,16 @@ class JsonFileResearchRunStore:
         schema_version: int,
     ) -> ResearchSourceRecord:
         expected_fields = (
-            self._SOURCE_FIELDS_V15
-            if schema_version >= 15
+            self._SOURCE_FIELDS_V16
+            if schema_version >= 16
             else (
-                self._SOURCE_FIELDS_V7
-                if schema_version >= 7
-                else self._SOURCE_FIELDS_V1_V6
+                self._SOURCE_FIELDS_V15
+                if schema_version >= 15
+                else (
+                    self._SOURCE_FIELDS_V7
+                    if schema_version >= 7
+                    else self._SOURCE_FIELDS_V1_V6
+                )
             )
         )
         if not isinstance(value, dict) or set(value) != expected_fields:
@@ -456,6 +465,7 @@ class JsonFileResearchRunStore:
                 else EXTERNAL_SOURCE_INSTRUCTION_AUTHORITY
             ),
             content_sha256=value["content_sha256"] if schema_version >= 15 else None,
+            requested_url=value["requested_url"] if schema_version >= 16 else None,
         )
 
     def _parse_failure(self, value: Any, schema_version: int) -> ResearchFailureRecord:
@@ -810,6 +820,7 @@ class JsonFileResearchRunStore:
                     "taint_label": source.taint_label,
                     "instruction_authority": source.instruction_authority,
                     "content_sha256": source.content_sha256,
+                    "requested_url": source.requested_url,
                 }
                 for source in run.sources
             ],

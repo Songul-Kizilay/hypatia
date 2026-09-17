@@ -2582,6 +2582,7 @@ class CognitiveEngine:
                 source,
                 run_id,
                 attempt_id=attempt_id,
+                requested_url=url.strip(),
             )
         except (ResearchError, KnowledgeError) as error:
             if isinstance(error, ResearchError) and self._request_cancelled(request):

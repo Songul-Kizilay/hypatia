@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.384
+## Current bounded text journey: v0.3.385
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -113,6 +113,47 @@ and model prose cannot alter it. It does not change mission lifecycle,
 authorization, cumulative allowance, plan digest, source slots, provider/model
 selection, retry behavior or run closure. An unchanged recovered state renders
 the same explanation.
+
+### Provenance foundation — inventory and requested-URL lineage: v0.3.385
+
+**Inventory (read-only).** Within one run, canonical references are exact IDs and
+ResearchRun validates them on every load, failing closed:
+
+| Record | Proven links |
+| --- | --- |
+| Source | document ID = content version; final URL; observed content_sha256 (v0.3.381) |
+| Evidence | accepted source; chunk ID/index; chunk SHA-256 |
+| Assessment | source; evidence belonging to that source; supersession within the source |
+| Comparison note | sources; evidence covering them; assessments citing that evidence |
+| Claim | evidence; source IDs must equal the evidence's sources; supersession |
+| Contradiction | two persisted claims; evidence equal to theirs |
+| Operator review | retained note; evidence equal to the note's; supersession; one current |
+| Mission | plan digest, run ID, approval consumption, checkpoint slot identities, stop reason |
+| Audit bundle | all of the above as recorded, plus recomputed evaluation |
+
+Cross-run: sources are per-run observations; shared storage is content-version
+only (v0.3.381); evidence cannot reference another run's source.
+
+**Gap found.** The requested URL, the root of *resource → fetch observation*,
+was not recorded on accepted sources. The HTTPS fetcher records the final URL
+after validated redirects. Missions kept the requested URL only in their
+execution checkpoint; generic plan acceptance and manual source loads kept it
+nowhere, so after a redirect it was unrecoverable. Replay and later revalidation
+must request the original resource, and guessing it from the final URL is unsafe.
+
+**Fix.** ResearchSourceRecord.requested_url stores the URL this run requested,
+passed by both acceptance callers (plan/mission acceptance uses the step's
+authorized URL; manual loads use the entered URL). Run store schema 16; older
+sources load with equested_url = None, shown as "unrecorded" and never copied
+from the final URL. Two runs sharing a content version keep their own requested
+URLs. Mission sources now match their checkpoint slot exactly (requested URL,
+final URL, content hash). Run and mission audit exports show both URLs.
+
+**Recorded for later.** The audit's traceability section still stops at source
+document IDs; resolving claims and reviews through to source observations, and
+naming the decisive records behind a goal outcome, are the next candidates.
+
+No authority, budget, lifecycle, goal or readiness change.
 
 ### False-refusal audit — resume after acceptance: v0.3.384
 

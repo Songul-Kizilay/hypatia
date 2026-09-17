@@ -75,6 +75,11 @@ def render_research_run_markdown(run: ResearchRun) -> str:
                 "",
                 f"- **Document ID:** {_inline(source.document_id)}",
                 f"- **URL:** {_inline(source.url)}",
+                (
+                    f"- **Requested URL:** {_inline(source.requested_url)}"
+                    if source.requested_url is not None
+                    else "- **Requested URL:** unrecorded"
+                ),
                 f"- **Content type:** {_inline(source.content_type)}",
                 f"- **Data taint:** {_inline(source.taint_label)}",
                 (

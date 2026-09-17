@@ -2,6 +2,29 @@
 
 All notable project changes are recorded here.
 
+## [0.3.385] - 2026-09-17
+
+### Added
+
+- Provenance inventory of canonical research records (documented in the
+  roadmap): which references are exact, validated and restart-safe.
+- Each run's accepted source now records the URL it requested beside the final
+  URL reached through validated redirects (run store schema 16). Plan and
+  mission acceptance record the step's authorized URL; manual source loads
+  record the entered URL. Run and mission audit exports show both.
+
+### Fixed
+
+- After a redirect, the requested URL of a manually loaded or plan-accepted
+  source was lost, so a later revalidation or replay could not know which
+  resource the run originally requested.
+
+### Boundaries
+
+- Older sources load with the requested URL unrecorded and it is never copied
+  from the final URL. Runs sharing a content version keep separate requested
+  URLs. No authority, budget, lifecycle, goal or readiness change.
+
 ## [0.3.384] - 2026-09-17
 
 ### Fixed

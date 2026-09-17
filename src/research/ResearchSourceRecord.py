@@ -28,6 +28,10 @@ class ResearchSourceRecord:
     #: version it observed.  ``None`` for sources accepted before versioning,
     #: whose observed content was not recorded and is never inferred.
     content_sha256: str | None = None
+    #: The authorized URL this run requested.  ``url`` is where the fetch ended
+    #: after validated redirects, so the two can differ.  ``None`` for sources
+    #: accepted before it was recorded; it is never inferred from ``url``.
+    requested_url: str | None = None
 
     def __post_init__(self) -> None:
         for value, field_name in (
@@ -56,6 +60,14 @@ class ResearchSourceRecord:
             or any(c not in "0123456789abcdef" for c in self.content_sha256)
         ):
             raise ResearchError("Research source content fingerprint is invalid.")
+        if self.requested_url is not None:
+            if (
+                not isinstance(self.requested_url, str)
+                or not self.requested_url.strip()
+                or len(self.requested_url.strip()) > 4_096
+            ):
+                raise ResearchError("Research source requested URL is invalid.")
+            object.__setattr__(self, "requested_url", self.requested_url.strip())
         object.__setattr__(self, "document_id", self.document_id.strip())
         object.__setattr__(self, "url", self.url.strip())
         object.__setattr__(self, "title", self.title.strip())
@@ -67,6 +79,7 @@ class ResearchSourceRecord:
         source: ResearchSource,
         document_id: str,
         added_at: datetime,
+        requested_url: str | None = None,
     ) -> ResearchSourceRecord:
         """Build a persistent provenance record from a fetched source."""
         if not isinstance(source, ResearchSource):
@@ -79,4 +92,5 @@ class ResearchSourceRecord:
             fetched_at=source.fetched_at,
             added_at=added_at,
             content_sha256=source.content_sha256,
+            requested_url=requested_url,
         )

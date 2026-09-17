@@ -2097,6 +2097,37 @@ class LearningResearchJourneyTests(unittest.TestCase):
     def fetched_urls(self):
         return [call.args[0] for call in self.fetcher.fetch.call_args_list]
 
+    def test_mission_source_records_the_requested_url_of_a_redirect(self):
+        self.relation = "possible_agreement"
+        requested, final = self.redirect_first_source()
+        response = self.start()
+        plan_id = response.research_plan_execution.plan_id
+        checkpoint = self.execution.mission_checkpoint(plan_id)
+
+        engine, controller = self.restored_controller()
+        run = JsonFileResearchRunStore(self.root / "runs.json").load()[0]
+        _, _, audit = self.audit_documents(controller, plan_id)
+
+        redirected = next(s for s in run.sources if s.url == final)
+        self.assertEqual(redirected.requested_url, requested)
+        # Every mission source matches its checkpoint slot exactly: requested
+        # URL, final URL and observed content hash.
+        slots = set(
+            zip(
+                checkpoint.requested_urls,
+                checkpoint.acquired_urls,
+                checkpoint.body_hashes,
+                strict=True,
+            )
+        )
+        self.assertEqual(
+            {(s.requested_url, s.url, s.content_sha256) for s in run.sources}, slots
+        )
+        self.assertIn(
+            (requested, final),
+            {(s["requested_url"], s["url"]) for s in audit["research_run"]["sources"]},
+        )
+
     def test_redirected_source_is_not_refetched_after_restart(self):
         self.relation = "possible_agreement"
         requested, final = self.redirect_first_source()

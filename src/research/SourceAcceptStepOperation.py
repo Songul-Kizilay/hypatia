@@ -94,7 +94,7 @@ class SourceAcceptStepOperation:
         self._raise_if_cancelled(context)
 
         try:
-            result = self._acceptance_service.accept(source, run_id)
+            result = self._acceptance_service.accept(source, run_id, requested_url=url)
         except KnowledgeError as error:
             self._record_failure(run_id, "Research source indexing failed.")
             raise ResearchError("Research source indexing failed.") from error

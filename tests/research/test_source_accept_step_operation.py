@@ -56,8 +56,10 @@ class RejectingAcceptanceService:
         self,
         source: ResearchSource,
         run_id: str = "",
+        *,
+        requested_url: str = "",
     ) -> ResearchSourceAcceptanceResult:
-        del source, run_id
+        del source, run_id, requested_url
         self.calls += 1
         return ResearchSourceAcceptanceResult(
             accepted=False,
@@ -263,7 +265,13 @@ class SourceAcceptStepOperationTests(unittest.TestCase):
         run_id = self._run_id()
 
         class FailingAcceptance:
-            def accept(self, source: ResearchSource, run_id: str = ""):  # type: ignore[no-untyped-def]
+            def accept(  # type: ignore[no-untyped-def]
+                self,
+                source: ResearchSource,
+                run_id: str = "",
+                *,
+                requested_url: str = "",
+            ):
                 raise KnowledgeError("Indexing unavailable.")
 
         with self.assertRaises(ResearchError):
