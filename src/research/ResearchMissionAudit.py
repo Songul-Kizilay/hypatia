@@ -45,8 +45,9 @@ from research.ResearchTeachingReport import teaching_report
 
 MISSION_AUDIT_SCHEMA = "hypatia.mission_audit"
 #: Version 2 resolves traces to evidence and source observations and names the
-#: recorded basis of the goal evaluation.
-MISSION_AUDIT_SCHEMA_VERSION = 2
+#: recorded basis of the goal evaluation.  Version 3 adds each source's selected
+#: discovery candidate when recorded.
+MISSION_AUDIT_SCHEMA_VERSION = 3
 
 
 def build_mission_audit(
@@ -459,6 +460,12 @@ def render_mission_audit_markdown(
                 + _inline(source["url"])
                 + " at "
                 + source["fetched_at"]
+                + "; discovery candidate "
+                + (
+                    _inline(source["discovery_candidate"]["candidate_id"])
+                    if source["discovery_candidate"]
+                    else "unrecorded"
+                )
                 + "; observed content SHA-256 "
                 + (
                     f"`{source['content_sha256']}`"
@@ -600,6 +607,13 @@ def _traceability(
     notes = {note.note_id: note for note in run.comparison_notes}
     evidence_by_id = {record.evidence_id: record for record in run.evidence}
     sources = {source.document_id: source for source in run.sources}
+    candidates = {
+        candidate_id: (discovery.discovery_id, candidate)
+        for discovery in run.discoveries
+        for candidate_id, candidate in zip(
+            discovery.candidate_ids, discovery.candidates, strict=False
+        )
+    }
     checkpoint = snapshot.mission_checkpoint
     mission_review = mission_comparison_review(run, checkpoint)
 
@@ -614,6 +628,23 @@ def _traceability(
             "content_sha256": source.content_sha256,
             "fetched_at": source.fetched_at.isoformat(),
             "added_at": source.added_at.isoformat(),
+            "discovery_candidate": candidate_trace(source.discovery_candidate_id),
+        }
+
+    def candidate_trace(candidate_id: str | None) -> dict[str, Any] | None:
+        # Resolved only by the identity recorded at selection; never by URL.
+        if candidate_id is None:
+            return None
+        found = candidates.get(candidate_id)
+        if found is None:
+            return {"candidate_id": candidate_id, "resolved": False}
+        discovery_id, candidate = found
+        return {
+            "candidate_id": candidate_id,
+            "resolved": True,
+            "discovery_id": discovery_id,
+            "url": candidate.url,
+            "title": candidate.title,
         }
 
     def evidence_trace(evidence_ids: tuple[str, ...]) -> list[dict[str, Any]]:

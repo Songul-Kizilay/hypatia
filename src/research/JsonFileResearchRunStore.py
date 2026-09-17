@@ -91,7 +91,7 @@ class _CollectionBudget:
 class JsonFileResearchRunStore:
     """Load and atomically replace a strict versioned research-run document."""
 
-    _SCHEMA_VERSION = 16
+    _SCHEMA_VERSION = 17
     _SUPPORTED_SCHEMA_VERSIONS = set(range(1, _SCHEMA_VERSION + 1))
     _DOCUMENT_FIELDS = {"schema_version", "runs"}
     _RUN_FIELDS_V1 = {
@@ -134,6 +134,10 @@ class JsonFileResearchRunStore:
     #: Version 16 records the URL each run requested, beside the final URL.
     #: Earlier sources decode with none: unrecorded, never copied from ``url``.
     _SOURCE_FIELDS_V16 = _SOURCE_FIELDS_V15 | {"requested_url"}
+    #: Version 17 records discovery-candidate identity: candidate IDs on each
+    #: discovery and the selected candidate on each source.  Earlier records
+    #: decode with none; nothing is backfilled from URLs or ordering.
+    _SOURCE_FIELDS_V17 = _SOURCE_FIELDS_V16 | {"discovery_candidate_id"}
     _FAILURE_FIELDS_V1_V12 = {"stage", "reason", "occurred_at"}
     _FAILURE_FIELDS_V13 = _FAILURE_FIELDS_V1_V12 | {"provider"}
     _EVIDENCE_FIELDS = {
@@ -346,6 +350,8 @@ class JsonFileResearchRunStore:
             15: self._RUN_FIELDS_V14,
             # Version 16 changed the shape of a source, not the run.
             16: self._RUN_FIELDS_V14,
+            # Version 17 changed discoveries and sources, not the run.
+            17: self._RUN_FIELDS_V14,
         }[schema_version]
         if not isinstance(value, dict) or set(value) != expected_fields:
             raise ResearchError("Research run store contains an invalid run record.")
@@ -406,7 +412,8 @@ class JsonFileResearchRunStore:
             updated_at=self._parse_datetime(value["updated_at"], "updated_at"),
             evidence=tuple(self._parse_evidence(item) for item in evidence_data),
             discoveries=tuple(
-                self._parse_discovery(item, budget) for item in discoveries_data
+                self._parse_discovery(item, budget, schema_version)
+                for item in discoveries_data
             ),
             assessments=tuple(
                 self._parse_assessment(item, schema_version, budget)
@@ -433,15 +440,19 @@ class JsonFileResearchRunStore:
         schema_version: int,
     ) -> ResearchSourceRecord:
         expected_fields = (
-            self._SOURCE_FIELDS_V16
-            if schema_version >= 16
+            self._SOURCE_FIELDS_V17
+            if schema_version >= 17
             else (
-                self._SOURCE_FIELDS_V15
-                if schema_version >= 15
+                self._SOURCE_FIELDS_V16
+                if schema_version >= 16
                 else (
-                    self._SOURCE_FIELDS_V7
-                    if schema_version >= 7
-                    else self._SOURCE_FIELDS_V1_V6
+                    self._SOURCE_FIELDS_V15
+                    if schema_version >= 15
+                    else (
+                        self._SOURCE_FIELDS_V7
+                        if schema_version >= 7
+                        else self._SOURCE_FIELDS_V1_V6
+                    )
                 )
             )
         )
@@ -466,6 +477,9 @@ class JsonFileResearchRunStore:
             ),
             content_sha256=value["content_sha256"] if schema_version >= 15 else None,
             requested_url=value["requested_url"] if schema_version >= 16 else None,
+            discovery_candidate_id=(
+                value["discovery_candidate_id"] if schema_version >= 17 else None
+            ),
         )
 
     def _parse_failure(self, value: Any, schema_version: int) -> ResearchFailureRecord:
@@ -506,8 +520,14 @@ class JsonFileResearchRunStore:
         self,
         value: Any,
         budget: _CollectionBudget,
+        schema_version: int,
     ) -> ResearchSourceDiscoveryRecord:
-        if not isinstance(value, dict) or set(value) != self._DISCOVERY_FIELDS:
+        expected_fields = (
+            self._DISCOVERY_FIELDS | {"candidate_ids"}
+            if schema_version >= 17
+            else self._DISCOVERY_FIELDS
+        )
+        if not isinstance(value, dict) or set(value) != expected_fields:
             raise ResearchError(
                 "Research run store contains an invalid discovery record."
             )
@@ -517,7 +537,13 @@ class JsonFileResearchRunStore:
                 "Research run store discovery candidates must be a list."
             )
         budget.consume(candidates)
+        candidate_ids = value.get("candidate_ids", [])
+        if not isinstance(candidate_ids, list):
+            raise ResearchError(
+                "Research run store discovery candidate IDs must be a list."
+            )
         return ResearchSourceDiscoveryRecord(
+            candidate_ids=tuple(candidate_ids),
             discovery_id=value["discovery_id"],
             query=value["query"],
             provider=value["provider"],
@@ -821,6 +847,7 @@ class JsonFileResearchRunStore:
                     "instruction_authority": source.instruction_authority,
                     "content_sha256": source.content_sha256,
                     "requested_url": source.requested_url,
+                    "discovery_candidate_id": source.discovery_candidate_id,
                 }
                 for source in run.sources
             ],
@@ -866,6 +893,7 @@ class JsonFileResearchRunStore:
                         for candidate in discovery.candidates
                     ],
                     "discovered_at": discovery.discovered_at.isoformat(),
+                    "candidate_ids": list(discovery.candidate_ids),
                 }
                 for discovery in run.discoveries
             ],

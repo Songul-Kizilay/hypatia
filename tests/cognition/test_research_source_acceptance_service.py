@@ -64,6 +64,7 @@ class FailingRunManager:
         source_value: object,
         document_id: str,
         requested_url: str | None = None,
+        discovery_candidate_id: str | None = None,
     ) -> None:
         raise ResearchError("Research source is already attached to this run.")
 

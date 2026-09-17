@@ -223,7 +223,7 @@ class ComparisonReviewRecordTests(unittest.TestCase):
             store.save([subject])
             document = json.loads(path.read_text(encoding="utf-8"))
 
-            self.assertEqual(document["schema_version"], 16)
+            self.assertEqual(document["schema_version"], 17)
             self.assertEqual(store.load(), [subject])
             document["schema_version"] = 13
             for value in document["runs"]:
@@ -231,6 +231,7 @@ class ComparisonReviewRecordTests(unittest.TestCase):
                 for source in value["sources"]:
                     source.pop("content_sha256", None)
                     source.pop("requested_url", None)
+                    source.pop("discovery_candidate_id", None)
             path.write_text(json.dumps(document), encoding="utf-8")
 
             self.assertEqual(store.load()[0].comparison_reviews, ())

@@ -58,8 +58,9 @@ class RejectingAcceptanceService:
         run_id: str = "",
         *,
         requested_url: str = "",
+        discovery_candidate_id: str = "",
     ) -> ResearchSourceAcceptanceResult:
-        del source, run_id, requested_url
+        del source, run_id, requested_url, discovery_candidate_id
         self.calls += 1
         return ResearchSourceAcceptanceResult(
             accepted=False,
@@ -271,6 +272,7 @@ class SourceAcceptStepOperationTests(unittest.TestCase):
                 run_id: str = "",
                 *,
                 requested_url: str = "",
+                discovery_candidate_id: str = "",
             ):
                 raise KnowledgeError("Indexing unavailable.")
 

@@ -52,6 +52,7 @@ class _Observations:
     run_id: str
     discovery_id: str = ""
     selected_url: str = ""
+    selected_candidate_id: str = ""
     preview: ResearchSourcePreview | None = None
     attempted_urls: tuple[str, ...] = ()
     acquired_urls: tuple[str, ...] = ()
@@ -223,6 +224,7 @@ class ResearchMissionStepResolver:
             if candidate is None:
                 raise ResearchError("No in-scope relevant source candidate; no retry.")
             observed.selected_url = candidate.url
+            observed.selected_candidate_id = record.candidate_id_of(candidate) or ""
             observed.attempted_urls += (candidate.url,)
             return replace(step, authorized_source_url=candidate.url), context
         preview = observed.preview
@@ -237,7 +239,9 @@ class ResearchMissionStepResolver:
             raise ResearchError("Exact inspected source preview is unavailable.")
         context = replace(context, source_preview=preview)
         if step.capability is Cap.SOURCE_ACCEPT:
-            return replace(step, authorized_source_url=observed.selected_url), context
+            return replace(step, authorized_source_url=observed.selected_url), replace(
+                context, discovery_candidate_id=observed.selected_candidate_id
+            )
         if step.capability is not Cap.EVIDENCE_RECORDING:
             raise ResearchError("Mission cannot derive another capability.")
         document_id = preview.source.to_document().document_id
@@ -689,6 +693,7 @@ class ResearchMissionStepResolver:
             # Retain origin identity to prevent replay, discard transient body.
             observed.preview = None
             observed.selected_url = ""
+            observed.selected_candidate_id = ""
         elif step.capability is Cap.SOURCE_ASSESSMENT:
             run = self._runs.get(observed.run_id)
             assessment = next(

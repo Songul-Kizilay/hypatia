@@ -2448,6 +2448,7 @@ class CognitiveEngine:
         return self._process_research_source_load(
             request,
             response_intent="research_source_candidate_accept",
+            discovery_candidate_id=preview.candidate_id or "",
         )
 
     @staticmethod
@@ -2473,6 +2474,7 @@ class CognitiveEngine:
         request: BrainRequest,
         *,
         response_intent: str = "research_source_load",
+        discovery_candidate_id: str = "",
     ) -> BrainResponse:
         """Acquire and index one explicit source without LLM or memory side effects.
 
@@ -2583,6 +2585,7 @@ class CognitiveEngine:
                 run_id,
                 attempt_id=attempt_id,
                 requested_url=url.strip(),
+                discovery_candidate_id=discovery_candidate_id,
             )
         except (ResearchError, KnowledgeError) as error:
             if isinstance(error, ResearchError) and self._request_cancelled(request):

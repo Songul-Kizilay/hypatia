@@ -32,6 +32,11 @@ class ResearchSourceRecord:
     #: after validated redirects, so the two can differ.  ``None`` for sources
     #: accepted before it was recorded; it is never inferred from ``url``.
     requested_url: str | None = None
+    #: The recorded identity of the discovery candidate this run selected and
+    #: requested, when the source came from a discovery.  ``None`` when the
+    #: source was not selected from a discovery or predates candidate identity;
+    #: it is never recovered by matching URLs.
+    discovery_candidate_id: str | None = None
 
     def __post_init__(self) -> None:
         for value, field_name in (
@@ -68,6 +73,13 @@ class ResearchSourceRecord:
             ):
                 raise ResearchError("Research source requested URL is invalid.")
             object.__setattr__(self, "requested_url", self.requested_url.strip())
+        if self.discovery_candidate_id is not None and (
+            not isinstance(self.discovery_candidate_id, str)
+            or not self.discovery_candidate_id.strip()
+            or self.discovery_candidate_id != self.discovery_candidate_id.strip()
+            or len(self.discovery_candidate_id) > 200
+        ):
+            raise ResearchError("Research source discovery candidate ID is invalid.")
         object.__setattr__(self, "document_id", self.document_id.strip())
         object.__setattr__(self, "url", self.url.strip())
         object.__setattr__(self, "title", self.title.strip())
@@ -80,6 +92,7 @@ class ResearchSourceRecord:
         document_id: str,
         added_at: datetime,
         requested_url: str | None = None,
+        discovery_candidate_id: str | None = None,
     ) -> ResearchSourceRecord:
         """Build a persistent provenance record from a fetched source."""
         if not isinstance(source, ResearchSource):
@@ -93,4 +106,5 @@ class ResearchSourceRecord:
             added_at=added_at,
             content_sha256=source.content_sha256,
             requested_url=requested_url,
+            discovery_candidate_id=discovery_candidate_id,
         )

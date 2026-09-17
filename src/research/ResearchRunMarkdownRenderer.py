@@ -80,6 +80,12 @@ def render_research_run_markdown(run: ResearchRun) -> str:
                     if source.requested_url is not None
                     else "- **Requested URL:** unrecorded"
                 ),
+                (
+                    "- **Discovery candidate:** "
+                    f"{_inline(source.discovery_candidate_id)}"
+                    if source.discovery_candidate_id is not None
+                    else "- **Discovery candidate:** unrecorded"
+                ),
                 f"- **Content type:** {_inline(source.content_type)}",
                 f"- **Data taint:** {_inline(source.taint_label)}",
                 (

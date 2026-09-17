@@ -77,7 +77,9 @@ class AcquisitionBatchDraftTests(unittest.TestCase):
                 )
         alias = replace(self.discovery.candidates[0], url=self.urls[0] + "/")
         discovery = replace(
-            self.discovery, candidates=(*self.discovery.candidates, alias)
+            self.discovery,
+            candidates=(*self.discovery.candidates, alias),
+            candidate_ids=(),
         )
         run = replace(self.run, discoveries=(discovery,))
         self.assertIsNone(
@@ -90,7 +92,10 @@ class AcquisitionBatchDraftTests(unittest.TestCase):
         for run in (
             replace(self.run, status=ResearchRunStatus.COMPLETED),
             self.manager.create("Other question"),
-            replace(self.run, discoveries=(replace(self.discovery, candidates=()),)),
+            replace(
+                self.run,
+                discoveries=(replace(self.discovery, candidates=(), candidate_ids=()),),
+            ),
         ):
             self.assertIsNone(
                 preview_acquisition_batch(

@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.386
+## Current bounded text journey: v0.3.387
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -113,6 +113,39 @@ and model prose cannot alter it. It does not change mission lifecycle,
 authorization, cumulative allowance, plan digest, source slots, provider/model
 selection, retry behavior or run closure. An unchanged recovered state renders
 the same explanation.
+
+### Provenance foundation — discovery-candidate identity: v0.3.387
+
+**Gap (confirmed by a failing test).** Discovery candidates had no identity, and
+both selection points (the mission resolver ranking a discovery's candidates,
+and manual candidate acceptance previewing one by discovery and URL) passed on
+only the URL. Which candidate an accepted source came from could only be guessed
+by URL equality, which the provenance rules forbid.
+
+**Change.**
+
+- *Candidate identity*: ResearchSourceDiscoveryRecord.candidate_ids, one
+  generated ID per candidate in order, assigned when the discovery is recorded.
+  Candidate value objects are unchanged.
+- *Selection*: the mission resolver takes the ID of the exact candidate object it
+  selected from the discovery record and passes it through the accept step's
+  context; manual acceptance takes it from the revalidated preview. The source
+  record stores it as discovery_candidate_id, the run's own observation.
+- *Integrity* (ResearchRun, on every load): the ID must name exactly one
+  candidate in this run's discoveries, the source must have a recorded requested
+  URL, and that URL must equal the candidate's URL. Unknown, cross-run and
+  mismatched references fail closed. One candidate may back several observations,
+  because a later re-fetch is a new observation of the same candidate.
+- *Persistence*: run store schema 17. Older discoveries load with no candidate
+  IDs and older sources with no candidate; nothing is backfilled from URLs or
+  ordering. No checkpoint change was needed: a fetch without acceptance is
+  already refused at restart.
+- *Audit* (schema 3): each source observation resolves its candidate by ID to its
+  discovery, URL and title, or reports unrecorded or unresolved. The run export
+  shows the candidate or "unrecorded".
+
+Restart preserves every link without rediscovery, reselection, calls or spend.
+No authority, budget, lifecycle, goal or readiness change.
 
 ### Provenance foundation — resolved audit trace: v0.3.386
 

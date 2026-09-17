@@ -2,12 +2,17 @@
 
 ## Runtime Version
 
-`v0.3.386 (Genesis)`
+`v0.3.387 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.386 turns the mission audit's traceability into a provable "why"
+Version v0.3.387 closes the discovery link of the provenance chain: each
+discovery records a stable identity per candidate, and a source selected from a
+discovery records that exact candidate on the run's own source observation at
+selection time (run store schema 17, mission audit schema 3). Integrity checks
+fail closed on unknown, cross-run or URL-mismatched candidates; older records
+stay unrecorded and nothing is matched by URL. Version v0.3.386 turns the mission audit's traceability into a provable "why"
 trace: reviews and claims resolve through each evidence record to this run's
 own source observation (requested URL, final URL, observed content SHA-256),
 and the goal evaluation's recorded basis names the exact comparison notes,

@@ -343,6 +343,7 @@ class ResearchRunManager:
         source: ResearchSource,
         document_id: str,
         requested_url: str | None = None,
+        discovery_candidate_id: str | None = None,
     ) -> ResearchRun:
         """Persist source provenance after successful local knowledge indexing."""
         normalized_id = self._normalize_run_id(run_id)
@@ -366,6 +367,7 @@ class ResearchRunManager:
                         normalized_document_id,
                         now,
                         requested_url=requested_url,
+                        discovery_candidate_id=discovery_candidate_id,
                     ),
                 ),
                 failures=run.failures,
@@ -510,6 +512,7 @@ class ResearchRunManager:
                 provider=normalized_provider,
                 candidates=candidate_tuple,
                 discovered_at=now,
+                candidate_ids=tuple(self._new_candidate_id() for _ in candidate_tuple),
             )
             updated = ResearchRun(
                 run_id=run.run_id,
@@ -591,6 +594,7 @@ class ResearchRunManager:
                 candidate,
                 True,
                 _acceptance_disclosure(candidate),
+                candidate_id=discovery.candidate_id_of(candidate),
             )
 
     def preview_source_assessment(
@@ -1524,6 +1528,16 @@ class ResearchRunManager:
         ):
             raise ResearchError("Research evidence ID already exists.")
         return evidence_id
+
+    def _new_candidate_id(self) -> str:
+        candidate_id = str(uuid4())
+        if any(
+            candidate_id in record.candidate_ids
+            for run in self._runs
+            for record in run.discoveries
+        ):
+            raise ResearchError("Research source candidate ID already exists.")
+        return candidate_id
 
     def _new_discovery_id(self) -> str:
         discovery_id = self._normalize_discovery_id(self._discovery_id_factory())

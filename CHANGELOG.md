@@ -2,6 +2,24 @@
 
 All notable project changes are recorded here.
 
+## [0.3.387] - 2026-09-17
+
+### Added
+
+- Discovery-candidate provenance: each discovery records a stable ID per
+  candidate, and a source selected from a discovery records that exact candidate
+  on the run's own source record at selection time, for mission selection and
+  manual candidate acceptance alike (run store schema 17).
+- Mission audit schema 3 resolves each source observation's candidate by ID to
+  its discovery, URL and title; the run export shows the candidate.
+
+### Boundaries
+
+- Candidate references must name a candidate in the same run whose URL equals
+  the recorded requested URL; unknown, cross-run or mismatched references fail
+  the load closed. Older records stay unrecorded and are never matched by URL
+  or ordering. No authority, budget, lifecycle, goal or readiness change.
+
 ## [0.3.386] - 2026-09-17
 
 ### Added

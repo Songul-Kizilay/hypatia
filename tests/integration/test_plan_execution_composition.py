@@ -581,6 +581,40 @@ class PlanExecutionCompositionTests(unittest.TestCase):
         self.assertEqual(final.claims, ())
         self.assertEqual(final.assessments, ())
 
+    def test_manual_candidate_acceptance_records_the_selected_candidate(
+        self,
+    ) -> None:
+        run = self.run_manager.create("What evidence supports the claim?")
+        discovery = self.run_manager.add_discovery(
+            run.run_id,
+            "What evidence supports the claim?",
+            "stub_provider",
+            [
+                ResearchSourceCandidate(
+                    url="https://example.test/candidate",
+                    title="Candidate",
+                    snippet="A snippet.",
+                )
+            ],
+        ).discoveries[0]
+
+        response = self.engine.process(
+            BrainRequest(
+                message="Accept selected research source candidate",
+                metadata={
+                    "intent": "research_source_candidate_accept",
+                    "research_run_id": run.run_id,
+                    "research_discovery_id": discovery.discovery_id,
+                    "research_url": "https://example.test/candidate",
+                },
+            )
+        )
+
+        self.assertTrue(response.success, response.message)
+        source = self.run_manager.get(run.run_id).sources[0]
+        self.assertEqual(source.discovery_candidate_id, discovery.candidate_ids[0])
+        self.assertEqual(source.requested_url, "https://example.test/candidate")
+
     def test_plan_acceptance_records_the_authorized_requested_url(self) -> None:
         run = self.run_manager.create("What evidence supports the claim?")
 

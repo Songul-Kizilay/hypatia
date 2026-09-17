@@ -1768,7 +1768,7 @@ class LearningResearchJourneyTests(unittest.TestCase):
 
         # Identity, plan and authority come from the canonical records.
         self.assertEqual(document["schema"], "hypatia.mission_audit")
-        self.assertEqual(document["schema_version"], 2)
+        self.assertEqual(document["schema_version"], 3)
         self.assertEqual(document["identity"]["plan_id"], plan_id)
         self.assertEqual(document["identity"]["research_run_id"], run.run_id)
         self.assertEqual(
@@ -1991,7 +1991,12 @@ class LearningResearchJourneyTests(unittest.TestCase):
         legacy = replace(
             run,
             sources=tuple(
-                replace(source, requested_url=None, content_sha256=None)
+                replace(
+                    source,
+                    requested_url=None,
+                    content_sha256=None,
+                    discovery_candidate_id=None,
+                )
                 for source in run.sources
             ),
         )
@@ -2196,6 +2201,62 @@ class LearningResearchJourneyTests(unittest.TestCase):
 
     def fetched_urls(self):
         return [call.args[0] for call in self.fetcher.fetch.call_args_list]
+
+    def test_mission_sources_record_their_selected_discovery_candidate(self):
+        self.relation = "possible_agreement"
+        response = self.start()
+        run = response.research_runs[0]
+        (discovery,) = run.discoveries
+
+        candidate_ids = dict(
+            zip(discovery.candidate_ids, discovery.candidates, strict=True)
+        )
+
+        self.assertEqual(len(set(discovery.candidate_ids)), len(discovery.candidates))
+        for source in run.sources:
+            selected = candidate_ids[source.discovery_candidate_id]
+            self.assertEqual(selected.url, source.requested_url)
+
+        calls = self.external_calls()
+        plan_id = response.research_plan_execution.plan_id
+        _, controller = self.restored_controller()
+        restored = JsonFileResearchRunStore(self.root / "runs.json").load()[0]
+        _, _, audit = self.audit_documents(controller, plan_id)
+
+        # Restart neither rediscovers nor reselects: the exact links survive.
+        self.assertEqual(self.external_calls(), calls)
+        self.assertEqual(
+            [s.discovery_candidate_id for s in restored.sources],
+            [s.discovery_candidate_id for s in run.sources],
+        )
+        self.assertEqual(
+            {
+                (
+                    o["document_id"],
+                    o["discovery_candidate"]["candidate_id"],
+                    o["discovery_candidate"]["discovery_id"],
+                    o["discovery_candidate"]["url"],
+                    o["requested_url"],
+                )
+                for o in audit["traceability"]["source_observations"]
+            },
+            {
+                (
+                    s.document_id,
+                    s.discovery_candidate_id,
+                    discovery.discovery_id,
+                    candidate_ids[s.discovery_candidate_id].url,
+                    s.requested_url,
+                )
+                for s in run.sources
+            },
+        )
+        self.assertTrue(
+            all(
+                o["discovery_candidate"]["resolved"]
+                for o in audit["traceability"]["source_observations"]
+            )
+        )
 
     def test_mission_source_records_the_requested_url_of_a_redirect(self):
         self.relation = "possible_agreement"

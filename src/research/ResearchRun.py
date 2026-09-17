@@ -76,6 +76,7 @@ class ResearchRun:
             raise ResearchError("Research evidence must reference an accepted source.")
         if not isinstance(self.discoveries, tuple):
             raise ResearchError("Research run discoveries must be an immutable tuple.")
+        self._validate_candidate_provenance()
         if not all(
             isinstance(record, ResearchSourceDiscoveryRecord)
             for record in self.discoveries
@@ -320,6 +321,40 @@ class ResearchRun:
         self._validate_comparison_reviews()
         object.__setattr__(self, "run_id", self.run_id.strip())
         object.__setattr__(self, "question", self.question.strip())
+
+    def _validate_candidate_provenance(self) -> None:
+        """A selected candidate must be one this run discovered, at that URL.
+
+        Candidate identity is recorded at selection; here it is only checked.
+        The candidate must exist in this run's own discoveries exactly once, and
+        its URL must be the URL this run recorded as requested.
+        """
+        candidates: dict[str, list[str]] = {}
+        for discovery in self.discoveries:
+            if not isinstance(discovery, ResearchSourceDiscoveryRecord):
+                return
+            for candidate_id, candidate in zip(
+                discovery.candidate_ids, discovery.candidates, strict=False
+            ):
+                candidates.setdefault(candidate_id, []).append(candidate.url)
+        if any(len(urls) != 1 for urls in candidates.values()):
+            raise ResearchError("Research run discovery candidate IDs are duplicated.")
+        # One candidate may back several observations (a later re-fetch is a new
+        # observation of the same candidate); each must still match exactly.
+        for source in self.sources:
+            # Read defensively: audits deliberately examine tampered records.
+            selected_id = getattr(source, "discovery_candidate_id", None)
+            if not isinstance(source, ResearchSourceRecord) or selected_id is None:
+                continue
+            urls = candidates.get(selected_id)
+            if (
+                urls is None
+                or getattr(source, "requested_url", None) is None
+                or urls[0] != source.requested_url
+            ):
+                raise ResearchError(
+                    "Research source discovery candidate provenance is invalid."
+                )
 
     def _validate_comparison_reviews(self) -> None:
         """Bind each operator review to one exact retained comparison note."""

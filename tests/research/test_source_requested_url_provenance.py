@@ -94,6 +94,7 @@ class RequestedUrlProvenanceTests(unittest.TestCase):
         for run in document["runs"]:
             for source in run["sources"]:
                 source.pop("requested_url")
+                source.pop("discovery_candidate_id", None)
         self.path.write_text(json.dumps(document), encoding="utf-8")
 
         loaded = JsonFileResearchRunStore(self.path).load()

@@ -266,6 +266,7 @@ class LegacySourceIdentityTests(unittest.TestCase):
             for source in run["sources"]:
                 source.pop("content_sha256")
                 source.pop("requested_url", None)
+                source.pop("discovery_candidate_id", None)
         path.write_text(json.dumps(document), encoding="utf-8")
 
         loaded = JsonFileResearchRunStore(path).load()
