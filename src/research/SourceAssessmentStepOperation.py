@@ -22,7 +22,6 @@ from research.ResearchPlanExecutionContext import ResearchPlanExecutionContext
 from research.ResearchPlanStep import ResearchPlanStep
 from research.ResearchPlanStepOperationResult import ResearchPlanStepOperationResult
 from research.ResearchRunManager import ResearchRunManager
-from research.ResearchSourceAssessmentRecord import identical_unjudged_assessment
 
 _ASSESSMENT_BOUNDARY = (
     "Authored assessment only: not evidence, not claim verification, not proof "
@@ -60,23 +59,6 @@ class SourceAssessmentStepOperation:
                 "Research run is closed and cannot record new assessments."
             )
         self._raise_if_cancelled(context)
-        if authorization.supersedes_assessment_id is None:
-            # A superseding write is already refused once its target has been
-            # superseded.  A first assessment has no such guard, so an attempt
-            # that saved it, died before the step was recorded and was ruled not
-            # performed would add an identical second current assessment.
-            existing = identical_unjudged_assessment(
-                run.assessments,
-                authorization.document_id,
-                authorization.evidence_ids,
-                authorization.text,
-                authorization.information_trust,
-            )
-            if existing is not None:
-                raise ResearchError(
-                    "This exact assessment is already recorded as "
-                    f"{existing.assessment_id} in this run; it was not recorded again."
-                )
 
         updated = self._research_run_manager.record_source_assessment(
             run_id,

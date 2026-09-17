@@ -89,29 +89,6 @@ class EvidenceRecordingStepOperation:
             ):
                 raise ResearchError("Evidence candidate changed or is not grounded.")
         self._raise_if_cancelled(context)
-        # The same identity the canonical record stores: stripped chunk content.
-        chunk_sha256 = sha256(chunk.content.strip().encode("utf-8")).hexdigest()
-        existing = next(
-            (
-                record
-                for record in run.evidence
-                if record.source_document_id == chunk.document_id
-                and record.chunk_index == chunk.index
-                and record.chunk_sha256 == chunk_sha256
-                and record.note.strip() == authorization.note.strip()
-            ),
-            None,
-        )
-        if existing is not None:
-            # The exact authorized observation is already canonical, for example
-            # when an attempt persisted its evidence but died before the step was
-            # recorded and was later ruled not performed.  Recording it again
-            # would count one observation twice; reporting success would claim
-            # this attempt recorded it.  Refuse honestly instead.
-            raise ResearchError(
-                f"This exact evidence is already recorded as {existing.evidence_id} "
-                "in this run; it was not recorded again."
-            )
 
         updated = self._research_run_manager.add_evidence(
             run_id,

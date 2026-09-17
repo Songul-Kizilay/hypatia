@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.381
+## Current bounded text journey: v0.3.382
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -113,6 +113,31 @@ and model prose cannot alter it. It does not change mission lifecycle,
 authorization, cumulative allowance, plan digest, source slots, provider/model
 selection, retry behavior or run closure. An unchanged recovered state renders
 the same explanation.
+
+### Manual-entry double-submit idempotency: v0.3.382
+
+Manual evidence, assessment, claim and comparison-note entry goes through the
+same ResearchRunManager write methods as plan steps. Assessments, claims and
+notes use preview → modal confirmation → record; evidence records directly. The
+v0.3.377–v0.3.379 replay guards lived only in the plan-step operations, so an
+operator re-confirming an identical entry still created a second record.
+
+The exact-repeat refusal now lives in the manager, the one write path:
+
+- **Evidence**: same source, chunk index, stripped-content SHA-256 and note.
+- **First assessment**: same source, evidence set, text, trust and all four
+  structured judgements (superseding corrections are unaffected).
+- **First claim**: same evidence set, text, epistemic state and confidence
+  (superseding corrections are unaffected).
+- **Comparison note**: same source, evidence and assessment sets and text.
+
+Write previews report llowed = false with a reason naming the existing record,
+so the operator sees it before confirming; recording refuses with the same
+message, and the manual evidence route shows it instead of a generic failure.
+The plan-step guards were removed in favour of this single implementation, and
+their replay tests pass unchanged. Anything genuinely different, and every
+explicit correction, is still recorded. No schema, authority, budget, goal or
+readiness change.
 
 ### Version-safe cross-run source identity: v0.3.381
 

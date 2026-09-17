@@ -439,6 +439,10 @@ class ResearchRunManager:
                 raise ResearchError(
                     "Research evidence must come from a source attached to this run."
                 )
+            self._refuse_duplicate(
+                "evidence",
+                self._identical_evidence(run, chunk, normalized_note),
+            )
             now = self._now()
             evidence = ResearchEvidenceRecord.from_chunk(
                 self._new_evidence_id(),
@@ -779,19 +783,35 @@ class ResearchRunManager:
                 source.document_id,
                 normalized_superseded_id,
             )
-            allowed = not run.status.terminal
-            reason = (
-                (
-                    "Research source assessment correction can be recorded after "
-                    "confirmation."
-                    if superseded_assessment is not None
-                    else (
-                        "Research source assessment can be recorded after "
-                        "confirmation."
-                    )
+            duplicate = (
+                None
+                if superseded_assessment is not None
+                else self._identical_assessment(
+                    run,
+                    source.document_id,
+                    tuple(record.evidence_id for record in evidence),
+                    normalized_text,
+                    normalized_information_trust,
+                    normalized_judgement,
                 )
-                if allowed
-                else "A closed research run cannot accept new assessments."
+            )
+            allowed = not run.status.terminal and duplicate is None
+            reason = (
+                self._duplicate_reason("assessment", duplicate)
+                if duplicate is not None
+                else (
+                    (
+                        "Research source assessment correction can be recorded after "
+                        "confirmation."
+                        if superseded_assessment is not None
+                        else (
+                            "Research source assessment can be recorded after "
+                            "confirmation."
+                        )
+                    )
+                    if allowed
+                    else "A closed research run cannot accept new assessments."
+                )
             )
             return ResearchSourceAssessmentWritePreview(
                 run_id=run.run_id,
@@ -837,15 +857,30 @@ class ResearchRunManager:
                 run,
                 normalized_superseded_id,
             )
-            allowed = not run.status.terminal
-            reason = (
-                (
-                    "Research claim correction can be recorded after confirmation."
-                    if superseded_claim is not None
-                    else "Research claim can be recorded after confirmation."
+            duplicate_claim = (
+                None
+                if superseded_claim is not None
+                else self._identical_claim(
+                    run,
+                    tuple(record.evidence_id for record in evidence),
+                    normalized_text,
+                    normalized_state,
+                    normalized_confidence,
                 )
-                if allowed
-                else "A closed research run cannot accept new claims."
+            )
+            allowed = not run.status.terminal and duplicate_claim is None
+            reason = (
+                self._duplicate_reason("claim", duplicate_claim)
+                if duplicate_claim is not None
+                else (
+                    (
+                        "Research claim correction can be recorded after confirmation."
+                        if superseded_claim is not None
+                        else "Research claim can be recorded after confirmation."
+                    )
+                    if allowed
+                    else "A closed research run cannot accept new claims."
+                )
             )
             return ResearchClaimWritePreview(
                 run_id=run.run_id,
@@ -888,6 +923,17 @@ class ResearchRunManager:
                 run,
                 normalized_superseded_id,
             )
+            if superseded_claim is None:
+                self._refuse_duplicate(
+                    "claim",
+                    self._identical_claim(
+                        run,
+                        tuple(record.evidence_id for record in evidence),
+                        normalized_text,
+                        normalized_state,
+                        normalized_confidence,
+                    ),
+                )
             self._require_collecting(run)
             now = self._now()
             claim = ResearchClaimRecord(
@@ -1167,6 +1213,18 @@ class ResearchRunManager:
                 source.document_id,
                 normalized_superseded_id,
             )
+            if superseded_assessment is None:
+                self._refuse_duplicate(
+                    "assessment",
+                    self._identical_assessment(
+                        run,
+                        source.document_id,
+                        tuple(record.evidence_id for record in evidence),
+                        normalized_text,
+                        normalized_information_trust,
+                        normalized_judgement,
+                    ),
+                )
             self._require_collecting(run)
             now = self._now()
             assessment = ResearchSourceAssessmentRecord(
@@ -1239,7 +1297,14 @@ class ResearchRunManager:
                 normalized_evidence_ids,
                 normalized_assessment_ids,
             )
-            allowed = not run.status.terminal
+            duplicate = self._identical_comparison_note(
+                run,
+                normalized_document_ids,
+                tuple(record.evidence_id for record in evidence),
+                tuple(record.assessment_id for record in assessments),
+                normalized_text,
+            )
+            allowed = not run.status.terminal and duplicate is None
             return ResearchSourceComparisonNoteWritePreview(
                 comparison=comparison,
                 evidence=evidence,
@@ -1247,9 +1312,13 @@ class ResearchRunManager:
                 text=normalized_text,
                 allowed=allowed,
                 reason=(
-                    "Research comparison note can be recorded after confirmation."
-                    if allowed
-                    else "A closed research run cannot accept comparison notes."
+                    self._duplicate_reason("comparison note", duplicate)
+                    if duplicate is not None
+                    else (
+                        "Research comparison note can be recorded after confirmation."
+                        if allowed
+                        else "A closed research run cannot accept comparison notes."
+                    )
                 ),
             )
 
@@ -1282,6 +1351,16 @@ class ResearchRunManager:
                 normalized_document_ids,
                 normalized_evidence_ids,
                 normalized_assessment_ids,
+            )
+            self._refuse_duplicate(
+                "comparison note",
+                self._identical_comparison_note(
+                    run,
+                    normalized_document_ids,
+                    tuple(record.evidence_id for record in evidence),
+                    tuple(record.assessment_id for record in assessments),
+                    normalized_text,
+                ),
             )
             self._require_collecting(run)
             now = self._now()
@@ -1701,6 +1780,120 @@ class ResearchRunManager:
         if len(normalized) > 2_000:
             raise ResearchError("Research question is too long.")
         return normalized
+
+    @staticmethod
+    def _duplicate_reason(label: str, record: object) -> str:
+        identity = next(
+            getattr(record, name)
+            for name in ("evidence_id", "assessment_id", "claim_id", "note_id")
+            if hasattr(record, name)
+        )
+        return (
+            f"This exact {label} is already recorded as {identity} in this run; "
+            "it was not recorded again."
+        )
+
+    @classmethod
+    def _refuse_duplicate(cls, label: str, record: object | None) -> None:
+        """Refuse an exact repeat of an existing first record, naming it.
+
+        Recording one observation twice would count it twice, whether the
+        repeat comes from a retried plan step or a re-confirmed manual entry.
+        """
+        if record is not None:
+            raise ResearchError(cls._duplicate_reason(label, record))
+
+    @staticmethod
+    def _identical_evidence(
+        run: ResearchRun, chunk: Chunk, note: str
+    ) -> ResearchEvidenceRecord | None:
+        chunk_sha256 = sha256(chunk.content.strip().encode("utf-8")).hexdigest()
+        return next(
+            (
+                record
+                for record in run.evidence
+                if record.source_document_id == chunk.document_id
+                and record.chunk_index == chunk.index
+                and record.chunk_sha256 == chunk_sha256
+                and record.note == note
+            ),
+            None,
+        )
+
+    @staticmethod
+    def _identical_assessment(
+        run: ResearchRun,
+        document_id: str,
+        evidence_ids: tuple[str, ...],
+        text: str,
+        information_trust: ResearchInformationTrust,
+        judgement: tuple[
+            ResearchSourceUsefulness,
+            ResearchSourceApplicability,
+            ResearchSourceIndependence,
+            ResearchSourcePublicationStatus,
+        ],
+    ) -> ResearchSourceAssessmentRecord | None:
+        return next(
+            (
+                record
+                for record in run.assessments
+                if record.supersedes_assessment_id is None
+                and record.source_document_id == document_id
+                and set(record.evidence_ids) == set(evidence_ids)
+                and record.text == text
+                and record.information_trust is information_trust
+                and (
+                    record.usefulness,
+                    record.applicability,
+                    record.independence,
+                    record.publication_status,
+                )
+                == judgement
+            ),
+            None,
+        )
+
+    @staticmethod
+    def _identical_claim(
+        run: ResearchRun,
+        evidence_ids: tuple[str, ...],
+        text: str,
+        epistemic_state: ResearchEpistemicState,
+        confidence: ResearchClaimConfidence,
+    ) -> ResearchClaimRecord | None:
+        return next(
+            (
+                record
+                for record in run.claims
+                if record.supersedes_claim_id is None
+                and set(record.evidence_ids) == set(evidence_ids)
+                and record.text == text
+                and record.epistemic_state is epistemic_state
+                and record.confidence is confidence
+            ),
+            None,
+        )
+
+    @staticmethod
+    def _identical_comparison_note(
+        run: ResearchRun,
+        document_ids: tuple[str, ...],
+        evidence_ids: tuple[str, ...],
+        assessment_ids: tuple[str, ...],
+        text: str,
+    ) -> ResearchSourceComparisonNoteRecord | None:
+        return next(
+            (
+                record
+                for record in run.comparison_notes
+                if set(record.source_document_ids) == set(document_ids)
+                and set(record.evidence_ids) == set(evidence_ids)
+                and set(record.assessment_ids) == set(assessment_ids)
+                and record.text == text
+            ),
+            None,
+        )
 
     @staticmethod
     def _normalize_run_id(run_id: str) -> str:

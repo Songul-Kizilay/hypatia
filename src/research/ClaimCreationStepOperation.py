@@ -58,28 +58,6 @@ class ClaimCreationStepOperation:
         if run.status.terminal:
             raise ResearchError("Research run is closed and cannot record new claims.")
         self._raise_if_cancelled(context)
-        if authorization.supersedes_claim_id is None:
-            # A superseding claim is already refused once its target has been
-            # superseded.  A first claim has no such guard, so an attempt that
-            # saved it, died before the step was recorded and was ruled not
-            # performed would record the identical claim a second time.
-            existing = next(
-                (
-                    record
-                    for record in run.claims
-                    if record.supersedes_claim_id is None
-                    and set(record.evidence_ids) == set(authorization.evidence_ids)
-                    and record.text.strip() == authorization.text.strip()
-                    and record.epistemic_state is authorization.epistemic_state
-                    and record.confidence is authorization.confidence
-                ),
-                None,
-            )
-            if existing is not None:
-                raise ResearchError(
-                    f"This exact claim is already recorded as {existing.claim_id} "
-                    "in this run; it was not recorded again."
-                )
 
         updated = self._research_run_manager.record_claim(
             run_id,

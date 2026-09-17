@@ -2,6 +2,26 @@
 
 All notable project changes are recorded here.
 
+## [0.3.382] - 2026-09-17
+
+### Fixed
+
+- Re-confirming an identical manual entry recorded it twice. The run manager
+  now refuses an exact repeat of existing evidence, a first assessment, a first
+  claim or a comparison note, naming the existing record; write previews report
+  the entry as not allowed with that reason before confirmation, and manual
+  evidence entry shows the explanation.
+
+### Changed
+
+- The replay guards added to plan steps in v0.3.377–v0.3.379 now live only in
+  the run manager, the single write path shared with manual entry.
+
+### Boundaries
+
+- Superseding corrections and genuinely different entries are still recorded.
+  No schema, authority, budget, goal or readiness change.
+
 ## [0.3.381] - 2026-09-17
 
 ### Fixed

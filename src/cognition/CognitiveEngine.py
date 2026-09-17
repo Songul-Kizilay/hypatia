@@ -1496,10 +1496,16 @@ class CognitiveEngine:
                 chunk,
                 note,
             )
-        except ResearchError:
+        except ResearchError as error:
             return self._response_composer.research_evidence_record_failure(
                 request,
-                "Research evidence could not be saved.",
+                # A repeated identical entry is explained, naming the existing
+                # evidence; other refusals keep the bounded generic message.
+                (
+                    str(error)
+                    if str(error).startswith("This exact evidence is already recorded")
+                    else "Research evidence could not be saved."
+                ),
             )
         return self._response_composer.research_evidence_record_success(request, run)
 

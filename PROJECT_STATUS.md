@@ -2,12 +2,15 @@
 
 ## Runtime Version
 
-`v0.3.381 (Genesis)`
+`v0.3.382 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.381 makes cross-run source identity version-safe: an indexed
+Version v0.3.382 closes the manual-entry double-submit gap: the run manager,
+the single write path for manual entry and plan steps, refuses an exact repeat
+of existing evidence, a first assessment, a first claim or a comparison note,
+and write previews say so before confirmation. Version v0.3.381 makes cross-run source identity version-safe: an indexed
 document is now one immutable content version rather than a URL, each run's
 source record is its own observation carrying the content SHA-256 it fetched,
 identical versions share storage but not provenance, and a run can accept its
