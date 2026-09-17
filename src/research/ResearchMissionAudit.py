@@ -46,8 +46,9 @@ from research.ResearchTeachingReport import teaching_report
 MISSION_AUDIT_SCHEMA = "hypatia.mission_audit"
 #: Version 2 resolves traces to evidence and source observations and names the
 #: recorded basis of the goal evaluation.  Version 3 adds each source's selected
-#: discovery candidate when recorded.
-MISSION_AUDIT_SCHEMA_VERSION = 3
+#: discovery candidate when recorded.  Version 4 traces user-reviewed claim
+#: contradictions through their exact claims and evidence.
+MISSION_AUDIT_SCHEMA_VERSION = 4
 
 
 def build_mission_audit(
@@ -429,6 +430,27 @@ def render_mission_audit_markdown(
                 )
             )
         basis = traceability["goal_basis"]
+        for entry in traceability["claim_contradictions"]:
+            lines.append(
+                f"- Contradiction {_inline(entry['contradiction_id'])} (user-reviewed) "
+                "→ claims "
+                + ", ".join(
+                    f"{_inline(claim['claim_id'])} "
+                    + (
+                        f"({claim['epistemic_state']}, "
+                        f"{'current' if claim['current'] else 'superseded'})"
+                        if claim["resolved"]
+                        else "(not found in this run)"
+                    )
+                    for claim in entry["claims"]
+                )
+            )
+            for trace in entry["evidence"]:
+                lines.append("  - " + _evidence_trace_line(trace))
+        if traceability["claim_contradictions"]:
+            lines.append(
+                "_A recorded contradiction does not decide which claim is true._"
+            )
         lines.extend(("", "### Recorded Basis of the Goal Evaluation", ""))
         for note in basis["comparison_notes"]:
             lines.append(
@@ -706,6 +728,29 @@ def _traceability(
         }
         for claim in run.claims
     ]
+    claims_by_id = {claim.claim_id: claim for claim in run.claims}
+    contradictions = [
+        {
+            "contradiction_id": contradiction.contradiction_id,
+            "claims": [
+                {
+                    "claim_id": claim_id,
+                    "resolved": claim_id in claims_by_id,
+                    "epistemic_state": (
+                        claims_by_id[claim_id].epistemic_state.value
+                        if claim_id in claims_by_id
+                        else None
+                    ),
+                    "current": claim_id not in superseded_claims,
+                }
+                for claim_id in contradiction.claim_ids
+            ],
+            "evidence_ids": list(contradiction.evidence_ids),
+            "evidence": evidence_trace(contradiction.evidence_ids),
+            "recorded_at": contradiction.recorded_at.isoformat(),
+        }
+        for contradiction in run.claim_contradictions
+    ]
     goal_basis: list[dict[str, Any]] = []
     if checkpoint is not None:
         for role, note_id, relation in (
@@ -771,6 +816,7 @@ def _traceability(
         ],
         "comparison_reviews": reviews,
         "claims": claims,
+        "claim_contradictions": contradictions,
     }
 
 

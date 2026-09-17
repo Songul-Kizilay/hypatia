@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.387
+## Current bounded text journey: v0.3.388
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -113,6 +113,34 @@ and model prose cannot alter it. It does not change mission lifecycle,
 authorization, cumulative allowance, plan digest, source slots, provider/model
 selection, retry behavior or run closure. An unchanged recovered state renders
 the same explanation.
+
+### Provenance foundation — contradiction trace and phase close: v0.3.388
+
+**Change (audit schema 4, read-only).** Each user-reviewed claim contradiction is
+traced through its exact claims (epistemic state, current or superseded, or
+"not found") and each evidence record to this run's source observation. The
+Markdown audit states that a recorded contradiction does not decide which claim
+is true. Contradiction semantics are unchanged.
+
+**Provenance inventory re-run.** Every hop is now an exact, persisted ID reference,
+validated on load and exported, with older records reported as unrecorded:
+
+| Hop | Recorded as | Since |
+| --- | --- | --- |
+| discovery → candidate | candidate_ids on the discovery record | v0.3.387 |
+| candidate → fetch observation | discovery_candidate_id on the run's source | v0.3.387 |
+| requested → final URL | equested_url and url on the source | v0.3.385 |
+| observation → content version | content-derived document ID and content_sha256 | v0.3.381 |
+| content version → evidence | evidence source_document_id, chunk ID and SHA-256 | earlier |
+| evidence → claim / assessment / comparison note | exact evidence IDs | earlier |
+| claims → contradiction | exact claim and evidence IDs | earlier |
+| note → operator review | note ID with identical evidence IDs | v0.3.367 |
+| mission → plan / execution / run / approval | digest, snapshot, run ID, consumption | earlier |
+| checkpoint → mission decision basis | recorded note IDs, outcomes, supporting review | v0.3.386 |
+
+Cross-run observation ownership is never shared; only immutable content storage
+is. The provenance-foundation phase is closed. Next phase: temporal freshness
+and revalidation, starting with characterization.
 
 ### Provenance foundation — discovery-candidate identity: v0.3.387
 

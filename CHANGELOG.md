@@ -2,6 +2,23 @@
 
 All notable project changes are recorded here.
 
+## [0.3.388] - 2026-09-17
+
+### Added
+
+- Mission audit schema 4 traces each user-reviewed claim contradiction through
+  its exact claims (state, current or superseded) and evidence to this run's
+  source observations. The Markdown audit states that a contradiction does not
+  decide which claim is true.
+- Re-run provenance inventory (roadmap): every hop from discovery candidate to
+  mission decision is recorded by ID, validated and exported. The
+  provenance-foundation phase is closed.
+
+### Boundaries
+
+- Read-only export; contradiction semantics, persistence, authority, budget,
+  goal and readiness are unchanged.
+
 ## [0.3.387] - 2026-09-17
 
 ### Added

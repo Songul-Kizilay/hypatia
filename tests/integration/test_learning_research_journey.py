@@ -1768,7 +1768,7 @@ class LearningResearchJourneyTests(unittest.TestCase):
 
         # Identity, plan and authority come from the canonical records.
         self.assertEqual(document["schema"], "hypatia.mission_audit")
-        self.assertEqual(document["schema_version"], 3)
+        self.assertEqual(document["schema_version"], 4)
         self.assertEqual(document["identity"]["plan_id"], plan_id)
         self.assertEqual(document["identity"]["research_run_id"], run.run_id)
         self.assertEqual(
@@ -1964,6 +1964,58 @@ class LearningResearchJourneyTests(unittest.TestCase):
         self.assertEqual(
             self.approvals.authorization_for_execution(plan_id), authorization
         )
+
+    def test_audit_traces_claim_contradictions_through_claims_and_evidence(self):
+        self.relation = "possible_agreement"
+        response = self.start()
+        plan_id = response.research_plan_execution.plan_id
+        run = response.research_runs[0]
+        manager = self.bootstrap.container.resolve(ResearchRunManager)
+        first, second = run.evidence[0], run.evidence[1]
+        claim_a = manager.record_claim(
+            run.run_id, [first.evidence_id], "Defenses are effective.", "hypothesis"
+        ).claims[-1]
+        claim_b = manager.record_claim(
+            run.run_id,
+            [second.evidence_id],
+            "Defenses are not effective.",
+            "hypothesis",
+        ).claims[-1]
+        contradiction = manager.record_claim_contradiction(
+            run.run_id, [claim_a.claim_id, claim_b.claim_id], "These disagree."
+        ).claim_contradictions[-1]
+        stored = manager.get(run.run_id)
+        calls = self.external_calls()
+
+        _, markdown, audit = self.audit_documents(self.controller, plan_id)
+
+        (entry,) = audit["traceability"]["claim_contradictions"]
+        self.assertEqual(entry["contradiction_id"], contradiction.contradiction_id)
+        self.assertEqual(
+            [(c["claim_id"], c["resolved"], c["current"]) for c in entry["claims"]],
+            [(claim_a.claim_id, True, True), (claim_b.claim_id, True, True)],
+        )
+        sources = {s.document_id: s for s in stored.sources}
+        evidence = {e.evidence_id: e for e in stored.evidence}
+        self.assertEqual(
+            [
+                (t["evidence_id"], t["source"]["document_id"], t["source"]["url"])
+                for t in entry["evidence"]
+            ],
+            [
+                (
+                    evidence_id,
+                    evidence[evidence_id].source_document_id,
+                    sources[evidence[evidence_id].source_document_id].url,
+                )
+                for evidence_id in contradiction.evidence_ids
+            ],
+        )
+        self.assertIn(f"Contradiction {contradiction.contradiction_id}", markdown)
+        self.assertIn("does not decide which claim is true", markdown)
+        # Tracing is read-only: the contradiction and goal state are untouched.
+        self.assertEqual(manager.get(run.run_id), stored)
+        self.assertEqual(self.external_calls(), calls)
 
     def test_audit_trace_reports_unresolved_references_without_guessing(self):
         self.relation = "possible_agreement"

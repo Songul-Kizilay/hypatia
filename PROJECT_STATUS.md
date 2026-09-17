@@ -2,12 +2,15 @@
 
 ## Runtime Version
 
-`v0.3.387 (Genesis)`
+`v0.3.388 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.387 closes the discovery link of the provenance chain: each
+Version v0.3.388 adds user-reviewed claim contradictions to the mission audit
+trace (audit schema 4) and closes the provenance-foundation phase: every link
+from discovery candidate to mission decision is now recorded by ID, validated
+and exported. Version v0.3.387 closes the discovery link of the provenance chain: each
 discovery records a stable identity per candidate, and a source selected from a
 discovery records that exact candidate on the run's own source observation at
 selection time (run store schema 17, mission audit schema 3). Integrity checks
