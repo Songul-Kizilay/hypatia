@@ -33,10 +33,11 @@ def command_plan():
     )
 
 
-def https_header_command_plan():
+def https_header_command_plan(*, resolved_address: str = "93.184.216.34"):
     return kali_operation_command_plan(
         operation_kind=ResearchKaliOperationKind.HTTPS_HEADER_LOOKUP,
         hostname="www.example.test",
+        resolved_address=resolved_address,
     )
 
 
@@ -121,6 +122,8 @@ class WslKaliOperationProcessAdapterTests(unittest.TestCase):
                 "10",
                 "--proto",
                 "=https",
+                "--resolve",
+                "www.example.test:443:93.184.216.34",
                 "https://www.example.test/",
             ),
             capture_output=True,

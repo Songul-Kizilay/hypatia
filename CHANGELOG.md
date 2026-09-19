@@ -2,6 +2,56 @@
 
 All notable project changes are recorded here.
 
+## [0.3.395] - 2026-09-19
+
+### Added
+
+- Closed an SSRF / address-pinning gap in the reviewed Kali
+  `HTTPS_HEADER_LOOKUP` operation. Building a preview for that operation kind
+  now resolves the authorized hostname through the existing
+  `PublicHttpsUrlValidator.validate_and_resolve()` and rejects it through the
+  same `ResearchTargetScope.require_addresses()` used on the ordinary fetch
+  path before any command plan is built, reusing the existing address
+  validation rather than adding a second one.
+- The validated address is carried as a new `resolved_address` field on
+  `ResearchKaliOperationPreview` (required and address-shaped for
+  `HTTPS_HEADER_LOOKUP`, always `None` for `DNS_RECORD_LOOKUP`) and is part of
+  the canonicalized preview document the operation digest is computed over
+  (digest schema tag `v1` -> `v2`, an in-memory canonicalization tag only; no
+  persisted schema changes). The generated `curl` argv now pins the actual
+  connection to that address with `--resolve host:443:address`, so the
+  network request contacts only the address that was validated, not whatever
+  a second, later DNS lookup might return.
+- Because the digest binds the resolved address, and the run path calls
+  `preview_for_request` again (a fresh DNS resolution) rather than reusing the
+  authorized preview, any DNS answer drift between authorization and run
+  changes the recomputed digest and the existing digest-equality check
+  refuses the run before any authorization is consumed or process spawned.
+- `ResearchKaliOperationRun` carries the same `resolved_address` for
+  provenance, and both the preview and run response text report it (or
+  "not applicable" for `DNS_RECORD_LOOKUP`).
+
+### Boundaries
+
+- `DNS_RECORD_LOOKUP` is unchanged: it performs no resolution, carries no
+  `resolved_address`, and its preview/run text is unchanged. No new Kali
+  operation kind was added, and Kali authorization single-use, five-minute
+  expiry and opt-in-flag semantics are unchanged.
+- `kali_operation_preview_failure()` still unconditionally renders
+  `"Network/DNS: not used"` on every refusal path. For two specific refusal
+  reasons on `HTTPS_HEADER_LOOKUP` — address-validation failure and an
+  excluded-network refusal from `require_addresses()` — a real DNS
+  resolution already happened before the refusal, so that line is inaccurate
+  for those two cases. The refusal itself is still correctly fail-closed (no
+  address bypass, no authority or budget granted, no process started); this
+  is a recorded wording-accuracy gap on the refusal path only, left open for
+  a future follow-up rather than fixed in this milestone.
+- The first address returned by resolution is the one pinned and bound; DNS
+  answer ordering across separate resolutions is not guaranteed stable, so
+  legitimate multi-address hosts can still see a resolution-drift refusal
+  between authorization and run. That is the intended fail-closed behavior,
+  not a defect.
+
 ## [0.3.394] - 2026-09-19
 
 ### Added

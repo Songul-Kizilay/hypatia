@@ -1084,6 +1084,7 @@ class ResponseComposer:
                     if preview.dns_record_type is not None
                     else "not applicable"
                 ),
+                "Resolved address: " + (preview.resolved_address or "not applicable"),
                 "Permitted ports: "
                 + ", ".join(str(port) for port in preview.permitted_ports),
                 "Budget: "
@@ -1098,7 +1099,13 @@ class ResponseComposer:
                 *argv_lines,
                 "Execution: not started",
                 "Process: not created",
-                "Network/DNS: not used",
+                "Network/DNS: "
+                + (
+                    "DNS resolution performed to validate the target address; "
+                    "no other network use"
+                    if preview.resolved_address is not None
+                    else "not used"
+                ),
             )
         )
         return BrainResponse(
@@ -1332,6 +1339,8 @@ class ResponseComposer:
                     f"Scope revision digest: {result.scope_revision_digest}",
                     "Execution policy digest: " f"{result.execution_policy_digest}",
                     f"Operation: {result.operation_kind.value}",
+                    "Resolved address: "
+                    + (result.resolved_address or "not applicable"),
                     "Command plan: validated argv only; no shell command string",
                     f"Transport profile: {result.command_plan.transport.value}",
                     f"Executable: {result.command_plan.executable_path}",

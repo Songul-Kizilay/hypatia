@@ -141,6 +141,7 @@ class KaliOperationRunApplicationService:
             operation_kind=preview.operation_kind,
             command_plan=preview.command_plan,
             process_result=process_result,
+            resolved_address=preview.resolved_address,
         )
 
     @staticmethod

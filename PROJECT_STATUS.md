@@ -2,11 +2,25 @@
 
 ## Runtime Version
 
-`v0.3.394 (Genesis)`
+`v0.3.395 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
+Version v0.3.395 closes an SSRF / address-pinning gap in the reviewed Kali
+`HTTPS_HEADER_LOOKUP` operation. Building its preview now resolves and
+validates the authorized hostname's address through the existing
+`PublicHttpsUrlValidator`/`ResearchTargetScope.require_addresses()` path
+before any command plan is built, carries the validated address as a new
+`resolved_address` field bound into the operation digest, and pins the
+generated `curl` argv to it with `--resolve`. Because the run path
+re-resolves and recomputes the digest from a fresh preview rather than
+reusing the authorized one, any DNS drift between authorization and run
+fails the digest-equality check closed before any authorization is consumed
+or process spawned. `DNS_RECORD_LOOKUP` is unchanged. One residual wording
+gap is recorded: refusal text still unconditionally claims no DNS was used,
+which is inaccurate for the two refusal reasons that occur after a real
+resolution; the refusal itself remains fail-closed.
 Version v0.3.394 gives the conversational model runtime capability
 self-awareness. The cognitive engine projects what it actually wired (research
 operations, plan approval, sessions, memory, local knowledge, self-audit and

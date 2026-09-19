@@ -9,6 +9,7 @@ from typing import cast
 from brain.BrainRequest import BrainRequest
 from brain.BrainResponse import BrainResponse
 from core.Exceptions import ResearchError
+from research.PublicHttpsUrlValidator import PublicHttpsUrlValidator
 from research.ResearchKaliOperationPreview import (
     ResearchDnsRecordType,
     ResearchKaliOperationKind,
@@ -25,7 +26,13 @@ KALI_OPERATION_PREVIEW_INTENT = "kali_operation_preview"
 
 
 class KaliOperationPreviewApplicationService:
-    """Preview one reviewed operation without DNS, process or network effects."""
+    """Preview one reviewed operation without process or execution effects.
+
+    DNS_RECORD_LOOKUP previews perform no DNS lookup or network effect.
+    HTTPS_HEADER_LOOKUP previews resolve and validate the target hostname's
+    address so the previewed and later-authorized command plan can be pinned
+    to it; that resolution is the only network effect a preview performs.
+    """
 
     def __init__(
         self,
@@ -33,10 +40,12 @@ class KaliOperationPreviewApplicationService:
         program_scope_revision_store: ResearchProgramScopeRevisionStore,
         *,
         clock: Callable[[], datetime] | None = None,
+        https_url_validator: PublicHttpsUrlValidator | None = None,
     ) -> None:
         self._response_composer = response_composer
         self._program_scope_revision_store = program_scope_revision_store
         self._clock = clock or (lambda: datetime.now(UTC))
+        self._https_url_validator = https_url_validator or PublicHttpsUrlValidator()
 
     @staticmethod
     def is_preview_request(request: BrainRequest) -> bool:
@@ -44,7 +53,7 @@ class KaliOperationPreviewApplicationService:
         return request.metadata.get("intent") == KALI_OPERATION_PREVIEW_INTENT
 
     def process_preview(self, request: BrainRequest) -> BrainResponse:
-        """Build a side-effect-free operation preview or a bounded refusal."""
+        """Build one operation preview, or a bounded refusal, without a process."""
         try:
             preview = self.preview_for_request(request)
         except ResearchError as error:
@@ -76,6 +85,14 @@ class KaliOperationPreviewApplicationService:
             and 443 not in policy.permitted_ports
         ):
             raise ResearchError("Program scope policy does not permit HTTPS port 443.")
+        resolved_address: str | None = None
+        if kind is ResearchKaliOperationKind.HTTPS_HEADER_LOOKUP:
+            normalized_hostname = hostname.strip().lower().removesuffix(".")
+            destination = self._https_url_validator.validate_and_resolve(
+                f"https://{normalized_hostname}/"
+            )
+            revision.scope.require_addresses(destination.addresses)
+            resolved_address = destination.addresses[0]
         return ResearchKaliOperationPreview(
             program_id=revision.program_id,
             scope_revision_id=revision.revision_id,
@@ -89,6 +106,7 @@ class KaliOperationPreviewApplicationService:
                 if kind is ResearchKaliOperationKind.DNS_RECORD_LOOKUP
                 else None
             ),
+            resolved_address=resolved_address,
             permitted_ports=policy.permitted_ports,
             max_request_count=policy.max_request_count,
             max_requests_per_minute=policy.max_requests_per_minute,
