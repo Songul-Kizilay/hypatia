@@ -2,6 +2,40 @@
 
 All notable project changes are recorded here.
 
+## [0.3.394] - 2026-09-19
+
+### Added
+
+- Runtime capability self-awareness for conversation. The cognitive engine
+  observes its own wiring once at construction (which research operations are
+  registered, whether plan approval, sessions, memory, local knowledge, the
+  self-audit and a reviewed Kali runner are wired) and projects a small typed
+  capability context: `available`, `unavailable` or `unknown`.
+- Every conversational model request carries that context as a separate,
+  deterministic system instruction after the configured system prompt, so a
+  custom `HYPATIA_LLM_SYSTEM_PROMPT` still works and cannot remove it. It tells
+  the model that Hypatia is an application and the model is its language
+  component, lists only what this runtime has wired, marks security ambitions,
+  web browsing from chat, monitoring, device control and system administration
+  as unavailable, and instructs it never to invent a capability.
+
+### Boundaries
+
+- Runtime capability description is not runtime authority. The projection
+  runs no operation, grants no approval, spends no allowance, fetches nothing,
+  revalidates nothing, starts no background work and calls no model;
+  capability self-awareness activates no tool.
+- Chat capability awareness does not mean chat performed research. The
+  context repeats that ordinary chat never researched, browsed, fetched,
+  verified or revalidated anything, and the existing deterministic research
+  honesty handling and claim guard are unchanged.
+- Truth comes only from wiring, never from documentation, module or folder
+  names: planned modules are never listed as available. Missing or malformed
+  evidence renders as not confirmed, and a projection fault falls back to a
+  context that claims nothing without stopping startup. Structured extraction
+  and proposal calls do not receive the context. Source revalidation is
+  described exactly as v0.3.393 bounds it and its semantics are unchanged.
+
 ## [0.3.393] - 2026-09-19
 
 ### Added

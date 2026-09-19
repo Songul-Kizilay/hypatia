@@ -1,6 +1,17 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.393
+## Current bounded text journey: v0.3.394
+
+### Runtime capability self-awareness: v0.3.394
+
+Ordinary chat now carries a small projection of what this runtime actually
+wired, derived from the registered research operations and service presence,
+never from documentation or module names. It describes authorized research,
+source acquisition, evidence tracking and bounded approved revalidation only
+as workflows that run through approved plans, and lists unwired security,
+monitoring and browsing ambitions as unavailable. The projection is
+description, not authority: it changes nothing about approval, allowance,
+execution or revalidation, and chat still never performs research.
 
 ### Bounded source revalidation authority: v0.3.393
 

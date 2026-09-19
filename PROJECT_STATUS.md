@@ -2,11 +2,21 @@
 
 ## Runtime Version
 
-`v0.3.393 (Genesis)`
+`v0.3.394 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
+Version v0.3.394 gives the conversational model runtime capability
+self-awareness. The cognitive engine projects what it actually wired (research
+operations, plan approval, sessions, memory, local knowledge, self-audit and
+any reviewed Kali runner) into a short typed context sent with every chat
+request as a separate system instruction, after the default or custom system
+prompt. It distinguishes Hypatia from the underlying model, lists planned
+security, monitoring, browsing and device ambitions as unavailable, and tells
+the model never to invent capabilities. Description is not authority: the
+context activates no tool, grants nothing and does not mean chat performed
+research; unknown wiring is never reported as available.
 Version v0.3.393 adds bounded source-revalidation authority. An approved
 `source_revalidation` plan step binds one exact prior observation of its own
 run; the fetch URL is derived from that observation's recorded requested URL,

@@ -95,6 +95,11 @@ from cognition.ResearchPlanPreviewApplicationService import (
 from cognition.ResearchSourceAcceptanceService import (
     ResearchSourceAcceptanceService,
 )
+from cognition.RuntimeCapabilityProjection import (
+    RuntimeCapabilityContext,
+    RuntimeCapabilityEvidence,
+    project_runtime_capabilities,
+)
 from cognition.SecurityAgentApplicationService import (
     SecurityAgentApplicationService,
 )
@@ -194,6 +199,7 @@ from research.ResearchKaliOperationAuthorizationStore import (
 from research.ResearchKaliOperationExecution import (
     ResearchKaliOperationProcessAdapter,
 )
+from research.ResearchKaliOperationPreview import ResearchKaliOperationKind
 from research.ResearchKaliRuntimeEnvironment import ResearchKaliRuntimeProbe
 from research.ResearchMissionStepResolver import ResearchMissionStepResolver
 from research.ResearchPlan import ResearchPlan
@@ -499,6 +505,7 @@ class CognitiveEngine:
                         research_run_manager,
                     ),
                 )
+        registered_research_operations = operation_registry.registered_capabilities
         # Built before execution so it can be handed over as the narrow
         # consumption port. Approval still imports no execution or scheduling
         # service: the dependency runs one way, from execution to approval.
@@ -764,6 +771,47 @@ class CognitiveEngine:
         )
         self._hybrid_semantic_memory_ranker = HybridSemanticMemoryRanker()
         self._router = BrainRouter()
+        self._runtime_capabilities = self._project_runtime_capabilities(
+            registered_research_operations
+        )
+
+    @property
+    def runtime_capabilities(self) -> RuntimeCapabilityContext:
+        """Return what this runtime can truthfully describe; never authority."""
+        return self._runtime_capabilities
+
+    def _project_runtime_capabilities(
+        self,
+        registered_research_operations: tuple[ResearchPlanStepCapability, ...],
+    ) -> RuntimeCapabilityContext:
+        """Observe this engine's own wiring once; claim nothing on failure.
+
+        Only plain facts leave here: whether a service was wired, which research
+        operations are registered and which reviewed Kali operation kinds a
+        wired runner can run.  Projection performs no operation and no call.
+        """
+        try:
+            return project_runtime_capabilities(
+                RuntimeCapabilityEvidence(
+                    conversation_model=self._llm_provider is not None,
+                    sessions=self._session_manager is not None,
+                    memory=self._memory_manager is not None,
+                    local_knowledge=self._knowledge_engine is not None,
+                    research_approvals=(
+                        self._research_run_manager is not None
+                        and self._plan_authorization_service is not None
+                    ),
+                    research_operations=frozenset(registered_research_operations),
+                    security_self_audit=self._security_agent_service is not None,
+                    kali_operation_kinds=(
+                        tuple(kind.value for kind in ResearchKaliOperationKind)
+                        if self._kali_operation_run_service is not None
+                        else ()
+                    ),
+                )
+            )
+        except Exception:  # noqa: BLE001 - a projection fault must not add claims
+            return RuntimeCapabilityContext.conservative()
 
     def process(self, request: BrainRequest) -> BrainResponse:
         """Process a request using the currently supported cognitive intent."""
@@ -3346,6 +3394,9 @@ class CognitiveEngine:
                 generated = self._llm_provider.generate(
                     provider_prompt,
                     history=history,
+                    # Descriptive runtime truth, kept apart from the configured
+                    # system prompt; it enables and authorizes nothing.
+                    system_instruction=self._runtime_capabilities.instruction(),
                 )
                 response = BrainResponse(
                     message=self._conversation_research_claim_guard.annotate(

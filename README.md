@@ -1303,6 +1303,28 @@ correction naming the canonical counts and stating that anything it called a
 source is model output. The model text is never deleted: you should see both the
 claim and the correction.
 
+### What Hypatia tells the model about itself
+
+The conversational model also receives a short runtime capability context with
+every chat request. The cognitive engine builds it once from its own wiring:
+which research operations are registered, whether plan approval, sessions,
+memory, local knowledge, the self-audit and a reviewed Kali runner are present.
+Documentation, roadmap entries and module folders never count, so a planned
+module is never described as available. Each capability is `available`,
+`unavailable`, or not confirmed when the wiring could not be established; an
+unconfirmed capability is never claimed.
+
+The context is sent as a separate system instruction after the default prompt
+or your `HYPATIA_LLM_SYSTEM_PROMPT`, so a custom prompt keeps the capability
+truth. It tells the model that Hypatia is the application and the model only its
+language component, and that it must not invent capabilities.
+
+Runtime capability description is not runtime authority. Capability
+self-awareness activates no tool: it grants no approval, spends no allowance,
+fetches or revalidates nothing and starts no background work. Knowing that a
+research workflow exists does not mean chat performed research; research still
+runs only through an explicitly approved plan.
+
 ---
 
 ## Choosing a local model
