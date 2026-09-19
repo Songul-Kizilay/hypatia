@@ -223,7 +223,7 @@ class ComparisonReviewRecordTests(unittest.TestCase):
             store.save([subject])
             document = json.loads(path.read_text(encoding="utf-8"))
 
-            self.assertEqual(document["schema_version"], 18)
+            self.assertEqual(document["schema_version"], 19)
             self.assertEqual(store.load(), [subject])
             document["schema_version"] = 13
             for value in document["runs"]:

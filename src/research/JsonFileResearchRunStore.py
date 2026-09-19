@@ -357,7 +357,12 @@ class JsonFileResearchRunStore:
             if schema_version >= 19
             else self._DOCUMENT_FIELDS_V1_V18
         )
-        if set(document) != expected_fields:
+        has_empty_forward_relation_field = (
+            schema_version < 19
+            and set(document) == self._DOCUMENT_FIELDS_V19
+            and document.get("source_revalidations") == []
+        )
+        if set(document) != expected_fields and not has_empty_forward_relation_field:
             raise ResearchError(
                 f"Research run store '{self._path}' has invalid fields."
             )
