@@ -73,7 +73,12 @@ def render_research_run_markdown(run: ResearchRun) -> str:
             (
                 f"### Source {source_index}: {_inline(source.title)}",
                 "",
-                f"- **Document ID:** {_inline(source.document_id)}",
+                (
+                    f"- **Observation ID:** {_inline(source.observation_id)}"
+                    if source.observation_id is not None
+                    else "- **Observation ID:** unrecorded"
+                ),
+                f"- **Document/content version ID:** {_inline(source.document_id)}",
                 f"- **URL:** {_inline(source.url)}",
                 (
                     f"- **Requested URL:** {_inline(source.requested_url)}"

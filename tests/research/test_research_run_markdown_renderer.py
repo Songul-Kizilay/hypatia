@@ -50,6 +50,8 @@ class ResearchRunMarkdownRendererTests(unittest.TestCase):
         self.assertIn("- **Supersedes:** assessment-1", first)
         self.assertIn(r"- **Data taint:** external\_untrusted\_data", first)
         self.assertIn("- **Instruction authority:** none", first)
+        self.assertIn("- **Observation ID:** unrecorded", first)
+        self.assertIn("- **Document/content version ID:** document-1", first)
         # Sources built without a recorded observation say so, not guess one.
         self.assertIn(
             "- **Observed content SHA-256:** unrecorded (accepted before content "
@@ -66,6 +68,16 @@ class ResearchRunMarkdownRendererTests(unittest.TestCase):
             )
         )
         self.assertIn(f"- **Observed content SHA-256:** `{'c' * 64}`", versioned)
+        observed = render_research_run_markdown(
+            replace(
+                run,
+                sources=(
+                    replace(run.sources[0], observation_id="obs-1"),
+                    *run.sources[1:],
+                ),
+            )
+        )
+        self.assertIn("- **Observation ID:** obs-1", observed)
         self.assertIn("- **Information trust:** low", first)
         self.assertIn("- **Information trust:** high", first)
         self.assertIn("## Evidence-linked Claims", first)

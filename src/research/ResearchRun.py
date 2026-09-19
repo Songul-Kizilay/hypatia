@@ -56,6 +56,16 @@ class ResearchRun:
             raise ResearchError("Research run contains an invalid source record.")
         if len({source.document_id for source in self.sources}) != len(self.sources):
             raise ResearchError("Research run contains duplicate source documents.")
+        # Treat records constructed by older in-memory code as legacy, rather
+        # than inventing a new observation identity for them. Persisted legacy
+        # records are decoded the same way, with ``observation_id=None``.
+        observation_ids = [
+            observation_id
+            for source in self.sources
+            if (observation_id := getattr(source, "observation_id", None)) is not None
+        ]
+        if len(observation_ids) != len(set(observation_ids)):
+            raise ResearchError("Research run contains duplicate source observations.")
         if not isinstance(self.failures, tuple):
             raise ResearchError("Research run failures must be an immutable tuple.")
         if not all(

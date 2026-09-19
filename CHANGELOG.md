@@ -2,6 +2,25 @@
 
 All notable project changes are recorded here.
 
+## [0.3.390] - 2026-09-19
+
+### Added
+
+- Each newly accepted research source now receives an immutable, run-scoped
+  observation ID (research-run store schema 18). It names that exact acceptance
+  event and stays distinct from the immutable document/content version ID and
+  observed content SHA-256.
+- Run and mission audit exports now show observation identity separately from
+  document/content version. Legacy records truthfully show it as unrecorded.
+
+### Boundaries
+
+- Identical content may still be accepted by different runs and share content
+  storage, but each acceptance gets its own observation ID. IDs are only unique
+  within a run; no global identity registry was introduced. Existing records
+  are never backfilled, and this milestone adds no revalidation, freshness,
+  fetch, authority, provider, model, budget or lifecycle behavior.
+
 ## [0.3.389] - 2026-09-19
 
 ### Added

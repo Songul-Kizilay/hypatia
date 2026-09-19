@@ -111,6 +111,7 @@ class ResearchRunManager:
         *,
         clock: Callable[[], datetime] | None = None,
         id_factory: Callable[[], str] | None = None,
+        observation_id_factory: Callable[[], str] | None = None,
         evidence_id_factory: Callable[[], str] | None = None,
         discovery_id_factory: Callable[[], str] | None = None,
         assessment_id_factory: Callable[[], str] | None = None,
@@ -121,6 +122,7 @@ class ResearchRunManager:
         self._store = store
         self._clock = clock or (lambda: datetime.now(UTC))
         self._id_factory = id_factory or (lambda: str(uuid4()))
+        self._observation_id_factory = observation_id_factory or (lambda: str(uuid4()))
         self._evidence_id_factory = evidence_id_factory or (lambda: str(uuid4()))
         self._discovery_id_factory = discovery_id_factory or (lambda: str(uuid4()))
         self._assessment_id_factory = assessment_id_factory or (lambda: str(uuid4()))
@@ -368,6 +370,7 @@ class ResearchRunManager:
                         now,
                         requested_url=requested_url,
                         discovery_candidate_id=discovery_candidate_id,
+                        observation_id=self._new_observation_id(run),
                     ),
                 ),
                 failures=run.failures,
@@ -1519,6 +1522,15 @@ class ResearchRunManager:
             raise ResearchError("Research run ID already exists.")
         return run_id
 
+    def _new_observation_id(self, run: ResearchRun) -> str:
+        """Create an ID unique only among this run's source observations."""
+        observation_id = self._normalize_observation_id(self._observation_id_factory())
+        if any(source.observation_id == observation_id for source in run.sources):
+            raise ResearchError(
+                "Research source observation ID already exists in this run."
+            )
+        return observation_id
+
     def _new_evidence_id(self) -> str:
         evidence_id = self._normalize_evidence_id(self._evidence_id_factory())
         if any(
@@ -2050,6 +2062,15 @@ class ResearchRunManager:
         if not isinstance(document_id, str) or not document_id.strip():
             raise ResearchError("Research source document ID cannot be empty.")
         return document_id.strip()
+
+    @staticmethod
+    def _normalize_observation_id(observation_id: str) -> str:
+        if not isinstance(observation_id, str) or not observation_id.strip():
+            raise ResearchError("Research source observation ID cannot be empty.")
+        normalized = observation_id.strip()
+        if len(normalized) > 200:
+            raise ResearchError("Research source observation ID is too long.")
+        return normalized
 
     @staticmethod
     def _normalize_comparison_document_ids(

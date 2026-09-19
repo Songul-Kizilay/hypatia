@@ -161,6 +161,7 @@ class DiscoveryCandidateProvenanceTests(unittest.TestCase):
         for run in document["runs"]:
             for source in run["sources"]:
                 source.pop("discovery_candidate_id")
+                source.pop("observation_id", None)
             for record in run["discoveries"]:
                 record.pop("candidate_ids")
         self.path.write_text(json.dumps(document), encoding="utf-8")

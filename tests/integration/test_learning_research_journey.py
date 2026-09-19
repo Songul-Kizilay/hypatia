@@ -1768,7 +1768,7 @@ class LearningResearchJourneyTests(unittest.TestCase):
 
         # Identity, plan and authority come from the canonical records.
         self.assertEqual(document["schema"], "hypatia.mission_audit")
-        self.assertEqual(document["schema_version"], 5)
+        self.assertEqual(document["schema_version"], 6)
         self.assertEqual(document["identity"]["plan_id"], plan_id)
         self.assertEqual(document["identity"]["research_run_id"], run.run_id)
         self.assertEqual(
@@ -1894,6 +1894,13 @@ class LearningResearchJourneyTests(unittest.TestCase):
                 for o in trace["source_observations"]
             },
             observations,
+        )
+        self.assertEqual(
+            {
+                o["document_id"]: o["observation_id"]
+                for o in trace["source_observations"]
+            },
+            {source.document_id: source.observation_id for source in final_run.sources},
         )
         temporal = document["temporal_freshness"]
         observed_at = sorted(

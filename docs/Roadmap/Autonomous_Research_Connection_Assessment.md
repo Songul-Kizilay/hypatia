@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.389
+## Current bounded text journey: v0.3.390
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -126,6 +126,29 @@ This makes the first temporal limitation visible without pretending the system
 can yet answer whether an origin has changed. The next safe slice is an
 authority-bound, bounded revalidation design; it must not turn observation age
 into a silent refetch or an automatic truth decision.
+
+### Immutable source observation identity: v0.3.390
+
+**Gap (confirmed by a failing test first).** A run already retained its own
+fetch time and acceptance record, while immutable content storage could be
+shared across runs. However, the persisted source record had no stable identity
+for the exact acceptance event itself, so a later temporal relation could not
+refer to one observation without overloading the document/content version ID.
+
+**Change (run store schema 18; mission audit schema 6).** Each newly accepted
+source receives a UUID-derived `observation_id` through the existing
+`ResearchRunManager` factory pattern. It is validated as unique only within its
+run and persists unchanged across restart. Audit and Markdown exports render
+the observation ID separately from the document/content version ID and SHA-256.
+
+**Compatibility and boundaries.** Sources written before schema 18 load with
+`observation_id = None`; no ID is derived from a URL, content hash, document ID
+or source ordering, and loading does not mutate history. Same content in two
+runs can share storage/version while retaining distinct observation IDs. No
+typed revalidation relation, content-changed state, freshness claim, TTL,
+refetch, scheduler, authority, provider/model call, budget spend or lifecycle
+change is included. The next safe work is only read-only characterization of a
+typed relation between two exact recorded observation IDs.
 
 ### Provenance foundation — contradiction trace and phase close: v0.3.388
 

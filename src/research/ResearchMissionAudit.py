@@ -49,8 +49,9 @@ MISSION_AUDIT_SCHEMA = "hypatia.mission_audit"
 #: discovery candidate when recorded.  Version 4 traces user-reviewed claim
 #: contradictions through their exact claims and evidence.  Version 5 exposes
 #: the bounded temporal observation window without claiming that a live
-#: revalidation happened.
-MISSION_AUDIT_SCHEMA_VERSION = 5
+#: revalidation happened.  Version 6 distinguishes each accepted source
+#: observation from its immutable document/content version.
+MISSION_AUDIT_SCHEMA_VERSION = 6
 
 
 def build_mission_audit(
@@ -479,7 +480,11 @@ def render_mission_audit_markdown(
         lines.extend(("", "### Source Observations of This Run", ""))
         for source in traceability["source_observations"]:
             lines.append(
-                f"- {_inline(source['document_id'])}: requested "
+                "- Observation "
+                + _optional(source["observation_id"])
+                + "; document/content version "
+                + _inline(source["document_id"])
+                + ": requested "
                 + _optional(source["requested_url"])
                 + " → fetched "
                 + _inline(source["url"])
@@ -666,6 +671,7 @@ def _traceability(
         if source is None:
             return None
         return {
+            "observation_id": source.observation_id,
             "document_id": source.document_id,
             "requested_url": source.requested_url,
             "url": source.url,
@@ -912,7 +918,8 @@ def _evidence_trace_line(trace: dict[str, Any]) -> str:
         f"`{source['content_sha256']}`" if source["content_sha256"] else "unrecorded"
     )
     return (
-        f"evidence {_inline(trace['evidence_id'])} → source "
+        f"evidence {_inline(trace['evidence_id'])} → observation "
+        f"{_optional(source['observation_id'])}; document/content version "
         f"{_inline(source['document_id'])} ({_inline(source['url'])}; content "
         f"SHA-256 {content})"
     )

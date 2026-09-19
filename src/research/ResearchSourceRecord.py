@@ -37,6 +37,11 @@ class ResearchSourceRecord:
     #: source was not selected from a discovery or predates candidate identity;
     #: it is never recovered by matching URLs.
     discovery_candidate_id: str | None = None
+    #: Immutable identity for this one accepted source observation.  It is
+    #: intentionally separate from ``document_id`` and ``content_sha256``:
+    #: identical content may be observed and accepted by different runs.  ``None``
+    #: means the source predates observation identity and is never backfilled.
+    observation_id: str | None = None
 
     def __post_init__(self) -> None:
         for value, field_name in (
@@ -80,6 +85,13 @@ class ResearchSourceRecord:
             or len(self.discovery_candidate_id) > 200
         ):
             raise ResearchError("Research source discovery candidate ID is invalid.")
+        if self.observation_id is not None and (
+            not isinstance(self.observation_id, str)
+            or not self.observation_id.strip()
+            or self.observation_id != self.observation_id.strip()
+            or len(self.observation_id) > 200
+        ):
+            raise ResearchError("Research source observation ID is invalid.")
         object.__setattr__(self, "document_id", self.document_id.strip())
         object.__setattr__(self, "url", self.url.strip())
         object.__setattr__(self, "title", self.title.strip())
@@ -93,6 +105,7 @@ class ResearchSourceRecord:
         added_at: datetime,
         requested_url: str | None = None,
         discovery_candidate_id: str | None = None,
+        observation_id: str | None = None,
     ) -> ResearchSourceRecord:
         """Build a persistent provenance record from a fetched source."""
         if not isinstance(source, ResearchSource):
@@ -107,4 +120,5 @@ class ResearchSourceRecord:
             content_sha256=source.content_sha256,
             requested_url=requested_url,
             discovery_candidate_id=discovery_candidate_id,
+            observation_id=observation_id,
         )

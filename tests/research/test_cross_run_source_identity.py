@@ -25,6 +25,7 @@ from research.JsonFileResearchSourceContentStore import (
 )
 from research.ResearchRun import ResearchRun
 from research.ResearchRunManager import ResearchRunManager
+from research.ResearchRunStatus import ResearchRunStatus
 from research.ResearchSource import ResearchSource
 from research.ResearchSourceContentRecord import ResearchSourceContentRecord
 from research.ResearchSourceContentRestorer import ResearchSourceContentRestorer
@@ -125,6 +126,64 @@ class CrossRunSourceIdentityTests(unittest.TestCase):
         self.assertEqual((source_a.fetched_at, source_b.fetched_at), (FIRST, LATER))
         self.assertIsNot(source_a, source_b)
 
+    def test_same_content_in_two_runs_has_distinct_immutable_observation_ids(self):
+        """A shared content version cannot stand in for two source observations."""
+        self.acceptance.accept(fetched(TEXT_A), self.run_a)
+        self.acceptance.accept(fetched(TEXT_A, LATER), self.run_b)
+
+        source_a = self.runs.get(self.run_a).sources[0]
+        source_b = self.runs.get(self.run_b).sources[0]
+
+        self.assertEqual(source_a.document_id, source_b.document_id)
+        self.assertIsNotNone(source_a.observation_id)
+        self.assertIsNotNone(source_b.observation_id)
+        self.assertNotEqual(source_a.observation_id, source_b.observation_id)
+
+    def test_observation_id_factory_is_scoped_to_one_run(self):
+        manager = ResearchRunManager(
+            clock=lambda: LATER,
+            observation_id_factory=lambda: "observation-fixed",
+        )
+        first_run = manager.create("First").run_id
+        second_run = manager.create("Second").run_id
+
+        first = manager.add_source(first_run, fetched(TEXT_A), "document-1")
+        second = manager.add_source(second_run, fetched(TEXT_A, LATER), "document-1")
+
+        self.assertEqual(first.sources[0].observation_id, "observation-fixed")
+        self.assertEqual(second.sources[0].observation_id, "observation-fixed")
+
+    def test_one_run_refuses_duplicate_non_null_observation_id(self):
+        source_one = ResearchSourceRecord(
+            document_id="document-1",
+            url=URL,
+            title="First",
+            content_type="text/plain",
+            fetched_at=FIRST,
+            added_at=FIRST,
+            observation_id="observation-1",
+        )
+        source_two = ResearchSourceRecord(
+            document_id="document-2",
+            url="https://example.test/second",
+            title="Second",
+            content_type="text/plain",
+            fetched_at=LATER,
+            added_at=LATER,
+            observation_id="observation-1",
+        )
+
+        with self.assertRaisesRegex(ResearchError, "duplicate source observations"):
+            ResearchRun(
+                run_id="run",
+                question="Question",
+                status=ResearchRunStatus.COLLECTING,
+                sources=(source_one, source_two),
+                failures=(),
+                created_at=FIRST,
+                updated_at=LATER,
+            )
+
     def test_a_run_that_did_not_fetch_cannot_use_another_runs_content(self):
         accepted = self.acceptance.accept(fetched(TEXT_A), self.run_a)
         chunk = self.chunk_for(accepted.document_id)
@@ -195,6 +254,10 @@ class CrossRunSourceIdentityTests(unittest.TestCase):
             [s.content_sha256 for s in by_run[shared].sources], [sha(TEXT_A)]
         )
         self.assertEqual([s.fetched_at for s in by_run[shared].sources], [LATER])
+        self.assertEqual(
+            by_run[self.run_a].sources[0].observation_id,
+            self.runs.get(self.run_a).sources[0].observation_id,
+        )
 
     def test_restore_refuses_stored_content_a_run_did_not_observe(self):
         accepted = self.acceptance.accept(fetched(TEXT_A), self.run_a)
@@ -267,11 +330,33 @@ class LegacySourceIdentityTests(unittest.TestCase):
                 source.pop("content_sha256")
                 source.pop("requested_url", None)
                 source.pop("discovery_candidate_id", None)
+                source.pop("observation_id", None)
         path.write_text(json.dumps(document), encoding="utf-8")
 
         loaded = JsonFileResearchRunStore(path).load()
 
         self.assertIsNone(loaded[0].sources[0].content_sha256)
+        self.assertIsNone(loaded[0].sources[0].observation_id)
+
+    def test_schema_17_source_loads_with_unrecorded_observation_identity(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        path = Path(directory.name) / "runs.json"
+        manager = ResearchRunManager(JsonFileResearchRunStore(path))
+        run_id = manager.create("Question").run_id
+        ResearchSourceAcceptanceService(KnowledgeEngine(), manager).accept(
+            fetched(TEXT_A), run_id
+        )
+        document = json.loads(path.read_text("utf-8"))
+        document["schema_version"] = 17
+        for run in document["runs"]:
+            for source in run["sources"]:
+                source.pop("observation_id")
+        path.write_text(json.dumps(document), encoding="utf-8")
+
+        [loaded] = JsonFileResearchRunStore(path).load()
+
+        self.assertIsNone(loaded.sources[0].observation_id)
 
 
 if __name__ == "__main__":

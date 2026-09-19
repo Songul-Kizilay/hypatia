@@ -2,12 +2,17 @@
 
 ## Runtime Version
 
-`v0.3.389 (Genesis)`
+`v0.3.390 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.389 adds a read-only temporal observation window to the mission
+Version v0.3.390 gives every newly accepted source a distinct immutable,
+run-scoped observation ID (run store schema 18), separate from its
+document/content version and content hash. The run and mission audit exports
+show both values distinctly; historical sources remain unrecorded rather than
+receiving invented IDs. It deliberately adds no revalidation or freshness
+meaning. Version v0.3.389 adds a read-only temporal observation window to the mission
 audit: its oldest/newest recorded fetch times, observation count and explicit
 limits that no live revalidation or freshness threshold occurred. This is
 provenance visibility, not a freshness verdict or new source work. Version
