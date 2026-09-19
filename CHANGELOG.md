@@ -2,6 +2,20 @@
 
 All notable project changes are recorded here.
 
+## [0.3.389] - 2026-09-19
+
+### Added
+
+- Mission audit schema 5 now has a read-only temporal observation-window
+  projection: source-observation count plus the oldest and newest recorded
+  fetch timestamps.
+
+### Boundaries
+
+- Observation times remain provenance, not current-web freshness. The audit
+  declares that no threshold or live revalidation exists; it does not fetch,
+  spend budget, change a run, or label a source fresh or stale.
+
 ## [0.3.388] - 2026-09-17
 
 ### Added

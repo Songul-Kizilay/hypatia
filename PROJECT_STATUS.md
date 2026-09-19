@@ -2,12 +2,16 @@
 
 ## Runtime Version
 
-`v0.3.388 (Genesis)`
+`v0.3.389 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.388 adds user-reviewed claim contradictions to the mission audit
+Version v0.3.389 adds a read-only temporal observation window to the mission
+audit: its oldest/newest recorded fetch times, observation count and explicit
+limits that no live revalidation or freshness threshold occurred. This is
+provenance visibility, not a freshness verdict or new source work. Version
+v0.3.388 adds user-reviewed claim contradictions to the mission audit
 trace (audit schema 4) and closes the provenance-foundation phase: every link
 from discovery candidate to mission decision is now recorded by ID, validated
 and exported. Version v0.3.387 closes the discovery link of the provenance chain: each

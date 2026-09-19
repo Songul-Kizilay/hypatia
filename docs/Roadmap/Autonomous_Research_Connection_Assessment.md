@@ -1,6 +1,6 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.388
+## Current bounded text journey: v0.3.389
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -113,6 +113,19 @@ and model prose cannot alter it. It does not change mission lifecycle,
 authorization, cumulative allowance, plan digest, source slots, provider/model
 selection, retry behavior or run closure. An unchanged recovered state renders
 the same explanation.
+
+### Temporal observation characterization: v0.3.389
+
+The mission audit now has a small, read-only temporal projection: source count
+and the oldest/newest recorded `fetched_at` observation. It explicitly states
+that no live revalidation was attempted and that the project has no declared
+freshness threshold. It therefore never labels a source fresh or stale, and it
+does not fetch, spend budget, alter mission lifecycle, or create authority.
+
+This makes the first temporal limitation visible without pretending the system
+can yet answer whether an origin has changed. The next safe slice is an
+authority-bound, bounded revalidation design; it must not turn observation age
+into a silent refetch or an automatic truth decision.
 
 ### Provenance foundation — contradiction trace and phase close: v0.3.388
 

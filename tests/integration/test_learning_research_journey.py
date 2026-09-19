@@ -1768,7 +1768,7 @@ class LearningResearchJourneyTests(unittest.TestCase):
 
         # Identity, plan and authority come from the canonical records.
         self.assertEqual(document["schema"], "hypatia.mission_audit")
-        self.assertEqual(document["schema_version"], 4)
+        self.assertEqual(document["schema_version"], 5)
         self.assertEqual(document["identity"]["plan_id"], plan_id)
         self.assertEqual(document["identity"]["research_run_id"], run.run_id)
         self.assertEqual(
@@ -1895,6 +1895,24 @@ class LearningResearchJourneyTests(unittest.TestCase):
             },
             observations,
         )
+        temporal = document["temporal_freshness"]
+        observed_at = sorted(
+            source.fetched_at.isoformat() for source in final_run.sources
+        )
+        self.assertEqual(
+            temporal,
+            {
+                "status": "observation_window_recorded",
+                "source_observation_count": len(final_run.sources),
+                "oldest_observation_at": observed_at[0],
+                "newest_observation_at": observed_at[-1],
+                "live_revalidation": "not_attempted",
+                "limitations": [
+                    "freshness_threshold_not_declared",
+                    "live_revalidation_not_attempted",
+                ],
+            },
+        )
         evidence_sources = {
             e.evidence_id: e.source_document_id for e in final_run.evidence
         }
@@ -1950,6 +1968,8 @@ class LearningResearchJourneyTests(unittest.TestCase):
             "- **Completion readiness:** ready",
             "## Teaching Report",
             "## Operator Comparison Reviews",
+            "## Temporal Observation Window",
+            "recorded observation times, not a current-web freshness claim",
             "not model output and not universal truth",
             "- **Decision:** not_supported",
             f"- **Supersedes:** {reviews[0].review_id}",

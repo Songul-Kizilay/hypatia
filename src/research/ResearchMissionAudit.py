@@ -47,8 +47,10 @@ MISSION_AUDIT_SCHEMA = "hypatia.mission_audit"
 #: Version 2 resolves traces to evidence and source observations and names the
 #: recorded basis of the goal evaluation.  Version 3 adds each source's selected
 #: discovery candidate when recorded.  Version 4 traces user-reviewed claim
-#: contradictions through their exact claims and evidence.
-MISSION_AUDIT_SCHEMA_VERSION = 4
+#: contradictions through their exact claims and evidence.  Version 5 exposes
+#: the bounded temporal observation window without claiming that a live
+#: revalidation happened.
+MISSION_AUDIT_SCHEMA_VERSION = 5
 
 
 def build_mission_audit(
@@ -225,6 +227,7 @@ def build_mission_audit(
         },
         "research_run": run_document,
         "traceability": _traceability(run, snapshot),
+        "temporal_freshness": _temporal_freshness(run),
         "evaluation": evaluation,
         "teaching_report": report,
         "limitations": sorted(set(limitations)),
@@ -506,6 +509,25 @@ def render_mission_audit_markdown(
             "comparison and its evidence, not model output and not universal "
             "truth._"
         )
+
+    lines.extend(("", "## Temporal Observation Window", ""))
+    temporal = audit["temporal_freshness"]
+    lines.extend(
+        (
+            f"- **Status:** {temporal['status']}",
+            "- **Recorded source observations:** "
+            + str(temporal["source_observation_count"]),
+            "- **Oldest recorded observation:** "
+            + _optional(temporal["oldest_observation_at"]),
+            "- **Newest recorded observation:** "
+            + _optional(temporal["newest_observation_at"]),
+            "- **Live revalidation:** " + temporal["live_revalidation"],
+            "- **Freshness limitations:** " + ", ".join(temporal["limitations"]),
+            "_These are recorded observation times, not a current-web freshness "
+            "claim. This audit did not re-fetch, revalidate, or label any source "
+            "fresh or stale._",
+        )
+    )
 
     lines.extend(("", "## Goal Evaluation", ""))
     if evaluation is None:
@@ -817,6 +839,48 @@ def _traceability(
         "comparison_reviews": reviews,
         "claims": claims,
         "claim_contradictions": contradictions,
+    }
+
+
+def _temporal_freshness(run: ResearchRun | None) -> dict[str, object]:
+    """Describe recorded observation times without declaring source freshness.
+
+    The audit deliberately does not consult a clock or a remote origin.  A
+    timestamp records when this run observed a content version; it cannot prove
+    the source remains current, and no threshold is silently invented here.
+    """
+    limitations = [
+        "freshness_threshold_not_declared",
+        "live_revalidation_not_attempted",
+    ]
+    if run is None:
+        return {
+            "status": "unavailable",
+            "source_observation_count": 0,
+            "oldest_observation_at": None,
+            "newest_observation_at": None,
+            "live_revalidation": "not_attempted",
+            "limitations": limitations + ["research_run_unavailable"],
+        }
+    if not run.sources:
+        return {
+            "status": "no_source_observations",
+            "source_observation_count": 0,
+            "oldest_observation_at": None,
+            "newest_observation_at": None,
+            "live_revalidation": "not_attempted",
+            "limitations": limitations,
+        }
+    observations = sorted(
+        run.sources, key=lambda source: (source.fetched_at, source.document_id)
+    )
+    return {
+        "status": "observation_window_recorded",
+        "source_observation_count": len(observations),
+        "oldest_observation_at": observations[0].fetched_at.isoformat(),
+        "newest_observation_at": observations[-1].fetched_at.isoformat(),
+        "live_revalidation": "not_attempted",
+        "limitations": limitations,
     }
 
 
