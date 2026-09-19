@@ -2,11 +2,18 @@
 
 ## Runtime Version
 
-`v0.3.391 (Genesis)`
+`v0.3.392 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
+Version v0.3.392 adds a read-only temporal-history projection to the mission
+audit. For each recorded requested resource it exposes only canonical
+observation ownership, timestamps and explicit typed revalidation edges, with
+single, linear, branched, disconnected or incomplete history shapes. It never
+creates a relation from matching URLs, hashes, timestamps or ordering, and it
+does not establish an external resource state. Legacy records with an
+unrecorded observation identity remain incomplete rather than being repaired.
 Version v0.3.391 adds a durable, intentional relation between two ordered
 recorded source observations for the same canonical requested-URL resource.
 It reports only whether their recorded content hashes were unchanged or

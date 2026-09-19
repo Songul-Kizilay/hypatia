@@ -36,6 +36,7 @@ from research.ResearchMissionAuditExport import (
 )
 from research.ResearchRun import ResearchRun
 from research.ResearchRunManager import ResearchRunManager
+from research.SourceIdentity import identity_of
 
 MISSION_AUDIT_PREVIEW_INTENT = "research_mission_audit_export_preview"
 MISSION_AUDIT_SAVE_INTENT = "research_mission_audit_export_save"
@@ -104,6 +105,22 @@ class ResearchMissionAuditApplicationService:
             source_revalidations=(
                 tuple(self._runs.source_revalidations())
                 if self._runs is not None
+                else ()
+            ),
+            temporal_histories=(
+                tuple(
+                    self._runs.temporal_history(requested_url)
+                    for requested_url in sorted(
+                        {
+                            identity: source.requested_url
+                            for source in run.sources
+                            if source.requested_url is not None
+                            for identity in (identity_of(source.requested_url),)
+                            if identity
+                        }.values()
+                    )
+                )
+                if self._runs is not None and run is not None
                 else ()
             ),
         )

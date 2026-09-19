@@ -104,6 +104,10 @@ from research.ResearchSourceRevalidationRecord import (
     ResearchSourceRevalidationInspection,
     ResearchSourceRevalidationRecord,
 )
+from research.ResearchSourceTemporalHistory import (
+    ResearchSourceTemporalHistory,
+    temporal_history_for,
+)
 from research.ResearchSourceUsefulness import ResearchSourceUsefulness
 from research.SourceIdentity import same_resource
 
@@ -197,6 +201,52 @@ class ResearchRunManager:
                 self._inspect_source_revalidation(record)
                 for record in self._source_revalidations
             ]
+
+    def temporal_history(self, requested_url: str) -> ResearchSourceTemporalHistory:
+        """Derive one resource's recorded history without writing or fetching."""
+        with self._lock:
+            matching_sources = [
+                source
+                for run in self._runs
+                for source in run.sources
+                if source.requested_url is not None
+                and same_resource(source.requested_url, requested_url)
+            ]
+            observations = [
+                (run.run_id, source.observation_id, source.fetched_at)
+                for run in self._runs
+                for source in run.sources
+                if source.observation_id is not None
+                and source.requested_url is not None
+                and same_resource(source.requested_url, requested_url)
+            ]
+            incomplete_limitations = (
+                ("canonical_observation_identity_unrecorded",)
+                if any(source.observation_id is None for source in matching_sources)
+                else ()
+            )
+            keys = {
+                (run_id, observation_id) for run_id, observation_id, _ in observations
+            }
+            relations = [
+                (
+                    record.revalidation_id,
+                    record.earlier_run_id,
+                    record.earlier_observation_id,
+                    record.later_run_id,
+                    record.later_observation_id,
+                    record.outcome,
+                )
+                for record in self._source_revalidations
+                if (record.earlier_run_id, record.earlier_observation_id) in keys
+                and (record.later_run_id, record.later_observation_id) in keys
+            ]
+        return temporal_history_for(
+            requested_url,
+            observations=tuple(observations),
+            relations=tuple(relations),
+            incomplete_limitations=incomplete_limitations,
+        )
 
     def record_source_revalidation(
         self,

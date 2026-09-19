@@ -1,6 +1,22 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.391
+## Current bounded text journey: v0.3.392
+
+### Read-only temporal history: v0.3.392
+
+Mission audits now project one resource's recorded observation graph from
+canonical source observations and explicit revalidation records. The output
+keeps exact run and observation identities, recorded observation times and
+each ordered `content_unchanged` or `content_changed` edge. It can describe a
+single observation, a linear history, a branch, disconnected records or an
+incomplete record set. It names a latest recorded observation only when the
+recorded chronology has one unambiguous maximum.
+
+This is historical provenance, not an assertion about an external resource.
+It performs no fetch, provider or model operation, persistence, claim/evidence
+change, authority action, allowance spend or lifecycle transition. Sources with
+unrecorded observation identities stay incomplete; no ID, edge or chronology is
+invented for legacy material.
 
 ### Typed source revalidation relation: v0.3.391
 

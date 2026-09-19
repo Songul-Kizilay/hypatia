@@ -1768,7 +1768,19 @@ class LearningResearchJourneyTests(unittest.TestCase):
 
         # Identity, plan and authority come from the canonical records.
         self.assertEqual(document["schema"], "hypatia.mission_audit")
-        self.assertEqual(document["schema_version"], 7)
+        self.assertEqual(document["schema_version"], 8)
+        history = next(
+            value
+            for value in document["temporal_history"]
+            if run.sources[0].observation_id in value["observation_ids"]
+        )
+        self.assertEqual(history["shape"], "single_observation")
+        self.assertEqual(history["relation_ids"], [])
+        self.assertEqual(
+            history["observations"][0]["observation_id"],
+            run.sources[0].observation_id,
+        )
+        self.assertIn("recorded historical observations", markdown.casefold())
         self.assertEqual(document["identity"]["plan_id"], plan_id)
         self.assertEqual(document["identity"]["research_run_id"], run.run_id)
         self.assertEqual(

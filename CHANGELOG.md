@@ -2,6 +2,27 @@
 
 All notable project changes are recorded here.
 
+## [0.3.392] - 2026-09-19
+
+### Added
+
+- The mission audit now includes a read-only temporal-history projection for
+  each recorded requested resource. It preserves exact observation ownership,
+  recorded timestamps, explicit revalidation edges and their per-edge typed
+  outcomes; it reports only single, linear, branched, disconnected or
+  incomplete recorded history.
+- Legacy sources lacking an observation identity produce an incomplete history
+  for their recorded resource rather than receiving a synthetic identity,
+  relation or chronology. Repeated projection and restart restoration produce
+  the same result from unchanged canonical records.
+
+### Boundaries
+
+- The projection does not fetch, revalidate, persist, spend allowance, change
+  authority, alter lifecycle state, add evidence or claims, or infer an
+  external resource state. Content relations remain attached to their exact
+  recorded edges and are never collapsed into a global source conclusion.
+
 ## [0.3.391] - 2026-09-19
 
 ### Added

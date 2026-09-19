@@ -44,6 +44,7 @@ from research.ResearchRunMarkdownRenderer import (
 from research.ResearchSourceRevalidationRecord import (
     ResearchSourceRevalidationInspection,
 )
+from research.ResearchSourceTemporalHistory import ResearchSourceTemporalHistory
 from research.ResearchTeachingReport import teaching_report
 
 MISSION_AUDIT_SCHEMA = "hypatia.mission_audit"
@@ -56,7 +57,7 @@ MISSION_AUDIT_SCHEMA = "hypatia.mission_audit"
 #: observation from its immutable document/content version. Version 7 adds
 #: explicitly recorded source-revalidation relations without asserting live
 #: source freshness.
-MISSION_AUDIT_SCHEMA_VERSION = 7
+MISSION_AUDIT_SCHEMA_VERSION = 8
 
 
 def build_mission_audit(
@@ -66,6 +67,7 @@ def build_mission_audit(
     *,
     hypatia_version: str,
     source_revalidations: tuple[ResearchSourceRevalidationInspection, ...] = (),
+    temporal_histories: tuple[ResearchSourceTemporalHistory, ...] = (),
 ) -> dict[str, Any]:
     """Return the canonical audit document for one mission. Mutates nothing."""
     if (
@@ -235,6 +237,7 @@ def build_mission_audit(
         "research_run": run_document,
         "traceability": _traceability(run, snapshot, source_revalidations),
         "temporal_freshness": _temporal_freshness(run),
+        "temporal_history": [_temporal_history(value) for value in temporal_histories],
         "evaluation": evaluation,
         "teaching_report": report,
         "limitations": sorted(set(limitations)),
@@ -565,6 +568,38 @@ def render_mission_audit_markdown(
             "fresh or stale._",
         )
     )
+    lines.extend(("", "## Temporal History", ""))
+    for history in audit["temporal_history"]:
+        lines.append(
+            "- Recorded temporal history is " + history["shape"].replace("_", " ") + "."
+        )
+        lines.append("  - Resource identity: " + _inline(history["resource_identity"]))
+        lines.append(
+            "  - Observations: "
+            + ", ".join(_inline(value) for value in history["observation_ids"])
+        )
+        lines.append(
+            "  - Latest recorded observation: "
+            + _optional(history["latest_recorded_observation_id"])
+        )
+        for edge in history["relations"]:
+            wording = (
+                "unchanged" if edge["outcome"] == "content_unchanged" else "differed"
+            )
+            lines.append(
+                "  - Observed content was "
+                + wording
+                + " between observations "
+                + _inline(edge["earlier_observation_id"])
+                + " and "
+                + _inline(edge["later_observation_id"])
+                + "."
+            )
+    if audit["temporal_history"]:
+        lines.append(
+            "_This describes Hypatia's recorded historical observations and does "
+            "not establish the resource's external state._"
+        )
 
     lines.extend(("", "## Goal Evaluation", ""))
     if evaluation is None:
@@ -955,6 +990,36 @@ def _temporal_freshness(run: ResearchRun | None) -> dict[str, object]:
         "newest_observation_at": observations[-1].fetched_at.isoformat(),
         "live_revalidation": "not_attempted",
         "limitations": limitations,
+    }
+
+
+def _temporal_history(history: ResearchSourceTemporalHistory) -> dict[str, object]:
+    if not isinstance(history, ResearchSourceTemporalHistory):
+        raise ResearchError("A mission audit received invalid temporal history.")
+    return {
+        "resource_identity": history.resource_identity,
+        "observations": [
+            {
+                "run_id": observation.run_id,
+                "observation_id": observation.observation_id,
+                "observed_at": observation.observed_at.isoformat(),
+            }
+            for observation in history.observations
+        ],
+        "observation_ids": list(history.observation_ids),
+        "relation_ids": list(history.relation_ids),
+        "shape": history.shape.value,
+        "latest_recorded_observation_id": history.latest_recorded_observation_id,
+        "limitations": list(history.limitations),
+        "relations": [
+            {
+                "relation_id": edge.relation_id,
+                "earlier_observation_id": edge.earlier_observation_id,
+                "later_observation_id": edge.later_observation_id,
+                "outcome": edge.outcome.value,
+            }
+            for edge in history.relations
+        ],
     }
 
 
