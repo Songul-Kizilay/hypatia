@@ -2,12 +2,17 @@
 
 ## Runtime Version
 
-`v0.3.390 (Genesis)`
+`v0.3.391 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
-Version v0.3.390 gives every newly accepted source a distinct immutable,
+Version v0.3.391 adds a durable, intentional relation between two ordered
+recorded source observations for the same canonical requested-URL resource.
+It reports only whether their recorded content hashes were unchanged or
+changed, and the mission audit shows both owner runs and immutable observation
+identities. It never fetches or claims current freshness. Version v0.3.390
+gives every newly accepted source a distinct immutable,
 run-scoped observation ID (run store schema 18), separate from its
 document/content version and content hash. The run and mission audit exports
 show both values distinctly; historical sources remain unrecorded rather than

@@ -39,6 +39,8 @@ from research.ResearchSourceRecord import (
     EXTERNAL_SOURCE_TAINT_LABEL,
     ResearchSourceRecord,
 )
+from research.ResearchSourceRevalidationOutcome import ResearchSourceRevalidationOutcome
+from research.ResearchSourceRevalidationRecord import ResearchSourceRevalidationRecord
 from research.ResearchSourceUsefulness import ResearchSourceUsefulness
 from research.ResearchVulnerabilityMetric import ResearchVulnerabilityMetric
 from research.ResearchVulnerabilityRecord import ResearchVulnerabilityRecord
@@ -91,9 +93,10 @@ class _CollectionBudget:
 class JsonFileResearchRunStore:
     """Load and atomically replace a strict versioned research-run document."""
 
-    _SCHEMA_VERSION = 18
+    _SCHEMA_VERSION = 19
     _SUPPORTED_SCHEMA_VERSIONS = set(range(1, _SCHEMA_VERSION + 1))
-    _DOCUMENT_FIELDS = {"schema_version", "runs"}
+    _DOCUMENT_FIELDS_V1_V18 = {"schema_version", "runs"}
+    _DOCUMENT_FIELDS_V19 = _DOCUMENT_FIELDS_V1_V18 | {"source_revalidations"}
     _RUN_FIELDS_V1 = {
         "run_id",
         "question",
@@ -239,37 +242,47 @@ class JsonFileResearchRunStore:
         "text",
         "recorded_at",
     }
+    _SOURCE_REVALIDATION_FIELDS = {
+        "revalidation_id",
+        "earlier_run_id",
+        "earlier_observation_id",
+        "later_run_id",
+        "later_observation_id",
+        "outcome",
+        "recorded_at",
+    }
 
     def __init__(self, path: Path) -> None:
         self._path = path
 
     def load(self) -> list[ResearchRun]:
         """Return a fully validated snapshot, or an empty one when absent."""
-        if not self._path.exists():
-            return []
-        try:
-            with self._path.open("rb") as file:
-                encoded_document = file.read(MAX_RESEARCH_RUN_STORE_BYTES + 1)
-        except OSError as error:
-            raise ResearchError(
-                f"Unable to read research run store '{self._path}'."
-            ) from error
-        if len(encoded_document) > MAX_RESEARCH_RUN_STORE_BYTES:
-            raise ResearchError(f"Research run store '{self._path}' is too large.")
-        try:
-            document = json.loads(encoded_document)
-        except (UnicodeDecodeError, json.JSONDecodeError) as error:
-            raise ResearchError(
-                f"Unable to read research run store '{self._path}'."
-            ) from error
-        return self._parse_document(document)
+        return self._load_snapshot()[0]
+
+    def load_source_revalidations(self) -> list[ResearchSourceRevalidationRecord]:
+        """Return recorded cross-run observation relations without mutation."""
+        return self._load_snapshot()[1]
 
     def save(self, runs: list[ResearchRun]) -> None:
         """Atomically replace the complete research-run snapshot."""
+        self.save_with_source_revalidations(runs, [])
+
+    def save_with_source_revalidations(
+        self,
+        runs: list[ResearchRun],
+        source_revalidations: list[ResearchSourceRevalidationRecord],
+    ) -> None:
+        """Atomically replace run and cross-run temporal provenance together."""
         self._validate_runs(runs)
+        self._validate_source_revalidations(source_revalidations)
+        self._validate_source_revalidation_bindings(source_revalidations, runs)
         document = {
             "schema_version": self._SCHEMA_VERSION,
             "runs": [self._serialize_run(run) for run in runs],
+            "source_revalidations": [
+                self._serialize_source_revalidation(record)
+                for record in source_revalidations
+            ],
         }
         temporary_path: Path | None = None
         try:
@@ -299,8 +312,34 @@ class JsonFileResearchRunStore:
         finally:
             self._remove_temporary_file(temporary_path)
 
-    def _parse_document(self, document: Any) -> list[ResearchRun]:
-        if not isinstance(document, dict) or set(document) != self._DOCUMENT_FIELDS:
+    def _load_snapshot(
+        self,
+    ) -> tuple[list[ResearchRun], list[ResearchSourceRevalidationRecord]]:
+        if not self._path.exists():
+            return [], []
+        try:
+            with self._path.open("rb") as file:
+                encoded_document = file.read(MAX_RESEARCH_RUN_STORE_BYTES + 1)
+        except OSError as error:
+            raise ResearchError(
+                f"Unable to read research run store '{self._path}'."
+            ) from error
+        if len(encoded_document) > MAX_RESEARCH_RUN_STORE_BYTES:
+            raise ResearchError(f"Research run store '{self._path}' is too large.")
+        try:
+            document = json.loads(encoded_document)
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise ResearchError(
+                f"Unable to read research run store '{self._path}'."
+            ) from error
+        return self._parse_snapshot(document)
+
+    def _parse_snapshot(
+        self, document: Any
+    ) -> tuple[list[ResearchRun], list[ResearchSourceRevalidationRecord]]:
+        if not isinstance(document, dict) or not isinstance(
+            document.get("schema_version"), int
+        ):
             raise ResearchError(
                 f"Research run store '{self._path}' has invalid fields."
             )
@@ -313,6 +352,15 @@ class JsonFileResearchRunStore:
             raise ResearchError(
                 f"Research run store '{self._path}' has an unsupported schema version."
             )
+        expected_fields = (
+            self._DOCUMENT_FIELDS_V19
+            if schema_version >= 19
+            else self._DOCUMENT_FIELDS_V1_V18
+        )
+        if set(document) != expected_fields:
+            raise ResearchError(
+                f"Research run store '{self._path}' has invalid fields."
+            )
         runs_data = document["runs"]
         if not isinstance(runs_data, list):
             raise ResearchError(
@@ -322,7 +370,19 @@ class JsonFileResearchRunStore:
         budget.consume(runs_data)
         runs = [self._parse_run(value, schema_version, budget) for value in runs_data]
         self._validate_runs(runs)
-        return runs
+        revalidations_data = document.get("source_revalidations", [])
+        if not isinstance(revalidations_data, list):
+            raise ResearchError(
+                f"Research run store '{self._path}' source revalidations "
+                "must be a list."
+            )
+        budget.consume(revalidations_data)
+        revalidations = [
+            self._parse_source_revalidation(value) for value in revalidations_data
+        ]
+        self._validate_source_revalidations(revalidations)
+        self._validate_source_revalidation_bindings(revalidations, runs)
+        return runs, revalidations
 
     def _parse_run(
         self,
@@ -358,6 +418,8 @@ class JsonFileResearchRunStore:
             17: self._RUN_FIELDS_V14,
             # Version 18 changed the shape of a source, not the run.
             18: self._RUN_FIELDS_V14,
+            # Version 19 adds document-level source revalidations, not run fields.
+            19: self._RUN_FIELDS_V14,
         }[schema_version]
         if not isinstance(value, dict) or set(value) != expected_fields:
             raise ResearchError("Research run store contains an invalid run record.")
@@ -815,6 +877,32 @@ class JsonFileResearchRunStore:
                 "Research run store contains invalid claim confidence."
             ) from error
 
+    def _parse_source_revalidation(
+        self, value: Any
+    ) -> ResearchSourceRevalidationRecord:
+        if (
+            not isinstance(value, dict)
+            or set(value) != self._SOURCE_REVALIDATION_FIELDS
+        ):
+            raise ResearchError(
+                "Research run store contains an invalid source revalidation record."
+            )
+        try:
+            outcome = ResearchSourceRevalidationOutcome(value["outcome"])
+        except (TypeError, ValueError) as error:
+            raise ResearchError(
+                "Research run store contains an invalid source revalidation outcome."
+            ) from error
+        return ResearchSourceRevalidationRecord(
+            revalidation_id=value["revalidation_id"],
+            earlier_run_id=value["earlier_run_id"],
+            earlier_observation_id=value["earlier_observation_id"],
+            later_run_id=value["later_run_id"],
+            later_observation_id=value["later_observation_id"],
+            outcome=outcome,
+            recorded_at=self._parse_datetime(value["recorded_at"], "recorded_at"),
+        )
+
     def _parse_datetime(self, value: Any, field_name: str) -> datetime:
         if not isinstance(value, str):
             raise ResearchError(
@@ -976,6 +1064,20 @@ class JsonFileResearchRunStore:
         }
 
     @staticmethod
+    def _serialize_source_revalidation(
+        record: ResearchSourceRevalidationRecord,
+    ) -> dict[str, object]:
+        return {
+            "revalidation_id": record.revalidation_id,
+            "earlier_run_id": record.earlier_run_id,
+            "earlier_observation_id": record.earlier_observation_id,
+            "later_run_id": record.later_run_id,
+            "later_observation_id": record.later_observation_id,
+            "outcome": record.outcome.value,
+            "recorded_at": record.recorded_at.isoformat(),
+        }
+
+    @staticmethod
     def _validate_runs(runs: list[ResearchRun]) -> None:
         if not isinstance(runs, list):
             raise ResearchError("Research run store accepts a list of runs.")
@@ -1044,6 +1146,97 @@ class JsonFileResearchRunStore:
             raise ResearchError(
                 "Research run store contains duplicate comparison review IDs."
             )
+
+    @staticmethod
+    def _validate_source_revalidations(
+        records: list[ResearchSourceRevalidationRecord],
+    ) -> None:
+        if not isinstance(records, list) or not all(
+            isinstance(record, ResearchSourceRevalidationRecord) for record in records
+        ):
+            raise ResearchError(
+                "Research run store accepts only source revalidation records."
+            )
+        identifiers = [record.revalidation_id for record in records]
+        if len(identifiers) != len(set(identifiers)):
+            raise ResearchError(
+                "Research run store contains duplicate source revalidation IDs."
+            )
+        pairs = [
+            (
+                record.earlier_run_id,
+                record.earlier_observation_id,
+                record.later_run_id,
+                record.later_observation_id,
+            )
+            for record in records
+        ]
+        if len(pairs) != len(set(pairs)):
+            raise ResearchError(
+                "Research run store contains duplicate source revalidation pairs."
+            )
+
+    @staticmethod
+    def _validate_source_revalidation_bindings(
+        records: list[ResearchSourceRevalidationRecord],
+        runs: list[ResearchRun],
+    ) -> None:
+        from research.SourceIdentity import same_resource
+
+        by_run = {run.run_id: run for run in runs}
+        for record in records:
+            earlier_run = by_run.get(record.earlier_run_id)
+            later_run = by_run.get(record.later_run_id)
+            if earlier_run is None or later_run is None:
+                raise ResearchError(
+                    "Research source revalidation references an unknown run."
+                )
+            earlier = next(
+                (
+                    source
+                    for source in earlier_run.sources
+                    if source.observation_id == record.earlier_observation_id
+                ),
+                None,
+            )
+            later = next(
+                (
+                    source
+                    for source in later_run.sources
+                    if source.observation_id == record.later_observation_id
+                ),
+                None,
+            )
+            if earlier is None or later is None:
+                raise ResearchError(
+                    "Research source revalidation references an unknown observation."
+                )
+            if (
+                earlier.requested_url is None
+                or later.requested_url is None
+                or not same_resource(earlier.requested_url, later.requested_url)
+            ):
+                raise ResearchError(
+                    "Research source revalidation resource lineage is invalid."
+                )
+            if earlier.content_sha256 is None or later.content_sha256 is None:
+                raise ResearchError(
+                    "Research source revalidation requires recorded content versions."
+                )
+            if earlier.fetched_at >= later.fetched_at:
+                raise ResearchError(
+                    "Research source revalidation observation order is invalid."
+                )
+            expected = (
+                ResearchSourceRevalidationOutcome.CONTENT_UNCHANGED
+                if earlier.content_sha256 == later.content_sha256
+                else ResearchSourceRevalidationOutcome.CONTENT_CHANGED
+            )
+            if record.outcome is not expected:
+                raise ResearchError(
+                    "Research source revalidation outcome differs from "
+                    "recorded content."
+                )
 
     @staticmethod
     def _remove_temporary_file(path: Path | None) -> None:

@@ -41,6 +41,9 @@ from research.ResearchRunMarkdownRenderer import (
     _quote,
     render_research_run_markdown,
 )
+from research.ResearchSourceRevalidationRecord import (
+    ResearchSourceRevalidationInspection,
+)
 from research.ResearchTeachingReport import teaching_report
 
 MISSION_AUDIT_SCHEMA = "hypatia.mission_audit"
@@ -50,8 +53,10 @@ MISSION_AUDIT_SCHEMA = "hypatia.mission_audit"
 #: contradictions through their exact claims and evidence.  Version 5 exposes
 #: the bounded temporal observation window without claiming that a live
 #: revalidation happened.  Version 6 distinguishes each accepted source
-#: observation from its immutable document/content version.
-MISSION_AUDIT_SCHEMA_VERSION = 6
+#: observation from its immutable document/content version. Version 7 adds
+#: explicitly recorded source-revalidation relations without asserting live
+#: source freshness.
+MISSION_AUDIT_SCHEMA_VERSION = 7
 
 
 def build_mission_audit(
@@ -60,6 +65,7 @@ def build_mission_audit(
     authorization: ResearchPlanAuthorization | None,
     *,
     hypatia_version: str,
+    source_revalidations: tuple[ResearchSourceRevalidationInspection, ...] = (),
 ) -> dict[str, Any]:
     """Return the canonical audit document for one mission. Mutates nothing."""
     if (
@@ -227,7 +233,7 @@ def build_mission_audit(
             "snapshot": execution,
         },
         "research_run": run_document,
-        "traceability": _traceability(run, snapshot),
+        "traceability": _traceability(run, snapshot, source_revalidations),
         "temporal_freshness": _temporal_freshness(run),
         "evaluation": evaluation,
         "teaching_report": report,
@@ -505,6 +511,32 @@ def render_mission_audit_markdown(
             )
         if not traceability["source_observations"]:
             lines.append("- No source was accepted into this run.")
+        lines.extend(("", "### Recorded Source Revalidations", ""))
+        for relation in traceability["source_revalidations"]:
+            outcome = relation["outcome"]
+            wording = (
+                "Observed content was unchanged between these two recorded "
+                "observations."
+                if outcome == "content_unchanged"
+                else "Observed content changed between these two recorded observations."
+            )
+            lines.append(
+                "- Revalidation "
+                + _inline(relation["revalidation_id"])
+                + ": "
+                + wording
+                + " Earlier observation "
+                + _inline(relation["earlier"]["observation_id"])
+                + " in run "
+                + _inline(relation["earlier"]["run_id"])
+                + "; later observation "
+                + _inline(relation["later"]["observation_id"])
+                + " in run "
+                + _inline(relation["later"]["run_id"])
+                + "."
+            )
+        if not traceability["source_revalidations"]:
+            lines.append("- No source revalidation relation involves this run.")
         lines.append(
             "_Each hop follows a recorded ID. Unrecorded or unresolved links are "
             "reported as such and never matched by URL, text or hash._"
@@ -642,7 +674,9 @@ def _authorization_document(
 
 
 def _traceability(
-    run: ResearchRun | None, snapshot: ResearchPlanExecutionSnapshot
+    run: ResearchRun | None,
+    snapshot: ResearchPlanExecutionSnapshot,
+    source_revalidations: tuple[ResearchSourceRevalidationInspection, ...],
 ) -> dict[str, Any] | None:
     """Resolve recorded IDs to exact records; never infer a relation.
 
@@ -679,6 +713,18 @@ def _traceability(
             "fetched_at": source.fetched_at.isoformat(),
             "added_at": source.added_at.isoformat(),
             "discovery_candidate": candidate_trace(source.discovery_candidate_id),
+        }
+
+    def revalidation_observation(run_id: str, source: Any) -> dict[str, Any]:
+        return {
+            "run_id": run_id,
+            "observation_id": source.observation_id,
+            "document_id": source.document_id,
+            "requested_url": source.requested_url,
+            "url": source.url,
+            "content_sha256": source.content_sha256,
+            "fetched_at": source.fetched_at.isoformat(),
+            "added_at": source.added_at.isoformat(),
         }
 
     def candidate_trace(candidate_id: str | None) -> dict[str, Any] | None:
@@ -818,6 +864,27 @@ def _traceability(
                 }
             )
     support = supporting_comparison_review(run, checkpoint)
+    revalidations = []
+    for inspection in source_revalidations:
+        if not isinstance(inspection, ResearchSourceRevalidationInspection):
+            raise ResearchError("A mission audit received an invalid revalidation.")
+        record = inspection.record
+        if run.run_id not in (record.earlier_run_id, record.later_run_id):
+            continue
+        revalidations.append(
+            {
+                "revalidation_id": record.revalidation_id,
+                "outcome": record.outcome.value,
+                "recorded_at": record.recorded_at.isoformat(),
+                "earlier": revalidation_observation(
+                    record.earlier_run_id, inspection.earlier_source
+                ),
+                "later": revalidation_observation(
+                    record.later_run_id, inspection.later_source
+                ),
+            }
+        )
+    revalidations.sort(key=lambda item: (item["recorded_at"], item["revalidation_id"]))
     return {
         "mission_comparison_note_id": (
             checkpoint.semantic_note_id or None if checkpoint is not None else None
@@ -842,6 +909,7 @@ def _traceability(
         "source_observations": [
             observation(source.document_id) for source in run.sources
         ],
+        "source_revalidations": revalidations,
         "comparison_reviews": reviews,
         "claims": claims,
         "claim_contradictions": contradictions,

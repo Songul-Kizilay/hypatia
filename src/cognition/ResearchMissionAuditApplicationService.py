@@ -101,6 +101,11 @@ class ResearchMissionAuditApplicationService:
             run,
             authorization,
             hypatia_version=self._hypatia_version(),
+            source_revalidations=(
+                tuple(self._runs.source_revalidations())
+                if self._runs is not None
+                else ()
+            ),
         )
         markdown = render_mission_audit_markdown(audit, run)
         evaluation = audit["evaluation"]

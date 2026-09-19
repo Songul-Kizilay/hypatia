@@ -1,6 +1,22 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.390
+## Current bounded text journey: v0.3.391
+
+### Typed source revalidation relation: v0.3.391
+
+The durable research-run document can now record one explicit ordered relation
+between two accepted source observations, including across run boundaries. The
+relation binds both owner run IDs and observation IDs, requires the existing
+canonical requested-URL resource identity and strict recorded observation-time
+order, and derives only `content_unchanged` or `content_changed` from exact
+recorded content hashes. Audits display this provenance without inferring a
+freshness verdict.
+
+This is not live revalidation: it performs no fetch, provider/model call,
+scheduling, claim/evidence mutation, authority expansion, budget spend or
+mission lifecycle transition. Missing or changed canonical bindings fail
+closed. A later observation remains a historical recorded version, not proof
+that the remote resource is current now.
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded

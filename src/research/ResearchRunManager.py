@@ -99,7 +99,13 @@ from research.ResearchSourceDiscoveryRecord import ResearchSourceDiscoveryRecord
 from research.ResearchSourceIndependence import ResearchSourceIndependence
 from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
 from research.ResearchSourceRecord import ResearchSourceRecord
+from research.ResearchSourceRevalidationOutcome import ResearchSourceRevalidationOutcome
+from research.ResearchSourceRevalidationRecord import (
+    ResearchSourceRevalidationInspection,
+    ResearchSourceRevalidationRecord,
+)
 from research.ResearchSourceUsefulness import ResearchSourceUsefulness
+from research.SourceIdentity import same_resource
 
 
 class ResearchRunManager:
@@ -112,6 +118,7 @@ class ResearchRunManager:
         clock: Callable[[], datetime] | None = None,
         id_factory: Callable[[], str] | None = None,
         observation_id_factory: Callable[[], str] | None = None,
+        revalidation_id_factory: Callable[[], str] | None = None,
         evidence_id_factory: Callable[[], str] | None = None,
         discovery_id_factory: Callable[[], str] | None = None,
         assessment_id_factory: Callable[[], str] | None = None,
@@ -123,6 +130,9 @@ class ResearchRunManager:
         self._clock = clock or (lambda: datetime.now(UTC))
         self._id_factory = id_factory or (lambda: str(uuid4()))
         self._observation_id_factory = observation_id_factory or (lambda: str(uuid4()))
+        self._revalidation_id_factory = revalidation_id_factory or (
+            lambda: str(uuid4())
+        )
         self._evidence_id_factory = evidence_id_factory or (lambda: str(uuid4()))
         self._discovery_id_factory = discovery_id_factory or (lambda: str(uuid4()))
         self._assessment_id_factory = assessment_id_factory or (lambda: str(uuid4()))
@@ -134,6 +144,7 @@ class ResearchRunManager:
             lambda: str(uuid4())
         )
         self._runs: tuple[ResearchRun, ...] = ()
+        self._source_revalidations: tuple[ResearchSourceRevalidationRecord, ...] = ()
         self._lock = RLock()
 
     def load(self) -> None:
@@ -141,8 +152,13 @@ class ResearchRunManager:
         if self._store is None:
             return
         runs = self._store.load()
+        load_revalidations = getattr(self._store, "load_source_revalidations", None)
+        source_revalidations = (
+            load_revalidations() if load_revalidations is not None else []
+        )
         with self._lock:
             self._runs = tuple(runs)
+            self._source_revalidations = tuple(source_revalidations)
 
     def create(self, question: str) -> ResearchRun:
         """Create a collecting run for one explicit research question."""
@@ -173,6 +189,90 @@ class ResearchRunManager:
         """Return runs in deterministic creation order."""
         with self._lock:
             return list(self._runs)
+
+    def source_revalidations(self) -> Sequence[ResearchSourceRevalidationInspection]:
+        """Inspect persisted revalidation provenance without causing work."""
+        with self._lock:
+            return [
+                self._inspect_source_revalidation(record)
+                for record in self._source_revalidations
+            ]
+
+    def record_source_revalidation(
+        self,
+        earlier_run_id: str,
+        earlier_observation_id: str,
+        later_run_id: str,
+        later_observation_id: str,
+    ) -> ResearchSourceRevalidationRecord:
+        """Add one explicit, directional, content-equality provenance record."""
+        with self._lock:
+            earlier_run, earlier = self._source_observation(
+                earlier_run_id, earlier_observation_id
+            )
+            later_run, later = self._source_observation(
+                later_run_id, later_observation_id
+            )
+            if earlier.observation_id is None or later.observation_id is None:
+                raise ResearchError(
+                    "Source revalidation requires recorded observation identities."
+                )
+            if (
+                earlier_run.run_id == later_run.run_id
+                and earlier.observation_id == later.observation_id
+            ):
+                raise ResearchError("A source observation cannot revalidate itself.")
+            if (
+                earlier.requested_url is None
+                or later.requested_url is None
+                or not same_resource(earlier.requested_url, later.requested_url)
+            ):
+                raise ResearchError(
+                    "Source revalidation requires matching recorded requested URLs."
+                )
+            if earlier.content_sha256 is None or later.content_sha256 is None:
+                raise ResearchError(
+                    "Source revalidation requires recorded content versions."
+                )
+            if earlier.fetched_at >= later.fetched_at:
+                raise ResearchError(
+                    "Source revalidation requires an unambiguous earlier observation."
+                )
+            pair = (
+                earlier_run.run_id,
+                earlier.observation_id,
+                later_run.run_id,
+                later.observation_id,
+            )
+            if any(
+                (
+                    record.earlier_run_id,
+                    record.earlier_observation_id,
+                    record.later_run_id,
+                    record.later_observation_id,
+                )
+                == pair
+                for record in self._source_revalidations
+            ):
+                raise ResearchError("Source revalidation relation already exists.")
+            outcome = (
+                ResearchSourceRevalidationOutcome.CONTENT_UNCHANGED
+                if earlier.content_sha256 == later.content_sha256
+                else ResearchSourceRevalidationOutcome.CONTENT_CHANGED
+            )
+            record = ResearchSourceRevalidationRecord(
+                revalidation_id=self._new_revalidation_id(),
+                earlier_run_id=earlier_run.run_id,
+                earlier_observation_id=earlier.observation_id,
+                later_run_id=later_run.run_id,
+                later_observation_id=later.observation_id,
+                outcome=outcome,
+                recorded_at=self._now(),
+            )
+            candidate = (*self._source_revalidations, record)
+            self._persist(self._runs, candidate)
+            self._source_revalidations = candidate
+            return record
 
     def get(self, run_id: str) -> ResearchRun:
         """Return one run or raise a controlled unknown-run error."""
@@ -1506,9 +1606,30 @@ class ResearchRunManager:
                 return index, run
         raise ResearchError(f"Research run was not found: {run_id}")
 
-    def _persist(self, runs: tuple[ResearchRun, ...]) -> None:
+    def _persist(
+        self,
+        runs: tuple[ResearchRun, ...],
+        source_revalidations: (
+            tuple[ResearchSourceRevalidationRecord, ...] | None
+        ) = None,
+    ) -> None:
         if self._store is not None:
-            self._store.save(list(runs))
+            records = (
+                self._source_revalidations
+                if source_revalidations is None
+                else source_revalidations
+            )
+            save_with_revalidations = getattr(
+                self._store, "save_with_source_revalidations", None
+            )
+            if save_with_revalidations is None:
+                if records:
+                    raise ResearchError(
+                        "Research run store cannot persist source revalidations."
+                    )
+                self._store.save(list(runs))
+                return
+            save_with_revalidations(list(runs), list(records))
 
     def _now(self) -> datetime:
         now = self._clock()
@@ -1530,6 +1651,49 @@ class ResearchRunManager:
                 "Research source observation ID already exists in this run."
             )
         return observation_id
+
+    def _new_revalidation_id(self) -> str:
+        revalidation_id = self._normalize_revalidation_id(
+            self._revalidation_id_factory()
+        )
+        if any(
+            record.revalidation_id == revalidation_id
+            for record in self._source_revalidations
+        ):
+            raise ResearchError("Research source revalidation ID already exists.")
+        return revalidation_id
+
+    def _source_observation(
+        self,
+        run_id: str,
+        observation_id: str,
+    ) -> tuple[ResearchRun, ResearchSourceRecord]:
+        run = self.get(run_id)
+        normalized_observation_id = self._normalize_observation_id(observation_id)
+        source = next(
+            (
+                candidate
+                for candidate in run.sources
+                if candidate.observation_id == normalized_observation_id
+            ),
+            None,
+        )
+        if source is None:
+            raise ResearchError("Research source observation was not found.")
+        return run, source
+
+    def _inspect_source_revalidation(
+        self,
+        record: ResearchSourceRevalidationRecord,
+    ) -> ResearchSourceRevalidationInspection:
+        earlier_run, earlier = self._source_observation(
+            record.earlier_run_id, record.earlier_observation_id
+        )
+        later_run, later = self._source_observation(
+            record.later_run_id, record.later_observation_id
+        )
+        del earlier_run, later_run
+        return ResearchSourceRevalidationInspection(record, earlier, later)
 
     def _new_evidence_id(self) -> str:
         evidence_id = self._normalize_evidence_id(self._evidence_id_factory())
@@ -2070,6 +2234,15 @@ class ResearchRunManager:
         normalized = observation_id.strip()
         if len(normalized) > 200:
             raise ResearchError("Research source observation ID is too long.")
+        return normalized
+
+    @staticmethod
+    def _normalize_revalidation_id(revalidation_id: str) -> str:
+        if not isinstance(revalidation_id, str) or not revalidation_id.strip():
+            raise ResearchError("Research source revalidation ID cannot be empty.")
+        normalized = revalidation_id.strip()
+        if len(normalized) > 200:
+            raise ResearchError("Research source revalidation ID is too long.")
         return normalized
 
     @staticmethod

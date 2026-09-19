@@ -2,6 +2,24 @@
 
 All notable project changes are recorded here.
 
+## [0.3.391] - 2026-09-19
+
+### Added
+
+- Explicit source-revalidation relations now bind two ordered, recorded source
+  observations from the same canonical requested-URL resource. Their sole
+  typed outcome is `content_unchanged` for equal recorded hashes or
+  `content_changed` otherwise (research-run store schema 19).
+- Mission audits render the bounded cross-run provenance relation with both
+  owner run IDs, observation IDs and recorded document/content versions.
+
+### Boundaries
+
+- Recording a relation never fetches, revalidates, schedules, changes a claim
+  or evidence record, spends authority or budget, or declares current-source
+  freshness. Missing lineage, version, strict time ordering or a tampered
+  binding fails closed.
+
 ## [0.3.390] - 2026-09-19
 
 ### Added

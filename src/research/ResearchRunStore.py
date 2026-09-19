@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Protocol
 
 from research.ResearchRun import ResearchRun
+from research.ResearchSourceRevalidationRecord import ResearchSourceRevalidationRecord
 
 
 class ResearchRunStore(Protocol):
@@ -15,3 +16,13 @@ class ResearchRunStore(Protocol):
 
     def save(self, runs: list[ResearchRun]) -> None:
         """Atomically persist all runs in creation order."""
+
+    def load_source_revalidations(self) -> list[ResearchSourceRevalidationRecord]:
+        """Return exact recorded cross-run source-observation relations."""
+
+    def save_with_source_revalidations(
+        self,
+        runs: list[ResearchRun],
+        source_revalidations: list[ResearchSourceRevalidationRecord],
+    ) -> None:
+        """Atomically persist runs and their relation-only temporal provenance."""
