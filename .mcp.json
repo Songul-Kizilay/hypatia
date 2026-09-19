@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/readonly",
+      "headers": {
+        "Authorization": "Bearer ${HYPATIA_GITHUB_MCP_PAT}",
+        "X-MCP-Toolsets": "repos,issues,pull_requests,actions,code_security,dependabot,secret_protection"
+      }
+    },
+    "context7": {
+      "type": "http",
+      "url": "https://mcp.context7.com/mcp"
+    }
+  }
+}
