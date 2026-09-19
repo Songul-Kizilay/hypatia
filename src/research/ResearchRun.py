@@ -54,8 +54,18 @@ class ResearchRun:
             raise ResearchError("Research run sources must be an immutable tuple.")
         if not all(isinstance(source, ResearchSourceRecord) for source in self.sources):
             raise ResearchError("Research run contains an invalid source record.")
-        if len({source.document_id for source in self.sources}) != len(self.sources):
+        # One ordinary acceptance per content version per run.  Only an explicit
+        # revalidation observation may re-observe a version already in the run,
+        # because identical content re-observed is a new observation, not a
+        # duplicate document.
+        ordinary_documents = [
+            source.document_id
+            for source in self.sources
+            if getattr(source, "revalidation_of_observation_id", None) is None
+        ]
+        if len(ordinary_documents) != len(set(ordinary_documents)):
             raise ResearchError("Research run contains duplicate source documents.")
+        self._validate_revalidation_provenance()
         # Treat records constructed by older in-memory code as legacy, rather
         # than inventing a new observation identity for them. Persisted legacy
         # records are decoded the same way, with ``observation_id=None``.
@@ -331,6 +341,53 @@ class ResearchRun:
         self._validate_comparison_reviews()
         object.__setattr__(self, "run_id", self.run_id.strip())
         object.__setattr__(self, "question", self.question.strip())
+
+    def _validate_revalidation_provenance(self) -> None:
+        """Bind each revalidation observation to one earlier same-run record.
+
+        The prior must precede it in this run, carry the same recorded requested
+        URL and a strictly earlier fetch time.  Each prior observation may be
+        revalidated at most once per run, which is what makes a resumed step
+        recognise its own durable result instead of fetching again.
+        """
+        seen: dict[str, ResearchSourceRecord] = {}
+        revalidated: set[str] = set()
+        for source in self.sources:
+            prior_id = getattr(source, "revalidation_of_observation_id", None)
+            if prior_id is not None:
+                prior = seen.get(prior_id)
+                if (
+                    prior is None
+                    or prior_id in revalidated
+                    or prior.requested_url is None
+                    or prior.content_sha256 is None
+                    or prior.requested_url != source.requested_url
+                    or prior.fetched_at >= source.fetched_at
+                ):
+                    raise ResearchError(
+                        "Research source revalidation provenance is invalid."
+                    )
+                revalidated.add(prior_id)
+            else:
+                documents = {record.document_id for record in seen.values()}
+                if source.document_id in documents:
+                    raise ResearchError(
+                        "Research run contains duplicate source documents."
+                    )
+            observation_id = getattr(source, "observation_id", None)
+            if observation_id is not None:
+                seen[observation_id] = source
+
+    def source_for_document(self, document_id: str) -> ResearchSourceRecord | None:
+        """Return the first observation that brought this version into the run.
+
+        A later explicit revalidation may re-observe the same content version;
+        the ordinary acceptance that introduced it stays its evidence anchor.
+        """
+        return next(
+            (source for source in self.sources if source.document_id == document_id),
+            None,
+        )
 
     def _validate_candidate_provenance(self) -> None:
         """A selected candidate must be one this run discovered, at that URL.

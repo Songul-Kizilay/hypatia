@@ -685,6 +685,22 @@ steps stay pending. Authorizations are not persisted, so a restored execution
 cannot be advanced and nothing is replayed. A corrupt store raises at startup
 rather than being replaced by an empty one.
 
+### Explicit source revalidation
+
+An old source observation is never permission to fetch it again. Re-observing
+one requires a `source_revalidation` step in an approved plan, bound to one
+exact prior observation of that plan's research run. The URL is derived from
+the observation's recorded requested URL; it cannot be substituted. The result
+is one new observation plus one recorded relation saying only whether the
+content identity was `content_unchanged` or `content_changed`.
+
+Revalidation authority is not freshness inference: nothing labels a source
+fresh, stale or current, and nothing revalidates automatically, on a schedule
+or across runs. A revalidation consumes one normal source slot and the ordinary
+cumulative network/execution allowance, with no separate budget. If the
+process stops after the new observation was durably recorded, resuming that
+execution completes the step from the record without fetching again.
+
 ---
 
 ## Background research scheduling

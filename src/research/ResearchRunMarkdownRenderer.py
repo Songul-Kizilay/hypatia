@@ -59,15 +59,18 @@ def render_research_run_markdown(run: ResearchRun) -> str:
     if not run.sources:
         lines.extend(("_No accepted sources._", ""))
     for source_index, source in enumerate(run.sources, start=1):
+        # Evidence stays anchored to the observation that first brought its
+        # content version into the run, never repeated under a revalidation.
+        anchor = run.source_for_document(source.document_id) is source
         evidence = tuple(
             record
             for record in run.evidence
-            if record.source_document_id == source.document_id
+            if anchor and record.source_document_id == source.document_id
         )
         assessments = tuple(
             record
             for record in run.assessments
-            if record.source_document_id == source.document_id
+            if anchor and record.source_document_id == source.document_id
         )
         lines.extend(
             (
@@ -105,11 +108,16 @@ def render_research_run_markdown(run: ResearchRun) -> str:
                     else "- **Observed content SHA-256:** unrecorded (accepted "
                     "before content versioning)"
                 ),
-                "",
-                "#### Evidence",
-                "",
             )
         )
+        if source.revalidation_of_observation_id is not None:
+            lines.append(
+                "- **Explicit revalidation of observation:** "
+                f"{_inline(source.revalidation_of_observation_id)} (approved "
+                f"execution {_inline(source.revalidation_execution_id or '')}; "
+                "a content comparison, not a freshness conclusion)"
+            )
+        lines.extend(("", "#### Evidence", ""))
         if not evidence:
             lines.extend(("_No evidence recorded for this source._", ""))
         for evidence_index, evidence_record in enumerate(evidence, start=1):

@@ -19,6 +19,7 @@ class ResearchPlanStepCapability(StrEnum):
     SOURCE_DISCOVERY = "source_discovery"
     SOURCE_FETCH = "source_fetch"
     SOURCE_ACCEPT = "source_accept"
+    SOURCE_REVALIDATION = "source_revalidation"
     EVIDENCE_RECORDING = "evidence_recording"
     SOURCE_ASSESSMENT = "source_assessment"
     CLAIM_CREATION = "claim_creation"

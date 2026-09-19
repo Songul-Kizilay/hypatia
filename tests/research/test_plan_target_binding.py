@@ -29,6 +29,7 @@ from research.ResearchPlanStepStatus import ResearchPlanStepStatus
 from research.ResearchPlanTargetBinding import ResearchPlanTargetBinding
 from research.ResearchTargetScope import ResearchTargetScope, TargetHostRule
 from research.SemanticEvidenceStepBinding import SemanticEvidenceStepBinding
+from research.SourceRevalidationStepBinding import SourceRevalidationStepBinding
 from tests.research.test_plan_restrictions import restricted_plan
 
 MOMENT = datetime(2026, 9, 3, tzinfo=UTC)
@@ -126,6 +127,15 @@ class PlanTargetBindingTests(unittest.TestCase):
                         request=replace(
                             binding.request, question=reference_plan().question
                         ),
+                    ),
+                )
+            elif capability is ResearchPlanStepCapability.SOURCE_REVALIDATION:
+                step = ResearchPlanStep(
+                    "step-1",
+                    "Revalidate",
+                    capability=capability,
+                    source_revalidation_binding=SourceRevalidationStepBinding(
+                        "run-1", "observation-1", "https://example.test/", 2
                     ),
                 )
             else:

@@ -232,6 +232,7 @@ from research.SourceDiscoveryStepOperation import SourceDiscoveryStepOperation
 from research.SourceFetchStepOperation import SourceFetchStepOperation
 from research.SourceIdentity import identity_of
 from research.SourceLoadStage import SourceLoadStage
+from research.SourceRevalidationStepOperation import SourceRevalidationStepOperation
 from response.ResponseComposer import ResponseComposer
 from security.VulnerabilityGraphStore import VulnerabilityGraphStore
 from session.SessionCreateService import SessionCreateService
@@ -485,6 +486,14 @@ class CognitiveEngine:
                 operation_registry.register(
                     ResearchPlanStepCapability.SOURCE_ACCEPT,
                     SourceAcceptStepOperation(
+                        research_source_fetcher,
+                        self._research_source_acceptance_service,
+                        research_run_manager,
+                    ),
+                )
+                operation_registry.register(
+                    ResearchPlanStepCapability.SOURCE_REVALIDATION,
+                    SourceRevalidationStepOperation(
                         research_source_fetcher,
                         self._research_source_acceptance_service,
                         research_run_manager,

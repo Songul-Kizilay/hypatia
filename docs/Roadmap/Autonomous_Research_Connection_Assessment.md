@@ -1,6 +1,30 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.392
+## Current bounded text journey: v0.3.393
+
+### Bounded source revalidation authority: v0.3.393
+
+A plan may now carry an explicit `source_revalidation` step whose typed binding
+names one exact prior observation of the approved run. The plan digest covers
+the binding, so neither a source-fetch approval nor a restart can turn into a
+revalidation of a different observation. Execution re-reads the observation,
+derives the URL from its recorded canonical requested URL, fetches once and
+accepts through the normal content-version transaction. One durable write adds
+the new immutable observation (with the prior observation and execution it
+re-observed) and exactly one `content_unchanged` or `content_changed` relation,
+which the v0.3.392 temporal history then shows.
+
+Accounting is ordinary: one normal `max_sources` slot and one advance plus one
+network operation from the cumulative allowance. There is no separate
+revalidation budget, and without an approved allowance the step is refused.
+On restart, an interrupted revalidation whose own observation and relation are
+durable completes from that record with no refetch or recharge; an unprovable
+attempt stays interrupted for the existing operator ruling.
+
+Deliberate limits: same-run only (no cross-run authority), once per prior
+observation per run, not available inside learning missions or target plans,
+and no TTL, age threshold, stale/fresh label, scheduling or automatic refresh.
+Revalidation authority is execution authority, not freshness inference.
 
 ### Read-only temporal history: v0.3.392
 

@@ -548,6 +548,171 @@ class ResearchRunManager:
             self._runs = candidate_tuple
         return updated
 
+    def add_revalidated_source(
+        self,
+        run_id: str,
+        prior_observation_id: str,
+        source: ResearchSource,
+        document_id: str,
+        *,
+        requested_url: str,
+        execution_id: str,
+    ) -> tuple[ResearchRun, ResearchSourceRevalidationRecord]:
+        """Atomically add one later observation and its explicit relation.
+
+        This is deliberately narrower than ``add_source``: it accepts no
+        cross-run prior identity and no caller-selected relation outcome.  The
+        same durable write commits the normal source observation, its
+        revalidation provenance and the hash-derived temporal edge, so a
+        process cannot leave an accepted revalidation observation that would
+        invite a second fetch merely because relation recording was interrupted
+        afterwards.  The later observation may carry the prior's content
+        version: identical content re-observed is a new observation.
+        """
+        normalized_id = self._normalize_run_id(run_id)
+        normalized_prior_id = self._normalize_observation_id(prior_observation_id)
+        normalized_document_id = self._normalize_document_id(document_id)
+        if not isinstance(requested_url, str) or not requested_url.strip():
+            raise ResearchError("Revalidation requires a recorded requested URL.")
+        normalized_requested_url = requested_url.strip()
+        if (
+            not isinstance(execution_id, str)
+            or not execution_id.strip()
+            or len(execution_id.strip()) > 200
+        ):
+            raise ResearchError("Revalidation requires its execution identity.")
+        normalized_execution_id = execution_id.strip()
+        with self._lock:
+            index, run = self._find_with_index(normalized_id)
+            self._require_collecting(run)
+            prior = next(
+                (
+                    item
+                    for item in run.sources
+                    if item.observation_id == normalized_prior_id
+                ),
+                None,
+            )
+            if (
+                prior is None
+                or prior.requested_url is None
+                or prior.content_sha256 is None
+                or prior.requested_url != normalized_requested_url
+            ):
+                raise ResearchError(
+                    "Revalidation prior observation no longer matches its binding."
+                )
+            prior_id = prior.observation_id
+            if prior_id is None:
+                raise ResearchError(
+                    "Revalidation prior observation identity is unavailable."
+                )
+            if any(
+                record.revalidation_of_observation_id == prior_id
+                for record in run.sources
+            ):
+                raise ResearchError("Source revalidation was already recorded.")
+            now = self._now()
+            later = ResearchSourceRecord.from_source(
+                source,
+                normalized_document_id,
+                now,
+                requested_url=normalized_requested_url,
+                observation_id=self._new_observation_id(run),
+                revalidation_of_observation_id=prior_id,
+                revalidation_execution_id=normalized_execution_id,
+            )
+            if later.observation_id is None or later.content_sha256 is None:
+                raise ResearchError("Revalidation observation identity is unavailable.")
+            if prior.fetched_at >= later.fetched_at:
+                raise ResearchError(
+                    "Revalidation requires an unambiguous later observation."
+                )
+            if any(
+                record.earlier_run_id == run.run_id
+                and record.earlier_observation_id == prior_id
+                and record.later_run_id == run.run_id
+                for record in self._source_revalidations
+            ):
+                raise ResearchError("Source revalidation was already recorded.")
+            updated = ResearchRun(
+                run_id=run.run_id,
+                question=run.question,
+                status=run.status,
+                sources=(*run.sources, later),
+                failures=run.failures,
+                created_at=run.created_at,
+                updated_at=now,
+                evidence=run.evidence,
+                discoveries=run.discoveries,
+                assessments=run.assessments,
+                comparison_notes=run.comparison_notes,
+                claims=run.claims,
+                claim_contradictions=run.claim_contradictions,
+                comparison_reviews=run.comparison_reviews,
+            )
+            outcome = (
+                ResearchSourceRevalidationOutcome.CONTENT_UNCHANGED
+                if prior.content_sha256 == later.content_sha256
+                else ResearchSourceRevalidationOutcome.CONTENT_CHANGED
+            )
+            relation = ResearchSourceRevalidationRecord(
+                revalidation_id=self._new_revalidation_id(),
+                earlier_run_id=run.run_id,
+                earlier_observation_id=prior_id,
+                later_run_id=run.run_id,
+                later_observation_id=later.observation_id,
+                outcome=outcome,
+                recorded_at=now,
+            )
+            candidate_runs = list(self._runs)
+            candidate_runs[index] = updated
+            candidate_tuple = tuple(candidate_runs)
+            candidate_relations = (*self._source_revalidations, relation)
+            self._persist(candidate_tuple, candidate_relations)
+            self._runs = candidate_tuple
+            self._source_revalidations = candidate_relations
+            return updated, relation
+
+    def recorded_revalidation(
+        self, run_id: str, prior_observation_id: str
+    ) -> tuple[ResearchSourceRecord, ResearchSourceRevalidationRecord] | None:
+        """Return the durable same-run revalidation of one prior, if any.
+
+        Read-only.  At most one exists per prior observation per run, so a
+        resumed step can find its own committed result instead of fetching.
+        """
+        normalized_id = self._normalize_run_id(run_id)
+        normalized_prior_id = self._normalize_observation_id(prior_observation_id)
+        with self._lock:
+            _, run = self._find_with_index(normalized_id)
+            later = next(
+                (
+                    source
+                    for source in run.sources
+                    if source.revalidation_of_observation_id == normalized_prior_id
+                ),
+                None,
+            )
+            if later is None:
+                return None
+            relation = next(
+                (
+                    record
+                    for record in self._source_revalidations
+                    if record.earlier_run_id == run.run_id
+                    and record.earlier_observation_id == normalized_prior_id
+                    and record.later_run_id == run.run_id
+                    and record.later_observation_id == later.observation_id
+                ),
+                None,
+            )
+            if relation is None:
+                raise ResearchError(
+                    "Research source revalidation observation lacks its relation."
+                )
+            return later, relation
+
     def record_failure(
         self,
         run_id: str,
@@ -818,7 +983,11 @@ class ResearchRunManager:
         normalized_document_ids = self._normalize_comparison_document_ids(document_ids)
         with self._lock:
             _, run = self._find_with_index(normalized_run_id)
-            sources_by_id = {source.document_id: source for source in run.sources}
+            sources_by_id = {
+                document_id: source
+                for document_id in dict.fromkeys(s.document_id for s in run.sources)
+                if (source := run.source_for_document(document_id)) is not None
+            }
             if any(
                 document_id not in sources_by_id
                 for document_id in normalized_document_ids
@@ -1953,7 +2122,11 @@ class ResearchRunManager:
         source_ids = tuple(
             dict.fromkeys(record.source_document_id for record in evidence)
         )
-        sources_by_id = {record.document_id: record for record in run.sources}
+        sources_by_id = {
+            document_id: record
+            for document_id in dict.fromkeys(s.document_id for s in run.sources)
+            if (record := run.source_for_document(document_id)) is not None
+        }
         try:
             sources = tuple(sources_by_id[source_id] for source_id in source_ids)
         except KeyError as error:

@@ -2,6 +2,50 @@
 
 All notable project changes are recorded here.
 
+## [0.3.393] - 2026-09-19
+
+### Added
+
+- Bounded source-revalidation authority. A new `source_revalidation` plan
+  step carries a typed binding to one exact prior source observation in its
+  own research run. The approved plan digest covers the binding, so a source
+  fetch approval can never start a revalidation and a restart cannot rebind a
+  different observation.
+- Executing the step re-reads the bound observation, derives the fetch URL
+  from its recorded canonical requested URL (never from the final URL or a
+  caller-supplied replacement), fetches once through the existing guarded
+  fetch path and accepts the content through the normal acceptance and
+  content-version transaction.
+- One durable write commits the new immutable observation (new observation
+  ID, normal requested/final URL provenance, plus the prior observation and
+  execution it re-observed) together with exactly one `content_unchanged` or
+  `content_changed` relation. Unchanged content is recorded as a new
+  observation of the same content version; evidence stays anchored to the
+  observation that first brought that version into the run. The v0.3.392
+  temporal history and the run export show the explicit edge
+  (research-run store schema 20).
+- Restart: an interrupted revalidation whose own observation and relation are
+  already durable is completed from that record without refetching,
+  recharging or duplicating anything. An attempt whose outcome cannot be
+  proven stays interrupted and needs the existing operator ruling.
+
+### Boundaries
+
+- Revalidation authority is not freshness inference. An old observation is
+  not permission to fetch again, and the relation says only whether recorded
+  content identity changed; it never labels a source fresh, stale or current.
+- One successful revalidation is one normal additional source observation. It
+  consumes one normal `max_sources` slot and one advance plus one network
+  operation from the ordinary cumulative allowance. There is no separate
+  revalidation, refresh or freshness budget, and a revalidation step without
+  an explicit approved allowance is refused.
+- Same-run only: a binding names an observation of its own approved run, each
+  prior observation can be revalidated once per run, and no cross-run
+  revalidation authority exists. Learning missions and target plans cannot
+  contain revalidation steps. Nothing is scheduled, automatic or
+  time-triggered; legacy observations without recorded identity or requested
+  URL cannot be bound.
+
 ## [0.3.392] - 2026-09-19
 
 ### Added

@@ -724,7 +724,11 @@ def _traceability(
         return None
     notes = {note.note_id: note for note in run.comparison_notes}
     evidence_by_id = {record.evidence_id: record for record in run.evidence}
-    sources = {source.document_id: source for source in run.sources}
+    # An explicit revalidation may re-observe a content version; evidence stays
+    # anchored to the observation that first brought that version into the run.
+    sources: dict[str, Any] = {}
+    for source in run.sources:
+        sources.setdefault(source.document_id, source)
     candidates = {
         candidate_id: (discovery.discovery_id, candidate)
         for discovery in run.discoveries
@@ -739,6 +743,9 @@ def _traceability(
         source = sources.get(document_id)
         if source is None:
             return None
+        return observation_of(source)
+
+    def observation_of(source: Any) -> dict[str, Any]:
         return {
             "observation_id": source.observation_id,
             "document_id": source.document_id,
@@ -941,9 +948,7 @@ def _traceability(
             ),
             "supporting_review_id": support.review_id if support else None,
         },
-        "source_observations": [
-            observation(source.document_id) for source in run.sources
-        ],
+        "source_observations": [observation_of(source) for source in run.sources],
         "source_revalidations": revalidations,
         "comparison_reviews": reviews,
         "claims": claims,

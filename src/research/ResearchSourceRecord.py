@@ -42,6 +42,13 @@ class ResearchSourceRecord:
     #: identical content may be observed and accepted by different runs.  ``None``
     #: means the source predates observation identity and is never backfilled.
     observation_id: str | None = None
+    #: For an explicitly approved revalidation only: the exact earlier
+    #: observation in this same run that this observation deliberately
+    #: re-observed, and the execution whose approved step performed it.  Both
+    #: are ``None`` for every ordinary acceptance and are never inferred from a
+    #: URL, content hash or timestamp.
+    revalidation_of_observation_id: str | None = None
+    revalidation_execution_id: str | None = None
 
     def __post_init__(self) -> None:
         for value, field_name in (
@@ -92,6 +99,29 @@ class ResearchSourceRecord:
             or len(self.observation_id) > 200
         ):
             raise ResearchError("Research source observation ID is invalid.")
+        prior_id = self.revalidation_of_observation_id
+        execution_id = self.revalidation_execution_id
+        if (prior_id is None) != (execution_id is None):
+            raise ResearchError("Research source revalidation provenance is partial.")
+        for provenance, label in (
+            (prior_id, "Research source revalidation prior observation ID"),
+            (execution_id, "Research source revalidation execution ID"),
+        ):
+            if provenance is not None and (
+                not isinstance(provenance, str)
+                or not provenance.strip()
+                or provenance != provenance.strip()
+                or len(provenance) > 200
+            ):
+                raise ResearchError(f"{label} is invalid.")
+        if prior_id is not None and (
+            self.observation_id is None
+            or self.requested_url is None
+            or self.content_sha256 is None
+            or self.discovery_candidate_id is not None
+            or prior_id == self.observation_id
+        ):
+            raise ResearchError("Research source revalidation provenance is invalid.")
         object.__setattr__(self, "document_id", self.document_id.strip())
         object.__setattr__(self, "url", self.url.strip())
         object.__setattr__(self, "title", self.title.strip())
@@ -106,6 +136,8 @@ class ResearchSourceRecord:
         requested_url: str | None = None,
         discovery_candidate_id: str | None = None,
         observation_id: str | None = None,
+        revalidation_of_observation_id: str | None = None,
+        revalidation_execution_id: str | None = None,
     ) -> ResearchSourceRecord:
         """Build a persistent provenance record from a fetched source."""
         if not isinstance(source, ResearchSource):
@@ -121,4 +153,6 @@ class ResearchSourceRecord:
             requested_url=requested_url,
             discovery_candidate_id=discovery_candidate_id,
             observation_id=observation_id,
+            revalidation_of_observation_id=revalidation_of_observation_id,
+            revalidation_execution_id=revalidation_execution_id,
         )

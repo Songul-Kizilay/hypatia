@@ -152,6 +152,9 @@ class ResearchPlanDraftService:
                     completion_authorization=(normalized.completion_authorization),
                     semantic_evidence_binding=normalized.semantic_evidence_binding,
                     semantic_comparison_binding=normalized.semantic_comparison_binding,
+                    source_revalidation_binding=(
+                        normalized.source_revalidation_binding
+                    ),
                 )
             )
         return tuple(steps)

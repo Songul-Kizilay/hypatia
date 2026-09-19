@@ -276,6 +276,50 @@ class ResearchPlanExecutionState:
             status=ResearchPlanExecutionStatus.RUNNING,
         )
 
+    def complete_interrupted_step_from_record(
+        self,
+        step_id: str,
+        detail: str,
+        operation: str,
+    ) -> ResearchPlanExecutionState:
+        """Complete one interrupted step whose own result is durably recorded.
+
+        This is not a guess and not a ruling: the caller has found, in canonical
+        local state, the exact result this execution's step committed before
+        the process died.  Nothing is charged or refunded, and no operation
+        runs.  Any other interrupted step keeps the execution interrupted.
+        """
+        if self.status is not ResearchPlanExecutionStatus.INTERRUPTED:
+            raise ResearchError(
+                "Only an interrupted research plan execution can be reconciled."
+            )
+        current = self._step(step_id)
+        if (
+            current.status is not ResearchPlanStepStatus.INTERRUPTED
+            or current.resolution is not ResearchAttemptResolution.NONE
+        ):
+            raise ResearchError(
+                "Only an unruled interrupted research plan step can be reconciled."
+            )
+        updated = self._replace_step(
+            step_id,
+            ResearchPlanStepStatus.COMPLETED,
+            detail,
+            work_performed=True,
+            operation=operation,
+        )
+        if any(
+            step.status is ResearchPlanStepStatus.INTERRUPTED for step in updated.steps
+        ):
+            status = ResearchPlanExecutionStatus.INTERRUPTED
+        elif all(
+            step.status is ResearchPlanStepStatus.COMPLETED for step in updated.steps
+        ):
+            status = ResearchPlanExecutionStatus.COMPLETED
+        else:
+            status = ResearchPlanExecutionStatus.RUNNING
+        return replace(updated, status=status, detail="")
+
     def _with_ruling(
         self,
         current: ResearchPlanStepState,

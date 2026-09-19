@@ -69,6 +69,7 @@ _EXECUTION_FIELDS = frozenset(
 #: Version 1 wrote every field above except the last.
 _EXECUTION_FIELDS_V1 = _EXECUTION_FIELDS - {"allowance"}
 _EXECUTION_FIELDS_WITH_TARGET = _EXECUTION_FIELDS | {"target_plan_digest"}
+_EXECUTION_FIELDS_WITH_REVALIDATION = _EXECUTION_FIELDS | {"revalidation_plan_digest"}
 _EXECUTION_FIELDS_WITH_MISSION = _EXECUTION_FIELDS | {"mission_plan_digest"}
 _EXECUTION_FIELDS_WITH_MISSION_RECOVERY = _EXECUTION_FIELDS_WITH_MISSION | {
     "mission_scope",
@@ -189,6 +190,8 @@ def encode_execution_snapshot(
     }
     if snapshot.target_plan_digest is not None:
         document["target_plan_digest"] = snapshot.target_plan_digest
+    if snapshot.revalidation_plan_digest is not None:
+        document["revalidation_plan_digest"] = snapshot.revalidation_plan_digest
     if snapshot.mission_plan_digest is not None:
         document["mission_plan_digest"] = snapshot.mission_plan_digest
     if snapshot.mission_scope is not None:
@@ -231,6 +234,7 @@ def decode_execution_snapshot(document: object) -> ResearchPlanExecutionSnapshot
         _EXECUTION_FIELDS,
         _EXECUTION_FIELDS_V1,
         _EXECUTION_FIELDS_WITH_TARGET,
+        _EXECUTION_FIELDS_WITH_REVALIDATION,
         _EXECUTION_FIELDS_WITH_MISSION,
         _EXECUTION_FIELDS_WITH_MISSION_RECOVERY,
         _EXECUTION_FIELDS_WITH_MISSION_REQUEST,
@@ -266,6 +270,7 @@ def decode_execution_snapshot(document: object) -> ResearchPlanExecutionSnapshot
         recorded_at=_timestamp(document["recorded_at"]),
         allowance=_decode_allowance(document.get("allowance")),
         target_plan_digest=document.get("target_plan_digest"),
+        revalidation_plan_digest=document.get("revalidation_plan_digest"),
         mission_plan_digest=document.get("mission_plan_digest"),
         mission_scope=(
             _decode_mission_scope(document["mission_scope"])

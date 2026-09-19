@@ -2,11 +2,22 @@
 
 ## Runtime Version
 
-`v0.3.392 (Genesis)`
+`v0.3.393 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
+Version v0.3.393 adds bounded source-revalidation authority. An approved
+`source_revalidation` plan step binds one exact prior observation of its own
+run; the fetch URL is derived from that observation's recorded requested URL,
+the content is accepted through the normal transaction, and one durable write
+adds a new immutable observation plus exactly one `content_unchanged` or
+`content_changed` relation. It consumes one normal source slot and the ordinary
+cumulative allowance, with no separate budget. Revalidation authority is not
+freshness inference: an old observation is never permission to fetch again, and
+nothing is automatic, scheduled or cross-run. A restart completes an
+interrupted revalidation from its own durable record without refetching;
+anything unprovable stays interrupted for an operator ruling.
 Version v0.3.392 adds a read-only temporal-history projection to the mission
 audit. For each recorded requested resource it exposes only canonical
 observation ownership, timestamps and explicit typed revalidation edges, with

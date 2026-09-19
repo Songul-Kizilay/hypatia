@@ -65,6 +65,8 @@ class ResearchSourceAcceptanceService:
         attempt_id: str = "",
         requested_url: str = "",
         discovery_candidate_id: str = "",
+        revalidation_prior_observation_id: str = "",
+        revalidation_execution_id: str = "",
     ) -> ResearchSourceAcceptanceResult:
         """Run the canonical acceptance transaction for one fetched source.
 
@@ -93,7 +95,10 @@ class ResearchSourceAcceptanceService:
         except ResearchError:
             # An unknown run is refused at attachment, as it always was.
             run_sources = ()
-        if any(
+        revalidating = bool(revalidation_prior_observation_id)
+        if revalidating and not revalidation_execution_id:
+            raise KnowledgeError("Source revalidation requires its execution identity.")
+        if not revalidating and any(
             record.document_id == source_document.document_id for record in run_sources
         ):
             # This run already accepted this exact version: refused before the
@@ -179,13 +184,23 @@ class ResearchSourceAcceptanceService:
 
         events.attach_started(resource, document.document_id, run_id)
         try:
-            run = self._research_run_manager.add_source(
-                run_id,
-                source,
-                document.document_id,
-                requested_url=requested_url.strip() or None,
-                discovery_candidate_id=discovery_candidate_id.strip() or None,
-            )
+            if revalidation_prior_observation_id:
+                run, _ = self._research_run_manager.add_revalidated_source(
+                    run_id,
+                    revalidation_prior_observation_id,
+                    source,
+                    document.document_id,
+                    requested_url=requested_url.strip(),
+                    execution_id=revalidation_execution_id,
+                )
+            else:
+                run = self._research_run_manager.add_source(
+                    run_id,
+                    source,
+                    document.document_id,
+                    requested_url=requested_url.strip() or None,
+                    discovery_candidate_id=discovery_candidate_id.strip() or None,
+                )
         except ResearchError:
             return self._failed(
                 events,

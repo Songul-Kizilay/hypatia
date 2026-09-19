@@ -294,6 +294,10 @@ class SourceTemporalHistoryCharacterizationTests(unittest.TestCase):
             document["schema_version"] = 17
             document.pop("source_revalidations")
             document["runs"][0]["sources"][0].pop("observation_id")
+            document["runs"][0]["sources"][0].pop(
+                "revalidation_of_observation_id", None
+            )
+            document["runs"][0]["sources"][0].pop("revalidation_execution_id", None)
             path.write_text(json.dumps(document), encoding="utf-8")
             restored = ResearchRunManager(
                 JsonFileResearchRunStore(path), clock=lambda: FIRST

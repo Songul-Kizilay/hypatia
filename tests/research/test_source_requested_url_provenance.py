@@ -96,6 +96,8 @@ class RequestedUrlProvenanceTests(unittest.TestCase):
                 source.pop("requested_url")
                 source.pop("discovery_candidate_id", None)
                 source.pop("observation_id", None)
+                source.pop("revalidation_of_observation_id", None)
+                source.pop("revalidation_execution_id", None)
         self.path.write_text(json.dumps(document), encoding="utf-8")
 
         loaded = JsonFileResearchRunStore(self.path).load()

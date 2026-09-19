@@ -106,6 +106,7 @@ from research.ResearchPlanExecutionContext import ResearchPlanExecutionContext
 from research.ResearchPlanExecutionSnapshot import (
     MAX_MISSION_REQUEST_ID_CHARACTERS,
     ResearchPlanExecutionSnapshot,
+    ResearchPlanExecutionStepSnapshot,
 )
 from research.ResearchPlanExecutionState import ResearchPlanExecutionState
 from research.ResearchPlanExecutionStatus import ResearchPlanExecutionStatus
@@ -125,6 +126,7 @@ from research.ResearchProgramScopeRevisionStore import ResearchProgramScopeRevis
 from research.ResearchSourcePreview import ResearchSourcePreview
 from research.SemanticComparisonStepResult import SemanticComparisonStepResult
 from research.SemanticEvidenceStepResult import SemanticEvidenceStepResult
+from research.SourceRevalidationStepOperation import SourceRevalidationStepOperation
 from research.StartsResearchPlanExecution import ResearchPlanExecutionStartRefusal
 from response.ResponseComposer import ResponseComposer
 
@@ -484,6 +486,15 @@ class ResearchPlanExecutionApplicationService:
                     "Target execution must retain its exact recorded plan, "
                     "program, scope and research run."
                 )
+        if snapshot.revalidation_plan_digest is not None or _revalidates(plan):
+            if (
+                snapshot.revalidation_plan_digest != plan_digest(plan)
+                or snapshot.research_run_id != research_run_id
+            ):
+                return ResearchPlanExecutionStartRefusal(
+                    "Source revalidation must retain its exact recorded plan and "
+                    "research run; no prior observation was rebound."
+                )
         if plan_restriction_conflicts(plan):
             return ResearchPlanExecutionStartRefusal(
                 "The derived plan contains a capability forbidden by its own "
@@ -536,6 +547,9 @@ class ResearchPlanExecutionApplicationService:
         except ResearchError as error:
             return ResearchPlanExecutionStartRefusal(str(error))
         bound = replace(plan, plan_id=execution_id)
+        state, reconciled = self._reconcile_recorded_revalidations(
+            state, bound, research_run_id, recorded
+        )
         if mission:
             assert self._mission_resolver is not None
             try:
@@ -558,7 +572,50 @@ class ResearchPlanExecutionApplicationService:
             if snapshot.mission_request_id is not None:
                 self._mission_request_ids[execution_id] = snapshot.mission_request_id
         self._restored.pop(execution_id, None)
+        if reconciled:
+            self._persist(execution_id)
         return state
+
+    def _reconcile_recorded_revalidations(
+        self,
+        state: ResearchPlanExecutionState,
+        plan: ResearchPlan,
+        research_run_id: str,
+        recorded: dict[str, ResearchPlanExecutionStepSnapshot],
+    ) -> tuple[ResearchPlanExecutionState, bool]:
+        """Complete interrupted revalidations whose own result is durable.
+
+        Purely local: the registered operation only reads the run for a
+        revalidation of the step's bound prior observation that this exact
+        execution committed.  Nothing is fetched, charged, refunded or
+        repeated; anything not provable stays interrupted for an operator.
+        """
+        reconciled = False
+        context = ResearchPlanExecutionContext(
+            research_run_id=research_run_id, execution_id=plan.plan_id
+        )
+        for step in plan.steps:
+            snapshot_step = recorded[step.step_id]
+            if (
+                step.capability is not ResearchPlanStepCapability.SOURCE_REVALIDATION
+                or snapshot_step.status is not ResearchPlanStepStatus.INTERRUPTED
+                or snapshot_step.resolution is not ResearchAttemptResolution.NONE
+            ):
+                continue
+            operation = self._operation_registry.resolve(step.capability)
+            if not isinstance(operation, SourceRevalidationStepOperation):
+                continue
+            result = operation.recorded_result(step, context)
+            if result is None:
+                continue
+            state = state.complete_interrupted_step_from_record(
+                step.step_id, result.detail, operation.operation_name
+            )
+            self._events.step_completed(
+                plan.plan_id, step.step_id, operation.operation_name
+            )
+            reconciled = True
+        return state, reconciled
 
     def _authorize(
         self,
@@ -1254,6 +1311,15 @@ class ResearchPlanExecutionApplicationService:
                     request,
                     self._mission_resolver.followup_refusal(followup.status),
                 )
+        if (
+            step.capability is ResearchPlanStepCapability.SOURCE_REVALIDATION
+            and allowance is None
+        ):
+            return self._response_composer.research_plan_execution_rejected(
+                request,
+                "Source revalidation requires an explicit approved execution "
+                "allowance; it has no separate or implicit budget.",
+            )
         if cost.llm_operations and allowance is None:
             return self._response_composer.research_plan_execution_rejected(
                 request, "Model steps require an explicit approved execution budget."
@@ -1636,6 +1702,9 @@ class ResearchPlanExecutionApplicationService:
             mission_checkpoint=mission_checkpoint,
             mission_request_id=self._mission_request_ids.get(plan_id),
             mission_stop_reason=mission_stop_reason,
+            revalidation_plan_digest=(
+                plan_digest(plan) if _revalidates(plan) else None
+            ),
         )
 
     def _snapshots(self) -> list[ResearchPlanExecutionSnapshot]:
@@ -1725,3 +1794,11 @@ _CONTINUATION_HALTS = {
     ),
     ResearchPlanExecutionStatus.CANCELLED: (ResearchContinuationStopReason.CANCELLED),
 }
+
+
+def _revalidates(plan: ResearchPlan) -> bool:
+    """Return whether a plan carries explicit source-revalidation authority."""
+    return any(
+        step.capability is ResearchPlanStepCapability.SOURCE_REVALIDATION
+        for step in plan.steps
+    )

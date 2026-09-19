@@ -111,8 +111,18 @@ class ResearchPlanExecutionSnapshot:
     #: metadata, not authority, budget or goal satisfaction.  Absent in legacy
     #: snapshots, and then never inferred from status, notes or goal state.
     mission_stop_reason: AutonomyStopReason | None = None
+    #: Full canonical plan identity for an execution that carries explicit
+    #: source-revalidation authority, so a restart cannot rebind a different
+    #: prior observation.  Absent for every other execution.
+    revalidation_plan_digest: str | None = None
 
     def __post_init__(self) -> None:
+        if self.revalidation_plan_digest is not None and (
+            not is_plan_digest(self.revalidation_plan_digest)
+            or self.target_plan_digest is not None
+            or self.mission_plan_digest is not None
+        ):
+            raise ResearchError("Execution snapshot revalidation digest is invalid.")
         if self.mission_stop_reason is not None and (
             not isinstance(self.mission_stop_reason, AutonomyStopReason)
             or self.mission_scope is None
@@ -220,6 +230,7 @@ class ResearchPlanExecutionSnapshot:
         mission_checkpoint: ResearchMissionRecoveryCheckpoint | None = None,
         mission_request_id: str | None = None,
         mission_stop_reason: AutonomyStopReason | None = None,
+        revalidation_plan_digest: str | None = None,
     ) -> ResearchPlanExecutionSnapshot:
         """Capture the current state, pairing each step with its capability."""
         capabilities = {step.step_id: step.capability for step in steps}
@@ -237,6 +248,7 @@ class ResearchPlanExecutionSnapshot:
             mission_checkpoint=mission_checkpoint,
             mission_request_id=mission_request_id,
             mission_stop_reason=mission_stop_reason,
+            revalidation_plan_digest=revalidation_plan_digest,
             recorded_at=recorded_at,
             steps=tuple(
                 ResearchPlanExecutionStepSnapshot(

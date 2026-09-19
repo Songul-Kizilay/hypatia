@@ -34,6 +34,7 @@ from research.ResearchPlanStepCapability import ResearchPlanStepCapability
 from research.SemanticComparisonStepBinding import SemanticComparisonStepBinding
 from research.SemanticEvidenceStepBinding import SemanticEvidenceStepBinding
 from research.SemanticMissionPolicy import SemanticMissionPolicy
+from research.SourceRevalidationStepBinding import SourceRevalidationStepBinding
 
 MAX_RESEARCH_PLAN_STEP_ID_CHARACTERS = 200
 MAX_RESEARCH_PLAN_STEP_INSTRUCTION_CHARACTERS = 2_000
@@ -61,8 +62,40 @@ class ResearchPlanStep:
     semantic_evidence_binding: SemanticEvidenceStepBinding | None = None
     semantic_comparison_binding: SemanticComparisonStepBinding | None = None
     semantic_mission_policy: SemanticMissionPolicy | None = None
+    source_revalidation_binding: SourceRevalidationStepBinding | None = None
 
     def __post_init__(self) -> None:
+        if self.capability is ResearchPlanStepCapability.SOURCE_REVALIDATION:
+            if not isinstance(
+                self.source_revalidation_binding, SourceRevalidationStepBinding
+            ):
+                raise ResearchError(
+                    "Source revalidation requires an exact prior observation binding."
+                )
+            if (
+                self.selected_source_document_ids
+                or self.authorized_source_url
+                or self.discovery_provider is not None
+                or any(
+                    value is not None
+                    for value in (
+                        self.evidence_authorization,
+                        self.assessment_authorization,
+                        self.claim_authorization,
+                        self.contradiction_authorization,
+                        self.comparison_authorization,
+                        self.completion_authorization,
+                        self.semantic_evidence_binding,
+                        self.semantic_comparison_binding,
+                        self.semantic_mission_policy,
+                    )
+                )
+            ):
+                raise ResearchError("Source revalidation cannot carry other authority.")
+        elif self.source_revalidation_binding is not None:
+            raise ResearchError(
+                "Only source revalidation may carry a prior observation binding."
+            )
         if self.capability is ResearchPlanStepCapability.SEMANTIC_EVIDENCE_COMPARISON:
             if not (
                 isinstance(

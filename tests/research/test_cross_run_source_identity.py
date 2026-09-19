@@ -331,6 +331,8 @@ class LegacySourceIdentityTests(unittest.TestCase):
                 source.pop("requested_url", None)
                 source.pop("discovery_candidate_id", None)
                 source.pop("observation_id", None)
+                source.pop("revalidation_of_observation_id", None)
+                source.pop("revalidation_execution_id", None)
         path.write_text(json.dumps(document), encoding="utf-8")
 
         loaded = JsonFileResearchRunStore(path).load()
@@ -352,6 +354,8 @@ class LegacySourceIdentityTests(unittest.TestCase):
         for run in document["runs"]:
             for source in run["sources"]:
                 source.pop("observation_id")
+                source.pop("revalidation_of_observation_id", None)
+                source.pop("revalidation_execution_id", None)
         path.write_text(json.dumps(document), encoding="utf-8")
 
         [loaded] = JsonFileResearchRunStore(path).load()

@@ -93,7 +93,7 @@ class _CollectionBudget:
 class JsonFileResearchRunStore:
     """Load and atomically replace a strict versioned research-run document."""
 
-    _SCHEMA_VERSION = 19
+    _SCHEMA_VERSION = 20
     _SUPPORTED_SCHEMA_VERSIONS = set(range(1, _SCHEMA_VERSION + 1))
     _DOCUMENT_FIELDS_V1_V18 = {"schema_version", "runs"}
     _DOCUMENT_FIELDS_V19 = _DOCUMENT_FIELDS_V1_V18 | {"source_revalidations"}
@@ -145,6 +145,13 @@ class JsonFileResearchRunStore:
     #: Earlier records retain ``None`` because historical observation identity
     #: was never captured and must not be fabricated during loading.
     _SOURCE_FIELDS_V18 = _SOURCE_FIELDS_V17 | {"observation_id"}
+    #: Version 20 records explicit same-run revalidation provenance on the
+    #: re-observation.  Earlier records decode as ordinary acceptances; none is
+    #: ever reinterpreted as a revalidation.
+    _SOURCE_FIELDS_V20 = _SOURCE_FIELDS_V18 | {
+        "revalidation_of_observation_id",
+        "revalidation_execution_id",
+    }
     _FAILURE_FIELDS_V1_V12 = {"stage", "reason", "occurred_at"}
     _FAILURE_FIELDS_V13 = _FAILURE_FIELDS_V1_V12 | {"provider"}
     _EVIDENCE_FIELDS = {
@@ -425,6 +432,7 @@ class JsonFileResearchRunStore:
             18: self._RUN_FIELDS_V14,
             # Version 19 adds document-level source revalidations, not run fields.
             19: self._RUN_FIELDS_V14,
+            20: self._RUN_FIELDS_V14,
         }[schema_version]
         if not isinstance(value, dict) or set(value) != expected_fields:
             raise ResearchError("Research run store contains an invalid run record.")
@@ -513,21 +521,25 @@ class JsonFileResearchRunStore:
         schema_version: int,
     ) -> ResearchSourceRecord:
         expected_fields = (
-            self._SOURCE_FIELDS_V18
-            if schema_version >= 18
+            self._SOURCE_FIELDS_V20
+            if schema_version >= 20
             else (
-                self._SOURCE_FIELDS_V17
-                if schema_version >= 17
+                self._SOURCE_FIELDS_V18
+                if schema_version >= 18
                 else (
-                    self._SOURCE_FIELDS_V16
-                    if schema_version >= 16
+                    self._SOURCE_FIELDS_V17
+                    if schema_version >= 17
                     else (
-                        self._SOURCE_FIELDS_V15
-                        if schema_version >= 15
+                        self._SOURCE_FIELDS_V16
+                        if schema_version >= 16
                         else (
-                            self._SOURCE_FIELDS_V7
-                            if schema_version >= 7
-                            else self._SOURCE_FIELDS_V1_V6
+                            self._SOURCE_FIELDS_V15
+                            if schema_version >= 15
+                            else (
+                                self._SOURCE_FIELDS_V7
+                                if schema_version >= 7
+                                else self._SOURCE_FIELDS_V1_V6
+                            )
                         )
                     )
                 )
@@ -558,6 +570,14 @@ class JsonFileResearchRunStore:
                 value["discovery_candidate_id"] if schema_version >= 17 else None
             ),
             observation_id=value["observation_id"] if schema_version >= 18 else None,
+            revalidation_of_observation_id=(
+                value["revalidation_of_observation_id"]
+                if schema_version >= 20
+                else None
+            ),
+            revalidation_execution_id=(
+                value["revalidation_execution_id"] if schema_version >= 20 else None
+            ),
         )
 
     def _parse_failure(self, value: Any, schema_version: int) -> ResearchFailureRecord:
@@ -953,6 +973,10 @@ class JsonFileResearchRunStore:
                     "requested_url": source.requested_url,
                     "discovery_candidate_id": source.discovery_candidate_id,
                     "observation_id": source.observation_id,
+                    "revalidation_of_observation_id": (
+                        source.revalidation_of_observation_id
+                    ),
+                    "revalidation_execution_id": source.revalidation_execution_id,
                 }
                 for source in run.sources
             ],
@@ -1242,6 +1266,27 @@ class JsonFileResearchRunStore:
                     "Research source revalidation outcome differs from "
                     "recorded content."
                 )
+        # An explicit revalidation observation and its relation are committed
+        # in one write, so each must name exactly the other.  A marked
+        # observation without its same-run edge is a tampered or partial record.
+        for run in runs:
+            for source in run.sources:
+                prior_id = source.revalidation_of_observation_id
+                if prior_id is None:
+                    continue
+                matching = [
+                    record
+                    for record in records
+                    if record.later_run_id == run.run_id
+                    and record.later_observation_id == source.observation_id
+                    and record.earlier_run_id == run.run_id
+                    and record.earlier_observation_id == prior_id
+                ]
+                if len(matching) != 1:
+                    raise ResearchError(
+                        "Research source revalidation observation lacks its "
+                        "recorded relation."
+                    )
 
     @staticmethod
     def _remove_temporary_file(path: Path | None) -> None:

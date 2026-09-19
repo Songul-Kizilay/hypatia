@@ -202,6 +202,10 @@ class SourceRevalidationCharacterizationTests(unittest.TestCase):
             document = json.loads(path.read_text(encoding="utf-8"))
             document["schema_version"] = 18
             document.pop("source_revalidations")
+            for run in document["runs"]:
+                for source in run["sources"]:
+                    source.pop("revalidation_of_observation_id")
+                    source.pop("revalidation_execution_id")
             path.write_text(json.dumps(document), encoding="utf-8")
 
             restored = self._manager(path)
