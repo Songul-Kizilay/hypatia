@@ -202,13 +202,19 @@ class ResearchRunManager:
                 for record in self._source_revalidations
             ]
 
-    def temporal_history(self, requested_url: str) -> ResearchSourceTemporalHistory:
+    def temporal_history(
+        self, requested_url: str, *, run_id: str | None = None
+    ) -> ResearchSourceTemporalHistory:
         """Derive one resource's recorded history without writing or fetching."""
         with self._lock:
+            normalized_run_id = (
+                self._normalize_run_id(run_id) if run_id is not None else None
+            )
             matching_sources = [
                 source
                 for run in self._runs
                 for source in run.sources
+                if normalized_run_id is None or run.run_id == normalized_run_id
                 if source.requested_url is not None
                 and same_resource(source.requested_url, requested_url)
             ]
@@ -216,6 +222,7 @@ class ResearchRunManager:
                 (run.run_id, source.observation_id, source.fetched_at)
                 for run in self._runs
                 for source in run.sources
+                if normalized_run_id is None or run.run_id == normalized_run_id
                 if source.observation_id is not None
                 and source.requested_url is not None
                 and same_resource(source.requested_url, requested_url)

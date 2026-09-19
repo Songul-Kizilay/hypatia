@@ -16,7 +16,9 @@ This is historical provenance, not an assertion about an external resource.
 It performs no fetch, provider or model operation, persistence, claim/evidence
 change, authority action, allowance spend or lifecycle transition. Sources with
 unrecorded observation identities stay incomplete; no ID, edge or chronology is
-invented for legacy material.
+invented for legacy material. A mission audit projects only the mission's own
+observations, so an audit cannot import another mission's records merely
+because both named the same resource.
 
 ### Typed source revalidation relation: v0.3.391
 

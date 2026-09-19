@@ -109,7 +109,7 @@ class ResearchMissionAuditApplicationService:
             ),
             temporal_histories=(
                 tuple(
-                    self._runs.temporal_history(requested_url)
+                    self._runs.temporal_history(requested_url, run_id=run.run_id)
                     for requested_url in sorted(
                         {
                             identity: source.requested_url

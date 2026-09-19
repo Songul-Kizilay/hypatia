@@ -21,7 +21,8 @@ All notable project changes are recorded here.
 - The projection does not fetch, revalidate, persist, spend allowance, change
   authority, alter lifecycle state, add evidence or claims, or infer an
   external resource state. Content relations remain attached to their exact
-  recorded edges and are never collapsed into a global source conclusion.
+  recorded edges and are never collapsed into a global source conclusion. Each
+  mission audit is restricted to that mission's own source observations.
 
 ## [0.3.391] - 2026-09-19
 
