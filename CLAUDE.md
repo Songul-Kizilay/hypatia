@@ -116,6 +116,48 @@ Stop and report — do not improvise around — any unexpected history,
 suspicious diff, failing check, merge conflict, branch-protection issue, or
 provenance problem found during this sequence.
 
+## Standing milestone authorization
+
+When the user explicitly instructs the Lead to carry one bounded milestone
+through implementation, review, release, CI, PR, and main integration, that
+instruction is already authorization for the routine steps of that
+lifecycle — pushing the release commit to the existing development branch,
+creating the expected PR to `main`, waiting for and inspecting PR-triggered
+CI, merging that verified PR with a standard merge commit, fetching origin,
+and the post-merge reachability/provenance verification. Do not stop to ask
+again between these routine stages merely because they touch git/GitHub;
+the milestone authorization already covers them.
+
+This does not relax any other rule in this file, and does not apply at all
+if any of the following would be required — stop and ask first, always,
+regardless of any standing authorization: widening product scope;
+introducing or widening an authority class; granting fresh budget
+automatically; changing target identity; changing credential authority;
+adding automatic runtime execution; introducing an autonomous
+planning/research loop; weakening a permanent security/epistemic
+invariant; force-pushing; rewriting or destructively rebasing/amending
+already-published history; bypassing branch protection; bypassing a
+failing required check; merging a conflicted PR; merging unexpected or
+unrelated commits; deleting an important branch, tag, or history; changing
+repository visibility; changing GitHub security/access settings; any other
+destructive repository operation; or any material ambiguity about what was
+actually authorized.
+
+Mechanism: `.claude/hooks/hypatia_guard.py`'s `command` PreToolUse guard
+auto-allows exactly one shape without a prompt — a lone
+`gh pr merge <number> --merge` (optionally with one `--subject <text>`) as
+the entire command, nothing chained before or after it. This is an
+allowlist of that exact shape, not a denylist of dangerous flags: a plain
+wildcard in `.claude/settings.json` cannot safely express this, because a
+`*` cannot refuse to match `--admin`/`--squash`/`--rebase`/
+`--delete-branch` appearing inside the wildcarded region. Every other
+`gh pr merge` invocation — any other flag, a non-numeric identifier,
+anything chained — still hits the existing `Bash(gh pr merge *)` ask rule
+in `.claude/settings.json` unchanged. That settings.json rule itself is
+untouched by this section; the narrowing lives entirely in the guard's
+token-level check, which is auditable and cannot be widened by an
+in-conversation wildcard mistake.
+
 ## Team operating model
 
 The Lead Architect (the main session) inspects first, defines one coherent

@@ -22,6 +22,13 @@ Process:
    out CLAUDE.md's "Default-branch integration": verify or create the PR to
    `main`, verify scope/conflicts/checks, merge with a standard merge
    commit, and verify reachability. Only then report the milestone COMPLETE.
+   Per CLAUDE.md's "Standing milestone authorization", an explicit
+   instruction to carry the milestone through to main integration already
+   authorizes these routine steps — do not stop to ask again between them
+   for that reason alone. Still stop immediately for any of that section's
+   listed conditions (authority/scope/budget/target/credential change,
+   automatic execution, an autonomous loop, a weakened invariant, or any
+   destructive/branch-protection/failing-check/conflict/history problem).
 
 Hard boundaries: the constitution in `CLAUDE.md`. No authority widening,
 hidden budget, unsafe replay or invented provenance. The standard
