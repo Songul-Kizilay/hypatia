@@ -2,6 +2,63 @@
 
 All notable project changes are recorded here.
 
+## [0.3.396] - 2026-09-20
+
+### Added
+
+- Evaluate -> Adapt v1: a new typed, frozen, read-only
+  `ResearchMissionContinuationProposal` (`src/research/`), derived by a pure
+  function `continuation_proposal_for(run, outcome, origin_plan_digest,
+  stop_reason, generated_at=None)` from one closed mission's existing
+  `ResearchMissionOutcome`. It is proposable only when
+  `goal_satisfaction.status` is `unresolved` or `partially_satisfied`; every
+  other status (`satisfied`, `blocked`, `budget_limited`, `failed`,
+  `cancelled`) is explicitly ineligible, and `__post_init__` makes an
+  ineligible instance impossible to construct. The proposal carries no
+  budget, scope, target, discovery-provider or plan-step field — only a
+  citation to the originating run/plan/evaluation and the original question
+  verbatim (`seed_question`, always derived from `run.question`, never
+  independently settable). Zero network/LLM/store side effects;
+  deterministic; never persisted, re-derived on demand like
+  `ResearchMissionOutcome` itself.
+- Wired via one new read method, `proposal_for(plan_id)`, on the existing
+  `ResearchMissionAuditApplicationService` (`src/cognition/`) — no new
+  store, no `Bootstrap.py` change — which fails closed (returns `None`,
+  never fabricates) on any missing or malformed snapshot, run, stop reason
+  or plan digest, mirroring the existing `build_mission_audit` gate.
+- A proposal is never itself authority: approving one means taking
+  `proposal.seed_question` into the existing, completely unmodified
+  `research_question_plan_preview` -> `ResearchPlanDraftService.preview_question`
+  -> `ResearchPlanAuthorization`/`ResearchPlanAuthorizationApplicationService`
+  flow — byte-for-byte the same path a manually-typed question already uses,
+  with no new authorization primitive. Proven by a new end-to-end test that a
+  proposal-seeded question reaches an identical plan digest and goes through
+  authorization/start unremarkably, exactly like manual entry. The existing
+  same-plan conditional follow-up mechanism
+  (`ResearchMissionFollowupDecision`/`ResearchMissionStepResolver.followup_decision()`)
+  is a separate, narrower, completely unmodified mechanism, confirmed
+  unaffected by its own unchanged tests.
+- Adopted `docs/Roadmap/Master_Roadmap.md` as Hypatia's canonical long-term
+  product roadmap, following a read-only reconciliation against repository
+  ground truth at v0.3.395; corrections include crediting
+  previously-undercounted implemented items (time budget, GitHub Actions
+  SHA-pinning, concurrent-writer tests) and explicitly naming the existing
+  Evaluate -> Adapt precedents (`ResearchMissionFollowupDecision`,
+  `ResearchCuriosityQuestion`, `ResearchMissionOutcome`).
+  `docs/Roadmap/README.md` is now a concise index pointing to it, superseding
+  its old per-version theme table; `CLAUDE.md` gained one short pointer line
+  to the canonical roadmap with no content duplicated.
+
+### Boundaries
+
+- No revalidation-candidate proposal type in v1 (deferred to a future,
+  separately-scoped milestone).
+- No new desktop UI; this is a backend/service-layer seam only.
+- No proposal from `budget_limited` or `blocked` outcomes: budget exhaustion
+  must never silently become a request for more budget, and a blocked state
+  may reflect a genuine authority/scope/operator dependency — both deferred.
+- No LLM participation; generation is pure and deterministic.
+
 ## [0.3.395] - 2026-09-19
 
 ### Added

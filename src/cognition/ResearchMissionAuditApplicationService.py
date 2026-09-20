@@ -34,6 +34,11 @@ from research.ResearchMissionAuditExport import (
     ResearchMissionAuditExportResult,
     mission_audit_filenames,
 )
+from research.ResearchMissionContinuationProposal import (
+    ResearchMissionContinuationProposal,
+    continuation_proposal_for,
+)
+from research.ResearchMissionOutcome import mission_outcome_for
 from research.ResearchRun import ResearchRun
 from research.ResearchRunManager import ResearchRunManager
 from research.SourceIdentity import identity_of
@@ -157,6 +162,44 @@ class ResearchMissionAuditApplicationService:
             snapshot.plan_id,
             markdown.encode("utf-8"),
             mission_audit_json(audit).encode("utf-8"),
+        )
+
+    def proposal_for(self, plan_id: str) -> ResearchMissionContinuationProposal | None:
+        """Return a bounded continuation proposal for one mission, if eligible.
+
+        Assembles the snapshot, run and stop reason exactly as `render` does
+        for the same plan ID, and fails closed exactly like
+        `build_mission_audit`'s evaluation gate: a missing snapshot, run or
+        recorded stop reason yields no proposal rather than a partial one.
+        This reads only recorded state; it never executes, fetches, calls a
+        model or provider, spends, authorizes or persists anything.
+        """
+        if not isinstance(plan_id, str) or not plan_id.strip():
+            return None
+        snapshot = self._execution.mission_snapshot(plan_id.strip())
+        if snapshot is None:
+            return None
+        run: ResearchRun | None = None
+        if self._runs is not None and snapshot.research_run_id:
+            try:
+                run = self._runs.get(snapshot.research_run_id)
+            except ResearchError:
+                run = None
+        if run is None:
+            return None
+        stop = snapshot.mission_stop_reason
+        if stop is None:
+            return None
+        # `stop` is non-None only when `mission_scope` is also set, and the
+        # snapshot's own validation then requires `mission_plan_digest` to be
+        # a well-formed digest, never None; checked explicitly (not asserted)
+        # so this fails closed even under `python -O` or a future validation
+        # change, rather than leaking a raised error past this boundary.
+        if snapshot.mission_plan_digest is None:
+            return None
+        outcome = mission_outcome_for(run, stop, snapshot.mission_checkpoint)
+        return continuation_proposal_for(
+            run, outcome, snapshot.mission_plan_digest, stop
         )
 
     def _preview(self, request: BrainRequest) -> BrainResponse:

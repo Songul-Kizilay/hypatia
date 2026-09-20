@@ -2,11 +2,34 @@
 
 ## Runtime Version
 
-`v0.3.395 (Genesis)`
+`v0.3.396 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
+Version v0.3.396 adds Evaluate -> Adapt v1: a new typed, frozen, read-only
+`ResearchMissionContinuationProposal` (`src/research/`), derived by a pure
+function from one closed mission's existing `ResearchMissionOutcome`. It is
+proposable only when `goal_satisfaction.status` is `unresolved` or
+`partially_satisfied`; every other status is explicitly ineligible, and
+`__post_init__` makes an ineligible instance impossible to construct. It
+carries no budget, scope, target, discovery-provider or plan-step field —
+only a citation to the originating run/plan/evaluation and the original
+question verbatim, with zero network/LLM/store side effects and nothing
+persisted. A new `proposal_for(plan_id)` method on the existing
+`ResearchMissionAuditApplicationService` wires it in, reusing existing
+dependencies and failing closed on any missing or malformed state. A
+proposal is never itself authority: approving one takes its seed question
+into the existing, completely unmodified question-preview ->
+authorization -> start flow, byte-for-byte the same path manual entry
+already uses, proven by a new end-to-end test that a proposal-seeded
+question reaches an identical plan digest. No revalidation-candidate
+proposal, no new desktop UI, no proposal from `budget_limited`/`blocked`
+outcomes and no LLM participation are in scope for v1. This milestone also
+adopts `docs/Roadmap/Master_Roadmap.md` as the canonical long-term product
+roadmap, reconciled against repository ground truth at v0.3.395, with
+`docs/Roadmap/README.md` now a concise index and one short pointer line
+added to `CLAUDE.md`.
 Version v0.3.395 closes an SSRF / address-pinning gap in the reviewed Kali
 `HTTPS_HEADER_LOOKUP` operation. Building its preview now resolves and
 validates the authorized hostname's address through the existing

@@ -3,6 +3,9 @@
 This file governs how Claude Code develops Hypatia. It is developer
 infrastructure, not a Hypatia runtime feature. Team roles live in
 `.claude/agents/`, the current milestone ledger in `docs/dev/MILESTONE.md`.
+Long-term product direction, phase ordering, and the implemented/planned
+distinction are canonical in `docs/Roadmap/Master_Roadmap.md`; this file
+governs engineering process, not product scope.
 
 ## Ground truth before claims
 
