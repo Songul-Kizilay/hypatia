@@ -1,6 +1,75 @@
 # Autonomous research connection assessment
 
-## Current bounded text journey: v0.3.347
+## Current bounded text journey: v0.3.394
+
+### Runtime capability self-awareness: v0.3.394
+
+Ordinary chat now carries a small projection of what this runtime actually
+wired, derived from the registered research operations and service presence,
+never from documentation or module names. It describes authorized research,
+source acquisition, evidence tracking and bounded approved revalidation only
+as workflows that run through approved plans, and lists unwired security,
+monitoring and browsing ambitions as unavailable. The projection is
+description, not authority: it changes nothing about approval, allowance,
+execution or revalidation, and chat still never performs research.
+
+### Bounded source revalidation authority: v0.3.393
+
+A plan may now carry an explicit `source_revalidation` step whose typed binding
+names one exact prior observation of the approved run. The plan digest covers
+the binding, so neither a source-fetch approval nor a restart can turn into a
+revalidation of a different observation. Execution re-reads the observation,
+derives the URL from its recorded canonical requested URL, fetches once and
+accepts through the normal content-version transaction. One durable write adds
+the new immutable observation (with the prior observation and execution it
+re-observed) and exactly one `content_unchanged` or `content_changed` relation,
+which the v0.3.392 temporal history then shows.
+
+Accounting is ordinary: one normal `max_sources` slot and one advance plus one
+network operation from the cumulative allowance. There is no separate
+revalidation budget, and without an approved allowance the step is refused.
+On restart, an interrupted revalidation whose own observation and relation are
+durable completes from that record with no refetch or recharge; an unprovable
+attempt stays interrupted for the existing operator ruling.
+
+Deliberate limits: same-run only (no cross-run authority), once per prior
+observation per run, not available inside learning missions or target plans,
+and no TTL, age threshold, stale/fresh label, scheduling or automatic refresh.
+Revalidation authority is execution authority, not freshness inference.
+
+### Read-only temporal history: v0.3.392
+
+Mission audits now project one resource's recorded observation graph from
+canonical source observations and explicit revalidation records. The output
+keeps exact run and observation identities, recorded observation times and
+each ordered `content_unchanged` or `content_changed` edge. It can describe a
+single observation, a linear history, a branch, disconnected records or an
+incomplete record set. It names a latest recorded observation only when the
+recorded chronology has one unambiguous maximum.
+
+This is historical provenance, not an assertion about an external resource.
+It performs no fetch, provider or model operation, persistence, claim/evidence
+change, authority action, allowance spend or lifecycle transition. Sources with
+unrecorded observation identities stay incomplete; no ID, edge or chronology is
+invented for legacy material. A mission audit projects only the mission's own
+observations, so an audit cannot import another mission's records merely
+because both named the same resource.
+
+### Typed source revalidation relation: v0.3.391
+
+The durable research-run document can now record one explicit ordered relation
+between two accepted source observations, including across run boundaries. The
+relation binds both owner run IDs and observation IDs, requires the existing
+canonical requested-URL resource identity and strict recorded observation-time
+order, and derives only `content_unchanged` or `content_changed` from exact
+recorded content hashes. Audits display this provenance without inferring a
+freshness verdict.
+
+This is not live revalidation: it performs no fetch, provider/model call,
+scheduling, claim/evidence mutation, authority expansion, budget spend or
+mission lifecycle transition. Missing or changed canonical bindings fail
+closed. A later observation remains a historical recorded version, not proof
+that the remote resource is current now.
 
 The longer-term [autonomous cybersecurity mission direction](Autonomous_Cybersecurity_Mission_Direction.md)
 is deliberately layered on this runtime. It does not turn the current bounded
@@ -75,6 +144,795 @@ No new lifecycle, run transition, scheduler behavior or automatic closure exists
 here. The separate future boundary is an evidence-grounded, scope-specific goal
 satisfaction contract; it cannot be inferred from a completed step list or a
 teaching report.
+
+### Evidence-grounded goal satisfaction: v0.3.349
+
+The teaching report now adds a read-only, bounded goal-satisfaction projection.
+It composes the existing execution outcome, evidence-only completion evaluator
+and the already persisted semantic contradiction-investigation outcome when the
+mission has one. The result is one of `satisfied`, `partially_satisfied`,
+`unresolved`, `blocked`, `budget_limited`, `failed` or `cancelled`.
+
+`satisfied` is deliberately narrow: the existing bounded execution must have
+completed and its canonical evidence must be sufficiently supported. It means
+only that the mission deliverable is supported within the retained evidence; it
+does not establish a universal answer, select a source winner or promote a
+claim. A pending tentative conflict or a durable `unresolved` follow-up outcome
+prevents full satisfaction. `structurally_clarified` changes no truth status.
+
+This is not a lifecycle or planning feature. It creates no new authority,
+budget, store, provider/model call, retry, follow-up or scheduler behavior; it
+does not close the research run or mutate canonical evidence. The next Phase 2
+decision remains whether to generalize bounded replanning safely, rather than
+mistaking this evaluation for permission to create new work.
+
+### Typed goal explanation in the teaching report: v0.3.350
+
+The deterministic teaching report now renders an operator-facing explanation
+of the existing mission goal-satisfaction projection. It exposes only typed,
+bounded facts: accepted/evidence-bearing source coverage and a finite set of
+reasons such as missing evidence or corroboration, unresolved tentative
+contradiction, existing scope/authority block, cumulative budget exhaustion,
+failure, cancellation or interruption.
+
+The explanation is a read-only rendering of the existing execution outcome,
+evidence-completion limitations and, when present, the durable contradiction
+checkpoint. It is neither a semantic adjudicator nor a report parser: source
+and model prose cannot alter it. It does not change mission lifecycle,
+authorization, cumulative allowance, plan digest, source slots, provider/model
+selection, retry behavior or run closure. An unchanged recovered state renders
+the same explanation.
+
+### Temporal observation characterization: v0.3.389
+
+The mission audit now has a small, read-only temporal projection: source count
+and the oldest/newest recorded `fetched_at` observation. It explicitly states
+that no live revalidation was attempted and that the project has no declared
+freshness threshold. It therefore never labels a source fresh or stale, and it
+does not fetch, spend budget, alter mission lifecycle, or create authority.
+
+This makes the first temporal limitation visible without pretending the system
+can yet answer whether an origin has changed. The next safe slice is an
+authority-bound, bounded revalidation design; it must not turn observation age
+into a silent refetch or an automatic truth decision.
+
+### Immutable source observation identity: v0.3.390
+
+**Gap (confirmed by a failing test first).** A run already retained its own
+fetch time and acceptance record, while immutable content storage could be
+shared across runs. However, the persisted source record had no stable identity
+for the exact acceptance event itself, so a later temporal relation could not
+refer to one observation without overloading the document/content version ID.
+
+**Change (run store schema 18; mission audit schema 6).** Each newly accepted
+source receives a UUID-derived `observation_id` through the existing
+`ResearchRunManager` factory pattern. It is validated as unique only within its
+run and persists unchanged across restart. Audit and Markdown exports render
+the observation ID separately from the document/content version ID and SHA-256.
+
+**Compatibility and boundaries.** Sources written before schema 18 load with
+`observation_id = None`; no ID is derived from a URL, content hash, document ID
+or source ordering, and loading does not mutate history. Same content in two
+runs can share storage/version while retaining distinct observation IDs. No
+typed revalidation relation, content-changed state, freshness claim, TTL,
+refetch, scheduler, authority, provider/model call, budget spend or lifecycle
+change is included. The next safe work is only read-only characterization of a
+typed relation between two exact recorded observation IDs.
+
+### Provenance foundation — contradiction trace and phase close: v0.3.388
+
+**Change (audit schema 4, read-only).** Each user-reviewed claim contradiction is
+traced through its exact claims (epistemic state, current or superseded, or
+"not found") and each evidence record to this run's source observation. The
+Markdown audit states that a recorded contradiction does not decide which claim
+is true. Contradiction semantics are unchanged.
+
+**Provenance inventory re-run.** Every hop is now an exact, persisted ID reference,
+validated on load and exported, with older records reported as unrecorded:
+
+| Hop | Recorded as | Since |
+| --- | --- | --- |
+| discovery → candidate | candidate_ids on the discovery record | v0.3.387 |
+| candidate → fetch observation | discovery_candidate_id on the run's source | v0.3.387 |
+| requested → final URL | equested_url and url on the source | v0.3.385 |
+| observation → content version | content-derived document ID and content_sha256 | v0.3.381 |
+| content version → evidence | evidence source_document_id, chunk ID and SHA-256 | earlier |
+| evidence → claim / assessment / comparison note | exact evidence IDs | earlier |
+| claims → contradiction | exact claim and evidence IDs | earlier |
+| note → operator review | note ID with identical evidence IDs | v0.3.367 |
+| mission → plan / execution / run / approval | digest, snapshot, run ID, consumption | earlier |
+| checkpoint → mission decision basis | recorded note IDs, outcomes, supporting review | v0.3.386 |
+
+Cross-run observation ownership is never shared; only immutable content storage
+is. The provenance-foundation phase is closed. Next phase: temporal freshness
+and revalidation, starting with characterization.
+
+### Provenance foundation — discovery-candidate identity: v0.3.387
+
+**Gap (confirmed by a failing test).** Discovery candidates had no identity, and
+both selection points (the mission resolver ranking a discovery's candidates,
+and manual candidate acceptance previewing one by discovery and URL) passed on
+only the URL. Which candidate an accepted source came from could only be guessed
+by URL equality, which the provenance rules forbid.
+
+**Change.**
+
+- *Candidate identity*: ResearchSourceDiscoveryRecord.candidate_ids, one
+  generated ID per candidate in order, assigned when the discovery is recorded.
+  Candidate value objects are unchanged.
+- *Selection*: the mission resolver takes the ID of the exact candidate object it
+  selected from the discovery record and passes it through the accept step's
+  context; manual acceptance takes it from the revalidated preview. The source
+  record stores it as discovery_candidate_id, the run's own observation.
+- *Integrity* (ResearchRun, on every load): the ID must name exactly one
+  candidate in this run's discoveries, the source must have a recorded requested
+  URL, and that URL must equal the candidate's URL. Unknown, cross-run and
+  mismatched references fail closed. One candidate may back several observations,
+  because a later re-fetch is a new observation of the same candidate.
+- *Persistence*: run store schema 17. Older discoveries load with no candidate
+  IDs and older sources with no candidate; nothing is backfilled from URLs or
+  ordering. No checkpoint change was needed: a fetch without acceptance is
+  already refused at restart.
+- *Audit* (schema 3): each source observation resolves its candidate by ID to its
+  discovery, URL and title, or reports unrecorded or unresolved. The run export
+  shows the candidate or "unrecorded".
+
+Restart preserves every link without rediscovery, reselection, calls or spend.
+No authority, budget, lifecycle, goal or readiness change.
+
+### Provenance foundation — resolved audit trace: v0.3.386
+
+**Gap.** The mission audit's traceability section stopped at source document
+IDs. A reader could not see, in one place, which exact source observation an
+operator review or claim ultimately rests on, and nothing named the records the
+goal evaluation actually reads.
+
+**Change (audit schema version 2, additive).** Every hop follows a recorded ID:
+
+- *Reviews and claims* list each evidence record with its chunk ID and SHA-256
+  and resolve it to this run's own source observation: document (content
+  version) ID, requested URL, final URL, observed content SHA-256, fetch and
+  acceptance times. Claims are marked current or superseded.
+- *Source observations* lists every source this run accepted, with the same
+  fields; older sources show requested URL and content version as unrecorded.
+- *Recorded basis of the goal evaluation* names the comparison notes the mission
+  checkpoint recorded (initial comparison, contradiction initial and follow-up,
+  evidence-gap follow-up) with their recorded relations and resolved evidence
+  lineage, the contradiction and evidence-gap outcomes, and the operator review
+  that supports the comparison, if any. It matches the evaluation's
+  supported_by_review_id.
+
+A reference that does not resolve (for example a checkpoint note that is not in
+the run) is reported with esolved: false and no evidence; it is never matched
+by URL, text or content hash. Generation stays deterministic and read-only. No
+new persistence, authority, budget, goal or readiness change.
+
+### Provenance foundation — inventory and requested-URL lineage: v0.3.385
+
+**Inventory (read-only).** Within one run, canonical references are exact IDs and
+ResearchRun validates them on every load, failing closed:
+
+| Record | Proven links |
+| --- | --- |
+| Source | document ID = content version; final URL; observed content_sha256 (v0.3.381) |
+| Evidence | accepted source; chunk ID/index; chunk SHA-256 |
+| Assessment | source; evidence belonging to that source; supersession within the source |
+| Comparison note | sources; evidence covering them; assessments citing that evidence |
+| Claim | evidence; source IDs must equal the evidence's sources; supersession |
+| Contradiction | two persisted claims; evidence equal to theirs |
+| Operator review | retained note; evidence equal to the note's; supersession; one current |
+| Mission | plan digest, run ID, approval consumption, checkpoint slot identities, stop reason |
+| Audit bundle | all of the above as recorded, plus recomputed evaluation |
+
+Cross-run: sources are per-run observations; shared storage is content-version
+only (v0.3.381); evidence cannot reference another run's source.
+
+**Gap found.** The requested URL, the root of *resource → fetch observation*,
+was not recorded on accepted sources. The HTTPS fetcher records the final URL
+after validated redirects. Missions kept the requested URL only in their
+execution checkpoint; generic plan acceptance and manual source loads kept it
+nowhere, so after a redirect it was unrecoverable. Replay and later revalidation
+must request the original resource, and guessing it from the final URL is unsafe.
+
+**Fix.** ResearchSourceRecord.requested_url stores the URL this run requested,
+passed by both acceptance callers (plan/mission acceptance uses the step's
+authorized URL; manual loads use the entered URL). Run store schema 16; older
+sources load with equested_url = None, shown as "unrecorded" and never copied
+from the final URL. Two runs sharing a content version keep their own requested
+URLs. Mission sources now match their checkpoint slot exactly (requested URL,
+final URL, content hash). Run and mission audit exports show both URLs.
+
+**Recorded for later.** The audit's traceability section still stops at source
+document IDs; resolving claims and reviews through to source observations, and
+naming the decisive records behind a goal outcome, are the next candidates.
+
+No authority, budget, lifecycle, goal or readiness change.
+
+### False-refusal audit — resume after acceptance: v0.3.384
+
+**Boundary.** A slot's fetch and acceptance completed, its evidence step did not
+(step 4, 8 or 14: first slot, second slot, follow-up slot). Recovery refused
+because evidence selection reads the fetched preview, which is transient.
+
+**Why the refusal was false.** Acceptance makes the preview's content durable,
+and since v0.3.381 it is exactly identifiable: the checkpoint records the slot's
+requested URL, final URL and body SHA-256; the run holds this run's own source
+record with the same final URL and content_sha256; and the knowledge index
+holds that content version under its content-derived document ID. Evidence
+selection is a deterministic function of that content.
+
+**Fix.** Recovery rebuilds the preview only when all of these agree: the slot's
+requested URL is recorded, evidence exists for every earlier slot and none for
+this one, the run's source matches the final URL and body hash, the indexed
+document exists, and the rebuilt text hashes to the body hash and to the
+source's document ID. The mission then resumes, records evidence from the same
+chunk a live run would choose, and finishes with the same fetches, model calls,
+spend and stop reason as live. The accepted source is never fetched again.
+
+**Still refused.** A checkpoint without requested URLs (legacy), a mismatched
+body hash, a missing or different source record, or a missing indexed document
+refuses with the original message. Fetch-without-acceptance and
+model-without-note boundaries remain correctly refused.
+
+The earlier test that pinned this refusal now asserts the corrected invariant:
+the accepted URL is fetched exactly once and no source is duplicated. No
+authority, budget, schema, goal or readiness change.
+
+### False-refusal audit — learning mission restart boundaries: v0.3.383
+
+The 18-step learning mission was stopped cleanly after every step and
+restarted, for the agreement branch and the conflict branch (which runs the
+pre-authorized third-source follow-up). Each restart was compared with the live
+mission's fetches, model calls, discovery calls, spend and stop reason.
+
+| Stopped after | Restart | Verdict |
+| --- | --- | --- |
+| step 1 (local search) | refused: discovery checkpoint unavailable | **false refusal, fixed here** |
+| step 2, 5, 6, 9, 10, 12, 15, 16 | resumes; identical to live | correct |
+| step 12 → third-source follow-up | follow-up runs exactly once; identical totals | correct |
+| step 3, 7, 13 (fetched, not accepted) | refused: transient preview not durable | correct: accepting needs a refetch |
+| step 11, 17 (model ran, note not saved) | refused: model output not retained | correct: needs a new model call |
+| step 4, 8, 14 (accepted, no evidence yet) | refused: no durable evidence checkpoint | **false refusal, fixed in v0.3.384** |
+
+**Fix.** After local search the checkpoint exists but has no discovery ID, and
+recovery refused it. Recovery now resumes such a mission exactly as one with no
+checkpoint, but only when the checkpoint is entirely empty, the run holds no
+discovery, source, evidence, assessment or comparison note, and no step other
+than local search completed. A checkpoint that lost its discovery ID while later
+state exists is still refused, and an exhausted network budget still stops the
+resumed mission before any provider call. No authority, budget, schema, goal or
+readiness change.
+
+### Manual-entry double-submit idempotency: v0.3.382
+
+Manual evidence, assessment, claim and comparison-note entry goes through the
+same ResearchRunManager write methods as plan steps. Assessments, claims and
+notes use preview → modal confirmation → record; evidence records directly. The
+v0.3.377–v0.3.379 replay guards lived only in the plan-step operations, so an
+operator re-confirming an identical entry still created a second record.
+
+The exact-repeat refusal now lives in the manager, the one write path:
+
+- **Evidence**: same source, chunk index, stripped-content SHA-256 and note.
+- **First assessment**: same source, evidence set, text, trust and all four
+  structured judgements (superseding corrections are unaffected).
+- **First claim**: same evidence set, text, epistemic state and confidence
+  (superseding corrections are unaffected).
+- **Comparison note**: same source, evidence and assessment sets and text.
+
+Write previews report llowed = false with a reason naming the existing record,
+so the operator sees it before confirming; recording refuses with the same
+message, and the manual evidence route shows it instead of a generic failure.
+The plan-step guards were removed in favour of this single implementation, and
+their replay tests pass unchanged. Anything genuinely different, and every
+explicit correction, is still recorded. No schema, authority, budget, goal or
+readiness change.
+
+### Version-safe cross-run source identity: v0.3.381
+
+Product decision: content-versioned documents plus run-scoped observations;
+knowledge is not isolated per run.
+
+**Problem (confirmed by a failing test first).** A knowledge document's identity
+was uuid5(url), the content store refused duplicate URLs, and restoration
+rebuilt the URL identity. A second run accepting its own fetch of a URL another
+run had indexed failed with "Knowledge document is already loaded", and reusing
+that document would have attached content the second run never fetched.
+
+**Model.**
+
+- *Resource*: the URL, unchanged as resource identity (source-identity counting
+  still joins on it).
+- *Content version*: the document ID is now derived from a SHA-256 of the exact
+  representation (URL, title, content type, content resource, acquisition and
+  content SHA-256). The same URL with different text is a different version.
+- *Observation*: each run's ResearchSourceRecord is that run's own fetch and
+  acceptance, with its own etched_at/dded_at and a new content_sha256
+  (run store schema 15).
+- *Evidence* keeps pointing at the chunk of the exact version its run accepted.
+
+**Behaviour.**
+
+- Different content for the same URL: both versions are indexed and stored;
+  each run's evidence resolves to its own text before and after restart.
+- Identical content: the second run reuses the immutable stored version (one
+  indexed document, one content record) and records its own observation. A
+  failed attach never removes the shared version.
+- A run that did not fetch a source still cannot record evidence from it; the
+  same run accepting the same version twice is still refused at indexing.
+- The content store keeps one record per version and no longer requires unique
+  URLs. Restoration groups run records by version, requires each to agree on
+  the version, accepts any recording run's fetch time, and refuses stored text
+  that differs from a run's recorded content_sha256.
+- Run and mission audit exports show each source's observed content SHA-256,
+  or "unrecorded" for sources accepted earlier.
+
+**Old data.** Documents indexed before versioning keep their URL-only IDs and
+restore as legacy documents; their source records load with
+content_sha256 = None and gain no version meaning. Nothing is migrated or
+rewritten from current page contents.
+
+**Not included.** Freshness, revalidation, HTTP caching, automatic reuse of
+another run's content, or a provenance graph. No authority, budget, lifecycle,
+goal or readiness change. The manual-entry double-submit gap remains open.
+
+### Recovery false refusal before first evidence: v0.3.380
+
+Found during the source-fetch audit (v0.3.376). Mission recovery validated the
+checkpoint's recorded evidence unconditionally, and that validation requires at
+least one evidence record. A mission that stopped after discovery but before
+its first evidence was therefore refused at restart with "Mission evidence
+changed or is missing", even though nothing about it was uncertain.
+
+- **Clean boundary.** A mission stopped between discovery and its first fetch
+  now resumes after restart and finishes exactly as a live mission would (same
+  fetches and spend).
+- **Interrupted first fetch.** It is rebound instead of refused: the step stays
+  interrupted and charged, advance still refuses it, the stop reason
+  step_interrupted is recorded, and the existing operator ruling ("not
+  performed") is now reachable, after which one ordinary, newly charged fetch
+  runs. Previously that ruling was unreachable because the mission never became
+  live again.
+- **Still refused.** A checkpoint with no evidence is accepted only when nothing
+  past discovery exists: no acquired URLs, assessments or semantic note in the
+  checkpoint, no sources, evidence, assessments or comparison notes in the run,
+  and no completed step beyond local search and discovery. Anything else is
+  refused as before.
+
+No schema, authority, budget, goal or readiness change.
+
+### Replay/idempotency audit — claims, contradictions, notes, reviews: v0.3.379
+
+- **Claim contradictions (safe, unchanged).** The run manager refuses a second
+  contradiction relationship for the same claim pair, so a replay cannot
+  duplicate it.
+- **Comparison reviews (safe, unchanged).** A note with a current review can be
+  reviewed again only by superseding that exact review, so a replay is refused
+  as stale.
+- **Claims (fixed).** A superseding claim was already refused on replay; a first
+  claim was not. The claim step now refuses when the run already holds the exact
+  same first claim (evidence set, text, epistemic state, confidence), naming it.
+- **Comparison notes (fixed).** No note write was guarded. The comparison step
+  now refuses when the run already holds the exact same note (source, evidence
+  and assessment sets, text). Mission semantic notes were already protected by
+  recovery, which refuses a model comparison without its durable note step.
+
+Every guard fails the step without performed work and names the existing
+record; different text, state, confidence or references are still recorded.
+Manual (non-plan) writes are unchanged. No schema, authority, budget, goal or
+readiness change.
+
+### Replay/idempotency audit — source acceptance and assessment: v0.3.378
+
+**Source acceptance (characterized, no code change).** Acceptance indexes the
+document, snapshots its content and attaches it to the run. Replaying it in the
+same run is refused by dd_source ("already attached") with the index and
+content snapshot rolled back; in the same process the knowledge engine also
+refuses to load the document twice. It is duplicate-safe. One limitation was
+recorded for a product decision rather than fixed: document identity is derived
+from the URL alone, and knowledge is global, so a second run cannot accept a URL
+another run already indexed. Reusing the indexed document could attach content
+that run never fetched (for example after the page changed), so resolving it
+needs content-versioned or run-scoped knowledge, not a narrow guard.
+
+**Source assessment (gap found and fixed).** A superseding assessment is already
+refused on replay once its target is superseded. A first assessment had no guard:
+in the same crash window as evidence (write persisted, step interrupted, operator
+ruling "not performed", retry) it added an identical second current assessment,
+and a rebound mission could reach the same path. The assessment operation now
+refuses when the run already holds the exact same first assessment (source,
+evidence IDs, text, trust, and the four judgements this operation writes as
+unknown), naming the existing assessment and failing without performed work.
+A different text, trust or evidence set, or a manual assessment carrying other
+judgements, is still recorded. No schema, authority, budget, goal or readiness
+change; manual assessment entry is unchanged.
+
+### Replay/idempotency audit — evidence recording: v0.3.377
+
+Second capability of the one-at-a-time audit. Characterized behaviour:
+
+- **Identity.** Evidence IDs are random per write. A record stores run, source
+  document, chunk ID and index, excerpt, the SHA-256 of the stripped chunk
+  content and the note; it stores no execution or step identity.
+- **Mission path.** Safe already: recovery refuses a mission whose accepted
+  source lacks its durable evidence step, and a mission's notes embed its plan
+  digest and source hash, so separate observations never collide.
+- **Gap found and fixed.** In a generic plan, dd_evidence persists before the
+  step's completion is persisted. A crash between them restores the step as
+  interrupted; an operator ruling of "not performed" returns it to pending, and
+  the next advance recorded the same chunk and note again under a new ID —
+  one observation counted twice. The evidence-recording operation now refuses
+  when the run already holds the exact same observation (document, chunk index,
+  content hash, note), naming the existing evidence ID. The step fails with no
+  performed work; it is neither a duplicate nor a fabricated success.
+- **Deliberate behaviour change.** A second, separately started plan that
+  authorizes the identical observation in the same run now fails the same way
+  instead of creating a duplicate record. A different note, a different chunk,
+  or the same text in another run is still recorded.
+- **Unchanged / remaining.** Manual evidence recording (a direct operator
+  request, not a replayed plan step) is not deduplicated, so a double submit
+  can still create two records. No authority, budget, schema, goal or readiness
+  change.
+
+### Replay/idempotency audit — source fetch: v0.3.376
+
+First capability of the one-at-a-time replay audit. Characterized behaviour:
+
+- **Operation identity.** A fetch is one authored plan step in one execution;
+  the executor only starts the next pending step, so a completed or failed step
+  is never started again. Mission slots take the URL from ranked discovery
+  candidates, excluding every identity already attempted or acquired.
+- **Crash windows.** The running step and its charge are persisted before the
+  network is reachable. After restart a running step is interrupted: it stays
+  charged, advance refuses it, and only an explicit operator ruling that it was
+  not performed returns it to pending for an ordinary, newly charged attempt.
+  A failed fetch fails the execution (not resumable) and keeps its run failure.
+- **Gap found and fixed.** Live missions excluded the *requested* URL of each
+  slot, but checkpoints kept only the validated *final* URL. After a redirect,
+  restart lost the requested identity, so a later slot or follow-up could
+  select the same candidate and fetch it again (charging network spend before
+  the duplicate was detected). Checkpoints now carry equested_urls beside
+  cquired_urls; restore uses them exactly as the live process does. A legacy
+  checkpoint with acquired sources but no requested URLs refuses recovery while
+  a fetch slot is still pending, instead of risking a duplicate fetch.
+- **Unchanged.** URL security and redirect validation, authority, budget and
+  cost, goal and readiness semantics. Another mission fetching the same URL is
+  a distinct authorized operation and is not suppressed.
+- **Found for later audits.** Recovery refuses a mission interrupted before its
+  first evidence record ("Mission evidence changed or is missing"), a fail-closed
+  false refusal; and accepting a source already indexed by another run fails at
+  indexing. Both belong to the false-refusal and source-acceptance audits.
+
+### Mission audit bundle: v0.3.375
+
+An operator can now answer, from one exported artifact, what a mission did,
+under which recorded approval and allowance, what it spent, which evidence and
+reviews bear on its result, and why its derived status is what it is.
+
+- **Sources.** The durable-form execution snapshot (live missions are captured
+  exactly as persistence would; restored ones are their loaded snapshot), the
+  linked run in its run-store document form, and the approval whose consumption
+  names this execution. Goal satisfaction, explanation, readiness and the
+  teaching report are recomputed by the existing functions and not persisted.
+- **Formats.** mission-audit-<plan>.json (schema hypatia.mission_audit v1,
+  sorted keys, typed enum strings, canonical IDs; the snapshot's write time is
+  excluded so live and restored audits of the same state are byte-identical)
+  and mission-audit-<plan>.md, rendered from the same data with the existing
+  run export nested inside. Nothing parses Markdown.
+- **Workflow.** Preview renders both files and their SHA-256 fingerprints and
+  writes nothing. Saving requires an existing absolute directory, re-renders,
+  refuses if either fingerprint changed, refuses if either file exists, and
+  publishes both with the existing create-new atomic publisher, removing the
+  Markdown file if the JSON file cannot be written.
+- **Conservative gaps.** A missing stop reason, checkpoint, allowance, approval,
+  run or request ID becomes a typed limitation with null values; no evaluation
+  or report is produced without a recorded stop. Recorded URLs with credentials
+  (rejected where URLs enter, but checked again here) make the export fail
+  closed. The bundle never includes API keys or request headers, which are not
+  recorded.
+- **Not included.** Replay, provenance graphs and freshness; traceability only
+  follows recorded IDs and says "unavailable" otherwise.
+
+### Listing points to restored reports: v0.3.374
+
+The recovered-missions listing is how an operator finds plan IDs after
+restart. A terminal mission (for example completed or failed) is never
+resumable, so it was listed only as "not resumed" with the rebind refusal, even
+though v0.3.370 made its recomputed report available in execution status. Each
+not-resumed entry now states either that its report, recomputed from the
+recorded stop, is in execution status, or that no stop was recorded and no
+report is available. Listing still reads only in-memory recovery outcomes and
+durable snapshots; it resumes, renders and calls nothing.
+
+### Export includes recorded judgements: v0.3.373
+
+The deterministic run Markdown export predated operator comparison reviews and
+the typed assessment judgements, so an exported audit omitted exactly the
+records that can change a mission's goal status or caveats. The export now has
+an "Operator Comparison Reviews" section (review, note, decision, evidence IDs,
+current/superseded state, supersession and operator reason, with a statement
+that a review is a bounded judgement rather than model output or truth) and
+lists each assessment's usefulness, applicability, independence and
+publication status. Comparison notes, which a mission may derive from a model,
+are labelled tentative instead of user-authored. The export remains local,
+read-only and deterministic; an earlier exported file no longer verifies
+against the current rendering, as with any change to the run.
+
+### Source-independence review of any named mission: v0.3.372
+
+Source-independence review still reached only the last live mission or a
+single recovered one. The window now keeps the plan-to-run pairs the runtime
+reported (live results and the recovered listing) and reviews the run of the
+execution named in the panel, falling back to the last live mission when the
+panel is empty. A named execution with no reported run is refused instead of
+silently reviewing another mission. The canonical run and the existing
+assessment path are unchanged.
+
+### Desktop review of any named mission: v0.3.371
+
+The mission-bound comparison review bound a plan only after a live result or
+when startup recovery listed exactly one mission, so with several restored
+missions only execution status could reach them. The review now targets the
+execution named in the execution panel (filled by the recovered listing, a
+live result, or the operator), falling back to the last live mission. The
+loaded plan is remembered with its run and note, so the preview names it and
+the post-record reload uses it even if the panel is edited in between. The
+backend still resolves the run, checkpoint note and report; no new authority,
+persistence or execution is involved.
+
+### Restored mission status report: v0.3.370
+
+Execution status for a mission resumed at startup already showed the report
+its recovery rendered. A restored mission that was not resumed showed only its
+durable step record. Its status now appends the existing teaching report,
+recomputed from the durable run, checkpoint, allowance and recorded stop reason
+on every request, so an operator review recorded after restart is reflected
+immediately. It is not cached or persisted, retains no lesson, resumes nothing
+and calls nothing. A legacy snapshot without a recorded stop says so and shows
+no goal status.
+
+### Durable mission stop reason: v0.3.369
+
+A mission's outcome, explanation, readiness and teaching report are derived
+from its run, checkpoint, allowance and the typed autonomy stop reason. The
+first three were durable; the stop reason lived only in process memory, so a
+restored mission that was not resumed (completed, failed, cancelled or blocked
+executions are never resumable, and a changed model destination refuses
+recovery) could not show its result or be reviewed from it.
+
+Execution snapshots now carry an optional `mission_stop_reason` using the
+existing `AutonomyStopReason` enum. It is recorded after a live or recovered
+mission's autonomy run and bound to the exact immutable execution state it
+describes: any later state change makes it inapplicable, a snapshot restored
+with a running step drops it, and a rebound (resumed) execution records its own
+new stop. Missing values decode as absent and the mission report is refused;
+unknown values fail the store load closed. No report prose, authority, budget,
+source slot or goal status is persisted, and reading it never resumes work.
+
+### Desktop access to comparison review: v0.3.368
+
+The persisted-comparison-note selector now also exposes the one existing
+operator-review action. It shows the selected note's exact source, evidence and
+assessment IDs plus the current review state, then asks for explicit
+confirmation before calling the existing canonical review service. If a current
+review exists, its exact ID is supplied as the supersession target; the service
+remains the enforcement boundary and rejects a stale or cross-run change.
+
+This is not a new review system or automatic support path. It adds no authority,
+budget, source fetch, model/provider call, lifecycle change or recovery replay.
+The same selector works for a canonically reloaded run, so a recovered mission
+does not require the operator to reconstruct comparison identities manually.
+
+For a learning mission the desktop also offers a mission-bound review. A new
+read-only intent, `research_mission_comparison_review`, resolves the plan's
+canonical run and the checkpoint's exact semantic note and re-renders the
+existing teaching report; the window previews plan, run, note, evidence IDs,
+current review, decision and reason before any write, records through the same
+service and reloads so the goal outcome is recomputed, never composed in the UI.
+Reviews of other notes cannot satisfy the mission, conflicts and comparison gaps
+stay unresolved, and a recovered mission binds the same run and note. A restored
+mission not resumed this session has no stop reason to recompute from and is
+refused rather than guessed.
+
+### Operator review as the supported-comparison path: v0.3.367
+
+The run already kept operator-authored, revalidated records, but none named one
+exact comparison: assessments judge a source, claims judge a statement and claim
+contradictions link two claims. v0.3.367 adds the smallest such record: an
+operator comparison review of one retained note, with the note's exact evidence,
+a typed `supported` or `not_supported` decision, the operator's reason and the
+commit time, persisted in the run store (schema 14). A new review of a reviewed
+note supersedes exactly its current review, so support is revocable and stale
+views are refused.
+
+`tentative comparison -> explicit operator review -> supported comparison`. A
+tentative agreement is satisfied and ready only while the current review of the
+checkpoint's note is `supported`; the report names the review. The model
+relation, note text, trust, independence, claim confidence, source count and
+completion never create support, and reviews never lift conflicts, clarified
+conflicts or comparison gaps. Restart reloads reviews without authority, budget
+or calls. Automatic verification remains out of scope.
+
+### Tentative agreement is not a supported comparison: v0.3.366
+
+The last satisfied comparison path was a first comparison whose relation was
+`possible_agreement`. It became satisfied and ready on complete evidence alone,
+although the relation is a tentative model interpretation, trust was unassessed,
+independence unknown and no claim existed. The model has no supported or
+verified agreement state, so learning missions with this relation are now
+`unresolved` and not ready, and the explanation says the sources tentatively
+agree without a sufficiently supported comparison. `tentative agreement !=
+supported comparison`. A mission checkpoint with notes but no recorded relation
+fails safe the same way. No learning mission with a mission checkpoint can
+currently reach `satisfied`; a future supported-agreement contract would need an
+explicit structured state rather than note prose.
+
+### Clarified conflicts are not verified resolutions: v0.3.365
+
+The follow-up branch compares the first source with one new source. When that
+tentatively agreed, the outcome `structurally_clarified` previously satisfied the
+goal and marked the mission ready, although nothing was verified. No mission
+scope defines an objective that identifying the aligned side completes, so any
+recorded tentative conflict now leaves the goal `unresolved` and the mission not
+ready, and the explanation says the structure was clarified without a verified
+resolution. `structural clarification != verified resolution`. Legacy
+checkpoints that record the conflict only in `semantic_relation` fail safe the
+same way; a mission whose initial comparison agreed remains satisfied.
+
+### Not-comparable sources as an unresolved comparison gap: v0.3.364
+
+When the first two sources were judged `not_comparable`, the mission skipped the
+optional follow-up and reported a satisfied, ready goal. Goal satisfaction now
+reads that durable relation as an unresolved comparison gap and the explanation
+says no supported comparison was established. `not comparable != successful
+comparison`: the finding is valid evidence but does not satisfy a comparison
+goal. The follow-up remains skipped, so authority, spend and the plan digest are
+unchanged. An unresolved conflict follow-up's explanation now also names its
+durable follow-up relation.
+
+### Empty-proposal follow-up as a typed comparison gap: v0.3.363
+
+An empty initial proposal activates the pre-approved third-source branch. Its
+final observation previously only accepted a contradiction follow-up, so the
+authorized branch failed after spending its full budget. The observation now
+records a durable `evidence_gap_outcome` (`no_supported_comparison`, or
+`followup_comparison_recorded` for a tentative relation with the new source) and
+restart validates it against the retained note's canonical provenance.
+
+`follow-up executed != comparison established` and
+`no supported comparison != execution failure`: goal satisfaction is
+`unresolved` whenever the central comparison supported nothing, readiness stays
+not ready, and a legacy checkpoint without the outcome never yields a satisfied
+goal or an inferred result.
+
+### Prior lessons before approval: v0.3.362
+
+Failure memory recalled matching lessons only in the report after a mission had
+already spent its budget. The inert learning preview now shows the same
+read-only advice before the operator approves, so an earlier failure (for
+example a query whose discovery returned nothing) is visible at the decision
+point. `stored lesson != verified fact`: advice is labelled as not instructions,
+authority or evidence, and the preview still writes and calls nothing.
+
+### Clarified tentative conflicts stay visible: v0.3.361
+
+When the follow-up branch compared a third source and did not conflict, the
+durable outcome is `structurally_clarified` and the goal can be satisfied. The
+explanation previously said nothing about the original tentative conflict. It
+now adds a bounded reason from the checkpoint: the follow-up clarifies structure
+only, does not resolve the original disagreement and does not show either source
+wrong. `follow-up performed != contradiction resolved`; satisfaction and
+readiness are unchanged.
+
+### Independence review for recovered missions: v0.3.360
+
+The operator source-independence review only knew the run of a mission started
+in the current session, so a mission resumed after restart could not be
+reviewed from the desktop. The recovered-missions listing now carries each
+mission's canonical run ID, and a single listed mission names its run for the
+existing review. `operator judgement != model truth` still holds: judgements go
+through the unchanged assessment and supersession path.
+
+### Startup recovery outcome shown on completion: v0.3.359
+
+When deferred startup recovery finishes having resumed or refused a mission, the
+desktop renders the existing read-only recovered-missions listing in the
+execution panel and names a single mission for Refresh status. A launch with
+nothing to recover changes nothing on screen. This is presentation of existing
+in-memory state only.
+
+### Cancellable desktop startup recovery: v0.3.358
+
+The deferred recovery request now carries the desktop's cancellation token into
+each resumed mission's existing cooperative autonomy cancellation. A cancelled
+in-flight mission keeps its recorded charge and retains no new lesson; missions
+not yet started stay restored with a visible cancellation reason. Cancellation
+does not reopen the once-per-process pass and grants no authority.
+
+### Non-blocking desktop startup recovery: v0.3.357
+
+Startup recovery previously ran inside runtime initialization, before the
+desktop window existed, so a resumed mission's bounded fetch and model calls
+held up launch with no visible window or cancellation surface. The desktop now
+defers that pass and runs it on its single request worker once the window is up.
+`restart != fresh authority`: the deferred pass is the identical exact-mission
+resume, runs at most once per process within recorded allowance, and a repeat
+request does nothing. Headless composition is unchanged.
+
+### Failure-lesson retention for resumed missions: v0.3.356
+
+A live learning mission retains opted-in failure lessons after it reports; a
+mission resumed by startup recovery previously did not. Recovery now uses the
+same lesson-retention helper and failure memory whenever the resumed autonomy
+run returns a result, appending prior advice and the retention result to the
+recovered report. `recovered lesson retention != new execution` and
+`restart != fresh authority`: stable lesson IDs make a repeated retention a
+no-op, and refused recovery retains nothing.
+
+### Discoverable startup mission recovery: v0.3.355
+
+A recovered report is only useful if the operator can name its mission. The
+desktop execution controls now list this session's startup recovery outcomes —
+resumed with a teaching report, or refused with its reason — through a read-only
+`research_plan_execution_recovered` request. A single listed mission fills the
+execution field for the existing Refresh status. Listing performs no research
+work and grants no authority.
+
+### Teaching reports for missions resumed after restart: v0.3.354
+
+Startup recovery previously discarded the autonomy result of a resumed learning
+mission, so completed work had no visible cited report. Recovery now renders the
+existing teaching report from the canonical run, durable checkpoint and
+cumulative spend whenever the resumed autonomy run returns a result, and keeps it
+in memory for that session. The mission's execution-status response appends it.
+
+`restart recovery completed work != goal satisfied` and
+`recovered report != new execution`. Refused or failed-closed recovery keeps its
+refusal without a report; no report is persisted; retrieval performs no fetch,
+provider or model call and changes no spend, lifecycle, plan digest, scope,
+checkpoint, authority or run closure.
+
+### Operator source-independence review: v0.3.353
+
+The desktop mission result now offers **Review source independence**. It loads
+the mission run from canonical state, lists only accepted evidence-bearing
+sources with their current judgement, and records an operator's `independent`,
+`derivative`, `likely_duplicate` or `unknown` judgement through the existing
+assessment preview/confirmation/record path. The reviewed current assessment is
+superseded exactly; a stale review is refused by the existing already-superseded
+check, and other judgement dimensions are carried forward.
+
+`operator judgement != model truth` and `caveat removal != goal upgrade`. The
+review makes no provider/model call and changes no mission authority, plan
+digest, checkpoint, cumulative allowance, source slot, lifecycle, goal
+satisfaction or completion readiness. Restart shows the same current judgement.
+
+### Source-independence uncertainty caveat: v0.3.352
+
+The evidence-completion evaluation derives a secondary caveat from current
+source assessments: `source_independence_unverified` when an evidence-bearing
+source's independence is `unknown` or unassessed, and the stronger
+`source_not_independent` for an explicit derivative or likely-duplicate
+judgement. The goal explanation and teaching report show it beneath the goal
+status.
+
+`unknown independence = explicit uncertainty, not proof and not failure`. The
+caveat does not change evidence readiness, goal satisfaction or completion
+readiness, is recomputed from unchanged canonical state after restart, and adds
+no persistence, authority, provider, model, budget or lifecycle effect.
+
+### Mission completion readiness: v0.3.351
+
+The mission outcome now also exposes a pure completion-readiness projection:
+`ready`, or not-ready evidence, conflict, boundary, budget, execution, failure
+or cancellation. This answers whether the user can consider the bounded
+deliverable concluded; it remains separate from both execution completion and
+the narrower evidence-grounded goal-satisfaction result.
+
+`ready` requires existing `satisfied` goal state. It does not close the run,
+promote a claim, infer truth, mutate checkpoint state, consume authority or
+budget, choose a source/provider/model, retry, or create a follow-up. An
+unchanged restored mission yields the same readiness result.
 
 ### Visible fail-closed restart refusals: v0.3.343
 
@@ -152,6 +1010,29 @@ checkpoints without the new outcome remain readable and never fabricate one.
 The original digest-bound scope, destination, disclosure and cumulative
 allowance remain the only authority/accounting mechanisms; no second source
 selection, retry, planner, store or agent loop is introduced.
+
+### Typed decision for the existing fixed follow-up slot: v0.3.348
+
+The semantic mission's one conditional third-source slot now has a small typed
+decision projection in the existing mission resolver. It can state only that
+the already-authorized `SOURCE_FETCH` slot is `proposed`, `not_needed`,
+`blocked_predecessor`, `budget_limited`, `already_attempted`, or `completed`.
+The projection carries the original plan digest plus existing canonical semantic
+note/fingerprint binding; it does not contain a URL or a future provider/model
+choice.
+
+The executor reads that decision before its normal attempt boundary. Existing
+cumulative allowance and inspected-text limits therefore block the third source
+without a new fetch or charge. A retained outcome or attempted source cannot be
+replayed. The decision is derived again from the existing restored mission
+checkpoint rather than stored independently, so legacy checkpoints never gain
+new routing state or authority.
+
+This remains a bounded routing aid, not a general structured-gap planner. It
+does not generate a new plan, select an arbitrary follow-up, change scope or
+destination, promote a claim, close the run, declare the goal satisfied, or
+treat a semantic label as truth. Broader follow-up planning and the separate
+evidence-grounded goal-satisfaction contract remain future work.
 
 ### Authority, accounting and durable output
 

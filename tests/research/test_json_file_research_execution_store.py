@@ -17,6 +17,7 @@ from research.JsonFileResearchExecutionStore import (
     MAX_RESEARCH_EXECUTION_STORE_BYTES,
     MAX_RESEARCH_EXECUTION_STORE_EXECUTIONS,
     JsonFileResearchExecutionStore,
+    _BoundedUtf8Writer,
 )
 from research.ResearchPlanExecutionCodec import encode_execution_snapshot
 from research.ResearchPlanExecutionSnapshot import (
@@ -264,6 +265,85 @@ class JsonFileResearchExecutionStoreTests(unittest.TestCase):
             if entry.name.startswith(f".{self.path.name}.")
         ]
         self.assertEqual(leftovers, [])
+
+    def test_partial_write_failure_preserves_previous_snapshot_byte_for_byte(
+        self,
+    ) -> None:
+        self.store.save([snapshot(plan_id="plan-original")])
+        original = self.path.read_bytes()
+        real_write = _BoundedUtf8Writer.write
+        call_count = {"calls": 0}
+
+        def flaky_write(self: _BoundedUtf8Writer, value: str) -> int:
+            call_count["calls"] += 1
+            if call_count["calls"] == 1:
+                return real_write(self, value)
+            raise OSError("simulated mid-write failure")
+
+        with (
+            patch.object(
+                _BoundedUtf8Writer, "write", autospec=True, side_effect=flaky_write
+            ),
+            self.assertRaises(ResearchError),
+        ):
+            self.store.save([snapshot(plan_id="plan-replacement")])
+
+        self.assertGreaterEqual(
+            call_count["calls"],
+            2,
+            "the failure must occur after a real write, not before one",
+        )
+        self.assertEqual(self.path.read_bytes(), original)
+
+    def test_partial_write_failure_leaves_no_temporary_file(self) -> None:
+        self.store.save([snapshot(plan_id="plan-original")])
+        real_write = _BoundedUtf8Writer.write
+        call_count = {"calls": 0}
+
+        def flaky_write(self: _BoundedUtf8Writer, value: str) -> int:
+            call_count["calls"] += 1
+            if call_count["calls"] == 1:
+                return real_write(self, value)
+            raise OSError("simulated mid-write failure")
+
+        with (
+            patch.object(
+                _BoundedUtf8Writer, "write", autospec=True, side_effect=flaky_write
+            ),
+            self.assertRaises(ResearchError),
+        ):
+            self.store.save([snapshot(plan_id="plan-replacement")])
+
+        self.assertGreaterEqual(
+            call_count["calls"],
+            2,
+            "the failure must occur after a real write, not before one",
+        )
+        leftovers = [
+            entry
+            for entry in self.path.parent.iterdir()
+            if entry.name.startswith(f".{self.path.name}.")
+        ]
+        self.assertEqual(leftovers, [])
+
+    def test_cleanup_unlink_failure_does_not_mask_the_original_research_error(
+        self,
+    ) -> None:
+        self.store.save([snapshot(plan_id="plan-original")])
+
+        with (
+            patch(
+                "research.JsonFileResearchExecutionStore.os.replace",
+                side_effect=OSError("replace failed"),
+            ),
+            patch.object(Path, "unlink", side_effect=OSError("cleanup failed")),
+        ):
+            with self.assertRaises(ResearchError) as context:
+                self.store.save([snapshot(plan_id="plan-replacement")])
+
+        cause = context.exception.__cause__
+        self.assertIsInstance(cause, OSError)
+        self.assertEqual(str(cause), "replace failed")
 
     def test_no_partial_document_when_encoding_fails(self) -> None:
         self.store.save([snapshot(plan_id="plan-original")])

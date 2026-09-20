@@ -38,6 +38,18 @@ class ResearchMissionRecoveryCheckpoint:
     contradiction_followup_input_fingerprint: str = ""
     contradiction_followup_relation: str = ""
     contradiction_outcome: str = ""
+    # The pre-approved follow-up after an empty initial proposal.  It records
+    # only that the authorized branch ran and what typed relation it retained;
+    # an absent value (legacy or not yet run) never implies a supported result.
+    evidence_gap_followup_note_id: str = ""
+    evidence_gap_followup_input_fingerprint: str = ""
+    evidence_gap_followup_relation: str = ""
+    evidence_gap_outcome: str = ""
+    # The authorized URL each acquired source was requested from, in slot order
+    # beside ``acquired_urls`` (which holds the validated final URL).  A redirect
+    # makes them differ; without the requested identity a restart could select
+    # and fetch the same candidate again.  Empty in legacy checkpoints.
+    requested_urls: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         values = (
@@ -59,6 +71,16 @@ class ResearchMissionRecoveryCheckpoint:
                 for value in values
                 for item in value
             )
+            or not isinstance(self.requested_urls, tuple)
+            or any(
+                not isinstance(item, str) or not item.strip() or item != item.strip()
+                for item in self.requested_urls
+            )
+            or (
+                bool(self.requested_urls)
+                and len(self.requested_urls) != len(self.acquired_urls)
+            )
+            or len(self.requested_urls) != len(set(self.requested_urls))
             or len(self.acquired_urls) != len(self.body_hashes)
             or len(self.acquired_urls) != len(set(self.acquired_urls))
             or len(self.evidence_ids) != len(set(self.evidence_ids))
@@ -123,6 +145,7 @@ class ResearchMissionRecoveryCheckpoint:
                 )
             )
             or not self._valid_contradiction_state()
+            or not self._valid_evidence_gap_state()
         ):
             raise ResearchError("Mission recovery checkpoint is invalid.")
         object.__setattr__(self, "discovery_id", self.discovery_id.strip())
@@ -211,6 +234,41 @@ class ResearchMissionRecoveryCheckpoint:
             and self.contradiction_followup_relation in relations
             and self.contradiction_outcome in {"unresolved", "structurally_clarified"}
             and self._fingerprint(self.contradiction_followup_input_fingerprint)
+        )
+
+    def _valid_evidence_gap_state(self) -> bool:
+        """Keep the empty-proposal follow-up outcome typed and self-consistent."""
+        values = (
+            self.evidence_gap_followup_note_id,
+            self.evidence_gap_followup_input_fingerprint,
+            self.evidence_gap_followup_relation,
+            self.evidence_gap_outcome,
+        )
+        if not all(
+            isinstance(value, str) and value == value.strip() for value in values
+        ):
+            return False
+        if not any(values):
+            return True
+        relations = {
+            "possible_agreement",
+            "possible_conflict",
+            "not_comparable",
+            "no_supported_comparison",
+        }
+        expected_outcome = (
+            "no_supported_comparison"
+            if self.evidence_gap_followup_relation == "no_supported_comparison"
+            else "followup_comparison_recorded"
+        )
+        return (
+            all(values)
+            and self.semantic_relation == "no_supported_comparison"
+            and not self.contradiction_initial_note_id
+            and self.evidence_gap_followup_relation in relations
+            and self.evidence_gap_outcome == expected_outcome
+            and self.evidence_gap_followup_note_id != self.semantic_note_id.strip()
+            and self._fingerprint(self.evidence_gap_followup_input_fingerprint)
         )
 
     @staticmethod

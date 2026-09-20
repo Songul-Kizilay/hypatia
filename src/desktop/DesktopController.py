@@ -23,6 +23,7 @@ from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchKaliOperationPreview import ResearchKaliOperationPreview
+from research.ResearchMissionAuditExport import ResearchMissionAuditExportPreview
 from research.ResearchPlanDigest import plan_digest
 from research.ResearchPlanRestriction import ResearchPlanRestriction
 from research.ResearchProgramScopeRevision import ResearchProgramScopeRevision
@@ -678,6 +679,29 @@ class DesktopController:
             "research_plan_execution_status",
             "Report research plan execution status",
             execution_id,
+        )
+
+    def resume_restored_research_missions(
+        self, *, cancellation_token: CancellationToken | None = None
+    ) -> BrainResponse:
+        """Run the postponed once-per-process startup mission recovery."""
+        return self._brain.process(
+            BrainRequest(
+                message="Resume restored research missions",
+                source="desktop",
+                cancellation_token=cancellation_token,
+                metadata={"intent": "research_mission_recovery_start"},
+            )
+        )
+
+    def recovered_research_missions(self) -> BrainResponse:
+        """List missions startup recovery resumed or refused. Advances nothing."""
+        return self._brain.process(
+            BrainRequest(
+                message="List missions recovered at startup",
+                source="desktop",
+                metadata={"intent": "research_plan_execution_recovered"},
+            )
         )
 
     def advance_research_execution(self, execution_id: str) -> BrainResponse:
@@ -1788,6 +1812,45 @@ class DesktopController:
             )
         )
 
+    def preview_mission_audit_export(self, plan_id: str) -> BrainResponse:
+        """Render one mission's audit bundle for preview. Writes nothing."""
+        if not plan_id.strip():
+            raise ValueError("A mission plan ID is required.")
+        return self._brain.process(
+            BrainRequest(
+                message="Preview mission audit export",
+                source="desktop",
+                metadata={
+                    "intent": "research_mission_audit_export_preview",
+                    "research_plan_id": plan_id.strip(),
+                },
+            )
+        )
+
+    def save_mission_audit_export(
+        self,
+        preview: ResearchMissionAuditExportPreview,
+        destination_directory: str,
+    ) -> BrainResponse:
+        """Save exactly the previewed audit bundle as two new files."""
+        if not isinstance(preview, ResearchMissionAuditExportPreview):
+            raise ValueError("A mission audit export preview is required.")
+        if not destination_directory.strip():
+            raise ValueError("A mission audit export directory is required.")
+        return self._brain.process(
+            BrainRequest(
+                message="Save previewed mission audit export",
+                source="desktop",
+                metadata={
+                    "intent": "research_mission_audit_export_save",
+                    "research_plan_id": preview.plan_id,
+                    "destination_directory": destination_directory.strip(),
+                    "expected_markdown_sha256": preview.markdown_sha256,
+                    "expected_json_sha256": preview.json_sha256,
+                },
+            )
+        )
+
     def save_research_run_markdown_export(
         self,
         preview: ResearchRunMarkdownExportPreview,
@@ -2087,6 +2150,51 @@ class DesktopController:
                 metadata={
                     "intent": "research_claim_contradiction_write_preview",
                     **metadata,
+                },
+            )
+        )
+
+    def mission_comparison_review(self, plan_id: str) -> BrainResponse:
+        """Load one mission's canonical comparison-review target. Writes nothing."""
+        if not plan_id.strip():
+            raise ValueError("A mission plan ID is required.")
+        return self._brain.process(
+            BrainRequest(
+                message="Load mission comparison review target",
+                source="desktop",
+                metadata={
+                    "intent": "research_mission_comparison_review",
+                    "research_plan_id": plan_id.strip(),
+                },
+            )
+        )
+
+    def record_research_comparison_review(
+        self,
+        research_run_id: str,
+        note_id: str,
+        decision: str,
+        note: str,
+        supersedes_review_id: str = "",
+    ) -> BrainResponse:
+        """Submit one operator review of one exact comparison note."""
+        if not research_run_id.strip() or not note_id.strip():
+            raise ValueError("A research run ID and comparison note ID are required.")
+        if not note.strip():
+            raise ValueError("An operator review note is required.")
+        return self._brain.process(
+            BrainRequest(
+                message="Record operator research comparison review",
+                source="desktop",
+                metadata={
+                    "intent": "research_comparison_review_record",
+                    "research_run_id": research_run_id.strip(),
+                    "research_comparison_note_id": note_id.strip(),
+                    "research_comparison_review_decision": decision.strip(),
+                    "research_comparison_review_note": note.strip(),
+                    "research_comparison_review_supersedes_id": (
+                        supersedes_review_id.strip()
+                    ),
                 },
             )
         )

@@ -18,5 +18,10 @@ class AcceptsResearchSource(Protocol):
         self,
         source: ResearchSource,
         run_id: str = "",
+        *,
+        requested_url: str = "",
+        discovery_candidate_id: str = "",
+        revalidation_prior_observation_id: str = "",
+        revalidation_execution_id: str = "",
     ) -> ResearchSourceAcceptanceResult:
         """Index, persist, and record the source, rolling back on failure."""

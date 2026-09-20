@@ -58,7 +58,14 @@ class RecordingContentStore:
 class FailingRunManager:
     """Run manager whose add_source always rejects."""
 
-    def add_source(self, run_id: str, source_value: object, document_id: str) -> None:
+    def add_source(
+        self,
+        run_id: str,
+        source_value: object,
+        document_id: str,
+        requested_url: str | None = None,
+        discovery_candidate_id: str | None = None,
+    ) -> None:
         raise ResearchError("Research source is already attached to this run.")
 
 

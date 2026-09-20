@@ -1798,7 +1798,10 @@ class BootstrapLLMProviderTests(unittest.TestCase):
                 [
                     {
                         "role": "system",
-                        "content": HYPATIA_DEFAULT_SYSTEM_PROMPT,
+                        "content": (
+                            f"{HYPATIA_DEFAULT_SYSTEM_PROMPT}\n\n"
+                            f"{cognitive_engine.runtime_capabilities.instruction()}"
+                        ),
                     },
                     {
                         "role": "user",
@@ -1830,7 +1833,10 @@ class BootstrapLLMProviderTests(unittest.TestCase):
                 [
                     {
                         "role": "system",
-                        "content": HYPATIA_DEFAULT_SYSTEM_PROMPT,
+                        "content": (
+                            f"{HYPATIA_DEFAULT_SYSTEM_PROMPT}\n\n"
+                            f"{cognitive_engine.runtime_capabilities.instruction()}"
+                        ),
                     },
                     {
                         "role": "user",

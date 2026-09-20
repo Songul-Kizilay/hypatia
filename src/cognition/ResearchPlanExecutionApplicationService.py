@@ -67,6 +67,7 @@ from research.ResearchAttemptRecoveryDecision import (
     ResearchAttemptRecoveryDecision,
 )
 from research.ResearchAttemptResolution import ResearchAttemptResolution
+from research.ResearchAutonomyResult import AutonomyStopReason
 from research.ResearchCapabilityCost import cost_for
 from research.ResearchContinuationStopReason import (
     ResearchContinuationStopReason,
@@ -78,6 +79,10 @@ from research.ResearchExecutionContinuation import (
     ResearchExecutionContinuation,
 )
 from research.ResearchExecutionStore import ResearchExecutionStore
+from research.ResearchMissionFollowupDecision import (
+    ResearchMissionFollowupDecisionStatus,
+)
+from research.ResearchMissionRecoveryCheckpoint import ResearchMissionRecoveryCheckpoint
 from research.ResearchMissionStepResolver import ResearchMissionStepResolver
 from research.ResearchPlan import ResearchPlan
 from research.ResearchPlanAuthorizationConsumer import (
@@ -101,6 +106,7 @@ from research.ResearchPlanExecutionContext import ResearchPlanExecutionContext
 from research.ResearchPlanExecutionSnapshot import (
     MAX_MISSION_REQUEST_ID_CHARACTERS,
     ResearchPlanExecutionSnapshot,
+    ResearchPlanExecutionStepSnapshot,
 )
 from research.ResearchPlanExecutionState import ResearchPlanExecutionState
 from research.ResearchPlanExecutionStatus import ResearchPlanExecutionStatus
@@ -120,6 +126,7 @@ from research.ResearchProgramScopeRevisionStore import ResearchProgramScopeRevis
 from research.ResearchSourcePreview import ResearchSourcePreview
 from research.SemanticComparisonStepResult import SemanticComparisonStepResult
 from research.SemanticEvidenceStepResult import SemanticEvidenceStepResult
+from research.SourceRevalidationStepOperation import SourceRevalidationStepOperation
 from research.StartsResearchPlanExecution import ResearchPlanExecutionStartRefusal
 from response.ResponseComposer import ResponseComposer
 
@@ -130,6 +137,7 @@ RESEARCH_PLAN_EXECUTION_RECOVER_INTENT = "research_plan_execution_recover"
 RESEARCH_PLAN_EXECUTION_CONTINUE_INTENT = "research_plan_execution_continue"
 RESEARCH_PLAN_EXECUTION_CANCEL_INTENT = "research_plan_execution_cancel"
 RESEARCH_PLAN_EXECUTION_ADVANCE_INTENT = "research_plan_execution_advance"
+RESEARCH_PLAN_EXECUTION_RECOVERED_INTENT = "research_plan_execution_recovered"
 
 MAX_ACTIVE_RESEARCH_PLAN_EXECUTIONS = 20
 
@@ -179,7 +187,13 @@ class ResearchPlanExecutionApplicationService:
         self._mission_resolver = mission_resolver
         self._mission_digests: dict[str, str] = {}
         self._mission_request_ids: dict[str, str] = {}
+        #: A mission's last autonomy stop, paired with the exact immutable state
+        #: it described; any later state change makes it no longer apply.
+        self._mission_stops: dict[
+            str, tuple[ResearchPlanExecutionState, AutonomyStopReason]
+        ] = {}
         self._mission_recovery_refusals: dict[str, str] = {}
+        self._mission_recovery_reports: dict[str, str] = {}
         self._clock = clock or (lambda: datetime.now(UTC))
         self._restored: dict[str, ResearchPlanExecutionSnapshot] = {}
         self._restore()
@@ -472,6 +486,15 @@ class ResearchPlanExecutionApplicationService:
                     "Target execution must retain its exact recorded plan, "
                     "program, scope and research run."
                 )
+        if snapshot.revalidation_plan_digest is not None or _revalidates(plan):
+            if (
+                snapshot.revalidation_plan_digest != plan_digest(plan)
+                or snapshot.research_run_id != research_run_id
+            ):
+                return ResearchPlanExecutionStartRefusal(
+                    "Source revalidation must retain its exact recorded plan and "
+                    "research run; no prior observation was rebound."
+                )
         if plan_restriction_conflicts(plan):
             return ResearchPlanExecutionStartRefusal(
                 "The derived plan contains a capability forbidden by its own "
@@ -524,6 +547,9 @@ class ResearchPlanExecutionApplicationService:
         except ResearchError as error:
             return ResearchPlanExecutionStartRefusal(str(error))
         bound = replace(plan, plan_id=execution_id)
+        state, reconciled = self._reconcile_recorded_revalidations(
+            state, bound, research_run_id, recorded
+        )
         if mission:
             assert self._mission_resolver is not None
             try:
@@ -546,7 +572,50 @@ class ResearchPlanExecutionApplicationService:
             if snapshot.mission_request_id is not None:
                 self._mission_request_ids[execution_id] = snapshot.mission_request_id
         self._restored.pop(execution_id, None)
+        if reconciled:
+            self._persist(execution_id)
         return state
+
+    def _reconcile_recorded_revalidations(
+        self,
+        state: ResearchPlanExecutionState,
+        plan: ResearchPlan,
+        research_run_id: str,
+        recorded: dict[str, ResearchPlanExecutionStepSnapshot],
+    ) -> tuple[ResearchPlanExecutionState, bool]:
+        """Complete interrupted revalidations whose own result is durable.
+
+        Purely local: the registered operation only reads the run for a
+        revalidation of the step's bound prior observation that this exact
+        execution committed.  Nothing is fetched, charged, refunded or
+        repeated; anything not provable stays interrupted for an operator.
+        """
+        reconciled = False
+        context = ResearchPlanExecutionContext(
+            research_run_id=research_run_id, execution_id=plan.plan_id
+        )
+        for step in plan.steps:
+            snapshot_step = recorded[step.step_id]
+            if (
+                step.capability is not ResearchPlanStepCapability.SOURCE_REVALIDATION
+                or snapshot_step.status is not ResearchPlanStepStatus.INTERRUPTED
+                or snapshot_step.resolution is not ResearchAttemptResolution.NONE
+            ):
+                continue
+            operation = self._operation_registry.resolve(step.capability)
+            if not isinstance(operation, SourceRevalidationStepOperation):
+                continue
+            result = operation.recorded_result(step, context)
+            if result is None:
+                continue
+            state = state.complete_interrupted_step_from_record(
+                step.step_id, result.detail, operation.operation_name
+            )
+            self._events.step_completed(
+                plan.plan_id, step.step_id, operation.operation_name
+            )
+            reconciled = True
+        return state, reconciled
 
     def _authorize(
         self,
@@ -604,6 +673,57 @@ class ResearchPlanExecutionApplicationService:
         """Return the authored plan behind a live execution, if any."""
         return self._plans.get(plan_id)
 
+    def mission_checkpoint(
+        self, plan_id: str
+    ) -> ResearchMissionRecoveryCheckpoint | None:
+        """Return one mission's existing non-content checkpoint, read-only."""
+        plan = self._plans.get(plan_id)
+        if plan is None or plan.mission_scope is None or self._mission_resolver is None:
+            return None
+        return self._mission_resolver.checkpoint(plan)
+
+    def record_mission_stop_reason(
+        self, plan_id: str, stop_reason: AutonomyStopReason
+    ) -> bool:
+        """Durably record why a live mission's autonomy run stopped.
+
+        The reason is bound to the current execution state, so it describes
+        exactly that state and nothing later.  Recording grants no authority or
+        budget and performs no work; it only lets the existing outcome be
+        recomputed after restart.  Returns whether the write landed.
+        """
+        plan = self._plans.get(plan_id)
+        state = self._executions.get(plan_id)
+        if (
+            plan is None
+            or state is None
+            or plan.mission_scope is None
+            or plan_id not in self._mission_digests
+            or not isinstance(stop_reason, AutonomyStopReason)
+        ):
+            return False
+        self._mission_stops[plan_id] = (state, stop_reason)
+        return self._persist_checkpoint(plan_id)
+
+    def mission_stop_reason(self, plan_id: str) -> AutonomyStopReason | None:
+        """Return the recorded stop that still describes this execution, if any."""
+        state = self._executions.get(plan_id)
+        if state is not None:
+            recorded = self._mission_stops.get(plan_id)
+            return (
+                recorded[1] if recorded is not None and recorded[0] is state else None
+            )
+        restored = self._restored.get(plan_id)
+        return restored.mission_stop_reason if restored is not None else None
+
+    def mission_run_id(self, plan_id: str) -> str | None:
+        """Return the canonical research run bound to one execution, read-only."""
+        context = self._contexts.get(plan_id)
+        if context is not None and context.research_run_id:
+            return context.research_run_id
+        restored = self._restored.get(plan_id)
+        return restored.research_run_id if restored is not None else None
+
     def restored_execution(
         self,
         plan_id: str,
@@ -636,6 +756,75 @@ class ResearchPlanExecutionApplicationService:
         ):
             return
         self._mission_recovery_refusals[plan_id] = reason.strip()[:500]
+        self._mission_recovery_reports.pop(plan_id, None)
+
+    def record_mission_recovery_report(self, plan_id: str, report: str) -> None:
+        """Keep one resumed mission's rendered report for this session only.
+
+        Only a mission that startup recovery rebound live (which removes it from
+        the restored set) and ran may carry one.  Nothing is persisted, and
+        retrieving it never advances execution.
+        """
+        plan = self._plans.get(plan_id)
+        if (
+            plan_id not in self._executions
+            or plan is None
+            or plan.mission_scope is None
+            or not isinstance(report, str)
+            or not report.strip()
+        ):
+            return
+        self._mission_recovery_reports[plan_id] = report
+
+    @staticmethod
+    def is_recovered_request(request: BrainRequest) -> bool:
+        return (
+            request.metadata.get("intent") == RESEARCH_PLAN_EXECUTION_RECOVERED_INTENT
+        )
+
+    def process_recovered(self, request: BrainRequest) -> BrainResponse:
+        """List this session's startup mission-recovery outcomes, read-only.
+
+        A mission whose resume left a teaching report and a restored mission
+        whose recovery was refused are the two outcomes execution status can
+        show; listing them names the plan IDs an operator cannot otherwise
+        discover after restart.  Listing advances, resumes and spends nothing.
+        """
+        entries: list[tuple[str, str, str, str]] = []
+        for plan_id in sorted(self._mission_recovery_reports):
+            plan = self._plans.get(plan_id)
+            context = self._contexts.get(plan_id)
+            if plan is not None:
+                entries.append(
+                    (
+                        plan_id,
+                        plan.question,
+                        "resumed at startup; its teaching report is in this "
+                        "execution's status",
+                        (context.research_run_id if context else None) or "",
+                    )
+                )
+        for plan_id in sorted(self._mission_recovery_refusals):
+            snapshot = self._restored.get(plan_id)
+            if snapshot is not None and plan_id not in self._mission_recovery_reports:
+                entries.append(
+                    (
+                        plan_id,
+                        snapshot.question,
+                        "not resumed: "
+                        + self._mission_recovery_refusals[plan_id]
+                        + (
+                            " Its report, recomputed from the recorded stop, is "
+                            "in this execution's status."
+                            if snapshot.mission_stop_reason is not None
+                            else " No stop was recorded, so no report is available."
+                        ),
+                        snapshot.research_run_id or "",
+                    )
+                )
+        return self._response_composer.research_plan_execution_recovered_missions(
+            request, tuple(entries)
+        )
 
     def process_status(self, request: BrainRequest) -> BrainResponse:
         """Report live state, restored durable state, or neither."""
@@ -653,11 +842,24 @@ class ResearchPlanExecutionApplicationService:
                 request,
                 plan_id,
             )
-        return self._response_composer.research_plan_execution_status(
+        response = self._response_composer.research_plan_execution_status(
             request,
             state,
             self._allowances.get(plan_id),
             self._next_capability(plan_id, state),
+        )
+        report = self._mission_recovery_reports.get(plan_id)
+        if report is None:
+            return response
+        return replace(
+            response,
+            message=(
+                f"{response.message}\n\n"
+                "Recovered mission teaching report (rendered when startup "
+                "recovery resumed this mission; retrieving it performs no new "
+                "work):\n\n"
+                f"{report}"
+            ),
         )
 
     def _next_capability(
@@ -1079,6 +1281,45 @@ class ResearchPlanExecutionApplicationService:
 
         allowance = self._allowances.get(plan_id)
         cost = cost_for(step.capability)
+        if plan.mission_scope is not None:
+            assert self._mission_resolver is not None
+            followup = self._mission_resolver.followup_decision(
+                plan, step_id, allowance
+            )
+            if followup.status is ResearchMissionFollowupDecisionStatus.BUDGET_LIMITED:
+                if allowance is not None and not allowance.affords(cost):
+                    self._events.budget_refused(plan_id, step_id, step.capability.value)
+                    return (
+                        self._response_composer.research_plan_execution_budget_refused(
+                            request,
+                            plan_id,
+                            step.capability.value,
+                            allowance,
+                        )
+                    )
+                return self._response_composer.research_plan_execution_rejected(
+                    request,
+                    "Bounded follow-up source-text allowance is exhausted; "
+                    "no attempt or charge occurred.",
+                )
+            if followup.status in {
+                ResearchMissionFollowupDecisionStatus.BLOCKED_PREDECESSOR,
+                ResearchMissionFollowupDecisionStatus.ALREADY_ATTEMPTED,
+                ResearchMissionFollowupDecisionStatus.COMPLETED,
+            }:
+                return self._response_composer.research_plan_execution_rejected(
+                    request,
+                    self._mission_resolver.followup_refusal(followup.status),
+                )
+        if (
+            step.capability is ResearchPlanStepCapability.SOURCE_REVALIDATION
+            and allowance is None
+        ):
+            return self._response_composer.research_plan_execution_rejected(
+                request,
+                "Source revalidation requires an explicit approved execution "
+                "allowance; it has no separate or implicit budget.",
+            )
         if cost.llm_operations and allowance is None:
             return self._response_composer.research_plan_execution_rejected(
                 request, "Model steps require an explicit approved execution budget."
@@ -1409,44 +1650,69 @@ class ResearchPlanExecutionApplicationService:
             return False
         return True
 
+    def mission_snapshot(self, plan_id: str) -> ResearchPlanExecutionSnapshot | None:
+        """Return one mission's durable-form record, live or restored, read-only.
+
+        A live mission is captured exactly as persistence would capture it; a
+        restored one is its loaded snapshot.  Nothing is written or advanced.
+        """
+        snapshot: ResearchPlanExecutionSnapshot | None = (
+            self._live_snapshot(plan_id, self._clock())
+            if plan_id in self._executions
+            else self._restored.get(plan_id)
+        )
+        if snapshot is None or snapshot.mission_scope is None:
+            return None
+        return snapshot
+
+    def _live_snapshot(
+        self, plan_id: str, recorded_at: datetime
+    ) -> ResearchPlanExecutionSnapshot:
+        state = self._executions[plan_id]
+        plan = self._plans[plan_id]
+        context = self._contexts.get(plan_id, ResearchPlanExecutionContext())
+        mission_scope = None
+        mission_disclosure = ResearchDisclosure.NONE
+        mission_checkpoint = None
+        mission_stop_reason = None
+        scope = plan.mission_scope
+        if (
+            scope is not None
+            and scope.semantic_policy is not None
+            and context.disclosure is scope.semantic_policy.disclosure
+        ):
+            mission_scope = scope
+            mission_disclosure = context.disclosure
+            if self._mission_resolver is not None:
+                mission_checkpoint = self._mission_resolver.checkpoint(plan)
+            mission_stop_reason = self.mission_stop_reason(plan_id)
+        return ResearchPlanExecutionSnapshot.capture(
+            state,
+            plan.question,
+            plan.steps,
+            recorded_at,
+            context.research_run_id,
+            self._allowances.get(plan_id),
+            target_plan_digest=(
+                plan_digest(plan) if plan.target_binding is not None else None
+            ),
+            mission_plan_digest=self._mission_digests.get(plan_id),
+            mission_scope=mission_scope,
+            mission_disclosure=mission_disclosure,
+            mission_checkpoint=mission_checkpoint,
+            mission_request_id=self._mission_request_ids.get(plan_id),
+            mission_stop_reason=mission_stop_reason,
+            revalidation_plan_digest=(
+                plan_digest(plan) if _revalidates(plan) else None
+            ),
+        )
+
     def _snapshots(self) -> list[ResearchPlanExecutionSnapshot]:
         """Capture live executions, keeping restored history alongside them."""
         recorded_at = self._clock()
-        snapshots: list[ResearchPlanExecutionSnapshot] = []
-        for plan_id, state in self._executions.items():
-            plan = self._plans[plan_id]
-            context = self._contexts.get(plan_id, ResearchPlanExecutionContext())
-            mission_scope = None
-            mission_disclosure = ResearchDisclosure.NONE
-            mission_checkpoint = None
-            scope = plan.mission_scope
-            if (
-                scope is not None
-                and scope.semantic_policy is not None
-                and context.disclosure is scope.semantic_policy.disclosure
-            ):
-                mission_scope = scope
-                mission_disclosure = context.disclosure
-                if self._mission_resolver is not None:
-                    mission_checkpoint = self._mission_resolver.checkpoint(plan)
-            snapshots.append(
-                ResearchPlanExecutionSnapshot.capture(
-                    state,
-                    plan.question,
-                    plan.steps,
-                    recorded_at,
-                    context.research_run_id,
-                    self._allowances.get(plan_id),
-                    target_plan_digest=(
-                        plan_digest(plan) if plan.target_binding is not None else None
-                    ),
-                    mission_plan_digest=self._mission_digests.get(plan_id),
-                    mission_scope=mission_scope,
-                    mission_disclosure=mission_disclosure,
-                    mission_checkpoint=mission_checkpoint,
-                    mission_request_id=self._mission_request_ids.get(plan_id),
-                )
-            )
+        snapshots: list[ResearchPlanExecutionSnapshot] = [
+            self._live_snapshot(plan_id, recorded_at) for plan_id in self._executions
+        ]
         snapshots.extend(
             snapshot
             for plan_id, snapshot in self._restored.items()
@@ -1528,3 +1794,11 @@ _CONTINUATION_HALTS = {
     ),
     ResearchPlanExecutionStatus.CANCELLED: (ResearchContinuationStopReason.CANCELLED),
 }
+
+
+def _revalidates(plan: ResearchPlan) -> bool:
+    """Return whether a plan carries explicit source-revalidation authority."""
+    return any(
+        step.capability is ResearchPlanStepCapability.SOURCE_REVALIDATION
+        for step in plan.steps
+    )

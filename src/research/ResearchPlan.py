@@ -81,6 +81,22 @@ class ResearchPlan:
         step_ids = tuple(step.step_id for step in self.steps)
         if len(step_ids) != len(set(step_ids)):
             raise ResearchError("Research plan contains duplicate step IDs.")
+        revalidations = [
+            step.source_revalidation_binding
+            for step in self.steps
+            if step.source_revalidation_binding is not None
+        ]
+        # One approved step per exact prior observation, all against one run:
+        # a resumed step can then recognise only its own recorded result.
+        if (
+            len({binding.prior_observation_id for binding in revalidations})
+            != len(revalidations)
+            or len({binding.research_run_id for binding in revalidations}) > 1
+        ):
+            raise ResearchError(
+                "Research plan revalidation bindings must name distinct prior "
+                "observations in one research run."
+            )
         if (
             not isinstance(self.created_at, datetime)
             or self.created_at.utcoffset() is None

@@ -61,6 +61,10 @@ from research.ResearchKaliOperationPreview import (
     ResearchKaliOperationPreview,
 )
 from research.ResearchKaliRuntimeEnvironment import ResearchKaliRuntimeReadiness
+from research.ResearchMissionAuditExport import (
+    ResearchMissionAuditExportPreview,
+    ResearchMissionAuditExportResult,
+)
 from research.ResearchPairedProviderQualityReport import (
     ResearchPairedProviderQualityReport,
 )
@@ -132,6 +136,9 @@ class BrainResponse:
     )
     knowledge_relation_revocation: KnowledgeRelationRevocation | None = None
     research_runs: list[ResearchRun] = field(default_factory=list)
+    research_recovered_mission_ids: tuple[str, ...] = ()
+    research_recovered_mission_run_ids: tuple[str, ...] = ()
+    research_mission_comparison_note_id: str = ""
     research_claim_preview: ResearchClaimPreview | None = None
     research_claim_write_preview: ResearchClaimWritePreview | None = None
     research_claim_contradiction_preview: ResearchClaimContradictionPreview | None = (
@@ -145,6 +152,10 @@ class BrainResponse:
     ) = None
     research_run_markdown_export_preview: ResearchRunMarkdownExportPreview | None = None
     research_run_markdown_export_result: ResearchRunMarkdownExportResult | None = None
+    research_mission_audit_export_preview: ResearchMissionAuditExportPreview | None = (
+        None
+    )
+    research_mission_audit_export_result: ResearchMissionAuditExportResult | None = None
     research_run_markdown_export_verification: (
         ResearchRunMarkdownExportVerification | None
     ) = None

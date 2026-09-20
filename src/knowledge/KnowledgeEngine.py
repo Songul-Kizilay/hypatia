@@ -86,6 +86,10 @@ class KnowledgeEngine:
         self._graph.clear()
         self._documents.clear()
 
+    def loaded_document(self, document_id: str) -> Document | None:
+        """Return one loaded document by identity, or nothing. Read-only."""
+        return self._documents.get(document_id)
+
     def remove_document(self, document_id: str) -> Document:
         """Remove an unlinked document for a caller-owned transaction rollback."""
         document = self._document_by_id(document_id)

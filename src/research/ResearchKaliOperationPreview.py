@@ -8,6 +8,7 @@ authorization layer must bind before any child process can be considered.
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import json
 import re
 from dataclasses import dataclass, field
@@ -20,7 +21,7 @@ from research.ResearchProgramScopeExecutionPolicy import (
 )
 
 MAX_KALI_OPERATION_HOSTNAME_CHARACTERS = 253
-_KALI_OPERATION_DIGEST_SCHEMA = "hypatia:kali-operation-preview:v1"
+_KALI_OPERATION_DIGEST_SCHEMA = "hypatia:kali-operation-preview:v2"
 _SHA256_HEX_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 
@@ -137,6 +138,7 @@ class ResearchKaliOperationPreview:
     check_class: ResearchProgramScopeCheckClass
     hostname: str
     dns_record_type: ResearchDnsRecordType | None
+    resolved_address: str | None
     permitted_ports: tuple[int, ...]
     max_request_count: int
     max_requests_per_minute: int
@@ -171,6 +173,24 @@ class ResearchKaliOperationPreview:
         elif self.dns_record_type is not None:
             raise ResearchError(
                 "Kali operation preview DNS record type is not applicable."
+            )
+        if self.operation_kind is ResearchKaliOperationKind.HTTPS_HEADER_LOOKUP:
+            if (
+                not isinstance(self.resolved_address, str)
+                or not self.resolved_address.strip()
+            ):
+                raise ResearchError(
+                    "Kali operation preview resolved address is invalid."
+                )
+            try:
+                ipaddress.ip_address(self.resolved_address)
+            except ValueError as error:
+                raise ResearchError(
+                    "Kali operation preview resolved address is invalid."
+                ) from error
+        elif self.resolved_address is not None:
+            raise ResearchError(
+                "Kali operation preview resolved address is not applicable."
             )
         if not isinstance(self.permitted_ports, tuple) or not self.permitted_ports:
             raise ResearchError("Kali operation preview permitted ports are invalid.")
@@ -218,6 +238,7 @@ class ResearchKaliOperationPreview:
                 operation_kind=self.operation_kind,
                 hostname=normalized_hostname,
                 dns_record_type=self.dns_record_type,
+                resolved_address=self.resolved_address,
             ),
         )
         object.__setattr__(
@@ -230,6 +251,7 @@ def kali_operation_command_plan(
     operation_kind: ResearchKaliOperationKind,
     hostname: str,
     dns_record_type: ResearchDnsRecordType | None = None,
+    resolved_address: str | None = None,
 ) -> ResearchKaliOperationCommandPlan:
     """Build the reviewed argv plan for one supported operation."""
     if not isinstance(operation_kind, ResearchKaliOperationKind):
@@ -245,6 +267,10 @@ def kali_operation_command_plan(
         if not isinstance(dns_record_type, ResearchDnsRecordType):
             raise ResearchError(
                 "Kali operation command plan DNS record type is invalid."
+            )
+        if resolved_address is not None:
+            raise ResearchError(
+                "Kali operation command plan resolved address is not applicable."
             )
         return ResearchKaliOperationCommandPlan(
             transport=ResearchKaliCommandTransport.WSL_KALI,
@@ -263,6 +289,21 @@ def kali_operation_command_plan(
             raise ResearchError(
                 "Kali operation command plan DNS record type is not applicable."
             )
+        if not isinstance(resolved_address, str) or not resolved_address.strip():
+            raise ResearchError(
+                "Kali operation command plan resolved address is invalid."
+            )
+        try:
+            parsed_address = ipaddress.ip_address(resolved_address)
+        except ValueError as error:
+            raise ResearchError(
+                "Kali operation command plan resolved address is invalid."
+            ) from error
+        resolve_address = (
+            f"[{parsed_address.compressed}]"
+            if isinstance(parsed_address, ipaddress.IPv6Address)
+            else parsed_address.compressed
+        )
         return ResearchKaliOperationCommandPlan(
             transport=ResearchKaliCommandTransport.WSL_KALI,
             executable_path="/usr/bin/curl",
@@ -275,6 +316,8 @@ def kali_operation_command_plan(
                 "10",
                 "--proto",
                 "=https",
+                "--resolve",
+                f"{normalized_hostname}:443:{resolve_address}",
                 f"https://{normalized_hostname}/",
             ),
         )
@@ -300,6 +343,7 @@ def kali_operation_preview_document(
             if preview.dns_record_type is not None
             else None
         ),
+        "resolved_address": preview.resolved_address,
         "permitted_ports": list(preview.permitted_ports),
         "max_request_count": preview.max_request_count,
         "max_requests_per_minute": preview.max_requests_per_minute,

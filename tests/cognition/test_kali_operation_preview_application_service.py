@@ -155,6 +155,7 @@ class KaliOperationPreviewApplicationServiceTests(unittest.TestCase):
         self.assertIn("argv[0]: /usr/bin/dig", response.message)
         self.assertIn("argv[4]: www.example.test", response.message)
         self.assertNotIn("dig ", response.message)
+        self.assertIn("Network/DNS: not used", response.message)
         self.assertFalse(self.store.save_calls)
         getaddrinfo.assert_not_called()
         run.assert_not_called()
@@ -162,7 +163,10 @@ class KaliOperationPreviewApplicationServiceTests(unittest.TestCase):
 
     def test_https_header_lookup_preview_uses_reviewed_curl_argv(self) -> None:
         with (
-            patch("socket.getaddrinfo") as getaddrinfo,
+            patch(
+                "socket.getaddrinfo",
+                return_value=[(2, 1, 6, "", ("93.184.216.34", 443))],
+            ) as getaddrinfo,
             patch("subprocess.run") as run,
             patch("subprocess.Popen") as popen,
         ):
@@ -185,6 +189,7 @@ class KaliOperationPreviewApplicationServiceTests(unittest.TestCase):
             preview.check_class, ResearchProgramScopeCheckClass.PUBLIC_HTTPS_CONTENT
         )
         self.assertIsNone(preview.dns_record_type)
+        self.assertEqual(preview.resolved_address, "93.184.216.34")
         self.assertEqual(preview.command_plan.executable_path, "/usr/bin/curl")
         self.assertEqual(
             preview.command_plan.argv,
@@ -197,19 +202,135 @@ class KaliOperationPreviewApplicationServiceTests(unittest.TestCase):
                 "10",
                 "--proto",
                 "=https",
+                "--resolve",
+                "www.example.test:443:93.184.216.34",
                 "https://www.example.test/",
             ),
         )
         self.assertIn("Operation: https_header_lookup", response.message)
         self.assertIn("Check class: public_https_content", response.message)
         self.assertIn("DNS record type: not applicable", response.message)
+        self.assertIn("Resolved address: 93.184.216.34", response.message)
+        self.assertIn(
+            "Network/DNS: DNS resolution performed to validate the target address",
+            response.message,
+        )
         self.assertIn("Executable: /usr/bin/curl", response.message)
         self.assertNotIn("curl ", response.message)
         self.assertFalse(preview.command_plan.shell)
         self.assertFalse(self.store.save_calls)
-        getaddrinfo.assert_not_called()
+        getaddrinfo.assert_called_once()
         run.assert_not_called()
         popen.assert_not_called()
+
+    def test_https_header_lookup_refuses_non_global_resolution_before_process(
+        self,
+    ) -> None:
+        with (
+            patch(
+                "socket.getaddrinfo",
+                return_value=[(2, 1, 6, "", ("127.0.0.1", 443))],
+            ),
+            patch("subprocess.run") as run,
+            patch("subprocess.Popen") as popen,
+        ):
+            response = self.service.process_preview(
+                self.request(
+                    kali_operation_kind=(
+                        ResearchKaliOperationKind.HTTPS_HEADER_LOOKUP.value
+                    )
+                )
+            )
+
+        self.assertFalse(response.success)
+        self.assertIsNone(response.kali_operation_preview)
+        self.assertIn("public internet addresses", response.message)
+        run.assert_not_called()
+        popen.assert_not_called()
+
+    def test_https_header_lookup_refuses_a_resolution_mixing_public_and_private(
+        self,
+    ) -> None:
+        with (
+            patch(
+                "socket.getaddrinfo",
+                return_value=[
+                    (2, 1, 6, "", ("93.184.216.34", 443)),
+                    (2, 1, 6, "", ("10.0.0.9", 443)),
+                ],
+            ),
+            patch("subprocess.run") as run,
+            patch("subprocess.Popen") as popen,
+        ):
+            response = self.service.process_preview(
+                self.request(
+                    kali_operation_kind=(
+                        ResearchKaliOperationKind.HTTPS_HEADER_LOOKUP.value
+                    )
+                )
+            )
+
+        self.assertFalse(response.success)
+        self.assertIsNone(response.kali_operation_preview)
+        self.assertIn("public internet addresses", response.message)
+        run.assert_not_called()
+        popen.assert_not_called()
+
+    def test_https_header_lookup_refuses_a_resolution_in_an_excluded_network(
+        self,
+    ) -> None:
+        excluded_revision = ResearchProgramScopeRevision(
+            "scope-revision-excluded",
+            "program-a",
+            ResearchTargetScope(
+                allowed_hosts=(TargetHostRule("example.test", True),),
+                excluded_networks=("1.2.3.0/24",),
+            ),
+            NOW - timedelta(minutes=1),
+            NOW + timedelta(minutes=30),
+            execution_policy=dns_policy(),
+        )
+        scoped_store = FakeProgramScopeRevisionStore([excluded_revision])
+        service = KaliOperationPreviewApplicationService(
+            ResponseComposer(),
+            scoped_store,
+            clock=lambda: NOW,
+        )
+        with (
+            patch(
+                "socket.getaddrinfo",
+                return_value=[(2, 1, 6, "", ("1.2.3.4", 443))],
+            ),
+            patch("subprocess.run") as run,
+            patch("subprocess.Popen") as popen,
+        ):
+            response = service.process_preview(
+                BrainRequest(
+                    message="preview Kali operation",
+                    metadata={
+                        "intent": KALI_OPERATION_PREVIEW_INTENT,
+                        "program_id": "program-a",
+                        "scope_revision_id": excluded_revision.revision_id,
+                        "scope_revision_digest": excluded_revision.revision_digest,
+                        "kali_operation_kind": (
+                            ResearchKaliOperationKind.HTTPS_HEADER_LOOKUP.value
+                        ),
+                        "hostname": "www.example.test",
+                    },
+                )
+            )
+
+        self.assertFalse(response.success)
+        self.assertIsNone(response.kali_operation_preview)
+        self.assertIn("explicitly excluded", response.message)
+        run.assert_not_called()
+        popen.assert_not_called()
+
+    def test_dns_lookup_preview_has_no_resolved_address(self) -> None:
+        response = self.service.process_preview(self.request())
+        preview = response.kali_operation_preview
+        assert preview is not None
+        self.assertIsNone(preview.resolved_address)
 
     def test_preview_document_contains_reviewed_argv_but_no_command_string(
         self,

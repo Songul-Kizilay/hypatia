@@ -63,6 +63,10 @@ class ResearchSourceAcceptanceService:
         source: ResearchSource,
         run_id: str = "",
         attempt_id: str = "",
+        requested_url: str = "",
+        discovery_candidate_id: str = "",
+        revalidation_prior_observation_id: str = "",
+        revalidation_execution_id: str = "",
     ) -> ResearchSourceAcceptanceResult:
         """Run the canonical acceptance transaction for one fetched source.
 
@@ -72,21 +76,67 @@ class ResearchSourceAcceptanceService:
         events = self._events.for_attempt(attempt_id)
         resource = identity_of(source.url)
         source_document = source.to_document()
-        events.index_started(resource, run_id=run_id)
+        # The document is this exact content version, never the URL.  A version
+        # another run already stored is immutable shared storage: it is reused
+        # for this run's own fetch, which still gets its own source record.  It
+        # never stands in for a fetch this run did not perform.
+        manager = self._research_run_manager
+        stored_version = (
+            self._knowledge_engine.loaded_document(source_document.document_id)
+            if run_id and manager is not None
+            else None
+        )
         try:
-            document = self._knowledge_engine.add_document(
-                source_document,
-                stable_chunk_ids=bool(run_id),
+            run_sources = (
+                manager.get(run_id).sources
+                if stored_version is not None and manager is not None
+                else ()
             )
-        except KnowledgeError:
+        except ResearchError:
+            # An unknown run is refused at attachment, as it always was.
+            run_sources = ()
+        revalidating = bool(revalidation_prior_observation_id)
+        if revalidating and not revalidation_execution_id:
+            raise KnowledgeError("Source revalidation requires its execution identity.")
+        if not revalidating and any(
+            record.document_id == source_document.document_id for record in run_sources
+        ):
+            # This run already accepted this exact version: refused before the
+            # run, exactly as indexing refuses a document loaded twice.
+            events.index_started(resource, run_id=run_id)
             events.failed(
                 SourceLoadStage.INDEX_FAILED,
                 IngestionFailureKind.INDEX_FAILED,
                 resource_identity=resource,
                 run_id=run_id,
             )
-            raise
-        events.index_completed(resource, document.document_id, run_id=run_id)
+            raise KnowledgeError("Knowledge document is already loaded.")
+        if stored_version is not None:
+            if (
+                stored_version.content != source_document.content
+                or stored_version.source != source_document.source
+                or stored_version.title != source_document.title
+            ):
+                raise KnowledgeError("Stored content version does not match.")
+            document = stored_version
+            indexed_here = False
+        else:
+            events.index_started(resource, run_id=run_id)
+            try:
+                document = self._knowledge_engine.add_document(
+                    source_document,
+                    stable_chunk_ids=bool(run_id),
+                )
+            except KnowledgeError:
+                events.failed(
+                    SourceLoadStage.INDEX_FAILED,
+                    IngestionFailureKind.INDEX_FAILED,
+                    resource_identity=resource,
+                    run_id=run_id,
+                )
+                raise
+            events.index_completed(resource, document.document_id, run_id=run_id)
+            indexed_here = True
 
         if not run_id or self._research_run_manager is None:
             return ResearchSourceAcceptanceResult(
@@ -98,7 +148,7 @@ class ResearchSourceAcceptanceService:
             )
 
         content_snapshot: list[ResearchSourceContentRecord] | None = None
-        if self._research_source_content_store is not None:
+        if self._research_source_content_store is not None and indexed_here:
             try:
                 content_snapshot = self._research_source_content_store.load()
                 content_record = ResearchSourceContentRecord.from_source(
@@ -134,15 +184,33 @@ class ResearchSourceAcceptanceService:
 
         events.attach_started(resource, document.document_id, run_id)
         try:
-            run = self._research_run_manager.add_source(
-                run_id,
-                source,
-                document.document_id,
-            )
+            if revalidation_prior_observation_id:
+                run, _ = self._research_run_manager.add_revalidated_source(
+                    run_id,
+                    revalidation_prior_observation_id,
+                    source,
+                    document.document_id,
+                    requested_url=requested_url.strip(),
+                    execution_id=revalidation_execution_id,
+                )
+            else:
+                run = self._research_run_manager.add_source(
+                    run_id,
+                    source,
+                    document.document_id,
+                    requested_url=requested_url.strip() or None,
+                    discovery_candidate_id=discovery_candidate_id.strip() or None,
+                )
         except ResearchError:
             return self._failed(
                 events,
-                self._rollback(document.document_id, content_snapshot),
+                (
+                    self._rollback(document.document_id, content_snapshot)
+                    if indexed_here
+                    # Nothing was created here, so nothing shared is removed.
+                    else "Research source audit could not be saved; the shared "
+                    "stored content version was left unchanged."
+                ),
                 SourceLoadStage.RUN_ATTACH_FAILED,
                 IngestionFailureKind.ATTACH_REFUSED,
                 resource,

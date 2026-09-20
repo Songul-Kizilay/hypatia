@@ -74,6 +74,7 @@ class ResearchKaliOperationRun:
     operation_kind: ResearchKaliOperationKind
     command_plan: ResearchKaliOperationCommandPlan
     process_result: ResearchKaliOperationProcessResult
+    resolved_address: str | None = None
     authorization_consumed: bool = True
 
     def __post_init__(self) -> None:
@@ -96,6 +97,16 @@ class ResearchKaliOperationRun:
             raise ResearchError("Kali operation run process result is invalid.")
         if self.process_result.command_plan != self.command_plan:
             raise ResearchError("Kali operation run result used a different command.")
+        if self.operation_kind is ResearchKaliOperationKind.HTTPS_HEADER_LOOKUP:
+            if (
+                not isinstance(self.resolved_address, str)
+                or not self.resolved_address.strip()
+            ):
+                raise ResearchError("Kali operation run resolved address is invalid.")
+        elif self.resolved_address is not None:
+            raise ResearchError(
+                "Kali operation run resolved address is not applicable."
+            )
         if self.authorization_consumed is not True:
             raise ResearchError("Kali operation run requires consumed authorization.")
 

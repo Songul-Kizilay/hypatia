@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 import re
 import stat
-import tempfile
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from hashlib import sha256
@@ -33,8 +32,15 @@ from research.ResearchClaimRecord import (
     ResearchClaimRecord,
 )
 from research.ResearchClaimWritePreview import ResearchClaimWritePreview
+from research.ResearchComparisonReviewRecord import (
+    MAX_COMPARISON_REVIEW_NOTE_CHARACTERS,
+    ResearchComparisonReviewDecision,
+    ResearchComparisonReviewRecord,
+    current_comparison_review,
+)
 from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
+from research.ResearchExportPublisher import publish_new_export_file
 from research.ResearchFailureRecord import ResearchFailureRecord
 from research.ResearchInformationTrust import ResearchInformationTrust
 from research.ResearchRun import ResearchRun
@@ -93,7 +99,17 @@ from research.ResearchSourceDiscoveryRecord import ResearchSourceDiscoveryRecord
 from research.ResearchSourceIndependence import ResearchSourceIndependence
 from research.ResearchSourcePublicationStatus import ResearchSourcePublicationStatus
 from research.ResearchSourceRecord import ResearchSourceRecord
+from research.ResearchSourceRevalidationOutcome import ResearchSourceRevalidationOutcome
+from research.ResearchSourceRevalidationRecord import (
+    ResearchSourceRevalidationInspection,
+    ResearchSourceRevalidationRecord,
+)
+from research.ResearchSourceTemporalHistory import (
+    ResearchSourceTemporalHistory,
+    temporal_history_for,
+)
 from research.ResearchSourceUsefulness import ResearchSourceUsefulness
+from research.SourceIdentity import same_resource
 
 
 class ResearchRunManager:
@@ -105,6 +121,8 @@ class ResearchRunManager:
         *,
         clock: Callable[[], datetime] | None = None,
         id_factory: Callable[[], str] | None = None,
+        observation_id_factory: Callable[[], str] | None = None,
+        revalidation_id_factory: Callable[[], str] | None = None,
         evidence_id_factory: Callable[[], str] | None = None,
         discovery_id_factory: Callable[[], str] | None = None,
         assessment_id_factory: Callable[[], str] | None = None,
@@ -115,6 +133,10 @@ class ResearchRunManager:
         self._store = store
         self._clock = clock or (lambda: datetime.now(UTC))
         self._id_factory = id_factory or (lambda: str(uuid4()))
+        self._observation_id_factory = observation_id_factory or (lambda: str(uuid4()))
+        self._revalidation_id_factory = revalidation_id_factory or (
+            lambda: str(uuid4())
+        )
         self._evidence_id_factory = evidence_id_factory or (lambda: str(uuid4()))
         self._discovery_id_factory = discovery_id_factory or (lambda: str(uuid4()))
         self._assessment_id_factory = assessment_id_factory or (lambda: str(uuid4()))
@@ -126,6 +148,7 @@ class ResearchRunManager:
             lambda: str(uuid4())
         )
         self._runs: tuple[ResearchRun, ...] = ()
+        self._source_revalidations: tuple[ResearchSourceRevalidationRecord, ...] = ()
         self._lock = RLock()
 
     def load(self) -> None:
@@ -133,8 +156,13 @@ class ResearchRunManager:
         if self._store is None:
             return
         runs = self._store.load()
+        load_revalidations = getattr(self._store, "load_source_revalidations", None)
+        source_revalidations = (
+            load_revalidations() if load_revalidations is not None else []
+        )
         with self._lock:
             self._runs = tuple(runs)
+            self._source_revalidations = tuple(source_revalidations)
 
     def create(self, question: str) -> ResearchRun:
         """Create a collecting run for one explicit research question."""
@@ -154,6 +182,7 @@ class ResearchRunManager:
                 comparison_notes=(),
                 claims=(),
                 claim_contradictions=(),
+                comparison_reviews=(),
             )
             candidate = (*self._runs, run)
             self._persist(candidate)
@@ -164,6 +193,143 @@ class ResearchRunManager:
         """Return runs in deterministic creation order."""
         with self._lock:
             return list(self._runs)
+
+    def source_revalidations(self) -> Sequence[ResearchSourceRevalidationInspection]:
+        """Inspect persisted revalidation provenance without causing work."""
+        with self._lock:
+            return [
+                self._inspect_source_revalidation(record)
+                for record in self._source_revalidations
+            ]
+
+    def temporal_history(
+        self, requested_url: str, *, run_id: str | None = None
+    ) -> ResearchSourceTemporalHistory:
+        """Derive one resource's recorded history without writing or fetching."""
+        with self._lock:
+            normalized_run_id = (
+                self._normalize_run_id(run_id) if run_id is not None else None
+            )
+            matching_sources = [
+                source
+                for run in self._runs
+                for source in run.sources
+                if normalized_run_id is None or run.run_id == normalized_run_id
+                if source.requested_url is not None
+                and same_resource(source.requested_url, requested_url)
+            ]
+            observations = [
+                (run.run_id, source.observation_id, source.fetched_at)
+                for run in self._runs
+                for source in run.sources
+                if normalized_run_id is None or run.run_id == normalized_run_id
+                if source.observation_id is not None
+                and source.requested_url is not None
+                and same_resource(source.requested_url, requested_url)
+            ]
+            incomplete_limitations = (
+                ("canonical_observation_identity_unrecorded",)
+                if any(source.observation_id is None for source in matching_sources)
+                else ()
+            )
+            keys = {
+                (run_id, observation_id) for run_id, observation_id, _ in observations
+            }
+            relations = [
+                (
+                    record.revalidation_id,
+                    record.earlier_run_id,
+                    record.earlier_observation_id,
+                    record.later_run_id,
+                    record.later_observation_id,
+                    record.outcome,
+                )
+                for record in self._source_revalidations
+                if (record.earlier_run_id, record.earlier_observation_id) in keys
+                and (record.later_run_id, record.later_observation_id) in keys
+            ]
+        return temporal_history_for(
+            requested_url,
+            observations=tuple(observations),
+            relations=tuple(relations),
+            incomplete_limitations=incomplete_limitations,
+        )
+
+    def record_source_revalidation(
+        self,
+        earlier_run_id: str,
+        earlier_observation_id: str,
+        later_run_id: str,
+        later_observation_id: str,
+    ) -> ResearchSourceRevalidationRecord:
+        """Add one explicit, directional, content-equality provenance record."""
+        with self._lock:
+            earlier_run, earlier = self._source_observation(
+                earlier_run_id, earlier_observation_id
+            )
+            later_run, later = self._source_observation(
+                later_run_id, later_observation_id
+            )
+            if earlier.observation_id is None or later.observation_id is None:
+                raise ResearchError(
+                    "Source revalidation requires recorded observation identities."
+                )
+            if (
+                earlier_run.run_id == later_run.run_id
+                and earlier.observation_id == later.observation_id
+            ):
+                raise ResearchError("A source observation cannot revalidate itself.")
+            if (
+                earlier.requested_url is None
+                or later.requested_url is None
+                or not same_resource(earlier.requested_url, later.requested_url)
+            ):
+                raise ResearchError(
+                    "Source revalidation requires matching recorded requested URLs."
+                )
+            if earlier.content_sha256 is None or later.content_sha256 is None:
+                raise ResearchError(
+                    "Source revalidation requires recorded content versions."
+                )
+            if earlier.fetched_at >= later.fetched_at:
+                raise ResearchError(
+                    "Source revalidation requires an unambiguous earlier observation."
+                )
+            pair = (
+                earlier_run.run_id,
+                earlier.observation_id,
+                later_run.run_id,
+                later.observation_id,
+            )
+            if any(
+                (
+                    record.earlier_run_id,
+                    record.earlier_observation_id,
+                    record.later_run_id,
+                    record.later_observation_id,
+                )
+                == pair
+                for record in self._source_revalidations
+            ):
+                raise ResearchError("Source revalidation relation already exists.")
+            outcome = (
+                ResearchSourceRevalidationOutcome.CONTENT_UNCHANGED
+                if earlier.content_sha256 == later.content_sha256
+                else ResearchSourceRevalidationOutcome.CONTENT_CHANGED
+            )
+            record = ResearchSourceRevalidationRecord(
+                revalidation_id=self._new_revalidation_id(),
+                earlier_run_id=earlier_run.run_id,
+                earlier_observation_id=earlier.observation_id,
+                later_run_id=later_run.run_id,
+                later_observation_id=later.observation_id,
+                outcome=outcome,
+                recorded_at=self._now(),
+            )
+            candidate = (*self._source_revalidations, record)
+            self._persist(self._runs, candidate)
+            self._source_revalidations = candidate
+            return record
 
     def get(self, run_id: str) -> ResearchRun:
         """Return one run or raise a controlled unknown-run error."""
@@ -335,6 +501,8 @@ class ResearchRunManager:
         run_id: str,
         source: ResearchSource,
         document_id: str,
+        requested_url: str | None = None,
+        discovery_candidate_id: str | None = None,
     ) -> ResearchRun:
         """Persist source provenance after successful local knowledge indexing."""
         normalized_id = self._normalize_run_id(run_id)
@@ -357,6 +525,9 @@ class ResearchRunManager:
                         source,
                         normalized_document_id,
                         now,
+                        requested_url=requested_url,
+                        discovery_candidate_id=discovery_candidate_id,
+                        observation_id=self._new_observation_id(run),
                     ),
                 ),
                 failures=run.failures,
@@ -368,6 +539,7 @@ class ResearchRunManager:
                 comparison_notes=run.comparison_notes,
                 claims=run.claims,
                 claim_contradictions=run.claim_contradictions,
+                comparison_reviews=run.comparison_reviews,
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -375,6 +547,171 @@ class ResearchRunManager:
             self._persist(candidate_tuple)
             self._runs = candidate_tuple
         return updated
+
+    def add_revalidated_source(
+        self,
+        run_id: str,
+        prior_observation_id: str,
+        source: ResearchSource,
+        document_id: str,
+        *,
+        requested_url: str,
+        execution_id: str,
+    ) -> tuple[ResearchRun, ResearchSourceRevalidationRecord]:
+        """Atomically add one later observation and its explicit relation.
+
+        This is deliberately narrower than ``add_source``: it accepts no
+        cross-run prior identity and no caller-selected relation outcome.  The
+        same durable write commits the normal source observation, its
+        revalidation provenance and the hash-derived temporal edge, so a
+        process cannot leave an accepted revalidation observation that would
+        invite a second fetch merely because relation recording was interrupted
+        afterwards.  The later observation may carry the prior's content
+        version: identical content re-observed is a new observation.
+        """
+        normalized_id = self._normalize_run_id(run_id)
+        normalized_prior_id = self._normalize_observation_id(prior_observation_id)
+        normalized_document_id = self._normalize_document_id(document_id)
+        if not isinstance(requested_url, str) or not requested_url.strip():
+            raise ResearchError("Revalidation requires a recorded requested URL.")
+        normalized_requested_url = requested_url.strip()
+        if (
+            not isinstance(execution_id, str)
+            or not execution_id.strip()
+            or len(execution_id.strip()) > 200
+        ):
+            raise ResearchError("Revalidation requires its execution identity.")
+        normalized_execution_id = execution_id.strip()
+        with self._lock:
+            index, run = self._find_with_index(normalized_id)
+            self._require_collecting(run)
+            prior = next(
+                (
+                    item
+                    for item in run.sources
+                    if item.observation_id == normalized_prior_id
+                ),
+                None,
+            )
+            if (
+                prior is None
+                or prior.requested_url is None
+                or prior.content_sha256 is None
+                or prior.requested_url != normalized_requested_url
+            ):
+                raise ResearchError(
+                    "Revalidation prior observation no longer matches its binding."
+                )
+            prior_id = prior.observation_id
+            if prior_id is None:
+                raise ResearchError(
+                    "Revalidation prior observation identity is unavailable."
+                )
+            if any(
+                record.revalidation_of_observation_id == prior_id
+                for record in run.sources
+            ):
+                raise ResearchError("Source revalidation was already recorded.")
+            now = self._now()
+            later = ResearchSourceRecord.from_source(
+                source,
+                normalized_document_id,
+                now,
+                requested_url=normalized_requested_url,
+                observation_id=self._new_observation_id(run),
+                revalidation_of_observation_id=prior_id,
+                revalidation_execution_id=normalized_execution_id,
+            )
+            if later.observation_id is None or later.content_sha256 is None:
+                raise ResearchError("Revalidation observation identity is unavailable.")
+            if prior.fetched_at >= later.fetched_at:
+                raise ResearchError(
+                    "Revalidation requires an unambiguous later observation."
+                )
+            if any(
+                record.earlier_run_id == run.run_id
+                and record.earlier_observation_id == prior_id
+                and record.later_run_id == run.run_id
+                for record in self._source_revalidations
+            ):
+                raise ResearchError("Source revalidation was already recorded.")
+            updated = ResearchRun(
+                run_id=run.run_id,
+                question=run.question,
+                status=run.status,
+                sources=(*run.sources, later),
+                failures=run.failures,
+                created_at=run.created_at,
+                updated_at=now,
+                evidence=run.evidence,
+                discoveries=run.discoveries,
+                assessments=run.assessments,
+                comparison_notes=run.comparison_notes,
+                claims=run.claims,
+                claim_contradictions=run.claim_contradictions,
+                comparison_reviews=run.comparison_reviews,
+            )
+            outcome = (
+                ResearchSourceRevalidationOutcome.CONTENT_UNCHANGED
+                if prior.content_sha256 == later.content_sha256
+                else ResearchSourceRevalidationOutcome.CONTENT_CHANGED
+            )
+            relation = ResearchSourceRevalidationRecord(
+                revalidation_id=self._new_revalidation_id(),
+                earlier_run_id=run.run_id,
+                earlier_observation_id=prior_id,
+                later_run_id=run.run_id,
+                later_observation_id=later.observation_id,
+                outcome=outcome,
+                recorded_at=now,
+            )
+            candidate_runs = list(self._runs)
+            candidate_runs[index] = updated
+            candidate_tuple = tuple(candidate_runs)
+            candidate_relations = (*self._source_revalidations, relation)
+            self._persist(candidate_tuple, candidate_relations)
+            self._runs = candidate_tuple
+            self._source_revalidations = candidate_relations
+            return updated, relation
+
+    def recorded_revalidation(
+        self, run_id: str, prior_observation_id: str
+    ) -> tuple[ResearchSourceRecord, ResearchSourceRevalidationRecord] | None:
+        """Return the durable same-run revalidation of one prior, if any.
+
+        Read-only.  At most one exists per prior observation per run, so a
+        resumed step can find its own committed result instead of fetching.
+        """
+        normalized_id = self._normalize_run_id(run_id)
+        normalized_prior_id = self._normalize_observation_id(prior_observation_id)
+        with self._lock:
+            _, run = self._find_with_index(normalized_id)
+            later = next(
+                (
+                    source
+                    for source in run.sources
+                    if source.revalidation_of_observation_id == normalized_prior_id
+                ),
+                None,
+            )
+            if later is None:
+                return None
+            relation = next(
+                (
+                    record
+                    for record in self._source_revalidations
+                    if record.earlier_run_id == run.run_id
+                    and record.earlier_observation_id == normalized_prior_id
+                    and record.later_run_id == run.run_id
+                    and record.later_observation_id == later.observation_id
+                ),
+                None,
+            )
+            if relation is None:
+                raise ResearchError(
+                    "Research source revalidation observation lacks its relation."
+                )
+            return later, relation
 
     def record_failure(
         self,
@@ -407,6 +744,7 @@ class ResearchRunManager:
                 comparison_notes=run.comparison_notes,
                 claims=run.claims,
                 claim_contradictions=run.claim_contradictions,
+                comparison_reviews=run.comparison_reviews,
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -430,6 +768,10 @@ class ResearchRunManager:
                 raise ResearchError(
                     "Research evidence must come from a source attached to this run."
                 )
+            self._refuse_duplicate(
+                "evidence",
+                self._identical_evidence(run, chunk, normalized_note),
+            )
             now = self._now()
             evidence = ResearchEvidenceRecord.from_chunk(
                 self._new_evidence_id(),
@@ -451,6 +793,7 @@ class ResearchRunManager:
                 comparison_notes=run.comparison_notes,
                 claims=run.claims,
                 claim_contradictions=run.claim_contradictions,
+                comparison_reviews=run.comparison_reviews,
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -494,6 +837,7 @@ class ResearchRunManager:
                 provider=normalized_provider,
                 candidates=candidate_tuple,
                 discovered_at=now,
+                candidate_ids=tuple(self._new_candidate_id() for _ in candidate_tuple),
             )
             updated = ResearchRun(
                 run_id=run.run_id,
@@ -509,6 +853,7 @@ class ResearchRunManager:
                 comparison_notes=run.comparison_notes,
                 claims=run.claims,
                 claim_contradictions=run.claim_contradictions,
+                comparison_reviews=run.comparison_reviews,
             )
             candidate_runs = list(self._runs)
             candidate_runs[index] = updated
@@ -574,6 +919,7 @@ class ResearchRunManager:
                 candidate,
                 True,
                 _acceptance_disclosure(candidate),
+                candidate_id=discovery.candidate_id_of(candidate),
             )
 
     def preview_source_assessment(
@@ -637,7 +983,11 @@ class ResearchRunManager:
         normalized_document_ids = self._normalize_comparison_document_ids(document_ids)
         with self._lock:
             _, run = self._find_with_index(normalized_run_id)
-            sources_by_id = {source.document_id: source for source in run.sources}
+            sources_by_id = {
+                document_id: source
+                for document_id in dict.fromkeys(s.document_id for s in run.sources)
+                if (source := run.source_for_document(document_id)) is not None
+            }
             if any(
                 document_id not in sources_by_id
                 for document_id in normalized_document_ids
@@ -768,19 +1118,35 @@ class ResearchRunManager:
                 source.document_id,
                 normalized_superseded_id,
             )
-            allowed = not run.status.terminal
-            reason = (
-                (
-                    "Research source assessment correction can be recorded after "
-                    "confirmation."
-                    if superseded_assessment is not None
-                    else (
-                        "Research source assessment can be recorded after "
-                        "confirmation."
-                    )
+            duplicate = (
+                None
+                if superseded_assessment is not None
+                else self._identical_assessment(
+                    run,
+                    source.document_id,
+                    tuple(record.evidence_id for record in evidence),
+                    normalized_text,
+                    normalized_information_trust,
+                    normalized_judgement,
                 )
-                if allowed
-                else "A closed research run cannot accept new assessments."
+            )
+            allowed = not run.status.terminal and duplicate is None
+            reason = (
+                self._duplicate_reason("assessment", duplicate)
+                if duplicate is not None
+                else (
+                    (
+                        "Research source assessment correction can be recorded after "
+                        "confirmation."
+                        if superseded_assessment is not None
+                        else (
+                            "Research source assessment can be recorded after "
+                            "confirmation."
+                        )
+                    )
+                    if allowed
+                    else "A closed research run cannot accept new assessments."
+                )
             )
             return ResearchSourceAssessmentWritePreview(
                 run_id=run.run_id,
@@ -826,15 +1192,30 @@ class ResearchRunManager:
                 run,
                 normalized_superseded_id,
             )
-            allowed = not run.status.terminal
-            reason = (
-                (
-                    "Research claim correction can be recorded after confirmation."
-                    if superseded_claim is not None
-                    else "Research claim can be recorded after confirmation."
+            duplicate_claim = (
+                None
+                if superseded_claim is not None
+                else self._identical_claim(
+                    run,
+                    tuple(record.evidence_id for record in evidence),
+                    normalized_text,
+                    normalized_state,
+                    normalized_confidence,
                 )
-                if allowed
-                else "A closed research run cannot accept new claims."
+            )
+            allowed = not run.status.terminal and duplicate_claim is None
+            reason = (
+                self._duplicate_reason("claim", duplicate_claim)
+                if duplicate_claim is not None
+                else (
+                    (
+                        "Research claim correction can be recorded after confirmation."
+                        if superseded_claim is not None
+                        else "Research claim can be recorded after confirmation."
+                    )
+                    if allowed
+                    else "A closed research run cannot accept new claims."
+                )
             )
             return ResearchClaimWritePreview(
                 run_id=run.run_id,
@@ -877,6 +1258,17 @@ class ResearchRunManager:
                 run,
                 normalized_superseded_id,
             )
+            if superseded_claim is None:
+                self._refuse_duplicate(
+                    "claim",
+                    self._identical_claim(
+                        run,
+                        tuple(record.evidence_id for record in evidence),
+                        normalized_text,
+                        normalized_state,
+                        normalized_confidence,
+                    ),
+                )
             self._require_collecting(run)
             now = self._now()
             claim = ResearchClaimRecord(
@@ -905,6 +1297,7 @@ class ResearchRunManager:
                 comparison_notes=run.comparison_notes,
                 claims=(*run.claims, claim),
                 claim_contradictions=run.claim_contradictions,
+                comparison_reviews=run.comparison_reviews,
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -995,6 +1388,7 @@ class ResearchRunManager:
                 comparison_notes=run.comparison_notes,
                 claims=run.claims,
                 claim_contradictions=(*run.claim_contradictions, contradiction),
+                comparison_reviews=run.comparison_reviews,
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -1002,6 +1396,107 @@ class ResearchRunManager:
             self._persist(candidate_tuple)
             self._runs = candidate_tuple
         return updated
+
+    def record_comparison_review(
+        self,
+        run_id: str,
+        note_id: str,
+        decision: ResearchComparisonReviewDecision | str,
+        note: str,
+        supersedes_review_id: str | None = None,
+    ) -> ResearchRun:
+        """Revalidate and append one operator review of one exact comparison note.
+
+        The review copies the note's evidence identities.  A note that already
+        has a current review can only be reviewed again by superseding exactly
+        that review, so a stale operator view cannot overwrite a newer decision
+        and support can be withdrawn without deleting history.
+        """
+        normalized_run_id = self._normalize_run_id(run_id)
+        if not isinstance(note_id, str) or not note_id.strip():
+            raise ResearchError("Research comparison review note ID cannot be empty.")
+        normalized_note_id = note_id.strip()
+        try:
+            normalized_decision = ResearchComparisonReviewDecision(
+                decision.strip() if isinstance(decision, str) else decision
+            )
+        except (TypeError, ValueError) as error:
+            raise ResearchError(
+                "Research comparison review decision is invalid."
+            ) from error
+        if not isinstance(note, str) or not note.strip():
+            raise ResearchError("Research comparison review note cannot be empty.")
+        normalized_note = note.strip()
+        if len(normalized_note) > MAX_COMPARISON_REVIEW_NOTE_CHARACTERS:
+            raise ResearchError("Research comparison review note is too long.")
+        if supersedes_review_id is not None and not isinstance(
+            supersedes_review_id, str
+        ):
+            raise ResearchError("Superseded comparison review ID is invalid.")
+        normalized_superseded = (supersedes_review_id or "").strip() or None
+        with self._lock:
+            index, run = self._find_with_index(normalized_run_id)
+            target = next(
+                (
+                    value
+                    for value in run.comparison_notes
+                    if value.note_id == normalized_note_id
+                ),
+                None,
+            )
+            if target is None:
+                raise ResearchError(
+                    "Research comparison note was not found in this run."
+                )
+            current = current_comparison_review(run.comparison_reviews, target.note_id)
+            if (current.review_id if current else None) != normalized_superseded:
+                raise ResearchError(
+                    "A comparison review must supersede exactly the current review "
+                    "of its note."
+                )
+            self._require_collecting(run)
+            now = self._now()
+            review = ResearchComparisonReviewRecord(
+                review_id=self._new_comparison_review_id(),
+                note_id=target.note_id,
+                evidence_ids=target.evidence_ids,
+                decision=normalized_decision,
+                note=normalized_note,
+                recorded_at=now,
+                supersedes_review_id=normalized_superseded,
+            )
+            updated = ResearchRun(
+                run_id=run.run_id,
+                question=run.question,
+                status=run.status,
+                sources=run.sources,
+                failures=run.failures,
+                created_at=run.created_at,
+                updated_at=now,
+                evidence=run.evidence,
+                discoveries=run.discoveries,
+                assessments=run.assessments,
+                comparison_notes=run.comparison_notes,
+                claims=run.claims,
+                claim_contradictions=run.claim_contradictions,
+                comparison_reviews=(*run.comparison_reviews, review),
+            )
+            candidate = list(self._runs)
+            candidate[index] = updated
+            candidate_tuple = tuple(candidate)
+            self._persist(candidate_tuple)
+            self._runs = candidate_tuple
+        return updated
+
+    def _new_comparison_review_id(self) -> str:
+        review_id = str(uuid4())
+        if any(
+            record.review_id == review_id
+            for run in self._runs
+            for record in run.comparison_reviews
+        ):
+            raise ResearchError("Research comparison review ID already exists.")
+        return review_id
 
     def record_source_assessment(
         self,
@@ -1053,6 +1548,18 @@ class ResearchRunManager:
                 source.document_id,
                 normalized_superseded_id,
             )
+            if superseded_assessment is None:
+                self._refuse_duplicate(
+                    "assessment",
+                    self._identical_assessment(
+                        run,
+                        source.document_id,
+                        tuple(record.evidence_id for record in evidence),
+                        normalized_text,
+                        normalized_information_trust,
+                        normalized_judgement,
+                    ),
+                )
             self._require_collecting(run)
             now = self._now()
             assessment = ResearchSourceAssessmentRecord(
@@ -1086,6 +1593,7 @@ class ResearchRunManager:
                 comparison_notes=run.comparison_notes,
                 claims=run.claims,
                 claim_contradictions=run.claim_contradictions,
+                comparison_reviews=run.comparison_reviews,
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -1124,7 +1632,14 @@ class ResearchRunManager:
                 normalized_evidence_ids,
                 normalized_assessment_ids,
             )
-            allowed = not run.status.terminal
+            duplicate = self._identical_comparison_note(
+                run,
+                normalized_document_ids,
+                tuple(record.evidence_id for record in evidence),
+                tuple(record.assessment_id for record in assessments),
+                normalized_text,
+            )
+            allowed = not run.status.terminal and duplicate is None
             return ResearchSourceComparisonNoteWritePreview(
                 comparison=comparison,
                 evidence=evidence,
@@ -1132,9 +1647,13 @@ class ResearchRunManager:
                 text=normalized_text,
                 allowed=allowed,
                 reason=(
-                    "Research comparison note can be recorded after confirmation."
-                    if allowed
-                    else "A closed research run cannot accept comparison notes."
+                    self._duplicate_reason("comparison note", duplicate)
+                    if duplicate is not None
+                    else (
+                        "Research comparison note can be recorded after confirmation."
+                        if allowed
+                        else "A closed research run cannot accept comparison notes."
+                    )
                 ),
             )
 
@@ -1168,6 +1687,16 @@ class ResearchRunManager:
                 normalized_evidence_ids,
                 normalized_assessment_ids,
             )
+            self._refuse_duplicate(
+                "comparison note",
+                self._identical_comparison_note(
+                    run,
+                    normalized_document_ids,
+                    tuple(record.evidence_id for record in evidence),
+                    tuple(record.assessment_id for record in assessments),
+                    normalized_text,
+                ),
+            )
             self._require_collecting(run)
             now = self._now()
             note = ResearchSourceComparisonNoteRecord(
@@ -1192,6 +1721,7 @@ class ResearchRunManager:
                 comparison_notes=(*run.comparison_notes, note),
                 claims=run.claims,
                 claim_contradictions=run.claim_contradictions,
+                comparison_reviews=run.comparison_reviews,
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -1229,6 +1759,7 @@ class ResearchRunManager:
                 comparison_notes=run.comparison_notes,
                 claims=run.claims,
                 claim_contradictions=run.claim_contradictions,
+                comparison_reviews=run.comparison_reviews,
             )
             candidate = list(self._runs)
             candidate[index] = updated
@@ -1301,9 +1832,30 @@ class ResearchRunManager:
                 return index, run
         raise ResearchError(f"Research run was not found: {run_id}")
 
-    def _persist(self, runs: tuple[ResearchRun, ...]) -> None:
+    def _persist(
+        self,
+        runs: tuple[ResearchRun, ...],
+        source_revalidations: (
+            tuple[ResearchSourceRevalidationRecord, ...] | None
+        ) = None,
+    ) -> None:
         if self._store is not None:
-            self._store.save(list(runs))
+            records = (
+                self._source_revalidations
+                if source_revalidations is None
+                else source_revalidations
+            )
+            save_with_revalidations = getattr(
+                self._store, "save_with_source_revalidations", None
+            )
+            if save_with_revalidations is None:
+                if records:
+                    raise ResearchError(
+                        "Research run store cannot persist source revalidations."
+                    )
+                self._store.save(list(runs))
+                return
+            save_with_revalidations(list(runs), list(records))
 
     def _now(self) -> datetime:
         now = self._clock()
@@ -1317,6 +1869,58 @@ class ResearchRunManager:
             raise ResearchError("Research run ID already exists.")
         return run_id
 
+    def _new_observation_id(self, run: ResearchRun) -> str:
+        """Create an ID unique only among this run's source observations."""
+        observation_id = self._normalize_observation_id(self._observation_id_factory())
+        if any(source.observation_id == observation_id for source in run.sources):
+            raise ResearchError(
+                "Research source observation ID already exists in this run."
+            )
+        return observation_id
+
+    def _new_revalidation_id(self) -> str:
+        revalidation_id = self._normalize_revalidation_id(
+            self._revalidation_id_factory()
+        )
+        if any(
+            record.revalidation_id == revalidation_id
+            for record in self._source_revalidations
+        ):
+            raise ResearchError("Research source revalidation ID already exists.")
+        return revalidation_id
+
+    def _source_observation(
+        self,
+        run_id: str,
+        observation_id: str,
+    ) -> tuple[ResearchRun, ResearchSourceRecord]:
+        run = self.get(run_id)
+        normalized_observation_id = self._normalize_observation_id(observation_id)
+        source = next(
+            (
+                candidate
+                for candidate in run.sources
+                if candidate.observation_id == normalized_observation_id
+            ),
+            None,
+        )
+        if source is None:
+            raise ResearchError("Research source observation was not found.")
+        return run, source
+
+    def _inspect_source_revalidation(
+        self,
+        record: ResearchSourceRevalidationRecord,
+    ) -> ResearchSourceRevalidationInspection:
+        earlier_run, earlier = self._source_observation(
+            record.earlier_run_id, record.earlier_observation_id
+        )
+        later_run, later = self._source_observation(
+            record.later_run_id, record.later_observation_id
+        )
+        del earlier_run, later_run
+        return ResearchSourceRevalidationInspection(record, earlier, later)
+
     def _new_evidence_id(self) -> str:
         evidence_id = self._normalize_evidence_id(self._evidence_id_factory())
         if any(
@@ -1326,6 +1930,16 @@ class ResearchRunManager:
         ):
             raise ResearchError("Research evidence ID already exists.")
         return evidence_id
+
+    def _new_candidate_id(self) -> str:
+        candidate_id = str(uuid4())
+        if any(
+            candidate_id in record.candidate_ids
+            for run in self._runs
+            for record in run.discoveries
+        ):
+            raise ResearchError("Research source candidate ID already exists.")
+        return candidate_id
 
     def _new_discovery_id(self) -> str:
         discovery_id = self._normalize_discovery_id(self._discovery_id_factory())
@@ -1508,7 +2122,11 @@ class ResearchRunManager:
         source_ids = tuple(
             dict.fromkeys(record.source_document_id for record in evidence)
         )
-        sources_by_id = {record.document_id: record for record in run.sources}
+        sources_by_id = {
+            document_id: record
+            for document_id in dict.fromkeys(s.document_id for s in run.sources)
+            if (record := run.source_for_document(document_id)) is not None
+        }
         try:
             sources = tuple(sources_by_id[source_id] for source_id in source_ids)
         except KeyError as error:
@@ -1584,6 +2202,120 @@ class ResearchRunManager:
         if len(normalized) > 2_000:
             raise ResearchError("Research question is too long.")
         return normalized
+
+    @staticmethod
+    def _duplicate_reason(label: str, record: object) -> str:
+        identity = next(
+            getattr(record, name)
+            for name in ("evidence_id", "assessment_id", "claim_id", "note_id")
+            if hasattr(record, name)
+        )
+        return (
+            f"This exact {label} is already recorded as {identity} in this run; "
+            "it was not recorded again."
+        )
+
+    @classmethod
+    def _refuse_duplicate(cls, label: str, record: object | None) -> None:
+        """Refuse an exact repeat of an existing first record, naming it.
+
+        Recording one observation twice would count it twice, whether the
+        repeat comes from a retried plan step or a re-confirmed manual entry.
+        """
+        if record is not None:
+            raise ResearchError(cls._duplicate_reason(label, record))
+
+    @staticmethod
+    def _identical_evidence(
+        run: ResearchRun, chunk: Chunk, note: str
+    ) -> ResearchEvidenceRecord | None:
+        chunk_sha256 = sha256(chunk.content.strip().encode("utf-8")).hexdigest()
+        return next(
+            (
+                record
+                for record in run.evidence
+                if record.source_document_id == chunk.document_id
+                and record.chunk_index == chunk.index
+                and record.chunk_sha256 == chunk_sha256
+                and record.note == note
+            ),
+            None,
+        )
+
+    @staticmethod
+    def _identical_assessment(
+        run: ResearchRun,
+        document_id: str,
+        evidence_ids: tuple[str, ...],
+        text: str,
+        information_trust: ResearchInformationTrust,
+        judgement: tuple[
+            ResearchSourceUsefulness,
+            ResearchSourceApplicability,
+            ResearchSourceIndependence,
+            ResearchSourcePublicationStatus,
+        ],
+    ) -> ResearchSourceAssessmentRecord | None:
+        return next(
+            (
+                record
+                for record in run.assessments
+                if record.supersedes_assessment_id is None
+                and record.source_document_id == document_id
+                and set(record.evidence_ids) == set(evidence_ids)
+                and record.text == text
+                and record.information_trust is information_trust
+                and (
+                    record.usefulness,
+                    record.applicability,
+                    record.independence,
+                    record.publication_status,
+                )
+                == judgement
+            ),
+            None,
+        )
+
+    @staticmethod
+    def _identical_claim(
+        run: ResearchRun,
+        evidence_ids: tuple[str, ...],
+        text: str,
+        epistemic_state: ResearchEpistemicState,
+        confidence: ResearchClaimConfidence,
+    ) -> ResearchClaimRecord | None:
+        return next(
+            (
+                record
+                for record in run.claims
+                if record.supersedes_claim_id is None
+                and set(record.evidence_ids) == set(evidence_ids)
+                and record.text == text
+                and record.epistemic_state is epistemic_state
+                and record.confidence is confidence
+            ),
+            None,
+        )
+
+    @staticmethod
+    def _identical_comparison_note(
+        run: ResearchRun,
+        document_ids: tuple[str, ...],
+        evidence_ids: tuple[str, ...],
+        assessment_ids: tuple[str, ...],
+        text: str,
+    ) -> ResearchSourceComparisonNoteRecord | None:
+        return next(
+            (
+                record
+                for record in run.comparison_notes
+                if set(record.source_document_ids) == set(document_ids)
+                and set(record.evidence_ids) == set(evidence_ids)
+                and set(record.assessment_ids) == set(assessment_ids)
+                and record.text == text
+            ),
+            None,
+        )
 
     @staticmethod
     def _normalize_run_id(run_id: str) -> str:
@@ -1717,37 +2449,31 @@ class ResearchRunManager:
     @staticmethod
     def _publish_new_export(destination: Path, content: bytes) -> None:
         """Publish complete bytes atomically without replacing an existing path."""
-        temporary_path: Path | None = None
-        try:
-            descriptor, raw_temporary_path = tempfile.mkstemp(
-                prefix=f".{destination.name}.",
-                suffix=".tmp",
-                dir=destination.parent,
-            )
-            temporary_path = Path(raw_temporary_path)
-            with os.fdopen(descriptor, "wb") as stream:
-                stream.write(content)
-                stream.flush()
-                os.fsync(stream.fileno())
-            os.link(temporary_path, destination)
-        except FileExistsError as error:
-            raise ResearchError(
-                "Research export destination already exists; no file was replaced."
-            ) from error
-        except OSError as error:
-            raise ResearchError("Research export file could not be saved.") from error
-        finally:
-            if temporary_path is not None:
-                try:
-                    temporary_path.unlink(missing_ok=True)
-                except OSError:
-                    pass
+        publish_new_export_file(destination, content)
 
     @staticmethod
     def _normalize_document_id(document_id: str) -> str:
         if not isinstance(document_id, str) or not document_id.strip():
             raise ResearchError("Research source document ID cannot be empty.")
         return document_id.strip()
+
+    @staticmethod
+    def _normalize_observation_id(observation_id: str) -> str:
+        if not isinstance(observation_id, str) or not observation_id.strip():
+            raise ResearchError("Research source observation ID cannot be empty.")
+        normalized = observation_id.strip()
+        if len(normalized) > 200:
+            raise ResearchError("Research source observation ID is too long.")
+        return normalized
+
+    @staticmethod
+    def _normalize_revalidation_id(revalidation_id: str) -> str:
+        if not isinstance(revalidation_id, str) or not revalidation_id.strip():
+            raise ResearchError("Research source revalidation ID cannot be empty.")
+        normalized = revalidation_id.strip()
+        if len(normalized) > 200:
+            raise ResearchError("Research source revalidation ID is too long.")
+        return normalized
 
     @staticmethod
     def _normalize_comparison_document_ids(

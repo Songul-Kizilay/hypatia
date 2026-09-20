@@ -92,6 +92,71 @@ class ClaimCreationStepOperationTests(unittest.TestCase):
     def test_operation_name_is_stable(self) -> None:
         self.assertEqual(self.operation.operation_name, "claim_creation")
 
+    def test_repeating_the_exact_first_claim_records_nothing_new(self) -> None:
+        run_id = self._run_id()
+        evidence_id = self._with_evidence(run_id)
+        context = ResearchPlanExecutionContext(research_run_id=run_id)
+        authorization = ResearchClaimAuthorization(
+            evidence_ids=(evidence_id,),
+            text=TEXT,
+            epistemic_state=ResearchEpistemicState.HYPOTHESIS,
+        )
+        self.operation.run(step(authorization), context)
+        first = self.manager.get(run_id)
+
+        with self.assertRaisesRegex(
+            ResearchError, f"already recorded as {first.claims[0].claim_id}"
+        ):
+            self.operation.run(step(authorization), context)
+        self.assertEqual(self.manager.get(run_id), first)
+
+        for different in (
+            ResearchClaimAuthorization(
+                evidence_ids=(evidence_id,),
+                text=TEXT,
+                epistemic_state=ResearchEpistemicState.LIKELY,
+            ),
+            ResearchClaimAuthorization(
+                evidence_ids=(evidence_id,),
+                text="A different claim.",
+                epistemic_state=ResearchEpistemicState.HYPOTHESIS,
+            ),
+        ):
+            with self.subTest(different=different):
+                self.operation.run(step(different), context)
+        self.assertEqual(len(self.manager.get(run_id).claims), 3)
+
+    def test_replayed_superseding_claim_is_still_refused_by_the_manager(
+        self,
+    ) -> None:
+        run_id = self._run_id()
+        evidence_id = self._with_evidence(run_id)
+        context = ResearchPlanExecutionContext(research_run_id=run_id)
+        self.operation.run(
+            step(
+                ResearchClaimAuthorization(
+                    evidence_ids=(evidence_id,),
+                    text=TEXT,
+                    epistemic_state=ResearchEpistemicState.HYPOTHESIS,
+                )
+            ),
+            context,
+        )
+        correction = step(
+            ResearchClaimAuthorization(
+                evidence_ids=(evidence_id,),
+                text="Corrected claim.",
+                epistemic_state=ResearchEpistemicState.HYPOTHESIS,
+                supersedes_claim_id=self.manager.get(run_id).claims[0].claim_id,
+            )
+        )
+        self.operation.run(correction, context)
+        recorded = self.manager.get(run_id)
+
+        with self.assertRaisesRegex(ResearchError, "already been superseded"):
+            self.operation.run(correction, context)
+        self.assertEqual(self.manager.get(run_id), recorded)
+
     def test_records_an_authored_claim_in_its_declared_state(self) -> None:
         run_id = self._run_id()
         evidence_id = self._with_evidence(run_id)

@@ -4,8 +4,34 @@ from research.ResearchEvidenceCompletionEvaluation import (
     ResearchEvidenceCompletionEvaluation,
     evaluate_evidence_completion,
 )
-from research.ResearchMissionOutcome import mission_outcome_for
+from research.ResearchMissionGoalExplanation import explain_mission_goal_satisfaction
+from research.ResearchMissionOutcome import (
+    mission_comparison_review,
+    mission_outcome_for,
+)
+from research.ResearchMissionRecoveryCheckpoint import ResearchMissionRecoveryCheckpoint
 from research.ResearchRun import ResearchRun
+
+
+def _comparison_review_lines(
+    run: ResearchRun, checkpoint: ResearchMissionRecoveryCheckpoint | None
+) -> tuple[str, ...]:
+    """Name the structured review of the mission comparison, or its absence."""
+    if checkpoint is None or not checkpoint.semantic_note_id:
+        return ()
+    review = mission_comparison_review(run, checkpoint)
+    if review is None:
+        return (
+            "Comparison review: none recorded for mission comparison note "
+            f"{checkpoint.semantic_note_id}; its relation remains tentative.",
+        )
+    return (
+        f"Comparison review: operator review {review.review_id} marked note "
+        f"{review.note_id} {review.decision.value.replace('_', ' ')} at "
+        f"{review.recorded_at.isoformat()}, citing evidence "
+        f"{', '.join(review.evidence_ids)}. It is a recorded human judgement from "
+        "the operator review record, not model output or note text.",
+    )
 
 
 def teaching_report(
@@ -13,10 +39,16 @@ def teaching_report(
     stop: str,
     spend: str,
     evaluation: ResearchEvidenceCompletionEvaluation | None = None,
+    checkpoint: ResearchMissionRecoveryCheckpoint | None = None,
 ) -> str:
     """Render canonical evidence and its non-mutating readiness evaluation."""
     evaluation = evaluation or evaluate_evidence_completion(run, stop)
-    mission_outcome = mission_outcome_for(run, stop)
+    mission_outcome = mission_outcome_for(run, stop, checkpoint)
+    goal_explanation = explain_mission_goal_satisfaction(
+        mission_outcome,
+        stop,
+        checkpoint,
+    )
     sources = {s.document_id: s for s in run.sources}
     lines = [
         "Bounded research report",
@@ -80,11 +112,29 @@ def teaching_report(
             ),
             f"Recorded limitations: {limitations}.",
             (
+                "Uncertainty caveats: "
+                + (
+                    ", ".join(
+                        value.value.replace("_", " ") for value in evaluation.caveats
+                    )
+                    or "none recorded"
+                )
+                + ". Unknown source independence is not proof of independent "
+                "corroboration and does not by itself change goal status."
+            ),
+            (
                 "This is a derived evidence-readiness assessment. It does not close "
                 "the research run, promote a tentative comparison into fact, or "
                 "declare the question universally resolved."
             ),
             mission_outcome.summary(),
+            goal_explanation.summary(),
+            *_comparison_review_lines(run, checkpoint),
+            (
+                "The goal-satisfaction explanation is derived only from typed "
+                "execution, evidence and contradiction state. Report or model "
+                "prose cannot change it."
+            ),
         ]
     )
     lines.extend(

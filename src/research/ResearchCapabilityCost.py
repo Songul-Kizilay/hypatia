@@ -23,6 +23,9 @@ CAPABILITY_COSTS: dict[ResearchPlanStepCapability, ResearchOperationCost] = {
     ResearchPlanStepCapability.SOURCE_DISCOVERY: _ONE_NETWORK_CALL,
     ResearchPlanStepCapability.SOURCE_FETCH: _ONE_NETWORK_CALL,
     ResearchPlanStepCapability.SOURCE_ACCEPT: _ONE_NETWORK_CALL,
+    # One revalidation is one normal, explicitly approved source acquisition.
+    # It has no separate allowance and does not receive a free refresh slot.
+    ResearchPlanStepCapability.SOURCE_REVALIDATION: _ONE_NETWORK_CALL,
     ResearchPlanStepCapability.EVIDENCE_RECORDING: _LOCAL,
     ResearchPlanStepCapability.SOURCE_ASSESSMENT: _LOCAL,
     ResearchPlanStepCapability.CLAIM_CREATION: _LOCAL,

@@ -115,6 +115,52 @@ class EvidenceRecordingStepOperationTests(unittest.TestCase):
         self.assertIn("Recorded evidence", result.detail)
         self.assertIn("not a claim", result.detail)
 
+    def test_repeating_the_exact_authorized_evidence_records_nothing_new(self) -> None:
+        run_id = self._run_id()
+        document_id = self._accepted(run_id)
+        context = ResearchPlanExecutionContext(research_run_id=run_id)
+        self.operation.run(step(document_id), context)
+        first = self.manager.get(run_id)
+
+        # e.g. an attempt that persisted its evidence, died before the step was
+        # recorded, and was then ruled not performed and advanced again.
+        with self.assertRaisesRegex(
+            ResearchError, f"already recorded as {first.evidence[0].evidence_id}"
+        ):
+            self.operation.run(step(document_id, note=f"  {NOTE} "), context)
+
+        self.assertEqual(self.manager.get(run_id), first)
+
+    def test_distinct_observations_of_the_same_chunk_are_still_recorded(self) -> None:
+        run_id = self._run_id()
+        document_id = self._accepted(run_id)
+        context = ResearchPlanExecutionContext(research_run_id=run_id)
+        self.operation.run(step(document_id), context)
+
+        self.operation.run(step(document_id, note="A different observation."), context)
+
+        run = self.manager.get(run_id)
+        self.assertEqual(len(run.evidence), 2)
+        self.assertEqual(len({record.evidence_id for record in run.evidence}), 2)
+
+    def test_identical_evidence_in_another_run_is_not_suppressed(self) -> None:
+        first_run = self._run_id()
+        second_run = self._run_id()
+        first_document = self._accepted(first_run)
+        second_document = self._accepted(second_run, "https://example.test/b")
+
+        self.operation.run(
+            step(first_document),
+            ResearchPlanExecutionContext(research_run_id=first_run),
+        )
+        self.operation.run(
+            step(second_document),
+            ResearchPlanExecutionContext(research_run_id=second_run),
+        )
+
+        self.assertEqual(len(self.manager.get(first_run).evidence), 1)
+        self.assertEqual(len(self.manager.get(second_run).evidence), 1)
+
     def test_provenance_is_computed_from_the_real_chunk(self) -> None:
         run_id = self._run_id()
         document_id = self._accepted(run_id)

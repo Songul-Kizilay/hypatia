@@ -10,6 +10,7 @@ from research.ResearchClaimContradictionRecord import (
     ResearchClaimContradictionRecord,
 )
 from research.ResearchClaimRecord import ResearchClaimRecord
+from research.ResearchComparisonReviewRecord import ResearchComparisonReviewRecord
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchFailureRecord import ResearchFailureRecord
 from research.ResearchRunStatus import ResearchRunStatus
@@ -38,6 +39,7 @@ class ResearchRun:
     comparison_notes: tuple[ResearchSourceComparisonNoteRecord, ...] = ()
     claims: tuple[ResearchClaimRecord, ...] = ()
     claim_contradictions: tuple[ResearchClaimContradictionRecord, ...] = ()
+    comparison_reviews: tuple[ResearchComparisonReviewRecord, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.run_id, str) or not self.run_id.strip():
@@ -52,8 +54,28 @@ class ResearchRun:
             raise ResearchError("Research run sources must be an immutable tuple.")
         if not all(isinstance(source, ResearchSourceRecord) for source in self.sources):
             raise ResearchError("Research run contains an invalid source record.")
-        if len({source.document_id for source in self.sources}) != len(self.sources):
+        # One ordinary acceptance per content version per run.  Only an explicit
+        # revalidation observation may re-observe a version already in the run,
+        # because identical content re-observed is a new observation, not a
+        # duplicate document.
+        ordinary_documents = [
+            source.document_id
+            for source in self.sources
+            if getattr(source, "revalidation_of_observation_id", None) is None
+        ]
+        if len(ordinary_documents) != len(set(ordinary_documents)):
             raise ResearchError("Research run contains duplicate source documents.")
+        self._validate_revalidation_provenance()
+        # Treat records constructed by older in-memory code as legacy, rather
+        # than inventing a new observation identity for them. Persisted legacy
+        # records are decoded the same way, with ``observation_id=None``.
+        observation_ids = [
+            observation_id
+            for source in self.sources
+            if (observation_id := getattr(source, "observation_id", None)) is not None
+        ]
+        if len(observation_ids) != len(set(observation_ids)):
+            raise ResearchError("Research run contains duplicate source observations.")
         if not isinstance(self.failures, tuple):
             raise ResearchError("Research run failures must be an immutable tuple.")
         if not all(
@@ -74,6 +96,7 @@ class ResearchRun:
             raise ResearchError("Research evidence must reference an accepted source.")
         if not isinstance(self.discoveries, tuple):
             raise ResearchError("Research run discoveries must be an immutable tuple.")
+        self._validate_candidate_provenance()
         if not all(
             isinstance(record, ResearchSourceDiscoveryRecord)
             for record in self.discoveries
@@ -315,5 +338,148 @@ class ResearchRun:
             raise ResearchError(
                 "Research claim contradiction time must stay within its run lifecycle."
             )
+        self._validate_comparison_reviews()
         object.__setattr__(self, "run_id", self.run_id.strip())
         object.__setattr__(self, "question", self.question.strip())
+
+    def _validate_revalidation_provenance(self) -> None:
+        """Bind each revalidation observation to one earlier same-run record.
+
+        The prior must precede it in this run, carry the same recorded requested
+        URL and a strictly earlier fetch time.  Each prior observation may be
+        revalidated at most once per run, which is what makes a resumed step
+        recognise its own durable result instead of fetching again.
+        """
+        seen: dict[str, ResearchSourceRecord] = {}
+        revalidated: set[str] = set()
+        for source in self.sources:
+            prior_id = getattr(source, "revalidation_of_observation_id", None)
+            if prior_id is not None:
+                prior = seen.get(prior_id)
+                if (
+                    prior is None
+                    or prior_id in revalidated
+                    or prior.requested_url is None
+                    or prior.content_sha256 is None
+                    or prior.requested_url != source.requested_url
+                    or prior.fetched_at >= source.fetched_at
+                ):
+                    raise ResearchError(
+                        "Research source revalidation provenance is invalid."
+                    )
+                revalidated.add(prior_id)
+            else:
+                documents = {record.document_id for record in seen.values()}
+                if source.document_id in documents:
+                    raise ResearchError(
+                        "Research run contains duplicate source documents."
+                    )
+            observation_id = getattr(source, "observation_id", None)
+            if observation_id is not None:
+                seen[observation_id] = source
+
+    def source_for_document(self, document_id: str) -> ResearchSourceRecord | None:
+        """Return the first observation that brought this version into the run.
+
+        A later explicit revalidation may re-observe the same content version;
+        the ordinary acceptance that introduced it stays its evidence anchor.
+        """
+        return next(
+            (source for source in self.sources if source.document_id == document_id),
+            None,
+        )
+
+    def _validate_candidate_provenance(self) -> None:
+        """A selected candidate must be one this run discovered, at that URL.
+
+        Candidate identity is recorded at selection; here it is only checked.
+        The candidate must exist in this run's own discoveries exactly once, and
+        its URL must be the URL this run recorded as requested.
+        """
+        candidates: dict[str, list[str]] = {}
+        for discovery in self.discoveries:
+            if not isinstance(discovery, ResearchSourceDiscoveryRecord):
+                return
+            for candidate_id, candidate in zip(
+                discovery.candidate_ids, discovery.candidates, strict=False
+            ):
+                candidates.setdefault(candidate_id, []).append(candidate.url)
+        if any(len(urls) != 1 for urls in candidates.values()):
+            raise ResearchError("Research run discovery candidate IDs are duplicated.")
+        # One candidate may back several observations (a later re-fetch is a new
+        # observation of the same candidate); each must still match exactly.
+        for source in self.sources:
+            # Read defensively: audits deliberately examine tampered records.
+            selected_id = getattr(source, "discovery_candidate_id", None)
+            if not isinstance(source, ResearchSourceRecord) or selected_id is None:
+                continue
+            urls = candidates.get(selected_id)
+            if (
+                urls is None
+                or getattr(source, "requested_url", None) is None
+                or urls[0] != source.requested_url
+            ):
+                raise ResearchError(
+                    "Research source discovery candidate provenance is invalid."
+                )
+
+    def _validate_comparison_reviews(self) -> None:
+        """Bind each operator review to one exact retained comparison note."""
+        if not isinstance(self.comparison_reviews, tuple) or not all(
+            isinstance(record, ResearchComparisonReviewRecord)
+            for record in self.comparison_reviews
+        ):
+            raise ResearchError("Research run contains an invalid comparison review.")
+        notes_by_id = {note.note_id: note for note in self.comparison_notes}
+        reviews_by_id: dict[str, ResearchComparisonReviewRecord] = {}
+        superseded_ids: set[str] = set()
+        for review in self.comparison_reviews:
+            if review.review_id in reviews_by_id:
+                raise ResearchError(
+                    "Research run contains duplicate comparison review IDs."
+                )
+            note = notes_by_id.get(review.note_id)
+            if note is None:
+                raise ResearchError(
+                    "Research comparison reviews must reference a retained note."
+                )
+            if review.evidence_ids != note.evidence_ids:
+                raise ResearchError(
+                    "Research comparison review evidence must match its note."
+                )
+            superseded_id = review.supersedes_review_id
+            if superseded_id is not None:
+                target = reviews_by_id.get(superseded_id)
+                if target is None or target.note_id != review.note_id:
+                    raise ResearchError(
+                        "Research comparison review supersession must reference an "
+                        "earlier review of the same note."
+                    )
+                if superseded_id in superseded_ids:
+                    raise ResearchError(
+                        "A research comparison review cannot have multiple "
+                        "superseding records."
+                    )
+                if review.recorded_at < target.recorded_at:
+                    raise ResearchError(
+                        "A superseding comparison review cannot precede its target."
+                    )
+                superseded_ids.add(superseded_id)
+            if (
+                review.recorded_at < self.created_at
+                or review.recorded_at > self.updated_at
+            ):
+                raise ResearchError(
+                    "Research comparison review time must stay within its run "
+                    "lifecycle."
+                )
+            reviews_by_id[review.review_id] = review
+        current_note_ids = [
+            review.note_id
+            for review in self.comparison_reviews
+            if review.review_id not in superseded_ids
+        ]
+        if len(current_note_ids) != len(set(current_note_ids)):
+            raise ResearchError(
+                "A research comparison note can have only one current review."
+            )

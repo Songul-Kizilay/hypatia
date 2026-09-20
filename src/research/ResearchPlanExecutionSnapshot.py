@@ -23,6 +23,7 @@ from datetime import datetime
 from core.Exceptions import ResearchError
 from research.ResearchAttemptRecovery import ResearchAttemptRecovery
 from research.ResearchAttemptResolution import ResearchAttemptResolution
+from research.ResearchAutonomyResult import AutonomyStopReason
 from research.ResearchDisclosure import ResearchDisclosure
 from research.ResearchExecutionAllowance import ResearchExecutionAllowance
 from research.ResearchMissionRecoveryCheckpoint import ResearchMissionRecoveryCheckpoint
@@ -104,8 +105,29 @@ class ResearchPlanExecutionSnapshot:
     #: A caller-supplied idempotency key for a durably started mission.  It is
     #: not authority and is absent for legacy snapshots.
     mission_request_id: str | None = None
+    #: Why the mission's last autonomy run stopped, recorded against exactly
+    #: this execution state so its existing outcome and report can be
+    #: recomputed after restart without resuming anything.  It is execution
+    #: metadata, not authority, budget or goal satisfaction.  Absent in legacy
+    #: snapshots, and then never inferred from status, notes or goal state.
+    mission_stop_reason: AutonomyStopReason | None = None
+    #: Full canonical plan identity for an execution that carries explicit
+    #: source-revalidation authority, so a restart cannot rebind a different
+    #: prior observation.  Absent for every other execution.
+    revalidation_plan_digest: str | None = None
 
     def __post_init__(self) -> None:
+        if self.revalidation_plan_digest is not None and (
+            not is_plan_digest(self.revalidation_plan_digest)
+            or self.target_plan_digest is not None
+            or self.mission_plan_digest is not None
+        ):
+            raise ResearchError("Execution snapshot revalidation digest is invalid.")
+        if self.mission_stop_reason is not None and (
+            not isinstance(self.mission_stop_reason, AutonomyStopReason)
+            or self.mission_scope is None
+        ):
+            raise ResearchError("Execution snapshot mission stop reason is invalid.")
         if self.target_plan_digest is not None and self.mission_plan_digest is not None:
             raise ResearchError(
                 "Target and reference mission digests cannot be combined."
@@ -207,6 +229,8 @@ class ResearchPlanExecutionSnapshot:
         mission_disclosure: ResearchDisclosure = ResearchDisclosure.NONE,
         mission_checkpoint: ResearchMissionRecoveryCheckpoint | None = None,
         mission_request_id: str | None = None,
+        mission_stop_reason: AutonomyStopReason | None = None,
+        revalidation_plan_digest: str | None = None,
     ) -> ResearchPlanExecutionSnapshot:
         """Capture the current state, pairing each step with its capability."""
         capabilities = {step.step_id: step.capability for step in steps}
@@ -223,6 +247,8 @@ class ResearchPlanExecutionSnapshot:
             mission_disclosure=mission_disclosure,
             mission_checkpoint=mission_checkpoint,
             mission_request_id=mission_request_id,
+            mission_stop_reason=mission_stop_reason,
+            revalidation_plan_digest=revalidation_plan_digest,
             recorded_at=recorded_at,
             steps=tuple(
                 ResearchPlanExecutionStepSnapshot(
@@ -269,4 +295,6 @@ class ResearchPlanExecutionSnapshot:
             if not self.status.terminal
             else self.status
         )
-        return replace(self, steps=steps, status=status)
+        # A recorded stop cannot describe work that was still running; the
+        # interrupted execution keeps no stop reason rather than a stale one.
+        return replace(self, steps=steps, status=status, mission_stop_reason=None)

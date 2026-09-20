@@ -23,6 +23,7 @@ appear to have everything left.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime
 from typing import Any
 
@@ -34,6 +35,7 @@ from research.ResearchAttemptRecoveryDecision import (
 from research.ResearchAttemptResolution import ResearchAttemptResolution
 from research.ResearchAuthorizer import ResearchAuthorizer
 from research.ResearchAutonomyBudget import ResearchAutonomyBudget
+from research.ResearchAutonomyResult import AutonomyStopReason
 from research.ResearchDisclosure import ResearchDisclosure
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchExecutionAllowance import ResearchExecutionAllowance
@@ -67,6 +69,7 @@ _EXECUTION_FIELDS = frozenset(
 #: Version 1 wrote every field above except the last.
 _EXECUTION_FIELDS_V1 = _EXECUTION_FIELDS - {"allowance"}
 _EXECUTION_FIELDS_WITH_TARGET = _EXECUTION_FIELDS | {"target_plan_digest"}
+_EXECUTION_FIELDS_WITH_REVALIDATION = _EXECUTION_FIELDS | {"revalidation_plan_digest"}
 _EXECUTION_FIELDS_WITH_MISSION = _EXECUTION_FIELDS | {"mission_plan_digest"}
 _EXECUTION_FIELDS_WITH_MISSION_RECOVERY = _EXECUTION_FIELDS_WITH_MISSION | {
     "mission_scope",
@@ -109,6 +112,16 @@ _MISSION_CHECKPOINT_FIELDS_WITH_CONTRADICTION_OUTCOME = _MISSION_CHECKPOINT_FIEL
     "contradiction_followup_relation",
     "contradiction_outcome",
 }
+_MISSION_CHECKPOINT_FIELDS_WITH_EVIDENCE_GAP_OUTCOME = (
+    _MISSION_CHECKPOINT_FIELDS_WITH_CONTRADICTION_OUTCOME
+    | {
+        "evidence_gap_followup_note_id",
+        "evidence_gap_followup_input_fingerprint",
+        "evidence_gap_followup_relation",
+        "evidence_gap_outcome",
+    }
+)
+
 _ALLOWANCE_FIELDS = frozenset({"budget", "spend"})
 _BUDGET_FIELDS = frozenset(
     {
@@ -177,6 +190,8 @@ def encode_execution_snapshot(
     }
     if snapshot.target_plan_digest is not None:
         document["target_plan_digest"] = snapshot.target_plan_digest
+    if snapshot.revalidation_plan_digest is not None:
+        document["revalidation_plan_digest"] = snapshot.revalidation_plan_digest
     if snapshot.mission_plan_digest is not None:
         document["mission_plan_digest"] = snapshot.mission_plan_digest
     if snapshot.mission_scope is not None:
@@ -187,15 +202,39 @@ def encode_execution_snapshot(
         )
     if snapshot.mission_request_id is not None:
         document["mission_request_id"] = snapshot.mission_request_id
+    if snapshot.mission_stop_reason is not None:
+        document["mission_stop_reason"] = snapshot.mission_stop_reason.value
     return document
 
 
 def decode_execution_snapshot(document: object) -> ResearchPlanExecutionSnapshot:
-    """Return one validated snapshot, or refuse a malformed document."""
+    """Return one validated snapshot, or refuse a malformed document.
+
+    ``mission_stop_reason`` is optional and only valid beside recorded mission
+    recovery state.  Its absence decodes as no recorded stop, never as a guess.
+    """
+    if isinstance(document, dict) and "mission_stop_reason" in document:
+        if set(document) - {"mission_stop_reason"} not in (
+            _EXECUTION_FIELDS_WITH_MISSION_RECOVERY,
+            _EXECUTION_FIELDS_WITH_MISSION_REQUEST,
+        ):
+            raise ResearchError("Execution snapshot document is invalid.")
+        stop_reason = _enum(
+            document["mission_stop_reason"],
+            AutonomyStopReason,
+            "mission stop reason",
+        )
+        base = {
+            key: value
+            for key, value in document.items()
+            if key != "mission_stop_reason"
+        }
+        return replace(decode_execution_snapshot(base), mission_stop_reason=stop_reason)
     if not isinstance(document, dict) or set(document) not in (
         _EXECUTION_FIELDS,
         _EXECUTION_FIELDS_V1,
         _EXECUTION_FIELDS_WITH_TARGET,
+        _EXECUTION_FIELDS_WITH_REVALIDATION,
         _EXECUTION_FIELDS_WITH_MISSION,
         _EXECUTION_FIELDS_WITH_MISSION_RECOVERY,
         _EXECUTION_FIELDS_WITH_MISSION_REQUEST,
@@ -231,6 +270,7 @@ def decode_execution_snapshot(document: object) -> ResearchPlanExecutionSnapshot
         recorded_at=_timestamp(document["recorded_at"]),
         allowance=_decode_allowance(document.get("allowance")),
         target_plan_digest=document.get("target_plan_digest"),
+        revalidation_plan_digest=document.get("revalidation_plan_digest"),
         mission_plan_digest=document.get("mission_plan_digest"),
         mission_scope=(
             _decode_mission_scope(document["mission_scope"])
@@ -370,6 +410,13 @@ def _encode_mission_checkpoint(
         ),
         "contradiction_followup_relation": checkpoint.contradiction_followup_relation,
         "contradiction_outcome": checkpoint.contradiction_outcome,
+        "evidence_gap_followup_note_id": checkpoint.evidence_gap_followup_note_id,
+        "evidence_gap_followup_input_fingerprint": (
+            checkpoint.evidence_gap_followup_input_fingerprint
+        ),
+        "evidence_gap_followup_relation": checkpoint.evidence_gap_followup_relation,
+        "evidence_gap_outcome": checkpoint.evidence_gap_outcome,
+        "requested_urls": list(checkpoint.requested_urls),
     }
 
 
@@ -378,11 +425,16 @@ def _decode_mission_checkpoint(
 ) -> ResearchMissionRecoveryCheckpoint | None:
     if value is None:
         return None
-    if not isinstance(value, dict) or set(value) not in (
+    # ``requested_urls`` is independent of the relation fields, so it may
+    # accompany any recognised checkpoint shape; its absence means unrecorded.
+    if not isinstance(value, dict) or set(value) - {"requested_urls"} not in (
         _MISSION_CHECKPOINT_FIELDS_V1,
         _MISSION_CHECKPOINT_FIELDS,
         _MISSION_CHECKPOINT_FIELDS_WITH_CONTRADICTION_OUTCOME,
+        _MISSION_CHECKPOINT_FIELDS_WITH_EVIDENCE_GAP_OUTCOME,
     ):
+        raise ResearchError("Execution snapshot mission checkpoint is invalid.")
+    if "requested_urls" in value and not isinstance(value["requested_urls"], list):
         raise ResearchError("Execution snapshot mission checkpoint is invalid.")
     sequences = (
         "acquired_urls",
@@ -397,9 +449,10 @@ def _decode_mission_checkpoint(
         "contradiction_initial_source_document_ids",
         "contradiction_initial_assessment_ids",
     )
-    if set(value) == _MISSION_CHECKPOINT_FIELDS_WITH_CONTRADICTION_OUTCOME and any(
-        not isinstance(value[name], list) for name in contradiction_sequences
-    ):
+    if set(value) - {"requested_urls"} in (
+        _MISSION_CHECKPOINT_FIELDS_WITH_CONTRADICTION_OUTCOME,
+        _MISSION_CHECKPOINT_FIELDS_WITH_EVIDENCE_GAP_OUTCOME,
+    ) and any(not isinstance(value[name], list) for name in contradiction_sequences):
         raise ResearchError("Execution snapshot mission checkpoint is invalid.")
     try:
         return ResearchMissionRecoveryCheckpoint(
@@ -449,6 +502,21 @@ def _decode_mission_checkpoint(
                 "contradiction_followup_relation", ""
             ),
             contradiction_outcome=value.get("contradiction_outcome", ""),
+            # Absent in legacy checkpoints: decoded as "not recorded", never as
+            # a supported or resolved follow-up.
+            evidence_gap_followup_note_id=value.get(
+                "evidence_gap_followup_note_id", ""
+            ),
+            evidence_gap_followup_input_fingerprint=value.get(
+                "evidence_gap_followup_input_fingerprint", ""
+            ),
+            evidence_gap_followup_relation=value.get(
+                "evidence_gap_followup_relation", ""
+            ),
+            evidence_gap_outcome=value.get("evidence_gap_outcome", ""),
+            # Absent in legacy checkpoints: decoded as "not recorded".  Recovery
+            # then refuses any further fetch rather than risk refetching a source.
+            requested_urls=tuple(value.get("requested_urls", [])),
         )
     except ResearchError as error:
         raise ResearchError(

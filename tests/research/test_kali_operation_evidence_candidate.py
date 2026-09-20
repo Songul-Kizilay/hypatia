@@ -36,6 +36,14 @@ def command_plan():
     )
 
 
+def https_command_plan(*, resolved_address: str = "93.184.216.34"):
+    return kali_operation_command_plan(
+        operation_kind=ResearchKaliOperationKind.HTTPS_HEADER_LOOKUP,
+        hostname="www.example.test",
+        resolved_address=resolved_address,
+    )
+
+
 def kali_run(
     *,
     stdout_lines: tuple[str, ...] = ("192.0.2.10",),
@@ -123,6 +131,50 @@ class KaliOperationEvidenceCandidateTests(unittest.TestCase):
                 exit_code=0,
                 timed_out=False,
                 evidence_recorded=True,
+            )
+
+
+class ResearchKaliOperationRunResolvedAddressTests(unittest.TestCase):
+    def test_https_header_lookup_run_requires_a_resolved_address(self) -> None:
+        plan = https_command_plan()
+        with self.assertRaisesRegex(ResearchError, "resolved address is invalid"):
+            ResearchKaliOperationRun(
+                authorization_id="kali-auth-1",
+                operation_digest=OPERATION_DIGEST,
+                program_id="program-a",
+                scope_revision_id="scope-rev-1",
+                scope_revision_digest="scope-digest-1",
+                execution_policy_digest="policy-digest-1",
+                operation_kind=ResearchKaliOperationKind.HTTPS_HEADER_LOOKUP,
+                command_plan=plan,
+                process_result=ResearchKaliOperationProcessResult(
+                    command_plan=plan,
+                    exit_code=0,
+                    stdout_lines=("HTTP/2 200",),
+                ),
+                resolved_address=None,
+            )
+
+    def test_dns_lookup_run_rejects_a_resolved_address(self) -> None:
+        plan = command_plan()
+        with self.assertRaisesRegex(
+            ResearchError, "resolved address is not applicable"
+        ):
+            ResearchKaliOperationRun(
+                authorization_id="kali-auth-1",
+                operation_digest=OPERATION_DIGEST,
+                program_id="program-a",
+                scope_revision_id="scope-rev-1",
+                scope_revision_digest="scope-digest-1",
+                execution_policy_digest="policy-digest-1",
+                operation_kind=ResearchKaliOperationKind.DNS_RECORD_LOOKUP,
+                command_plan=plan,
+                process_result=ResearchKaliOperationProcessResult(
+                    command_plan=plan,
+                    exit_code=0,
+                    stdout_lines=("192.0.2.10",),
+                ),
+                resolved_address="93.184.216.34",
             )
 
 

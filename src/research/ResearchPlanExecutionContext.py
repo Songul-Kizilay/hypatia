@@ -37,6 +37,8 @@ class ResearchPlanExecutionContext:
     research_question: str | None = None
     source_preview: ResearchSourcePreview | None = field(default=None, repr=False)
     evidence_chunk_sha256: str = ""
+    #: The recorded discovery candidate a mission selected for this source.
+    discovery_candidate_id: str = ""
 
     def __post_init__(self) -> None:
         if self.source_preview is not None and not isinstance(

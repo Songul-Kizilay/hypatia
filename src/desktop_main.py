@@ -76,6 +76,9 @@ def main() -> None:
         research_program_scope_revision_path=(
             data_paths.research_program_scope_revision_path
         ),
+        # Restored missions resume on the desktop worker once the window is up,
+        # so their bounded provider/model work cannot hold up launch.
+        defer_mission_recovery=True,
     )
     app.start()
 

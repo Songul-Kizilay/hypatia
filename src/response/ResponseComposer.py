@@ -987,6 +987,8 @@ class ResponseComposer:
                     lines.extend(step.semantic_evidence_binding.lines())
                 if step.semantic_comparison_binding is not None:
                     lines.extend(step.semantic_comparison_binding.lines())
+                if step.source_revalidation_binding is not None:
+                    lines.extend(step.source_revalidation_binding.lines())
             if plan.constraints:
                 # Listed apart from the steps, and numbered separately, so a
                 # constraint can never be read back as "step 11".
@@ -1082,6 +1084,7 @@ class ResponseComposer:
                     if preview.dns_record_type is not None
                     else "not applicable"
                 ),
+                "Resolved address: " + (preview.resolved_address or "not applicable"),
                 "Permitted ports: "
                 + ", ".join(str(port) for port in preview.permitted_ports),
                 "Budget: "
@@ -1096,7 +1099,13 @@ class ResponseComposer:
                 *argv_lines,
                 "Execution: not started",
                 "Process: not created",
-                "Network/DNS: not used",
+                "Network/DNS: "
+                + (
+                    "DNS resolution performed to validate the target address; "
+                    "no other network use"
+                    if preview.resolved_address is not None
+                    else "not used"
+                ),
             )
         )
         return BrainResponse(
@@ -1330,6 +1339,8 @@ class ResponseComposer:
                     f"Scope revision digest: {result.scope_revision_digest}",
                     "Execution policy digest: " f"{result.execution_policy_digest}",
                     f"Operation: {result.operation_kind.value}",
+                    "Resolved address: "
+                    + (result.resolved_address or "not applicable"),
                     "Command plan: validated argv only; no shell command string",
                     f"Transport profile: {result.command_plan.transport.value}",
                     f"Executable: {result.command_plan.executable_path}",
@@ -3324,6 +3335,33 @@ class ResponseComposer:
             memory_count=0,
         )
 
+    def research_plan_execution_recovered_missions(
+        self,
+        request: BrainRequest,
+        entries: tuple[tuple[str, str, str, str], ...],
+    ) -> BrainResponse:
+        """List startup mission-recovery outcomes without performing work."""
+        lines = ["Missions recovered at startup (this session):"]
+        lines.extend(
+            f"- Plan ID: {plan_id} | Question: {question} | {outcome}"
+            + (f" | Run ID: {run_id}" if run_id else "")
+            for plan_id, question, outcome, run_id in entries
+        )
+        if not entries:
+            lines.append("No learning mission was resumed or refused at startup.")
+        lines.append(
+            "Listing performs no research work; use execution status with a plan "
+            "ID to read its recovered report or refusal."
+        )
+        return BrainResponse(
+            message="\n".join(lines),
+            request_id=request.request_id,
+            intent="research_plan_execution_recovered",
+            memory_count=0,
+            research_recovered_mission_ids=tuple(entry[0] for entry in entries),
+            research_recovered_mission_run_ids=tuple(entry[3] for entry in entries),
+        )
+
     def research_plan_execution_missing(
         self,
         request: BrainRequest,
@@ -4360,6 +4398,45 @@ class ResponseComposer:
             memory_count=0,
             success=preview.allowed,
             research_claim_contradiction_write_preview=preview,
+        )
+
+    def research_comparison_review_record_success(
+        self,
+        request: BrainRequest,
+        run: ResearchRun,
+    ) -> BrainResponse:
+        """Render one comparison review only after the audit snapshot commits."""
+        review = run.comparison_reviews[-1]
+        return BrainResponse(
+            message=(
+                "Research comparison review recorded:\n"
+                f"ID: {review.review_id}\n"
+                f"Comparison note ID: {review.note_id}\n"
+                f"Evidence IDs: {', '.join(review.evidence_ids)}\n"
+                f"Decision: {review.decision.value}\n"
+                f"Operator note: {review.note}\n"
+                f"Supersedes review: {review.supersedes_review_id or 'none'}\n"
+                "Status: committed operator judgement about this exact comparison; "
+                "not model output and not a claim or truth decision"
+            ),
+            request_id=request.request_id,
+            intent="research_comparison_review_record",
+            memory_count=0,
+            research_runs=[run],
+        )
+
+    def research_comparison_review_record_failure(
+        self,
+        request: BrainRequest,
+        message: str,
+    ) -> BrainResponse:
+        """Report invalid or refused comparison review input safely."""
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent="research_comparison_review_record",
+            memory_count=0,
+            success=False,
         )
 
     def research_claim_contradiction_record_success(

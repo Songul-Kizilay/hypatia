@@ -158,6 +158,16 @@ class ResearchPlanAuthorization:
             raise ResearchError(
                 f"Semantic comparison approval refused: {refusal.value}."
             )
+        if any(
+            step.source_revalidation_binding is not None
+            and step.source_revalidation_binding.research_run_id != research_run_id
+            for step in plan.steps
+        ):
+            # Revalidation is bounded to the approved run's own observations;
+            # no cross-run revalidation authority exists.
+            raise ResearchError(
+                "Source revalidation can be approved only for its bound run."
+            )
         return cls(
             authorization_id=authorization_id,
             plan_digest=plan_digest(plan),

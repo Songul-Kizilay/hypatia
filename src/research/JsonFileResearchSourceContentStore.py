@@ -225,14 +225,13 @@ class JsonFileResearchSourceContentStore:
             )
         if len(records) > cls._MAXIMUM_RECORDS:
             raise ResearchError("Research source content store has too many records.")
+        # One record per immutable content version.  A URL may have several
+        # versions, because the same URL can serve different text over time.
         document_ids = [record.document_id for record in records]
-        urls = [record.url for record in records]
         if len(document_ids) != len(set(document_ids)):
             raise ResearchError(
                 "Research source content store has duplicate document IDs."
             )
-        if len(urls) != len(set(urls)):
-            raise ResearchError("Research source content store has duplicate URLs.")
         if (
             sum(record.content_byte_count for record in records)
             > cls._MAXIMUM_TOTAL_CONTENT_BYTES

@@ -69,16 +69,23 @@ class JsonFileResearchSourceContentStoreTests(unittest.TestCase):
                 with self.assertRaisesRegex(ResearchError, message):
                     self.store.load()
 
-    def test_save_rejects_duplicate_document_ids_and_urls(self) -> None:
-        for duplicate, message in (
-            (replace(self.record, url="https://example.com/other"), "document IDs"),
-            (replace(self.record, document_id="document-2"), "URLs"),
-        ):
-            with (
-                self.subTest(message=message),
-                self.assertRaisesRegex(ResearchError, message),
-            ):
-                self.store.save([self.record, duplicate])
+    def test_save_rejects_duplicate_document_ids(self) -> None:
+        with self.assertRaisesRegex(ResearchError, "document IDs"):
+            self.store.save(
+                [self.record, replace(self.record, url="https://example.com/other")]
+            )
+
+    def test_one_url_may_have_several_content_versions(self) -> None:
+        # The same URL can serve different text over time; each version is its
+        # own immutable record, never collapsed into one document per URL.
+        version = replace(self.record, document_id="document-2")
+
+        self.store.save([self.record, version])
+
+        self.assertEqual(
+            [record.document_id for record in self.store.load()],
+            [self.record.document_id, "document-2"],
+        )
 
     def test_save_enforces_record_total_content_and_serialized_file_limits(
         self,

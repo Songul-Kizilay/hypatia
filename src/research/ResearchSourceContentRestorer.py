@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime
 
 from core.Exceptions import KnowledgeError, ResearchError
 from knowledge.Document import Document
@@ -80,39 +79,47 @@ class ResearchSourceContentRestorer:
     def _provenance_by_document_id(
         cls,
         runs: list[ResearchRun],
-    ) -> dict[str, ResearchSourceRecord]:
-        provenance: dict[str, ResearchSourceRecord] = {}
+    ) -> dict[str, list[ResearchSourceRecord]]:
+        """Group each run's own source record under the version it accepted.
+
+        Several runs may accept the same immutable content version, each with
+        its own fetch time; they must still agree on the version itself.
+        """
+        provenance: dict[str, list[ResearchSourceRecord]] = {}
         for run in runs:
             for source in run.sources:
-                existing = provenance.get(source.document_id)
-                if existing is not None and cls._provenance_identity(
-                    existing
-                ) != cls._provenance_identity(source):
+                records = provenance.setdefault(source.document_id, [])
+                if records and any(
+                    cls._version_identity(existing) != cls._version_identity(source)
+                    for existing in records
+                ):
                     raise ResearchError(
                         "Research runs contain conflicting source provenance."
                     )
-                provenance.setdefault(source.document_id, source)
+                records.append(source)
         return provenance
 
     @classmethod
     def _validated_document(
         cls,
         record: ResearchSourceContentRecord,
-        provenance_by_document_id: dict[str, ResearchSourceRecord],
+        provenance_by_document_id: dict[str, list[ResearchSourceRecord]],
     ) -> Document:
         provenance = provenance_by_document_id.get(record.document_id)
-        if provenance is None:
+        if not provenance:
             raise ResearchError(
                 "Persisted research source content has no accepted provenance."
             )
-        if cls._content_identity(record) != cls._provenance_identity(provenance):
+        if any(
+            cls._content_version_identity(record) != cls._version_identity(source)
+            for source in provenance
+        ) or record.fetched_at not in {source.fetched_at for source in provenance}:
             raise ResearchError(
                 "Persisted research source content does not match its provenance."
             )
-        # Rebuilt with its acquisition provenance, not without it. The document
-        # identity derives from the URL alone, so a restoration that dropped
-        # these came back matching, indexing cleanly, and describing an accepted
-        # CVE as an ordinary read of the page that cannot serve it.
+        # Rebuilt with its acquisition provenance, not without it. Without these
+        # an accepted CVE came back matching, indexing cleanly, and describing
+        # itself as an ordinary read of the page that cannot serve it.
         source = ResearchSource(
             url=record.url,
             title=record.title,
@@ -124,12 +131,27 @@ class ResearchSourceContentRestorer:
         )
         if source.content != record.content:
             raise ResearchError("Persisted research source content is not canonical.")
-        document = source.to_document()
-        if document.document_id != record.document_id:
+        # A run that recorded which content it observed must have observed
+        # exactly this stored text; stored content is never assigned to a run
+        # whose observation differs.
+        if any(
+            source.content_sha256 is not None
+            and source.content_sha256 != record.content_sha256
+            for source in provenance
+        ):
+            raise ResearchError(
+                "Persisted research source content does not match its provenance."
+            )
+        # Content accepted before versioning keeps its URL-only identity; it is
+        # restored as that legacy document and gains no version meaning.
+        if record.document_id not in {
+            source.content_version_id(),
+            source.legacy_document_id(),
+        }:
             raise ResearchError(
                 "Persisted research source content has an invalid document ID."
             )
-        return document
+        return source.to_document(record.document_id)
 
     @staticmethod
     def _paragraph_count(content: str) -> int:
@@ -138,25 +160,23 @@ class ResearchSourceContentRestorer:
         )
 
     @staticmethod
-    def _content_identity(
+    def _content_version_identity(
         record: ResearchSourceContentRecord,
-    ) -> tuple[str, str, str, str, datetime]:
+    ) -> tuple[str, str, str, str]:
         return (
             record.document_id,
             record.url,
             record.title,
             record.content_type,
-            record.fetched_at,
         )
 
     @staticmethod
-    def _provenance_identity(
+    def _version_identity(
         record: ResearchSourceRecord,
-    ) -> tuple[str, str, str, str, datetime]:
+    ) -> tuple[str, str, str, str]:
         return (
             record.document_id,
             record.url,
             record.title,
             record.content_type,
-            record.fetched_at,
         )

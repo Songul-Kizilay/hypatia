@@ -15,6 +15,10 @@ from research.ResearchClaimContradictionRecord import (
     ResearchClaimContradictionRecord,
 )
 from research.ResearchClaimRecord import ResearchClaimRecord
+from research.ResearchComparisonReviewRecord import (
+    ResearchComparisonReviewDecision,
+    ResearchComparisonReviewRecord,
+)
 from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
 from research.ResearchFailureRecord import ResearchFailureRecord
@@ -35,6 +39,8 @@ from research.ResearchSourceRecord import (
     EXTERNAL_SOURCE_TAINT_LABEL,
     ResearchSourceRecord,
 )
+from research.ResearchSourceRevalidationOutcome import ResearchSourceRevalidationOutcome
+from research.ResearchSourceRevalidationRecord import ResearchSourceRevalidationRecord
 from research.ResearchSourceUsefulness import ResearchSourceUsefulness
 from research.ResearchVulnerabilityMetric import ResearchVulnerabilityMetric
 from research.ResearchVulnerabilityRecord import ResearchVulnerabilityRecord
@@ -87,9 +93,10 @@ class _CollectionBudget:
 class JsonFileResearchRunStore:
     """Load and atomically replace a strict versioned research-run document."""
 
-    _SCHEMA_VERSION = 13
-    _SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13}
-    _DOCUMENT_FIELDS = {"schema_version", "runs"}
+    _SCHEMA_VERSION = 20
+    _SUPPORTED_SCHEMA_VERSIONS = set(range(1, _SCHEMA_VERSION + 1))
+    _DOCUMENT_FIELDS_V1_V18 = {"schema_version", "runs"}
+    _DOCUMENT_FIELDS_V19 = _DOCUMENT_FIELDS_V1_V18 | {"source_revalidations"}
     _RUN_FIELDS_V1 = {
         "run_id",
         "question",
@@ -107,6 +114,10 @@ class JsonFileResearchRunStore:
     _RUN_FIELDS_V7 = _RUN_FIELDS_V6
     _RUN_FIELDS_V8 = _RUN_FIELDS_V7 | {"claims"}
     _RUN_FIELDS_V9 = _RUN_FIELDS_V8 | {"claim_contradictions"}
+    #: Version 14 adds explicit operator comparison reviews. A run written
+    #: before it decodes with none, which is what it holds: no review was
+    #: recorded, so no retained comparison is treated as supported.
+    _RUN_FIELDS_V14 = _RUN_FIELDS_V9 | {"comparison_reviews"}
     _SOURCE_FIELDS_V1_V6 = {
         "document_id",
         "url",
@@ -118,6 +129,28 @@ class JsonFileResearchRunStore:
     _SOURCE_FIELDS_V7 = _SOURCE_FIELDS_V1_V6 | {
         "taint_label",
         "instruction_authority",
+    }
+    #: Version 15 records the content version each run observed.  Sources
+    #: written before it decode with none: their content version is unrecorded,
+    #: never inferred from the URL or from content stored by another run.
+    _SOURCE_FIELDS_V15 = _SOURCE_FIELDS_V7 | {"content_sha256"}
+    #: Version 16 records the URL each run requested, beside the final URL.
+    #: Earlier sources decode with none: unrecorded, never copied from ``url``.
+    _SOURCE_FIELDS_V16 = _SOURCE_FIELDS_V15 | {"requested_url"}
+    #: Version 17 records discovery-candidate identity: candidate IDs on each
+    #: discovery and the selected candidate on each source.  Earlier records
+    #: decode with none; nothing is backfilled from URLs or ordering.
+    _SOURCE_FIELDS_V17 = _SOURCE_FIELDS_V16 | {"discovery_candidate_id"}
+    #: Version 18 records the immutable identity of each source acceptance.
+    #: Earlier records retain ``None`` because historical observation identity
+    #: was never captured and must not be fabricated during loading.
+    _SOURCE_FIELDS_V18 = _SOURCE_FIELDS_V17 | {"observation_id"}
+    #: Version 20 records explicit same-run revalidation provenance on the
+    #: re-observation.  Earlier records decode as ordinary acceptances; none is
+    #: ever reinterpreted as a revalidation.
+    _SOURCE_FIELDS_V20 = _SOURCE_FIELDS_V18 | {
+        "revalidation_of_observation_id",
+        "revalidation_execution_id",
     }
     _FAILURE_FIELDS_V1_V12 = {"stage", "reason", "occurred_at"}
     _FAILURE_FIELDS_V13 = _FAILURE_FIELDS_V1_V12 | {"provider"}
@@ -199,6 +232,15 @@ class JsonFileResearchRunStore:
         "note",
         "recorded_at",
     }
+    _COMPARISON_REVIEW_FIELDS = {
+        "review_id",
+        "note_id",
+        "evidence_ids",
+        "decision",
+        "note",
+        "recorded_at",
+        "supersedes_review_id",
+    }
     _COMPARISON_NOTE_FIELDS = {
         "note_id",
         "source_document_ids",
@@ -207,37 +249,47 @@ class JsonFileResearchRunStore:
         "text",
         "recorded_at",
     }
+    _SOURCE_REVALIDATION_FIELDS = {
+        "revalidation_id",
+        "earlier_run_id",
+        "earlier_observation_id",
+        "later_run_id",
+        "later_observation_id",
+        "outcome",
+        "recorded_at",
+    }
 
     def __init__(self, path: Path) -> None:
         self._path = path
 
     def load(self) -> list[ResearchRun]:
         """Return a fully validated snapshot, or an empty one when absent."""
-        if not self._path.exists():
-            return []
-        try:
-            with self._path.open("rb") as file:
-                encoded_document = file.read(MAX_RESEARCH_RUN_STORE_BYTES + 1)
-        except OSError as error:
-            raise ResearchError(
-                f"Unable to read research run store '{self._path}'."
-            ) from error
-        if len(encoded_document) > MAX_RESEARCH_RUN_STORE_BYTES:
-            raise ResearchError(f"Research run store '{self._path}' is too large.")
-        try:
-            document = json.loads(encoded_document)
-        except (UnicodeDecodeError, json.JSONDecodeError) as error:
-            raise ResearchError(
-                f"Unable to read research run store '{self._path}'."
-            ) from error
-        return self._parse_document(document)
+        return self._load_snapshot()[0]
+
+    def load_source_revalidations(self) -> list[ResearchSourceRevalidationRecord]:
+        """Return recorded cross-run observation relations without mutation."""
+        return self._load_snapshot()[1]
 
     def save(self, runs: list[ResearchRun]) -> None:
         """Atomically replace the complete research-run snapshot."""
+        self.save_with_source_revalidations(runs, [])
+
+    def save_with_source_revalidations(
+        self,
+        runs: list[ResearchRun],
+        source_revalidations: list[ResearchSourceRevalidationRecord],
+    ) -> None:
+        """Atomically replace run and cross-run temporal provenance together."""
         self._validate_runs(runs)
+        self._validate_source_revalidations(source_revalidations)
+        self._validate_source_revalidation_bindings(source_revalidations, runs)
         document = {
             "schema_version": self._SCHEMA_VERSION,
             "runs": [self._serialize_run(run) for run in runs],
+            "source_revalidations": [
+                self._serialize_source_revalidation(record)
+                for record in source_revalidations
+            ],
         }
         temporary_path: Path | None = None
         try:
@@ -267,8 +319,34 @@ class JsonFileResearchRunStore:
         finally:
             self._remove_temporary_file(temporary_path)
 
-    def _parse_document(self, document: Any) -> list[ResearchRun]:
-        if not isinstance(document, dict) or set(document) != self._DOCUMENT_FIELDS:
+    def _load_snapshot(
+        self,
+    ) -> tuple[list[ResearchRun], list[ResearchSourceRevalidationRecord]]:
+        if not self._path.exists():
+            return [], []
+        try:
+            with self._path.open("rb") as file:
+                encoded_document = file.read(MAX_RESEARCH_RUN_STORE_BYTES + 1)
+        except OSError as error:
+            raise ResearchError(
+                f"Unable to read research run store '{self._path}'."
+            ) from error
+        if len(encoded_document) > MAX_RESEARCH_RUN_STORE_BYTES:
+            raise ResearchError(f"Research run store '{self._path}' is too large.")
+        try:
+            document = json.loads(encoded_document)
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise ResearchError(
+                f"Unable to read research run store '{self._path}'."
+            ) from error
+        return self._parse_snapshot(document)
+
+    def _parse_snapshot(
+        self, document: Any
+    ) -> tuple[list[ResearchRun], list[ResearchSourceRevalidationRecord]]:
+        if not isinstance(document, dict) or not isinstance(
+            document.get("schema_version"), int
+        ):
             raise ResearchError(
                 f"Research run store '{self._path}' has invalid fields."
             )
@@ -281,6 +359,20 @@ class JsonFileResearchRunStore:
             raise ResearchError(
                 f"Research run store '{self._path}' has an unsupported schema version."
             )
+        expected_fields = (
+            self._DOCUMENT_FIELDS_V19
+            if schema_version >= 19
+            else self._DOCUMENT_FIELDS_V1_V18
+        )
+        has_empty_forward_relation_field = (
+            schema_version < 19
+            and set(document) == self._DOCUMENT_FIELDS_V19
+            and document.get("source_revalidations") == []
+        )
+        if set(document) != expected_fields and not has_empty_forward_relation_field:
+            raise ResearchError(
+                f"Research run store '{self._path}' has invalid fields."
+            )
         runs_data = document["runs"]
         if not isinstance(runs_data, list):
             raise ResearchError(
@@ -290,7 +382,19 @@ class JsonFileResearchRunStore:
         budget.consume(runs_data)
         runs = [self._parse_run(value, schema_version, budget) for value in runs_data]
         self._validate_runs(runs)
-        return runs
+        revalidations_data = document.get("source_revalidations", [])
+        if not isinstance(revalidations_data, list):
+            raise ResearchError(
+                f"Research run store '{self._path}' source revalidations "
+                "must be a list."
+            )
+        budget.consume(revalidations_data)
+        revalidations = [
+            self._parse_source_revalidation(value) for value in revalidations_data
+        ]
+        self._validate_source_revalidations(revalidations)
+        self._validate_source_revalidation_bindings(revalidations, runs)
+        return runs, revalidations
 
     def _parse_run(
         self,
@@ -317,6 +421,18 @@ class JsonFileResearchRunStore:
             12: self._RUN_FIELDS_V9,
             # Version 13 added optional provider provenance to failures.
             13: self._RUN_FIELDS_V9,
+            14: self._RUN_FIELDS_V14,
+            # Version 15 changed the shape of a source, not the run.
+            15: self._RUN_FIELDS_V14,
+            # Version 16 changed the shape of a source, not the run.
+            16: self._RUN_FIELDS_V14,
+            # Version 17 changed discoveries and sources, not the run.
+            17: self._RUN_FIELDS_V14,
+            # Version 18 changed the shape of a source, not the run.
+            18: self._RUN_FIELDS_V14,
+            # Version 19 adds document-level source revalidations, not run fields.
+            19: self._RUN_FIELDS_V14,
+            20: self._RUN_FIELDS_V14,
         }[schema_version]
         if not isinstance(value, dict) or set(value) != expected_fields:
             raise ResearchError("Research run store contains an invalid run record.")
@@ -336,6 +452,9 @@ class JsonFileResearchRunStore:
         claim_contradictions_data = (
             [] if schema_version < 9 else value["claim_contradictions"]
         )
+        comparison_reviews_data = (
+            [] if schema_version < 14 else value["comparison_reviews"]
+        )
         if (
             not isinstance(sources_data, list)
             or not isinstance(failures_data, list)
@@ -345,6 +464,7 @@ class JsonFileResearchRunStore:
             or not isinstance(comparison_notes_data, list)
             or not isinstance(claims_data, list)
             or not isinstance(claim_contradictions_data, list)
+            or not isinstance(comparison_reviews_data, list)
         ):
             raise ResearchError("Research run store contains invalid run collections.")
         for values in (
@@ -356,6 +476,7 @@ class JsonFileResearchRunStore:
             comparison_notes_data,
             claims_data,
             claim_contradictions_data,
+            comparison_reviews_data,
         ):
             budget.consume(values)
         return ResearchRun(
@@ -372,7 +493,8 @@ class JsonFileResearchRunStore:
             updated_at=self._parse_datetime(value["updated_at"], "updated_at"),
             evidence=tuple(self._parse_evidence(item) for item in evidence_data),
             discoveries=tuple(
-                self._parse_discovery(item, budget) for item in discoveries_data
+                self._parse_discovery(item, budget, schema_version)
+                for item in discoveries_data
             ),
             assessments=tuple(
                 self._parse_assessment(item, schema_version, budget)
@@ -387,6 +509,10 @@ class JsonFileResearchRunStore:
                 self._parse_claim_contradiction(item, budget)
                 for item in claim_contradictions_data
             ),
+            comparison_reviews=tuple(
+                self._parse_comparison_review(item, budget)
+                for item in comparison_reviews_data
+            ),
         )
 
     def _parse_source(
@@ -395,7 +521,29 @@ class JsonFileResearchRunStore:
         schema_version: int,
     ) -> ResearchSourceRecord:
         expected_fields = (
-            self._SOURCE_FIELDS_V7 if schema_version >= 7 else self._SOURCE_FIELDS_V1_V6
+            self._SOURCE_FIELDS_V20
+            if schema_version >= 20
+            else (
+                self._SOURCE_FIELDS_V18
+                if schema_version >= 18
+                else (
+                    self._SOURCE_FIELDS_V17
+                    if schema_version >= 17
+                    else (
+                        self._SOURCE_FIELDS_V16
+                        if schema_version >= 16
+                        else (
+                            self._SOURCE_FIELDS_V15
+                            if schema_version >= 15
+                            else (
+                                self._SOURCE_FIELDS_V7
+                                if schema_version >= 7
+                                else self._SOURCE_FIELDS_V1_V6
+                            )
+                        )
+                    )
+                )
+            )
         )
         if not isinstance(value, dict) or set(value) != expected_fields:
             raise ResearchError("Research run store contains an invalid source record.")
@@ -415,6 +563,20 @@ class JsonFileResearchRunStore:
                 value["instruction_authority"]
                 if schema_version >= 7
                 else EXTERNAL_SOURCE_INSTRUCTION_AUTHORITY
+            ),
+            content_sha256=value["content_sha256"] if schema_version >= 15 else None,
+            requested_url=value["requested_url"] if schema_version >= 16 else None,
+            discovery_candidate_id=(
+                value["discovery_candidate_id"] if schema_version >= 17 else None
+            ),
+            observation_id=value["observation_id"] if schema_version >= 18 else None,
+            revalidation_of_observation_id=(
+                value["revalidation_of_observation_id"]
+                if schema_version >= 20
+                else None
+            ),
+            revalidation_execution_id=(
+                value["revalidation_execution_id"] if schema_version >= 20 else None
             ),
         )
 
@@ -456,8 +618,14 @@ class JsonFileResearchRunStore:
         self,
         value: Any,
         budget: _CollectionBudget,
+        schema_version: int,
     ) -> ResearchSourceDiscoveryRecord:
-        if not isinstance(value, dict) or set(value) != self._DISCOVERY_FIELDS:
+        expected_fields = (
+            self._DISCOVERY_FIELDS | {"candidate_ids"}
+            if schema_version >= 17
+            else self._DISCOVERY_FIELDS
+        )
+        if not isinstance(value, dict) or set(value) != expected_fields:
             raise ResearchError(
                 "Research run store contains an invalid discovery record."
             )
@@ -467,7 +635,13 @@ class JsonFileResearchRunStore:
                 "Research run store discovery candidates must be a list."
             )
         budget.consume(candidates)
+        candidate_ids = value.get("candidate_ids", [])
+        if not isinstance(candidate_ids, list):
+            raise ResearchError(
+                "Research run store discovery candidate IDs must be a list."
+            )
         return ResearchSourceDiscoveryRecord(
+            candidate_ids=tuple(candidate_ids),
             discovery_id=value["discovery_id"],
             query=value["query"],
             provider=value["provider"],
@@ -679,6 +853,37 @@ class JsonFileResearchRunStore:
             recorded_at=self._parse_datetime(value["recorded_at"], "recorded_at"),
         )
 
+    def _parse_comparison_review(
+        self,
+        value: Any,
+        budget: _CollectionBudget,
+    ) -> ResearchComparisonReviewRecord:
+        if not isinstance(value, dict) or set(value) != self._COMPARISON_REVIEW_FIELDS:
+            raise ResearchError(
+                "Research run store contains an invalid comparison review record."
+            )
+        evidence_ids = value["evidence_ids"]
+        if not isinstance(evidence_ids, list):
+            raise ResearchError(
+                "Research run store comparison review evidence must be a list."
+            )
+        budget.consume(evidence_ids)
+        try:
+            decision = ResearchComparisonReviewDecision(value["decision"])
+        except (TypeError, ValueError) as error:
+            raise ResearchError(
+                "Research run store contains an invalid comparison review decision."
+            ) from error
+        return ResearchComparisonReviewRecord(
+            review_id=value["review_id"],
+            note_id=value["note_id"],
+            evidence_ids=tuple(evidence_ids),
+            decision=decision,
+            note=value["note"],
+            recorded_at=self._parse_datetime(value["recorded_at"], "recorded_at"),
+            supersedes_review_id=value["supersedes_review_id"],
+        )
+
     @staticmethod
     def _parse_epistemic_state(value: Any) -> ResearchEpistemicState:
         try:
@@ -697,6 +902,32 @@ class JsonFileResearchRunStore:
                 "Research run store contains invalid claim confidence."
             ) from error
 
+    def _parse_source_revalidation(
+        self, value: Any
+    ) -> ResearchSourceRevalidationRecord:
+        if (
+            not isinstance(value, dict)
+            or set(value) != self._SOURCE_REVALIDATION_FIELDS
+        ):
+            raise ResearchError(
+                "Research run store contains an invalid source revalidation record."
+            )
+        try:
+            outcome = ResearchSourceRevalidationOutcome(value["outcome"])
+        except (TypeError, ValueError) as error:
+            raise ResearchError(
+                "Research run store contains an invalid source revalidation outcome."
+            ) from error
+        return ResearchSourceRevalidationRecord(
+            revalidation_id=value["revalidation_id"],
+            earlier_run_id=value["earlier_run_id"],
+            earlier_observation_id=value["earlier_observation_id"],
+            later_run_id=value["later_run_id"],
+            later_observation_id=value["later_observation_id"],
+            outcome=outcome,
+            recorded_at=self._parse_datetime(value["recorded_at"], "recorded_at"),
+        )
+
     def _parse_datetime(self, value: Any, field_name: str) -> datetime:
         if not isinstance(value, str):
             raise ResearchError(
@@ -714,6 +945,14 @@ class JsonFileResearchRunStore:
             )
         return parsed
 
+    @classmethod
+    def encode_run(cls, run: ResearchRun) -> tuple[int, dict[str, object]]:
+        """Return the store schema version and one run's canonical document form.
+
+        Read-only; used by exports that must carry exactly the persisted shape.
+        """
+        return cls._SCHEMA_VERSION, cls._serialize_run(run)
+
     @staticmethod
     def _serialize_run(run: ResearchRun) -> dict[str, object]:
         return {
@@ -730,6 +969,14 @@ class JsonFileResearchRunStore:
                     "added_at": source.added_at.isoformat(),
                     "taint_label": source.taint_label,
                     "instruction_authority": source.instruction_authority,
+                    "content_sha256": source.content_sha256,
+                    "requested_url": source.requested_url,
+                    "discovery_candidate_id": source.discovery_candidate_id,
+                    "observation_id": source.observation_id,
+                    "revalidation_of_observation_id": (
+                        source.revalidation_of_observation_id
+                    ),
+                    "revalidation_execution_id": source.revalidation_execution_id,
                 }
                 for source in run.sources
             ],
@@ -775,6 +1022,7 @@ class JsonFileResearchRunStore:
                         for candidate in discovery.candidates
                     ],
                     "discovered_at": discovery.discovered_at.isoformat(),
+                    "candidate_ids": list(discovery.candidate_ids),
                 }
                 for discovery in run.discoveries
             ],
@@ -828,8 +1076,34 @@ class JsonFileResearchRunStore:
                 }
                 for contradiction in run.claim_contradictions
             ],
+            "comparison_reviews": [
+                {
+                    "review_id": review.review_id,
+                    "note_id": review.note_id,
+                    "evidence_ids": list(review.evidence_ids),
+                    "decision": review.decision.value,
+                    "note": review.note,
+                    "recorded_at": review.recorded_at.isoformat(),
+                    "supersedes_review_id": review.supersedes_review_id,
+                }
+                for review in run.comparison_reviews
+            ],
             "created_at": run.created_at.isoformat(),
             "updated_at": run.updated_at.isoformat(),
+        }
+
+    @staticmethod
+    def _serialize_source_revalidation(
+        record: ResearchSourceRevalidationRecord,
+    ) -> dict[str, object]:
+        return {
+            "revalidation_id": record.revalidation_id,
+            "earlier_run_id": record.earlier_run_id,
+            "earlier_observation_id": record.earlier_observation_id,
+            "later_run_id": record.later_run_id,
+            "later_observation_id": record.later_observation_id,
+            "outcome": record.outcome.value,
+            "recorded_at": record.recorded_at.isoformat(),
         }
 
     @staticmethod
@@ -850,8 +1124,11 @@ class JsonFileResearchRunStore:
                 run.comparison_notes,
                 run.claims,
                 run.claim_contradictions,
+                run.comparison_reviews,
             ):
                 budget.consume_count(len(values))
+            for review in run.comparison_reviews:
+                budget.consume_count(len(review.evidence_ids))
             for discovery in run.discoveries:
                 budget.consume_count(len(discovery.candidates))
             for assessment in run.assessments:
@@ -891,6 +1168,125 @@ class JsonFileResearchRunStore:
             raise ResearchError(
                 "Research run store contains duplicate claim contradiction IDs."
             )
+        review_ids = [
+            review.review_id for run in runs for review in run.comparison_reviews
+        ]
+        if len(review_ids) != len(set(review_ids)):
+            raise ResearchError(
+                "Research run store contains duplicate comparison review IDs."
+            )
+
+    @staticmethod
+    def _validate_source_revalidations(
+        records: list[ResearchSourceRevalidationRecord],
+    ) -> None:
+        if not isinstance(records, list) or not all(
+            isinstance(record, ResearchSourceRevalidationRecord) for record in records
+        ):
+            raise ResearchError(
+                "Research run store accepts only source revalidation records."
+            )
+        identifiers = [record.revalidation_id for record in records]
+        if len(identifiers) != len(set(identifiers)):
+            raise ResearchError(
+                "Research run store contains duplicate source revalidation IDs."
+            )
+        pairs = [
+            (
+                record.earlier_run_id,
+                record.earlier_observation_id,
+                record.later_run_id,
+                record.later_observation_id,
+            )
+            for record in records
+        ]
+        if len(pairs) != len(set(pairs)):
+            raise ResearchError(
+                "Research run store contains duplicate source revalidation pairs."
+            )
+
+    @staticmethod
+    def _validate_source_revalidation_bindings(
+        records: list[ResearchSourceRevalidationRecord],
+        runs: list[ResearchRun],
+    ) -> None:
+        from research.SourceIdentity import same_resource
+
+        by_run = {run.run_id: run for run in runs}
+        for record in records:
+            earlier_run = by_run.get(record.earlier_run_id)
+            later_run = by_run.get(record.later_run_id)
+            if earlier_run is None or later_run is None:
+                raise ResearchError(
+                    "Research source revalidation references an unknown run."
+                )
+            earlier = next(
+                (
+                    source
+                    for source in earlier_run.sources
+                    if source.observation_id == record.earlier_observation_id
+                ),
+                None,
+            )
+            later = next(
+                (
+                    source
+                    for source in later_run.sources
+                    if source.observation_id == record.later_observation_id
+                ),
+                None,
+            )
+            if earlier is None or later is None:
+                raise ResearchError(
+                    "Research source revalidation references an unknown observation."
+                )
+            if (
+                earlier.requested_url is None
+                or later.requested_url is None
+                or not same_resource(earlier.requested_url, later.requested_url)
+            ):
+                raise ResearchError(
+                    "Research source revalidation resource lineage is invalid."
+                )
+            if earlier.content_sha256 is None or later.content_sha256 is None:
+                raise ResearchError(
+                    "Research source revalidation requires recorded content versions."
+                )
+            if earlier.fetched_at >= later.fetched_at:
+                raise ResearchError(
+                    "Research source revalidation observation order is invalid."
+                )
+            expected = (
+                ResearchSourceRevalidationOutcome.CONTENT_UNCHANGED
+                if earlier.content_sha256 == later.content_sha256
+                else ResearchSourceRevalidationOutcome.CONTENT_CHANGED
+            )
+            if record.outcome is not expected:
+                raise ResearchError(
+                    "Research source revalidation outcome differs from "
+                    "recorded content."
+                )
+        # An explicit revalidation observation and its relation are committed
+        # in one write, so each must name exactly the other.  A marked
+        # observation without its same-run edge is a tampered or partial record.
+        for run in runs:
+            for source in run.sources:
+                prior_id = source.revalidation_of_observation_id
+                if prior_id is None:
+                    continue
+                matching = [
+                    record
+                    for record in records
+                    if record.later_run_id == run.run_id
+                    and record.later_observation_id == source.observation_id
+                    and record.earlier_run_id == run.run_id
+                    and record.earlier_observation_id == prior_id
+                ]
+                if len(matching) != 1:
+                    raise ResearchError(
+                        "Research source revalidation observation lacks its "
+                        "recorded relation."
+                    )
 
     @staticmethod
     def _remove_temporary_file(path: Path | None) -> None:

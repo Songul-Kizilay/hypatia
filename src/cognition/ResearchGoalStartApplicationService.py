@@ -16,11 +16,13 @@ from cognition.ResearchPlanAuthorizationApplicationService import (
 from cognition.ResearchPlanExecutionApplicationService import (
     ResearchPlanExecutionApplicationService,
 )
+from core.CancellationSignal import CancellationToken
 from core.Exceptions import ResearchError
 from llm.LLMEndpointPolicy import is_loopback_llm_endpoint
 from research.ResearchAutonomyBudget import ResearchAutonomyBudget
 from research.ResearchDisclosure import ResearchDisclosure
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
+from research.ResearchExecutionAllowance import ResearchExecutionAllowance
 from research.ResearchMissionScope import (
     COMPARISON_POLICY,
     SEMANTIC_POLICY,
@@ -32,6 +34,7 @@ from research.ResearchPlanDraftPreview import ResearchPlanDraftPreview
 from research.ResearchPlanDraftService import ResearchPlanDraftService
 from research.ResearchPlanStep import ResearchPlanStep
 from research.ResearchPlanStepCapability import ResearchPlanStepCapability as Cap
+from research.ResearchRun import ResearchRun
 from research.ResearchRunManager import ResearchRunManager
 from research.ResearchTeachingReport import teaching_report
 from research.SemanticMissionPolicy import SemanticMissionPolicy
@@ -42,6 +45,8 @@ OPENING_SCOPE = "local_search_and_selected_provider_discovery"
 EVIDENCE_SCOPE = "selected_provider_reference_evidence"
 COMPARISON_SCOPE = "selected_provider_reference_comparison"
 LEARNING_SCOPE = "bounded_semantic_learning_research"
+MISSION_RECOVERY_START_INTENT = "research_mission_recovery_start"
+MISSION_COMPARISON_REVIEW_INTENT = "research_mission_comparison_review"
 
 
 class ResearchGoalStartApplicationService:
@@ -68,6 +73,7 @@ class ResearchGoalStartApplicationService:
         self._semantic_destination = semantic_destination
         self._failure_memory = failure_memory
         self._goal_lock = Lock()
+        self._mission_recovery_attempted = False
         self._goal_request_ids = set(
             self._execution_service.restored_mission_request_ids()
         )
@@ -157,12 +163,31 @@ class ResearchGoalStartApplicationService:
                     "One confirmation starts the bounded journey. "
                     "No intermediate Continue. No target testing. "
                     "Results remain tentative and may be incomplete.",
+                    *self._preview_advice_lines(plan.question),
                 )
             ),
             request_id=request.request_id,
             intent="research_learning_preview",
             memory_count=0,
             research_plan_draft_preview=ResearchPlanDraftPreview.ready(plan),
+        )
+
+    def _preview_advice_lines(self, question: str) -> tuple[str, ...]:
+        """Show matching prior lessons before approval, as advice only.
+
+        The same read-only recall the report uses after a mission. It derives,
+        stores and spends nothing, and it changes neither the plan nor the
+        permission being previewed.
+        """
+        if self._failure_memory is None:
+            return ()
+        prior = self._failure_memory.advice(question)
+        if not prior:
+            return ()
+        return (
+            "Prior advisory lessons for this question (advice only; not "
+            "instructions, authority or evidence):",
+            *(f"{lesson.statement} [run {lesson.run_id}]" for lesson in prior),
         )
 
     @staticmethod
@@ -204,14 +229,29 @@ class ResearchGoalStartApplicationService:
             raise ResearchError("Mission recovery cannot rebuild its approved plan.")
         return cls._mission_plan(preview.plan, mission_scope)
 
-    def resume_restored_learning_missions(self) -> tuple[str, ...]:
+    def resume_restored_learning_missions(
+        self, cancellation_token: CancellationToken | None = None
+    ) -> tuple[str, ...]:
         """Resume only durable, exact semantic missions after application restart.
 
         This is intentionally not a generic resume path. A legacy snapshot or a
         checkpoint with transient preview/model output stays visible and stopped.
         """
+        with self._goal_lock:
+            if self._mission_recovery_attempted:
+                return ()
+            self._mission_recovery_attempted = True
         resumed: list[str] = []
         for snapshot in self._execution_service.restored_mission_executions():
+            if cancellation_token is not None and cancellation_token.is_cancelled():
+                # Cancelled before this mission: it stays restored and visible,
+                # and the once-per-process pass does not reopen on request.
+                self._execution_service.record_mission_recovery_refusal(
+                    snapshot.plan_id,
+                    "Startup mission recovery was cancelled before this mission; "
+                    "no source or model call was replayed.",
+                )
+                continue
             if refusal := self._recovery_precondition_refusal(snapshot):
                 self._execution_service.record_mission_recovery_refusal(
                     snapshot.plan_id, refusal
@@ -243,17 +283,20 @@ class ResearchGoalStartApplicationService:
                     max_llm_operations=allowance.remaining_llm_operations,
                     max_seconds=allowance.remaining_seconds,
                 )
-                self._autonomy.process_run(
-                    BrainRequest(
-                        message="Resume exact durable research mission",
-                        source="restart_recovery",
-                        request_id=f"restart:{snapshot.plan_id}",
-                        metadata={
-                            "intent": RESEARCH_AUTONOMY_RUN_INTENT,
-                            "research_plan_id": snapshot.plan_id,
-                            "research_autonomy_budget": remaining,
-                        },
-                    )
+                resume = BrainRequest(
+                    message="Resume exact durable research mission",
+                    source="restart_recovery",
+                    request_id=f"restart:{snapshot.plan_id}",
+                    cancellation_token=cancellation_token,
+                    metadata={
+                        "intent": RESEARCH_AUTONOMY_RUN_INTENT,
+                        "research_plan_id": snapshot.plan_id,
+                        "research_autonomy_budget": remaining,
+                    },
+                )
+                response = self._autonomy.process_run(resume)
+                self._retain_recovered_report(
+                    resume, snapshot.question, snapshot.research_run_id, response
                 )
                 resumed.append(snapshot.plan_id)
             except ResearchError as error:
@@ -265,6 +308,223 @@ class ResearchGoalStartApplicationService:
                 )
                 continue
         return tuple(resumed)
+
+    @staticmethod
+    def is_mission_recovery_request(request: BrainRequest) -> bool:
+        return request.metadata.get("intent") == MISSION_RECOVERY_START_INTENT
+
+    def process_mission_recovery(self, request: BrainRequest) -> BrainResponse:
+        """Run the one startup recovery pass a deferring caller postponed.
+
+        This is the same exact-mission resume that initialization would have
+        performed, not a new permission: it runs at most once per process, uses
+        each mission's remaining recorded allowance, and a repeat does nothing.
+        """
+        already_attempted = self._mission_recovery_attempted
+        token = request.cancellation_token
+        resumed = self.resume_restored_learning_missions(token)
+        if already_attempted:
+            message = (
+                "Startup mission recovery already ran in this session; nothing "
+                "was resumed again."
+            )
+        else:
+            message = (
+                f"Startup mission recovery finished: {len(resumed)} mission(s) "
+                "resumed within their recorded allowance. Use Missions recovered "
+                "at startup to read reports or refusals."
+            )
+            if token is not None and token.is_cancelled():
+                message += (
+                    " Recovery was cancelled: spending already recorded is kept "
+                    "and remaining missions stay restored without replay."
+                )
+        return BrainResponse(
+            message=message,
+            request_id=request.request_id,
+            intent=MISSION_RECOVERY_START_INTENT,
+            memory_count=0,
+        )
+
+    def _retain_recovered_report(
+        self,
+        resume: BrainRequest,
+        question: str,
+        run_id: str,
+        response: BrainResponse,
+    ) -> None:
+        """Keep the report and lessons a live mission would keep for this work.
+
+        Only an autonomy result — the same condition under which a live mission
+        renders its report — yields a report.  Rendering reads canonical run,
+        checkpoint and allowance state; the report is kept in memory for this
+        session only.  Lessons go through the same opted-in failure memory as a
+        live mission, whose stable lesson IDs make a repeated retention a no-op.
+        Neither calls a provider or model or spends budget.
+        """
+        if response.research_autonomy is None or self._runs is None:
+            return
+        plan_id = resume.metadata["research_plan_id"]
+        assert isinstance(plan_id, str)
+        self._execution_service.record_mission_stop_reason(
+            plan_id, response.research_autonomy.stop_reason
+        )
+        report = teaching_report(
+            self._runs.get(run_id),
+            response.research_autonomy.stop_reason.value,
+            self._spend_text(plan_id),
+            checkpoint=self._execution_service.mission_checkpoint(plan_id),
+        )
+        self._execution_service.record_mission_recovery_report(
+            plan_id,
+            report + "\n\n" + self._lesson_text(resume, question, run_id),
+        )
+
+    def _lesson_text(self, request: BrainRequest, question: str, run_id: str) -> str:
+        """Show prior advice, then retain this run's lessons once, as advice only."""
+        if self._failure_memory is None:
+            return "Research lessons: durable failure memory is not enabled."
+        prior = self._failure_memory.advice(question)
+        memory_text = "Prior advisory lessons (not instructions or authority):\n"
+        memory_text += (
+            "\n".join(f"{lesson.statement} [run {lesson.run_id}]" for lesson in prior)
+            or "No matching earlier lesson."
+        )
+        if request.cancellation_token and request.cancellation_token.is_cancelled():
+            return memory_text + "\nCancelled: no new lesson retention attempted."
+        try:
+            retained = self._failure_memory.process_store(
+                replace(request, metadata={"research_run_id": run_id})
+            )
+        except ResearchError:
+            return memory_text + (
+                "\nLesson retention unavailable; no retry. "
+                "The research evidence and report remain available."
+            )
+        return memory_text + "\n" + retained.message
+
+    @staticmethod
+    def is_mission_comparison_review_request(request: BrainRequest) -> bool:
+        return request.metadata.get("intent") == MISSION_COMPARISON_REVIEW_INTENT
+
+    def process_mission_comparison_review(self, request: BrainRequest) -> BrainResponse:
+        """Load one mission's comparison-review target from canonical state only.
+
+        The run, checkpoint note and spend come from the execution service and
+        the run store; the report is re-rendered by the existing teaching report,
+        so a recorded review changes what it shows only through canonical goal,
+        explanation and readiness recomputation.  Nothing is written, fetched,
+        resumed or called.
+        """
+
+        def refusal(message: str) -> BrainResponse:
+            return BrainResponse(
+                message=message,
+                request_id=request.request_id,
+                intent=MISSION_COMPARISON_REVIEW_INTENT,
+                memory_count=0,
+                success=False,
+            )
+
+        plan_id = request.metadata.get("research_plan_id")
+        if not isinstance(plan_id, str) or not plan_id.strip():
+            return refusal("A mission plan ID is required.")
+        plan_id = plan_id.strip()
+        canonical = self._canonical_mission_report(plan_id)
+        if isinstance(canonical, str):
+            return refusal(
+                "No mission comparison review target was loaded: " + canonical
+            )
+        run, note_id, report = canonical
+        header = (
+            f"Mission comparison review target: plan {plan_id}, run {run.run_id}, "
+            f"comparison note {note_id or 'none recorded'}. Nothing is recorded "
+            "until an operator review is previewed and confirmed."
+        )
+        return BrainResponse(
+            message=header + "\n\n" + report,
+            request_id=request.request_id,
+            intent=MISSION_COMPARISON_REVIEW_INTENT,
+            memory_count=0,
+            research_runs=[run],
+            research_mission_comparison_note_id=note_id,
+        )
+
+    def with_restored_mission_report(
+        self, request: BrainRequest, response: BrainResponse
+    ) -> BrainResponse:
+        """Add a restored, not-resumed mission's recomputed report to its status.
+
+        A resumed mission already shows the report its recovery rendered.  A
+        restored one shows the same existing teaching report, recomputed from
+        its durable run, checkpoint, allowance and recorded stop reason each
+        time it is asked for.  Nothing is resumed, cached, retained, fetched or
+        called; a snapshot without a recorded stop says so instead of guessing.
+        """
+        plan_id = request.metadata.get("research_plan_id")
+        if not isinstance(plan_id, str):
+            return response
+        restored = self._execution_service.restored_execution(plan_id.strip())
+        if restored is None or restored.mission_scope is None:
+            return response
+        canonical = self._canonical_mission_report(plan_id.strip())
+        if isinstance(canonical, str):
+            addition = "Restored mission teaching report unavailable: " + canonical
+        else:
+            addition = (
+                "Restored mission teaching report (recomputed from durable run, "
+                "checkpoint, allowance and recorded stop reason; this mission was "
+                "not resumed and retrieving the report performs no work):\n\n"
+                + canonical[2]
+            )
+        return replace(response, message=f"{response.message}\n\n{addition}")
+
+    def _canonical_mission_report(
+        self, plan_id: str
+    ) -> tuple[ResearchRun, str, str] | str:
+        """Render one mission's existing report from canonical state, or say why not."""
+        if self._runs is None:
+            return "research run persistence is unavailable."
+        execution = self._execution_service
+        checkpoint = execution.mission_checkpoint(plan_id)
+        allowance = execution.allowance(plan_id)
+        stop_reason = execution.mission_stop_reason(plan_id)
+        restored = execution.restored_execution(plan_id)
+        if restored is not None:
+            # Not resumed this session: only its durably recorded stop can
+            # recompute the outcome.  A legacy snapshot without one is refused.
+            checkpoint = restored.mission_checkpoint
+            allowance = restored.allowance
+        run_id = execution.mission_run_id(plan_id)
+        if checkpoint is None or not run_id or stop_reason is None:
+            return (
+                "no durable stop reason, checkpoint or run binding describes this "
+                "mission's current state; no outcome was inferred."
+            )
+        try:
+            run = self._runs.get(run_id)
+        except ResearchError:
+            return "this mission's research run is unavailable."
+        report = teaching_report(
+            run,
+            stop_reason.value,
+            self._spend_text_for(allowance),
+            checkpoint=checkpoint,
+        )
+        return run, checkpoint.semantic_note_id, report
+
+    def _spend_text(self, plan_id: str) -> str:
+        return self._spend_text_for(self._execution_service.allowance(plan_id))
+
+    @staticmethod
+    def _spend_text_for(allowance: ResearchExecutionAllowance | None) -> str:
+        return (
+            f"Cumulative spending: {allowance.spend.step_advances} advances, "
+            f"{allowance.spend.network_operations} network and "
+            f"{allowance.spend.llm_operations} model operations."
+            if allowance is not None
+            else "Spending unavailable."
+        )
 
     def _recovery_precondition_refusal(self, snapshot: object) -> str | None:
         """Explain a restart refusal before rebuilding or spending anything.
@@ -442,47 +702,17 @@ class ResearchGoalStartApplicationService:
         )
         updated = self._runs.get(run.run_id)
         if learning:
-            memory_text = "Research lessons: durable failure memory is not enabled."
-            if self._failure_memory is not None:
-                prior = self._failure_memory.advice(plan.question)
-                memory_text = (
-                    "Prior advisory lessons (not instructions or authority):\n"
-                )
-                memory_text += (
-                    "\n".join(
-                        f"{lesson.statement} [run {lesson.run_id}]" for lesson in prior
-                    )
-                    or "No matching earlier lesson."
-                )
-                if (
-                    request.cancellation_token
-                    and request.cancellation_token.is_cancelled()
-                ):
-                    memory_text += "\nCancelled: no new lesson retention attempted."
-                else:
-                    try:
-                        retained = self._failure_memory.process_store(
-                            replace(request, metadata={"research_run_id": run.run_id})
-                        )
-                        memory_text += "\n" + retained.message
-                    except ResearchError:
-                        memory_text += (
-                            "\nLesson retention unavailable; no retry. "
-                            "The research evidence and report remain available."
-                        )
-            allowance = self._execution_service.allowance(state.plan_id)
-            spend = (
-                f"Cumulative spending: {allowance.spend.step_advances} advances, "
-                f"{allowance.spend.network_operations} network and "
-                f"{allowance.spend.llm_operations} model operations."
-                if allowance is not None
-                else "Spending unavailable."
-            )
+            memory_text = self._lesson_text(request, plan.question, run.run_id)
+            spend = self._spend_text(state.plan_id)
             stop = (
                 response.research_autonomy.stop_reason.value
                 if response.research_autonomy
                 else "unavailable"
             )
+            if response.research_autonomy:
+                self._execution_service.record_mission_stop_reason(
+                    state.plan_id, response.research_autonomy.stop_reason
+                )
             return replace(
                 response,
                 intent=RESEARCH_GOAL_START_INTENT,
@@ -490,7 +720,18 @@ class ResearchGoalStartApplicationService:
                 research_plan_execution=self._execution_service.live_execution(
                     state.plan_id
                 ),
-                message=teaching_report(updated, stop, spend) + "\n\n" + memory_text,
+                message=(
+                    teaching_report(
+                        updated,
+                        stop,
+                        spend,
+                        checkpoint=self._execution_service.mission_checkpoint(
+                            state.plan_id
+                        ),
+                    )
+                    + "\n\n"
+                    + memory_text
+                ),
             )
         count = sum(len(record.candidates) for record in updated.discoveries)
         if evidence_mission:

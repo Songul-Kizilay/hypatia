@@ -33,6 +33,8 @@ class ResearchPlanStepOperationResult:
     discovery_id: str = ""
     evidence_id: str = ""
     assessment_id: str = ""
+    source_observation_id: str = ""
+    source_revalidation_id: str = ""
     semantic_comparison: SemanticComparisonStepResult | None = field(
         default=None, repr=False
     )
@@ -51,7 +53,12 @@ class ResearchPlanStepOperationResult:
             raise ResearchError(
                 "Only successful comparison can carry tentative output."
             )
-        for identity in (self.evidence_id, self.assessment_id):
+        for identity in (
+            self.evidence_id,
+            self.assessment_id,
+            self.source_observation_id,
+            self.source_revalidation_id,
+        ):
             if not isinstance(identity, str) or len(identity) > 200:
                 raise ResearchError("Operation record identity is invalid.")
             if identity and (not self.performed or not self.succeeded):

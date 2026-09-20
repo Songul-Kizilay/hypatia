@@ -228,3 +228,7 @@ models/**
 !models/README.md
 logs/**
 !logs/.gitkeep
+
+# Claude Code: personal settings and isolated worktrees stay local
+.claude/settings.local.json
+.claude/worktrees/

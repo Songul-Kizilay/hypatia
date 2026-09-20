@@ -180,6 +180,7 @@ class Bootstrap:
         kali_runtime_probe: WslKaliRuntimeProbe | None = None,
         kali_operation_process_adapter: WslKaliOperationProcessAdapter | None = None,
         semantic_comparison_transport: ChatCompletionTransport | None = None,
+        defer_mission_recovery: bool = False,
     ) -> None:
         self._memory_path = memory_path
         self._session_path = session_path
@@ -210,6 +211,9 @@ class Bootstrap:
         )
         self._kali_runtime_probe = kali_runtime_probe
         self._kali_operation_process_adapter = kali_operation_process_adapter
+        # A caller with its own worker (the desktop) resumes restored missions
+        # after it is visible instead of inside initialize().
+        self._defer_mission_recovery = defer_mission_recovery
 
     @classmethod
     def from_process_environment(
@@ -220,6 +224,7 @@ class Bootstrap:
         research_run_path: Path | None = None,
         research_source_content_path: Path | None = None,
         research_program_scope_revision_path: Path | None = None,
+        defer_mission_recovery: bool = False,
     ) -> Bootstrap:
         """Create Bootstrap with LLM settings loaded from the process environment."""
         llm_config, llm_api_key = load_llm_process_environment_settings()
@@ -260,6 +265,7 @@ class Bootstrap:
             kali_operation_process_adapter=(
                 Bootstrap._load_process_kali_operation_process_adapter()
             ),
+            defer_mission_recovery=defer_mission_recovery,
         )
 
     @staticmethod
@@ -687,6 +693,7 @@ class Bootstrap:
                 research_source_content_restoration_status
             ),
             research_evidence_integrity_auditor=(research_evidence_integrity_auditor),
+            defer_mission_recovery=self._defer_mission_recovery,
         )
         brain = Brain(cognitive_engine, memory_manager, event_bus)
         deferred_execution_control = (

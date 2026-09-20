@@ -26,6 +26,7 @@ from desktop.KaliOperationPanel import KaliOperationPanel
 from research.JsonFileResearchKaliOperationAuthorizationStore import (
     JsonFileResearchKaliOperationAuthorizationStore,
 )
+from research.PublicHttpsUrlValidator import PublicHttpsUrlValidator
 from research.ResearchKaliOperationExecution import ResearchKaliOperationProcessResult
 from research.ResearchProgramScopeExecutionPolicy import (
     ResearchProgramScopeExecutionPolicy,
@@ -75,7 +76,13 @@ class KaliOperationPanelTests(unittest.TestCase):
             Path(self.temp.name) / "approvals.json"
         )
         composer = ResponseComposer()
-        self.previews = KaliOperationPreviewApplicationService(composer, self.scopes)
+        self.previews = KaliOperationPreviewApplicationService(
+            composer,
+            self.scopes,
+            https_url_validator=PublicHttpsUrlValidator(
+                lambda _hostname: ("93.184.216.34",)
+            ),
+        )
         self.approvals = KaliOperationAuthorizationApplicationService(
             composer, self.previews, authorization_store=self.store
         )

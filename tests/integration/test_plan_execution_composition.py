@@ -581,6 +581,137 @@ class PlanExecutionCompositionTests(unittest.TestCase):
         self.assertEqual(final.claims, ())
         self.assertEqual(final.assessments, ())
 
+    def test_manual_candidate_acceptance_records_the_selected_candidate(
+        self,
+    ) -> None:
+        run = self.run_manager.create("What evidence supports the claim?")
+        discovery = self.run_manager.add_discovery(
+            run.run_id,
+            "What evidence supports the claim?",
+            "stub_provider",
+            [
+                ResearchSourceCandidate(
+                    url="https://example.test/candidate",
+                    title="Candidate",
+                    snippet="A snippet.",
+                )
+            ],
+        ).discoveries[0]
+
+        response = self.engine.process(
+            BrainRequest(
+                message="Accept selected research source candidate",
+                metadata={
+                    "intent": "research_source_candidate_accept",
+                    "research_run_id": run.run_id,
+                    "research_discovery_id": discovery.discovery_id,
+                    "research_url": "https://example.test/candidate",
+                },
+            )
+        )
+
+        self.assertTrue(response.success, response.message)
+        source = self.run_manager.get(run.run_id).sources[0]
+        self.assertEqual(source.discovery_candidate_id, discovery.candidate_ids[0])
+        self.assertEqual(source.requested_url, "https://example.test/candidate")
+
+    def test_plan_acceptance_records_the_authorized_requested_url(self) -> None:
+        run = self.run_manager.create("What evidence supports the claim?")
+
+        def redirected(url: str) -> ResearchSource:
+            self.source_fetcher.urls.append(url)
+            return ResearchSource(
+                url="https://example.test/final",
+                title="Authorized source",
+                content="Authorized source body text.",
+                content_type="text/html",
+                fetched_at=datetime(2026, 8, 1, tzinfo=UTC),
+            )
+
+        self.source_fetcher.fetch = redirected  # type: ignore[method-assign]
+        self._advance(
+            self._start(
+                "source_accept",
+                run_id=run.run_id,
+                authorized_url="https://example.test/requested",
+            )
+        )
+
+        source = self.run_manager.get(run.run_id).sources[0]
+        self.assertEqual(
+            (source.requested_url, source.url),
+            ("https://example.test/requested", "https://example.test/final"),
+        )
+
+    def test_repeated_identical_evidence_fails_honestly_without_duplicate(
+        self,
+    ) -> None:
+        run = self.run_manager.create("What evidence supports the claim?")
+        accept_plan = self._start(
+            "source_accept",
+            run_id=run.run_id,
+            authorized_url="https://example.test/chain",
+        )
+        self._advance(accept_plan)
+        document_id = self.run_manager.get(run.run_id).sources[0].document_id
+        authorization = (document_id, 0, "Supports the question under review.")
+        first = self._advance(
+            self._start("evidence_recording", run_id=run.run_id, evidence=authorization)
+        )
+        assert first.research_plan_execution is not None
+        self.assertEqual(first.research_plan_execution.status.value, "completed")
+        recorded = self.run_manager.get(run.run_id)
+
+        again = self._advance(
+            self._start("evidence_recording", run_id=run.run_id, evidence=authorization)
+        )
+
+        state = again.research_plan_execution
+        assert state is not None
+        self.assertEqual(state.status.value, "failed")
+        # Refused before any write: not reported as performed work or success.
+        self.assertFalse(state.steps[0].work_performed)
+        self.assertIn(recorded.evidence[0].evidence_id, state.steps[0].detail)
+        self.assertEqual(self.run_manager.get(run.run_id).evidence, recorded.evidence)
+
+    def test_repeated_manual_evidence_entry_is_explained_not_duplicated(
+        self,
+    ) -> None:
+        run = self.run_manager.create("What evidence supports the claim?")
+        self._advance(
+            self._start(
+                "source_accept",
+                run_id=run.run_id,
+                authorized_url="https://example.test/chain",
+            )
+        )
+        document_id = self.run_manager.get(run.run_id).sources[0].document_id
+        chunk = next(
+            c for c in self.knowledge_engine.chunks() if c.document_id == document_id
+        )
+
+        def record():  # type: ignore[no-untyped-def]
+            return self.engine.process(
+                BrainRequest(
+                    message="Record selected research evidence",
+                    metadata={
+                        "intent": "research_evidence_record",
+                        "research_run_id": run.run_id,
+                        "research_chunk_id": chunk.chunk_id,
+                        "research_evidence_note": "Supports the question.",
+                    },
+                )
+            )
+
+        first = record()
+        again = record()
+
+        self.assertTrue(first.success, first.message)
+        self.assertFalse(again.success)
+        existing = self.run_manager.get(run.run_id).evidence
+        self.assertEqual(len(existing), 1)
+        self.assertIn(f"already recorded as {existing[0].evidence_id}", again.message)
+
     def test_fetched_but_unaccepted_source_cannot_record_evidence(self) -> None:
         run = self.run_manager.create("What evidence supports the claim?")
 

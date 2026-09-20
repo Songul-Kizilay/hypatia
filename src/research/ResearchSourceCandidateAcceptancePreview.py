@@ -17,6 +17,9 @@ class ResearchSourceCandidateAcceptancePreview:
     candidate: ResearchSourceCandidate
     allowed: bool
     reason: str
+    #: The recorded identity of the previewed candidate, when its discovery
+    #: recorded identities; carried into acceptance, never matched by URL.
+    candidate_id: str | None = None
 
     def __post_init__(self) -> None:
         for value, field_name in (

@@ -77,6 +77,9 @@ from cognition.ResearchGoalStartApplicationService import (
 from cognition.ResearchHonestyApplicationService import (
     ResearchHonestyApplicationService,
 )
+from cognition.ResearchMissionAuditApplicationService import (
+    ResearchMissionAuditApplicationService,
+)
 from cognition.ResearchOverviewApplicationService import (
     ResearchOverviewApplicationService,
 )
@@ -91,6 +94,11 @@ from cognition.ResearchPlanPreviewApplicationService import (
 )
 from cognition.ResearchSourceAcceptanceService import (
     ResearchSourceAcceptanceService,
+)
+from cognition.RuntimeCapabilityProjection import (
+    RuntimeCapabilityContext,
+    RuntimeCapabilityEvidence,
+    project_runtime_capabilities,
 )
 from cognition.SecurityAgentApplicationService import (
     SecurityAgentApplicationService,
@@ -114,6 +122,7 @@ from core.Exceptions import (
     SessionDeleteEventError,
     SessionError,
 )
+from core.Version import VERSION
 from eventbus.EventBus import EventBus
 from knowledge.KnowledgeCitation import KnowledgeCitation
 from knowledge.KnowledgeContextPrompt import (
@@ -190,6 +199,7 @@ from research.ResearchKaliOperationAuthorizationStore import (
 from research.ResearchKaliOperationExecution import (
     ResearchKaliOperationProcessAdapter,
 )
+from research.ResearchKaliOperationPreview import ResearchKaliOperationKind
 from research.ResearchKaliRuntimeEnvironment import ResearchKaliRuntimeProbe
 from research.ResearchMissionStepResolver import ResearchMissionStepResolver
 from research.ResearchPlan import ResearchPlan
@@ -228,6 +238,7 @@ from research.SourceDiscoveryStepOperation import SourceDiscoveryStepOperation
 from research.SourceFetchStepOperation import SourceFetchStepOperation
 from research.SourceIdentity import identity_of
 from research.SourceLoadStage import SourceLoadStage
+from research.SourceRevalidationStepOperation import SourceRevalidationStepOperation
 from response.ResponseComposer import ResponseComposer
 from security.VulnerabilityGraphStore import VulnerabilityGraphStore
 from session.SessionCreateService import SessionCreateService
@@ -335,6 +346,7 @@ class CognitiveEngine:
         research_evidence_integrity_auditor: (
             ResearchEvidenceIntegrityAuditor | None
         ) = None,
+        defer_mission_recovery: bool = False,
         research_plan_draft_service: ResearchPlanDraftService | None = None,
         semantic_comparison_operation: SemanticComparisonStepOperation | None = None,
     ) -> None:
@@ -485,6 +497,15 @@ class CognitiveEngine:
                         research_run_manager,
                     ),
                 )
+                operation_registry.register(
+                    ResearchPlanStepCapability.SOURCE_REVALIDATION,
+                    SourceRevalidationStepOperation(
+                        research_source_fetcher,
+                        self._research_source_acceptance_service,
+                        research_run_manager,
+                    ),
+                )
+        registered_research_operations = operation_registry.registered_capabilities
         # Built before execution so it can be handed over as the narrow
         # consumption port. Approval still imports no execution or scheduling
         # service: the dependency runs one way, from execution to approval.
@@ -545,6 +566,16 @@ class CognitiveEngine:
                 hypothesis_store=hypothesis_store,
                 event_bus=event_bus,
             )
+        self._research_mission_audit_service = ResearchMissionAuditApplicationService(
+            self._research_plan_execution_service,
+            research_run_manager,
+            (
+                self._plan_authorization_service
+                if plan_authorization_store is not None
+                else None
+            ),
+            hypatia_version=lambda: VERSION.short,
+        )
         self._research_goal_start_service = ResearchGoalStartApplicationService(
             self._research_plan_execution_service,
             self._research_autonomy_service,
@@ -567,7 +598,8 @@ class CognitiveEngine:
                 else None
             ),
         )
-        self._research_goal_start_service.resume_restored_learning_missions()
+        if not defer_mission_recovery:
+            self._research_goal_start_service.resume_restored_learning_missions()
         self._background_research_scheduler = (
             BackgroundResearchSchedulerApplicationService(
                 self._research_autonomy_service,
@@ -739,6 +771,47 @@ class CognitiveEngine:
         )
         self._hybrid_semantic_memory_ranker = HybridSemanticMemoryRanker()
         self._router = BrainRouter()
+        self._runtime_capabilities = self._project_runtime_capabilities(
+            registered_research_operations
+        )
+
+    @property
+    def runtime_capabilities(self) -> RuntimeCapabilityContext:
+        """Return what this runtime can truthfully describe; never authority."""
+        return self._runtime_capabilities
+
+    def _project_runtime_capabilities(
+        self,
+        registered_research_operations: tuple[ResearchPlanStepCapability, ...],
+    ) -> RuntimeCapabilityContext:
+        """Observe this engine's own wiring once; claim nothing on failure.
+
+        Only plain facts leave here: whether a service was wired, which research
+        operations are registered and which reviewed Kali operation kinds a
+        wired runner can run.  Projection performs no operation and no call.
+        """
+        try:
+            return project_runtime_capabilities(
+                RuntimeCapabilityEvidence(
+                    conversation_model=self._llm_provider is not None,
+                    sessions=self._session_manager is not None,
+                    memory=self._memory_manager is not None,
+                    local_knowledge=self._knowledge_engine is not None,
+                    research_approvals=(
+                        self._research_run_manager is not None
+                        and self._plan_authorization_service is not None
+                    ),
+                    research_operations=frozenset(registered_research_operations),
+                    security_self_audit=self._security_agent_service is not None,
+                    kali_operation_kinds=(
+                        tuple(kind.value for kind in ResearchKaliOperationKind)
+                        if self._kali_operation_run_service is not None
+                        else ()
+                    ),
+                )
+            )
+        except Exception:  # noqa: BLE001 - a projection fault must not add claims
+            return RuntimeCapabilityContext.conservative()
 
     def process(self, request: BrainRequest) -> BrainResponse:
         """Process a request using the currently supported cognitive intent."""
@@ -828,7 +901,12 @@ class CognitiveEngine:
             return self._research_plan_execution_service.process_start(request)
 
         if self._research_plan_execution_service.is_status_request(request):
-            return self._research_plan_execution_service.process_status(request)
+            return self._research_goal_start_service.with_restored_mission_report(
+                request,
+                self._research_plan_execution_service.process_status(request),
+            )
+        if self._research_plan_execution_service.is_recovered_request(request):
+            return self._research_plan_execution_service.process_recovered(request)
 
         if self._research_plan_execution_service.is_cancel_request(request):
             return self._research_plan_execution_service.process_cancel(request)
@@ -844,6 +922,16 @@ class CognitiveEngine:
 
         if self._research_goal_start_service.is_goal_request(request):
             return self._research_goal_start_service.process_goal(request)
+        if self._research_goal_start_service.is_mission_recovery_request(request):
+            return self._research_goal_start_service.process_mission_recovery(request)
+        if self._research_mission_audit_service.is_request(request):
+            return self._research_mission_audit_service.process(request)
+        if self._research_goal_start_service.is_mission_comparison_review_request(
+            request
+        ):
+            return self._research_goal_start_service.process_mission_comparison_review(
+                request
+            )
         if self._research_autonomy_service.is_run_request(request):
             return self._research_autonomy_service.process_run(request)
 
@@ -947,6 +1035,8 @@ class CognitiveEngine:
 
         if self._is_research_claim_contradiction_record_request(request):
             return self._process_research_claim_contradiction_record(request)
+        if request.metadata.get("intent") == "research_comparison_review_record":
+            return self._process_research_comparison_review_record(request)
 
         if authored_history.is_source_comparison_preview_request(request):
             return authored_history.process_source_comparison_preview(request)
@@ -1463,10 +1553,16 @@ class CognitiveEngine:
                 chunk,
                 note,
             )
-        except ResearchError:
+        except ResearchError as error:
             return self._response_composer.research_evidence_record_failure(
                 request,
-                "Research evidence could not be saved.",
+                # A repeated identical entry is explained, naming the existing
+                # evidence; other refusals keep the bounded generic message.
+                (
+                    str(error)
+                    if str(error).startswith("This exact evidence is already recorded")
+                    else "Research evidence could not be saved."
+                ),
             )
         return self._response_composer.research_evidence_record_success(request, run)
 
@@ -1765,6 +1861,46 @@ class CognitiveEngine:
         return self._process_research_claim_contradiction_write(
             request,
             preview_only=True,
+        )
+
+    def _process_research_comparison_review_record(
+        self,
+        request: BrainRequest,
+    ) -> BrainResponse:
+        """Commit one separately confirmed operator review of one comparison note."""
+        failure = self._response_composer.research_comparison_review_record_failure
+        metadata = request.metadata
+        run_id = metadata.get("research_run_id")
+        note_id = metadata.get("research_comparison_note_id")
+        decision = metadata.get("research_comparison_review_decision")
+        note = metadata.get("research_comparison_review_note")
+        supersedes = metadata.get("research_comparison_review_supersedes_id", "")
+        if not all(
+            isinstance(value, str) and value.strip()
+            for value in (run_id, note_id, decision, note)
+        ) or not isinstance(supersedes, str):
+            return failure(
+                request,
+                "A run ID, comparison note ID, review decision and operator review "
+                "note are required.",
+            )
+        if self._research_run_manager is None:
+            return failure(request, "Research run persistence is unavailable.")
+        assert isinstance(run_id, str)
+        assert isinstance(note_id, str)
+        assert isinstance(decision, str)
+        assert isinstance(note, str)
+        try:
+            run = self._research_run_manager.record_comparison_review(
+                run_id, note_id, decision, note, supersedes or None
+            )
+        except ResearchError:
+            return failure(
+                request,
+                "Research comparison review could not be validated or saved.",
+            )
+        return self._response_composer.research_comparison_review_record_success(
+            request, run
         )
 
     def _process_research_claim_contradiction_record(
@@ -2369,6 +2505,7 @@ class CognitiveEngine:
         return self._process_research_source_load(
             request,
             response_intent="research_source_candidate_accept",
+            discovery_candidate_id=preview.candidate_id or "",
         )
 
     @staticmethod
@@ -2394,6 +2531,7 @@ class CognitiveEngine:
         request: BrainRequest,
         *,
         response_intent: str = "research_source_load",
+        discovery_candidate_id: str = "",
     ) -> BrainResponse:
         """Acquire and index one explicit source without LLM or memory side effects.
 
@@ -2503,6 +2641,8 @@ class CognitiveEngine:
                 source,
                 run_id,
                 attempt_id=attempt_id,
+                requested_url=url.strip(),
+                discovery_candidate_id=discovery_candidate_id,
             )
         except (ResearchError, KnowledgeError) as error:
             if isinstance(error, ResearchError) and self._request_cancelled(request):
@@ -3254,6 +3394,9 @@ class CognitiveEngine:
                 generated = self._llm_provider.generate(
                     provider_prompt,
                     history=history,
+                    # Descriptive runtime truth, kept apart from the configured
+                    # system prompt; it enables and authorizes nothing.
+                    system_instruction=self._runtime_capabilities.instruction(),
                 )
                 response = BrainResponse(
                     message=self._conversation_research_claim_guard.annotate(

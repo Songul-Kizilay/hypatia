@@ -186,15 +186,87 @@ class KaliOperationAuthorizationApplicationServiceTests(unittest.TestCase):
         return preview.operation_digest
 
     def test_https_header_run_checks_curl_readiness_and_uses_curl_plan(self) -> None:
-        digest = self.digest_for_request(
-            kali_operation_kind=ResearchKaliOperationKind.HTTPS_HEADER_LOOKUP.value
-        )
-        authorization_response = self.service.process_authorization(
-            self.request(
-                kali_operation_kind=ResearchKaliOperationKind.HTTPS_HEADER_LOOKUP.value,
-                operation_digest=digest,
+        with patch(
+            "socket.getaddrinfo",
+            return_value=[(2, 1, 6, "", ("93.184.216.34", 443))],
+        ):
+            digest = self.digest_for_request(
+                kali_operation_kind=(
+                    ResearchKaliOperationKind.HTTPS_HEADER_LOOKUP.value
+                )
             )
+            authorization_response = self.service.process_authorization(
+                self.request(
+                    kali_operation_kind=(
+                        ResearchKaliOperationKind.HTTPS_HEADER_LOOKUP.value
+                    ),
+                    operation_digest=digest,
+                )
+            )
+            authorization = authorization_response.kali_operation_authorization
+            assert authorization is not None
+            temporary_directory = tempfile.TemporaryDirectory()
+            self.addCleanup(temporary_directory.cleanup)
+            store = JsonFileResearchKaliOperationAuthorizationStore(
+                Path(temporary_directory.name) / "authorizations.json"
+            )
+            store.save([authorization])
+            probe = ReadyKaliRuntimeProbe()
+            adapter = RecordingKaliProcessAdapter()
+            runner = KaliOperationRunApplicationService(
+                ResponseComposer(),
+                self.preview_service,
+                store,
+                probe,
+                adapter,
+                clock=lambda: AUTH_TIME,
+            )
+
+            response = runner.process_run(
+                self.run_request(
+                    operator_opt_in=True,
+                    kali_operation_kind=(
+                        ResearchKaliOperationKind.HTTPS_HEADER_LOOKUP.value
+                    ),
+                    operation_digest=digest,
+                    authorization_id=authorization.authorization_id,
+                )
+            )
+
+        self.assertTrue(response.success, response.message)
+        self.assertEqual(probe.calls, 1)
+        self.assertEqual(probe.requirements[0].executable_path, "/usr/bin/curl")
+        self.assertEqual(probe.requirements[0].version_arguments, ("--version",))
+        self.assertEqual(adapter.calls, 1)
+        run_result = response.kali_operation_run
+        assert run_result is not None
+        self.assertEqual(run_result.command_plan.executable_path, "/usr/bin/curl")
+        self.assertEqual(run_result.resolved_address, "93.184.216.34")
+        self.assertIn("https://www.example.test/", run_result.command_plan.argv)
+        self.assertIn(
+            "www.example.test:443:93.184.216.34", run_result.command_plan.argv
         )
+
+    def test_https_header_run_refuses_when_the_resolution_changes_before_run(
+        self,
+    ) -> None:
+        with patch(
+            "socket.getaddrinfo",
+            return_value=[(2, 1, 6, "", ("93.184.216.34", 443))],
+        ):
+            digest = self.digest_for_request(
+                kali_operation_kind=(
+                    ResearchKaliOperationKind.HTTPS_HEADER_LOOKUP.value
+                )
+            )
+            authorization_response = self.service.process_authorization(
+                self.request(
+                    kali_operation_kind=(
+                        ResearchKaliOperationKind.HTTPS_HEADER_LOOKUP.value
+                    ),
+                    operation_digest=digest,
+                )
+            )
         authorization = authorization_response.kali_operation_authorization
         assert authorization is not None
         temporary_directory = tempfile.TemporaryDirectory()
@@ -214,24 +286,26 @@ class KaliOperationAuthorizationApplicationServiceTests(unittest.TestCase):
             clock=lambda: AUTH_TIME,
         )
 
-        response = runner.process_run(
-            self.run_request(
-                operator_opt_in=True,
-                kali_operation_kind=ResearchKaliOperationKind.HTTPS_HEADER_LOOKUP.value,
-                operation_digest=digest,
-                authorization_id=authorization.authorization_id,
+        with patch(
+            "socket.getaddrinfo",
+            return_value=[(2, 1, 6, "", ("8.8.8.8", 443))],
+        ):
+            response = runner.process_run(
+                self.run_request(
+                    operator_opt_in=True,
+                    kali_operation_kind=(
+                        ResearchKaliOperationKind.HTTPS_HEADER_LOOKUP.value
+                    ),
+                    operation_digest=digest,
+                    authorization_id=authorization.authorization_id,
+                )
             )
-        )
 
-        self.assertTrue(response.success, response.message)
-        self.assertEqual(probe.calls, 1)
-        self.assertEqual(probe.requirements[0].executable_path, "/usr/bin/curl")
-        self.assertEqual(probe.requirements[0].version_arguments, ("--version",))
-        self.assertEqual(adapter.calls, 1)
-        run_result = response.kali_operation_run
-        assert run_result is not None
-        self.assertEqual(run_result.command_plan.executable_path, "/usr/bin/curl")
-        self.assertIn("https://www.example.test/", run_result.command_plan.argv)
+        self.assertFalse(response.success)
+        self.assertIsNone(response.kali_operation_run)
+        self.assertIn("does not match", response.message)
+        self.assertEqual(adapter.calls, 0)
+        self.assertEqual(len(store.load()), 1)
 
     def test_authorization_is_explicit_structured_intent_only(self) -> None:
         self.assertTrue(self.service.is_authorization_request(self.request()))

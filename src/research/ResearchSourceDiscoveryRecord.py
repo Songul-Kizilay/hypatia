@@ -18,6 +18,11 @@ class ResearchSourceDiscoveryRecord:
     provider: str
     candidates: tuple[ResearchSourceCandidate, ...]
     discovered_at: datetime
+    #: A stable identity for each candidate, in candidate order, assigned when
+    #: the discovery is recorded.  Selection records this identity, never the
+    #: URL, so provenance does not depend on later URL matching.  Empty for
+    #: discoveries recorded before candidate identity existed.
+    candidate_ids: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         for value, field_name, maximum in (
@@ -49,6 +54,21 @@ class ResearchSourceDiscoveryRecord:
             raise ResearchError(
                 "Research source discovery contains an invalid candidate."
             )
+        if not isinstance(self.candidate_ids, tuple) or (
+            self.candidate_ids
+            and (
+                len(self.candidate_ids) != len(self.candidates)
+                or len(set(self.candidate_ids)) != len(self.candidate_ids)
+                or any(
+                    not isinstance(value, str)
+                    or not value.strip()
+                    or value != value.strip()
+                    or len(value) > 200
+                    for value in self.candidate_ids
+                )
+            )
+        ):
+            raise ResearchError("Research source discovery candidate IDs are invalid.")
         urls = [candidate.url for candidate in self.candidates]
         if len(urls) != len(set(urls)):
             raise ResearchError("Research source discovery contains duplicate URLs.")
@@ -63,3 +83,16 @@ class ResearchSourceDiscoveryRecord:
         object.__setattr__(self, "discovery_id", self.discovery_id.strip())
         object.__setattr__(self, "query", self.query.strip())
         object.__setattr__(self, "provider", self.provider.strip())
+
+    def candidate_id_of(self, candidate: ResearchSourceCandidate) -> str | None:
+        """Return the recorded identity of this exact candidate object, if any.
+
+        Used at selection time on a candidate taken from this record, never to
+        match a URL seen later.  ``None`` when identities were not recorded.
+        """
+        if not self.candidate_ids:
+            return None
+        for index, value in enumerate(self.candidates):
+            if value is candidate:
+                return self.candidate_ids[index]
+        return None

@@ -480,6 +480,7 @@ class ResearchCapabilityCostTests(unittest.TestCase):
                 ResearchPlanStepCapability.SOURCE_DISCOVERY,
                 ResearchPlanStepCapability.SOURCE_FETCH,
                 ResearchPlanStepCapability.SOURCE_ACCEPT,
+                ResearchPlanStepCapability.SOURCE_REVALIDATION,
                 ResearchPlanStepCapability.SEMANTIC_EVIDENCE_PROPOSAL,
                 ResearchPlanStepCapability.SEMANTIC_EVIDENCE_COMPARISON,
             },

@@ -13,11 +13,17 @@ from urllib.parse import urlsplit
 from core.Exceptions import ResearchError
 from knowledge.KnowledgeEngine import KnowledgeEngine
 from research.ResearchAssessmentAuthorization import ResearchAssessmentAuthorization
+from research.ResearchCapabilityCost import cost_for
 from research.ResearchComparisonAuthorization import ResearchComparisonAuthorization
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
 from research.ResearchEvidenceAuthorization import ResearchEvidenceAuthorization
 from research.ResearchEvidenceIntegrityAuditor import ResearchEvidenceIntegrityAuditor
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
+from research.ResearchExecutionAllowance import ResearchExecutionAllowance
+from research.ResearchMissionFollowupDecision import (
+    ResearchMissionFollowupDecision,
+    ResearchMissionFollowupDecisionStatus,
+)
 from research.ResearchMissionRecoveryCheckpoint import ResearchMissionRecoveryCheckpoint
 from research.ResearchPlan import ResearchPlan
 from research.ResearchPlanDigest import plan_digest
@@ -30,6 +36,7 @@ from research.ResearchPlanStepStatus import ResearchPlanStepStatus
 from research.ResearchQueryTerms import normalized_terms
 from research.ResearchRun import ResearchRun
 from research.ResearchRunManager import ResearchRunManager
+from research.ResearchSource import HTTPS_ACQUISITION, ResearchSource
 from research.ResearchSourceAssessmentRecord import ResearchSourceAssessmentRecord
 from research.ResearchSourcePreview import ResearchSourcePreview
 from research.ResearchSourceRelevanceRanker import ResearchSourceRelevanceRanker
@@ -45,9 +52,12 @@ class _Observations:
     run_id: str
     discovery_id: str = ""
     selected_url: str = ""
+    selected_candidate_id: str = ""
     preview: ResearchSourcePreview | None = None
     attempted_urls: tuple[str, ...] = ()
     acquired_urls: tuple[str, ...] = ()
+    # Requested (authorized) URL of each acquired source, beside acquired_urls.
+    requested_urls: tuple[str, ...] = ()
     body_hashes: tuple[str, ...] = ()
     inspected_bytes: int = 0
     evidence: tuple[ResearchEvidenceRecord, ...] = ()
@@ -69,6 +79,10 @@ class _Observations:
     contradiction_followup_input_fingerprint: str = ""
     contradiction_followup_relation: str = ""
     contradiction_outcome: str = ""
+    evidence_gap_followup_note_id: str = ""
+    evidence_gap_followup_input_fingerprint: str = ""
+    evidence_gap_followup_relation: str = ""
+    evidence_gap_outcome: str = ""
 
 
 class ResearchMissionStepResolver:
@@ -172,8 +186,13 @@ class ResearchMissionStepResolver:
                 context,
             )
         if step.capability is Cap.SOURCE_FETCH:
-            if self.followup_unnecessary(plan, step.step_id):
-                raise ResearchError("Follow-up is unnecessary; no further source call.")
+            decision = self.followup_decision(plan, step.step_id)
+            if (
+                decision.status
+                is not ResearchMissionFollowupDecisionStatus.NOT_APPLICABLE
+                and not decision.proposed
+            ):
+                raise ResearchError(self.followup_refusal(decision.status))
             if (
                 observed.selected_url
                 or len(observed.attempted_urls) >= scope.max_sources
@@ -205,6 +224,7 @@ class ResearchMissionStepResolver:
             if candidate is None:
                 raise ResearchError("No in-scope relevant source candidate; no retry.")
             observed.selected_url = candidate.url
+            observed.selected_candidate_id = record.candidate_id_of(candidate) or ""
             observed.attempted_urls += (candidate.url,)
             return replace(step, authorized_source_url=candidate.url), context
         preview = observed.preview
@@ -219,7 +239,9 @@ class ResearchMissionStepResolver:
             raise ResearchError("Exact inspected source preview is unavailable.")
         context = replace(context, source_preview=preview)
         if step.capability is Cap.SOURCE_ACCEPT:
-            return replace(step, authorized_source_url=observed.selected_url), context
+            return replace(step, authorized_source_url=observed.selected_url), replace(
+                context, discovery_candidate_id=observed.selected_candidate_id
+            )
         if step.capability is not Cap.EVIDENCE_RECORDING:
             raise ResearchError("Mission cannot derive another capability.")
         document_id = preview.source.to_document().document_id
@@ -267,6 +289,7 @@ class ResearchMissionStepResolver:
         return ResearchMissionRecoveryCheckpoint(
             discovery_id=observed.discovery_id,
             acquired_urls=observed.acquired_urls,
+            requested_urls=observed.requested_urls,
             body_hashes=observed.body_hashes,
             inspected_bytes=observed.inspected_bytes,
             evidence_ids=tuple(value.evidence_id for value in observed.evidence),
@@ -303,6 +326,12 @@ class ResearchMissionStepResolver:
             ),
             contradiction_followup_relation=(observed.contradiction_followup_relation),
             contradiction_outcome=observed.contradiction_outcome,
+            evidence_gap_followup_note_id=observed.evidence_gap_followup_note_id,
+            evidence_gap_followup_input_fingerprint=(
+                observed.evidence_gap_followup_input_fingerprint
+            ),
+            evidence_gap_followup_relation=observed.evidence_gap_followup_relation,
+            evidence_gap_outcome=observed.evidence_gap_outcome,
         )
 
     def restore(
@@ -334,7 +363,7 @@ class ResearchMissionStepResolver:
             raise ResearchError(
                 "Mission recovery steps do not match the approved plan."
             )
-        self._reject_transient_boundary(plan, by_id)
+        accept_boundary = self._reject_transient_boundary(plan, by_id)
         if checkpoint is None:
             if any(
                 step.status is ResearchPlanStepStatus.COMPLETED
@@ -349,6 +378,26 @@ class ResearchMissionStepResolver:
         if run.question != plan.question or run.status.terminal:
             raise ResearchError("Mission cannot change its original question or run.")
         if not checkpoint.discovery_id:
+            # Stopped after local search and before discovery: nothing external
+            # happened, so resume exactly as a mission with no checkpoint does.
+            # Any recorded observation or completed later step still refuses.
+            if (
+                checkpoint == ResearchMissionRecoveryCheckpoint()
+                and not (
+                    run.discoveries
+                    or run.sources
+                    or run.evidence
+                    or run.assessments
+                    or run.comparison_notes
+                )
+                and not any(
+                    step.capability is not Cap.LOCAL_KNOWLEDGE_SEARCH
+                    and by_id[step.step_id].status is ResearchPlanStepStatus.COMPLETED
+                    for step in plan.steps
+                )
+            ):
+                self._observed[plan.plan_id] = _Observations(plan_digest(plan), run_id)
+                return
             raise ResearchError("Mission discovery checkpoint is unavailable.")
         discovery = next(
             (
@@ -386,30 +435,166 @@ class ResearchMissionStepResolver:
             not set(value.evidence_ids).issubset(evidence_ids) for value in assessments
         ):
             raise ResearchError("Mission assessment checkpoint no longer matches.")
+        if (
+            checkpoint.acquired_urls
+            and not checkpoint.requested_urls
+            and any(
+                step.capability is Cap.SOURCE_FETCH
+                and by_id[step.step_id].status is ResearchPlanStepStatus.PENDING
+                for step in plan.steps
+            )
+        ):
+            # A legacy checkpoint kept only final URLs.  After a redirect the
+            # requested candidate is not recognisable, so another fetch could
+            # acquire the same source again; refuse rather than risk it.
+            raise ResearchError(
+                "Mission checkpoint lacks requested source identities; a further "
+                "fetch could repeat an acquired source, so no fetch is replayed."
+            )
         observed = _Observations(
             digest=plan_digest(plan),
             run_id=run_id,
             discovery_id=checkpoint.discovery_id,
-            attempted_urls=checkpoint.acquired_urls,
+            # In a live process attempted URLs are the requested ones, and their
+            # count is the slot count; final URLs stay excluded via acquired.
+            attempted_urls=checkpoint.requested_urls or checkpoint.acquired_urls,
             acquired_urls=checkpoint.acquired_urls,
+            requested_urls=checkpoint.requested_urls,
             body_hashes=checkpoint.body_hashes,
             inspected_bytes=checkpoint.inspected_bytes,
             evidence=evidence,
             assessments=assessments,
         )
-        self._validate_recorded_evidence(observed, run)
+        # Stopped after accepting the first slot's source, before its evidence:
+        # exactly one acquired and accepted source and nothing else yet.
+        first_slot_accepted = bool(
+            accept_boundary is not None
+            and len(checkpoint.acquired_urls) == 1
+            and len(run.sources) == 1
+            and not (checkpoint.assessment_ids or checkpoint.semantic_note_id)
+            and not (run.evidence or run.assessments or run.comparison_notes)
+        )
+        if checkpoint.evidence_ids:
+            self._validate_recorded_evidence(observed, run)
+        elif not first_slot_accepted and (
+            checkpoint.acquired_urls
+            or checkpoint.assessment_ids
+            or checkpoint.semantic_note_id
+            or run.sources
+            or run.evidence
+            or run.assessments
+            or run.comparison_notes
+            or any(
+                step.capability is not Cap.LOCAL_KNOWLEDGE_SEARCH
+                and step.capability is not Cap.SOURCE_DISCOVERY
+                and by_id[step.step_id].status is ResearchPlanStepStatus.COMPLETED
+                for step in plan.steps
+            )
+        ):
+            # Nothing past discovery may have happened without recorded evidence;
+            # anything else means the checkpoint no longer describes the run.
+            raise ResearchError("Mission evidence changed or is missing.")
+        # With no recorded evidence the mission stopped at or before its first
+        # source slot; the discovery provenance above is all it needs to resume.
         self._restore_semantic_adaptation(plan, by_id, checkpoint, observed, run)
         self._restore_contradiction_investigation(
             plan, by_id, checkpoint, observed, run
         )
+        self._restore_evidence_gap_followup(plan, by_id, checkpoint, observed, run)
+        if accept_boundary is not None:
+            observed.preview = self._restored_accepted_preview(
+                plan, accept_boundary, checkpoint, observed, run
+            )
+            observed.selected_url = observed.preview.requested_url
         self._observed[plan.plan_id] = observed
+
+    def _restored_accepted_preview(
+        self,
+        plan: ResearchPlan,
+        accept_index: int,
+        checkpoint: ResearchMissionRecoveryCheckpoint,
+        observed: _Observations,
+        run: ResearchRun,
+    ) -> ResearchSourcePreview:
+        """Rebuild the inspected preview of a source that was durably accepted.
+
+        The fetched text itself is transient, but acceptance persisted it: the
+        run records this run's own source with the content SHA-256 it observed,
+        the knowledge index holds that exact content version, and the checkpoint
+        names the requested URL, final URL and body hash of the slot.  Only when
+        all of these agree is the preview restored; nothing is fetched, and no
+        legacy record lacking the identities is trusted.
+        """
+        refusal = ResearchError(
+            "Mission accepted source lacks its durable evidence checkpoint; "
+            "no inferred preview or replay is permitted."
+        )
+        fetch_step = plan.steps[accept_index - 1] if accept_index > 0 else None
+        if (
+            fetch_step is None
+            or fetch_step.capability is not Cap.SOURCE_FETCH
+            or not checkpoint.acquired_urls
+            or len(checkpoint.requested_urls) != len(checkpoint.acquired_urls)
+            or len(observed.evidence) != len(checkpoint.acquired_urls) - 1
+        ):
+            raise refusal
+        final_url = checkpoint.acquired_urls[-1]
+        body_hash = checkpoint.body_hashes[-1]
+        record = next(
+            (
+                source
+                for source in run.sources
+                if source.url == final_url and source.content_sha256 == body_hash
+            ),
+            None,
+        )
+        document = (
+            self._knowledge.loaded_document(record.document_id)
+            if record is not None
+            else None
+        )
+        if record is None or document is None:
+            raise refusal
+        try:
+            source = ResearchSource(
+                url=record.url,
+                title=record.title,
+                content=document.content,
+                content_type=record.content_type,
+                fetched_at=record.fetched_at,
+                content_resource=str(document.metadata.get("content_resource", "")),
+                acquisition=str(
+                    document.metadata.get("acquisition", HTTPS_ACQUISITION)
+                ),
+            )
+            preview = ResearchSourcePreview(
+                execution_id=plan.plan_id,
+                run_id=run.run_id,
+                step_id=fetch_step.step_id,
+                requested_url=checkpoint.requested_urls[-1],
+                source=source,
+            )
+        except ResearchError as error:
+            raise refusal from error
+        if (
+            preview.content_sha256 != body_hash
+            or source.content_version_id() != record.document_id
+        ):
+            raise refusal
+        return preview
 
     @staticmethod
     def _reject_transient_boundary(
         plan: ResearchPlan,
         steps: dict[str, ResearchPlanExecutionStepSnapshot],
-    ) -> None:
-        """Refuse uncertain previews/model results rather than replaying them."""
+    ) -> int | None:
+        """Refuse uncertain previews/model results rather than replaying them.
+
+        Returns the index of a completed acceptance whose evidence step has not
+        completed.  That preview is durable through acceptance and is rebuilt
+        from recorded state or refused by the caller; it is never refetched.
+        """
+        accept_boundary: int | None = None
         for index, step in enumerate(plan.steps):
             state = steps[step.step_id]
             if step.capability is Cap.SOURCE_FETCH and (
@@ -436,10 +621,7 @@ class ResearchMissionStepResolver:
                     is not ResearchPlanStepStatus.COMPLETED
                 )
             ):
-                raise ResearchError(
-                    "Mission accepted source lacks its durable evidence checkpoint; "
-                    "no inferred preview or replay is permitted."
-                )
+                accept_boundary = index
             if step.capability is Cap.SEMANTIC_EVIDENCE_COMPARISON and (
                 state.status is ResearchPlanStepStatus.COMPLETED
                 and (
@@ -454,6 +636,7 @@ class ResearchMissionStepResolver:
                     "Mission model output was not durably retained; no model replay "
                     "is permitted."
                 )
+        return accept_boundary
 
     def observe(
         self,
@@ -491,6 +674,7 @@ class ResearchMissionStepResolver:
                 raise ResearchError("Fetched preview failed mission inspection.")
             observed.preview = preview
             observed.acquired_urls += (preview.source.url,)
+            observed.requested_urls += (observed.selected_url,)
             observed.body_hashes += (preview.content_sha256,)
             observed.inspected_bytes += preview.content_byte_count
         elif step.capability is Cap.EVIDENCE_RECORDING:
@@ -509,6 +693,7 @@ class ResearchMissionStepResolver:
             # Retain origin identity to prevent replay, discard transient body.
             observed.preview = None
             observed.selected_url = ""
+            observed.selected_candidate_id = ""
         elif step.capability is Cap.SOURCE_ASSESSMENT:
             run = self._runs.get(observed.run_id)
             assessment = next(
@@ -543,24 +728,126 @@ class ResearchMissionStepResolver:
             )
 
     def followup_unnecessary(self, plan: ResearchPlan, step_id: str | None) -> bool:
+        """Say whether the existing slot is truthfully unnecessary.
+
+        This retains the existing delivery stop behavior while making the
+        decision itself available as a typed, digest-bound projection.
+        """
+        return (
+            self.followup_decision(plan, step_id).status
+            is ResearchMissionFollowupDecisionStatus.NOT_NEEDED
+        )
+
+    def followup_decision(
+        self,
+        plan: ResearchPlan,
+        step_id: str | None,
+        allowance: ResearchExecutionAllowance | None = None,
+    ) -> ResearchMissionFollowupDecision:
+        """Project the one existing third-source slot without creating work.
+
+        The plan already contains this conditional slot and its original digest
+        remains the only authority. This method neither picks a future source
+        nor consumes allowance; it only reports whether the executor may reach
+        the normal resolver path for that one slot.
+        """
         scope = plan.mission_scope
         if (
             scope is None
             or scope.semantic_policy is None
+            or len(plan.steps) <= 12
             or step_id != plan.steps[12].step_id
+            or plan.steps[12].capability is not Cap.SOURCE_FETCH
         ):
-            return False
+            return ResearchMissionFollowupDecision(
+                ResearchMissionFollowupDecisionStatus.NOT_APPLICABLE
+            )
         observed = self._observed.get(plan.plan_id)
         if (
             observed is None
             or observed.digest != plan_digest(plan)
+            or not observed.semantic_note_id
+            or not observed.semantic_input_fingerprint
             or not observed.semantic_relation
         ):
-            return False
-        return observed.semantic_relation in {
-            "possible_agreement",
-            "not_comparable",
-        }
+            return self._followup_decision(
+                plan,
+                step_id,
+                ResearchMissionFollowupDecisionStatus.BLOCKED_PREDECESSOR,
+            )
+        if observed.contradiction_outcome or observed.evidence_gap_outcome:
+            return self._followup_decision(
+                plan,
+                step_id,
+                ResearchMissionFollowupDecisionStatus.COMPLETED,
+                observed,
+            )
+        if observed.semantic_relation in {"possible_agreement", "not_comparable"}:
+            return self._followup_decision(
+                plan,
+                step_id,
+                ResearchMissionFollowupDecisionStatus.NOT_NEEDED,
+                observed,
+            )
+        if len(observed.attempted_urls) >= scope.max_sources:
+            return self._followup_decision(
+                plan,
+                step_id,
+                ResearchMissionFollowupDecisionStatus.ALREADY_ATTEMPTED,
+                observed,
+            )
+        if observed.inspected_bytes >= scope.max_source_bytes or (
+            allowance is not None and not allowance.affords(cost_for(Cap.SOURCE_FETCH))
+        ):
+            return self._followup_decision(
+                plan,
+                step_id,
+                ResearchMissionFollowupDecisionStatus.BUDGET_LIMITED,
+                observed,
+            )
+        return self._followup_decision(
+            plan, step_id, ResearchMissionFollowupDecisionStatus.PROPOSED, observed
+        )
+
+    @staticmethod
+    def _followup_decision(
+        plan: ResearchPlan,
+        step_id: str,
+        status: ResearchMissionFollowupDecisionStatus,
+        observed: _Observations | None = None,
+    ) -> ResearchMissionFollowupDecision:
+        return ResearchMissionFollowupDecision(
+            status=status,
+            plan_digest=plan_digest(plan),
+            step_id=step_id,
+            capability=Cap.SOURCE_FETCH,
+            semantic_note_id=observed.semantic_note_id if observed else "",
+            semantic_input_fingerprint=(
+                observed.semantic_input_fingerprint if observed else ""
+            ),
+            semantic_relation=observed.semantic_relation if observed else "",
+        )
+
+    @staticmethod
+    def followup_refusal(status: ResearchMissionFollowupDecisionStatus) -> str:
+        """Return bounded refusal text for a non-proposed existing slot."""
+        return {
+            ResearchMissionFollowupDecisionStatus.NOT_NEEDED: (
+                "Follow-up is unnecessary; no further source call."
+            ),
+            ResearchMissionFollowupDecisionStatus.BLOCKED_PREDECESSOR: (
+                "Follow-up predecessor state is unavailable; no source call."
+            ),
+            ResearchMissionFollowupDecisionStatus.BUDGET_LIMITED: (
+                "Follow-up is outside the remaining bounded budget; no source call."
+            ),
+            ResearchMissionFollowupDecisionStatus.ALREADY_ATTEMPTED: (
+                "Follow-up source was already attempted; no retry is permitted."
+            ),
+            ResearchMissionFollowupDecisionStatus.COMPLETED: (
+                "Follow-up outcome is already recorded; no duplicate source call."
+            ),
+        }.get(status, "Follow-up slot is not available; no source call.")
 
     def _observe_semantic_note(
         self,
@@ -614,6 +901,47 @@ class ResearchMissionStepResolver:
             return
         if len(observed.evidence) != 3:
             raise ResearchError("Mission contradiction follow-up lacks three sources.")
+        if (
+            observed.semantic_relation == "no_supported_comparison"
+            and not observed.contradiction_initial_note_id
+        ):
+            # The same pre-approved third-source slot, reached because the
+            # initial proposal supported nothing.  Record what it retained; a
+            # second empty result is an evidence gap, not an execution failure.
+            if observed.evidence_gap_outcome:
+                raise ResearchError("Mission evidence-gap follow-up cannot repeat.")
+            first_evidence = observed.evidence[0]
+            gap_evidence = observed.evidence[-1]
+            gap_assessment = next(
+                (
+                    value
+                    for value in observed.assessments
+                    if value.evidence_ids == (gap_evidence.evidence_id,)
+                ),
+                None,
+            )
+            if (
+                gap_assessment is None
+                or note.evidence_ids
+                != (first_evidence.evidence_id, gap_evidence.evidence_id)
+                or note.source_document_ids
+                != (first_evidence.source_document_id, gap_evidence.source_document_id)
+                or gap_assessment.assessment_id not in note.assessment_ids
+            ):
+                raise ResearchError(
+                    "Mission evidence-gap follow-up provenance changed."
+                )
+            observed.evidence_gap_followup_note_id = note.note_id
+            observed.evidence_gap_followup_input_fingerprint = (
+                result.request.content_fingerprint
+            )
+            observed.evidence_gap_followup_relation = relation
+            observed.evidence_gap_outcome = (
+                "no_supported_comparison"
+                if relation == "no_supported_comparison"
+                else "followup_comparison_recorded"
+            )
+            return
         if (
             observed.contradiction_initial_relation != "possible_conflict"
             or not observed.contradiction_initial_note_id
@@ -891,6 +1219,91 @@ class ResearchMissionStepResolver:
             checkpoint.contradiction_followup_relation
         )
         observed.contradiction_outcome = checkpoint.contradiction_outcome
+
+    def _restore_evidence_gap_followup(
+        self,
+        plan: ResearchPlan,
+        steps: dict[str, ResearchPlanExecutionStepSnapshot],
+        checkpoint: ResearchMissionRecoveryCheckpoint,
+        observed: _Observations,
+        run: ResearchRun,
+    ) -> None:
+        """Restore a completed empty-proposal follow-up without reinterpreting it.
+
+        A completed follow-up note with no durable typed outcome refuses rather
+        than being read from note prose or assumed supported.
+        """
+        gap_branch = (
+            checkpoint.semantic_relation == "no_supported_comparison"
+            and not checkpoint.contradiction_initial_note_id
+        )
+        if not checkpoint.evidence_gap_followup_note_id:
+            if gap_branch and self._followup_note_step(plan, steps) is not None:
+                raise ResearchError(
+                    "Mission evidence-gap follow-up outcome is unavailable."
+                )
+            return
+        if (
+            not gap_branch
+            or len(observed.evidence) != 3
+            or self._followup_note_step(plan, steps) is None
+        ):
+            raise ResearchError(
+                "Mission evidence-gap follow-up was not durably retained."
+            )
+        first_evidence = observed.evidence[0]
+        gap_evidence = observed.evidence[-1]
+        gap_assessment = next(
+            (
+                value
+                for value in observed.assessments
+                if value.evidence_ids == (gap_evidence.evidence_id,)
+            ),
+            None,
+        )
+        gap_note = next(
+            (
+                value
+                for value in run.comparison_notes
+                if value.note_id == checkpoint.evidence_gap_followup_note_id
+            ),
+            None,
+        )
+        relation = checkpoint.evidence_gap_followup_relation
+        if (
+            gap_assessment is None
+            or gap_note is None
+            or gap_note.evidence_ids
+            != (first_evidence.evidence_id, gap_evidence.evidence_id)
+            or gap_note.source_document_ids
+            != (first_evidence.source_document_id, gap_evidence.source_document_id)
+            or gap_assessment.assessment_id not in gap_note.assessment_ids
+            or "Bounded follow-up compared the first source with one new source."
+            not in gap_note.text
+            or f"Input SHA256 {checkpoint.evidence_gap_followup_input_fingerprint};"
+            not in gap_note.text
+            or f"mission {plan_digest(plan)}." not in gap_note.text
+            or (
+                relation == "no_supported_comparison"
+                and "No supported comparison proposal; evidence gap remains."
+                not in gap_note.text
+            )
+            or (
+                relation != "no_supported_comparison"
+                and f"Tentative relation: {relation}." not in gap_note.text
+            )
+        ):
+            raise ResearchError(
+                "Mission evidence-gap follow-up provenance no longer matches."
+            )
+        observed.evidence_gap_followup_note_id = (
+            checkpoint.evidence_gap_followup_note_id
+        )
+        observed.evidence_gap_followup_input_fingerprint = (
+            checkpoint.evidence_gap_followup_input_fingerprint
+        )
+        observed.evidence_gap_followup_relation = relation
+        observed.evidence_gap_outcome = checkpoint.evidence_gap_outcome
 
     @staticmethod
     def _followup_note_step(

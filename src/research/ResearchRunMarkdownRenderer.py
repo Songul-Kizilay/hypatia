@@ -38,6 +38,7 @@ def render_research_run_markdown(run: ResearchRun) -> str:
         f"- **Evidence records:** {len(run.evidence)}",
         f"- **Assessments:** {len(run.assessments)}",
         f"- **Comparison notes:** {len(run.comparison_notes)}",
+        f"- **Comparison reviews:** {len(run.comparison_reviews)}",
         f"- **Claims:** {len(run.claims)}",
         f"- **Claim contradictions:** {len(run.claim_contradictions)}",
         f"- **Failures:** {len(run.failures)}",
@@ -58,22 +59,41 @@ def render_research_run_markdown(run: ResearchRun) -> str:
     if not run.sources:
         lines.extend(("_No accepted sources._", ""))
     for source_index, source in enumerate(run.sources, start=1):
+        # Evidence stays anchored to the observation that first brought its
+        # content version into the run, never repeated under a revalidation.
+        anchor = run.source_for_document(source.document_id) is source
         evidence = tuple(
             record
             for record in run.evidence
-            if record.source_document_id == source.document_id
+            if anchor and record.source_document_id == source.document_id
         )
         assessments = tuple(
             record
             for record in run.assessments
-            if record.source_document_id == source.document_id
+            if anchor and record.source_document_id == source.document_id
         )
         lines.extend(
             (
                 f"### Source {source_index}: {_inline(source.title)}",
                 "",
-                f"- **Document ID:** {_inline(source.document_id)}",
+                (
+                    f"- **Observation ID:** {_inline(source.observation_id)}"
+                    if source.observation_id is not None
+                    else "- **Observation ID:** unrecorded"
+                ),
+                f"- **Document/content version ID:** {_inline(source.document_id)}",
                 f"- **URL:** {_inline(source.url)}",
+                (
+                    f"- **Requested URL:** {_inline(source.requested_url)}"
+                    if source.requested_url is not None
+                    else "- **Requested URL:** unrecorded"
+                ),
+                (
+                    "- **Discovery candidate:** "
+                    f"{_inline(source.discovery_candidate_id)}"
+                    if source.discovery_candidate_id is not None
+                    else "- **Discovery candidate:** unrecorded"
+                ),
                 f"- **Content type:** {_inline(source.content_type)}",
                 f"- **Data taint:** {_inline(source.taint_label)}",
                 (
@@ -82,11 +102,22 @@ def render_research_run_markdown(run: ResearchRun) -> str:
                 ),
                 f"- **Fetched:** {source.fetched_at.isoformat()}",
                 f"- **Accepted:** {source.added_at.isoformat()}",
-                "",
-                "#### Evidence",
-                "",
+                (
+                    f"- **Observed content SHA-256:** `{source.content_sha256}`"
+                    if source.content_sha256 is not None
+                    else "- **Observed content SHA-256:** unrecorded (accepted "
+                    "before content versioning)"
+                ),
             )
         )
+        if source.revalidation_of_observation_id is not None:
+            lines.append(
+                "- **Explicit revalidation of observation:** "
+                f"{_inline(source.revalidation_of_observation_id)} (approved "
+                f"execution {_inline(source.revalidation_execution_id or '')}; "
+                "a content comparison, not a freshness conclusion)"
+            )
+        lines.extend(("", "#### Evidence", ""))
         if not evidence:
             lines.extend(("_No evidence recorded for this source._", ""))
         for evidence_index, evidence_record in enumerate(evidence, start=1):
@@ -131,6 +162,13 @@ def render_research_run_markdown(run: ResearchRun) -> str:
                         "- **Information trust:** "
                         f"{assessment_record.information_trust.value}"
                     ),
+                    f"- **Usefulness:** {assessment_record.usefulness.value}",
+                    f"- **Applicability:** {assessment_record.applicability.value}",
+                    f"- **Independence:** {assessment_record.independence.value}",
+                    (
+                        "- **Publication status:** "
+                        f"{assessment_record.publication_status.value}"
+                    ),
                     "- **Evidence IDs:** "
                     + ", ".join(
                         _inline(value) for value in assessment_record.evidence_ids
@@ -160,9 +198,49 @@ def render_research_run_markdown(run: ResearchRun) -> str:
                 "- **Assessment IDs:** "
                 + ", ".join(_inline(value) for value in note.assessment_ids),
                 f"- **Recorded:** {note.recorded_at.isoformat()}",
-                "- **User comparison note:**",
+                "- **Recorded comparison note (tentative; not a verified result):**",
                 "",
                 *_quote(note.text),
+                "",
+            )
+        )
+
+    lines.extend(("## Operator Comparison Reviews", ""))
+    superseded_review_ids = {
+        review.supersedes_review_id
+        for review in run.comparison_reviews
+        if review.supersedes_review_id is not None
+    }
+    if not run.comparison_reviews:
+        lines.extend(("_No comparison reviews recorded._", ""))
+    else:
+        lines.extend(
+            (
+                "_An operator review is a bounded judgement about one exact "
+                "comparison note and its evidence, not model output or a "
+                "factual-truth decision._",
+                "",
+            )
+        )
+    for review_index, review in enumerate(run.comparison_reviews, start=1):
+        review_state = (
+            "superseded" if review.review_id in superseded_review_ids else "current"
+        )
+        lines.extend(
+            (
+                f"### Comparison Review {review_index}",
+                "",
+                f"- **Review ID:** {_inline(review.review_id)}",
+                f"- **Audit state:** {review_state}",
+                f"- **Note ID:** {_inline(review.note_id)}",
+                f"- **Decision:** {review.decision.value}",
+                "- **Evidence IDs:** "
+                + ", ".join(_inline(value) for value in review.evidence_ids),
+                f"- **Supersedes:** {_inline(review.supersedes_review_id or 'none')}",
+                f"- **Recorded:** {review.recorded_at.isoformat()}",
+                "- **Operator reason:**",
+                "",
+                *_quote(review.note),
                 "",
             )
         )

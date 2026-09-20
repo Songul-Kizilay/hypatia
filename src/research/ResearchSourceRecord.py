@@ -24,6 +24,31 @@ class ResearchSourceRecord:
     added_at: datetime
     taint_label: str = EXTERNAL_SOURCE_TAINT_LABEL
     instruction_authority: str = EXTERNAL_SOURCE_INSTRUCTION_AUTHORITY
+    #: SHA-256 of the exact text this run fetched and accepted: the content
+    #: version it observed.  ``None`` for sources accepted before versioning,
+    #: whose observed content was not recorded and is never inferred.
+    content_sha256: str | None = None
+    #: The authorized URL this run requested.  ``url`` is where the fetch ended
+    #: after validated redirects, so the two can differ.  ``None`` for sources
+    #: accepted before it was recorded; it is never inferred from ``url``.
+    requested_url: str | None = None
+    #: The recorded identity of the discovery candidate this run selected and
+    #: requested, when the source came from a discovery.  ``None`` when the
+    #: source was not selected from a discovery or predates candidate identity;
+    #: it is never recovered by matching URLs.
+    discovery_candidate_id: str | None = None
+    #: Immutable identity for this one accepted source observation.  It is
+    #: intentionally separate from ``document_id`` and ``content_sha256``:
+    #: identical content may be observed and accepted by different runs.  ``None``
+    #: means the source predates observation identity and is never backfilled.
+    observation_id: str | None = None
+    #: For an explicitly approved revalidation only: the exact earlier
+    #: observation in this same run that this observation deliberately
+    #: re-observed, and the execution whose approved step performed it.  Both
+    #: are ``None`` for every ordinary acceptance and are never inferred from a
+    #: URL, content hash or timestamp.
+    revalidation_of_observation_id: str | None = None
+    revalidation_execution_id: str | None = None
 
     def __post_init__(self) -> None:
         for value, field_name in (
@@ -46,6 +71,57 @@ class ResearchSourceRecord:
             raise ResearchError(
                 "External research source instruction authority must be none."
             )
+        if self.content_sha256 is not None and (
+            not isinstance(self.content_sha256, str)
+            or len(self.content_sha256) != 64
+            or any(c not in "0123456789abcdef" for c in self.content_sha256)
+        ):
+            raise ResearchError("Research source content fingerprint is invalid.")
+        if self.requested_url is not None:
+            if (
+                not isinstance(self.requested_url, str)
+                or not self.requested_url.strip()
+                or len(self.requested_url.strip()) > 4_096
+            ):
+                raise ResearchError("Research source requested URL is invalid.")
+            object.__setattr__(self, "requested_url", self.requested_url.strip())
+        if self.discovery_candidate_id is not None and (
+            not isinstance(self.discovery_candidate_id, str)
+            or not self.discovery_candidate_id.strip()
+            or self.discovery_candidate_id != self.discovery_candidate_id.strip()
+            or len(self.discovery_candidate_id) > 200
+        ):
+            raise ResearchError("Research source discovery candidate ID is invalid.")
+        if self.observation_id is not None and (
+            not isinstance(self.observation_id, str)
+            or not self.observation_id.strip()
+            or self.observation_id != self.observation_id.strip()
+            or len(self.observation_id) > 200
+        ):
+            raise ResearchError("Research source observation ID is invalid.")
+        prior_id = self.revalidation_of_observation_id
+        execution_id = self.revalidation_execution_id
+        if (prior_id is None) != (execution_id is None):
+            raise ResearchError("Research source revalidation provenance is partial.")
+        for provenance, label in (
+            (prior_id, "Research source revalidation prior observation ID"),
+            (execution_id, "Research source revalidation execution ID"),
+        ):
+            if provenance is not None and (
+                not isinstance(provenance, str)
+                or not provenance.strip()
+                or provenance != provenance.strip()
+                or len(provenance) > 200
+            ):
+                raise ResearchError(f"{label} is invalid.")
+        if prior_id is not None and (
+            self.observation_id is None
+            or self.requested_url is None
+            or self.content_sha256 is None
+            or self.discovery_candidate_id is not None
+            or prior_id == self.observation_id
+        ):
+            raise ResearchError("Research source revalidation provenance is invalid.")
         object.__setattr__(self, "document_id", self.document_id.strip())
         object.__setattr__(self, "url", self.url.strip())
         object.__setattr__(self, "title", self.title.strip())
@@ -57,6 +133,11 @@ class ResearchSourceRecord:
         source: ResearchSource,
         document_id: str,
         added_at: datetime,
+        requested_url: str | None = None,
+        discovery_candidate_id: str | None = None,
+        observation_id: str | None = None,
+        revalidation_of_observation_id: str | None = None,
+        revalidation_execution_id: str | None = None,
     ) -> ResearchSourceRecord:
         """Build a persistent provenance record from a fetched source."""
         if not isinstance(source, ResearchSource):
@@ -68,4 +149,10 @@ class ResearchSourceRecord:
             content_type=source.content_type,
             fetched_at=source.fetched_at,
             added_at=added_at,
+            content_sha256=source.content_sha256,
+            requested_url=requested_url,
+            discovery_candidate_id=discovery_candidate_id,
+            observation_id=observation_id,
+            revalidation_of_observation_id=revalidation_of_observation_id,
+            revalidation_execution_id=revalidation_execution_id,
         )

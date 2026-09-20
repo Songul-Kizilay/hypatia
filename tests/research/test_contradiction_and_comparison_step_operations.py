@@ -353,6 +353,38 @@ class SourceComparisonStepOperationTests(ResearchFixture):
         self.assertIn("no winner selected", result.detail)
         self.assertIn("no trust promoted", result.detail)
 
+    def test_repeating_the_exact_comparison_note_records_nothing_new(self) -> None:
+        run_id = self._run_id()
+        documents, evidence, assessments = self._two_assessed_sources(run_id)
+        context = ResearchPlanExecutionContext(research_run_id=run_id)
+        authorization = ResearchComparisonAuthorization(
+            document_ids=documents,
+            evidence_ids=evidence,
+            assessment_ids=assessments,
+            text="Both sources describe the ring system similarly.",
+        )
+        self.operation.run(comparison_step(authorization), context)
+        first = self.manager.get(run_id)
+
+        with self.assertRaisesRegex(
+            ResearchError, f"already recorded as {first.comparison_notes[0].note_id}"
+        ):
+            self.operation.run(comparison_step(authorization), context)
+        self.assertEqual(self.manager.get(run_id), first)
+
+        self.operation.run(
+            comparison_step(
+                ResearchComparisonAuthorization(
+                    document_ids=documents,
+                    evidence_ids=evidence,
+                    assessment_ids=assessments,
+                    text="A different comparison of the same sources.",
+                )
+            ),
+            context,
+        )
+        self.assertEqual(len(self.manager.get(run_id).comparison_notes), 2)
+
     def test_comparison_promotes_no_trust_and_verifies_no_claim(self) -> None:
         run_id = self._run_id()
         documents, evidence, assessments = self._two_assessed_sources(run_id)
