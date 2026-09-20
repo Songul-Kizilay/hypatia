@@ -129,8 +129,16 @@ class JsonFileBackgroundTaskStore:
         except (OSError, TypeError, ValueError) as error:
             raise ResearchError("Unable to write the background task store.") from error
         finally:
-            if temporary_path is not None:
-                temporary_path.unlink(missing_ok=True)
+            self._remove_temporary_file(temporary_path)
+
+    @staticmethod
+    def _remove_temporary_file(path: Path | None) -> None:
+        if path is None:
+            return
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            pass
 
     @staticmethod
     def _serialize(task: BackgroundResearchTask) -> dict[str, Any]:
