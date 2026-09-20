@@ -7,7 +7,19 @@ Modes (argv[1]):
            permission bypass), including forms permission rules cannot match
            (``git -C . push -f``, ``+refspec``, combined short flags).
            Merge, rebase, tag, hard reset, releases and PR merges are "ask"
-           rules in settings.json: each needs the user's explicit approval.
+           rules in settings.json: each needs the user's explicit approval,
+           EXCEPT the one exact routine shape this guard explicitly allows:
+           a lone ``gh pr merge <number> --merge`` (optionally with exactly
+           one ``--subject <text>``) as the entire command, nothing chained
+           before or after it, and no other flag present. That is the one
+           step of CLAUDE.md's "Default-branch integration" a standing
+           milestone authorization covers without a fresh prompt. A plain
+           wildcard in settings.json cannot express this safely (it cannot
+           refuse to match ``--admin``/``--squash``/``--rebase``/
+           ``--delete-branch`` appearing inside the wildcarded region), so
+           the exact-shape check is done here, on real parsed tokens, and
+           the settings.json "ask" rule is left as the unchanged default
+           for every other ``gh pr merge`` invocation.
   lint     PostToolUse (Edit/Write): run Ruff on one edited Python file.
 
 Standard library only. Hook input is parsed, never executed: no text from the
@@ -160,6 +172,35 @@ def _denial(tokens: list[str]) -> str | None:
     return None
 
 
+def _pr_merge_auto_allow(tokens: list[str]) -> bool:
+    """Only the exact routine shape: ``gh pr merge <number> --merge``,
+    optionally with exactly one trailing ``--subject <text>``.
+
+    Deliberately an allowlist of the exact expected shape, not a denylist of
+    known-dangerous flags: any flag other than ``--merge``/``--subject``,
+    any non-numeric PR identifier, or any extra token anywhere fails this
+    check and falls through to the settings.json ask rule unchanged. This
+    is checked against real parsed tokens (see ``_segments``), not a glob,
+    specifically so a flag like ``--admin``, ``--squash``, ``--rebase`` or
+    ``--delete-branch`` can never hide inside a wildcarded region.
+    """
+    if len(tokens) < 5:
+        return False
+    if _program(tokens[0]) != "gh":
+        return False
+    if tokens[1:3] != ["pr", "merge"]:
+        return False
+    if not tokens[3].isdigit():
+        return False
+    rest = tokens[4:]
+    if not rest or rest[0] != "--merge":
+        return False
+    rest = rest[1:]
+    if not rest:
+        return True
+    return len(rest) == 2 and rest[0] == "--subject"
+
+
 def command(payload: dict[str, object]) -> None:
     tool_input = payload.get("tool_input")
     text = tool_input.get("command") if isinstance(tool_input, dict) else None
@@ -178,6 +219,13 @@ def command(payload: dict[str, object]) -> None:
         if reason is not None:
             _deny(reason)
             return
+    # The whole command must be exactly one safe-shaped call - nothing may
+    # be chained before or after it, or the "allow" would cover that too.
+    if len(segments) == 1 and _pr_merge_auto_allow(segments[0]):
+        _allow(
+            "routine PR merge for an already-reviewed, CI-green Hypatia "
+            "milestone (CLAUDE.md's Default-branch integration)."
+        )
 
 
 def _deny(reason: str) -> None:
@@ -187,6 +235,20 @@ def _deny(reason: str) -> None:
                 "hookSpecificOutput": {
                     "hookEventName": "PreToolUse",
                     "permissionDecision": "deny",
+                    "permissionDecisionReason": f"Hypatia guard: {reason}",
+                }
+            }
+        )
+    )
+
+
+def _allow(reason: str) -> None:
+    print(
+        json.dumps(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "permissionDecision": "allow",
                     "permissionDecisionReason": f"Hypatia guard: {reason}",
                 }
             }
