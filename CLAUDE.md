@@ -67,11 +67,54 @@ module form. Never disable or bypass host security controls, and never use
 - After push: `git fetch origin`; `HEAD` must equal `@{u}`; dispatch
   `Linux desktop` and `Windows desktop` (`gh workflow run <name> --ref <branch>`)
   and check both with `gh run list --commit <sha>`.
-- A milestone is delivered only when both CI runs pass on the exact pushed SHA.
-  Do not start the next milestone, or edit the tree for it, while that CI is
-  pending. If CI fails, fix the current milestone first.
-- Never merge `main`, rebase just because `main` is ahead, force-push, tag or
-  create a GitHub Release without separate explicit authorization.
+- Both exact-SHA CI runs passing on the development branch is a milestone
+  prerequisite, not delivery. Do not start the next milestone, or edit the
+  tree for it, while that CI is pending. If CI fails, fix the current
+  milestone first.
+- Default-branch integration (permanent process rule): once exact-SHA CI is
+  green on the development branch, the release commit must reach `main`
+  through a GitHub PR merged with a standard merge commit before the
+  milestone is COMPLETE — see "Default-branch integration" below. This is a
+  standing, expected step of every milestone, not a one-off exception
+  requiring separate authorization each time.
+- Never rewrite or rebase already-published history, amend a pushed commit,
+  squash- or rebase-merge a milestone PR, or force-push `main` — for any
+  reason, including manufacturing GitHub contribution activity. Never create
+  empty/spam commits for that purpose either. Tagging and creating a GitHub
+  Release still require separate explicit authorization each time; the
+  standard merge-commit integration below does not.
+
+## Default-branch integration
+
+A product milestone is delivered only once its release commit is reachable
+from `origin/main` — not merely pushed with green CI on the development
+branch. After exact-SHA CI passes on the development branch:
+
+1. `git fetch origin`, then check whether the release SHA is already an
+   ancestor of `origin/main`
+   (`git merge-base --is-ancestor <release-sha> origin/main`). If yes,
+   record that and the milestone is COMPLETE.
+2. Otherwise, reuse an appropriate already-open PR from the development
+   branch to `main` if one exists, or open one. Title it to describe the
+   version range being synced; state in the body that included commits
+   already passed their own milestone-specific gates and exact-SHA CI.
+3. Before merging, verify: base is `main`, head is the intended development
+   branch, the release SHA is included in the PR's commit range, the diff
+   has no unexpected files or unrelated history, there are no merge
+   conflicts, and both PR-triggered Linux and Windows checks are green.
+4. Merge with a standard merge commit — never squash, never rebase-merge —
+   so the existing authored commits and their authorship are preserved
+   exactly.
+5. `git fetch origin` again; verify the PR is `MERGED`, the merge commit
+   exists on `origin/main`, the release SHA (and every commit the PR
+   carried) is reachable from `origin/main`, and author/committer identity
+   on the affected commits is unchanged.
+
+Only once this is verified may the milestone be reported COMPLETE. If
+GitHub requires interactive authorization to merge, ask before proceeding.
+Stop and report — do not improvise around — any unexpected history,
+suspicious diff, failing check, merge conflict, branch-protection issue, or
+provenance problem found during this sequence.
 
 ## Team operating model
 
@@ -83,7 +126,7 @@ single-file work. The Lead owns the integrated result.
 
 | Role (agent) | Owns |
 | --- | --- |
-| `hypatia-lead` | milestone definition, decomposition, ordering, integration, readiness |
+| `hypatia-lead` | milestone definition, decomposition, ordering, integration, default-branch integration, readiness |
 | `hypatia-runtime` | Bootstrap, cognition, execution state, persistence, restart, authority/budget mechanics |
 | `hypatia-epistemics` | research runs, evidence, claims, contradictions, provenance, observations, revalidation |
 | `hypatia-security` | authorization boundaries, URL/TLS/SSRF, credentials, Kali limits, untrusted content |

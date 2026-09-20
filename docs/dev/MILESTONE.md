@@ -6,6 +6,9 @@ Release records the delivered SHA and CI in the next milestone's first commit.
 Live CI for `HEAD` is reported at session start by `.claude/hooks/hypatia_guard.py`.
 
 Status values: planned, implementation, qa, release, ci-pending, delivered.
+`delivered` requires verified reachability from `origin/main` (CLAUDE.md's
+"Default-branch integration"), not merely green exact-SHA CI on the
+development branch — `release`/`ci-pending` cover that intermediate state.
 
 ## Current
 
