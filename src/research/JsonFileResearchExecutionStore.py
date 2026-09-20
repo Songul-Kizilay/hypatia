@@ -131,8 +131,7 @@ class JsonFileResearchExecutionStore:
                 f"Unable to write research execution store '{self._path}'."
             ) from error
         finally:
-            if temporary_path is not None:
-                temporary_path.unlink(missing_ok=True)
+            self._remove_temporary_file(temporary_path)
 
     def _parse_document(
         self,
@@ -176,3 +175,12 @@ class JsonFileResearchExecutionStore:
         plan_ids = [snapshot.plan_id for snapshot in snapshots]
         if len(plan_ids) != len(set(plan_ids)):
             raise ResearchError("Research execution store has duplicate execution IDs.")
+
+    @staticmethod
+    def _remove_temporary_file(path: Path | None) -> None:
+        if path is None:
+            return
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            pass

@@ -2,11 +2,31 @@
 
 ## Runtime Version
 
-`v0.3.396 (Genesis)`
+`v0.3.397 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
+Version v0.3.397 closes a latent error-integrity gap in
+`JsonFileResearchExecutionStore.save()`'s durable-write path: an unguarded
+cleanup unlink in the `finally` block could, on a rare double-fault (a
+transient `OSError` from cleanup while a `ResearchError` from the original
+write failure was already propagating), silently replace the propagating
+`ResearchError` with a raw `OSError`, breaking the store's "always raises
+`ResearchError`" contract on a narrow but real, Windows-relevant race. Fixed
+with a `_remove_temporary_file` helper mirroring the guard
+`JsonFileResearchRunStore` already used; no schema, authority, budget, scope
+or public API change. New regression tests in both stores prove a genuine
+mid-write failure (real partial bytes written before the fault) leaves the
+destination byte-for-byte unchanged with no temporary file left behind, and
+that the original `ResearchError` and its cause chain still propagate even
+when the cleanup unlink itself also fails; `hypatia-qa` independently
+confirmed the regression test fails without the fix. The same unguarded
+pattern remains unfixed in roughly ten other `JsonFile*Store` classes,
+including two authority/budget-critical ones
+(`JsonFileResearchKaliOperationAuthorizationStore`,
+`JsonFileDeferredExecutionGrantStore`); this was deliberately out of scope
+for this bounded milestone and is recorded as a tracked follow-up.
 Version v0.3.396 adds Evaluate -> Adapt v1: a new typed, frozen, read-only
 `ResearchMissionContinuationProposal` (`src/research/`), derived by a pure
 function from one closed mission's existing `ResearchMissionOutcome`. It is

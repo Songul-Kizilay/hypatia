@@ -2,6 +2,53 @@
 
 All notable project changes are recorded here.
 
+## [0.3.397] - 2026-09-20
+
+### Fixed
+
+- Closed a latent error-integrity gap in
+  `JsonFileResearchExecutionStore.save()`'s durable-write path. On any write
+  failure, the cleanup `finally` block previously called
+  `temporary_path.unlink(missing_ok=True)` unguarded. If that cleanup unlink
+  itself raised a transient `OSError` (for example a Windows AV/indexer file
+  lock) while the original `ResearchError` was already propagating from the
+  write failure, Python's `finally` semantics would silently replace the
+  propagating `ResearchError` with the raw, secondary `OSError` — breaking
+  the "save always raises `ResearchError`, never a bare OS exception"
+  contract on a narrow but real, Windows-relevant race. Fixed with a new
+  `_remove_temporary_file` static helper that wraps the cleanup in
+  `try/except OSError: pass`, mirroring the pattern
+  `JsonFileResearchRunStore` already used. No schema, authority, budget,
+  scope or public API change — this only affects which exception type
+  propagates from a rare double-fault during cleanup.
+
+### Added
+
+- Regression coverage in both `JsonFileResearchExecutionStore` and
+  `JsonFileResearchRunStore` test files proving, for the first time, that a
+  genuine mid-write failure (real partial bytes physically written to the
+  temporary file before the fault — previously only "failure before any
+  byte written" and "failure after a complete write" were tested) leaves
+  the destination file byte-for-byte unchanged and no temporary file
+  behind; and a nested-cleanup-failure regression test proving the original
+  `ResearchError` (and its exception cause chain, tracing to the real
+  underlying failure) still propagates even when the cleanup unlink itself
+  also fails. `hypatia-qa` independently reverted the production fix,
+  confirmed the regression test genuinely fails without it (a raw `OSError`
+  leaks instead of `ResearchError`), then confirmed the tree was restored
+  with no net change.
+
+### Boundaries
+
+- The same unguarded-cleanup pattern this milestone fixed in one store still
+  exists, unfixed, in roughly ten other `JsonFile*Store` classes in
+  `src/research/` and `src/security/`, including two authority/budget-
+  critical ones — `JsonFileResearchKaliOperationAuthorizationStore.py` and
+  `JsonFileDeferredExecutionGrantStore.py`. This was deliberately kept out
+  of scope for this bounded milestone, which targeted only the two primary
+  durability-critical stores this write pattern was built around, and
+  should be picked up as its own small follow-up milestone.
+
 ## [0.3.396] - 2026-09-20
 
 ### Added

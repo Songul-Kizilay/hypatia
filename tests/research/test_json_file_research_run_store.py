@@ -12,7 +12,10 @@ from pathlib import Path
 from unittest.mock import patch
 
 from core.Exceptions import ResearchError
-from research.JsonFileResearchRunStore import JsonFileResearchRunStore
+from research.JsonFileResearchRunStore import (
+    JsonFileResearchRunStore,
+    _BoundedUtf8Writer,
+)
 from research.ResearchClaimConfidence import ResearchClaimConfidence
 from research.ResearchClaimContradictionRecord import (
     ResearchClaimContradictionRecord,
@@ -1323,6 +1326,55 @@ class JsonFileResearchRunStoreTests(unittest.TestCase):
 
         self.assertEqual(self.path.read_text(encoding="utf-8"), original_document)
         self.assertEqual(list(self.path.parent.glob(f".{self.path.name}.*.tmp")), [])
+
+    def test_partial_write_failure_preserves_previous_snapshot_byte_for_byte(
+        self,
+    ) -> None:
+        original = self._minimal_run("original-run")
+        self.store.save([original])
+        original_bytes = self.path.read_bytes()
+        real_write = _BoundedUtf8Writer.write
+        call_count = {"calls": 0}
+
+        def flaky_write(self: _BoundedUtf8Writer, value: str) -> int:
+            call_count["calls"] += 1
+            if call_count["calls"] == 1:
+                return real_write(self, value)
+            raise OSError("simulated mid-write failure")
+
+        with patch.object(
+            _BoundedUtf8Writer, "write", autospec=True, side_effect=flaky_write
+        ):
+            with self.assertRaises(ResearchError):
+                self.store.save([self._minimal_run("replacement-run")])
+
+        self.assertGreaterEqual(
+            call_count["calls"],
+            2,
+            "the failure must occur after a real write, not before one",
+        )
+        self.assertEqual(self.path.read_bytes(), original_bytes)
+        self.assertEqual(list(self.path.parent.glob(f".{self.path.name}.*.tmp")), [])
+
+    def test_cleanup_unlink_failure_does_not_mask_the_original_research_error(
+        self,
+    ) -> None:
+        original = self._minimal_run("original-run")
+        self.store.save([original])
+
+        with (
+            patch(
+                "research.JsonFileResearchRunStore.os.replace",
+                side_effect=OSError("replace failed"),
+            ),
+            patch.object(Path, "unlink", side_effect=OSError("cleanup failed")),
+        ):
+            with self.assertRaises(ResearchError) as context:
+                self.store.save([self._minimal_run("replacement-run")])
+
+        cause = context.exception.__cause__
+        self.assertIsInstance(cause, OSError)
+        self.assertEqual(str(cause), "replace failed")
 
 
 if __name__ == "__main__":
