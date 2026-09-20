@@ -2,6 +2,65 @@
 
 All notable project changes are recorded here.
 
+## [0.3.398] - 2026-09-20
+
+### Fixed
+
+- Closed the same latent error-integrity gap v0.3.397 fixed in
+  `JsonFileResearchExecutionStore.save()` in all ten remaining
+  `JsonFile*Store` classes that shared the identical unguarded cleanup
+  pattern: `JsonFileResearchKaliOperationAuthorizationStore`,
+  `JsonFileDeferredExecutionGrantStore`,
+  `JsonFileResearchPlanAuthorizationStore`,
+  `JsonFileOneShotDeferredExecutionScheduleStore`, `JsonFileBackgroundTaskStore`,
+  `JsonFileHypothesisStore`, `JsonFileFailureLessonStore`,
+  `JsonFileReflectionReportStore`, `JsonFileCuriosityQuestionStore` and
+  `JsonFileVulnerabilityGraphStore`. Each `save()`'s cleanup `finally` block
+  previously called `temporary_path.unlink(missing_ok=True)` unguarded; a
+  transient cleanup-time `OSError` (for example a Windows AV/indexer file
+  lock) could silently replace an already-propagating `ResearchError` with
+  the raw, secondary `OSError`. Fixed with the identical `_remove_temporary_file`
+  static helper wrapping the cleanup unlink in `try/except OSError: pass` in
+  every one of the ten files. Two of these stores persist
+  authority/budget-bearing state
+  (`JsonFileResearchKaliOperationAuthorizationStore`,
+  `JsonFileDeferredExecutionGrantStore`); independent security review traced
+  a concrete correctness bug this closes there: in
+  `KaliOperationAuthorizationApplicationService.authorize()`, a double-fault
+  (write failure plus cleanup failure) could previously leak a raw `OSError`
+  past the `except ResearchError: return False` guard, skipping the
+  in-memory rollback and leaving the runtime believing an authorization was
+  granted while nothing was persisted to disk. No schema, public API,
+  authority, budget, target or credential semantics changed anywhere in any
+  of the ten stores — only which exception type propagates from a rare
+  double-fault during cleanup.
+
+### Added
+
+- Ten new direct unit test files (`tests/research/` and `tests/security/`),
+  one per fixed store — none of these ten stores had any direct unit test
+  before this milestone, only indirect integration coverage through
+  higher-level services. Each proves a genuine mid-write failure (real
+  partial bytes physically written before the fault, confirmed via a
+  `call_count["calls"] >= 2` self-proving assertion) leaves the destination
+  byte-for-byte unchanged with no leftover temporary file, and that a nested
+  cleanup failure (the write fails and the cleanup unlink also fails) still
+  raises `ResearchError` with its exception cause chain tracing to the
+  original failure, never a raw secondary `OSError`. Every fix's regression
+  test was independently verified to genuinely catch its bug (reverted,
+  confirmed failure, restored, confirmed pass) by at least two independent
+  reviewers across the two implementing agents and QA's own independent
+  reproduction.
+
+### Boundaries
+
+- No change to the already-fixed `JsonFileResearchExecutionStore` or
+  `JsonFileResearchRunStore` from v0.3.397 — confirmed unmodified, their
+  existing tests still pass unchanged. No new store, no new persistence
+  mechanism, no change to what gets persisted or who may write it. This
+  closes the tracked follow-up left open by v0.3.397; the unguarded-cleanup
+  pattern no longer exists anywhere in `src/research/` or `src/security/`.
+
 ## [0.3.397] - 2026-09-20
 
 ### Fixed

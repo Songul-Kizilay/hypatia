@@ -2,11 +2,38 @@
 
 ## Runtime Version
 
-`v0.3.397 (Genesis)`
+`v0.3.398 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
+Version v0.3.398 closes the tracked follow-up left open by v0.3.397: the
+identical unguarded-cleanup pattern in `save()`'s `finally` block existed,
+unfixed, in ten other `JsonFile*Store` classes across `src/research/` and
+`src/security/` — `JsonFileResearchKaliOperationAuthorizationStore`,
+`JsonFileDeferredExecutionGrantStore`,
+`JsonFileResearchPlanAuthorizationStore`,
+`JsonFileOneShotDeferredExecutionScheduleStore`, `JsonFileBackgroundTaskStore`,
+`JsonFileHypothesisStore`, `JsonFileFailureLessonStore`,
+`JsonFileReflectionReportStore`, `JsonFileCuriosityQuestionStore` and
+`JsonFileVulnerabilityGraphStore`. Applied the identical, already-reviewed
+`_remove_temporary_file` guard (wrapping the cleanup unlink in
+`try/except OSError: pass`) to all ten. Two of these stores persist
+authority/budget-bearing state; independent security review traced a
+concrete correctness bug this closes in
+`KaliOperationAuthorizationApplicationService.authorize()`: a double-fault
+(write failure plus cleanup failure) could previously leak a raw `OSError`
+past the `except ResearchError: return False` guard, skipping the
+in-memory rollback and leaving the runtime believing an authorization was
+granted while nothing was persisted to disk. No schema, public API,
+authority, budget, target or credential semantics changed. Added ten new
+direct unit test files (none of these stores had direct unit coverage
+before), each proving a genuine mid-write failure leaves the destination
+byte-for-byte unchanged with no leftover temporary file, and that a nested
+cleanup failure still raises `ResearchError` with its cause chain intact,
+never a raw secondary `OSError`. No change to the already-fixed
+`JsonFileResearchExecutionStore`/`JsonFileResearchRunStore` from v0.3.397;
+no new store, no new persistence mechanism.
 Version v0.3.397 closes a latent error-integrity gap in
 `JsonFileResearchExecutionStore.save()`'s durable-write path: an unguarded
 cleanup unlink in the `finally` block could, on a rare double-fault (a
