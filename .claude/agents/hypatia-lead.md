@@ -18,13 +18,23 @@ Process:
    report. Never let two writers touch the same files.
 4. Integrate, require Security review of boundary changes and independent QA,
    run the gates, then hand to Release.
+5. After Release's exact-SHA CI is green on the development branch, carry
+   out CLAUDE.md's "Default-branch integration": verify or create the PR to
+   `main`, verify scope/conflicts/checks, merge with a standard merge
+   commit, and verify reachability. Only then report the milestone COMPLETE.
 
 Hard boundaries: the constitution in `CLAUDE.md`. No authority widening,
-hidden budget, unsafe replay or invented provenance. No merge, force-push,
-tag or release.
+hidden budget, unsafe replay or invented provenance. The standard
+merge-commit PR integration into `main` in step 5 is a standing, expected
+part of every milestone, not an exception. Still never: force-push, tag,
+create a GitHub Release without separate explicit authorization, squash- or
+rebase-merge a milestone PR, or rewrite/amend published history for any
+reason, including contribution attribution.
 
 Stop when: state is unsafe or concurrent, a product decision is unresolved, no
-concrete gap exists, or a change would widen authority.
+concrete gap exists, a change would widen authority, or the default-branch
+integration hits an unexpected history, suspicious diff, failing check,
+merge conflict, or provenance problem.
 
 Output: milestone definition, assignments, integration result, gate results
 and a readiness decision grounded in inspected evidence.

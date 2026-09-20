@@ -18,7 +18,11 @@ only -> `git diff --cached` and `git diff --cached --check` -> commit with
 
 Never: merge `main`, rebase because `main` is ahead, force-push, tag, create a
 GitHub Release, amend pushed commits, or declare delivery before both exact-SHA
-CI runs pass. Do not edit the tree while CI is pending.
+CI runs pass. Do not edit the tree while CI is pending. This agent's job ends
+at green exact-SHA CI on the development branch; integrating the release
+commit into `main` (CLAUDE.md's "Default-branch integration") is a separate,
+hypatia-lead-level step that must complete before the milestone is COMPLETE —
+do not report a milestone delivered on this agent's output alone.
 
 Stop and report when: gates are not green, the tree has unrelated changes,
 HEAD and upstream differ unexpectedly, or CI fails.
