@@ -14,11 +14,112 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 
 | Field | Value |
 | --- | --- |
-| Milestone | Mission audit traceability view — in-app provenance graph browsing |
-| Base SHA | b1c0354ea7f2efeaede4fb84077699677e46ebfc |
-| Status | delivered — see "Last delivered product milestone" below for release/CI/PR/reachability detail |
-| Specialists | hypatia-epistemics (graph read model) then hypatia-runtime (Brain intent + desktop wiring), implementation complete; hypatia-security: one Medium finding (missing epistemic-tentativeness caveats in the new Treeview), fixed and verified; hypatia-qa: full canonical gates green (6530 then 6542 tests after fixes) plus 4 coverage/defect findings, all fixed and verified (one architecture-wide pre-existing gap — no real Tk `Treeview` construction anywhere in the test suite — recorded as residual, not a regression); hypatia-release delivered v0.3.399 |
+| Milestone | Desktop wiring for Evaluate -> Adapt v1 continuation proposals |
+| Base SHA | f5710aad85c7d9598dd04026e0d13c6daaf8a748 |
+| Status | planned |
+| Specialists | hypatia-runtime (intent + controller + desktop UI, single sequential owner — no new epistemic type needed since `ResearchMissionContinuationProposal`/`proposal_for` are reused byte-for-byte); hypatia-security and hypatia-qa independently after implementation; hypatia-release last |
 | Blockers | none |
+
+Rationale (repository archaeology, 2026-09-22): with Evaluate -> Adapt v1,
+Phase 7 hardening and v0.3.399 all settled (see the prior documentation
+reconciliation commit `f5710aa`), the roadmap's own "Default development
+order" flags item 3 (Tool registry + policy engine) as authority-adjacent
+and requiring an explicit human check-in before autonomous work — so it
+was not picked. Two parallel investigations (hypatia-runtime,
+hypatia-epistemics) evidenced two safely-boundable candidates instead:
+
+1. A desktop-visible source-revalidation flow (Phase 5's "[ ] User-facing
+   revalidation workflow"): confirmed genuinely, completely unreachable
+   from the desktop today (not merely buried — `SourceRevalidationStepBinding`
+   is constructed nowhere in `src/` outside its own plumbing and three test
+   files), reusing 100% existing same-run authority/budget.
+2. Wiring the already-delivered, already-tested Evaluate -> Adapt v1
+   continuation-proposal mechanism (v0.3.396) into the desktop: confirmed
+   `ResearchMissionAuditApplicationService.proposal_for` "is not wired to
+   any `BrainRequest` intent or desktop action" (grep across `src/desktop`
+   returns no matches for `proposal_for`/`ContinuationProposal`/
+   `seed_question`), and CHANGELOG.md's own v0.3.396 entry says so
+   explicitly: "No new desktop UI; this is a backend/service-layer seam
+   only." Hypatia's current top-level roadmap priority (Phase 6) is
+   therefore, today, completely unusable by an actual operator through the
+   product — it exists only as a backend service plus an end-to-end test.
+
+Chosen: **(2)**. It closes the more foundational gap — the flagship
+capability of the current phase has zero access path — while (1) remains
+a strong, independently-valid future candidate (recorded below as
+residual/future work, not discarded).
+
+Scope: (1) a new read-only Brain intent (e.g.
+`research_mission_continuation_proposal_preview`) that calls the EXISTING,
+UNMODIFIED `ResearchMissionAuditApplicationService.proposal_for(plan_id)`
+for a selected closed mission and returns either the proposal (with its
+existing provenance fields: `origin_run_id`, `origin_plan_digest`,
+`origin_stop_reason`, `origin_goal_status`, `origin_evidence_status`,
+`origin_evidence_limitations`, `seed_question`) or an explicit,
+accurate "not eligible" explanation — never a fabricated proposal, never a
+guessed reason; (2) a `DesktopController` method mirroring the existing
+`preview_mission_audit_export`/`preview_plan_authorization` read-only
+pattern; (3) a "View continuation proposal" button beside the existing
+mission-audit controls in "3 Authored analysis" -> "Plan draft" (same
+panel as v0.3.399's traceability view, for the same reason: that's where
+an operator already reviews a closed mission's result) showing the
+proposal read-only; (4) one convenience action, "Use this proposal's
+question," that does nothing except `self._research_question.set(seed_question)`
+on the desktop's existing question `StringVar` (the exact field
+`_preview_question_plan`/`_start_research_goal`/`_select_question_plan`
+already read from for manual entry) — zero Brain/network/authorization
+calls of its own. After that, the operator walks the entire existing,
+byte-for-byte-unmodified preview -> authorize -> start chain themselves,
+exactly as if they had typed the question by hand.
+
+Non-goals: no new authority/budget primitive; no auto-approval or
+auto-start of a proposal — approving still requires the full manual
+preview -> authorize -> start walk, unchanged; no new eligibility rule
+(reuses `proposal_for`'s existing `unresolved`/`partially_satisfied`-only
+gate exactly as-is; `blocked`/`budget_limited` stay ineligible, matching
+the v0.3.396 product decision); no "replanning diff" computation beyond
+showing the proposal's own already-existing provenance fields — no new
+comparison/judgment logic invented; no change to
+`ResearchMissionContinuationProposal`, `continuation_proposal_for`, or
+`proposal_for` themselves; no change to Evaluate -> Adapt v2, revalidation,
+cancellation, or persistence-store code; does not implement the
+budget-refusal-reason-persistence gap or the desktop-visible
+source-revalidation flow found during archaeology (both recorded as
+residual/future work below, not discarded).
+
+Acceptance criteria: for an eligible closed mission, the new intent
+returns a proposal identical to calling `proposal_for(plan_id)` directly
+(equality-tested, same idiom as v0.3.399's traceability-graph equivalence
+test); for an ineligible mission, an explicit accurate explanation, never
+a crash or a fabricated proposal; the convenience button triggers zero
+Brain/network calls and, after it fires, the existing preview -> authorize
+-> start chain behaves byte-for-byte identically to manual entry
+(extending `tests/e2e/test_continuation_proposal_reentry.py`'s existing
+proof to the desktop path); no existing Brain intent, `DesktopController`
+method, or `TkinterDesktopWindow` behavior changes; full canonical gates
+green.
+
+Security implications: the new surface renders a proposal's
+`seed_question` (verbatim operator-authored text from the ORIGIN mission,
+not external/untrusted content) and typed provenance IDs — no new
+untrusted-content-rendering surface beyond what v0.3.399 already
+established a pattern for. The convenience button must be proven to make
+no Brain call itself (pure `StringVar` population) — this is the one
+specific thing hypatia-security must independently trace.
+
+Epistemic implications: none new — `proposal_for`'s existing fail-closed
+eligibility gate is reused unchanged; this milestone must not add a
+second eligibility check that could disagree with it.
+
+Persistence/replay/restart implications: none — the new intent is a pure
+read reusing `proposal_for`'s existing pure-function, nothing-persisted
+derivation; nothing new is written, so restart/replay is unaffected by
+construction.
+
+Authority/budget/target/credential implications: none — no new primitive
+of any kind; the only executable path remains the existing, unmodified
+authorization chain, reached only through the operator's own explicit
+manual walk-through, exactly as today.
 
 Rationale (repository archaeology, 2026-09-22): Master_Roadmap.md was
 reconciled at v0.3.395 and is stale relative to v0.3.396-398. Two apparent

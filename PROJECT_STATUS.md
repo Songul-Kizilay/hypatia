@@ -2,11 +2,29 @@
 
 ## Runtime Version
 
-`v0.3.399 (Genesis)`
+`v0.3.400 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
+Version v0.3.400 wires Evaluate -> Adapt v1 continuation proposals into the
+desktop: an operator can now view a closed mission's continuation proposal
+in-app — previously reachable only as a backend service call
+(`ResearchMissionAuditApplicationService.proposal_for`, unchanged by this
+milestone) — and optionally copy its seed question into the ordinary new-
+question field to start a fresh, separately-authorized mission through the
+completely unmodified existing preview -> authorize -> start flow. A new
+read-only `research_mission_continuation_proposal_preview` Brain intent
+calls the existing `proposal_for(plan_id)` with no new computation path; a
+new `DesktopController.continuation_proposal_preview` method and two new
+buttons ("View continuation proposal", "Use this proposal's question") in
+the "3 Authored analysis" -> "Plan draft" sub-tab render the proposal
+read-only and let an operator copy its seed question into the question
+field, guarded by a staleness check against the currently selected
+mission. The convenience button makes zero Brain/network/authorization
+calls of its own. No new authority, budget, or automatic execution; no
+change to `ResearchMissionContinuationProposal`, `continuation_proposal_for`
+or `proposal_for` themselves.
 Version v0.3.399 adds a mission audit traceability view: an in-app,
 read-only way to browse a mission's already-computed provenance graph
 (claim -> evidence -> source observation -> discovery candidate;

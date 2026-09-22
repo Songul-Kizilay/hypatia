@@ -49,6 +49,9 @@ from research.SourceIdentity import identity_of
 MISSION_AUDIT_PREVIEW_INTENT = "research_mission_audit_export_preview"
 MISSION_AUDIT_SAVE_INTENT = "research_mission_audit_export_save"
 MISSION_AUDIT_TRACEABILITY_VIEW_INTENT = "research_mission_audit_traceability_view"
+MISSION_CONTINUATION_PROPOSAL_PREVIEW_INTENT = (
+    "research_mission_continuation_proposal_preview"
+)
 
 
 class ResearchMissionAuditApplicationService:
@@ -72,6 +75,7 @@ class ResearchMissionAuditApplicationService:
             MISSION_AUDIT_PREVIEW_INTENT,
             MISSION_AUDIT_SAVE_INTENT,
             MISSION_AUDIT_TRACEABILITY_VIEW_INTENT,
+            MISSION_CONTINUATION_PROPOSAL_PREVIEW_INTENT,
         }
 
     def process(self, request: BrainRequest) -> BrainResponse:
@@ -81,6 +85,8 @@ class ResearchMissionAuditApplicationService:
                 return self._preview(request)
             if intent == MISSION_AUDIT_TRACEABILITY_VIEW_INTENT:
                 return self._traceability_view(request)
+            if intent == MISSION_CONTINUATION_PROPOSAL_PREVIEW_INTENT:
+                return self._proposal_preview(request)
             return self._save(request)
         except ResearchError as error:
             return BrainResponse(
@@ -286,6 +292,42 @@ class ResearchMissionAuditApplicationService:
             intent=MISSION_AUDIT_TRACEABILITY_VIEW_INTENT,
             memory_count=0,
             research_mission_audit_traceability_graph=graph,
+        )
+
+    def _proposal_preview(self, request: BrainRequest) -> BrainResponse:
+        """Translate `proposal_for`'s return value into a `BrainResponse`.
+
+        Adds no computation path of its own: `proposal_for` already performs
+        the entire eligibility check (mission closed, run recorded, goal
+        status `unresolved`/`partially_satisfied`).  When it returns `None`
+        this reports one accurate, generic explanation covering every
+        possible cause, never a guessed specific diagnosis -- `proposal_for`
+        does not expose which of those causes applied.
+        """
+        plan_id = str(request.metadata.get("research_plan_id", ""))
+        proposal = self.proposal_for(plan_id)
+        if proposal is None:
+            return BrainResponse(
+                message=(
+                    "No continuation proposal is available for this mission "
+                    "(it is not closed, has no recorded run, or its goal "
+                    "status is not `unresolved`/`partially_satisfied`)."
+                ),
+                request_id=request.request_id,
+                intent=MISSION_CONTINUATION_PROPOSAL_PREVIEW_INTENT,
+                memory_count=0,
+            )
+        return BrainResponse(
+            message=(
+                f"Continuation proposal for plan {plan_id.strip()} "
+                f"(origin run {proposal.origin_run_id}): goal status "
+                f"{proposal.origin_goal_status.value}. Nothing was executed, "
+                "fetched, called, authorized or started."
+            ),
+            request_id=request.request_id,
+            intent=MISSION_CONTINUATION_PROPOSAL_PREVIEW_INTENT,
+            memory_count=0,
+            research_mission_continuation_proposal=proposal,
         )
 
     def _save(self, request: BrainRequest) -> BrainResponse:

@@ -380,9 +380,12 @@ directly rather than inheriting the v0.3.395 basis's `[ ]`.
       extracts `seed_question` and threads it through the ordinary,
       completely unmodified question-preview -> authorization -> start
       flow (proven byte-for-byte identical to manual entry by
-      `test_continuation_proposal_reentry.py`); there is deliberately no
-      dedicated "approve this proposal" method — "wired" means "proven
-      compatible," not "there is a button"
+      `test_continuation_proposal_reentry.py`); the desktop's "Use this
+      proposal's question" button (v0.3.400) only copies `seed_question`
+      into the question field — there is still deliberately no dedicated
+      "approve this proposal" method; populating the field is not itself
+      approval, and the same unmodified manual preview -> authorization ->
+      start walk is still required afterward
 - [x] Reuse existing approval machinery (`ResearchPlanAuthorization*`) —
       no new authorization primitive (same re-entry test)
 - [x] Reuse existing budget machinery — fresh, operator-set budget per

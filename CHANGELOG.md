@@ -2,6 +2,66 @@
 
 All notable project changes are recorded here.
 
+## [0.3.400] - 2026-09-22
+
+### Added
+
+- Desktop wiring for Evaluate -> Adapt v1 continuation proposals: an
+  operator can now, from the desktop, view a closed mission's
+  continuation proposal — previously reachable only as a backend service
+  call (`ResearchMissionAuditApplicationService.proposal_for`), with the
+  v0.3.396 CHANGELOG entry explicitly noting "No new desktop UI; this is
+  a backend/service-layer seam only." `ResearchMissionContinuationProposal`,
+  `continuation_proposal_for` and `proposal_for` itself are all unchanged
+  by this milestone.
+- `ResearchMissionAuditApplicationService`: a new read-only
+  `research_mission_continuation_proposal_preview` Brain intent that calls
+  the existing, unmodified `proposal_for(plan_id)` for a selected closed
+  mission and returns either the proposal (with its existing provenance
+  fields: `origin_run_id`, `origin_plan_digest`, `origin_stop_reason`,
+  `origin_goal_status`, `origin_evidence_status`,
+  `origin_evidence_limitations`, `seed_question`) or an explicit, accurate
+  "not eligible" explanation covering every possible cause — never a
+  fabricated proposal, never a guessed specific reason. `BrainResponse`
+  gains one new optional field,
+  `research_mission_continuation_proposal`.
+- `DesktopController.continuation_proposal_preview(plan_id)`: a new
+  read-only method mirroring the existing
+  `preview_mission_audit_export`/`preview_plan_authorization` pattern.
+- Two new buttons in the desktop app's "3 Authored analysis" -> "Plan
+  draft" sub-tab (the same panel as v0.3.399's traceability view, for the
+  same reason — that's where an operator already reviews a closed
+  mission's result): "View continuation proposal" shows the proposal
+  read-only (its `seed_question` rendered through the same `_clean_text`
+  normalization every other free-text field in this window applies), and
+  "Use this proposal's question" does nothing except copy the shown
+  proposal's `seed_question` into the desktop's existing question field —
+  zero Brain/network/authorization calls of its own. A staleness guard
+  compares the proposal's originating plan ID against the currently
+  selected mission before allowing reuse, so changing the mission
+  selector after viewing a proposal can never feed a different mission's
+  stale seed question into the field. After either action, the operator
+  walks the entire existing, byte-for-byte-unmodified preview ->
+  authorize -> start chain themselves, exactly as if they had typed the
+  question by hand. No new authority, budget, or automatic execution.
+- 5 new tests extending
+  `tests/cognition/test_research_mission_audit_application_service.py`
+  (proving the new intent adds no divergent computation over calling
+  `proposal_for` directly), and a new
+  `tests/desktop/test_continuation_proposal_view.py` (~20 tests), plus a
+  label-exclusion scoping fix in
+  `tests/desktop/test_research_command_bindings.py` so an existing
+  curiosity-proposal-isolation test doesn't collide with this milestone's
+  new, unrelated button labels.
+
+No new authority/budget/approval primitive; no auto-approval or
+auto-start of a proposal — approving still requires the full manual
+preview -> authorize -> start walk, unchanged; no new eligibility rule
+(reuses `proposal_for`'s existing `unresolved`/`partially_satisfied`-only
+gate exactly as-is); no change to `ResearchMissionContinuationProposal`,
+`continuation_proposal_for`, `proposal_for`, Evaluate -> Adapt v2,
+revalidation, cancellation, or persistence-store code.
+
 ## [0.3.399] - 2026-09-22
 
 ### Added
