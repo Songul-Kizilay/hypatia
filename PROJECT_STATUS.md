@@ -2,10 +2,20 @@
 
 ## Runtime Version
 
-`v0.3.402 (Genesis)`
+`v0.3.403 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
+
+Version v0.3.403 adds deterministic, code-literal "what would help close this
+gap" guidance to `ResearchMissionGoalExplanation`, derived only from the
+already-typed `ResearchEvidenceCompletionLimitation` values (no new enum
+value, no model-generated text, no confidence score). The guidance is pure
+presentation over already-computed state: read-only, explainability-only,
+and incapable of creating authority, budget, target, or credential changes.
+It reaches an operator through two existing, unmodified read paths — the
+teaching report and the mission audit export that embeds it — so this
+milestone added no new Brain intent and no new desktop widget.
 
 Version v0.3.402 preserves a bounded explanation when an `Advance` is
 refused before any attempt because the approved allowance cannot cover the

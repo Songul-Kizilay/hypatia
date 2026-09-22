@@ -14,6 +14,116 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 
 | Field | Value |
 | --- | --- |
+| Milestone | Deterministic gap-closing guidance on the mission goal explanation |
+| Base SHA | 201b1af345f9b853b522bd3f219b886d9c719415 |
+| Status | ci-pending — implementation, independent security review, independent QA review, and full canonical gates complete; awaiting release commit and exact-SHA CI |
+| Specialists | hypatia-epistemics-scope work performed directly by hypatia-lead (single-file, narrowly-bounded literal mapping); hypatia-security: independent review, PASS, no findings; hypatia-qa: independent review, PASS, all seven required test behaviors verified with real differential/equality assertions, full 133-test integration suite re-run clean |
+| Blockers | none |
+
+Rationale: user-directed. The user approved the prior turn's read-only
+reconnaissance of `docs/Roadmap/Master_Roadmap.md`'s "Future direction:
+bounded delegated research & evidence-quality completion" as the design
+basis, and explicitly locked candidate D ("Confidence and uncertainty made
+visible") as this milestone, explicitly excluding candidate A ("Bounded
+delegated research continuation") because its authority-policy boundary
+still requires a human design decision. Ground truth was re-verified
+against the live checkout immediately before implementation (HEAD/upstream
+unchanged at `201b1af`, the `ResearchEvidenceCompletionLimitation` enum
+still exactly 8 values, `ResearchMissionGoalExplanation.summary()`
+unchanged) before locking the milestone, per the user's instruction.
+
+Scope: a private literal `_LIMITATION_GUIDANCE` mapping in
+`src/research/ResearchMissionGoalExplanation.py` from each of the 8
+existing `ResearchEvidenceCompletionLimitation` values to one bounded,
+hand-written guidance sentence describing what recorded evidence gap it
+names — no new enum value, no model-generated text, no confidence score.
+A new additive `limitations: tuple[ResearchEvidenceCompletionLimitation,
+...] = ()` field on the frozen `ResearchMissionGoalExplanation` dataclass,
+validated in `__post_init__` exactly like the existing `caveats` field
+(type/membership/uniqueness only), populated unchanged from the
+already-computed `ResearchEvidenceCompletionEvaluation.limitations` inside
+`explain_mission_goal_satisfaction`. `summary()` appends one further
+sentence — explicitly labelled "(explanatory only; not a pending action or
+a grant of budget/authority)" — only when limitations are non-empty, in
+the same order the limitations tuple already carries.
+
+Investigated and confirmed during implementation: this text was already
+reachable through two existing, unmodified read paths with zero new
+surface needed. `ResearchTeachingReport.teaching_report()` already
+embeds `goal_explanation.summary()` verbatim (`ResearchTeachingReport.py:131`);
+`ResearchMissionAudit.py`'s `build_mission_audit` already sets its
+`report`/`teaching_report` field to that same `teaching_report(...)` call
+unmodified (`ResearchMissionAudit.py:174`), and its markdown `_preview()`
+quotes that field verbatim in a "## Teaching Report" section
+(`ResearchMissionAudit.py:639-650`). So no new Brain intent and no new
+desktop widget were added — confirmed necessary by hypatia-qa's
+independent re-reading of that call chain, not merely assumed.
+
+Non-goals: no change to `ResearchEvidenceCompletionLimitation` or any
+other enum; no automatic/inferred/model-generated guidance text; no
+numeric confidence score or percentage (the roadmap's own candidate D
+explicitly forbids fabricated percentages without a defensible model); no
+new Brain intent; no new desktop widget; no change to
+`ResearchEvidenceCompletionEvaluation`, `evaluate_evidence_completion`, or
+any authority/budget/target/credential primitive; does not implement
+candidate A (bounded delegated research continuation), which remains
+explicitly blocked on a human authority-policy decision.
+
+Acceptance criteria (all independently verified by hypatia-qa against a
+real test run, not merely read): every one of the 8
+`ResearchEvidenceCompletionLimitation` values maps to exactly one
+deterministic guidance statement; an empty/sufficiently-supported
+`limitations` tuple adds no gap-closing text; multiple simultaneous
+limitations render their guidance in the same stable order as the
+existing limitations tuple; `ResearchTeachingReport` output changes only
+by the appended guidance text (proved by a `dataclasses.replace(...,
+limitations=())` differential, not a substring check); `ResearchMissionAudit`
+output changes only by the same appended text (proved by construction,
+since its `report` field is the same `teaching_report(...)` string
+unmodified); existing summary content is byte-for-byte unchanged except
+for the new appended section; the guidance path performs no model,
+network, execution, persistence, budget, authorization, target, or
+credential side effect; full canonical gates green (6620 tests, `OK
+(skipped=3)`; Black, Ruff, MyPy, `git diff --check` all clean); the
+pre-existing 133-test `tests/integration/test_learning_research_journey.py`
+suite re-run clean and unmodified.
+
+Security implications: verified by independent hypatia-security review —
+the guidance path is read-only by construction (pure dict lookup plus
+string join, no I/O); the new `limitations` field is inert typed metadata
+that no other code path branches on to change what executes (grepped
+every `.limitations` read repo-wide); all 8 guidance strings are literal,
+hand-written text with no interpolation of source/model/note prose; the
+file's own "does not interpret source/model prose... does not grant any
+new authority" docstring invariant is preserved, reinforced by the new
+sentence's own explicit "(explanatory only...)" qualifier.
+
+Epistemic implications: none new — the guidance is a pure presentation
+layer over already-computed, already-typed limitation state; it does not
+assert that closing a named gap would produce a true or complete answer,
+only names what recorded condition is absent, exactly matching this
+file's existing reason/caveat rendering discipline.
+
+Persistence/replay/restart implications: none — `ResearchMissionGoalExplanation`
+is a derived, non-persisted projection recomputed on demand from canonical
+state; the new field carries no status transition and is not written to
+any store.
+
+Authority/budget/target/credential implications: none — no primitive of
+any kind is created, restored, or altered; this milestone only makes an
+existing gap more legible to an operator.
+
+Product-direction compatibility: this is explanation of a recorded
+evidence gap, not an epistemic completion decision, a saturation
+judgement, or a numeric confidence claim. Candidate A (bounded delegated
+research continuation) remains explicitly out of scope and blocked on a
+human authority-policy decision, per the user's instruction for this
+milestone.
+
+## Historical scope: v0.3.402 (delivered)
+
+| Field | Value |
+| --- | --- |
 | Milestone | Persist budget-refusal reasons across a status refresh |
 | Base SHA | 32d8376fc18a09d5f4beaa60a0fa9e230cbe529c |
 | Status | delivered — see "Last delivered product milestone" below for release/CI/PR/reachability detail |
