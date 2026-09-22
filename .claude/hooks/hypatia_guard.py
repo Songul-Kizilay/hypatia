@@ -35,6 +35,7 @@ from pathlib import Path
 PROJECT = Path(__file__).resolve().parents[2]
 SEPARATORS = {";", "&&", "||", "|", "|&", "&", "\n", "(", ")"}
 GIT_OPTIONS_WITH_VALUE = {"-C", "-c", "--git-dir", "--work-tree", "--namespace"}
+GH_OPTIONS_WITH_VALUE = {"-R", "--repo"}
 
 
 def _run(args: list[str], timeout: float = 15.0) -> str:
@@ -125,6 +126,14 @@ def _program(token: str) -> str:
     return name[:-4] if name.endswith(".exe") else name
 
 
+def _gh_subcommand(tokens: list[str]) -> list[str]:
+    """Return the first two ``gh`` subcommand words, skipping global flags."""
+    index = 1
+    while index < len(tokens) and tokens[index].startswith("-"):
+        index += 2 if tokens[index] in GH_OPTIONS_WITH_VALUE else 1
+    return tokens[index : index + 2]
+
+
 def _git_subcommand(tokens: list[str]) -> tuple[str, list[str]]:
     index = 1
     while index < len(tokens) and tokens[index].startswith("-"):
@@ -188,7 +197,10 @@ def _pr_merge_auto_allow(tokens: list[str]) -> bool:
     https://code.claude.com/docs/en/hooks-guide.md after that assumption
     was empirically wrong once in practice). settings.json therefore has NO
     ``ask`` rule for ``gh pr merge`` any more - see ``_pr_merge_denial``,
-    which is what actually keeps every other shape from running.
+    which is what actually keeps every other shape from running. Because
+    nothing in settings.json backstops this any more, ``_pr_merge_denial``
+    also covers the form reached through a ``gh`` global flag (``-R``/
+    ``--repo``), which no wildcard rule ever matched either.
     """
     if len(tokens) < 5:
         return False
@@ -222,8 +234,17 @@ def _pr_merge_denial(tokens: list[str], only_segment: bool) -> str | None:
     meant to be merely "ask", so denying them outright is not a narrowing
     of policy, it is enforcing the policy that already existed.
     """
-    if _program(tokens[0]) != "gh" or tokens[1:3] != ["pr", "merge"]:
+    if _program(tokens[0]) != "gh" or _gh_subcommand(tokens) != ["pr", "merge"]:
         return None
+    if tokens[1:3] != ["pr", "merge"]:
+        # Reached through a global flag such as ``-R owner/repo``. The allow
+        # shape is the plain form only, so this can never be auto-allowed;
+        # deny it rather than leave a pr-merge shape the guard does not decide.
+        return (
+            "A pre-authorized PR merge must be the plain "
+            "`gh pr merge <number> --merge` form, with no global flag before "
+            "the subcommand."
+        )
     if not only_segment:
         return "A gh pr merge command must not be chained with anything else."
     if _pr_merge_auto_allow(tokens):
