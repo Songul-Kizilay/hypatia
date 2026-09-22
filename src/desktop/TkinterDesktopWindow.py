@@ -44,6 +44,7 @@ from desktop.ResearchWorkspaceReadModel import (
     ResearchSourceCoverageFacet,
     ResearchWorkspaceReadModel,
 )
+from desktop.RevalidationResearchDraft import RevalidationResearchDraft
 from desktop.SimpleResearchActivity import SimpleResearchActivity
 from desktop.SimpleResearchPhrasebook import phrase as simple_phrase
 from desktop.SimpleResearchReadModel import SimpleResearchReadModel
@@ -324,7 +325,9 @@ _RESEARCH_ANALYSIS_TAB_TITLES = (
 
 
 class _OpeningPlanOptions(TypedDict, total=False):
-    opening_draft: QuestionResearchDraft | AcquisitionResearchDraft
+    opening_draft: (
+        QuestionResearchDraft | AcquisitionResearchDraft | RevalidationResearchDraft
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -1096,6 +1099,7 @@ class TkinterDesktopWindow:
             value="Run metadata unavailable until a research run is selected."
         )
         self._research_source_choice = tk.StringVar()
+        self._revalidation_source_choice = tk.StringVar()
         self._research_source_coverage_filter = tk.StringVar(
             value=ResearchSourceCoverageFacet.ALL.value
         )
@@ -1203,6 +1207,11 @@ class TkinterDesktopWindow:
         self._visible_research_runs: tuple[ResearchRun, ...] = ()
         self._research_source_catalog: tuple[ResearchSourceRecord, ...] = ()
         self._research_sources: tuple[ResearchSourceRecord, ...] = ()
+        #: Accepted sources eligible for revalidation (an exact recorded
+        #: observation and requested URL) from the current source catalog.
+        #: Legacy records missing either are never offered here; binding
+        #: them would fail `SourceRevalidationStepBinding`'s own validation.
+        self._revalidation_sources: tuple[ResearchSourceRecord, ...] = ()
         self._research_source_run_id = ""
         self._active_research_source_document_id = ""
         self._research_evidence_records: tuple[ResearchEvidenceRecord, ...] = ()
@@ -2337,6 +2346,38 @@ class TkinterDesktopWindow:
             text="Add to comparison",
             command=self._add_selected_research_assessment_to_comparison,
         ).grid(row=7, column=3, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ttk.Label(accepted_source_frame, text="Revalidate source").grid(
+            row=8,
+            column=0,
+            sticky="w",
+            padx=(0, 8),
+            pady=(8, 0),
+        )
+        self._revalidation_source_selector = ttk.Combobox(
+            accepted_source_frame,
+            textvariable=self._revalidation_source_choice,
+            values=(),
+            state="readonly",
+        )
+        self._revalidation_source_selector.grid(
+            row=8, column=1, sticky="ew", pady=(8, 0)
+        )
+        ttk.Button(
+            accepted_source_frame,
+            text="Propose revalidation",
+            command=self._propose_source_revalidation,
+        ).grid(row=8, column=2, sticky="ew", padx=(8, 0), pady=(8, 0))
+        ttk.Label(
+            accepted_source_frame,
+            text=(
+                "Source revalidation: one explicitly approved re-fetch only, "
+                "not a freshness conclusion. Legacy accepted sources without a "
+                "recorded observation are never offered here."
+            ),
+            style="Hint.TLabel",
+            wraplength=1000,
+            justify="left",
+        ).grid(row=9, column=0, columnspan=4, sticky="ew", pady=(4, 0))
         ttk.Label(
             research_analysis_frame,
             text=(
@@ -2497,7 +2538,10 @@ class TkinterDesktopWindow:
         ).grid(row=2, column=0, sticky="w", pady=(6, 0))
         self._target_plan_draft: TargetResearchDraft | None = None
         self._question_plan_draft: (
-            QuestionResearchDraft | AcquisitionResearchDraft | None
+            QuestionResearchDraft
+            | AcquisitionResearchDraft
+            | RevalidationResearchDraft
+            | None
         ) = None
         self._question_plan_previous_text: tuple[str, str] | None = None
         self._reference_plan_text: tuple[str, str] | None = None
@@ -5454,6 +5498,7 @@ class TkinterDesktopWindow:
         )
         self._research_source_catalog = run.sources
         self._research_source_run_id = run.run_id
+        self._render_revalidation_source_selector()
         self._research_source_coverage_filter.set(ResearchSourceCoverageFacet.ALL.value)
         self._research_source_catalog_summary.set(
             self._research_source_catalog_summary_text(run)
@@ -5640,6 +5685,41 @@ class TkinterDesktopWindow:
         )
         self._render_research_evidence_selector(run, selected_source)
         self._render_research_assessment_selector(run, selected_source)
+
+    def _render_revalidation_source_selector(self) -> None:
+        """Offer only sources a revalidation binding could actually name.
+
+        Reads directly from `self._research_source_catalog` -- the complete,
+        unfiltered accepted-source catalog -- rather than the coverage-view-
+        filtered `self._research_sources`, so the eligible-source picker
+        stays available regardless of the operator's chosen coverage view.
+        """
+        eligible = ResearchWorkspaceReadModel.revalidation_eligible_sources(
+            self._research_source_catalog
+        )
+        self._revalidation_sources = eligible
+        # Several existing tests build a partial window with only the
+        # attributes their own scenario needs (`object.__new__` plus manual
+        # assignment, never the real `_build_layout`). Guarded rather than
+        # required, so this new picker never raises through an unrelated
+        # test double that predates it and never touches revalidation.
+        selector = getattr(self, "_revalidation_source_selector", None)
+        if selector is not None:
+            selector.configure(
+                values=tuple(self._research_source_label(source) for source in eligible)
+            )
+        choice = getattr(self, "_revalidation_source_choice", None)
+        if choice is not None:
+            choice.set("")
+
+    def _selected_revalidation_source(self) -> ResearchSourceRecord | None:
+        """Return only an eligible source tied to the currently selected run."""
+        if self._research_run_id.get().strip() != self._research_source_run_id:
+            return None
+        selected_index = self._revalidation_source_selector.current()
+        if not 0 <= selected_index < len(self._revalidation_sources):
+            return None
+        return self._revalidation_sources[selected_index]
 
     @staticmethod
     def _filter_research_sources_by_coverage(
@@ -6159,6 +6239,13 @@ class TkinterDesktopWindow:
         )
         self._research_source_choice.set("")
         self._research_source_selector.configure(values=())
+        self._revalidation_sources = ()
+        choice = getattr(self, "_revalidation_source_choice", None)
+        if choice is not None:
+            choice.set("")
+        selector = getattr(self, "_revalidation_source_selector", None)
+        if selector is not None:
+            selector.configure(values=())
 
     def _clear_research_evidence(self) -> None:
         """Discard source-bound evidence presentation without editing form fields."""
@@ -9194,6 +9281,86 @@ class TkinterDesktopWindow:
         self._invalidate_plan_approval_preview()
         self._status.set(
             "Fetch batch selected. Use Preview approval; "
+            "nothing is approved or fetched."
+        )
+
+    def _propose_source_revalidation(self) -> None:
+        """Build one revalidation proposal from an explicitly picked prior source.
+
+        This makes exactly one no-write Brain preview call -- the same shape
+        "Review fetch batch" already uses for acquisition. It approves,
+        records or starts nothing: preview approval, confirm and start each
+        remain the operator's own separate later action.
+        """
+        source = self._selected_revalidation_source()
+        run = next(
+            (
+                candidate
+                for candidate in self._research_runs
+                if candidate.run_id == self._research_source_run_id
+            ),
+            None,
+        )
+        if (
+            source is None
+            or run is None
+            or run.run_id != self._research_run_id.get().strip()
+            or run.sources != self._research_source_catalog
+        ):
+            self._status.set(
+                "Select an eligible accepted source from the current research "
+                "run first."
+            )
+            return
+        if (
+            getattr(self, "_target_plan_draft", None) is not None
+            or self._text_value(self._research_plan_constraints).strip()
+            or self._plan_restriction.get() not in ("", "advisory")
+            or self._research_question.get().strip() != run.question
+        ):
+            self._status.set(
+                "Revalidation proposal cannot replace a different question, "
+                "target or constraints."
+            )
+            return
+        prior_observation_id = source.observation_id
+        assert prior_observation_id is not None
+        response = self._controller.preview_source_revalidation(
+            run.run_id, prior_observation_id
+        )
+        self._append_response(response)
+        preview = response.research_plan_draft_preview
+        if not response.success or preview is None or preview.plan is None:
+            return
+        try:
+            draft = RevalidationResearchDraft(run, prior_observation_id, preview.plan)
+        except ValueError as error:
+            self._status.set(str(error))
+            return
+        binding = draft.plan.steps[0].source_revalidation_binding
+        assert binding is not None
+        if not messagebox.askyesno(
+            "Propose this exact revalidation?",
+            "\n".join(binding.lines())
+            + f"\n\nPlan digest: {plan_digest(draft.plan)}\n\n"
+            "This selects a draft only. Preview approval, confirm and start "
+            "remain separate.",
+            parent=self._root,
+        ):
+            return
+        if getattr(self, "_question_plan_draft", None) is None:
+            self._question_plan_previous_text = (
+                self._text_value(self._research_plan_instructions),
+                self._text_value(self._research_plan_source_ids),
+            )
+        self._question_plan_draft = draft
+        self._replace_plan_text(
+            self._research_plan_instructions, draft.instruction_text, disabled=True
+        )
+        self._replace_plan_text(self._research_plan_source_ids, "", disabled=True)
+        self._invalidate_plan_approval_preview()
+        self._status.set(
+            "Revalidation proposed. Use Preview approval; "
             "nothing is approved or fetched."
         )
 

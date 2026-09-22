@@ -10,6 +10,7 @@ from brain.BrainResponse import BrainResponse
 from core.CancellationSignal import CancellationToken
 from desktop.AcquisitionResearchDraft import AcquisitionResearchDraft
 from desktop.QuestionResearchDraft import QuestionResearchDraft
+from desktop.RevalidationResearchDraft import RevalidationResearchDraft
 from desktop.TargetResearchDraft import TargetResearchDraft
 from research.DeferredExecutionControlView import DeferredExecutionControlView
 from research.OneShotDeferredExecutionSchedule import OneShotDeferredExecutionSchedule
@@ -42,7 +43,12 @@ ADVISORY_RESTRICTION_LABEL = "advisory"
 
 
 def _opening_draft_metadata(
-    draft: QuestionResearchDraft | AcquisitionResearchDraft | None,
+    draft: (
+        QuestionResearchDraft
+        | AcquisitionResearchDraft
+        | RevalidationResearchDraft
+        | None
+    ),
     target: TargetResearchDraft | None,
     question: str,
     instructions: str,
@@ -52,7 +58,10 @@ def _opening_draft_metadata(
 ) -> dict[str, object]:
     if draft is None:
         return {}
-    if not isinstance(draft, (QuestionResearchDraft, AcquisitionResearchDraft)):
+    if not isinstance(
+        draft,
+        (QuestionResearchDraft, AcquisitionResearchDraft, RevalidationResearchDraft),
+    ):
         raise ValueError("An opening requires a validated question draft.")
     if target is not None or constraints.strip() or _plan_restriction(restriction):
         raise ValueError("Opening mode cannot discard targets or constraints.")
@@ -480,7 +489,12 @@ class DesktopController:
         restriction: str = "",
         *,
         target_draft: TargetResearchDraft | None = None,
-        opening_draft: QuestionResearchDraft | AcquisitionResearchDraft | None = None,
+        opening_draft: (
+            QuestionResearchDraft
+            | AcquisitionResearchDraft
+            | RevalidationResearchDraft
+            | None
+        ) = None,
     ) -> BrainResponse:
         """Preview one explicit ordered plan without saving or executing it.
 
@@ -544,7 +558,12 @@ class DesktopController:
         restriction: str = "",
         *,
         target_draft: TargetResearchDraft | None = None,
-        opening_draft: QuestionResearchDraft | AcquisitionResearchDraft | None = None,
+        opening_draft: (
+            QuestionResearchDraft
+            | AcquisitionResearchDraft
+            | RevalidationResearchDraft
+            | None
+        ) = None,
     ) -> BrainResponse:
         """Show the approval this plan would record. Records nothing.
 
@@ -605,7 +624,12 @@ class DesktopController:
         restriction: str = "",
         *,
         target_draft: TargetResearchDraft | None = None,
-        opening_draft: QuestionResearchDraft | AcquisitionResearchDraft | None = None,
+        opening_draft: (
+            QuestionResearchDraft
+            | AcquisitionResearchDraft
+            | RevalidationResearchDraft
+            | None
+        ) = None,
     ) -> BrainResponse:
         """Record exactly one previewed approval. Starts no research.
 
@@ -648,7 +672,12 @@ class DesktopController:
         restriction: str = "",
         *,
         target_draft: TargetResearchDraft | None = None,
-        opening_draft: QuestionResearchDraft | AcquisitionResearchDraft | None = None,
+        opening_draft: (
+            QuestionResearchDraft
+            | AcquisitionResearchDraft
+            | RevalidationResearchDraft
+            | None
+        ) = None,
     ) -> BrainResponse:
         """Spend one recorded approval on one foreground execution start.
 
@@ -961,7 +990,12 @@ class DesktopController:
         constraint_lines: str = "",
         restriction: str = "",
         target_draft: TargetResearchDraft | None = None,
-        opening_draft: QuestionResearchDraft | AcquisitionResearchDraft | None = None,
+        opening_draft: (
+            QuestionResearchDraft
+            | AcquisitionResearchDraft
+            | RevalidationResearchDraft
+            | None
+        ) = None,
     ) -> BrainResponse:
         if not all(
             isinstance(value, str)
@@ -992,6 +1026,25 @@ class DesktopController:
                 or plan_digest(preview.plan) != plan_digest(opening_draft.plan)
             ):
                 raise ValueError("The recorded selection changed. Review a new batch.")
+        if isinstance(opening_draft, RevalidationResearchDraft):
+            if normalized_run_id != opening_draft.run.run_id:
+                raise ValueError(
+                    "The revalidation draft belongs to another research run."
+                )
+            current = self.preview_source_revalidation(
+                normalized_run_id,
+                opening_draft.prior_observation_id,
+            )
+            preview = current.research_plan_draft_preview
+            if (
+                not current.success
+                or preview is None
+                or preview.plan is None
+                or plan_digest(preview.plan) != plan_digest(opening_draft.plan)
+            ):
+                raise ValueError(
+                    "The recorded selection changed. Review a new proposal."
+                )
         metadata: dict[str, object] = {
             "intent": intent,
             "research_run_id": normalized_run_id,
@@ -1054,6 +1107,22 @@ class DesktopController:
                     "research_run_id": run_id,
                     "discovery_id": discovery_id,
                     "selected_candidate_urls": selected_urls,
+                },
+            )
+        )
+
+    def preview_source_revalidation(
+        self, run_id: str, prior_observation_id: str
+    ) -> BrainResponse:
+        """Prepare an inert one-step revalidation plan; approval/start are separate."""
+        return self._brain.process(
+            BrainRequest(
+                message="Preview source revalidation step",
+                source="desktop",
+                metadata={
+                    "intent": "research_revalidation_step_preview",
+                    "research_run_id": run_id,
+                    "prior_observation_id": prior_observation_id,
                 },
             )
         )

@@ -2,6 +2,55 @@
 
 All notable project changes are recorded here.
 
+## [0.3.401] - 2026-09-22
+
+### Added
+
+- Desktop wiring for source revalidation: an operator can now, from the
+  desktop's "2 Sources & evidence" panel, select one of a research run's
+  own already-accepted sources (excluding legacy records without a
+  recorded `observation_id`/`requested_url`) and propose a bounded
+  revalidation — an explicitly approved single re-fetch of that exact
+  prior observation, never a freshness conclusion — through the entirely
+  ordinary, unmodified preview -> authorize -> confirm -> start flow.
+  `SourceRevalidationStepOperation` and `SourceRevalidationStepBinding`
+  (v0.3.393) are reused byte-for-byte; no new authority, budget or
+  persistence primitive.
+- `src/research/ResearchRevalidationDraft.py`: a new pure
+  `preview_source_revalidation(run, prior_observation_id,
+  draft_service=None)` that resolves the prior observation and its
+  requested URL only from the run's own current source records — never
+  from caller-supplied fields — so the resulting binding can never name a
+  URL that does not belong to the selected observation and can never name
+  a different run.
+- `src/desktop/RevalidationResearchDraft.py`: a new frozen, self-validating
+  desktop draft type mirroring `AcquisitionResearchDraft`'s exact shape,
+  revalidating itself against canonical state via `plan_digest` equality
+  so a stale draft (source count or observation state changed since
+  preview) is rejected, not silently over-authorized.
+- `ResearchPlanPreviewApplicationService`: a new read-only
+  `research_revalidation_step_preview` Brain intent built on the new pure
+  builder above.
+- `DesktopController`: a new `preview_source_revalidation(run_id,
+  prior_observation_id)` read-only method, the `QuestionResearchDraft |
+  AcquisitionResearchDraft` opening-draft union widened to include the new
+  draft type at its existing call sites, and a same-run/staleness re-check
+  branch in `_plan_authorization_request` mirroring the existing
+  acquisition-draft check.
+- Desktop UI: a new eligible-source picker over the run's existing
+  accepted-sources catalog, a "Propose revalidation" button, and a confirm
+  dialog surfacing `SourceRevalidationStepBinding.lines()`'s existing,
+  already-reviewed wording verbatim ("one explicitly approved re-fetch
+  only", "not a freshness conclusion") rather than inventing new copy.
+  `ResearchWorkspaceReadModel.revalidation_eligible_sources(...)` filters
+  out any source with a null `observation_id` or `requested_url` so the
+  picker never offers a source `SourceRevalidationStepBinding` would
+  refuse.
+- `SourceRevalidationStepOperation.py`, `SourceRevalidationStepBinding.py`,
+  `ResearchRunManager.py`, `ResearchPlanAuthorizationApplicationService.py`,
+  `ResearchPlanExecutionApplicationService.py`, `AcquisitionResearchDraft.py`
+  and `QuestionResearchDraft.py` are all unchanged by this milestone.
+
 ## [0.3.400] - 2026-09-22
 
 ### Added

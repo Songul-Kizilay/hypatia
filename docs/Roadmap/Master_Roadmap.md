@@ -263,7 +263,12 @@ Bounded source revalidation — all `[x]`, tested beyond the happy path:
       code literally says "operator ruling" — that phrase is roadmap
       paraphrase for "refuses rather than inferring")
 
-- [ ] User-facing revalidation workflow
+- [x] User-facing revalidation workflow — `src/desktop/RevalidationResearchDraft.py`,
+      the desktop's "2 Sources & evidence" eligible-source picker and
+      "Propose revalidation" button, and the `research_revalidation_step_preview`
+      Brain intent let an operator propose one explicitly approved re-fetch
+      of an already-accepted source through the ordinary, unmodified
+      preview -> authorize -> confirm -> start flow (v0.3.401)
 - [ ] Evaluate->Adapt may propose revalidation without granting authority
       (explicitly **not** in the v1 Evaluate -> Adapt milestone — see Phase 6;
       v1 supports exactly one action type, bounded research-plan proposal,

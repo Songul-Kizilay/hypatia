@@ -23,6 +23,7 @@ from research.ResearchPlanFailureLessonTrace import (
 )
 from research.ResearchPlanRestriction import ResearchPlanRestriction
 from research.ResearchPlanTargetBinding import ResearchPlanTargetBinding
+from research.ResearchRevalidationDraft import preview_source_revalidation
 from research.ResearchRunManager import ResearchRunManager
 from response.ResponseComposer import ResponseComposer
 
@@ -53,6 +54,7 @@ class ResearchPlanPreviewApplicationService:
             "research_plan_draft_preview",
             "research_question_plan_preview",
             "research_acquisition_batch_preview",
+            "research_revalidation_step_preview",
         )
 
     def process_draft_preview(self, request: BrainRequest) -> BrainResponse:
@@ -61,6 +63,8 @@ class ResearchPlanPreviewApplicationService:
             return self._process_question_preview(request)
         if request.metadata.get("intent") == "research_acquisition_batch_preview":
             return self._process_acquisition_preview(request)
+        if request.metadata.get("intent") == "research_revalidation_step_preview":
+            return self._process_revalidation_preview(request)
         question = cast(str, request.metadata.get("research_plan_question"))
         step_drafts = cast(
             tuple[ResearchPlanStepDraft, ...],
@@ -119,6 +123,36 @@ class ResearchPlanPreviewApplicationService:
                 run,
                 cast(str, request.metadata.get("discovery_id")),
                 cast(tuple[str, ...], request.metadata.get("selected_candidate_urls")),
+                draft_service=self._draft_service,
+            )
+        except ResearchError as error:
+            preview = ResearchPlanDraftPreview.rejected(str(error))
+        return self._response_composer.research_plan_draft_preview(request, preview)
+
+    def _process_revalidation_preview(self, request: BrainRequest) -> BrainResponse:
+        """Resolve the prior observation from current run state, never a claim."""
+        try:
+            if self._research_run_manager is None:
+                raise ResearchError("Research run storage is unavailable.")
+            if any(
+                key in request.metadata
+                for key in (
+                    "research_plan_question",
+                    "research_plan_steps",
+                    "research_plan_constraints",
+                    RESEARCH_PLAN_RESTRICTION_KEY,
+                    RESEARCH_PLAN_TARGET_BINDING_KEY,
+                )
+            ):
+                raise ResearchError(
+                    "Revalidation planning cannot replace authored plans or targets."
+                )
+            run = self._research_run_manager.get(
+                cast(str, request.metadata.get("research_run_id"))
+            )
+            preview = preview_source_revalidation(
+                run,
+                cast(str, request.metadata.get("prior_observation_id")),
                 draft_service=self._draft_service,
             )
         except ResearchError as error:

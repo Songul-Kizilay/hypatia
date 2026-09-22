@@ -2,11 +2,31 @@
 
 ## Runtime Version
 
-`v0.3.400 (Genesis)`
+`v0.3.401 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
+Version v0.3.401 wires source revalidation into the desktop: an operator can
+now, from the "2 Sources & evidence" panel, select one of a research run's
+own already-accepted sources (excluding legacy records without a recorded
+`observation_id`/`requested_url`) and propose a bounded revalidation — an
+explicitly approved single re-fetch of that exact prior observation, never a
+freshness conclusion — through the entirely ordinary, unmodified preview ->
+authorize -> confirm -> start flow. A new pure
+`preview_source_revalidation(run, prior_observation_id)` resolves the prior
+observation only from the run's own current source records; a new frozen
+`RevalidationResearchDraft` mirrors `AcquisitionResearchDraft`'s shape and
+self-validates against canonical state via `plan_digest` equality so a stale
+draft is rejected, not silently over-authorized. A new read-only
+`research_revalidation_step_preview` Brain intent and a new
+`DesktopController.preview_source_revalidation` method reuse the existing
+preview pattern; a new eligible-source picker and "Propose revalidation"
+button in the desktop surface `SourceRevalidationStepBinding.lines()`'s
+existing wording verbatim. `SourceRevalidationStepOperation`,
+`SourceRevalidationStepBinding`, `ResearchRunManager` and the authorization/
+execution services are all reused byte-for-byte; no new authority, budget or
+persistence primitive.
 Version v0.3.400 wires Evaluate -> Adapt v1 continuation proposals into the
 desktop: an operator can now view a closed mission's continuation proposal
 in-app — previously reachable only as a backend service call
