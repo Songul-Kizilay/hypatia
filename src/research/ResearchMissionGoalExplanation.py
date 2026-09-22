@@ -194,6 +194,33 @@ _CAVEAT_TEXT = {
     ),
 }
 
+_LIMITATION_GUIDANCE = {
+    ResearchEvidenceCompletionLimitation.MISSING_EVIDENCE: (
+        "recording at least one relevant piece of evidence"
+    ),
+    ResearchEvidenceCompletionLimitation.SOURCE_LIMITED: (
+        "accepting at least one additional source"
+    ),
+    ResearchEvidenceCompletionLimitation.MISSING_CORROBORATION: (
+        "evidence from a second, distinct source"
+    ),
+    ResearchEvidenceCompletionLimitation.GROUNDING_INCOMPLETE: (
+        "a retained grounding assessment for the currently ungrounded evidence"
+    ),
+    ResearchEvidenceCompletionLimitation.COMPARISON_UNAVAILABLE: (
+        "a retained comparison note between the sources"
+    ),
+    ResearchEvidenceCompletionLimitation.BUDGET_LIMITED: (
+        "additional approved budget to continue the bounded execution"
+    ),
+    ResearchEvidenceCompletionLimitation.EXECUTION_INCOMPLETE: (
+        "completing the blocked, interrupted, or refused step"
+    ),
+    ResearchEvidenceCompletionLimitation.RECORDED_CONFLICT: (
+        "resolving or reviewing the recorded claim contradiction"
+    ),
+}
+
 
 @dataclass(frozen=True, slots=True)
 class ResearchMissionGoalExplanation:
@@ -206,6 +233,7 @@ class ResearchMissionGoalExplanation:
     evidence_source_count: int
     reasons: tuple[ResearchMissionGoalExplanationReason, ...]
     caveats: tuple[ResearchEvidenceCompletionCaveat, ...] = ()
+    limitations: tuple[ResearchEvidenceCompletionLimitation, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.status, ResearchMissionGoalSatisfactionStatus):
@@ -246,6 +274,17 @@ class ResearchMissionGoalExplanation:
             raise ResearchError(
                 "Research mission goal explanation caveats are invalid."
             )
+        if (
+            not isinstance(self.limitations, tuple)
+            or not all(
+                isinstance(limitation, ResearchEvidenceCompletionLimitation)
+                for limitation in self.limitations
+            )
+            or len(self.limitations) != len(set(self.limitations))
+        ):
+            raise ResearchError(
+                "Research mission goal explanation limitations are invalid."
+            )
 
     def summary(self) -> str:
         """Render bounded wording from typed state, never source/model prose."""
@@ -261,6 +300,14 @@ class ResearchMissionGoalExplanation:
         if self.caveats:
             caveats = "; ".join(_CAVEAT_TEXT[caveat] for caveat in self.caveats)
             rendered += f" Caveat (secondary; does not change goal status): {caveats}."
+        if self.limitations:
+            guidance = "; ".join(
+                _LIMITATION_GUIDANCE[limitation] for limitation in self.limitations
+            )
+            rendered += (
+                " What would help close this gap (explanatory only; not a "
+                f"pending action or a grant of budget/authority): {guidance}."
+            )
         return rendered
 
 
@@ -422,4 +469,5 @@ def explain_mission_goal_satisfaction(
         evidence_source_count=evaluation.evidence_source_count,
         reasons=tuple(dict.fromkeys(reasons)),
         caveats=evaluation.caveats,
+        limitations=evaluation.limitations,
     )

@@ -14,10 +14,120 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 
 | Field | Value |
 | --- | --- |
+| Milestone | Deterministic gap-closing guidance on the mission goal explanation |
+| Base SHA | 201b1af345f9b853b522bd3f219b886d9c719415 |
+| Status | ci-pending — implementation, independent security review, independent QA review, and full canonical gates complete; awaiting release commit and exact-SHA CI |
+| Specialists | hypatia-epistemics-scope work performed directly by hypatia-lead (single-file, narrowly-bounded literal mapping); hypatia-security: independent review, PASS, no findings; hypatia-qa: independent review, PASS, all seven required test behaviors verified with real differential/equality assertions, full 133-test integration suite re-run clean |
+| Blockers | none |
+
+Rationale: user-directed. The user approved the prior turn's read-only
+reconnaissance of `docs/Roadmap/Master_Roadmap.md`'s "Future direction:
+bounded delegated research & evidence-quality completion" as the design
+basis, and explicitly locked candidate D ("Confidence and uncertainty made
+visible") as this milestone, explicitly excluding candidate A ("Bounded
+delegated research continuation") because its authority-policy boundary
+still requires a human design decision. Ground truth was re-verified
+against the live checkout immediately before implementation (HEAD/upstream
+unchanged at `201b1af`, the `ResearchEvidenceCompletionLimitation` enum
+still exactly 8 values, `ResearchMissionGoalExplanation.summary()`
+unchanged) before locking the milestone, per the user's instruction.
+
+Scope: a private literal `_LIMITATION_GUIDANCE` mapping in
+`src/research/ResearchMissionGoalExplanation.py` from each of the 8
+existing `ResearchEvidenceCompletionLimitation` values to one bounded,
+hand-written guidance sentence describing what recorded evidence gap it
+names — no new enum value, no model-generated text, no confidence score.
+A new additive `limitations: tuple[ResearchEvidenceCompletionLimitation,
+...] = ()` field on the frozen `ResearchMissionGoalExplanation` dataclass,
+validated in `__post_init__` exactly like the existing `caveats` field
+(type/membership/uniqueness only), populated unchanged from the
+already-computed `ResearchEvidenceCompletionEvaluation.limitations` inside
+`explain_mission_goal_satisfaction`. `summary()` appends one further
+sentence — explicitly labelled "(explanatory only; not a pending action or
+a grant of budget/authority)" — only when limitations are non-empty, in
+the same order the limitations tuple already carries.
+
+Investigated and confirmed during implementation: this text was already
+reachable through two existing, unmodified read paths with zero new
+surface needed. `ResearchTeachingReport.teaching_report()` already
+embeds `goal_explanation.summary()` verbatim (`ResearchTeachingReport.py:131`);
+`ResearchMissionAudit.py`'s `build_mission_audit` already sets its
+`report`/`teaching_report` field to that same `teaching_report(...)` call
+unmodified (`ResearchMissionAudit.py:174`), and its markdown `_preview()`
+quotes that field verbatim in a "## Teaching Report" section
+(`ResearchMissionAudit.py:639-650`). So no new Brain intent and no new
+desktop widget were added — confirmed necessary by hypatia-qa's
+independent re-reading of that call chain, not merely assumed.
+
+Non-goals: no change to `ResearchEvidenceCompletionLimitation` or any
+other enum; no automatic/inferred/model-generated guidance text; no
+numeric confidence score or percentage (the roadmap's own candidate D
+explicitly forbids fabricated percentages without a defensible model); no
+new Brain intent; no new desktop widget; no change to
+`ResearchEvidenceCompletionEvaluation`, `evaluate_evidence_completion`, or
+any authority/budget/target/credential primitive; does not implement
+candidate A (bounded delegated research continuation), which remains
+explicitly blocked on a human authority-policy decision.
+
+Acceptance criteria (all independently verified by hypatia-qa against a
+real test run, not merely read): every one of the 8
+`ResearchEvidenceCompletionLimitation` values maps to exactly one
+deterministic guidance statement; an empty/sufficiently-supported
+`limitations` tuple adds no gap-closing text; multiple simultaneous
+limitations render their guidance in the same stable order as the
+existing limitations tuple; `ResearchTeachingReport` output changes only
+by the appended guidance text (proved by a `dataclasses.replace(...,
+limitations=())` differential, not a substring check); `ResearchMissionAudit`
+output changes only by the same appended text (proved by construction,
+since its `report` field is the same `teaching_report(...)` string
+unmodified); existing summary content is byte-for-byte unchanged except
+for the new appended section; the guidance path performs no model,
+network, execution, persistence, budget, authorization, target, or
+credential side effect; full canonical gates green (6620 tests, `OK
+(skipped=3)`; Black, Ruff, MyPy, `git diff --check` all clean); the
+pre-existing 133-test `tests/integration/test_learning_research_journey.py`
+suite re-run clean and unmodified.
+
+Security implications: verified by independent hypatia-security review —
+the guidance path is read-only by construction (pure dict lookup plus
+string join, no I/O); the new `limitations` field is inert typed metadata
+that no other code path branches on to change what executes (grepped
+every `.limitations` read repo-wide); all 8 guidance strings are literal,
+hand-written text with no interpolation of source/model/note prose; the
+file's own "does not interpret source/model prose... does not grant any
+new authority" docstring invariant is preserved, reinforced by the new
+sentence's own explicit "(explanatory only...)" qualifier.
+
+Epistemic implications: none new — the guidance is a pure presentation
+layer over already-computed, already-typed limitation state; it does not
+assert that closing a named gap would produce a true or complete answer,
+only names what recorded condition is absent, exactly matching this
+file's existing reason/caveat rendering discipline.
+
+Persistence/replay/restart implications: none — `ResearchMissionGoalExplanation`
+is a derived, non-persisted projection recomputed on demand from canonical
+state; the new field carries no status transition and is not written to
+any store.
+
+Authority/budget/target/credential implications: none — no primitive of
+any kind is created, restored, or altered; this milestone only makes an
+existing gap more legible to an operator.
+
+Product-direction compatibility: this is explanation of a recorded
+evidence gap, not an epistemic completion decision, a saturation
+judgement, or a numeric confidence claim. Candidate A (bounded delegated
+research continuation) remains explicitly out of scope and blocked on a
+human authority-policy decision, per the user's instruction for this
+milestone.
+
+## Historical scope: v0.3.402 (delivered)
+
+| Field | Value |
+| --- | --- |
 | Milestone | Persist budget-refusal reasons across a status refresh |
 | Base SHA | 32d8376fc18a09d5f4beaa60a0fa9e230cbe529c |
-| Status | release |
-| Specialists | hypatia-runtime (state method + call-site wiring + codec/schema + tests, single owner — this is squarely execution-state/persistence territory); hypatia-security and hypatia-qa independently after implementation; hypatia-release last |
+| Status | delivered — see "Last delivered product milestone" below for release/CI/PR/reachability detail |
+| Specialists | hypatia-runtime: implementation complete, including the critical anti-stranding safety design (rejecting the naive `block_step` reuse that would have permanently stranded refused executions); independent review (security/QA) surfaced three real findings during the implementation cycle — refusal reason not restored across `restored()`, a possible uncaught exception when the execution isn't cleanly running, and possible interference with an actively-running step — all three verified fixed directly against final code by hypatia-lead; hypatia-release delivered v0.3.402 (plus a follow-up test-fixture correction commit) |
 | Blockers | none |
 
 Rationale (repository archaeology, 2026-09-22): two candidates were
@@ -482,32 +592,51 @@ provenance.
 
 | Field | Value |
 | --- | --- |
-| Milestone | v0.3.401: desktop wiring for source revalidation |
-| SHA | 32d8376fc18a09d5f4beaa60a0fa9e230cbe529c |
-| Linux desktop CI (exact-SHA) | success (run 35754274521) |
-| Windows desktop CI (exact-SHA) | success (run 35754278750) |
+| Milestone | v0.3.402: persist budget-refusal reasons across a status refresh |
+| SHA | 793b5d70147438cad4a6a38590e61128a00aaa46 |
+| Linux desktop CI (exact-SHA) | success (run 35771449760) |
+| Windows desktop CI (exact-SHA) | success (run 35771465791) |
 | Status | delivered |
-| PR | #380, MERGED 2026-09-22T16:40:39Z, standard merge commit `a39f78cdcc0ee459b7ee756df1be8809cca94092` |
-| origin/main reachability | verified: `git merge-base --is-ancestor 32d8376 origin/main` succeeds; `origin/main` HEAD is the merge commit itself |
+| PR | #381, MERGED 2026-09-22T19:37:39Z, standard merge commit `cb96a3b674af5819651dca8571ba775d239f17c5` |
+| origin/main reachability | verified: `git merge-base --is-ancestor 793b5d7 origin/main` succeeds; `origin/main` HEAD is the merge commit itself |
 
-Post-merge verification (2026-09-22, hypatia-lead): PR #380 base `main`,
+Post-merge verification (2026-09-22, hypatia-lead): PR #381 base `main`,
 head `feature/structured-learned-memory-extraction-v0.3.118`, carried
-exactly 1 commit (v0.3.401), 14 files, `mergeStateStatus: CLEAN`, both
-PR-triggered checks `SUCCESS`. Merged with
-`gh pr merge 380 --merge --subject "..."` — no interactive confirmation
-prompt. Author/committer identity on the carried commit confirmed
+exactly 3 commits (v0.3.402's release commit `6e18a45`, its follow-up
+fixture-correction commit `793b5d7`, and the documentation-only
+product-direction commit `e24f085`), 15 files, `mergeStateStatus: CLEAN`,
+both PR-triggered checks `SUCCESS`. Merged with
+`gh pr merge 381 --merge --subject "..."` — no interactive confirmation
+prompt. Author/committer identity on all three carried commits confirmed
 unchanged (Songül Kızılay via GitHub noreply email). Working tree clean
-after merge except this ledger edit. Note: the release agent dispatched
-both exact-SHA CI runs and ended its turn before they finished;
-hypatia-lead independently polled both to completion (Linux `35754274521`,
-Windows `35754278750`, both `success`) and verified the conclusions before
-proceeding — no partial or unverified state was carried forward.
+after merge.
 
-Note: v0.3.400 (SHA `ec1a6f0bc2f6c5b8d1a609b789c8c836d91fffd4`), v0.3.399
-(SHA `650bfe486bb326635ea8aa4dd9c3b80dbc746c5b`), v0.3.398 (SHA
+Note: implementation, security-relevant fixes (three findings addressed:
+the refusal reason now correctly survives `restored()`; `refuse_advance`
+is now only ever called when the execution is cleanly `RUNNING` with no
+step in flight, so it can never raise on a non-running/failed execution;
+refusal recording is skipped entirely whenever another step is actively
+running, eliminating any interference with that step's own result), and
+release for this milestone completed during an automatic session-limit
+resume; hypatia-lead independently re-verified all three fixes directly
+against the final code (not merely trusted the resumed session's own
+account) before proceeding, and independently re-ran the full canonical
+suite plus Black/Ruff/MyPy/`git diff --check` on the exact release commit
+before default-branch integration. That local rerun's exact skip count is
+not evidenced by any repository-local artifact, so it is not restated as
+a specific number here; the two exact-SHA CI runs already cited above
+(Linux `35771449760`, Windows `35771465791`) each independently collected
+6612 tests, with Linux reporting `OK (skipped=34)` and Windows reporting
+plain `OK` (0 skipped) — two genuine but distinct platform results whose
+skip counts are not interchangeable with each other or with the
+unevidenced local figure.
+
+Note: v0.3.401 (SHA `32d8376fc18a09d5f4beaa60a0fa9e230cbe529c`), v0.3.400
+(SHA `ec1a6f0bc2f6c5b8d1a609b789c8c836d91fffd4`), v0.3.399 (SHA
+`650bfe486bb326635ea8aa4dd9c3b80dbc746c5b`), v0.3.398 (SHA
 `3cf726a6c16b181bf26ae4d67cea690e84f2ce9a`), and v0.3.397 (SHA
 `aeff7713a8fea7efd247892272c78a80b9d16176`) all remain reachable from
-`origin/main` as ancestors of v0.3.401 (this row), which is now the
+`origin/main` as ancestors of v0.3.402 (this row), which is now the
 current last-delivered product milestone.
 
 Developer-infrastructure changes (for example the Claude team setup) are not

@@ -512,14 +512,16 @@ by existing capability. `ResearchMissionGoalExplanation`'s
 `reasons`/`caveats` and the teaching report (both Phase 10-adjacent,
 `[x]` per prior archaeology) already explain what's supported, what's
 uncertain, and why a mission stopped, in plain typed terms — desktop-
-reachable today (v0.3.400/401 archaeology). Genuinely absent: a
-structured "what additional evidence would materially change this
-conclusion" projection, and any numeric confidence score. Per this
-file's own existing discipline (`model confidence != evidence`), do not
-introduce fabricated numerical percentages without a defensible model
-for them — prefer explainable typed evidence state over cosmetic scores,
-exactly as the existing claim-calibration and goal-explanation types
-already do.
+reachable today (v0.3.400/401 archaeology). As of v0.3.403, a bounded,
+deterministic, code-literal "what would help close this gap" guidance
+statement (`[x]`) is also attached, derived only from the existing typed
+`ResearchEvidenceCompletionLimitation` values — no model-generated text,
+no inference beyond the already-computed limitation. Genuinely still
+absent: any numeric confidence score. Per this file's own existing
+discipline (`model confidence != evidence`), do not introduce fabricated
+numerical percentages without a defensible model for them — prefer
+explainable typed evidence state over cosmetic scores, exactly as the
+existing claim-calibration and goal-explanation types already do.
 
 **E. Research saturation / evidence saturation / epistemic completeness**
 — `[ ]`, name not yet committed. A future concept where research may

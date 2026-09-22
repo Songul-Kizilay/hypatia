@@ -2,6 +2,30 @@
 
 All notable project changes are recorded here.
 
+## [0.3.403] - 2026-09-23
+
+### Added
+
+- Deterministic, code-literal "what would help close this gap" guidance on
+  `ResearchMissionGoalExplanation`, derived only from the already-computed,
+  already-typed `ResearchEvidenceCompletionLimitation` values a mission's
+  evidence-completion evaluation records. A private literal mapping gives
+  each of the eight existing limitation values exactly one bounded guidance
+  sentence; no new enum value, no model-generated text, no confidence score.
+- An additive `limitations` field on `ResearchMissionGoalExplanation`,
+  populated from the existing `ResearchEvidenceCompletionEvaluation`, so the
+  already-deterministic limitation order is preserved end to end.
+
+### Changed
+
+- `ResearchMissionGoalExplanation.summary()` now appends one further
+  sentence, only when limitations are present, naming what would help close
+  each recorded gap — explicitly labelled explanatory-only, never a pending
+  action or a grant of budget/authority. This text was already reachable
+  through two existing, unmodified read paths (`ResearchTeachingReport`'s
+  teaching report and `ResearchMissionAudit`'s embedding of that same report
+  text), so no new Brain intent and no new desktop widget were needed.
+
 ## [0.3.402] - 2026-09-22
 
 ### Added

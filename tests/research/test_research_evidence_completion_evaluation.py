@@ -250,6 +250,39 @@ class ResearchEvidenceCompletionEvaluationTests(unittest.TestCase):
         self.assertIn("does not close the research run", report)
         self.assertIs(subject.status, ResearchRunStatus.COLLECTING)
 
+    def test_report_appends_gap_closing_guidance_derived_from_limitations(self):
+        subject = run(
+            sources=(source(1),),
+            evidence_records=(evidence(1),),
+            assessments=(assessment(1),),
+        )
+
+        report = teaching_report(
+            subject,
+            AutonomyStopReason.RESEARCH_DELIVERABLE_READY.value,
+            "Cumulative spending: 12 advances.",
+        )
+
+        self.assertIn("What would help close this gap", report)
+        self.assertIn("evidence from a second, distinct source", report)
+        self.assertIn("a retained comparison note between the sources", report)
+
+    def test_fully_supported_report_has_no_gap_closing_guidance_section(self):
+        subject = run(
+            sources=(source(1), source(2)),
+            evidence_records=(evidence(1), evidence(2)),
+            assessments=(assessment(1), assessment(2)),
+            comparison_notes=(comparison(),),
+        )
+
+        report = teaching_report(
+            subject,
+            AutonomyStopReason.RESEARCH_DELIVERABLE_READY.value,
+            "Cumulative spending: 12 advances.",
+        )
+
+        self.assertNotIn("What would help close this gap", report)
+
     def test_report_comparison_prose_cannot_change_typed_goal_explanation(self):
         common = dict(
             sources=(source(1), source(2)),

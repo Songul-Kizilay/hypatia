@@ -28,10 +28,11 @@ from research.ResearchMissionCompletionReadiness import (
     evaluate_mission_completion_readiness,
 )
 from research.ResearchMissionGoalExplanation import (
-    ResearchMissionGoalExplanationReason as Reason,
+    _LIMITATION_GUIDANCE,
+    explain_mission_goal_satisfaction,
 )
 from research.ResearchMissionGoalExplanation import (
-    explain_mission_goal_satisfaction,
+    ResearchMissionGoalExplanationReason as Reason,
 )
 from research.ResearchMissionGoalSatisfaction import (
     ResearchMissionGoalSatisfaction,
@@ -264,6 +265,97 @@ class ResearchMissionGoalExplanationTests(unittest.TestCase):
                 AutonomyStopReason.RESEARCH_DELIVERABLE_READY,
                 checkpoint,
             )
+
+    def test_every_limitation_maps_to_exactly_one_deterministic_guidance_statement(
+        self,
+    ):
+        self.assertEqual(set(_LIMITATION_GUIDANCE), set(Limitation))
+        texts = list(_LIMITATION_GUIDANCE.values())
+        self.assertEqual(len(texts), len(set(texts)))
+        for limitation, text in _LIMITATION_GUIDANCE.items():
+            with self.subTest(limitation=limitation):
+                self.assertIsInstance(text, str)
+                self.assertTrue(text.strip())
+
+    def test_no_limitations_adds_no_gap_closing_guidance(self):
+        value = explain_mission_goal_satisfaction(
+            outcome(), AutonomyStopReason.RESEARCH_DELIVERABLE_READY
+        )
+
+        self.assertEqual(value.limitations, ())
+        self.assertNotIn("What would help close this gap", value.summary())
+
+    def test_multiple_limitations_render_guidance_in_stable_original_order(self):
+        ordered = (
+            Limitation.BUDGET_LIMITED,
+            Limitation.MISSING_EVIDENCE,
+            Limitation.RECORDED_CONFLICT,
+        )
+        value = explain_mission_goal_satisfaction(
+            outcome(
+                execution=BackgroundTaskOutcome.RETRYABLE_BUDGET_EXHAUSTED,
+                evidence_status=EvidenceStatus.BUDGET_LIMITED,
+                goal_status=GoalStatus.BUDGET_LIMITED,
+                limitations=ordered,
+            ),
+            AutonomyStopReason.NETWORK_BUDGET_EXHAUSTED,
+        )
+
+        self.assertEqual(value.limitations, ordered)
+        summary = value.summary()
+        positions = [
+            summary.index(_LIMITATION_GUIDANCE[limitation]) for limitation in ordered
+        ]
+        self.assertEqual(positions, sorted(positions))
+
+    def test_summary_changes_only_by_appended_guidance_when_limitations_present(self):
+        value = explain_mission_goal_satisfaction(
+            outcome(
+                evidence_status=EvidenceStatus.PARTIALLY_SUPPORTED,
+                goal_status=GoalStatus.PARTIALLY_SATISFIED,
+                limitations=(
+                    Limitation.MISSING_CORROBORATION,
+                    Limitation.SOURCE_LIMITED,
+                ),
+            ),
+            AutonomyStopReason.RESEARCH_DELIVERABLE_READY,
+        )
+        without_limitations = replace(value, limitations=())
+
+        guidance = "; ".join(
+            _LIMITATION_GUIDANCE[limitation] for limitation in value.limitations
+        )
+        expected_suffix = (
+            " What would help close this gap (explanatory only; not a "
+            f"pending action or a grant of budget/authority): {guidance}."
+        )
+        self.assertEqual(
+            value.summary(), without_limitations.summary() + expected_suffix
+        )
+
+    def test_guidance_rendering_is_a_pure_repeatable_lookup(self):
+        value = explain_mission_goal_satisfaction(
+            outcome(
+                evidence_status=EvidenceStatus.PARTIALLY_SUPPORTED,
+                goal_status=GoalStatus.PARTIALLY_SATISFIED,
+                limitations=(Limitation.MISSING_CORROBORATION,),
+            ),
+            AutonomyStopReason.RESEARCH_DELIVERABLE_READY,
+        )
+
+        self.assertEqual(value.summary(), value.summary())
+
+    def test_rejects_malformed_limitations_instead_of_guessing(self):
+        value = explain_mission_goal_satisfaction(
+            outcome(), AutonomyStopReason.RESEARCH_DELIVERABLE_READY
+        )
+        for limitations in (
+            ("missing_evidence",),
+            (Limitation.MISSING_EVIDENCE, Limitation.MISSING_EVIDENCE),
+        ):
+            with self.subTest(limitations=limitations):
+                with self.assertRaisesRegex(Exception, "limitations are invalid"):
+                    replace(value, limitations=limitations)
 
     def test_unchanged_state_renders_the_same_explanation_after_restart(self):
         checkpoint = unresolved_checkpoint()
