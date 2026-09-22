@@ -16,8 +16,8 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 | --- | --- |
 | Milestone | Deterministic gap-closing guidance on the mission goal explanation |
 | Base SHA | 201b1af345f9b853b522bd3f219b886d9c719415 |
-| Status | ci-pending — implementation, independent security review, independent QA review, and full canonical gates complete; awaiting release commit and exact-SHA CI |
-| Specialists | hypatia-epistemics-scope work performed directly by hypatia-lead (single-file, narrowly-bounded literal mapping); hypatia-security: independent review, PASS, no findings; hypatia-qa: independent review, PASS, all seven required test behaviors verified with real differential/equality assertions, full 133-test integration suite re-run clean |
+| Status | delivered — see "Last delivered product milestone" below for release/CI/PR/reachability detail |
+| Specialists | hypatia-epistemics-scope work performed directly by hypatia-lead (single-file, narrowly-bounded literal mapping); hypatia-security: independent review, PASS, no findings; hypatia-qa: independent review, PASS, all seven required test behaviors verified with real differential/equality assertions, full 133-test integration suite re-run clean; hypatia-release delivered v0.3.403 |
 | Blockers | none |
 
 Rationale: user-directed. The user approved the prior turn's read-only
@@ -592,51 +592,44 @@ provenance.
 
 | Field | Value |
 | --- | --- |
-| Milestone | v0.3.402: persist budget-refusal reasons across a status refresh |
-| SHA | 793b5d70147438cad4a6a38590e61128a00aaa46 |
-| Linux desktop CI (exact-SHA) | success (run 35771449760) |
-| Windows desktop CI (exact-SHA) | success (run 35771465791) |
+| Milestone | v0.3.403: deterministic gap-closing guidance on the goal explanation |
+| SHA | 848b37d23437a3adb038ef924fb1ca0a4c56455c |
+| Linux desktop CI (exact-SHA) | success (run 35786167329) |
+| Windows desktop CI (exact-SHA) | success (run 35786172103) |
 | Status | delivered |
-| PR | #381, MERGED 2026-09-22T19:37:39Z, standard merge commit `cb96a3b674af5819651dca8571ba775d239f17c5` |
-| origin/main reachability | verified: `git merge-base --is-ancestor 793b5d7 origin/main` succeeds; `origin/main` HEAD is the merge commit itself |
+| PR | #382, MERGED 2026-09-22T21:33:20Z, standard merge commit `52e5223a604592d9cb0df2de8d18b794c43647c7` |
+| origin/main reachability | verified: `git merge-base --is-ancestor 848b37d origin/main` succeeds; `origin/main` HEAD is the merge commit itself |
 
-Post-merge verification (2026-09-22, hypatia-lead): PR #381 base `main`,
+Post-merge verification (2026-09-22, hypatia-lead): PR #382 base `main`,
 head `feature/structured-learned-memory-extraction-v0.3.118`, carried
-exactly 3 commits (v0.3.402's release commit `6e18a45`, its follow-up
-fixture-correction commit `793b5d7`, and the documentation-only
-product-direction commit `e24f085`), 15 files, `mergeStateStatus: CLEAN`,
-both PR-triggered checks `SUCCESS`. Merged with
-`gh pr merge 381 --merge --subject "..."` — no interactive confirmation
-prompt. Author/committer identity on all three carried commits confirmed
+exactly 3 commits (the documentation-only ledger-reconciliation commit
+`c0b4134`, the documentation-only skip-count-correction commit `201b1af`,
+and v0.3.403's release commit `848b37d`), 9 files, `mergeStateStatus:
+CLEAN`, both PR-triggered checks `SUCCESS`. Merged with `gh pr merge 382
+--merge --subject "..."` — no interactive confirmation prompt.
+Author/committer identity on all three carried commits confirmed
 unchanged (Songül Kızılay via GitHub noreply email). Working tree clean
 after merge.
 
-Note: implementation, security-relevant fixes (three findings addressed:
-the refusal reason now correctly survives `restored()`; `refuse_advance`
-is now only ever called when the execution is cleanly `RUNNING` with no
-step in flight, so it can never raise on a non-running/failed execution;
-refusal recording is skipped entirely whenever another step is actively
-running, eliminating any interference with that step's own result), and
-release for this milestone completed during an automatic session-limit
-resume; hypatia-lead independently re-verified all three fixes directly
-against the final code (not merely trusted the resumed session's own
-account) before proceeding, and independently re-ran the full canonical
-suite plus Black/Ruff/MyPy/`git diff --check` on the exact release commit
-before default-branch integration. That local rerun's exact skip count is
-not evidenced by any repository-local artifact, so it is not restated as
-a specific number here; the two exact-SHA CI runs already cited above
-(Linux `35771449760`, Windows `35771465791`) each independently collected
-6612 tests, with Linux reporting `OK (skipped=34)` and Windows reporting
-plain `OK` (0 skipped) — two genuine but distinct platform results whose
-skip counts are not interchangeable with each other or with the
-unevidenced local figure.
+Note: this milestone's implementation, independent security review,
+independent QA review, and release were all completed directly by
+hypatia-lead in one continuous session (no delegated specialist agent for
+the single-file literal-mapping implementation itself; hypatia-security
+and hypatia-qa each ran one independent review pass as specialist
+subagents, both PASS with no findings). Full canonical suite on the
+release SHA: 6620 tests, `OK (skipped=3)` — this local skip count is
+genuinely evidenced by this session's own full-suite run
+(`full_suite_out.log`), for this exact commit only; it does not
+retroactively validate or apply to the different, unevidenced v0.3.402
+claim corrected in commit `201b1af`.
 
-Note: v0.3.401 (SHA `32d8376fc18a09d5f4beaa60a0fa9e230cbe529c`), v0.3.400
-(SHA `ec1a6f0bc2f6c5b8d1a609b789c8c836d91fffd4`), v0.3.399 (SHA
+Note: v0.3.402 (SHA `793b5d70147438cad4a6a38590e61128a00aaa46`), v0.3.401
+(SHA `32d8376fc18a09d5f4beaa60a0fa9e230cbe529c`), v0.3.400 (SHA
+`ec1a6f0bc2f6c5b8d1a609b789c8c836d91fffd4`), v0.3.399 (SHA
 `650bfe486bb326635ea8aa4dd9c3b80dbc746c5b`), v0.3.398 (SHA
 `3cf726a6c16b181bf26ae4d67cea690e84f2ce9a`), and v0.3.397 (SHA
 `aeff7713a8fea7efd247892272c78a80b9d16176`) all remain reachable from
-`origin/main` as ancestors of v0.3.402 (this row), which is now the
+`origin/main` as ancestors of v0.3.403 (this row), which is now the
 current last-delivered product milestone.
 
 Developer-infrastructure changes (for example the Claude team setup) are not
