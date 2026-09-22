@@ -32,6 +32,16 @@ below was previously mis-stated in one direction or the other; corrections
 are noted inline. **Roadmap != current capability. Planned != implemented.
 Capability != authority. Proposal != execution.**
 
+**Follow-up reconciliation, 2026-09-22 (documentation-only, hypatia-lead):**
+this v0.3.395 basis had gone stale in three places by v0.3.396-399 shipping
+without a matching roadmap update. Phase 4 ("Provenance visualization"),
+Phase 6 (Evaluate -> Adapt v1) and Phase 7 (cancellation/interruption,
+atomic writes) were re-verified against current code, tests and
+`origin/main` history and corrected below, each with inline evidence. This
+was a targeted pass on those three phases only, not a full 25-phase
+re-reconciliation — every other phase's status is carried forward unchanged
+from the v0.3.395 basis above.
+
 An item is complete only when repository evidence demonstrates the intended
 behavior, and is never marked complete merely because a plausibly-named
 file, class, test, document, or TODO exists.
@@ -286,10 +296,15 @@ Kali bounded operations:
 - [ ] General typed tool-execution framework (confirmed: only two
       `ResearchKaliOperationKind` values exist repo-wide, no generic dispatcher)
 
-## Phase 6 — Evaluate -> Adapt (current product priority)
+## Phase 6 — Evaluate -> Adapt
 
-- [~] **Evaluate -> Adapt v1: typed bounded research-plan proposal** —
-      current milestone; see `docs/dev/MILESTONE.md` for exact bounded scope.
+- [x] **Evaluate -> Adapt v1: typed bounded research-plan proposal** —
+      delivered v0.3.396 (`500d22168f6a49a8e919b76b0ea673f05041640b`),
+      reachable from `origin/main`, exact-SHA Linux (run `35509333572`) and
+      Windows (run `35509334966`) CI both `success`. See "Desired eventual
+      behavior" below for the item-by-item re-verification (2026-09-22).
+      **v2 is not ready** — see product decision 2 and the checklist's
+      `[-]` "Bounded source-revalidation proposal" line below for why.
 
 ### Existing precedents (name these explicitly; do not rediscover or duplicate them)
 
@@ -340,30 +355,75 @@ Kali bounded operations:
 
 ### Desired eventual behavior (bounded to the decisions above for v1)
 
-- [ ] Consume an existing mission-evaluation result (`ResearchMissionOutcome`)
-- [ ] `unresolved` -> bounded follow-up proposal
-- [ ] `partially_satisfied` -> bounded follow-up proposal
+Re-verified against `src/research/ResearchMissionContinuationProposal.py`,
+`ResearchMissionAuditApplicationService.proposal_for`, and
+`tests/e2e/test_continuation_proposal_reentry.py` on 2026-09-22
+(hypatia-epistemics + hypatia-lead). Each `[x]` below cites its evidence
+directly rather than inheriting the v0.3.395 basis's `[ ]`.
+
+- [x] Consume an existing mission-evaluation result (`ResearchMissionOutcome`)
+      — `continuation_proposal_for(run, outcome, ...)` takes it directly
+      (`ResearchMissionContinuationProposal.py:128-165`)
+- [x] `unresolved` -> bounded follow-up proposal — `_ELIGIBLE_GOAL_STATUSES`
+- [x] `partially_satisfied` -> bounded follow-up proposal — same set
 - [-] `blocked` -> no v1 proposal (deferred to a future "operator dependency" milestone)
 - [-] `budget_limited` -> no v1 proposal (deferred to a future "fresh budget request" milestone)
-- [ ] Typed proposal object (e.g. `ResearchMissionFollowUpProposal` or equivalent)
-- [ ] Exactly one proposed next research-plan action
-- [ ] Proposal != authority; proposal != execution
-- [ ] Human approval remains required
-- [ ] Reuse existing approval machinery (`ResearchPlanAuthorization*`) —
-      no new authorization primitive
-- [ ] Reuse existing budget machinery — fresh, operator-set budget per
-      proposed mission, never inherited/pooled/extended
-- [ ] Prevent scope expansion, target expansion, budget expansion,
-      credential expansion
-- [ ] Restart/replay safety (proposal generation is a read-only, idempotent
-      projection — nothing persisted that could be corrupted or replayed)
-- [ ] Proposal provenance (originating run/mission, evaluation/outcome,
-      relevant plan/result identity, evidence state needed for explanation)
+- [x] Typed proposal object — `ResearchMissionContinuationProposal`
+      (frozen dataclass; `__post_init__` makes an ineligible instance
+      impossible to construct)
+- [x] Exactly one proposed next research-plan action — one `seed_question`
+      field, no list/plurality
+- [x] Proposal != authority; proposal != execution — no budget, scope,
+      target, discovery-provider or plan-step field exists on the type
+      (module docstring, lines 6-14)
+- [x] Human approval remains required — approving a proposal manually
+      extracts `seed_question` and threads it through the ordinary,
+      completely unmodified question-preview -> authorization -> start
+      flow (proven byte-for-byte identical to manual entry by
+      `test_continuation_proposal_reentry.py`); there is deliberately no
+      dedicated "approve this proposal" method — "wired" means "proven
+      compatible," not "there is a button"
+- [x] Reuse existing approval machinery (`ResearchPlanAuthorization*`) —
+      no new authorization primitive (same re-entry test)
+- [x] Reuse existing budget machinery — fresh, operator-set budget per
+      proposed mission, never inherited/pooled/extended — re-entry calls
+      `run_manager.create(...)` to start an unrelated new run
+- [x] Prevent scope expansion, target expansion, budget expansion,
+      credential expansion — structural: the absent fields above make
+      expansion impossible to express, not merely refused at runtime
+- [x] Restart/replay safety — pure function, nothing persisted ("never
+      persisted, re-derived on demand," module docstring line 14)
+- [x] Proposal provenance — `origin_run_id`, `origin_plan_digest`,
+      `origin_stop_reason`, `origin_goal_status`, `origin_evidence_status`,
+      `origin_evidence_limitations` fields all present
 - [-] Bounded source-revalidation proposal (explicitly deferred past v1 —
-      see product decision 2)
-- [ ] Independent security review
-- [ ] Independent QA
-- [ ] Exact-SHA Linux + Windows CI delivery
+      see product decision 2). **Investigated 2026-09-22 and found not
+      simply reachable**: the fetch-based `source_revalidation` plan step
+      (v0.3.393) is a hard single-run construct at three independent
+      layers — `SourceRevalidationStepBinding` has exactly one
+      `research_run_id` field, `SourceRevalidationStepOperation.run()`
+      explicitly refuses when the binding's run differs from the execution
+      context's run, and `ResearchRunManager` hardcodes
+      `earlier_run_id=later_run_id=run.run_id` — with a dedicated refusing
+      test (`tests/research/test_source_revalidation_step_operation.py::test_cross_run_provenance_is_refused_without_authority`).
+      A version that delivers real cross-mission revalidation linking
+      requires new cross-mission authority/budget-boundary design; this is
+      **not** a bounded reuse of existing machinery and is out of scope for
+      autonomous execution until a human makes that design decision.
+- [ ] Independent security review, [ ] Independent QA — left unchecked:
+      no milestone-specific v0.3.396 sign-off artifact survives in the tree
+      (`docs/dev/MILESTONE.md`'s ledger has since rolled forward through
+      v0.3.397-399), so a dedicated original-release review of that exact
+      diff cannot be cited. Note for context, not a substitute for the
+      above: the underlying authority-safety properties this milestone
+      depends on (no budget/scope/target/credential field, fail-closed
+      `__post_init__`, byte-identical re-entry) were independently
+      re-traced and confirmed sound by hypatia-epistemics on 2026-09-22,
+      and the standing Claude-team review process was already in active,
+      CHANGELOG-documented use in the immediately adjacent
+      v0.3.395/397/398 milestones.
+- [x] Exact-SHA Linux + Windows CI delivery — Linux run `35509333572`,
+      Windows run `35509334966`, both `success` on `500d22168f6a49a8e919b76b0ea673f05041640b`
 
 ### Critical constraints (unchanged from prior direction)
 
@@ -378,17 +438,32 @@ authority, budget, provenance, and replay-safety path — never a shortcut.
 
 Persistence/concurrency:
 
-- [ ] Atomic state writes (**corrected**: the write path already uses
-      `NamedTemporaryFile` + `fsync` + `os.replace` in
-      `JsonFileResearchExecutionStore.save()` and equivalent stores — the
-      *pattern* exists; no dedicated test injects a mid-write failure to
-      prove the temp file is discarded and the destination is untouched
-      byte-for-byte)
-- [ ] Corrupted/truncated state handling (**corrected**: partial — 10+
-      JSON stores have real malformed-content-refuses tests (e.g.
-      `tests/integration/test_research_execution_restart.py::test_corrupted_store_refuses_rather_than_fabricating_state`)
-      and legacy-schema-load tests exist; a genuine mid-write-truncation
-      test — a valid-prefix, cut-off file — is not directly present)
+- [x] Atomic state writes (**re-corrected 2026-09-22**: closed by
+      v0.3.397/v0.3.398, after the v0.3.395 basis above was written. All 12
+      `JsonFile*Store` classes with a temp-file-then-`os.replace` save path
+      now have a direct fault-injection test proving a genuine mid-write
+      failure — real partial bytes physically written before the fault —
+      leaves the destination byte-for-byte unchanged with no leftover
+      temporary file, and that a nested cleanup failure still raises
+      `ResearchError` with its cause chain intact, never a raw secondary
+      `OSError` (e.g. `tests/research/test_json_file_research_execution_store.py`,
+      plus ten more added in v0.3.398). This closes exactly the gap this
+      line used to describe)
+- [ ] Corrupted/truncated state handling on **load** (**re-corrected
+      2026-09-22**: the mid-write-*failure* case above is now closed; the
+      remaining gap is narrower than this line's v0.3.395 wording — a
+      dedicated test that takes a real, previously-saved document and
+      truncates its actual bytes at an arbitrary cut point (reproducing
+      what a crash mid-`write()` on a non-atomic path, or a partially
+      flushed filesystem, would leave behind) and asserts `load()` refuses
+      it. 10+ JSON stores already have malformed-content-refuses tests
+      (e.g. `tests/integration/test_research_execution_restart.py::test_corrupted_store_refuses_rather_than_fabricating_state`)
+      and legacy-schema-load tests, and the existing exception-handling
+      machinery (blanket `except (UnicodeDecodeError, json.JSONDecodeError)`
+      plus required-field validation) very likely already covers this
+      case — but the specific truncated-valid-prefix fixture itself is
+      confirmed absent across every `JsonFile*Store` test file checked,
+      not merely undocumented)
 - [x] File locking, concurrent-writer prevention (**corrected — was `[ ]`,
       uncredited**): `tests/core/test_exclusive_store_ownership.py` spawns
       real OS subprocesses, takes a kernel-level file lock, and proves a
@@ -405,21 +480,75 @@ Persistence/concurrency:
       document (the behavior is consistently at-most-once in practice; it
       is not written down as a cross-cutting rule anywhere)
 
-Cancellation/interruption — unchanged, confirmed absent beyond what Phase 2 already lists:
+Cancellation/interruption — **re-corrected 2026-09-22: this section's
+"confirmed absent" language was wrong.** Direct re-inspection
+(hypatia-runtime) found substantial, tested cancellation and timeout
+mechanics already implemented, some predating the v0.3.395 basis:
 
-- [ ] Mission cancellation, step cancellation, tool timeout, model timeout,
-      network timeout, graceful cancellation
-- [ ] `cancelled != failed`, `interrupted != failed`
-- [ ] Hung-process detection, child-process cleanup, WSL process cleanup
+- [x] Mission/step cancellation — two complementary mechanisms exist.
+      `ResearchPlanExecutionApplicationService.process_cancel` (Brain
+      intent `research_plan_execution_cancel`) is an explicit compare-and-
+      set state transition, keyed by execution ID so it reaches a running
+      attempt regardless of whether foreground, background-scheduled, or
+      deferred work is driving it; a cooperative
+      `src/core/CancellationSignal.py` `CancellationToken.is_cancelled()`
+      is additionally checked at explicit safe checkpoints across 13 step
+      operations plus the autonomy/background-scheduler loop-continuation
+      gates. Graceful cancellation preserves already-completed step
+      history (`ResearchPlanExecutionState.cancel()` cancels only
+      non-terminal steps).
+- [x] Model/network/tool timeout — real, per-request, already enforced:
+      LLM chat completion (`UrllibChatCompletionTransport.py`,
+      `DEFAULT_TIMEOUT_SECONDS = 30.0`, `LOCAL_DEFAULT_TIMEOUT_SECONDS =
+      300.0`), source-fetch HTTPS (`HttpResearchSourceFetcher.py`,
+      10s default, with `PinnedHttpsTransport`'s `PinnedHttpsConnection`
+      additionally enforcing a deadline across the DNS/TCP/TLS handshake
+      phases), and Kali/WSL subprocess operations
+      (`WslKaliOperationProcessAdapter.py`, `subprocess.run(timeout=...)`,
+      `MAX_KALI_OPERATION_TIMEOUT_SECONDS = 30.0` ceiling, `TimeoutExpired`
+      caught and reported rather than propagating unbounded). No call site
+      was found that can hang indefinitely with zero timeout.
+- [x] `cancelled != failed` — directly proven:
+      `tests/research/test_research_plan_execution_state.py::test_cancel_preserves_finished_steps_and_cancels_the_rest`
+      (a completed step stays `COMPLETED` after cancel; execution status is
+      `CANCELLED`, never `FAILED`), and
+      `tests/research/test_concurrent_execution_state.py::test_a_failing_provider_cannot_overwrite_it_either`
+      (even when the in-flight provider call fails *after* a cancel lands,
+      the durable record stays `CANCELLED`, not `FAILED`).
+- [x] `interrupted != failed` — `ResearchPlanExecutionSnapshot.restored()`
+      turns a `RUNNING` step into `INTERRUPTED` on restart, never
+      `COMPLETED`; `INTERRUPTED` is a distinct, non-terminal status from
+      both `CANCELLED` and `FAILED`. Proven by
+      `tests/research/test_research_plan_execution_snapshot.py` (`test_running_step_restores_as_interrupted_never_completed`,
+      `test_completed_step_stays_completed`, `test_terminal_execution_stays_terminal`,
+      `test_blocked_and_interrupted_are_distinct_and_non_terminal`).
+- [ ] Hung-process detection, child-process cleanup, WSL process cleanup —
+      **narrower than this line implies**: Kali operations are already
+      bounded by the 30s ceiling above either way (no unbounded hang), so
+      this is a resource-cleanup hygiene gap, not an availability/
+      correctness one. The specific residual: `WslKaliOperationProcessAdapter`
+      terminates the Windows-side `wsl.exe` launcher process on timeout,
+      but nothing in this codebase verifies that reliably tears down the
+      invoked command's process tree inside the WSL guest itself (no
+      process-group kill inside the Linux namespace, no test asserting
+      orphaned in-VM processes are reaped).
 
-Errors — unchanged, confirmed absent as a unified taxonomy (individual
-typed errors like `ResearchError` exist per-domain; no machine-readable
-error-code system exists):
+Errors — confirmed still absent as a unified taxonomy (re-checked
+2026-09-22; individual typed errors like `ResearchError` exist per-domain,
+plus narrow purpose-built enums like `ToolFailureKind`,
+`ResearchPlanExecutionStatus`/`ResearchPlanStepStatus`,
+`AutonomyStopReason` — none is a cross-cutting error-code space):
 
 - [ ] Scope / authority / budget / policy-refusal / network-DNS-TLS / tool /
       model / evidence-insufficiency / persistence-corruption /
       timeout-cancellation-interruption / internal-invariant-violation
-      error taxonomy
+      error taxonomy (**sizing note, 2026-09-22**: an additive-only version
+      — a new optional `code` field, default `None`, no raise site touched
+      — would be small and safe but decorative, since nothing would
+      populate or consume it; a version that is actually useful would need
+      to touch a large fraction of the ~2,300 `raise ResearchError(...)`
+      sites across the ~598 files that import `core.Exceptions`. Neither
+      shape is a bounded single milestone)
 - [ ] Machine-readable error codes
 
 ## Phase 8 — Schema / configuration / secrets
@@ -743,13 +872,26 @@ repository evidence — a concrete safety or correctness prerequisite may
 interrupt it, and a later capability being more impressive is never a
 reason to jump forward.
 
-1. Evaluate -> Adapt (current)
-2. Persistence / concurrency / cancellation hardening — scoped down per
-   the Phase 7 corrections above: most corrupted-JSON and concurrent-writer
-   coverage already exists; the residual work is narrower than originally
-   framed (a mid-write-truncation test, cancellation/timeout semantics, a
-   formal error taxonomy)
-3. Tool registry + policy engine
+1. ~~Evaluate -> Adapt~~ — **v1 delivered, v0.3.396** (see Phase 6). v2
+   (cross-mission revalidation proposal) was investigated 2026-09-22 and
+   found to require new cross-mission authority/budget design; it is not a
+   queued next step, it is blocked on a human authority decision.
+2. Persistence / concurrency / cancellation hardening — **re-scoped down
+   further, 2026-09-22**: cancellation/timeout mechanics and mid-write-
+   failure atomicity are now both confirmed already implemented and tested
+   (see Phase 7). The only remaining residuals are a mid-write-truncation-
+   on-*load* test fixture, WSL in-guest process-tree cleanup hygiene on
+   Kali timeout, and a formal error taxonomy (confirmed either decorative
+   or architecturally large, not a bounded milestone by itself) — none of
+   these is substantial enough alone to justify a dedicated milestone; a
+   future pass may bundle the two small ones together as maintenance.
+3. Tool registry + policy engine — **next candidate direction**: this is
+   the first phase-order item without a confirmed-already-done or
+   confirmed-blocked status as of 2026-09-22. Note it is authority-adjacent
+   (a policy engine's `ALLOW`/`DENY`/`REQUIRE_APPROVAL` primitive is close
+   to a new authority-class decision) — starting it should include an
+   explicit human check-in on scope before autonomous implementation
+   begins, per this constitution's stop conditions.
 4. Observability + operator UX
 5. Prompt-injection / untrusted-content defense — build on the existing
    `UNTRUSTED_DATA`/verbatim-quote groundwork (Phase 12) rather than
