@@ -12,6 +12,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from hashlib import sha256
 from pathlib import Path
+from typing import Any
 
 from brain.BrainRequest import BrainRequest
 from brain.BrainResponse import BrainResponse
@@ -34,17 +35,20 @@ from research.ResearchMissionAuditExport import (
     ResearchMissionAuditExportResult,
     mission_audit_filenames,
 )
+from research.ResearchMissionAuditTraceabilityGraph import traceability_graph_for
 from research.ResearchMissionContinuationProposal import (
     ResearchMissionContinuationProposal,
     continuation_proposal_for,
 )
 from research.ResearchMissionOutcome import mission_outcome_for
+from research.ResearchPlanExecutionSnapshot import ResearchPlanExecutionSnapshot
 from research.ResearchRun import ResearchRun
 from research.ResearchRunManager import ResearchRunManager
 from research.SourceIdentity import identity_of
 
 MISSION_AUDIT_PREVIEW_INTENT = "research_mission_audit_export_preview"
 MISSION_AUDIT_SAVE_INTENT = "research_mission_audit_export_save"
+MISSION_AUDIT_TRACEABILITY_VIEW_INTENT = "research_mission_audit_traceability_view"
 
 
 class ResearchMissionAuditApplicationService:
@@ -67,6 +71,7 @@ class ResearchMissionAuditApplicationService:
         return request.metadata.get("intent") in {
             MISSION_AUDIT_PREVIEW_INTENT,
             MISSION_AUDIT_SAVE_INTENT,
+            MISSION_AUDIT_TRACEABILITY_VIEW_INTENT,
         }
 
     def process(self, request: BrainRequest) -> BrainResponse:
@@ -74,6 +79,8 @@ class ResearchMissionAuditApplicationService:
         try:
             if intent == MISSION_AUDIT_PREVIEW_INTENT:
                 return self._preview(request)
+            if intent == MISSION_AUDIT_TRACEABILITY_VIEW_INTENT:
+                return self._traceability_view(request)
             return self._save(request)
         except ResearchError as error:
             return BrainResponse(
@@ -84,8 +91,16 @@ class ResearchMissionAuditApplicationService:
                 success=False,
             )
 
-    def render(self, plan_id: str) -> tuple[str, str, str, bytes, bytes]:
-        """Return run ID, summary and both encoded files for one mission."""
+    def _audit_for(
+        self, plan_id: str
+    ) -> tuple[ResearchPlanExecutionSnapshot, ResearchRun | None, dict[str, Any]]:
+        """Assemble the snapshot, run and canonical audit dict for one mission.
+
+        This is the one place that snapshot/run/authorization/
+        source_revalidations/temporal_histories assembly happens; `render()`
+        and the traceability view both build on it so neither can diverge
+        from the other's computation.
+        """
         if not isinstance(plan_id, str) or not plan_id.strip():
             raise ResearchError("A mission plan ID is required.")
         snapshot = self._execution.mission_snapshot(plan_id.strip())
@@ -129,6 +144,11 @@ class ResearchMissionAuditApplicationService:
                 else ()
             ),
         )
+        return snapshot, run, audit
+
+    def render(self, plan_id: str) -> tuple[str, str, str, bytes, bytes]:
+        """Return run ID, summary and both encoded files for one mission."""
+        snapshot, run, audit = self._audit_for(plan_id)
         markdown = render_mission_audit_markdown(audit, run)
         evaluation = audit["evaluation"]
         summary = "\n".join(
@@ -225,6 +245,47 @@ class ResearchMissionAuditApplicationService:
             intent=MISSION_AUDIT_PREVIEW_INTENT,
             memory_count=0,
             research_mission_audit_export_preview=preview,
+        )
+
+    def _traceability_view(self, request: BrainRequest) -> BrainResponse:
+        """Re-shape one mission's already-computed traceability into a graph.
+
+        Builds the audit exactly as `render()` does (via `_audit_for()`); adds
+        no new computation path.  A mission with no recorded run has no
+        traceability dict to re-shape (`_traceability()` itself returns
+        `None` then), so this reports that explicitly rather than calling
+        `traceability_graph_for` on a `None` value.
+        """
+        snapshot, run, audit = self._audit_for(
+            str(request.metadata.get("research_plan_id", ""))
+        )
+        traceability = audit["traceability"]
+        if run is None or traceability is None:
+            return BrainResponse(
+                message=(
+                    f"Mission audit traceability graph for plan {snapshot.plan_id} "
+                    "is unavailable: no research run is recorded for this mission."
+                ),
+                request_id=request.request_id,
+                intent=MISSION_AUDIT_TRACEABILITY_VIEW_INTENT,
+                memory_count=0,
+            )
+        graph = traceability_graph_for(traceability)
+        return BrainResponse(
+            message=(
+                f"Mission audit traceability graph for plan {snapshot.plan_id} "
+                f"(run {snapshot.research_run_id}): {len(graph.claims)} claims, "
+                f"{len(graph.evidence)} evidence, "
+                f"{len(graph.source_observations)} source observations, "
+                f"{len(graph.comparison_reviews)} comparison reviews, "
+                f"{len(graph.claim_contradictions)} contradictions, "
+                f"{len(graph.source_revalidations)} revalidations. Read-only: "
+                "nothing was executed, fetched, called or changed."
+            ),
+            request_id=request.request_id,
+            intent=MISSION_AUDIT_TRACEABILITY_VIEW_INTENT,
+            memory_count=0,
+            research_mission_audit_traceability_graph=graph,
         )
 
     def _save(self, request: BrainRequest) -> BrainResponse:

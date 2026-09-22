@@ -2,11 +2,30 @@
 
 ## Runtime Version
 
-`v0.3.398 (Genesis)`
+`v0.3.399 (Genesis)`
 
 This is the current source/package version. The milestone ledger is CHANGELOG.md;
 the older capability narrative below is not a complete audit of this release.
 
+Version v0.3.399 adds a mission audit traceability view: an in-app,
+read-only way to browse a mission's already-computed provenance graph
+(claim -> evidence -> source observation -> discovery candidate;
+contradiction -> claims -> evidence; comparison review -> note -> evidence
+-> sources; revalidation -> paired observations) without leaving the
+desktop app. A new typed, frozen, Tkinter-independent graph read-model,
+`src/research/ResearchMissionAuditTraceabilityGraph.py`, re-shapes
+`ResearchMissionAudit.build_mission_audit`'s existing `_traceability()`
+output into explicit nodes and edges with zero new resolution or
+inference. A new read-only `research_mission_audit_traceability_view`
+Brain intent on `ResearchMissionAuditApplicationService` reuses the exact
+same `build_mission_audit(...)` call the existing preview/export already
+use. A new "View provenance graph" button and read-only `ttk.Treeview` in
+the desktop app's "3 Authored analysis" -> "Plan draft" sub-tab let an
+operator expand claim/evidence/source/contradiction/comparison-review/
+revalidation chains in-app; existing preview and export-to-disk behavior
+is unchanged. No new inference, no change to `build_mission_audit`'s
+computed semantics or the existing export formats, no new persistence or
+schema, no new authority/budget primitive.
 Version v0.3.398 closes the tracked follow-up left open by v0.3.397: the
 identical unguarded-cleanup pattern in `save()`'s `finally` block existed,
 unfixed, in ten other `JsonFile*Store` classes across `src/research/` and

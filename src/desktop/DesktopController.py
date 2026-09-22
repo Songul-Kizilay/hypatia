@@ -1827,6 +1827,27 @@ class DesktopController:
             )
         )
 
+    def mission_audit_traceability_view(self, plan_id: str) -> BrainResponse:
+        """Load one mission's already-computed provenance graph. Writes nothing.
+
+        Identical validation and request shape to `preview_mission_audit_export`:
+        this reads exactly the same canonical audit state and only re-shapes
+        its already-computed traceability into typed nodes and edges for
+        in-app display.
+        """
+        if not plan_id.strip():
+            raise ValueError("A mission plan ID is required.")
+        return self._brain.process(
+            BrainRequest(
+                message="View mission audit traceability graph",
+                source="desktop",
+                metadata={
+                    "intent": "research_mission_audit_traceability_view",
+                    "research_plan_id": plan_id.strip(),
+                },
+            )
+        )
+
     def save_mission_audit_export(
         self,
         preview: ResearchMissionAuditExportPreview,

@@ -2,6 +2,62 @@
 
 All notable project changes are recorded here.
 
+## [0.3.399] - 2026-09-22
+
+### Added
+
+- Mission audit traceability view: an in-app, read-only way to browse a
+  mission's already-computed provenance graph without leaving the desktop
+  app. Previously the only ways to see a mission's traceability structure
+  (claim -> evidence -> source observation -> discovery candidate;
+  contradiction -> claims -> evidence; comparison review -> note ->
+  evidence -> sources; revalidation -> paired observations) were a
+  24,000-character-truncated flat Markdown preview or exporting two files
+  to disk and opening them outside the app.
+- `src/research/ResearchMissionAuditTraceabilityGraph.py`: a new typed,
+  frozen, Tkinter-independent graph read-model
+  (`ResearchMissionAuditTraceabilityGraph`,
+  `traceability_graph_for(traceability_dict)`) that re-shapes
+  `ResearchMissionAudit.build_mission_audit`'s existing `_traceability()`
+  output into explicit nodes and edges. This performs zero new resolution,
+  zero new inference and zero new relations: every node and edge copies an
+  ID `_traceability()` already reported, and a reference `_traceability()`
+  already reported unresolved is carried through as an explicit unresolved
+  edge naming that ID, never silently dropped and never pointed at a
+  fabricated node.
+- `ResearchMissionAuditApplicationService`: a new read-only
+  `research_mission_audit_traceability_view` Brain intent, built from the
+  exact same `build_mission_audit(...)` call `render()`/`_preview()`
+  already use (extracted into a shared `_audit_for` helper) — no new
+  computation path, no mutation, no network/model/provider call.
+  `render()`'s own behavior is unchanged.
+- `DesktopController.mission_audit_traceability_view` and a new "View
+  provenance graph" button in the desktop app's "3 Authored analysis" ->
+  "Plan draft" sub-tab, rendering the graph in a read-only `ttk.Treeview`:
+  operators can expand claim/evidence/source/contradiction/
+  comparison-review/revalidation chains in-app. Untrusted source
+  titles/URLs are funneled through a new `_traceability_text` helper
+  reusing `ResearchRunMarkdownRenderer._clean_text` (no Markdown escaping,
+  since the Treeview renders plain text, not Markdown). Goal-basis and
+  contradiction tree sections carry an explicit epistemic-tentativeness
+  caveat label. Existing preview/save export behavior in "4 Review &
+  export" is completely unchanged — this is a strictly additive third way
+  to see the same already-computed data.
+- 22 new direct unit tests
+  (`tests/research/test_research_mission_audit_traceability_graph.py`), 4
+  new tests extending
+  `tests/cognition/test_research_mission_audit_application_service.py`, and
+  23 new tests
+  (`tests/desktop/test_mission_audit_traceability_view.py`), plus one
+  updated patched widget class in
+  `tests/desktop/test_research_command_bindings.py`.
+
+No new inference, no change to `build_mission_audit`'s computed semantics
+or the existing Markdown/JSON export format, no new persistence/store/
+schema version, no new authority/budget/approval primitive, no
+cross-mission graph. This is a pure read-only presentation layer over
+already-computed, already-tested canonical data.
+
 ## [0.3.398] - 2026-09-20
 
 ### Fixed

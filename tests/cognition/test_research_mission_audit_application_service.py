@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import sys
 import unittest
+from dataclasses import replace
 from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
@@ -20,14 +21,23 @@ for entry in (SRC_DIR, ROOT_DIR):
     if str(entry) not in sys.path:
         sys.path.append(str(entry))
 
+from brain.BrainRequest import BrainRequest
 from cognition.ResearchMissionAuditApplicationService import (
+    MISSION_AUDIT_TRACEABILITY_VIEW_INTENT,
     ResearchMissionAuditApplicationService,
 )
 from core.Exceptions import ResearchError
 from research.ResearchAutonomyResult import AutonomyStopReason
+from research.ResearchClaimConfidence import ResearchClaimConfidence
+from research.ResearchClaimContradictionRecord import (
+    ResearchClaimContradictionRecord,
+)
+from research.ResearchClaimRecord import ResearchClaimRecord
 from research.ResearchDisclosure import ResearchDisclosure
 from research.ResearchDiscoveryProviderName import ResearchDiscoveryProviderName
+from research.ResearchEpistemicState import ResearchEpistemicState
 from research.ResearchEvidenceRecord import ResearchEvidenceRecord
+from research.ResearchMissionAuditTraceabilityGraph import traceability_graph_for
 from research.ResearchMissionGoalSatisfaction import (
     ResearchMissionGoalSatisfactionStatus,
 )
@@ -71,7 +81,16 @@ class ExecutionMustNotWrite:
 
 
 class RunManagerMustNotWrite:
-    """Expose only `get`; any other call proves an unwanted read/write."""
+    """Expose only `get` and `source_revalidations`; any other call proves an
+    unwanted read/write.
+
+    `source_revalidations` is included (returning nothing recorded) because
+    `_audit_for` reads it unconditionally whenever a run manager is
+    configured, independent of whether `get` resolved a run -- so any test
+    that reaches `_audit_for` (directly or through `proposal_for`/the
+    traceability view) needs this fixture to answer it without that read
+    itself being mistaken for a write.
+    """
 
     def __init__(
         self,
@@ -88,6 +107,9 @@ class RunManagerMustNotWrite:
         if self._raise_missing or self._run is None:
             raise ResearchError("No research run with that ID is known.")
         return self._run
+
+    def source_revalidations(self) -> tuple[object, ...]:
+        return ()
 
     def __getattr__(self, name: str) -> object:
         def _forbidden(*args: object, **kwargs: object) -> None:
@@ -305,6 +327,202 @@ class ResearchMissionAuditApplicationServiceProposalTests(unittest.TestCase):
         self.assertIs(
             result.origin_goal_status, ResearchMissionGoalSatisfactionStatus.UNRESOLVED
         )
+        self.assertEqual(execution.mission_snapshot_calls, ["plan-1"])
+        self.assertEqual(runs.get_calls, ["run-1"])
+
+
+class RunManagerRecordingCalls:
+    """Expose exactly the reads `_audit_for` may perform. No network, no store.
+
+    `temporal_history` raises if ever called: every fixture run below has no
+    `requested_url` on any source, so `_audit_for`'s own requested-URL
+    collection is always empty and this must never be reached.
+    """
+
+    def __init__(self, run: ResearchRun | None) -> None:
+        self._run = run
+        self.get_calls: list[str] = []
+        self.source_revalidations_calls = 0
+
+    def get(self, run_id: str) -> ResearchRun:
+        self.get_calls.append(run_id)
+        if self._run is None or run_id != self._run.run_id:
+            raise ResearchError("No research run with that ID is known.")
+        return self._run
+
+    def source_revalidations(self) -> tuple[object, ...]:
+        self.source_revalidations_calls += 1
+        return ()
+
+    def temporal_history(self, requested_url: str, *, run_id: str) -> object:
+        raise AssertionError("temporal_history must not be called in this test.")
+
+    def __getattr__(self, name: str) -> object:
+        def _forbidden(*args: object, **kwargs: object) -> None:
+            raise AssertionError(f"the traceability view must never call runs.{name}.")
+
+        return _forbidden
+
+
+def _traceability_run() -> ResearchRun:
+    """A richer run than `_run()`: claims, a contradiction, a review too."""
+    run = _run(with_note=True)
+    claim = ResearchClaimRecord(
+        claim_id="claim-1",
+        text="The recorded evidence may support this.",
+        epistemic_state=ResearchEpistemicState.HYPOTHESIS,
+        confidence=ResearchClaimConfidence.LOW,
+        source_document_ids=("doc-1",),
+        evidence_ids=("evidence-1",),
+        recorded_at=NOW,
+    )
+    other_claim = ResearchClaimRecord(
+        claim_id="claim-2",
+        text="The recorded evidence may contradict the first claim.",
+        epistemic_state=ResearchEpistemicState.CONTRADICTED,
+        confidence=ResearchClaimConfidence.LOW,
+        source_document_ids=("doc-2",),
+        evidence_ids=("evidence-2",),
+        recorded_at=NOW,
+    )
+    contradiction = ResearchClaimContradictionRecord(
+        contradiction_id="contradiction-1",
+        claim_ids=("claim-1", "claim-2"),
+        evidence_ids=("evidence-1", "evidence-2"),
+        note="These disagree.",
+        recorded_at=NOW,
+    )
+    return replace(
+        run,
+        claims=(claim, other_claim),
+        claim_contradictions=(contradiction,),
+    )
+
+
+class ResearchMissionAuditApplicationServiceTraceabilityViewTests(unittest.TestCase):
+    """The new read-only intent must match a direct `traceability_graph_for` call."""
+
+    def test_matches_traceability_graph_for_called_directly_on_the_same_audit(
+        self,
+    ) -> None:
+        snapshot = _snapshot()
+        run = _traceability_run()
+        execution = ExecutionMustNotWrite(snapshot)
+        runs = RunManagerRecordingCalls(run)
+        service = ResearchMissionAuditApplicationService(
+            execution,  # type: ignore[arg-type]
+            runs,  # type: ignore[arg-type]
+            None,
+            lambda: "0.0.0-test",
+        )
+        request = BrainRequest(
+            message="View mission audit traceability graph",
+            source="desktop",
+            metadata={
+                "intent": MISSION_AUDIT_TRACEABILITY_VIEW_INTENT,
+                "research_plan_id": "plan-1",
+            },
+        )
+
+        response = service.process(request)
+
+        self.assertTrue(response.success)
+        self.assertIsNotNone(response.research_mission_audit_traceability_graph)
+        # Independently rebuild the exact same audit through the same
+        # assembly (`_audit_for`, the one place `render()` and this intent
+        # both build from) and compare the two graphs for exact dataclass
+        # equality -- proving the intent adds no divergent computation.
+        _expected_snapshot, _expected_run, expected_audit = service._audit_for("plan-1")
+        expected_graph = traceability_graph_for(expected_audit["traceability"])
+        self.assertEqual(
+            response.research_mission_audit_traceability_graph, expected_graph
+        )
+        self.assertEqual(execution.mission_snapshot_calls.count("plan-1"), 2)
+        self.assertTrue(all(call == "run-1" for call in runs.get_calls))
+
+    def test_reports_unavailable_explicitly_when_there_is_no_run(self) -> None:
+        snapshot = _snapshot(research_run_id=None, stop_reason=None)
+        execution = ExecutionMustNotWrite(snapshot)
+        service = ResearchMissionAuditApplicationService(
+            execution,  # type: ignore[arg-type]
+            None,
+            None,
+            lambda: "0.0.0-test",
+        )
+        request = BrainRequest(
+            message="View mission audit traceability graph",
+            source="desktop",
+            metadata={
+                "intent": MISSION_AUDIT_TRACEABILITY_VIEW_INTENT,
+                "research_plan_id": "plan-1",
+            },
+        )
+
+        response = service.process(request)
+
+        self.assertTrue(response.success)
+        self.assertIsNone(response.research_mission_audit_traceability_graph)
+        self.assertIn("unavailable", response.message)
+        self.assertIn("no research run is recorded", response.message)
+
+    def test_reports_unavailable_when_the_recorded_run_id_no_longer_resolves(
+        self,
+    ) -> None:
+        """`research_run_id` is set, but the run manager raises (a deleted or
+        corrupted run record) -- `_audit_for` must fail closed to no run
+        rather than let the exception escape or fabricate a graph.
+        """
+        snapshot = _snapshot(research_run_id="run-1")
+        execution = ExecutionMustNotWrite(snapshot)
+        runs = RunManagerMustNotWrite(raise_missing=True)
+        service = ResearchMissionAuditApplicationService(
+            execution,  # type: ignore[arg-type]
+            runs,  # type: ignore[arg-type]
+            None,
+            lambda: "0.0.0-test",
+        )
+        request = BrainRequest(
+            message="View mission audit traceability graph",
+            source="desktop",
+            metadata={
+                "intent": MISSION_AUDIT_TRACEABILITY_VIEW_INTENT,
+                "research_plan_id": "plan-1",
+            },
+        )
+
+        response = service.process(request)
+
+        self.assertTrue(response.success)
+        self.assertIsNone(response.research_mission_audit_traceability_graph)
+        self.assertIn("unavailable", response.message)
+        self.assertIn("no research run is recorded", response.message)
+        self.assertEqual(runs.get_calls, ["run-1"])
+
+    def test_performs_no_write_and_no_unexpected_read(self) -> None:
+        """Only `mission_snapshot`, `get` and `source_revalidations` are read."""
+        snapshot = _snapshot()
+        run = _traceability_run()
+        execution = ExecutionMustNotWrite(snapshot)
+        runs = RunManagerRecordingCalls(run)
+        service = ResearchMissionAuditApplicationService(
+            execution,  # type: ignore[arg-type]
+            runs,  # type: ignore[arg-type]
+            None,
+            lambda: "0.0.0-test",
+        )
+        request = BrainRequest(
+            message="View mission audit traceability graph",
+            source="desktop",
+            metadata={
+                "intent": MISSION_AUDIT_TRACEABILITY_VIEW_INTENT,
+                "research_plan_id": "plan-1",
+            },
+        )
+
+        response = service.process(request)
+
+        self.assertTrue(response.success)
+        self.assertEqual(runs.source_revalidations_calls, 1)
         self.assertEqual(execution.mission_snapshot_calls, ["plan-1"])
         self.assertEqual(runs.get_calls, ["run-1"])
 
