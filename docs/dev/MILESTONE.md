@@ -16,8 +16,8 @@ development branch — `release`/`ci-pending` cover that intermediate state.
 | --- | --- |
 | Milestone | Persist budget-refusal reasons across a status refresh |
 | Base SHA | 32d8376fc18a09d5f4beaa60a0fa9e230cbe529c |
-| Status | release |
-| Specialists | hypatia-runtime (state method + call-site wiring + codec/schema + tests, single owner — this is squarely execution-state/persistence territory); hypatia-security and hypatia-qa independently after implementation; hypatia-release last |
+| Status | delivered — see "Last delivered product milestone" below for release/CI/PR/reachability detail |
+| Specialists | hypatia-runtime: implementation complete, including the critical anti-stranding safety design (rejecting the naive `block_step` reuse that would have permanently stranded refused executions); independent review (security/QA) surfaced three real findings during the implementation cycle — refusal reason not restored across `restored()`, a possible uncaught exception when the execution isn't cleanly running, and possible interference with an actively-running step — all three verified fixed directly against final code by hypatia-lead; hypatia-release delivered v0.3.402 (plus a follow-up test-fixture correction commit) |
 | Blockers | none |
 
 Rationale (repository archaeology, 2026-09-22): two candidates were
@@ -482,32 +482,44 @@ provenance.
 
 | Field | Value |
 | --- | --- |
-| Milestone | v0.3.401: desktop wiring for source revalidation |
-| SHA | 32d8376fc18a09d5f4beaa60a0fa9e230cbe529c |
-| Linux desktop CI (exact-SHA) | success (run 35754274521) |
-| Windows desktop CI (exact-SHA) | success (run 35754278750) |
+| Milestone | v0.3.402: persist budget-refusal reasons across a status refresh |
+| SHA | 793b5d70147438cad4a6a38590e61128a00aaa46 |
+| Linux desktop CI (exact-SHA) | success (run 35771449760) |
+| Windows desktop CI (exact-SHA) | success (run 35771465791) |
 | Status | delivered |
-| PR | #380, MERGED 2026-09-22T16:40:39Z, standard merge commit `a39f78cdcc0ee459b7ee756df1be8809cca94092` |
-| origin/main reachability | verified: `git merge-base --is-ancestor 32d8376 origin/main` succeeds; `origin/main` HEAD is the merge commit itself |
+| PR | #381, MERGED 2026-09-22T19:37:39Z, standard merge commit `cb96a3b674af5819651dca8571ba775d239f17c5` |
+| origin/main reachability | verified: `git merge-base --is-ancestor 793b5d7 origin/main` succeeds; `origin/main` HEAD is the merge commit itself |
 
-Post-merge verification (2026-09-22, hypatia-lead): PR #380 base `main`,
+Post-merge verification (2026-09-22, hypatia-lead): PR #381 base `main`,
 head `feature/structured-learned-memory-extraction-v0.3.118`, carried
-exactly 1 commit (v0.3.401), 14 files, `mergeStateStatus: CLEAN`, both
-PR-triggered checks `SUCCESS`. Merged with
-`gh pr merge 380 --merge --subject "..."` — no interactive confirmation
-prompt. Author/committer identity on the carried commit confirmed
+exactly 3 commits (v0.3.402's release commit `6e18a45`, its follow-up
+fixture-correction commit `793b5d7`, and the documentation-only
+product-direction commit `e24f085`), 15 files, `mergeStateStatus: CLEAN`,
+both PR-triggered checks `SUCCESS`. Merged with
+`gh pr merge 381 --merge --subject "..."` — no interactive confirmation
+prompt. Author/committer identity on all three carried commits confirmed
 unchanged (Songül Kızılay via GitHub noreply email). Working tree clean
-after merge except this ledger edit. Note: the release agent dispatched
-both exact-SHA CI runs and ended its turn before they finished;
-hypatia-lead independently polled both to completion (Linux `35754274521`,
-Windows `35754278750`, both `success`) and verified the conclusions before
-proceeding — no partial or unverified state was carried forward.
+after merge.
 
-Note: v0.3.400 (SHA `ec1a6f0bc2f6c5b8d1a609b789c8c836d91fffd4`), v0.3.399
-(SHA `650bfe486bb326635ea8aa4dd9c3b80dbc746c5b`), v0.3.398 (SHA
+Note: implementation, security-relevant fixes (three findings addressed:
+the refusal reason now correctly survives `restored()`; `refuse_advance`
+is now only ever called when the execution is cleanly `RUNNING` with no
+step in flight, so it can never raise on a non-running/failed execution;
+refusal recording is skipped entirely whenever another step is actively
+running, eliminating any interference with that step's own result), and
+release for this milestone completed during an automatic session-limit
+resume; hypatia-lead independently re-verified all three fixes directly
+against the final code (not merely trusted the resumed session's own
+account) before proceeding, and independently re-ran the full canonical
+suite (6612 tests, skipped=3) plus Black/Ruff/MyPy/`git diff --check` on
+the exact release commit before default-branch integration.
+
+Note: v0.3.401 (SHA `32d8376fc18a09d5f4beaa60a0fa9e230cbe529c`), v0.3.400
+(SHA `ec1a6f0bc2f6c5b8d1a609b789c8c836d91fffd4`), v0.3.399 (SHA
+`650bfe486bb326635ea8aa4dd9c3b80dbc746c5b`), v0.3.398 (SHA
 `3cf726a6c16b181bf26ae4d67cea690e84f2ce9a`), and v0.3.397 (SHA
 `aeff7713a8fea7efd247892272c78a80b9d16176`) all remain reachable from
-`origin/main` as ancestors of v0.3.401 (this row), which is now the
+`origin/main` as ancestors of v0.3.402 (this row), which is now the
 current last-delivered product milestone.
 
 Developer-infrastructure changes (for example the Claude team setup) are not
