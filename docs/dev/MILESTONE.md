@@ -511,8 +511,15 @@ release for this milestone completed during an automatic session-limit
 resume; hypatia-lead independently re-verified all three fixes directly
 against the final code (not merely trusted the resumed session's own
 account) before proceeding, and independently re-ran the full canonical
-suite (6612 tests, skipped=3) plus Black/Ruff/MyPy/`git diff --check` on
-the exact release commit before default-branch integration.
+suite plus Black/Ruff/MyPy/`git diff --check` on the exact release commit
+before default-branch integration. That local rerun's exact skip count is
+not evidenced by any repository-local artifact, so it is not restated as
+a specific number here; the two exact-SHA CI runs already cited above
+(Linux `35771449760`, Windows `35771465791`) each independently collected
+6612 tests, with Linux reporting `OK (skipped=34)` and Windows reporting
+plain `OK` (0 skipped) — two genuine but distinct platform results whose
+skip counts are not interchangeable with each other or with the
+unevidenced local figure.
 
 Note: v0.3.401 (SHA `32d8376fc18a09d5f4beaa60a0fa9e230cbe529c`), v0.3.400
 (SHA `ec1a6f0bc2f6c5b8d1a609b789c8c836d91fffd4`), v0.3.399 (SHA
